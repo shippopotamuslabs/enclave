@@ -30,4 +30,5 @@ data class ActiveModelConfiguration(
     val localModelFormat: ModelFileFormat? = null,
     val apiProvider: ApiProvider? = null,
     val apiModelPricing: ApiModelSavedPricing? = null,
+    val apiBaseUrl: String? = null,
 )

@@ -63,6 +63,7 @@ internal fun UserBubble(
     modifier: Modifier = Modifier,
     message: ChatMessage,
     onEditClick: (String) -> Unit = {},
+    onReportClick: (String) -> Unit = {},
 ) {
     val clipboardManager = LocalClipboard.current
     val coroutineScope = rememberCoroutineScope()
@@ -151,6 +152,10 @@ internal fun UserBubble(
                 },
                 onCopyClick = {
                     copyToClipboard(message.content.text)
+                    showActions = false
+                },
+                onReportClick = {
+                    onReportClick(message.content.text)
                     showActions = false
                 },
             )

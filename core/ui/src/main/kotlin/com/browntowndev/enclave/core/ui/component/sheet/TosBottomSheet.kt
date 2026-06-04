@@ -1,6 +1,6 @@
 @file:Suppress("MaxLineLength")
 
-package com.browntowndev.enclave.feature.settings
+package com.browntowndev.enclave.core.ui.component.sheet
 
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -45,13 +45,10 @@ private val TOS_SECTIONS =
         ),
         TosSection(
             "4. User Responsibilities — Generated Content",
-            "You are solely responsible for all content generated through the App, including but not limited to text, images, video, audio, and any other media. You agree that you will not use the App to generate or distribute:\n\n" +
-                "• Content that is illegal under applicable law.\n" +
-                "• Content that infringes intellectual property rights of third parties.\n" +
-                "• Content that is defamatory, harassing, threatening, or abusive.\n" +
-                "• Child sexual abuse material or any content that sexually exploits minors.\n" +
-                "• Malware, phishing content, or material designed to deceive or defraud.\n\n" +
-                "The developer reserves the right to terminate access if misuse is reported or discovered.",
+            "You strictly and unconditionally agree that you will not use, or attempt to use, the App to generate, request, facilitate, or distribute illegal or dangerous content, including but not limited to instructional content for manufacturing or obtaining illicit drugs, constructing weapons or explosives, executing cyberattacks or malware, initiating phishing/scam operations, or any other criminal or harmful activities. " +
+                "You agree not to attempt to bypass, circumvent, or jailbreak the App's built-in moderation or safety filters. " +
+                "To the maximum extent permitted by law, you assume all legal, civil, and criminal liability for any inputs, requests, or outputs. " +
+                "You explicitly agree that the developer has zero responsibility or liability for your usage of the App, and any consequences arising from attempts to generate illegal content are solely and entirely on you, not the developer.",
         ),
         TosSection(
             "5. Local Model Usage",
@@ -100,12 +97,12 @@ private val TOS_SECTIONS =
         ),
     )
 
-internal val TOS_TEXT: String = TOS_SECTIONS.joinToString("\n\n") { "${it.heading}\n\n${it.body}" }
+public val TOS_TEXT: String = TOS_SECTIONS.joinToString("\n\n") { "${it.heading}\n\n${it.body}" }
 
 @Suppress("LongMethod")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun TosBottomSheet(onDismiss: () -> Unit) {
+public fun TosBottomSheet(onDismiss: () -> Unit) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     NeoModalBottomSheet(

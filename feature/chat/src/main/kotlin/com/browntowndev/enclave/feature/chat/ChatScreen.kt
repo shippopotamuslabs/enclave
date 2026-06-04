@@ -59,6 +59,7 @@ fun ChatScreen(
     onDismissShareSheet: () -> Unit = {},
     onStatsClick: (MessageId) -> Unit = {},
     onViewChatStatsClick: () -> Unit = {},
+    onReportMessage: (String) -> Unit = {},
 ) {
     StreamingResponseHapticEffect(
         hapticsEnabled = uiState.hapticResponse,
@@ -136,6 +137,7 @@ fun ChatScreen(
                         onNavigateToStudio = onNavigateToStudio,
                         onShareClick = onShareClick,
                         onStatsClick = onStatsClick,
+                        onReportMessage = onReportMessage,
                     )
 
                     if (uiState.shieldReason != null) {

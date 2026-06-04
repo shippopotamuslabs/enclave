@@ -13,9 +13,15 @@ import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -27,6 +33,8 @@ import com.browntowndev.enclave.core.ui.component.neo.NeoCircularProgressIndicat
 import com.browntowndev.enclave.core.ui.component.neo.NeoGroupDivider
 import com.browntowndev.enclave.core.ui.component.neo.NeoPanel
 import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
+import com.browntowndev.enclave.core.ui.component.neo.NeoSecondaryButton
+import com.browntowndev.enclave.core.ui.component.sheet.TosBottomSheet
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.feature.onboarding.OnboardingViewModel
@@ -37,12 +45,22 @@ fun WelcomeAgeGateStep(
     onAgeConfirmedChange: (Boolean) -> Unit,
     automaticErrorTrackingEnabled: Boolean,
     onAutomaticErrorTrackingChange: (Boolean) -> Unit,
+    tosReviewed: Boolean,
+    onTosReviewedChange: (Boolean) -> Unit,
+    tosAccepted: Boolean,
+    onTosAcceptedChange: (Boolean) -> Unit,
     onNext: () -> Unit,
     isSaving: Boolean = false,
     saveError: String? = null,
     continueButtonText: String = "CONTINUE",
     modifier: Modifier = Modifier,
 ) {
+    var showTosBottomSheet by remember { mutableStateOf(false) }
+
+    if (showTosBottomSheet) {
+        TosBottomSheet(onDismiss = { showTosBottomSheet = false })
+    }
+
     Column(
         modifier =
             modifier
@@ -110,6 +128,38 @@ fun WelcomeAgeGateStep(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+                    NeoGroupDivider(modifier = Modifier.padding(horizontal = 0.dp))
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    NeoSecondaryButton(
+                        text = "REVIEW TERMS OF SERVICE",
+                        onClick = {
+                            showTosBottomSheet = true
+                            onTosReviewedChange(true)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    AgeGateCheckboxRow(
+                        checked = tosAccepted,
+                        onCheckedChange = onTosAcceptedChange,
+                        label = "I agree to the Terms of Service",
+                        contentDescription = "TOS Gate Checkbox",
+                        enabled = tosReviewed,
+                    )
+                    if (!tosReviewed) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Please review the Terms of Service to enable agreement.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            modifier = Modifier.padding(start = 48.dp)
+                        )
+                    }
                 }
             }
 
@@ -135,7 +185,7 @@ fun WelcomeAgeGateStep(
             NeoPrimaryButton(
                 text = continueButtonText,
                 onClick = onNext,
-                enabled = ageConfirmed,
+                enabled = ageConfirmed && tosAccepted,
                 modifier = Modifier.fillMaxWidth(),
             )
         }
@@ -148,30 +198,34 @@ private fun AgeGateCheckboxRow(
     onCheckedChange: (Boolean) -> Unit,
     label: String,
     contentDescription: String,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier =
-            Modifier
+            modifier
                 .fillMaxWidth()
+                .toggleable(
+                    value = checked,
+                    enabled = enabled,
+                    role = Role.Checkbox,
+                    onValueChange = onCheckedChange,
+                )
                 .semantics {
-                    role = Role.Checkbox
                     this.contentDescription = contentDescription
                 },
     ) {
         Checkbox(
             checked = checked,
-            onCheckedChange = onCheckedChange,
+            onCheckedChange = null,
+            enabled = enabled,
             colors =
                 CheckboxDefaults.colors(
                     checkedColor = MaterialTheme.colorScheme.primary,
                     uncheckedColor = MaterialTheme.colorScheme.outline,
                 ),
-            modifier =
-                Modifier.semantics {
-                    role = Role.Checkbox
-                    this.contentDescription = contentDescription
-                },
+            modifier = Modifier.clearAndSetSemantics {},
         )
         Text(
             text = label,
@@ -179,7 +233,12 @@ private fun AgeGateCheckboxRow(
                 MaterialTheme.typography.bodyLarge.copy(
                     fontWeight = FontWeight.SemiBold,
                 ),
-            color = MaterialTheme.colorScheme.onSurface,
+            color =
+                if (enabled) {
+                    MaterialTheme.colorScheme.onSurface
+                } else {
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                },
             modifier = Modifier.padding(start = 12.dp),
         )
     }
@@ -194,6 +253,10 @@ internal fun WelcomeAgeGateStepLightPreview() {
             onAgeConfirmedChange = {},
             automaticErrorTrackingEnabled = false,
             onAutomaticErrorTrackingChange = {},
+            tosReviewed = false,
+            onTosReviewedChange = {},
+            tosAccepted = false,
+            onTosAcceptedChange = {},
             onNext = {},
         )
     }
@@ -208,6 +271,10 @@ internal fun WelcomeAgeGateStepDarkPreview() {
             onAgeConfirmedChange = {},
             automaticErrorTrackingEnabled = true,
             onAutomaticErrorTrackingChange = {},
+            tosReviewed = true,
+            onTosReviewedChange = {},
+            tosAccepted = true,
+            onTosAcceptedChange = {},
             onNext = {},
         )
     }

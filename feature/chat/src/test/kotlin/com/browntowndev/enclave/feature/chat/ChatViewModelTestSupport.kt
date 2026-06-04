@@ -4,6 +4,8 @@ import androidx.lifecycle.SavedStateHandle
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnSnapshotPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.domain.port.inference.PromptModerationPort
+import com.browntowndev.enclave.domain.port.inference.PromptModerationScores
 import com.browntowndev.enclave.domain.port.inference.ToolExecutionEventPort
 import com.browntowndev.enclave.domain.port.media.TtsPlaybackControllerPort
 import com.browntowndev.enclave.domain.port.repository.ChatRepository
@@ -14,6 +16,9 @@ import com.browntowndev.enclave.domain.usecase.chat.GetModelDisplayNameUseCase
 import com.browntowndev.enclave.domain.usecase.chat.StageImageAttachmentUseCase
 import com.browntowndev.enclave.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
+import com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase
+import com.browntowndev.enclave.domain.usecase.inference.ShouldModeratePromptUseCase
+import com.browntowndev.enclave.domain.usecase.inference.SubmitModerationReportUseCase
 import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.enclave.domain.usecase.share.ImportSharedChatUseCase
 import com.browntowndev.enclave.domain.usecase.share.ShareChatUseCase
@@ -31,6 +36,7 @@ import com.browntowndev.enclave.feature.chat.delegates.TtsController
 import com.browntowndev.enclave.feature.chat.mapping.ChatMessageUiMapper
 import com.browntowndev.enclave.feature.chat.mapping.PhotoAttachmentPolicyResolver
 import com.browntowndev.enclave.feature.chat.stats.ChatTelemetryUiMapper
+import io.mockk.coEvery
 import io.mockk.mockk
 import io.mockk.spyk
 import kotlinx.coroutines.flow.flowOf
@@ -60,6 +66,11 @@ object ChatViewModelTestSupport {
         chatRepository: ChatRepository,
         exportArtifactDocumentsUseCase: ExportArtifactDocumentsUseCase,
         stageImageAttachmentUseCase: StageImageAttachmentUseCase,
+        moderatePromptUseCase: ModeratePromptUseCase = ModeratePromptUseCase(AllowPromptModerationPort),
+        shouldModeratePromptUseCase: ShouldModeratePromptUseCase = mockk(relaxed = true) {
+            coEvery { this@mockk.invoke(any()) } returns true
+        },
+        submitModerationReportUseCase: SubmitModerationReportUseCase = mockk(relaxed = true),
     ): ChatViewModel =
         createHarness(
             settingsUseCases = settingsUseCases,
@@ -80,6 +91,9 @@ object ChatViewModelTestSupport {
             chatRepository = chatRepository,
             exportArtifactDocumentsUseCase = exportArtifactDocumentsUseCase,
             stageImageAttachmentUseCase = stageImageAttachmentUseCase,
+            moderatePromptUseCase = moderatePromptUseCase,
+            shouldModeratePromptUseCase = shouldModeratePromptUseCase,
+            submitModerationReportUseCase = submitModerationReportUseCase,
         ).viewModel
 
     fun createHarness(
@@ -101,6 +115,11 @@ object ChatViewModelTestSupport {
         chatRepository: ChatRepository,
         exportArtifactDocumentsUseCase: ExportArtifactDocumentsUseCase,
         stageImageAttachmentUseCase: StageImageAttachmentUseCase,
+        moderatePromptUseCase: ModeratePromptUseCase = ModeratePromptUseCase(AllowPromptModerationPort),
+        shouldModeratePromptUseCase: ShouldModeratePromptUseCase = mockk(relaxed = true) {
+            coEvery { this@mockk.invoke(any()) } returns true
+        },
+        submitModerationReportUseCase: SubmitModerationReportUseCase = mockk(relaxed = true),
     ): Harness {
         val chatMessageUiMapper = ChatMessageUiMapper()
         val inferenceOrchestrator =
@@ -174,6 +193,9 @@ object ChatViewModelTestSupport {
                     errorHandler = errorHandler,
                     loggingPort = loggingPort,
                     studioRepository = studioRepository,
+                    moderatePromptUseCase = moderatePromptUseCase,
+                    shouldModeratePromptUseCase = shouldModeratePromptUseCase,
+                    submitModerationReportUseCase = submitModerationReportUseCase,
                     inferenceOrchestrator = inferenceOrchestrator,
                     chatInputCoordinator = chatInputCoordinator,
                     speechInputCoordinator = speechInputCoordinator,
@@ -187,5 +209,9 @@ object ChatViewModelTestSupport {
                     photoAttachmentPolicyResolver = photoAttachmentPolicyResolver,
                 ),
         )
+    }
+
+    private object AllowPromptModerationPort : PromptModerationPort {
+        override suspend fun classify(prompt: String): PromptModerationScores = PromptModerationScores(scoresByLabel = mapOf("OK" to 1.0))
     }
 }

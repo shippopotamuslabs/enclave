@@ -286,6 +286,8 @@ class StudioMediaTasksRedTest {
         return MultimodalViewModel(
             defaultModelRepository = defaultModelRepository,
             mediaProviderRepository = mediaProviderRepository,
+            moderatePromptUseCase = allowPromptModerationUseCase(),
+            shouldModeratePromptUseCase = allowShouldModeratePromptUseCase(),
             resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase(),
             generationCoordinator = generationCoordinator,
             albumSelectionCoordinator = albumSelectionCoordinator,

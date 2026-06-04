@@ -10,10 +10,12 @@ fun MessageBubble(
     modifier: Modifier = Modifier,
     message: ChatMessage,
     onEditClick: (String) -> Unit = {},
+    onReportClick: (String) -> Unit = {},
 ) {
     UserBubble(
         modifier = modifier,
         message = message,
         onEditClick = onEditClick,
+        onReportClick = onReportClick,
     )
 }

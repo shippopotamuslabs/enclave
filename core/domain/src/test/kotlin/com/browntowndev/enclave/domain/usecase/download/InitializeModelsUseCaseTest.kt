@@ -18,6 +18,7 @@ import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.ModelConfigFetcherPort
 import com.browntowndev.enclave.domain.port.repository.UtilityModelRepositoryPort
+import com.browntowndev.enclave.domain.port.repository.TrustedDomainRepositoryPort
 import com.browntowndev.enclave.domain.usecase.FakeUtilityModelRepository
 import com.browntowndev.enclave.domain.usecase.modelconfig.SyncLocalModelRegistryUseCase
 import com.browntowndev.enclave.domain.usecase.modelconfig.SyncUtilityModelRegistryUseCase
@@ -25,6 +26,9 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
@@ -42,6 +46,7 @@ class InitializeModelsUseCaseTest {
     private lateinit var syncUtilityModelRegistryUseCase: SyncUtilityModelRegistryUseCase
     private lateinit var utilityModelRepository: UtilityModelRepositoryPort
     private lateinit var logPort: LoggingPort
+    private lateinit var trustedDomainRepository: TrustedDomainRepositoryPort
     private lateinit var useCase: InitializeModelsUseCase
 
     @BeforeEach
@@ -54,6 +59,7 @@ class InitializeModelsUseCaseTest {
         checkModelsUseCase = mockk()
         utilityModelRepository = FakeUtilityModelRepository()
         logPort = mockk(relaxed = true)
+        trustedDomainRepository = mockk(relaxed = true)
         syncUtilityModelRegistryUseCase =
             SyncUtilityModelRegistryUseCase(utilityModelRepository, logPort)
 
@@ -69,6 +75,8 @@ class InitializeModelsUseCaseTest {
                 modelDownloadOrchestrator,
                 checkModelsUseCase,
                 syncUtilityModelRegistryUseCase,
+                trustedDomainRepository,
+                externalScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
                 logPort,
             )
     }

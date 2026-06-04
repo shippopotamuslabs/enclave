@@ -82,11 +82,19 @@ class OnboardingViewModel
             _uiState.update { it.copy(automaticErrorTrackingEnabled = enabled) }
         }
 
+        fun onTosReviewedChange(reviewed: Boolean) {
+            _uiState.update { it.copy(tosReviewed = reviewed) }
+        }
+
+        fun onTosAcceptedChange(accepted: Boolean) {
+            _uiState.update { it.copy(tosAccepted = accepted) }
+        }
+
         fun onNextStep() {
             val state = _uiState.value
             when (state.currentStep) {
                 0 -> {
-                    if (!state.ageConfirmed) return
+                    if (!state.ageConfirmed || !state.tosAccepted) return
                     if (state.flowMode == OnboardingFlowMode.RESTORED) {
                         onCompleteOnboarding()
                         return
@@ -184,6 +192,10 @@ class OnboardingViewModel
             val state = _uiState.value
             if (!state.ageConfirmed) {
                 _uiState.update { it.copy(saveError = "Age confirmation is required") }
+                return
+            }
+            if (!state.tosAccepted) {
+                _uiState.update { it.copy(saveError = "Terms of Service agreement is required") }
                 return
             }
 
