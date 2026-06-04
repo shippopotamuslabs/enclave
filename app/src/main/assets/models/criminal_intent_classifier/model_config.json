@@ -22,17 +22,17 @@
     "SyntheticHardNegatives": "BSD-0 project-generated"
   },
   "eval_metrics": {
-    "block_recall": 0.925531914893617,
+    "block_recall": 0.9714912280701754,
     "epoch": 3.0,
-    "exact_match_ratio": 0.6824134705332086,
-    "false_positive_rate": 0.06534772182254196,
-    "loss": 0.20640884339809418,
-    "mean_accuracy": 0.849592409461446,
-    "negative_count": 1668.0,
-    "positive_count": 470.0,
-    "runtime": 3.0104,
-    "samples_per_second": 710.207,
-    "steps_per_second": 22.256
+    "exact_match_ratio": 0.7504496402877698,
+    "false_positive_rate": 0.0333710407239819,
+    "loss": 0.1035032868385315,
+    "mean_accuracy": 0.9119989722507709,
+    "negative_count": 1768.0,
+    "positive_count": 456.0,
+    "runtime": 3.1473,
+    "samples_per_second": 706.634,
+    "steps_per_second": 22.241
   },
   "label_aliases": {
     "criminal_intent_harmful": [
@@ -79,17 +79,17 @@
     "NQ-Open": 3000,
     "OpenAI Moderation Dataset": 1652,
     "OpenAssistant OASST1": 2942,
-    "SyntheticAdversarial": 261,
-    "SyntheticHardNegatives": 156
+    "SyntheticAdversarial": 747,
+    "SyntheticHardNegatives": 453
   },
   "thresholds": {
     "criminal_intent_harmful": 0.78,
-    "illicit_drug_instruction": 0.7,
+    "illicit_drug_instruction": 0.85,
     "malware_cyber_abuse": 0.9,
-    "other_illegal_instruction": 0.75,
-    "phishing_fraud_scam": 0.9,
-    "violent_or_organized_crime": 0.72,
-    "weapons_explosives_instruction": 0.85
+    "other_illegal_instruction": 0.78,
+    "phishing_fraud_scam": 0.85,
+    "violent_or_organized_crime": 0.8,
+    "weapons_explosives_instruction": 0.78
   },
   "tokenizer_path": "tokenizer.json",
   "training_methodology": {
