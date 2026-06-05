@@ -66,18 +66,29 @@ class DownloadProgressTracker(
      * Deduplicates by SHA256 hash internally. Model types are left empty
      * since the download worker does not have model type information.
      */
-    fun initialize(specs: List<DownloadFileSpec>) {
+    fun initialize(
+        specs: List<DownloadFileSpec>,
+        preserveFailedStates: Boolean = false,
+    ) {
+        val preservedFailures =
+            if (preserveFailedStates) {
+                fileStates.filterValues { it.status == FileStatus.FAILED }
+            } else {
+                emptyMap()
+            }
+
         val initialStates =
             specs
                 .distinctBy { it.sha256 }
                 .map { spec ->
+                    val preserved = preservedFailures[spec.sha256]
                     spec.sha256 to
                         FileDownloadState(
                             spec = spec,
-                            status = FileStatus.QUEUED,
-                            bytesDownloaded = 0L,
+                            status = preserved?.status ?: FileStatus.QUEUED,
+                            bytesDownloaded = preserved?.bytesDownloaded ?: 0L,
                             totalBytes = spec.totalArtifactSizeInBytes(),
-                            error = null,
+                            error = preserved?.error,
                             allModelTypesForFile = emptyList(),
                         )
                 }.toMap()

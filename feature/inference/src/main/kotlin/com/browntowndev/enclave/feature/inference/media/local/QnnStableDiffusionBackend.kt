@@ -2,6 +2,8 @@ package com.browntowndev.enclave.feature.inference.media.local
 
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationError
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId
+import com.browntowndev.enclave.domain.model.media.QnnRuntimeLibraryCatalog
 import com.browntowndev.enclave.localimagegen.NativeLocalImageGenRuntime
 import java.io.File
 import javax.inject.Inject
@@ -19,11 +21,20 @@ class QnnStableDiffusionBackend
             request: LocalImageGenerationNativeRequest,
         ): Result<LocalImageGenerationNativeResult> =
             runCatching {
+                nativeRuntime.ensureQnnRuntimeForModel(request.modelId)
                 val probe = nativeRuntime.probe(kind)
                 if (probe < 2) {
                     throw LocalImageGenerationError.RuntimeNotPackaged(
                         kind,
                         "QNN probe=$probe. Package libQnnHtp.so and model under ${request.modelDir}.",
+                    )
+                }
+                val skelName = QnnRuntimeLibraryCatalog.primarySkelLibraryFor(request.modelId)
+                if (!nativeRuntime.isQnnRuntimeReadyForModel(request.modelId)) {
+                    throw LocalImageGenerationError.RuntimeNotPackaged(
+                        kind,
+                        "Missing QNN runtime $skelName for ${request.modelId}. " +
+                            "Re-sync QNN assets (scripts/sync-qnn-jniLibs.sh) and reinstall the app.",
                     )
                 }
                 val outputPath = "${request.outputPathPrefix}.png"
@@ -38,6 +49,7 @@ class QnnStableDiffusionBackend
                         height = request.height,
                         steps = request.steps,
                         cfgScale = request.cfgScale,
+                        scheduler = request.scheduler,
                         seed = request.seed,
                         outputPath = outputPath,
                     )

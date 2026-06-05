@@ -4,6 +4,9 @@ import com.browntowndev.enclave.domain.model.download.ModelPack
 import com.browntowndev.enclave.domain.model.download.ModelPackCompleteness
 import com.browntowndev.enclave.domain.model.download.ModelPackRole
 import com.browntowndev.enclave.domain.port.download.ModelPackVerifierPort
+import com.browntowndev.enclave.domain.model.media.LocalImageGenTriState
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilities
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId
 import com.browntowndev.enclave.domain.port.media.LOCAL_ON_DEVICE_IMAGE_GENERATION_ENABLED
 import com.browntowndev.enclave.domain.port.media.LocalImageGenerationCapabilityPort
 import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
@@ -73,15 +76,16 @@ class GetModelPacksForSettingsUseCase
                             utilityModelRepository.getByUtilityType(utilityType) == null
                         }
                 val (isEligible, disabledReason) = packEligibility(pack.packId)
+                val needsDownloadAction =
+                    diffusionSoftDeleted ||
+                        areUtilityRegistryEntriesAbsent ||
+                        !completeness.isComplete
                 ModelPackSettingsRow(
                     pack = pack,
                     completeness = completeness,
                     isDiffusionSoftDeleted = diffusionSoftDeleted,
                     areUtilityRegistryEntriesAbsent = areUtilityRegistryEntriesAbsent,
-                    showDownloadAction =
-                        diffusionSoftDeleted ||
-                            areUtilityRegistryEntriesAbsent ||
-                            !completeness.isComplete,
+                    showDownloadAction = isEligible && needsDownloadAction,
                     disabledReason = disabledReason,
                     isEligible = isEligible,
                 )
@@ -89,11 +93,33 @@ class GetModelPacksForSettingsUseCase
         }
 
         private fun packEligibility(packId: String): Pair<Boolean, String?> {
-            if (packId != SDXL_PACK_ID) {
-                return true to null
+            val capabilities = capabilityPort.getCapabilities()
+            return when (packId) {
+                SDXL_PACK_ID -> {
+                    val isEligible = capabilities.sdxlNpuSupported == LocalImageGenTriState.YES
+                    val disabledReason =
+                        if (isEligible) {
+                            null
+                        } else {
+                            capabilities.disabledReasonsByModelId[LocalImageGenerationModelId.SDXL_QNN]
+                                ?: packBlockedReason(capabilities)
+                        }
+                    isEligible to disabledReason
+                }
+                SD15_PACK_ID -> {
+                    val isEligible = capabilities.sd15NpuSupported == LocalImageGenTriState.YES
+                    val disabledReason = if (isEligible) null else packBlockedReason(capabilities)
+                    isEligible to disabledReason
+                }
+                else -> true to null
             }
-            throw NotImplementedError("TDD Red")
         }
+
+        private fun packBlockedReason(capabilities: LocalImageGenerationCapabilities): String? =
+            capabilities.disabledReasonsByModelId.values.firstOrNull()
+                ?: capabilities.diagnostics.firstOrNull { diagnostic ->
+                    diagnostic.contains("Insufficient RAM") || diagnostic.contains("Requires arm64")
+                }
 
         private fun incompleteCompleteness(pack: ModelPack): ModelPackCompleteness =
             ModelPackCompleteness(
@@ -105,6 +131,7 @@ class GetModelPacksForSettingsUseCase
             )
 
         private companion object {
+            const val SD15_PACK_ID = "sd15-t2i"
             const val SDXL_PACK_ID = "sdxl-t2i"
         }
     }

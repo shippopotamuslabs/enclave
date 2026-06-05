@@ -1,8 +1,10 @@
 package com.browntowndev.enclave.domain.usecase.media
 
-import com.browntowndev.enclave.domain.model.media.ImageGenerationTarget
-import com.browntowndev.enclave.domain.model.media.ProviderCapabilities
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.enclave.domain.model.media.ImageGenerationTarget
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelPolicy
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelRegistry
+import com.browntowndev.enclave.domain.model.media.ProviderCapabilities
 import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import javax.inject.Inject
 
@@ -17,8 +19,15 @@ class GetImageGenerationCapabilitiesUseCase
     constructor(
         private val localModelRepository: LocalModelRepositoryPort,
     ) {
-        suspend fun localCapabilities(localConfigId: LocalModelConfigurationId): ProviderCapabilities =
-            throw NotImplementedError("TDD Red")
+        suspend fun localCapabilities(localConfigId: LocalModelConfigurationId): ProviderCapabilities {
+            val asset =
+                localModelRepository.getAssetByConfigId(localConfigId)
+                    ?: error("Missing local model configuration for $localConfigId.")
+            val descriptor =
+                LocalImageGenerationModelRegistry.descriptorFor(asset)
+                    ?: error("Assigned local model is not an image generation model.")
+            return LocalImageGenerationModelPolicy.providerCapabilitiesFor(descriptor.id)
+        }
 
         operator fun invoke(target: ImageGenerationTarget): ProviderCapabilities =
             when (target) {

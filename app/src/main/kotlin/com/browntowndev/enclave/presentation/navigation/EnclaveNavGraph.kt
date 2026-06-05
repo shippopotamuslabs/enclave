@@ -8,6 +8,7 @@ import androidx.compose.runtime.setValue
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import com.browntowndev.enclave.domain.model.download.DownloadModelsResult
+import com.browntowndev.enclave.feature.download.DownloadPlanRefresher
 import com.browntowndev.enclave.feature.onboarding.ModelChoice
 
 @Composable
@@ -17,6 +18,7 @@ fun EnclaveNavGraph(
     startDestination: String,
     modelsResult: DownloadModelsResult?,
     errorMessage: String? = null,
+    refreshDownloadPlan: DownloadPlanRefresher? = null,
 ) {
     val chatActions =
         ChatNavActions(
@@ -133,6 +135,7 @@ fun EnclaveNavGraph(
                     popUpTo(Routes.MODEL_DOWNLOAD) { inclusive = true }
                 }
             },
+            refreshDownloadPlan = refreshDownloadPlan,
         )
         chatNavGraph(
             actions = chatActions,

@@ -67,3 +67,20 @@ Mirror that folder on device under `Android/data/com.browntowndev.enclave/files/
 
 - **SD 1.5**: QNN first, MNN CPU fallback, clear error if neither is available.
 - **SDXL**: QNN only on Snapdragon 8 Gen 3+ class devices; no CPU fallback by default.
+
+## Licensing (pre–Play Store)
+
+| Component | License | Notes |
+|-----------|---------|--------|
+| Enclave app code | Project license | Kotlin, JNI bridge, domain/inference wiring |
+| `libstable_diffusion_core.so` | **CC BY-NC 4.0** (Local Dream) | Non-commercial unless you obtain separate rights or replace the backend |
+| QNN `.so` libraries | **Qualcomm proprietary (QAIRT EULA)** | Dev builds may use APK-extracted libs; **release builds must sync from QAIRT** after accepting the EULA |
+| Bundled model weights | Per model card | Disclosed in Settings → **Licenses & Attributions** (`Model:` entries) |
+| `stb_image_write` | Public domain | PNG output in local-image-gen-android |
+
+Before Play Store release:
+
+1. Accept the Qualcomm QAIRT EULA at https://softwarecenter.qualcomm.com/
+2. Set `qnn.sdk.dir` and run `./scripts/sync-qnn-jniLibs.sh` (stop relying on Local Dream APK extraction for QNN)
+3. Resolve Local Dream **CC BY-NC** vs commercial subscription plans (replace backend or obtain rights)
+4. Legal review of bundled HF model terms (SD 1.5 Open RAIL-M, SDXL Open RAIL++-M, LLM checkpoints, etc.)

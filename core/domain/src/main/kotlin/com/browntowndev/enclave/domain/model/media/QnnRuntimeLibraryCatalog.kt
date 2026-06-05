@@ -16,26 +16,51 @@ object QnnRuntimeLibraryCatalog {
     fun runtimeLibrariesFor(tier: SnapdragonTier): List<String> =
         coreLibraries + hexagonLibrariesFor(tier)
 
-    private fun hexagonLibrariesFor(tier: SnapdragonTier): List<String> =
-        when (tier) {
-            // Gen3+ devices run the 8gen2 (HTP V73) SD pack — there is no published
-            // 8gen3+ archive (see [com.browntowndev.enclave.domain.model.download.Sd15QnnPackVariant]).
-            // The runtime skel must match the pack's compiled Hexagon version (V73), not the
-            // device's native version, or QNN init dereferences a null backend and crashes.
-            // V79 is retained for the device-native arch / forward compatibility.
-            SnapdragonTier.GEN3_PLUS ->
+    /** Hexagon variant required by a specific on-device image model's compiled QNN graphs. */
+    fun runtimeLibrariesForModel(modelId: LocalImageGenerationModelId): List<String> =
+        coreLibraries + hexagonLibrariesForModel(modelId)
+
+    /** Primary skeleton library that must exist before launching QNN for [modelId]. */
+    fun primarySkelLibraryFor(modelId: LocalImageGenerationModelId): String =
+        when (modelId) {
+            LocalImageGenerationModelId.SDXL_QNN -> "libQnnHtpV81Skel.so"
+            LocalImageGenerationModelId.SD15_QNN,
+            LocalImageGenerationModelId.SD15_CPU,
+            -> "libQnnHtpV73Skel.so"
+        }
+
+    private fun hexagonLibrariesForModel(modelId: LocalImageGenerationModelId): List<String> =
+        when (modelId) {
+            LocalImageGenerationModelId.SDXL_QNN ->
+                variant(
+                    stub = "libQnnHtpV81Stub.so",
+                    lib = "libQnnHtpV81.so",
+                    skel = "libQnnHtpV81Skel.so",
+                )
+            LocalImageGenerationModelId.SD15_QNN ->
                 variant(
                     stub = "libQnnHtpV73Stub.so",
                     lib = "libQnnHtpV73.so",
                     skel = "libQnnHtpV73Skel.so",
-                ) +
+                )
+            LocalImageGenerationModelId.SD15_CPU -> emptyList()
+        }
+
+    private fun hexagonLibrariesFor(tier: SnapdragonTier): List<String> =
+        when (tier) {
+            // Gen3+ runs SD1.5 from the 8gen2 (V73) pack and SDXL from the 8gen3 (V81) pack.
+            // Both Hexagon families must be present or one model loads the wrong skel and crashes.
+            SnapdragonTier.GEN3_PLUS ->
+                hexagonLibrariesForModel(LocalImageGenerationModelId.SD15_QNN) +
+                    hexagonLibrariesForModel(LocalImageGenerationModelId.SDXL_QNN) +
                     variant(
                         stub = "libQnnHtpV79Stub.so",
                         lib = "libQnnHtpV79.so",
                         skel = "libQnnHtpV79Skel.so",
                     )
             SnapdragonTier.GEN2,
-            SnapdragonTier.GEN1 ->
+            SnapdragonTier.GEN1,
+            ->
                 variant(
                     stub = "libQnnHtpV73Stub.so",
                     lib = "libQnnHtpV73.so",

@@ -38,6 +38,7 @@ class MnnCpuStableDiffusionBackend
                         height = request.height,
                         steps = request.steps,
                         cfgScale = request.cfgScale,
+                        scheduler = request.scheduler,
                         seed = request.seed,
                         outputPath = outputPath,
                     )

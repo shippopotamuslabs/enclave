@@ -14,6 +14,7 @@ extern "C" int qnn_generate_image(
     int height,
     int steps,
     float cfg_scale,
+    const char* scheduler,
     long seed,
     const char* output_path,
     char* error_out,
@@ -28,6 +29,7 @@ extern "C" int mnn_generate_image(
     int height,
     int steps,
     float cfg_scale,
+    const char* scheduler,
     long seed,
     const char* output_path,
     char* error_out,
@@ -72,11 +74,13 @@ Java_com_browntowndev_enclave_localimagegen_LocalImageGenNative_nativeGenerateQn
     jint height,
     jint steps,
     jfloat cfg_scale,
+    jstring scheduler,
     jlong seed,
     jstring output_path) {
     const char* model_dir_c = env->GetStringUTFChars(model_dir, nullptr);
     const char* prompt_c = env->GetStringUTFChars(prompt, nullptr);
     const char* negative_c = negative_prompt ? env->GetStringUTFChars(negative_prompt, nullptr) : "";
+    const char* scheduler_c = scheduler ? env->GetStringUTFChars(scheduler, nullptr) : "dpm";
     const char* output_c = env->GetStringUTFChars(output_path, nullptr);
     char error[512] = {};
     const int code = qnn_generate_image(
@@ -87,6 +91,7 @@ Java_com_browntowndev_enclave_localimagegen_LocalImageGenNative_nativeGenerateQn
         height,
         steps,
         cfg_scale,
+        scheduler_c,
         seed,
         output_c,
         error,
@@ -95,6 +100,9 @@ Java_com_browntowndev_enclave_localimagegen_LocalImageGenNative_nativeGenerateQn
     env->ReleaseStringUTFChars(prompt, prompt_c);
     if (negative_prompt) {
         env->ReleaseStringUTFChars(negative_prompt, negative_c);
+    }
+    if (scheduler) {
+        env->ReleaseStringUTFChars(scheduler, scheduler_c);
     }
     env->ReleaseStringUTFChars(output_path, output_c);
     if (code != 0) {
@@ -114,11 +122,13 @@ Java_com_browntowndev_enclave_localimagegen_LocalImageGenNative_nativeGenerateMn
     jint height,
     jint steps,
     jfloat cfg_scale,
+    jstring scheduler,
     jlong seed,
     jstring output_path) {
     const char* model_dir_c = env->GetStringUTFChars(model_dir, nullptr);
     const char* prompt_c = env->GetStringUTFChars(prompt, nullptr);
     const char* negative_c = negative_prompt ? env->GetStringUTFChars(negative_prompt, nullptr) : "";
+    const char* scheduler_c = scheduler ? env->GetStringUTFChars(scheduler, nullptr) : "dpm";
     const char* output_c = env->GetStringUTFChars(output_path, nullptr);
     char error[512] = {};
     const int code = mnn_generate_image(
@@ -129,6 +139,7 @@ Java_com_browntowndev_enclave_localimagegen_LocalImageGenNative_nativeGenerateMn
         height,
         steps,
         cfg_scale,
+        scheduler_c,
         seed,
         output_c,
         error,
@@ -137,6 +148,9 @@ Java_com_browntowndev_enclave_localimagegen_LocalImageGenNative_nativeGenerateMn
     env->ReleaseStringUTFChars(prompt, prompt_c);
     if (negative_prompt) {
         env->ReleaseStringUTFChars(negative_prompt, negative_c);
+    }
+    if (scheduler) {
+        env->ReleaseStringUTFChars(scheduler, scheduler_c);
     }
     env->ReleaseStringUTFChars(output_path, output_c);
     if (code != 0) {

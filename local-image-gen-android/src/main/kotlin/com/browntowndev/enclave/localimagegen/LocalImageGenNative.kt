@@ -28,6 +28,7 @@ internal object LocalImageGenNative {
         height: Int,
         steps: Int,
         cfgScale: Float,
+        scheduler: String,
         seed: Long,
         outputPath: String,
     ): Int
@@ -40,6 +41,7 @@ internal object LocalImageGenNative {
         height: Int,
         steps: Int,
         cfgScale: Float,
+        scheduler: String,
         seed: Long,
         outputPath: String,
     ): Int

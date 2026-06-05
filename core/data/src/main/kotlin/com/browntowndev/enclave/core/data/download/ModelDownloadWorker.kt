@@ -8,6 +8,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
+import com.browntowndev.enclave.core.data.download.remote.DownloadHttpErrors
 import com.browntowndev.enclave.core.data.download.remote.DownloadSecurity
 import com.browntowndev.enclave.domain.model.download.DownloadArtifact
 import com.browntowndev.enclave.domain.model.download.DownloadFileSpec
@@ -113,8 +114,9 @@ class ModelDownloadWorker
                 "Starting download of ${uniqueSpecs.size} unique file specs: ${uniqueSpecs.joinToString { it.remoteFileName }}",
             )
 
-            // Initialize progress tracker with spec list (deduplicates by SHA256 internally)
-            progressTracker.initialize(uniqueSpecs)
+            // Initialize progress tracker with spec list (deduplicates by SHA256 internally).
+            // Preserve terminal failures across WorkManager retries so the UI does not flip back to 0/b.
+            progressTracker.initialize(uniqueSpecs, preserveFailedStates = runAttemptCount > 0)
 
             return coroutineScope {
                 // Channel for conflated progress updates to avoid overwhelming WorkManager's SQLite
@@ -187,11 +189,26 @@ class ModelDownloadWorker
                     // Final result building
                     if (failedCount.get() > 0) {
                         val currentAttempt = runAttemptCount
-                        if (currentAttempt >= ModelConfig.MAX_RETRY_ATTEMPTS) {
-                            logger.error(TAG, "Max retry attempts ($currentAttempt) exceeded, failing permanently")
+                        val hasNonRetryableFailure =
+                            progressTracker
+                                .getFileStates()
+                                .values
+                                .any { it.status == FileStatus.FAILED && DownloadHttpErrors.isNonRetryable(it.error) }
+                        try {
+                            setProgress(progressTracker.serializeToWorkData())
+                        } catch (e: Exception) {
+                            logger.warning(TAG, "Failed to flush terminal failure progress: ${e.message}")
+                        }
+                        if (hasNonRetryableFailure || currentAttempt >= ModelConfig.MAX_RETRY_ATTEMPTS) {
+                            if (hasNonRetryableFailure) {
+                                logger.error(TAG, "Non-retryable download failure detected, failing permanently")
+                            } else {
+                                logger.error(TAG, "Max retry attempts ($currentAttempt) exceeded, failing permanently")
+                            }
                             Result.failure(
                                 workDataOf(
-                                    DownloadWorkKeys.KEY_ERROR_MESSAGE to "Download failed after $currentAttempt attempts",
+                                    DownloadWorkKeys.KEY_ERROR_MESSAGE to
+                                        buildTerminalFailureMessage(progressTracker, currentAttempt + 1),
                                     DownloadWorkKeys.KEY_REQUEST_KIND to requestKind,
                                     DownloadWorkKeys.KEY_WORKER_STAGE to STAGE_DOWNLOAD,
                                     DownloadWorkKeys.KEY_SESSION_ID to sessionId,
@@ -284,6 +301,17 @@ class ModelDownloadWorker
                 // Trigger final progress update for this spec
                 progressChannel.trySend(Unit)
 
+                return
+            }
+
+            val existingState = progressTracker.getFileStates()[trackingKey]
+            if (existingState?.status == FileStatus.FAILED &&
+                DownloadHttpErrors.isNonRetryable(existingState.error)
+            ) {
+                logger.warning(
+                    TAG,
+                    "Skipping re-download of ${spec.localFileName}: ${existingState.error}",
+                )
                 return
             }
 
@@ -407,6 +435,25 @@ class ModelDownloadWorker
         /**
          * Returns a failure result with error metadata.
          */
+        private fun buildTerminalFailureMessage(
+            progressTracker: DownloadProgressTracker,
+            attempts: Int,
+        ): String {
+            val failed =
+                progressTracker
+                    .getFileStates()
+                    .values
+                    .filter { it.status == FileStatus.FAILED }
+            val firstFailure = failed.firstOrNull()
+            return if (firstFailure != null) {
+                val fileName = firstFailure.spec.localFileName
+                val reason = firstFailure.error?.takeIf { it.isNotBlank() } ?: "Download failed"
+                "Failed to download $fileName after $attempts attempts: $reason"
+            } else {
+                "Download failed after $attempts attempts"
+            }
+        }
+
         private fun failWithError(errorMessage: String): Result =
             Result.failure(
                 workDataOf(

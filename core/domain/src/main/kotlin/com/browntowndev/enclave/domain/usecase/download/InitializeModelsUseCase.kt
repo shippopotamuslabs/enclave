@@ -9,7 +9,9 @@ import com.browntowndev.enclave.domain.model.download.ParsedModelCatalog
 import com.browntowndev.enclave.domain.model.download.filterForDownload
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.download.ModelDownloadOrchestratorPort
+import com.browntowndev.enclave.domain.port.download.QnnPackInstallerPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.domain.model.media.LocalImageGenTriState
 import com.browntowndev.enclave.domain.port.media.GpuCapabilityPort
 import com.browntowndev.enclave.domain.port.media.LocalImageGenerationCapabilityPort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
@@ -42,12 +44,15 @@ class InitializeModelsUseCase
         private val gpuCapabilityPort: GpuCapabilityPort,
         private val capabilityPort: LocalImageGenerationCapabilityPort,
         private val resolveSd15QnnPackCatalogAssetUseCase: ResolveSd15QnnPackCatalogAssetUseCase,
+        private val qnnPackInstaller: QnnPackInstallerPort,
         @param:ApplicationScope private val externalScope: CoroutineScope,
         private val logPort: LoggingPort,
     ) {
         companion object {
             private const val TAG = "InitializeModelsUseCase"
             private const val SDXL_PACK_ID = "sdxl-t2i"
+            private val IMAGE_GEN_QNN_PACK_TYPES =
+                setOf(UtilityType.SD15_QNN_PACK, UtilityType.SDXL_QNN_PACK)
         }
 
         /**
@@ -114,6 +119,8 @@ class InitializeModelsUseCase
 
             val remoteAssets = catalog.assets
             logPort.debug(TAG, "Fetched ${remoteAssets.size} remote assets")
+
+            ensureInstalledQnnPackUtilities(remoteAssets)
 
             val imageGenerationIsApi =
                 activeModelProvider.getActiveConfiguration(ModelType.IMAGE_GENERATION)?.isLocal == false
@@ -268,17 +275,79 @@ class InitializeModelsUseCase
             syncUtilityModelRegistryUseCase(asset)
         }
 
+        private suspend fun ensureInstalledQnnPackUtilities(assets: List<LocalModelAsset>) {
+            assets
+                .filter { asset -> asset.metadata.utilityType in IMAGE_GEN_QNN_PACK_TYPES }
+                .forEach { asset ->
+                    runCatching {
+                        if (qnnPackInstaller.installIfNeeded(asset.metadata)) {
+                            logPort.debug(
+                                TAG,
+                                "Ensured QNN pack extracted for ${asset.metadata.utilityType}",
+                            )
+                        }
+                    }.onFailure { error ->
+                        logPort.warning(
+                            TAG,
+                            "QNN pack install attempt failed for ${asset.metadata.utilityType}: ${error.message}",
+                        )
+                    }
+                }
+        }
+
         private fun applyTierAwareImagePackDownloadFilter(
             catalog: ParsedModelCatalog,
             suppressImageGenerationDownloads: Boolean,
             slotAssignments: Map<ModelType, LocalModelAsset>,
             utilityAssets: List<LocalModelAsset>,
         ): Pair<Map<ModelType, LocalModelAsset>, List<LocalModelAsset>> {
-            if (suppressImageGenerationDownloads || catalog.packs.none { it.packId == SDXL_PACK_ID }) {
+            if (suppressImageGenerationDownloads) {
                 return slotAssignments to utilityAssets
             }
-            capabilityPort.getCapabilities()
-            throw NotImplementedError("TDD Red")
+            val capabilities = capabilityPort.getCapabilities()
+            if (capabilities.sd15NpuSupported == LocalImageGenTriState.NO) {
+                return excludeAllImageGenerationPackMembers(catalog, slotAssignments, utilityAssets)
+            }
+            if (catalog.packs.none { it.packId == SDXL_PACK_ID }) {
+                return slotAssignments to utilityAssets
+            }
+            if (capabilities.sdxlNpuSupported == LocalImageGenTriState.YES) {
+                return slotAssignments to utilityAssets
+            }
+            val sdxlMemberShas = sdxlPackMemberSha256s(catalog)
+            val filteredSlots =
+                slotAssignments.filterValues { asset ->
+                    asset.metadata.sha256 !in sdxlMemberShas
+                }
+            val filteredUtilities =
+                utilityAssets.filter { asset ->
+                    asset.metadata.sha256 !in sdxlMemberShas &&
+                        asset.metadata.utilityType != UtilityType.SDXL_QNN_PACK
+                }
+            return filteredSlots to filteredUtilities
+        }
+
+        private fun excludeAllImageGenerationPackMembers(
+            catalog: ParsedModelCatalog,
+            slotAssignments: Map<ModelType, LocalModelAsset>,
+            utilityAssets: List<LocalModelAsset>,
+        ): Pair<Map<ModelType, LocalModelAsset>, List<LocalModelAsset>> {
+            val imageGenPackMemberShas = catalog.packMemberSha256sForSlot(ModelType.IMAGE_GENERATION)
+            val filteredSlots =
+                slotAssignments.filterValues { asset ->
+                    asset.metadata.sha256 !in imageGenPackMemberShas
+                }
+            val filteredUtilities =
+                utilityAssets.filter { asset ->
+                    asset.metadata.sha256 !in imageGenPackMemberShas &&
+                        asset.metadata.utilityType !in IMAGE_GEN_QNN_PACK_TYPES
+                }
+            return filteredSlots to filteredUtilities
+        }
+
+        private fun sdxlPackMemberSha256s(catalog: ParsedModelCatalog): Set<String> {
+            val sdxlPack = catalog.packs.firstOrNull { it.packId == SDXL_PACK_ID } ?: return emptySet()
+            return sdxlPack.members.map { it.asset.metadata.sha256 }.toSet()
         }
 
         private fun augmentSd15QnnPackUtilities(

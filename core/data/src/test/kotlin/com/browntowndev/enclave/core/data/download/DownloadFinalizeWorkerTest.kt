@@ -38,6 +38,7 @@ import com.browntowndev.enclave.domain.model.download.ModelPack
 import com.browntowndev.enclave.domain.model.download.ModelPackVerificationDepth
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationPaths
 import com.browntowndev.enclave.domain.port.download.HashingPort
+import com.browntowndev.enclave.domain.port.download.QnnPackInstallerPort
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
@@ -103,7 +104,7 @@ class DownloadFinalizeWorkerTest {
     private lateinit var mockLoggingPort: LoggingPort
 
     @MockK
-    private lateinit var mockSd15QnnPackInstaller: Sd15QnnPackInstaller
+    private lateinit var mockQnnPackInstaller: QnnPackInstallerPort
 
     @MockK
     private lateinit var mockResolveSd15QnnPackCatalogAssetUseCase: ResolveSd15QnnPackCatalogAssetUseCase
@@ -139,7 +140,7 @@ class DownloadFinalizeWorkerTest {
         every { mockLoggingPort.warning(any(), any()) } returns Unit
         every { mockLoggingPort.error(any(), any()) } returns Unit
         every { mockLoggingPort.error(any(), any(), any()) } returns Unit
-        coEvery { mockSd15QnnPackInstaller.installIfNeeded(any()) } returns true
+        coEvery { mockQnnPackInstaller.installIfNeeded(any(), any()) } returns true
 
         // Create the worker with all dependencies
         worker =
@@ -150,7 +151,7 @@ class DownloadFinalizeWorkerTest {
                 modelConfigFetcher = mockModelConfigFetcher,
                 syncLocalModelRegistryUseCase = mockSyncLocalModelRegistryUseCase,
                 syncUtilityModelRegistryUseCase = syncUtilityModelRegistryUseCase,
-                sd15QnnPackInstaller = mockSd15QnnPackInstaller,
+                qnnPackInstaller = mockQnnPackInstaller,
                 resolveSd15QnnPackCatalogAssetUseCase = mockResolveSd15QnnPackCatalogAssetUseCase,
                 embeddingCoordinator = mockEmbeddingCoordinator,
                 logger = mockLoggingPort,
@@ -1067,11 +1068,17 @@ class DownloadFinalizeWorkerTest {
                 ),
             )
             coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(sdxlAsset))
-            coEvery { mockSd15QnnPackInstaller.installIfNeeded(match { it.utilityType == UtilityType.SDXL_QNN_PACK }) } returns false
+            coEvery {
+                mockQnnPackInstaller.installIfNeeded(
+                    match { it.utilityType == UtilityType.SDXL_QNN_PACK },
+                    any(),
+                )
+            } returns false
 
-            worker.doWork()
+            val result = worker.doWork()
 
-            assertFalse(LocalImageGenerationPaths.hasQnnArtifacts(packDir))
+            assertTrue(result is androidx.work.ListenableWorker.Result.Failure)
+            assertFalse(LocalImageGenerationPaths.hasSdxlQnnArtifacts(packDir))
             val packVerifier = ModelPackVerifierImpl(mockContext, mockk<HashingPort>(relaxed = true))
             val completeness =
                 packVerifier.verifyPack(
@@ -1089,7 +1096,10 @@ class DownloadFinalizeWorkerTest {
                 fakeUtilityModelRepository.getByUtilityType(UtilityType.SDXL_QNN_PACK),
             )
             coVerify(exactly = 1) {
-                mockSd15QnnPackInstaller.installIfNeeded(match { it.utilityType == UtilityType.SDXL_QNN_PACK })
+                mockQnnPackInstaller.installIfNeeded(
+                    match { it.utilityType == UtilityType.SDXL_QNN_PACK },
+                    any(),
+                )
             }
             coVerify(exactly = 0) { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) }
         }
@@ -1137,7 +1147,12 @@ class DownloadFinalizeWorkerTest {
                 com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId("sd15-local-config")
             var persistedImageGenerationDefault = existingSd15Default
             coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(sdxlAsset))
-            coEvery { mockSd15QnnPackInstaller.installIfNeeded(match { it.utilityType == UtilityType.SDXL_QNN_PACK }) } returns true
+            coEvery {
+                mockQnnPackInstaller.installIfNeeded(
+                    match { it.utilityType == UtilityType.SDXL_QNN_PACK },
+                    any(),
+                )
+            } returns true
             coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) } answers {
                 val modelType = firstArg<ModelType>()
                 val asset = secondArg<LocalModelAsset>()
@@ -1151,7 +1166,10 @@ class DownloadFinalizeWorkerTest {
             worker.doWork()
 
             coVerify(exactly = 1) {
-                mockSd15QnnPackInstaller.installIfNeeded(match { it.utilityType == UtilityType.SDXL_QNN_PACK })
+                mockQnnPackInstaller.installIfNeeded(
+                    match { it.utilityType == UtilityType.SDXL_QNN_PACK },
+                    any(),
+                )
             }
             // The SDXL local asset is registered as assignable (utility registry row present).
             assertEquals(

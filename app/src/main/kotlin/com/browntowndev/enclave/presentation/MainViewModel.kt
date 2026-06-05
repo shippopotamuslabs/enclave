@@ -787,6 +787,10 @@ class MainViewModel
             }
         }
 
+        suspend fun refreshDownloadModels() {
+            initializeModelsUseCase()
+        }
+
         private suspend fun initializeModelsIfNeeded() {
             val readyState = startupState.value as? AppStartupState.Ready
             if (readyState?.modelsResult != null && readyState.initializationError == null) {

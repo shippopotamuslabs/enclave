@@ -778,6 +778,25 @@ private fun ImageSettingsSection(
                 }
                 SettingsGroupDivider()
             }
+            if (caps.supportedImageSteps.isNotEmpty()) {
+                val stepOptions = caps.supportedImageSteps.map(Int::toString)
+                val selectedStep =
+                    (settings.diffusionSteps ?: caps.defaultImageStep).toString()
+                SettingRow(
+                    label = "Diffusion Steps",
+                    controlFullWidth = true,
+                ) {
+                    PillSelector(
+                        selected = selectedStep,
+                        options = stepOptions,
+                        onSelected = { step ->
+                            onUpdateSettings(settings.copy(diffusionSteps = step.toInt()))
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                SettingsGroupDivider()
+            }
             SettingRow(label = "Generation Count") {
                 GenerationCountPicker(
                     count = settings.generationCount,

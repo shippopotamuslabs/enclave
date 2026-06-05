@@ -275,8 +275,32 @@ internal fun applyLocalImageAssignmentEligibility(
     if (modelPacks.isEmpty()) {
         return assets
     }
-    throw NotImplementedError("TDD Red")
+    val blockedPackIds = modelPacks.filter { !it.isEligible }.map { it.packId }.toSet()
+    if (blockedPackIds.isEmpty()) {
+        return assets
+    }
+    return assets.filter { asset ->
+        when {
+            !asset.isImageGenerationCapable -> true
+            asset.imageGenerationPackId() in blockedPackIds -> false
+            else -> true
+        }
+    }
 }
+
+private const val SD15_PACK_ID = "sd15-t2i"
+private const val SDXL_PACK_ID = "sdxl-t2i"
+private const val SD15_LOCAL_CONFIG_ID = "sd15-local-config"
+private const val SDXL_LOCAL_CONFIG_ID = "sdxl-local-config"
+
+private fun LocalModelAssetUi.imageGenerationPackId(): String? =
+    configurations.firstNotNullOfOrNull { config ->
+        when (config.id.value) {
+            SD15_LOCAL_CONFIG_ID -> SD15_PACK_ID
+            SDXL_LOCAL_CONFIG_ID -> SDXL_PACK_ID
+            else -> null
+        }
+    }
 
 private val LOCAL_MODEL_UNSUPPORTED_ASSIGNMENT_TYPES =
     setOf(

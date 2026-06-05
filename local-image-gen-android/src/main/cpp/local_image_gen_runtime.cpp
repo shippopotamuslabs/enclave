@@ -160,7 +160,9 @@ bool qnn_model_dir_ready(const char* model_dir, char* error_out, int error_out_l
         copy_error("Model directory is empty.", error_out, error_out_len);
         return false;
     }
-    const char* required[] = {
+    const std::string model_dir_str(model_dir);
+    const bool sdxl_layout = file_exists(model_dir_str + "/clip_2.mnn");
+    static const char* kSd15Required[] = {
         "clip_v2.mnn",
         "token_emb.bin",
         "pos_emb.bin",
@@ -168,11 +170,30 @@ bool qnn_model_dir_ready(const char* model_dir, char* error_out, int error_out_l
         "vae_decoder.bin",
         "tokenizer.json",
     };
-    for (const char* name : required) {
-        const std::string path = std::string(model_dir) + "/" + name;
-        if (!file_exists(path)) {
-            copy_error("Missing QNN model file in model directory.", error_out, error_out_len);
-            return false;
+    static const char* kSdxlRequired[] = {
+        "clip.mnn",
+        "clip_2.mnn",
+        "token_emb.bin",
+        "token_emb_2.bin",
+        "pos_emb.bin",
+        "pos_emb_2.bin",
+        "unet.bin",
+        "vae_decoder.bin",
+        "tokenizer.json",
+    };
+    if (sdxl_layout) {
+        for (const char* name : kSdxlRequired) {
+            if (!file_exists(model_dir_str + "/" + name)) {
+                copy_error("Missing QNN model file in model directory.", error_out, error_out_len);
+                return false;
+            }
+        }
+    } else {
+        for (const char* name : kSd15Required) {
+            if (!file_exists(model_dir_str + "/" + name)) {
+                copy_error("Missing QNN model file in model directory.", error_out, error_out_len);
+                return false;
+            }
         }
     }
     return true;

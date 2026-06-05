@@ -23,6 +23,7 @@ import com.browntowndev.enclave.domain.port.media.LocalImageGenerationCapability
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.ModelConfigFetcherPort
+import com.browntowndev.enclave.domain.port.download.QnnPackInstallerPort
 import com.browntowndev.enclave.domain.port.repository.TrustedDomainRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.UtilityModelRepositoryPort
 import com.browntowndev.enclave.domain.usecase.FakeUtilityModelRepository
@@ -60,6 +61,7 @@ class InitializeModelsUseCaseTest {
     private lateinit var gpuCapabilityPort: GpuCapabilityPort
     private lateinit var capabilityPort: LocalImageGenerationCapabilityPort
     private lateinit var resolveSd15QnnPackCatalogAssetUseCase: ResolveSd15QnnPackCatalogAssetUseCase
+    private lateinit var qnnPackInstaller: QnnPackInstallerPort
     private lateinit var useCase: InitializeModelsUseCase
 
     @BeforeEach
@@ -97,6 +99,8 @@ class InitializeModelsUseCaseTest {
                     override fun currentTier(): SnapdragonTier = SnapdragonTier.GEN1
                 },
             )
+        qnnPackInstaller = mockk(relaxed = true)
+        coEvery { qnnPackInstaller.installIfNeeded(any(), any()) } returns true
 
         useCase =
             InitializeModelsUseCase(
@@ -111,6 +115,7 @@ class InitializeModelsUseCaseTest {
                 gpuCapabilityPort,
                 capabilityPort,
                 resolveSd15QnnPackCatalogAssetUseCase,
+                qnnPackInstaller,
                 externalScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
                 logPort = logPort,
             )
@@ -793,5 +798,54 @@ class InitializeModelsUseCaseTest {
             // utilityAssets contains no SD15_QNN_PACK or SDXL_QNN_PACK.
             assertFalse(UtilityType.SD15_QNN_PACK in utilityTypes)
             assertFalse(UtilityType.SDXL_QNN_PACK in utilityTypes)
+        }
+
+    @Test
+    @DisplayName("CAP-008 insufficient RAM startup excludes SD15 and SDXL pack downloads")
+    fun cap008_insufficientRamStartupExcludesAllImagePackDownloads() =
+        runTest {
+            every { capabilityPort.getCapabilities() } returns
+                com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilities(
+                    snapdragonTier = SnapdragonTier.GEN3_PLUS,
+                    npuAvailable = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
+                    sd15NpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.NO,
+                    sd15CpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.NO,
+                    sdxlNpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.NO,
+                    recommendedBackend = com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind.NONE,
+                    recommendedModelId = null,
+                    diagnostics = listOf("Insufficient RAM for local diffusion (need >= 8 GiB)."),
+                )
+
+            val parsedCatalog = ModelPackTestFixtures.parsedCatalogWithSdxl()
+
+            coEvery { modelConfigFetcher.fetchParsedCatalog() } returns Result.success(parsedCatalog)
+            coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
+
+            val expectedModelsSlot = slot<Map<ModelType, LocalModelAsset>>()
+            val utilitySlot = slot<List<LocalModelAsset>>()
+            coEvery {
+                checkModelsUseCase(
+                    expectedModels = capture(expectedModelsSlot),
+                    utilityAssets = capture(utilitySlot),
+                )
+            } returns
+                DownloadModelsResult(
+                    allModels = emptyMap(),
+                    utilityAssets = emptyList(),
+                    modelsToDownload = emptyList(),
+                    scanResult = ModelScanResult(emptyList(), emptyMap(), false),
+                )
+
+            useCase()
+
+            val expectedShas = expectedModelsSlot.captured.values.map { it.metadata.sha256 }.toSet()
+            val utilityTypes = utilitySlot.captured.map { it.metadata.utilityType }.toSet()
+            val utilityShas = utilitySlot.captured.map { it.metadata.sha256 }.toSet()
+
+            assertFalse(ModelPackTestFixtures.DIFFUSION_SHA in expectedShas)
+            assertFalse(ModelPackTestFixtures.SDXL_DIFFUSION_SHA in expectedShas)
+            assertFalse(UtilityType.SD15_QNN_PACK in utilityTypes)
+            assertFalse(UtilityType.SDXL_QNN_PACK in utilityTypes)
+            assertFalse(ModelPackTestFixtures.SDXL_QNN_PACK_SHA in utilityShas)
         }
 }

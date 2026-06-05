@@ -468,6 +468,16 @@ private fun LocalModelAssetCard(
                                 modifier = Modifier.size(20.dp),
                             )
                         }
+                        is ReDownloadProgress.Finalizing -> {
+                            if (reDownloadProgress.progress != null) {
+                                NeoCircularProgressIndicator(
+                                    progress = { reDownloadProgress.progress },
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            } else {
+                                NeoCircularProgressIndicator(modifier = Modifier.size(20.dp))
+                            }
+                        }
                         is ReDownloadProgress.Complete -> {
                             Icon(
                                 imageVector = Icons.Default.CheckCircle,
@@ -638,7 +648,7 @@ private fun ModelPackCard(
     onReDownload: () -> Unit,
     onRequestDelete: () -> Unit,
 ) {
-    val showDownload = pack.showDownloadAction
+    val showDownload = pack.showDownloadAction && pack.isEligible
     val dismissState =
         rememberSwipeToDismissBoxState(
             confirmValueChange = { value ->
@@ -695,6 +705,14 @@ private fun ModelPackCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 2.dp),
                 )
+                pack.disabledReason?.takeIf { it.isNotBlank() }?.let { reason ->
+                    Text(
+                        text = reason,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
             }
             if (showDownload || reDownloadProgress != null) {
                 Box(
@@ -723,6 +741,16 @@ private fun ModelPackCard(
                                 progress = { reDownloadProgress.progress },
                                 modifier = Modifier.size(20.dp),
                             )
+                        }
+                        is ReDownloadProgress.Finalizing -> {
+                            if (reDownloadProgress.progress != null) {
+                                NeoCircularProgressIndicator(
+                                    progress = { reDownloadProgress.progress },
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            } else {
+                                NeoCircularProgressIndicator(modifier = Modifier.size(20.dp))
+                            }
                         }
                         ReDownloadProgress.Complete -> {
                             Icon(

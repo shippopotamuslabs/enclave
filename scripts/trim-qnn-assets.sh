@@ -12,6 +12,7 @@ case "$TIER" in
   gen3_plus)
     keep=(
       libQnnHtp.so libQnnSystem.so
+      libQnnHtpV73Stub.so libQnnHtpV73.so libQnnHtpV73Skel.so
       libQnnHtpV79Stub.so libQnnHtpV79.so libQnnHtpV79Skel.so
       libQnnHtpV81Stub.so libQnnHtpV81.so libQnnHtpV81Skel.so
     )

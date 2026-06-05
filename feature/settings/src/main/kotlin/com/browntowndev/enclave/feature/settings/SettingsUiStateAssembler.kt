@@ -66,20 +66,8 @@ class SettingsUiStateAssembler
             modelPackRows: List<ModelPackSettingsRow> = emptyList(),
         ): SettingsUiState {
             val resolvedPackRows = modelPackRows
-            // Utility pack members (VAE, text encoder) live only on the pack row. Diffusion stays in
-            // the flat list so Model Configuration can assign local IMAGE_GENERATION; the Local AI
-            // Models sheet hides image-gen rows via isImageGenerationCapable.
-            val packMemberUtilityFileNames =
-                resolvedPackRows
-                    .flatMap { row ->
-                        row.pack.members
-                            .filter { it.role != ModelPackRole.DIFFUSION }
-                            .map { it.asset.metadata.localFileName }
-                    }
-                    .toSet()
             val localModels =
-                localAssets
-                    .filter { asset -> asset.metadata.localFileName !in packMemberUtilityFileNames }
+                localModelsExcludingPackUtilities(localAssets, resolvedPackRows)
                     .map(localModelAssetUiMapper::map)
             val refreshedSelectedLocalAsset =
                 localModelsState.selectedAsset?.let { selected ->
@@ -510,3 +498,32 @@ class SettingsUiStateAssembler
                 )
         }
     }
+
+/**
+ * Utility pack members (VAE, text encoder) live only on the pack row. Diffusion stays in the flat
+ * list so Model Configuration can assign local IMAGE_GENERATION.
+ *
+ * Match by [LocalModelMetadata.utilityType] (not file name): SDXL diffusion and utility share one
+ * zip on disk.
+ */
+internal fun localModelsExcludingPackUtilities(
+    localAssets: List<LocalModelAsset>,
+    modelPackRows: List<ModelPackSettingsRow>,
+): List<LocalModelAsset> {
+    val packMemberUtilityIdentities =
+        modelPackRows
+            .flatMap { row ->
+                row.pack.members
+                    .filter { it.role != ModelPackRole.DIFFUSION }
+                    .mapNotNull { member ->
+                        member.asset.metadata.utilityType?.let { utilityType ->
+                            utilityType to member.asset.metadata.sha256
+                        }
+                    }
+            }
+            .toSet()
+    return localAssets.filter { asset ->
+        val utilityType = asset.metadata.utilityType ?: return@filter true
+        (utilityType to asset.metadata.sha256) !in packMemberUtilityIdentities
+    }
+}

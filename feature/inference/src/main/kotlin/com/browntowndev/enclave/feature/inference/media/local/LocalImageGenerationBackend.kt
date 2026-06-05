@@ -1,9 +1,11 @@
 package com.browntowndev.enclave.feature.inference.media.local
 
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId
 
 data class LocalImageGenerationNativeRequest(
     val backend: LocalImageGenerationBackendKind,
+    val modelId: LocalImageGenerationModelId,
     val modelDir: String,
     val prompt: String,
     val negativePrompt: String?,

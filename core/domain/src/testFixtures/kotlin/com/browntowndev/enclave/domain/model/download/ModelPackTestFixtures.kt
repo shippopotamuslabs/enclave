@@ -24,7 +24,7 @@ object ModelPackTestFixtures {
     // SDXL pack fixtures (verified metadata from spec.md).
     const val SDXL_PACK_ID = "sdxl-t2i"
     const val SDXL_PACK_DISPLAY = "Stable Diffusion XL (NPU)"
-    const val SDXL_DIFFUSION_FILE = "realvis_xl_v5_dmd2.gguf"
+    const val SDXL_DIFFUSION_FILE = "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip"
     const val SDXL_DIFFUSION_SHA = LocalImageGenerationModelRegistry.SDXL_QNN_SHA256
     const val SDXL_CONFIG_ID = "sdxl-local-config"
     const val SD15_QNN_PACK_FILE = "AnythingV5_qnn2.28_8gen2.zip"
@@ -107,12 +107,12 @@ object ModelPackTestFixtures {
                 LocalModelMetadata(
                     id = LocalModelId("sdxl-diffusion"),
                     displayName = SDXL_PACK_DISPLAY,
-                    huggingFaceModelName = "gpustack/stable-diffusion-xl-base-1.0-GGUF",
+                    huggingFaceModelName = "xororz/sdxl-qnn",
                     remoteFileName = SDXL_DIFFUSION_FILE,
                     localFileName = SDXL_DIFFUSION_FILE,
                     sha256 = SDXL_DIFFUSION_SHA,
                     sizeInBytes = 3_504_485_672L,
-                    modelFileFormat = ModelFileFormat.GGUF,
+                    modelFileFormat = ModelFileFormat.BIN,
                     source = DownloadSource.HUGGING_FACE,
                 ),
             configurations =

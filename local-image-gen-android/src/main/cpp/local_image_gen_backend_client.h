@@ -57,7 +57,7 @@ inline std::string build_generate_request_body(const GenerateRequest& request) {
          << "\"width\":" << request.width << ","
          << "\"height\":" << request.height << ","
          << "\"seed\":" << request.seed << ","
-         << "\"scheduler\":\"dpm\""
+         << "\"scheduler\":\"" << json_escape_field(request.scheduler) << "\""
          << "}";
     return body.str();
 }

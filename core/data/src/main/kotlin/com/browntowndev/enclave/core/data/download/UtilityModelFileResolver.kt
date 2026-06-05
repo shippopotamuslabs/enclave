@@ -4,6 +4,7 @@ import android.content.Context
 import com.browntowndev.enclave.domain.model.config.LocalModelMetadata
 import com.browntowndev.enclave.domain.model.config.UtilityType
 import com.browntowndev.enclave.domain.model.download.ModelConfig
+import com.browntowndev.enclave.domain.model.download.SdxlQnnPackCatalog
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationPaths
 import com.browntowndev.enclave.domain.port.download.HashingPort
 import com.browntowndev.enclave.domain.port.repository.UtilityModelFilePort
@@ -29,7 +30,11 @@ class UtilityModelFileResolver
                 val modelsDir = File(context.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
                 if (utilityType == UtilityType.SD15_QNN_PACK) {
                     val packDir = File(modelsDir, LocalImageGenerationPaths.SD15_QNN_SUBDIR)
-                    return@withContext packDir.takeIf(LocalImageGenerationPaths::hasQnnArtifacts)?.absolutePath
+                    return@withContext packDir.takeIf(LocalImageGenerationPaths::hasSd15QnnArtifacts)?.absolutePath
+                }
+                if (utilityType == UtilityType.SDXL_QNN_PACK) {
+                    val packDir = File(modelsDir, LocalImageGenerationPaths.SDXL_QNN_SUBDIR)
+                    return@withContext packDir.takeIf(LocalImageGenerationPaths::hasSdxlQnnArtifacts)?.absolutePath
                 }
                 val file = safeFile(modelsDir, metadata.localFileName)
                 if (file.matches(metadata.sizeInBytes, metadata.sha256)) {
@@ -43,6 +48,13 @@ class UtilityModelFileResolver
             withContext(Dispatchers.IO) {
                 if (metadata.localFileName.isBlank()) return@withContext null
                 val modelsDir = File(context.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
+                SdxlQnnPackCatalog.findBySha256(metadata.sha256)?.let {
+                    val packDir = File(modelsDir, LocalImageGenerationPaths.SDXL_QNN_SUBDIR)
+                    packDir
+                        .takeIf(LocalImageGenerationPaths::hasSdxlQnnArtifacts)
+                        ?.absolutePath
+                        ?.let { return@withContext it }
+                }
                 val file = safeFile(modelsDir, metadata.localFileName)
                 if (file.matches(metadata.sizeInBytes, metadata.sha256)) {
                     file.absolutePath

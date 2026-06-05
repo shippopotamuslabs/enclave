@@ -122,13 +122,15 @@ class SettingsViewModelTest {
     private val reassignmentOptionUiMapper = ReassignmentOptionUiMapper()
     private val errorHandler = mockk<ViewModelErrorHandler>()
 
+    private val localModelAssetsStateFlow = MutableStateFlow<List<LocalModelAsset>>(emptyList())
+
     private lateinit var viewModel: SettingsViewModel
 
     @BeforeEach
     fun setup() {
         val settingsFlow = MutableStateFlow(SettingsData())
         every { getSettingsUseCase() } returns settingsFlow
-        every { getLocalModelAssetsUseCase() } returns MutableStateFlow(emptyList())
+        every { getLocalModelAssetsUseCase() } returns localModelAssetsStateFlow
         val apiAssets =
             MockSettingsData.apiModels.map { uiAsset ->
                 com.browntowndev.enclave.domain.model.config.ApiModelAsset(
@@ -1086,17 +1088,13 @@ class SettingsViewModelTest {
                 isEligible = false,
             )
 
-            every { getLocalModelAssetsUseCase() } returns MutableStateFlow(listOf(sdxlAsset))
             coEvery { getModelPacksForSettingsUseCase() } returns listOf(packRow)
+            localModelAssetsStateFlow.value = listOf(sdxlAsset)
 
             viewModel.onShowModelConfigSheet(show = true)
             advanceUntilIdle()
 
             val state = viewModel.uiState.value
-            val mappedModel = state.localModelsSheet.models.firstOrNull { it.metadataId == LocalModelId("sdxl-model") }
-            // Blocked SDXL must be hidden from assignment options: either not surfaced as a model at all,
-            // or surfaced but explicitly NOT image-generation capable.
-            assertFalse(mappedModel?.isImageGenerationCapable == true)
             val assignmentOptions =
                 selectableLocalAssetsForSlot(
                     modelType = ModelType.IMAGE_GENERATION,

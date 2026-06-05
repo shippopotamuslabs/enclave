@@ -3,6 +3,8 @@ package com.browntowndev.enclave.feature.studio
 import app.cash.turbine.test
 import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.enclave.domain.model.download.ModelPackTestFixtures
+import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.config.MediaProviderAsset
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
@@ -71,7 +73,9 @@ class MultimodalViewModelTest {
     private val defaultModelRepository = mockk<DefaultModelRepositoryPort>(relaxed = true)
     private val mediaProviderRepository = mockk<MediaProviderRepositoryPort>(relaxed = true)
     private val resolveMediaProviderCapabilitiesUseCase = mockk<ResolveMediaProviderCapabilitiesUseCase>()
-    private val getImageGenerationCapabilitiesUseCase = mockk<GetImageGenerationCapabilitiesUseCase>(relaxed = true)
+    private val localModelRepository = mockk<LocalModelRepositoryPort>()
+    private val getImageGenerationCapabilitiesUseCase =
+        GetImageGenerationCapabilitiesUseCase(localModelRepository)
     private val chatUseCases = mockk<ChatUseCases>()
     private val listenToSpeechUseCase = mockk<ListenToSpeechUseCase>()
     private val playbackController = mockk<TtsPlaybackControllerPort>(relaxed = true)
@@ -171,6 +175,13 @@ class MultimodalViewModelTest {
                 supportedVideoDurations = listOf(5),
                 supportsVideo = true,
             )
+
+        coEvery {
+            localModelRepository.getAssetByConfigId(LocalModelConfigurationId("sd15-local-config"))
+        } returns ModelPackTestFixtures.diffusionAsset()
+        coEvery {
+            localModelRepository.getAssetByConfigId(LocalModelConfigurationId("sdxl-local-config"))
+        } returns ModelPackTestFixtures.sdxlDiffusionAsset()
 
         every { listenToSpeechUseCase.invoke(any(), any()) } returns speechEvents
         every { chatUseCases.listenToSpeechUseCase } returns listenToSpeechUseCase
@@ -385,14 +396,8 @@ class MultimodalViewModelTest {
             advanceUntilIdle()
 
             val state = viewModel.uiState.value
-            assertEquals(
-                com.browntowndev.enclave.domain.model.media.LocalStableDiffusionCapabilities.supportedAspectRatios,
-                state.capabilities?.supportedAspectRatios,
-            )
-            assertEquals(
-                com.browntowndev.enclave.domain.model.media.LocalStableDiffusionCapabilities.supportedImageResolutions,
-                state.capabilities?.supportedImageResolutions,
-            )
+            assertEquals(listOf(AspectRatio.ONE_ONE), state.capabilities?.supportedAspectRatios)
+            assertEquals(listOf("512x512"), state.capabilities?.supportedImageResolutions)
             assertFalse(state.isCapabilitiesLoading)
             job.cancel()
         }

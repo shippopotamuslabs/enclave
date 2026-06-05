@@ -2,6 +2,7 @@ package com.browntowndev.enclave.core.data.download
 
 import android.content.Context
 import android.util.Log
+import com.browntowndev.enclave.domain.model.config.LocalModelArtifact
 import com.browntowndev.enclave.domain.model.config.LocalModelAsset
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelId
@@ -10,6 +11,7 @@ import com.browntowndev.enclave.domain.model.config.requiredArtifacts
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationPaths
 import com.browntowndev.enclave.domain.model.download.ModelConfig
 import com.browntowndev.enclave.domain.model.download.ModelScanResult
+import com.browntowndev.enclave.domain.model.download.SdxlQnnPackCatalog
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.download.ModelFileScannerPort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
@@ -89,83 +91,11 @@ class ModelFileScanner
 
                 // Iterate over expected assets (what we want to have)
                 for (expectedAsset in expectedAssets) {
-                    if (expectedAsset.metadata.utilityType == UtilityType.SD15_QNN_PACK) {
-                        val packDir = File(modelsDir, LocalImageGenerationPaths.SD15_QNN_SUBDIR)
-                        if (!LocalImageGenerationPaths.hasQnnArtifacts(packDir)) {
-                            missingModels.add(expectedAsset)
-                        }
-                        continue
-                    }
-                    var assetMissing = false
-                    var assetInvalid = false
-                    expectedAsset.metadata.requiredArtifacts().forEach { artifact ->
-                        val filename = artifact.localFileName
-                        val file = getSafeFile(modelsDir, filename)
-                        val tempFile = getSafeFile(modelsDir, "${filename}${ModelConfig.TEMP_EXTENSION}")
-                        val metaFile = getSafeFile(modelsDir, "${filename}${ModelConfig.TEMP_META_EXTENSION}")
-
-                        val fileExists = file.exists()
-                        val tempExists = tempFile.exists()
-                        val tempLength = if (tempExists) tempFile.length() else 0L
-
-                        when {
-                            tempExists && tempLength > 0 -> {
-                                var isValidPartial = false
-                                if (metaFile.exists()) {
-                                    try {
-                                        val metaLines = metaFile.readLines()
-                                        if (metaLines.size >= 2) {
-                                            val expectedSize = metaLines[0].toLongOrNull()
-                                            val expectedSha256 = metaLines[1]
-                                            if (expectedSize == artifact.sizeInBytes &&
-                                                expectedSha256 == artifact.sha256 &&
-                                                tempLength < expectedSize
-                                            ) {
-                                                isValidPartial = true
-                                            }
-                                        }
-                                    } catch (e: Exception) {
-                                        Log.w(TAG, "Failed to read meta file for $filename", e)
-                                    }
-                                }
-
-                                if (isValidPartial) {
-                                    partialDownloads[filename] = tempLength
-                                    Log.d(TAG, "Model artifact $filename has valid partial download")
-                                } else {
-                                    Log.w(TAG, "Model artifact $filename has invalid/stale partial download. Deleting.")
-                                    tempFile.delete()
-                                    metaFile.delete()
-                                    assetMissing = true
-                                }
-                            }
-                            fileExists && file.length() == artifact.sizeInBytes -> {
-                                Log.d(TAG, "Model artifact $filename is valid (size matches)")
-                            }
-                            fileExists -> {
-                                assetInvalid = true
-                                Log.w(
-                                    TAG,
-                                    "Model artifact $filename has size mismatch! " +
-                                        "Expected: ${artifact.sizeInBytes}, Actual: ${file.length()}. Will re-download.",
-                                )
-                            }
-                            else -> {
-                                assetMissing = true
-                                Log.d(TAG, "Model artifact $filename is missing")
-                                if (tempExists) {
-                                    tempFile.delete()
-                                }
-                                if (metaFile.exists()) {
-                                    metaFile.delete()
-                                }
-                            }
-                        }
-                    }
-                    if (assetInvalid) {
-                        invalidModels.add(expectedAsset)
-                    } else if (assetMissing) {
-                        missingModels.add(expectedAsset)
+                    val outcome = scanExpectedAsset(modelsDir, expectedAsset)
+                    partialDownloads.putAll(outcome.partialBytes)
+                    when {
+                        outcome.invalid -> invalidModels.add(expectedAsset)
+                        outcome.missing -> missingModels.add(expectedAsset)
                     }
                 }
 
@@ -289,4 +219,127 @@ class ModelFileScanner
 
                 allFilesExist && noPartialDownloads
             }
+
+        private data class AssetScanOutcome(
+            val missing: Boolean,
+            val invalid: Boolean,
+            val partialBytes: Map<String, Long>,
+        )
+
+        private fun scanExpectedAsset(
+            modelsDir: File,
+            expectedAsset: LocalModelAsset,
+        ): AssetScanOutcome {
+            qnnPackSubdirFor(expectedAsset.metadata.utilityType)?.let { qnnPackSubdir ->
+                val packDir = File(modelsDir, qnnPackSubdir)
+                val missing =
+                    when (expectedAsset.metadata.utilityType) {
+                        UtilityType.SDXL_QNN_PACK -> !LocalImageGenerationPaths.hasSdxlQnnArtifacts(packDir)
+                        UtilityType.SD15_QNN_PACK -> !LocalImageGenerationPaths.hasSd15QnnArtifacts(packDir)
+                        else -> !LocalImageGenerationPaths.hasSd15QnnArtifacts(packDir)
+                    }
+                return AssetScanOutcome(missing = missing, invalid = false, partialBytes = emptyMap())
+            }
+            if (isSdxlQnnCatalogAsset(expectedAsset)) {
+                val packDir = File(modelsDir, LocalImageGenerationPaths.SDXL_QNN_SUBDIR)
+                val missing = !LocalImageGenerationPaths.hasSdxlQnnArtifacts(packDir)
+                return AssetScanOutcome(missing = missing, invalid = false, partialBytes = emptyMap())
+            }
+            return scanAssetArtifacts(modelsDir, expectedAsset)
+        }
+
+        private fun isSdxlQnnCatalogAsset(asset: LocalModelAsset): Boolean =
+            SdxlQnnPackCatalog.findBySha256(asset.metadata.sha256) != null &&
+                asset.metadata.utilityType != UtilityType.SDXL_QNN_PACK
+
+        private fun qnnPackSubdirFor(utilityType: UtilityType?): String? =
+            when (utilityType) {
+                UtilityType.SD15_QNN_PACK -> LocalImageGenerationPaths.SD15_QNN_SUBDIR
+                UtilityType.SDXL_QNN_PACK -> LocalImageGenerationPaths.SDXL_QNN_SUBDIR
+                else -> null
+            }
+
+        private fun scanAssetArtifacts(
+            modelsDir: File,
+            expectedAsset: LocalModelAsset,
+        ): AssetScanOutcome {
+            var assetMissing = false
+            var assetInvalid = false
+            val partialBytes = mutableMapOf<String, Long>()
+            expectedAsset.metadata.requiredArtifacts().forEach { artifact ->
+                val filename = artifact.localFileName
+                val file = getSafeFile(modelsDir, filename)
+                val tempFile = getSafeFile(modelsDir, "${filename}${ModelConfig.TEMP_EXTENSION}")
+                val metaFile = getSafeFile(modelsDir, "${filename}${ModelConfig.TEMP_META_EXTENSION}")
+
+                val fileExists = file.exists()
+                val tempExists = tempFile.exists()
+                val tempLength = if (tempExists) tempFile.length() else 0L
+
+                when {
+                    tempExists && tempLength > 0 -> {
+                        val isValidPartial = isValidPartialDownload(metaFile, artifact, tempLength)
+                        if (isValidPartial) {
+                            partialBytes[filename] = tempLength
+                            Log.d(TAG, "Model artifact $filename has valid partial download")
+                        } else {
+                            Log.w(TAG, "Model artifact $filename has invalid/stale partial download. Deleting.")
+                            tempFile.delete()
+                            metaFile.delete()
+                            assetMissing = true
+                        }
+                    }
+                    fileExists && file.length() == artifact.sizeInBytes -> {
+                        Log.d(TAG, "Model artifact $filename is valid (size matches)")
+                    }
+                    fileExists -> {
+                        assetInvalid = true
+                        Log.w(
+                            TAG,
+                            "Model artifact $filename has size mismatch! " +
+                                "Expected: ${artifact.sizeInBytes}, Actual: ${file.length()}. Will re-download.",
+                        )
+                    }
+                    else -> {
+                        assetMissing = true
+                        Log.d(TAG, "Model artifact $filename is missing")
+                        if (tempExists) {
+                            tempFile.delete()
+                        }
+                        if (metaFile.exists()) {
+                            metaFile.delete()
+                        }
+                    }
+                }
+            }
+            return AssetScanOutcome(
+                missing = assetMissing,
+                invalid = assetInvalid,
+                partialBytes = partialBytes,
+            )
+        }
+
+        private fun isValidPartialDownload(
+            metaFile: File,
+            artifact: LocalModelArtifact,
+            tempLength: Long,
+        ): Boolean {
+            if (!metaFile.exists()) {
+                return false
+            }
+            return try {
+                val metaLines = metaFile.readLines()
+                if (metaLines.size < 2) {
+                    return false
+                }
+                val expectedSize = metaLines[0].toLongOrNull()
+                val expectedSha256 = metaLines[1]
+                expectedSize == artifact.sizeInBytes &&
+                    expectedSha256 == artifact.sha256 &&
+                    tempLength < expectedSize
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to read meta file for ${artifact.localFileName}", e)
+                false
+            }
+        }
     }

@@ -9,6 +9,7 @@ import com.browntowndev.enclave.domain.model.config.LocalModelMetadata
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelSource
 import com.browntowndev.enclave.domain.model.inference.ModelType
+import com.browntowndev.enclave.domain.model.download.ModelPackTestFixtures
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelRegistry
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -45,6 +46,52 @@ class StableDiffusionSd15T2iRedTest {
         assertTrue(bonsai.isImageGenerationCapable)
         assertFalse(chatModel.isImageGenerationCapable)
         assertEquals(listOf(bonsai), selectable)
+    }
+
+    @Test
+    fun applyLocalImageAssignmentEligibility_hidesBlockedSd15AndSdxlFromAssignmentOptions() {
+        val mapper = LocalModelAssetUiMapper()
+        val sd15 = mapper.map(ModelPackTestFixtures.diffusionAsset())
+        val sdxl = mapper.map(ModelPackTestFixtures.sdxlDiffusionAsset())
+        val blockedPacks =
+            listOf(
+                ModelPackUi(
+                    packId = ModelPackTestFixtures.PACK_ID,
+                    displayName = ModelPackTestFixtures.PACK_DISPLAY,
+                    completenessLabel = "0/2",
+                    installedCount = 0,
+                    totalCount = 2,
+                    showDownloadAction = false,
+                    isDiffusionSoftDeleted = false,
+                    disabledReason = "Insufficient RAM for local diffusion (need >= 8 GiB).",
+                    isEligible = false,
+                ),
+                ModelPackUi(
+                    packId = ModelPackTestFixtures.SDXL_PACK_ID,
+                    displayName = ModelPackTestFixtures.SDXL_PACK_DISPLAY,
+                    completenessLabel = "0/2",
+                    installedCount = 0,
+                    totalCount = 2,
+                    showDownloadAction = false,
+                    isDiffusionSoftDeleted = false,
+                    disabledReason = "Insufficient RAM for local diffusion (need >= 8 GiB).",
+                    isEligible = false,
+                ),
+            )
+
+        val filtered =
+            applyLocalImageAssignmentEligibility(
+                assets = listOf(sd15, sdxl),
+                modelPacks = blockedPacks,
+            )
+        val selectable =
+            selectableLocalAssetsForSlot(
+                modelType = ModelType.IMAGE_GENERATION,
+                assets = filtered,
+                modelPacks = blockedPacks,
+            )
+
+        assertTrue(selectable.isEmpty())
     }
 
     private fun localAsset(

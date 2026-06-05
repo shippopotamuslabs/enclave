@@ -67,6 +67,25 @@ class StudioCapabilitiesCoordinator
                     updated = updated.copy(imageResolution = resolution)
                 }
             }
+            updated =
+                when {
+                    caps.supportedImageSteps.isEmpty() ->
+                        if (updated.diffusionSteps != null) {
+                            updated.copy(diffusionSteps = null)
+                        } else {
+                            updated
+                        }
+                    else -> {
+                        val step =
+                            updated.diffusionSteps?.takeIf { it in caps.supportedImageSteps }
+                                ?: caps.defaultImageStep
+                        if (step != updated.diffusionSteps) {
+                            updated.copy(diffusionSteps = step)
+                        } else {
+                            updated
+                        }
+                    }
+                }
             return updated
         }
 

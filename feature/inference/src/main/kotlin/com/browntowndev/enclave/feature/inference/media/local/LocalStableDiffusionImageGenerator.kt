@@ -5,6 +5,7 @@ import com.browntowndev.enclave.domain.model.media.ImageGenerationProgress
 import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
 import com.browntowndev.enclave.domain.model.media.ImageGenerationTarget
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationError
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelPolicy
 import com.browntowndev.enclave.domain.port.inference.InferenceBusyException
 import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.enclave.domain.usecase.inference.InferenceType
@@ -45,7 +46,11 @@ class LocalStableDiffusionImageGenerator
         ): Result<LocalStableDiffusionGenerationResult> =
             runCatching {
                 onProgress(ImageGenerationProgress.PreparingModel)
-                val (width, height) = resolveDimensions(settings)
+                val normalized =
+                    LocalImageGenerationModelPolicy.normalizeRequest(
+                        modelId = target.modelId,
+                        settings = settings,
+                    )
                 val outputDir = File(context.cacheDir, OUTPUT_SUBDIR).apply { mkdirs() }
                 val outputPrefix = File(outputDir, "local-${UUID.randomUUID()}").absolutePath
 
@@ -55,18 +60,24 @@ class LocalStableDiffusionImageGenerator
                 try {
                     onProgress(ImageGenerationProgress.LoadingModel)
                     val started = System.currentTimeMillis()
-                    onProgress(ImageGenerationProgress.Generating(step = 0, totalSteps = STEPS))
+                    onProgress(
+                        ImageGenerationProgress.Generating(
+                            step = 0,
+                            totalSteps = normalized.diffusionSteps,
+                        ),
+                    )
                     val nativeRequest =
                         LocalImageGenerationNativeRequest(
                             backend = target.selectedBackend,
+                            modelId = target.modelId,
                             modelDir = target.modelDir,
                             prompt = prompt,
                             negativePrompt = null,
-                            width = width,
-                            height = height,
-                            steps = STEPS,
-                            cfgScale = CFG_SCALE,
-                            scheduler = "dpm",
+                            width = normalized.width,
+                            height = normalized.height,
+                            steps = normalized.diffusionSteps,
+                            cfgScale = normalized.cfgScale,
+                            scheduler = normalized.scheduler,
                             seed = settings.seed.toLongOrNull() ?: System.nanoTime(),
                             outputPathPrefix = outputPrefix,
                         )
@@ -75,7 +86,6 @@ class LocalStableDiffusionImageGenerator
                             val result = engine.generate(nativeRequest).getOrThrow()
                             val elapsed = System.currentTimeMillis() - started
                             if (elapsed > SLOW_GENERATION_WARNING_MS) {
-                                // Surface slow runs in logs only; do not kill unless user cancels.
                                 android.util.Log.w(
                                     TAG,
                                     "Local generation exceeded ${SLOW_GENERATION_WARNING_MS}ms (elapsed=$elapsed)",
@@ -99,6 +109,7 @@ class LocalStableDiffusionImageGenerator
                     is kotlinx.coroutines.CancellationException,
                     is InferenceBusyException,
                     is LocalImageGenerationError,
+                    is IllegalArgumentException,
                     -> throw cause
                     else -> throw LocalImageGenerationError.GenerationFailed(
                         target.selectedBackend,
@@ -108,36 +119,8 @@ class LocalStableDiffusionImageGenerator
                 }
             }
 
-        private fun resolveDimensions(settings: ImageGenerationSettings): Pair<Int, Int> {
-            val longestSide =
-                settings.imageResolution
-                    ?.trim()
-                    ?.lowercase()
-                    ?.split('x')
-                    ?.mapNotNull(String::toIntOrNull)
-                    ?.filter { it > 0 }
-                    ?.maxOrNull()
-                    ?: DEFAULT_DIMENSION
-            return resolveAspectRatioDimensions(settings.aspectRatio, longestSide)
-        }
-
-        private fun resolveAspectRatioDimensions(
-            aspectRatio: com.browntowndev.enclave.domain.model.media.AspectRatio,
-            longestSide: Int,
-        ): Pair<Int, Int> =
-            when (aspectRatio) {
-                com.browntowndev.enclave.domain.model.media.AspectRatio.SIXTEEN_NINE ->
-                    longestSide to longestSide * 9 / 16
-                com.browntowndev.enclave.domain.model.media.AspectRatio.NINE_SIXTEEN ->
-                    longestSide * 9 / 16 to longestSide
-                else -> longestSide to longestSide
-            }
-
         private companion object {
             const val TAG = "LocalImageGeneration"
-            const val CFG_SCALE = 7.5f
-            const val STEPS = 20
-            const val DEFAULT_DIMENSION = 512
             const val OUTPUT_SUBDIR = "local-image-gen"
             const val GENERATION_FAILED = "Local image generation failed."
             val SLOW_GENERATION_WARNING_MS = 3.minutes.inWholeMilliseconds

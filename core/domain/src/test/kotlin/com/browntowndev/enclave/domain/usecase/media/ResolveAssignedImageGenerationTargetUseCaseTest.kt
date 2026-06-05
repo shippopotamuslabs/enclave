@@ -6,6 +6,7 @@ import com.browntowndev.enclave.domain.model.config.LocalModelConfiguration
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.config.LocalModelMetadata
+import com.browntowndev.enclave.domain.model.download.ModelPackTestFixtures
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.media.ImageGenerationTarget
@@ -43,6 +44,31 @@ class ResolveAssignedImageGenerationTargetUseCaseTest {
             assertEquals("/abs/models/sd15-qnn", target.modelDir)
             assertEquals(LocalImageGenerationModelId.SD15_QNN, target.modelId)
             assertEquals(LocalImageGenerationBackendKind.QNN_NPU, target.selectedBackend)
+        }
+
+    @Test
+    fun `SDXL assignment resolves sdxl-qnn model directory and QNN backend`() =
+        runTest {
+            val modelFile = "/abs/models/${ModelPackTestFixtures.SDXL_DIFFUSION_FILE}"
+            val filePort =
+                mockk<com.browntowndev.enclave.domain.port.repository.UtilityModelFilePort> {
+                    coEvery { resolveLocalModelPath(any()) } returns modelFile
+                }
+            val sdxlConfigId = LocalModelConfigurationId(ModelPackTestFixtures.SDXL_CONFIG_ID)
+            val useCase =
+                useCaseWith(
+                    filePort = filePort,
+                    asset = ModelPackTestFixtures.sdxlDiffusionAsset(),
+                    localConfigId = sdxlConfigId,
+                    capabilities = sdxlSupportedCapabilities(),
+                )
+
+            val target = useCase().getOrThrow() as ImageGenerationTarget.LocalStableDiffusion
+
+            assertEquals("/abs/models/sdxl-qnn", target.modelDir)
+            assertEquals(LocalImageGenerationModelId.SDXL_QNN, target.modelId)
+            assertEquals(LocalImageGenerationBackendKind.QNN_NPU, target.selectedBackend)
+            assertEquals(sdxlConfigId, target.localConfigId)
         }
 
     @Test
@@ -94,11 +120,13 @@ class ResolveAssignedImageGenerationTargetUseCaseTest {
     private fun useCaseWith(
         filePort: com.browntowndev.enclave.domain.port.repository.UtilityModelFilePort,
         asset: LocalModelAsset = sd15Asset(),
+        localConfigId: LocalModelConfigurationId = LocalModelConfigurationId("sd15-local-config"),
+        capabilities: LocalImageGenerationCapabilities = supportedCapabilities(),
         localImageGenerationSupported: Boolean = true,
     ): ResolveAssignedImageGenerationTargetUseCase {
-        val capabilities =
+        val effectiveCapabilities =
             if (localImageGenerationSupported) {
-                supportedCapabilities()
+                capabilities
             } else {
                 LocalImageGenerationCapabilities(
                     npuAvailable = LocalImageGenTriState.NO,
@@ -117,14 +145,14 @@ class ResolveAssignedImageGenerationTargetUseCaseTest {
                         listOf(
                             DefaultModelAssignment(
                                 modelType = ModelType.IMAGE_GENERATION,
-                                localConfigId = LocalModelConfigurationId("sd15-local-config"),
+                                localConfigId = localConfigId,
                             ),
                         ),
                     )
                 },
             localModelRepository =
                 mockk {
-                    coEvery { getAssetByConfigId(LocalModelConfigurationId("sd15-local-config")) } returns asset
+                    coEvery { getAssetByConfigId(localConfigId) } returns asset
                 },
             mediaProviderRepository = mockk(relaxed = true),
             utilityModelFilePort = filePort,
@@ -134,7 +162,7 @@ class ResolveAssignedImageGenerationTargetUseCaseTest {
                 },
             capabilityPort =
                 mockk {
-                    every { getCapabilities() } returns capabilities
+                    every { getCapabilities() } returns effectiveCapabilities
                 },
             selectBackend = SelectLocalImageGenerationBackendUseCase(),
         )
@@ -146,6 +174,17 @@ class ResolveAssignedImageGenerationTargetUseCaseTest {
             sd15NpuSupported = LocalImageGenTriState.YES,
             sd15CpuSupported = LocalImageGenTriState.NO,
             sdxlNpuSupported = LocalImageGenTriState.NO,
+            recommendedBackend = LocalImageGenerationBackendKind.QNN_NPU,
+            recommendedModelId = LocalImageGenerationModelId.SD15_QNN,
+            diagnostics = emptyList(),
+        )
+
+    private fun sdxlSupportedCapabilities(): LocalImageGenerationCapabilities =
+        LocalImageGenerationCapabilities(
+            npuAvailable = LocalImageGenTriState.YES,
+            sd15NpuSupported = LocalImageGenTriState.YES,
+            sd15CpuSupported = LocalImageGenTriState.NO,
+            sdxlNpuSupported = LocalImageGenTriState.YES,
             recommendedBackend = LocalImageGenerationBackendKind.QNN_NPU,
             recommendedModelId = LocalImageGenerationModelId.SD15_QNN,
             diagnostics = emptyList(),

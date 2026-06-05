@@ -969,7 +969,7 @@ class ModelConfigFetcherImplTest {
             // SDXL pack carries its diffusion member AND its utility (`sdxl_qnn_pack`) member.
             val sdxlPack = catalog.packById("sdxl-t2i")!!
             assertEquals(
-                "realvis_xl_v5_dmd2.gguf",
+                "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip",
                 sdxlPack.members
                     .single { it.role == ModelPackRole.DIFFUSION }
                     .asset.metadata.localFileName,
@@ -980,6 +980,49 @@ class ModelConfigFetcherImplTest {
                     .single { it.role == ModelPackRole.TEXT_ENCODER }
                     .asset.metadata.utilityType,
             )
+        }
+
+    @Test
+    fun fetchParsedCatalog_discardsStaleCachedLegacySdxlGgufFilename() =
+        runTest {
+            val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+            val cacheFile = java.io.File(context.filesDir, "model_config_cache.json")
+            cacheFile.writeText(
+                """
+                {
+                  "assets": [
+                    {
+                      "huggingFaceModelName": "gpustack/stable-diffusion-xl-base-1.0-GGUF",
+                      "fileName": "realvis_xl_v5_dmd2.gguf",
+                      "sha256": "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83",
+                      "sizeInBytes": 3504485672,
+                      "source": "HF",
+                      "configurations": []
+                    }
+                  ],
+                  "modelPacks": []
+                }
+                """.trimIndent(),
+            )
+
+            val configFile =
+                listOf(
+                    java.io.File("model_config.json"),
+                    java.io.File("../model_config.json"),
+                    java.io.File("../../model_config.json"),
+                ).first { it.exists() }
+            mockConfigResponse(configFile.readText())
+
+            val result = fetcher.fetchParsedCatalog()
+
+            assertTrue(result.isSuccess)
+            val sdxlAsset =
+                result
+                    .getOrThrow()
+                    .assets
+                    .first { it.metadata.localFileName.contains("realvis_xl_v5_dmd2") }
+            assertEquals("realvis_xl_v5_dmd2_qnn2.28_8gen3.zip", sdxlAsset.metadata.localFileName)
+            assertTrue(cacheFile.readText().contains("realvis_xl_v5_dmd2_qnn2.28_8gen3.zip"))
         }
 }
 

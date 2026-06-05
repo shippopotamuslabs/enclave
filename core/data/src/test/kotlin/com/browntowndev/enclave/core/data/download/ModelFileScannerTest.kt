@@ -9,6 +9,9 @@ import com.browntowndev.enclave.domain.model.config.LocalModelMetadata
 import com.browntowndev.enclave.domain.model.download.ModelConfig
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
+import com.browntowndev.enclave.domain.model.config.UtilityType
+import com.browntowndev.enclave.domain.model.download.DownloadSource
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationPaths
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import io.mockk.every
@@ -67,7 +70,7 @@ class ModelFileScannerTest {
             val asset = createAsset(filename = "model.gguf", sizeBytes = 4L)
             File(modelsDir, asset.metadata.localFileName).writeBytes(byteArrayOf(1, 2, 3, 4))
 
-            val result = scanner.scanAndCreateDirIfNotExist(mapOf(ModelType.MAIN to asset))
+            val result = scanner.scanAndCreateDirIfNotExist(mapOf(ModelType.MAIN to asset), utilityAssets = emptyList())
 
             assertTrue(result.missingModels.isEmpty())
             assertTrue(result.partialDownloads.isEmpty())
@@ -81,7 +84,7 @@ class ModelFileScannerTest {
             val asset = createAsset(filename = "model.gguf", sizeBytes = 4L)
             File(modelsDir, asset.metadata.localFileName).writeBytes(byteArrayOf(1, 2))
 
-            val result = scanner.scanAndCreateDirIfNotExist(mapOf(ModelType.MAIN to asset))
+            val result = scanner.scanAndCreateDirIfNotExist(mapOf(ModelType.MAIN to asset), utilityAssets = emptyList())
 
             assertEquals(listOf(asset), result.invalidModels)
             assertFalse(result.allValid)
@@ -96,7 +99,7 @@ class ModelFileScannerTest {
             File(modelsDir, "${asset.metadata.localFileName}${ModelConfig.TEMP_META_EXTENSION}")
                 .writeText("4\ndummy-hash")
 
-            val result = scanner.scanAndCreateDirIfNotExist(mapOf(ModelType.MAIN to asset))
+            val result = scanner.scanAndCreateDirIfNotExist(mapOf(ModelType.MAIN to asset), utilityAssets = emptyList())
 
             assertEquals(2L, result.partialDownloads[asset.metadata.localFileName])
             assertTrue(result.missingModels.isEmpty())
@@ -111,7 +114,7 @@ class ModelFileScannerTest {
             File(modelsDir, "${asset.metadata.localFileName}${ModelConfig.TEMP_EXTENSION}")
                 .writeBytes(byteArrayOf(1, 2))
 
-            val result = scanner.scanAndCreateDirIfNotExist(mapOf(ModelType.MAIN to asset))
+            val result = scanner.scanAndCreateDirIfNotExist(mapOf(ModelType.MAIN to asset), utilityAssets = emptyList())
 
             assertTrue(result.partialDownloads.isEmpty())
             assertEquals(1, result.missingModels.size)
@@ -128,7 +131,7 @@ class ModelFileScannerTest {
             File(modelsDir, "${asset.metadata.localFileName}${ModelConfig.TEMP_META_EXTENSION}")
                 .writeText("4\nold-hash")
 
-            val result = scanner.scanAndCreateDirIfNotExist(mapOf(ModelType.MAIN to asset))
+            val result = scanner.scanAndCreateDirIfNotExist(mapOf(ModelType.MAIN to asset), utilityAssets = emptyList())
 
             assertTrue(result.partialDownloads.isEmpty())
             assertEquals(1, result.missingModels.size)
@@ -146,10 +149,49 @@ class ModelFileScannerTest {
             File(modelsDir, "${asset.metadata.localFileName}${ModelConfig.TEMP_META_EXTENSION}")
                 .writeText("4\ndummy-hash")
 
-            val result = scanner.scanAndCreateDirIfNotExist(mapOf(ModelType.MAIN to asset))
+            val result = scanner.scanAndCreateDirIfNotExist(mapOf(ModelType.MAIN to asset), utilityAssets = emptyList())
 
             assertEquals(2L, result.partialDownloads[asset.metadata.localFileName])
             assertTrue(result.invalidModels.isEmpty())
+            assertFalse(result.allValid)
+        }
+
+    @Test
+    fun `scan treats installed SDXL QNN pack directory as present`() =
+        kotlinx.coroutines.test.runTest {
+            val asset = createQnnPackAsset(
+                filename = "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip",
+                utilityType = UtilityType.SDXL_QNN_PACK,
+                packSubdir = LocalImageGenerationPaths.SDXL_QNN_SUBDIR,
+            )
+
+            val result =
+                scanner.scanAndCreateDirIfNotExist(
+                    expectedModels = emptyMap(),
+                    utilityAssets = listOf(asset),
+                )
+
+            assertTrue(result.missingModels.isEmpty())
+            assertTrue(result.allValid)
+        }
+
+    @Test
+    fun `scan marks SDXL QNN pack missing when extracted artifacts are absent`() =
+        kotlinx.coroutines.test.runTest {
+            val asset = createQnnPackAsset(
+                filename = "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip",
+                utilityType = UtilityType.SDXL_QNN_PACK,
+                packSubdir = LocalImageGenerationPaths.SDXL_QNN_SUBDIR,
+                installArtifacts = false,
+            )
+
+            val result =
+                scanner.scanAndCreateDirIfNotExist(
+                    expectedModels = emptyMap(),
+                    utilityAssets = listOf(asset),
+                )
+
+            assertEquals(listOf(asset), result.missingModels)
             assertFalse(result.allValid)
         }
 
@@ -184,4 +226,40 @@ class ModelFileScannerTest {
                     ),
                 ),
         )
+
+    private fun createQnnPackAsset(
+        filename: String,
+        utilityType: UtilityType,
+        packSubdir: String,
+        installArtifacts: Boolean = true,
+    ): LocalModelAsset {
+        if (installArtifacts) {
+            val packDir = File(modelsDir, packSubdir).apply { mkdirs() }
+            listOf(
+                "clip_v2.mnn",
+                "token_emb.bin",
+                "pos_emb.bin",
+                "unet.bin",
+                "vae_decoder.bin",
+                "tokenizer.json",
+            ).forEach { name ->
+                File(packDir, name).writeText("stub")
+            }
+        }
+        return LocalModelAsset(
+            metadata =
+                LocalModelMetadata(
+                    id = LocalModelId("qnn-pack"),
+                    huggingFaceModelName = "xororz/sdxl-qnn",
+                    remoteFileName = filename,
+                    localFileName = filename,
+                    sha256 = "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83",
+                    sizeInBytes = 100L,
+                    modelFileFormat = ModelFileFormat.BIN,
+                    source = DownloadSource.HUGGING_FACE,
+                    utilityType = utilityType,
+                ),
+            configurations = emptyList(),
+        )
+    }
 }

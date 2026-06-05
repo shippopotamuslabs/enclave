@@ -76,14 +76,7 @@ class WorkProgressParser
                 WorkInfo.State.RUNNING -> {
                     // Finalizer running means bytes are done, just finalizing registry
                     if (workerStage == DownloadWorkKeys.STAGE_FINALIZE) {
-                        DownloadProgressUpdate(
-                            status = DownloadStatus.DOWNLOADING,
-                            overallProgress = 1.0f,
-                            modelsComplete = currentDownloads.size,
-                            modelsTotal = currentDownloads.size,
-                            currentDownloads = currentDownloads,
-                            clearSession = false,
-                        )
+                        buildFinalizingUpdate(workInfo, currentDownloads)
                     } else {
                         parseRunning(workInfo, currentDownloads)
                     }
@@ -119,15 +112,50 @@ class WorkProgressParser
             // Download worker succeeded but finalizer hasn't run yet.
             // Preserve current progress but don't emit READY.
             Log.d(TAG, "Download worker SUCCEEDED (intermediate) – waiting for finalizer, sessionId=$workSessionId")
-            return DownloadProgressUpdate(
-                status = DownloadStatus.DOWNLOADING,
-                overallProgress = 1.0f,
-                modelsComplete = currentDownloads.size,
-                modelsTotal = currentDownloads.size,
+            return buildFinalizingUpdate(
+                workInfo = workInfo,
                 currentDownloads = currentDownloads,
-                clearSession = false,
             )
         }
+
+        private fun buildFinalizingUpdate(
+            workInfo: WorkInfo,
+            currentDownloads: List<FileProgress>,
+        ): DownloadProgressUpdate {
+            val postProcessProgress = readPostProcessProgress(workInfo)
+            return DownloadProgressUpdate(
+                status = DownloadStatus.FINALIZING,
+                overallProgress = postProcessProgress ?: 1.0f,
+                modelsComplete = currentDownloads.size,
+                modelsTotal = currentDownloads.size,
+                currentDownloads =
+                    currentDownloads.map { file ->
+                        if (requiresPostProcessing(file) && file.status != FileStatus.FAILED) {
+                            file.copy(
+                                bytesDownloaded = file.totalBytes,
+                                status = FileStatus.COMPLETE,
+                            )
+                        } else {
+                            file
+                        }
+                    },
+                clearSession = false,
+                postProcessProgress = postProcessProgress,
+            )
+        }
+
+        private fun readPostProcessProgress(workInfo: WorkInfo): Float? {
+            val progress = workInfo.progress
+            val totalBytes = progress.getLong(DownloadKey.POST_PROCESS_TOTAL.key, 0L)
+            if (totalBytes <= 0L) {
+                return null
+            }
+            val extractedBytes = progress.getLong(DownloadKey.POST_PROCESS_BYTES.key, 0L).coerceAtLeast(0L)
+            return (extractedBytes.toFloat() / totalBytes.toFloat()).coerceIn(0f, 1f)
+        }
+
+        private fun requiresPostProcessing(file: FileProgress): Boolean =
+            file.filename.endsWith(".zip", ignoreCase = true)
 
         private fun parseRunning(
             workInfo: WorkInfo,
@@ -183,9 +211,10 @@ class WorkProgressParser
                         }
                     }.sortedBy { it.filename }
             val etaString = if (etaSeconds > 0) formatEta(etaSeconds) else null
+            val failedFile = fileProgressList.firstOrNull { it.status == FileStatus.FAILED }
 
             return DownloadProgressUpdate(
-                status = DownloadStatus.DOWNLOADING,
+                status = if (failedFile != null) DownloadStatus.ERROR else DownloadStatus.DOWNLOADING,
                 overallProgress = overallProgress,
                 modelsComplete = modelsComplete,
                 modelsTotal = modelsTotal,
@@ -193,7 +222,10 @@ class WorkProgressParser
                 estimatedTimeRemaining = etaString,
                 currentSpeedMBs = speedMBs.takeIf { it > 0 },
                 waitingForUnmeteredNetwork = false,
-                errorMessage = null,
+                errorMessage =
+                    failedFile?.let { file ->
+                        "Failed to download ${file.filename}"
+                    },
             )
         }
 
@@ -217,8 +249,19 @@ class WorkProgressParser
                 overallProgress = 1.0f,
                 modelsComplete = totalModels,
                 modelsTotal = totalModels,
-                currentDownloads = currentDownloads,
+                currentDownloads =
+                    currentDownloads.map { file ->
+                        if (requiresPostProcessing(file)) {
+                            file.copy(
+                                bytesDownloaded = file.totalBytes,
+                                status = FileStatus.COMPLETE,
+                            )
+                        } else {
+                            file
+                        }
+                    },
                 clearSession = true,
+                postProcessProgress = 1.0f,
             )
         }
 

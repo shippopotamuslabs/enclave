@@ -11,6 +11,7 @@ import com.browntowndev.enclave.domain.model.download.ModelConfig
 import com.browntowndev.enclave.domain.model.download.ModelPack
 import com.browntowndev.enclave.domain.model.download.ModelPackMember
 import com.browntowndev.enclave.domain.model.download.ModelPackRole
+import com.browntowndev.enclave.domain.model.download.ModelPackTestFixtures
 import com.browntowndev.enclave.domain.model.download.ModelPackVerificationDepth
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
@@ -20,6 +21,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
@@ -104,7 +106,17 @@ class ModelPackVerifierImplTest {
         runTest {
             val modelsDir = File(appContext.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
             val packDir = File(modelsDir, LocalImageGenerationPaths.SDXL_QNN_SUBDIR).apply { mkdirs() }
-            listOf("clip_v2.mnn", "token_emb.bin", "pos_emb.bin", "unet.bin", "vae_decoder.bin", "tokenizer.json").forEach { name ->
+            listOf(
+                "clip.mnn",
+                "clip_2.mnn",
+                "token_emb.bin",
+                "token_emb_2.bin",
+                "pos_emb.bin",
+                "pos_emb_2.bin",
+                "unet.bin",
+                "vae_decoder.bin",
+                "tokenizer.json",
+            ).forEach { name ->
                 File(packDir, name).writeBytes(byteArrayOf(1))
             }
 
@@ -120,15 +132,44 @@ class ModelPackVerifierImplTest {
             val modelsDir = File(appContext.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
             val packDir = File(modelsDir, LocalImageGenerationPaths.SDXL_QNN_SUBDIR).apply { mkdirs() }
             // Missing tokenizer.json
-            listOf("clip_v2.mnn", "token_emb.bin", "pos_emb.bin", "unet.bin", "vae_decoder.bin").forEach { name ->
+            listOf("clip.mnn", "clip_2.mnn", "token_emb.bin", "token_emb_2.bin", "pos_emb.bin", "pos_emb_2.bin", "unet.bin", "vae_decoder.bin").forEach { name ->
                 File(packDir, name).writeBytes(byteArrayOf(1))
             }
 
             val result = verifier.verifyPack(sdxlQnnPack(), ModelPackVerificationDepth.SHA256_INTEGRITY)
 
             assertFalse(result.isComplete)
-            // The extracted directory is missing tokenizer.json, so it does not satisfy the QNN artifact contract.
-            assertFalse(LocalImageGenerationPaths.hasQnnArtifacts(packDir))
+            assertFalse(LocalImageGenerationPaths.hasSdxlQnnArtifacts(packDir))
+        }
+
+    @Test
+    fun sdxlFullPackZipOnlyDoesNotCountAsInstalled() =
+        runTest {
+            val modelsDir = File(appContext.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
+            modelsDir.mkdirs()
+            val zipFile = File(modelsDir, ModelPackTestFixtures.SDXL_QNN_PACK_FILE)
+            zipFile.writeBytes(ByteArray(1024))
+
+            val result = verifier.verifyPack(ModelPackTestFixtures.sdxlPack(), ModelPackVerificationDepth.SIZE_ON_DISK)
+
+            assertFalse(result.isComplete)
+            assertEquals(0, result.installedCount)
+            assertEquals(2, result.totalCount)
+        }
+
+    @Test
+    fun sdxlFullPackCountsBothMembersWhenArtifactsInstalled() =
+        runTest {
+            val modelsDir = File(appContext.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
+            val packDir = File(modelsDir, LocalImageGenerationPaths.SDXL_QNN_SUBDIR).apply { mkdirs() }
+            LocalImageGenerationPaths.REQUIRED_SDXL_QNN_FILES.forEach { name ->
+                File(packDir, name).writeBytes(byteArrayOf(1))
+            }
+
+            val result = verifier.verifyPack(ModelPackTestFixtures.sdxlPack(), ModelPackVerificationDepth.SHA256_INTEGRITY)
+
+            assertTrue(result.isComplete)
+            assertEquals(2, result.installedCount)
         }
 
     private fun testPack(

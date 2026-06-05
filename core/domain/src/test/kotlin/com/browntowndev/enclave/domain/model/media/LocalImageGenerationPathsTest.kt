@@ -38,6 +38,41 @@ class LocalImageGenerationPathsTest {
     }
 
     @Test
+    fun resolveQnnLaunchDir_prefersNestedSdxlArtifactDirectory() {
+        val parent = tempDir.toFile()
+        val packDir = File(parent, LocalImageGenerationPaths.SDXL_QNN_SUBDIR).apply { mkdirs() }
+        val artifactDir = File(packDir, "qnn_models_sdxl_8gen3").apply { mkdirs() }
+        touchSdxlQnn(artifactDir)
+
+        assertEquals(
+            artifactDir.absolutePath,
+            LocalImageGenerationPaths.resolveQnnLaunchDir(
+                resolvedStoragePath = packDir.absolutePath,
+                family = LocalImageGenerationModelFamily.SDXL,
+                relativePackSubdir = LocalImageGenerationPaths.SDXL_QNN_SUBDIR,
+            ),
+        )
+    }
+
+    @Test
+    fun resolveQnnLaunchDir_resolvesFromDiffusionZipParent() {
+        val modelsDir = tempDir.toFile()
+        val packDir = File(modelsDir, LocalImageGenerationPaths.SDXL_QNN_SUBDIR).apply { mkdirs() }
+        val artifactDir = File(packDir, "qnn_models_sdxl_8gen3").apply { mkdirs() }
+        touchSdxlQnn(artifactDir)
+        val zipPath = File(modelsDir, "realvis_xl.zip").apply { writeText("zip") }.absolutePath
+
+        assertEquals(
+            artifactDir.absolutePath,
+            LocalImageGenerationPaths.resolveQnnLaunchDir(
+                resolvedStoragePath = zipPath,
+                family = LocalImageGenerationModelFamily.SDXL,
+                relativePackSubdir = LocalImageGenerationPaths.SDXL_QNN_SUBDIR,
+            ),
+        )
+    }
+
+    @Test
     fun resolveMnnModelDir_prefersNestedSd15Cpu() {
         val parent = tempDir.toFile()
         val nested = File(parent, LocalImageGenerationPaths.SD15_CPU_SUBDIR).apply { mkdirs() }
@@ -48,7 +83,16 @@ class LocalImageGenerationPathsTest {
     @Test
     fun hasQnnArtifacts_falseWhenMissingFiles() {
         val dir = File(tempDir.toFile(), "empty").apply { mkdirs() }
-        assertFalse(LocalImageGenerationPaths.hasQnnArtifacts(dir))
+        assertFalse(LocalImageGenerationPaths.hasSd15QnnArtifacts(dir))
+    }
+
+    @Test
+    fun hasSdxlQnnArtifacts_trueForDualClipLayout() {
+        val dir = tempDir.toFile()
+        LocalImageGenerationPaths.REQUIRED_SDXL_QNN_FILES.forEach { name ->
+            File(dir, name).writeText("x")
+        }
+        assertTrue(LocalImageGenerationPaths.hasSdxlQnnArtifacts(dir))
     }
 
     @Test
@@ -61,6 +105,12 @@ class LocalImageGenerationPathsTest {
     private fun touchQnn(dir: File) {
         listOf("clip_v2.mnn", "token_emb.bin", "pos_emb.bin", "unet.bin", "vae_decoder.bin", "tokenizer.json").forEach {
             File(dir, it).writeText("x")
+        }
+    }
+
+    private fun touchSdxlQnn(dir: File) {
+        LocalImageGenerationPaths.REQUIRED_SDXL_QNN_FILES.forEach { name ->
+            File(dir, name).writeText("x")
         }
     }
 
