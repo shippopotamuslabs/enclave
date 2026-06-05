@@ -31,6 +31,7 @@ class FakePlaceholderImageGenerationBackendTest {
                             height = 64,
                             steps = 4,
                             cfgScale = 7.5f,
+                            scheduler = "dpm",
                             seed = 42L,
                             outputPathPrefix = prefix,
                         ),

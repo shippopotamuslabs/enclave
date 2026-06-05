@@ -66,6 +66,7 @@ class LocalStableDiffusionImageGenerator
                             height = height,
                             steps = STEPS,
                             cfgScale = CFG_SCALE,
+                            scheduler = "dpm",
                             seed = settings.seed.toLongOrNull() ?: System.nanoTime(),
                             outputPathPrefix = outputPrefix,
                         )

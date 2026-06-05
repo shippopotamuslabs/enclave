@@ -32,10 +32,17 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
+import com.browntowndev.enclave.domain.model.download.ModelPack
+import com.browntowndev.enclave.domain.model.download.ModelPackVerificationDepth
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationPaths
+import com.browntowndev.enclave.domain.port.download.HashingPort
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
+import java.io.File
 
 /**
  * TDD Red Phase Tests for DownloadFinalizeWorker.
@@ -1029,6 +1036,65 @@ class DownloadFinalizeWorkerTest {
         }
 
     @Test
+    @DisplayName("DL-007 incomplete SDXL extraction stays incomplete and does not register as ready")
+    fun dl007_incompleteSdxlExtractionStaysIncompleteAndSkipsRegistry(
+        @TempDir tempDir: File,
+    ) = runTest {
+            val sdxlSha = "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83"
+            val filesRoot = File(tempDir, "files").apply { mkdirs() }
+            every { mockContext.getExternalFilesDir(null) } returns filesRoot
+            val modelsDir = File(filesRoot, com.browntowndev.enclave.domain.model.download.ModelConfig.MODELS_DIR).apply { mkdirs() }
+            val packDir = File(modelsDir, LocalImageGenerationPaths.SDXL_QNN_SUBDIR).apply { mkdirs() }
+            listOf("clip_v2.mnn", "token_emb.bin", "pos_emb.bin", "unet.bin", "vae_decoder.bin").forEach { name ->
+                File(packDir, name).writeBytes(byteArrayOf(1))
+            }
+            val sdxlAsset =
+                createTestAsset("realvis_xl_v5_dmd2_qnn2.28_8gen3.zip", sdxlSha).let { asset ->
+                    asset.copy(
+                        metadata =
+                            asset.metadata.copy(
+                                id = LocalModelId("sdxl-qnn-pack"),
+                                utilityType = UtilityType.SDXL_QNN_PACK,
+                            ),
+                        configurations = emptyList(),
+                    )
+                }
+            setInputData(
+                workDataOf(
+                    KEY_SESSION_ID to SESSION_ID,
+                    KEY_REQUEST_KIND to REQUEST_INITIALIZE,
+                    KEY_DOWNLOADED_SHAS to Json.encodeToString(listOf(sdxlSha)),
+                ),
+            )
+            coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(sdxlAsset))
+            coEvery { mockSd15QnnPackInstaller.installIfNeeded(match { it.utilityType == UtilityType.SDXL_QNN_PACK }) } returns false
+
+            worker.doWork()
+
+            assertFalse(LocalImageGenerationPaths.hasQnnArtifacts(packDir))
+            val packVerifier = ModelPackVerifierImpl(mockContext, mockk<HashingPort>(relaxed = true))
+            val completeness =
+                packVerifier.verifyPack(
+                    ModelPack(
+                        packId = "sdxl-t2i",
+                        displayName = "Stable Diffusion XL",
+                        slot = ModelType.IMAGE_GENERATION,
+                        members = emptyList(),
+                    ),
+                    ModelPackVerificationDepth.SIZE_ON_DISK,
+                )
+            assertFalse(completeness.isComplete)
+            assertEquals(
+                null,
+                fakeUtilityModelRepository.getByUtilityType(UtilityType.SDXL_QNN_PACK),
+            )
+            coVerify(exactly = 1) {
+                mockSd15QnnPackInstaller.installIfNeeded(match { it.utilityType == UtilityType.SDXL_QNN_PACK })
+            }
+            coVerify(exactly = 0) { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) }
+        }
+
+    @Test
     @DisplayName("DL-009 registers SDXL without overriding the SD1.5 default")
     fun dl009_registersSdxlWithoutOverridingSd15Default() =
         runTest {
@@ -1066,16 +1132,37 @@ class DownloadFinalizeWorkerTest {
                     KEY_DOWNLOADED_SHAS to Json.encodeToString(listOf(sdxlSha)),
                 ),
             )
+            // Seed an existing default: IMAGE_GENERATION -> sd15-local-config.
+            val existingSd15Default =
+                com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId("sd15-local-config")
+            var persistedImageGenerationDefault = existingSd15Default
             coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(sdxlAsset))
-            coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) } returns mockk()
+            coEvery { mockSd15QnnPackInstaller.installIfNeeded(match { it.utilityType == UtilityType.SDXL_QNN_PACK }) } returns true
+            coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) } answers {
+                val modelType = firstArg<ModelType>()
+                val asset = secondArg<LocalModelAsset>()
+                if (modelType == ModelType.IMAGE_GENERATION) {
+                    persistedImageGenerationDefault =
+                        asset.configurations.first().id
+                }
+                mockk()
+            }
 
             worker.doWork()
 
-            coVerify(exactly = 0) { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) }
+            coVerify(exactly = 1) {
+                mockSd15QnnPackInstaller.installIfNeeded(match { it.utilityType == UtilityType.SDXL_QNN_PACK })
+            }
+            // The SDXL local asset is registered as assignable (utility registry row present).
             assertEquals(
                 sdxlSha,
                 fakeUtilityModelRepository.getByUtilityType(UtilityType.SDXL_QNN_PACK)?.sha256,
             )
+            // Finalize must not re-sync the IMAGE_GENERATION slot, so the existing SD1.5 default stands.
+            coVerify(exactly = 0) {
+                mockSyncLocalModelRegistryUseCase.invoke(ModelType.IMAGE_GENERATION, any())
+            }
+            assertEquals(existingSd15Default, persistedImageGenerationDefault)
         }
 
     // ===== Helper method =====

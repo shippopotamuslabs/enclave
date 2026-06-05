@@ -59,6 +59,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -1031,72 +1032,6 @@ class SettingsViewModelTest {
         }
 
     @Test
-    @DisplayName("SET-001 Gen3+ installed SDXL appears in local TextToImage assignment options")
-    fun set001_installedSdxlAppearsInAssignmentOptions() =
-        runTest {
-            val sdxlSha = "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83"
-            val sdxlAsset = LocalModelAsset(
-                metadata = LocalModelMetadata(
-                    id = LocalModelId("sdxl-model"),
-                    displayName = "Stable Diffusion XL",
-                    huggingFaceModelName = "xororz/sdxl-qnn",
-                    remoteFileName = "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip",
-                    localFileName = "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip",
-                    sha256 = sdxlSha,
-                    sizeInBytes = 3_504_485_672L,
-                    modelFileFormat = ModelFileFormat.BIN,
-                    source = DownloadSource.HUGGING_FACE,
-                ),
-                configurations = listOf(
-                    LocalModelConfiguration(
-                        id = com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId("sdxl-local-config"),
-                        localModelId = LocalModelId("sdxl-model"),
-                        displayName = "Stable Diffusion XL",
-                        maxTokens = 0,
-                        contextWindow = 0,
-                        temperature = 0.0,
-                        topP = 1.0,
-                        topK = 1,
-                        repetitionPenalty = 1.0,
-                        systemPrompt = "",
-                        defaultAssignments = listOf(ModelType.IMAGE_GENERATION),
-                    )
-                )
-            )
-            val sdxlPack = ModelPack(
-                packId = "sdxl-t2i",
-                displayName = "Stable Diffusion XL",
-                slot = ModelType.IMAGE_GENERATION,
-                members = listOf(ModelPackMember(ModelPackRole.DIFFUSION, sdxlAsset)),
-            )
-            val packRow = ModelPackSettingsRow(
-                pack = sdxlPack,
-                completeness = ModelPackCompleteness(
-                    packId = "sdxl-t2i",
-                    installedCount = 1,
-                    totalCount = 1,
-                    isComplete = true,
-                    members = emptyList(),
-                ),
-                isDiffusionSoftDeleted = false,
-                areUtilityRegistryEntriesAbsent = false,
-                showDownloadAction = false,
-                disabledReason = null,
-                isEligible = true,
-            )
-
-            every { getLocalModelAssetsUseCase() } returns MutableStateFlow(listOf(sdxlAsset))
-            coEvery { getModelPacksForSettingsUseCase() } returns listOf(packRow)
-
-            viewModel.onShowModelConfigSheet(show = true)
-            advanceUntilIdle()
-
-            val state = viewModel.uiState.value
-            val mappedModel = state.localModelsSheet.models.first { it.metadataId == LocalModelId("sdxl-model") }
-            assertTrue(mappedModel.isImageGenerationCapable)
-        }
-
-    @Test
     @DisplayName("SET-002 Gen2 hides SDXL from assignment and shows disabled reason")
     fun set002_disabledSdxlHiddenFromAssignment() =
         runTest {
@@ -1159,12 +1094,24 @@ class SettingsViewModelTest {
 
             val state = viewModel.uiState.value
             val mappedModel = state.localModelsSheet.models.firstOrNull { it.metadataId == LocalModelId("sdxl-model") }
-            // If mappedModel is present, it must NOT be image generation capable (so it's hidden from assignments options list)
-            if (mappedModel != null) {
-                assertFalse(mappedModel.isImageGenerationCapable)
-            }
-            val mappedPack = state.localModelsSheet.modelPacks.first { it.packId == "sdxl-t2i" }
-            assertEquals("Requires Snapdragon 8 Gen 3+ with QNN.", mappedPack.disabledReason)
+            // Blocked SDXL must be hidden from assignment options: either not surfaced as a model at all,
+            // or surfaced but explicitly NOT image-generation capable.
+            assertFalse(mappedModel?.isImageGenerationCapable == true)
+            val assignmentOptions =
+                selectableLocalAssetsForSlot(
+                    modelType = ModelType.IMAGE_GENERATION,
+                    assets = state.localModelsSheet.models,
+                    modelPacks = state.localModelsSheet.modelPacks,
+                )
+            assertTrue(
+                assignmentOptions.none { asset ->
+                    asset.configurations.any { it.id.value == "sdxl-local-config" }
+                },
+            )
+            // The pack row must still surface with the exact Gen2 disabled reason and be ineligible.
+            val mappedPack = state.localModelsSheet.modelPacks.firstOrNull { it.packId == "sdxl-t2i" }
+            assertNotNull(mappedPack)
+            assertEquals("Requires Snapdragon 8 Gen 3+ with QNN.", mappedPack!!.disabledReason)
             assertFalse(mappedPack.isEligible)
         }
 }

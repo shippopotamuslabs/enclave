@@ -214,6 +214,7 @@ fun ModelConfigurationScreen(
                 selectableLocalAssetsForSlot(
                     modelType = assignmentSlot,
                     assets = uiState.localModelsSheet.models,
+                    modelPacks = uiState.localModelsSheet.modelPacks,
                 )
             val apiAssets =
                 when {
@@ -252,12 +253,30 @@ fun ModelConfigurationScreen(
 internal fun selectableLocalAssetsForSlot(
     modelType: ModelType,
     assets: List<LocalModelAssetUi>,
+    modelPacks: List<ModelPackUi> = emptyList(),
 ): List<LocalModelAssetUi> =
     when {
-        modelType == ModelType.IMAGE_GENERATION -> assets.filter { it.isImageGenerationCapable }
+        modelType == ModelType.IMAGE_GENERATION -> {
+            val eligibleAssets = applyLocalImageAssignmentEligibility(assets, modelPacks)
+            eligibleAssets.filter { it.isImageGenerationCapable }
+        }
         modelType in LOCAL_MODEL_UNSUPPORTED_ASSIGNMENT_TYPES -> emptyList()
         else -> assets
     }
+
+/**
+ * Merges pack eligibility and completeness into local image assignment options.
+ * Red-phase stub: throws until settings maps domain policy outputs onto assignable models.
+ */
+internal fun applyLocalImageAssignmentEligibility(
+    assets: List<LocalModelAssetUi>,
+    modelPacks: List<ModelPackUi>,
+): List<LocalModelAssetUi> {
+    if (modelPacks.isEmpty()) {
+        return assets
+    }
+    throw NotImplementedError("TDD Red")
+}
 
 private val LOCAL_MODEL_UNSUPPORTED_ASSIGNMENT_TYPES =
     setOf(

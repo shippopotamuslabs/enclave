@@ -30,38 +30,6 @@ object LocalStableDiffusionModelPolicy {
     fun supports(asset: LocalModelAsset): Boolean = LocalImageGenerationModelRegistry.descriptorFor(asset) != null
 }
 
-object LocalImageGenerationModelPolicy {
-    fun supports(asset: LocalModelAsset): Boolean = LocalImageGenerationModelRegistry.descriptorFor(asset) != null
-
-    fun policyFor(id: LocalImageGenerationModelId): LocalImageGenerationPolicy =
-        throw NotImplementedError("TDD Red")
-
-    fun normalizeRequest(
-        modelId: LocalImageGenerationModelId,
-        settings: ImageGenerationSettings,
-    ): NormalizedLocalImageGenerationRequest =
-        throw NotImplementedError("TDD Red")
-}
-
-data class LocalImageGenerationPolicy(
-    val supportedImageResolutions: List<String>,
-    val defaultImageResolution: String,
-    val supportedDiffusionSteps: List<Int>,
-    val defaultDiffusionSteps: Int,
-    val fixedDiffusionSteps: Int?,
-    val cfgScale: Float,
-    val scheduler: String,
-)
-
-data class NormalizedLocalImageGenerationRequest(
-    val imageResolution: String,
-    val diffusionSteps: Int,
-    val width: Int,
-    val height: Int,
-    val cfgScale: Float,
-    val scheduler: String,
-)
-
 val LocalStableDiffusionCapabilities: ProviderCapabilities =
     ProviderCapabilities(
         supportedAspectRatios = listOf(AspectRatio.ONE_ONE, AspectRatio.SIXTEEN_NINE, AspectRatio.NINE_SIXTEEN),

@@ -562,17 +562,7 @@ bool run_stable_diffusion_generate(
     if (!wait_for_health(child, port, 300000, health_failure)) {
         copy_error(health_failure.c_str(), error_out, error_out_len);
     } else {
-        std::ostringstream body;
-        body << "{"
-             << "\"prompt\":\"" << json_escape(request.prompt) << "\","
-             << "\"negative_prompt\":\"" << json_escape(request.negative_prompt) << "\","
-             << "\"steps\":" << request.steps << ","
-             << "\"cfg\":" << request.cfg_scale << ","
-             << "\"width\":" << request.width << ","
-             << "\"height\":" << request.height << ","
-             << "\"seed\":" << request.seed << ","
-             << "\"scheduler\":\"dpm\""
-             << "}";
+        const std::string body = build_generate_request_body(request);
 
         std::atomic<bool> keep_draining_logs {true};
         std::thread log_thread([&child, &keep_draining_logs]() {
@@ -586,7 +576,7 @@ bool run_stable_diffusion_generate(
 
         std::string raw_response;
         const bool request_ok =
-            http_request(port, "POST", "/generate", body.str().c_str(), raw_response, 3600000);
+            http_request(port, "POST", "/generate", body.c_str(), raw_response, 3600000);
         keep_draining_logs.store(false);
         log_thread.join();
 

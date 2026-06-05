@@ -938,97 +938,48 @@ class ModelConfigFetcherImplTest {
     @Test
     fun `DL-001 catalog parses sd15-t2i and sdxl-t2i`() =
         runTest {
-            val json = """
-            {
-              "assets": [
-                {
-                  "displayName": "Stable Diffusion 1.5 (NPU)",
-                  "fileName": "stable-diffusion-v1-5-Q4_0.gguf",
-                  "sha256": "c2f6e92f9d08d69cc673a1003528ac8199274b3c0eaec88d5fbefe5af67bd42b",
-                  "configurations": [
-                    {
-                      "configId": "sd15-local-config",
-                      "displayName": "Stable Diffusion 1.5 (NPU)",
-                      "systemPrompt": "",
-                      "temperature": 0.0,
-                      "topK": 1,
-                      "topP": 1.0,
-                      "minP": 0.0,
-                      "repetitionPenalty": 1.0,
-                      "contextWindow": 0,
-                      "maxTokens": 0,
-                      "thinkingEnabled": false,
-                      "defaultAssignments": ["image_generation"]
-                    }
-                  ]
-                },
-                {
-                  "displayName": "Stable Diffusion XL (NPU)",
-                  "fileName": "realvis_xl_v5_dmd2.gguf",
-                  "sha256": "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83",
-                  "configurations": [
-                    {
-                      "configId": "sdxl-local-config",
-                      "displayName": "Stable Diffusion XL (NPU)",
-                      "systemPrompt": "",
-                      "temperature": 0.0,
-                      "topK": 1,
-                      "topP": 1.0,
-                      "minP": 0.0,
-                      "repetitionPenalty": 1.0,
-                      "contextWindow": 0,
-                      "maxTokens": 0,
-                      "thinkingEnabled": false,
-                      "defaultAssignments": ["image_generation"]
-                    }
-                  ]
-                },
-                {
-                  "displayName": "SDXL NPU weights",
-                  "fileName": "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip",
-                  "sha256": "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83",
-                  "utilityType": "sdxl_qnn_pack",
-                  "configurations": []
-                }
-              ],
-              "modelPacks": [
-                {
-                  "packId": "sd15-t2i",
-                  "displayName": "Stable Diffusion 1.5 (NPU)",
-                  "slot": "image_generation",
-                  "members": [
-                    {
-                      "role": "diffusion",
-                      "fileName": "stable-diffusion-v1-5-Q4_0.gguf"
-                    }
-                  ]
-                },
-                {
-                  "packId": "sdxl-t2i",
-                  "displayName": "Stable Diffusion XL (NPU)",
-                  "slot": "image_generation",
-                  "members": [
-                    {
-                      "role": "diffusion",
-                      "fileName": "realvis_xl_v5_dmd2.gguf"
-                    },
-                    {
-                      "role": "text_encoder",
-                      "fileName": "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip",
-                      "utilityType": "sdxl_qnn_pack"
-                    }
-                  ]
-                }
-              ]
-            }
-            """.trimIndent()
-            mockConfigResponse(json)
+            // Parse the SHIPPED model_config.json rather than hand-crafted JSON so the
+            // scenario is red until the production catalog carries BOTH packs with the
+            // SDXL utility (`sdxl_qnn_pack`) membership wired through the parser.
+            val configFile =
+                listOf(
+                    java.io.File("model_config.json"),
+                    java.io.File("../model_config.json"),
+                    java.io.File("../../model_config.json"),
+                ).first { it.exists() }
+            mockConfigResponse(configFile.readText())
 
             val result = fetcher.fetchParsedCatalog()
 
             assertTrue(result.isSuccess)
             val catalog = result.getOrThrow()
+
+            // Both image-generation packs are present in catalog order.
             assertEquals(listOf("sd15-t2i", "sdxl-t2i"), catalog.packs.map { it.packId })
+
+            // SD1.5 pack carries its utility (`sd15_qnn_pack`) member.
+            val sd15Pack = catalog.packById("sd15-t2i")!!
+            assertEquals(
+                UtilityType.SD15_QNN_PACK,
+                sd15Pack.members
+                    .single { it.role == ModelPackRole.TEXT_ENCODER }
+                    .asset.metadata.utilityType,
+            )
+
+            // SDXL pack carries its diffusion member AND its utility (`sdxl_qnn_pack`) member.
+            val sdxlPack = catalog.packById("sdxl-t2i")!!
+            assertEquals(
+                "realvis_xl_v5_dmd2.gguf",
+                sdxlPack.members
+                    .single { it.role == ModelPackRole.DIFFUSION }
+                    .asset.metadata.localFileName,
+            )
+            assertEquals(
+                UtilityType.SDXL_QNN_PACK,
+                sdxlPack.members
+                    .single { it.role == ModelPackRole.TEXT_ENCODER }
+                    .asset.metadata.utilityType,
+            )
         }
 }
 

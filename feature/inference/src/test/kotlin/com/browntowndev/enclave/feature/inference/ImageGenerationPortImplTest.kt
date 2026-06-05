@@ -232,7 +232,10 @@ class ImageGenerationPortImplTest {
         runTest {
             val target = localTarget()
             val settings = ImageGenerationSettings(imageResolution = "512x512")
-            coEvery { localStableDiffusionImageGenerator.generate(any(), eq(target), any(), any()) } returns
+            val settingsSlot = io.mockk.slot<ImageGenerationSettings>()
+            coEvery {
+                localStableDiffusionImageGenerator.generate(any(), eq(target), capture(settingsSlot), any())
+            } returns
                 Result.success(
                     LocalStableDiffusionGenerationResult(
                         outputFileReferences = listOf("/cache/bonsai-0.png"),
@@ -246,12 +249,13 @@ class ImageGenerationPortImplTest {
             val result = port.generateImage("bonsai", target, settings)
 
             assertTrue(result.isSuccess)
+            assertEquals("512x512", settingsSlot.captured.imageResolution)
             coVerify {
                 localStableDiffusionImageGenerator.generate(
                     prompt = "bonsai",
                     target = target,
                     settings = settings,
-                    onProgress = any()
+                    onProgress = any(),
                 )
             }
         }
@@ -259,22 +263,27 @@ class ImageGenerationPortImplTest {
     @Test
     fun `generateImage SDXL local target propagates correct parameters`() =
         runTest {
-            val target = localTarget().copy(
-                modelId = com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId.SDXL_QNN,
-                capabilities = ProviderCapabilities(
-                    supportedAspectRatios = listOf(AspectRatio.ONE_ONE),
-                    supportedImageQualities = listOf(GenerationQuality.SPEED),
-                    supportedImageResolutions = listOf("1024x1024"),
-                    supportedImageSteps = listOf(8, 12, 16, 20, 24, 30),
-                    defaultImageStep = 16,
-                    supportedVideoQualities = emptyList(),
-                    supportedVideoResolutions = emptyList(),
-                    supportedVideoDurations = emptyList(),
-                    supportsVideo = false,
+            val target =
+                localTarget().copy(
+                    modelId = com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId.SDXL_QNN,
+                    capabilities =
+                        ProviderCapabilities(
+                            supportedAspectRatios = listOf(AspectRatio.ONE_ONE),
+                            supportedImageQualities = listOf(GenerationQuality.SPEED),
+                            supportedImageResolutions = listOf("1024x1024"),
+                            supportedImageSteps = listOf(8, 12, 16, 20, 24, 30),
+                            defaultImageStep = 16,
+                            supportedVideoQualities = emptyList(),
+                            supportedVideoResolutions = emptyList(),
+                            supportedVideoDurations = emptyList(),
+                            supportsVideo = false,
+                        ),
                 )
-            )
             val settings = ImageGenerationSettings(imageResolution = "1024x1024", diffusionSteps = 8)
-            coEvery { localStableDiffusionImageGenerator.generate(any(), eq(target), any(), any()) } returns
+            val settingsSlot = io.mockk.slot<ImageGenerationSettings>()
+            coEvery {
+                localStableDiffusionImageGenerator.generate(any(), eq(target), capture(settingsSlot), any())
+            } returns
                 Result.success(
                     LocalStableDiffusionGenerationResult(
                         outputFileReferences = listOf("/cache/sdxl-0.png"),
@@ -288,12 +297,14 @@ class ImageGenerationPortImplTest {
             val result = port.generateImage("bonsai", target, settings)
 
             assertTrue(result.isSuccess)
+            assertEquals("1024x1024", settingsSlot.captured.imageResolution)
+            assertEquals(8, settingsSlot.captured.diffusionSteps)
             coVerify {
                 localStableDiffusionImageGenerator.generate(
                     prompt = "bonsai",
                     target = target,
                     settings = settings,
-                    onProgress = any()
+                    onProgress = any(),
                 )
             }
         }

@@ -5,6 +5,7 @@ import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.UtilityType
 import com.browntowndev.enclave.domain.model.download.DownloadModelsResult
 import com.browntowndev.enclave.domain.model.download.ImageGenerationPackMemberFilter
+import com.browntowndev.enclave.domain.model.download.ParsedModelCatalog
 import com.browntowndev.enclave.domain.model.download.filterForDownload
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.download.ModelDownloadOrchestratorPort
@@ -46,6 +47,7 @@ class InitializeModelsUseCase
     ) {
         companion object {
             private const val TAG = "InitializeModelsUseCase"
+            private const val SDXL_PACK_ID = "sdxl-t2i"
         }
 
         /**
@@ -180,11 +182,19 @@ class InitializeModelsUseCase
                     }
                 }
 
+            val (tierAwareSlotAssignments, tierAwareUtilityAssets) =
+                applyTierAwareImagePackDownloadFilter(
+                    catalog = catalog,
+                    suppressImageGenerationDownloads = suppressImageGenerationDownloads,
+                    slotAssignments = filteredSlotAssignments,
+                    utilityAssets = filteredUtilityAssets,
+                )
+
             // Check if models are ready using CheckModelsUseCase
             val modelsResult =
                 checkModelsUseCase(
-                    expectedModels = filteredSlotAssignments,
-                    utilityAssets = filteredUtilityAssets,
+                    expectedModels = tierAwareSlotAssignments,
+                    utilityAssets = tierAwareUtilityAssets,
                 )
 
             // Include soft-deleted models in availableToRedownload ONLY if they are still on remote.
@@ -222,7 +232,7 @@ class InitializeModelsUseCase
                 }
             }
 
-            filteredUtilityAssets.forEach { utilityAsset ->
+            tierAwareUtilityAssets.forEach { utilityAsset ->
                 if (utilityAsset.metadata.sha256 !in modelsToDownloadShaSet) {
                     persistUtilityAsset(utilityAsset)
                     logPort.debug(
@@ -256,6 +266,19 @@ class InitializeModelsUseCase
 
         private suspend fun persistUtilityAsset(asset: LocalModelAsset) {
             syncUtilityModelRegistryUseCase(asset)
+        }
+
+        private fun applyTierAwareImagePackDownloadFilter(
+            catalog: ParsedModelCatalog,
+            suppressImageGenerationDownloads: Boolean,
+            slotAssignments: Map<ModelType, LocalModelAsset>,
+            utilityAssets: List<LocalModelAsset>,
+        ): Pair<Map<ModelType, LocalModelAsset>, List<LocalModelAsset>> {
+            if (suppressImageGenerationDownloads || catalog.packs.none { it.packId == SDXL_PACK_ID }) {
+                return slotAssignments to utilityAssets
+            }
+            capabilityPort.getCapabilities()
+            throw NotImplementedError("TDD Red")
         }
 
         private fun augmentSd15QnnPackUtilities(

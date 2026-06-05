@@ -29,6 +29,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
@@ -459,6 +460,7 @@ class SetDefaultModelUseCaseTest {
             useCase(ModelType.IMAGE_GENERATION, localConfigId = configId, apiConfigId = null)
 
             assertEquals(configId, repository.getDefault(ModelType.IMAGE_GENERATION)?.localConfigId)
+            verify { capabilityPort.getCapabilities() }
         }
 
     @Test

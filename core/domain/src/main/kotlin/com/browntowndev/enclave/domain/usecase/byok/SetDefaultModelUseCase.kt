@@ -6,6 +6,8 @@ import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.config.TtsProviderId
 import com.browntowndev.enclave.domain.model.download.ModelPackRole
 import com.browntowndev.enclave.domain.model.inference.ModelType
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelRegistry
 import com.browntowndev.enclave.domain.model.media.LocalStableDiffusionModelPolicy
 import com.browntowndev.enclave.domain.port.media.GpuCapabilityPort
 import com.browntowndev.enclave.domain.port.media.LOCAL_IMAGE_GENERATION_UNSUPPORTED_MESSAGE
@@ -116,6 +118,7 @@ class SetDefaultModelUseCaseImpl
                     require(LocalStableDiffusionModelPolicy.supports(asset)) {
                         "Image generation slot requires a supported local diffusion model."
                     }
+                    requireLocalImageModelAssignmentAllowed(asset)
                     requireImageGenerationPackComplete(asset)
                 }
             }
@@ -154,5 +157,14 @@ class SetDefaultModelUseCaseImpl
                     throw IllegalArgumentException("Unable to verify model pack download status.")
                 }
             require(completeness.isComplete) { PACK_NOT_COMPLETE_MESSAGE }
+        }
+
+        private fun requireLocalImageModelAssignmentAllowed(asset: com.browntowndev.enclave.domain.model.config.LocalModelAsset) {
+            val modelId = LocalImageGenerationModelRegistry.descriptorFor(asset)?.id ?: return
+            if (modelId != LocalImageGenerationModelId.SDXL_QNN) {
+                return
+            }
+            capabilityPort.getCapabilities()
+            throw NotImplementedError("TDD Red")
         }
     }

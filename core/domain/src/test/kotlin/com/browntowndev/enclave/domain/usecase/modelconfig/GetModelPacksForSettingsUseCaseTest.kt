@@ -1,16 +1,24 @@
 package com.browntowndev.enclave.domain.usecase.modelconfig
 
+import com.browntowndev.enclave.domain.model.config.UtilityType
 import com.browntowndev.enclave.domain.model.download.ModelPackCompleteness
 import com.browntowndev.enclave.domain.model.download.ModelPackTestFixtures
+import com.browntowndev.enclave.domain.model.media.LocalImageGenTriState
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilities
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId
+import com.browntowndev.enclave.domain.port.media.LocalImageGenerationCapabilityPort
 import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.UtilityModelRepositoryPort
 import com.browntowndev.enclave.domain.port.download.ModelPackVerifierPort
 import com.browntowndev.enclave.domain.usecase.download.ResolveModelCatalogUseCase
 import com.browntowndev.enclave.domain.usecase.download.VerifyModelPackCompletenessUseCase
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
@@ -22,6 +30,7 @@ class GetModelPacksForSettingsUseCaseTest {
     private lateinit var localModelRepository: LocalModelRepositoryPort
     private lateinit var utilityModelRepository: UtilityModelRepositoryPort
     private lateinit var modelPackVerifier: ModelPackVerifierPort
+    private lateinit var capabilityPort: LocalImageGenerationCapabilityPort
     private lateinit var useCase: GetModelPacksForSettingsUseCase
 
     @BeforeEach
@@ -31,6 +40,7 @@ class GetModelPacksForSettingsUseCaseTest {
         modelPackVerifier = mockk()
         localModelRepository = mockk(relaxed = true)
         utilityModelRepository = mockk(relaxed = true)
+        capabilityPort = mockk(relaxed = true)
         coEvery { resolveModelCatalog() } returns Result.success(ModelPackTestFixtures.parsedCatalog())
         useCase =
             GetModelPacksForSettingsUseCase(
@@ -39,6 +49,7 @@ class GetModelPacksForSettingsUseCaseTest {
                 modelPackVerifier,
                 localModelRepository,
                 utilityModelRepository,
+                capabilityPort,
             )
     }
 
@@ -61,6 +72,56 @@ class GetModelPacksForSettingsUseCaseTest {
             val rows = useCase()
 
             assertEquals(ModelPackTestFixtures.PACK_ID, rows.single().pack.packId)
+        }
+
+    @Test
+    fun surfacesGen2DisabledReasonForBlockedSdxlPackRow() =
+        runTest {
+            every { capabilityPort.getCapabilities() } returns
+                LocalImageGenerationCapabilities(
+                    npuAvailable = LocalImageGenTriState.YES,
+                    sd15NpuSupported = LocalImageGenTriState.YES,
+                    sd15CpuSupported = LocalImageGenTriState.NO,
+                    sdxlNpuSupported = LocalImageGenTriState.NO,
+                    recommendedBackend = LocalImageGenerationBackendKind.QNN_NPU,
+                    recommendedModelId = LocalImageGenerationModelId.SD15_QNN,
+                    diagnostics = emptyList(),
+                    disabledReasonsByModelId =
+                        mapOf(
+                            LocalImageGenerationModelId.SDXL_QNN to
+                                "Requires Snapdragon 8 Gen 3+ with QNN.",
+                        ),
+                )
+            coEvery { resolveModelCatalog() } returns Result.success(ModelPackTestFixtures.parsedCatalogWithSdxl())
+            coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
+            coEvery { utilityModelRepository.getByUtilityType(UtilityType.SD15_QNN_PACK) } returns mockk(relaxed = true)
+            coEvery { utilityModelRepository.getByUtilityType(UtilityType.SDXL_QNN_PACK) } returns mockk(relaxed = true)
+            coEvery { verifyModelPackCompleteness(ModelPackTestFixtures.PACK_ID) } returns
+                Result.success(
+                    ModelPackCompleteness(
+                        packId = ModelPackTestFixtures.PACK_ID,
+                        installedCount = 2,
+                        totalCount = 2,
+                        isComplete = true,
+                        members = emptyList(),
+                    ),
+                )
+            coEvery { verifyModelPackCompleteness(ModelPackTestFixtures.SDXL_PACK_ID) } returns
+                Result.success(
+                    ModelPackCompleteness(
+                        packId = ModelPackTestFixtures.SDXL_PACK_ID,
+                        installedCount = 2,
+                        totalCount = 2,
+                        isComplete = true,
+                        members = emptyList(),
+                    ),
+                )
+
+            val rows = useCase()
+            val sdxlRow = rows.single { it.pack.packId == ModelPackTestFixtures.SDXL_PACK_ID }
+
+            assertEquals("Requires Snapdragon 8 Gen 3+ with QNN.", sdxlRow.disabledReason)
+            assertFalse(sdxlRow.isEligible)
         }
 
     @Test

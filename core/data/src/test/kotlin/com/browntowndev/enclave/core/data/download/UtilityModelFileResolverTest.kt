@@ -143,6 +143,23 @@ class UtilityModelFileResolverTest {
         }
 
     @Test
+    @DisplayName("DL-005 resolves installed SDXL QNN pack directory")
+    fun dl005_resolvesInstalledSdxlQnnPackDirectory() =
+        runTest {
+            val modelsDir = File(tempDir, ModelConfig.MODELS_DIR).apply { mkdirs() }
+            val packDir = File(modelsDir, LocalImageGenerationPaths.SDXL_QNN_SUBDIR).apply { mkdirs() }
+            listOf("clip_v2.mnn", "token_emb.bin", "pos_emb.bin", "unet.bin", "vae_decoder.bin", "tokenizer.json").forEach { name ->
+                File(packDir, name).writeBytes(byteArrayOf(1))
+            }
+            val repository = repositoryReturning(sdxlQnnPackMetadata())
+            val resolver = resolver(repository)
+
+            val path = resolver.resolveUtilityModelPath(UtilityType.SDXL_QNN_PACK)
+
+            assertEquals(packDir.absolutePath, path)
+        }
+
+    @Test
     @DisplayName("SCN-RESOLVE-LOCAL-001")
     fun scnResolveLocal001_returnsAbsolutePathWhenLocalModelPresentAndSizeAndHashMatch() =
         runTest {
@@ -269,6 +286,19 @@ class UtilityModelFileResolverTest {
             localFileName = "AnythingV5_qnn2.28_8gen2.zip",
             sha256 = "unused-after-install",
             sizeInBytes = 1_057_820_237L,
+            modelFileFormat = ModelFileFormat.BIN,
+            source = DownloadSource.HUGGING_FACE,
+        )
+
+    private fun sdxlQnnPackMetadata() =
+        UtilityModelMetadata(
+            id = UtilityModelId("sdxl-qnn-id"),
+            utilityType = UtilityType.SDXL_QNN_PACK,
+            huggingFaceModelName = "xororz/sdxl-qnn",
+            remoteFileName = "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip",
+            localFileName = "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip",
+            sha256 = "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83",
+            sizeInBytes = 3_504_485_672L,
             modelFileFormat = ModelFileFormat.BIN,
             source = DownloadSource.HUGGING_FACE,
         )

@@ -672,6 +672,7 @@ class InitializeModelsUseCaseTest {
         runTest {
             every { capabilityPort.getCapabilities() } returns
                 com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilities(
+                    snapdragonTier = SnapdragonTier.GEN2,
                     npuAvailable = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
                     sd15NpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
                     sd15CpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.NO,
@@ -681,29 +682,15 @@ class InitializeModelsUseCaseTest {
                     diagnostics = emptyList()
                 )
 
-            val parsedCatalog = ParsedModelCatalog(
-                assets = listOf(
-                    ModelPackTestFixtures.diffusionAsset(),
-                    createMockAsset("5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83", "realvis_xl.gguf", DownloadSource.HUGGING_FACE)
-                ),
-                packs = listOf(
-                    ModelPackTestFixtures.sd15Pack(),
-                    com.browntowndev.enclave.domain.model.download.ModelPack(
-                        packId = "sdxl-t2i",
-                        displayName = "Stable Diffusion XL",
-                        slot = ModelType.IMAGE_GENERATION,
-                        members = listOf(
-                            com.browntowndev.enclave.domain.model.download.ModelPackMember(
-                                role = com.browntowndev.enclave.domain.model.download.ModelPackRole.DIFFUSION,
-                                asset = createMockAsset("5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83", "realvis_xl.gguf", DownloadSource.HUGGING_FACE)
-                            )
-                        )
-                    )
-                )
-            )
+            val parsedCatalog = ModelPackTestFixtures.parsedCatalogWithSdxl()
 
             coEvery { modelConfigFetcher.fetchParsedCatalog() } returns Result.success(parsedCatalog)
-            coEvery { checkModelsUseCase(any(), any()) } returns
+            coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
+
+            val utilitySlot = slot<List<LocalModelAsset>>()
+            coEvery {
+                checkModelsUseCase(expectedModels = any(), utilityAssets = capture(utilitySlot))
+            } returns
                 DownloadModelsResult(
                     allModels = emptyMap(),
                     utilityAssets = emptyList(),
@@ -713,8 +700,18 @@ class InitializeModelsUseCaseTest {
 
             val result = useCase()
 
-            assertTrue(result.modelsToDownload.any { it.metadata.sha256 == ModelPackTestFixtures.DIFFUSION_SHA })
-            assertTrue(result.modelsToDownload.none { it.metadata.sha256 == "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83" })
+            val downloadShas = result.modelsToDownload.map { it.metadata.sha256 }.toSet()
+            val utilityTypes = utilitySlot.captured.map { it.metadata.utilityType }.toSet()
+            val utilityShas = utilitySlot.captured.map { it.metadata.sha256 }.toSet()
+
+            // modelsToDownload contains the sd15-t2i diffusion member.
+            assertTrue(ModelPackTestFixtures.DIFFUSION_SHA in downloadShas)
+            // utilityAssets contains the SD15_QNN_PACK member.
+            assertTrue(UtilityType.SD15_QNN_PACK in utilityTypes)
+            // Neither models nor utilities contain any sdxl-t2i member.
+            assertFalse(ModelPackTestFixtures.SDXL_DIFFUSION_SHA in downloadShas)
+            assertFalse(UtilityType.SDXL_QNN_PACK in utilityTypes)
+            assertFalse(ModelPackTestFixtures.SDXL_QNN_PACK_SHA in utilityShas)
         }
 
     @Test
@@ -722,6 +719,7 @@ class InitializeModelsUseCaseTest {
         runTest {
             every { capabilityPort.getCapabilities() } returns
                 com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilities(
+                    snapdragonTier = SnapdragonTier.GEN3_PLUS,
                     npuAvailable = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
                     sd15NpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
                     sd15CpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.NO,
@@ -731,41 +729,35 @@ class InitializeModelsUseCaseTest {
                     diagnostics = emptyList()
                 )
 
-            val sdxlAsset = createMockAsset("5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83", "realvis_xl.gguf", DownloadSource.HUGGING_FACE)
-            val parsedCatalog = ParsedModelCatalog(
-                assets = listOf(
-                    ModelPackTestFixtures.diffusionAsset(),
-                    sdxlAsset
-                ),
-                packs = listOf(
-                    ModelPackTestFixtures.sd15Pack(),
-                    com.browntowndev.enclave.domain.model.download.ModelPack(
-                        packId = "sdxl-t2i",
-                        displayName = "Stable Diffusion XL",
-                        slot = ModelType.IMAGE_GENERATION,
-                        members = listOf(
-                            com.browntowndev.enclave.domain.model.download.ModelPackMember(
-                                role = com.browntowndev.enclave.domain.model.download.ModelPackRole.DIFFUSION,
-                                asset = sdxlAsset
-                            )
-                        )
-                    )
-                )
-            )
+            val parsedCatalog = ModelPackTestFixtures.parsedCatalogWithSdxl()
 
             coEvery { modelConfigFetcher.fetchParsedCatalog() } returns Result.success(parsedCatalog)
-            coEvery { checkModelsUseCase(any(), any()) } returns
+            coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
+
+            val utilitySlot = slot<List<LocalModelAsset>>()
+            coEvery {
+                checkModelsUseCase(expectedModels = any(), utilityAssets = capture(utilitySlot))
+            } returns
                 DownloadModelsResult(
                     allModels = emptyMap(),
                     utilityAssets = emptyList(),
-                    modelsToDownload = listOf(ModelPackTestFixtures.diffusionAsset(), sdxlAsset),
+                    modelsToDownload =
+                        listOf(ModelPackTestFixtures.diffusionAsset(), ModelPackTestFixtures.sdxlDiffusionAsset()),
                     scanResult = ModelScanResult(emptyList(), emptyMap(), false),
                 )
 
             val result = useCase()
 
-            assertTrue(result.modelsToDownload.any { it.metadata.sha256 == ModelPackTestFixtures.DIFFUSION_SHA })
-            assertTrue(result.modelsToDownload.any { it.metadata.sha256 == "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83" })
+            val downloadShas = result.modelsToDownload.map { it.metadata.sha256 }.toSet()
+            val utilityTypes = utilitySlot.captured.map { it.metadata.utilityType }.toSet()
+
+            // modelsToDownload contains BOTH the sd15-t2i and sdxl-t2i diffusion members.
+            assertTrue(ModelPackTestFixtures.DIFFUSION_SHA in downloadShas)
+            assertTrue(ModelPackTestFixtures.SDXL_DIFFUSION_SHA in downloadShas)
+            // utilityAssets contains BOTH SD15_QNN_PACK and SDXL_QNN_PACK.
+            assertTrue(UtilityType.SD15_QNN_PACK in utilityTypes)
+            assertTrue(UtilityType.SDXL_QNN_PACK in utilityTypes)
+            verify { capabilityPort.getCapabilities() }
         }
 
     @Test
@@ -774,22 +766,32 @@ class InitializeModelsUseCaseTest {
             val apiConfig = mockk<ActiveModelConfiguration> { every { isLocal } returns false }
             coEvery { activeModelProvider.getActiveConfiguration(ModelType.IMAGE_GENERATION) } returns apiConfig
 
-            val parsedCatalog = ParsedModelCatalog(
-                assets = listOf(ModelPackTestFixtures.diffusionAsset()),
-                packs = listOf(ModelPackTestFixtures.sd15Pack())
-            )
+            val parsedCatalog = ModelPackTestFixtures.parsedCatalogWithSdxl()
 
             coEvery { modelConfigFetcher.fetchParsedCatalog() } returns Result.success(parsedCatalog)
-            coEvery { checkModelsUseCase(any(), any()) } returns
+            coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
+
+            val utilitySlot = slot<List<LocalModelAsset>>()
+            coEvery {
+                checkModelsUseCase(expectedModels = any(), utilityAssets = capture(utilitySlot))
+            } returns
                 DownloadModelsResult(
                     allModels = emptyMap(),
                     utilityAssets = emptyList(),
-                    modelsToDownload = listOf(ModelPackTestFixtures.diffusionAsset()),
+                    modelsToDownload = emptyList(),
                     scanResult = ModelScanResult(emptyList(), emptyMap(), false),
                 )
 
             val result = useCase()
 
-            assertTrue(result.modelsToDownload.none { it.metadata.sha256 == ModelPackTestFixtures.DIFFUSION_SHA })
+            val downloadShas = result.modelsToDownload.map { it.metadata.sha256 }.toSet()
+            val utilityTypes = utilitySlot.captured.map { it.metadata.utilityType }.toSet()
+
+            // modelsToDownload contains no sd15-t2i or sdxl-t2i member.
+            assertFalse(ModelPackTestFixtures.DIFFUSION_SHA in downloadShas)
+            assertFalse(ModelPackTestFixtures.SDXL_DIFFUSION_SHA in downloadShas)
+            // utilityAssets contains no SD15_QNN_PACK or SDXL_QNN_PACK.
+            assertFalse(UtilityType.SD15_QNN_PACK in utilityTypes)
+            assertFalse(UtilityType.SDXL_QNN_PACK in utilityTypes)
         }
 }

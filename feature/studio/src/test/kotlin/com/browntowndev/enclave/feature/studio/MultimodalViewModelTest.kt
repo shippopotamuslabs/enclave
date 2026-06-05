@@ -1072,9 +1072,30 @@ class MultimodalViewModelTest {
                     localConfigId = localConfigId,
                 )
             every { defaultModelRepository.observeDefaults() } returns flowOf(listOf(localImageAssignment))
-            
-            // To ensure it is in RED state (failing/throwing as expected when not implemented), we let the mock run.
-            // By default, it will not return the expected values, causing the assertions below to fail.
+            viewModel = createViewModel()
+            val job =
+                backgroundScope.launch(testDispatcher) {
+                    viewModel.uiState.collect {}
+                }
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals(listOf("512x512"), state.capabilities?.supportedImageResolutions)
+            job.cancel()
+        }
+
+    @Test
+    fun `MUT-001 hardcoded dual resolution fails SD15 exact resolution check`() =
+        runTest {
+            // Mutation defense reuses the STU-001 assigned-model capability path; a lazy dual-resolution
+            // implementation must fail this exact-resolution assertion for SD15_QNN.
+            val localConfigId = LocalModelConfigurationId("sd15-local-config")
+            val localImageAssignment =
+                DefaultModelAssignment(
+                    modelType = ModelType.IMAGE_GENERATION,
+                    localConfigId = localConfigId,
+                )
+            every { defaultModelRepository.observeDefaults() } returns flowOf(listOf(localImageAssignment))
             viewModel = createViewModel()
             val job =
                 backgroundScope.launch(testDispatcher) {

@@ -90,6 +90,88 @@ class LocalStableDiffusionImageGeneratorFailureTest {
         )
 
     @Test
+    fun `INF-001 SD15 native request uses policy-normalized 512 square 20 and 7_5`() =
+        runTest {
+            val capturedRequest = io.mockk.slot<LocalImageGenerationNativeRequest>()
+            val engine =
+                mockk<LocalImageGenerationEngine> {
+                    coEvery { generate(capture(capturedRequest)) } returns
+                        Result.success(
+                            LocalImageGenerationNativeResult(emptyList(), 512, 512, 0L),
+                        )
+                }
+            val context = mockk<Context>(relaxed = true)
+            every { context.cacheDir } returns java.io.File.createTempFile("cache", "").parentFile!!
+            val generator = LocalStableDiffusionImageGenerator(context, engine, lockManager)
+
+            val result =
+                generator.generate(
+                    prompt = "sunset",
+                    target = localTarget(),
+                    settings =
+                        ImageGenerationSettings(
+                            imageResolution = "512x512",
+                            aspectRatio = AspectRatio.SIXTEEN_NINE,
+                            diffusionSteps = 24,
+                        ),
+                )
+
+            assertTrue(result.isSuccess)
+            // Legacy hardcoded path derives 512x288 from 16:9; policy must force SD15 square 512x512.
+            assertEquals(512, capturedRequest.captured.width)
+            assertEquals(512, capturedRequest.captured.height)
+            assertEquals(20, capturedRequest.captured.steps)
+            assertEquals(7.5f, capturedRequest.captured.cfgScale)
+        }
+
+    @Test
+    fun `INF-002 SDXL native request uses 1024 selected steps CFG and lcm`() =
+        runTest {
+            val capturedRequest = io.mockk.slot<LocalImageGenerationNativeRequest>()
+            val engine =
+                mockk<LocalImageGenerationEngine> {
+                    coEvery { generate(capture(capturedRequest)) } returns
+                        Result.success(
+                            LocalImageGenerationNativeResult(emptyList(), 1024, 1024, 0L),
+                        )
+                }
+            val context = mockk<Context>(relaxed = true)
+            every { context.cacheDir } returns java.io.File.createTempFile("cache", "").parentFile!!
+            val generator = LocalStableDiffusionImageGenerator(context, engine, lockManager)
+
+            val sdxlTarget =
+                localTarget().copy(
+                    modelId = LocalImageGenerationModelId.SDXL_QNN,
+                    capabilities =
+                        ProviderCapabilities(
+                            supportedAspectRatios = listOf(AspectRatio.ONE_ONE),
+                            supportedImageQualities = listOf(GenerationQuality.SPEED),
+                            supportedImageResolutions = listOf("1024x1024"),
+                            supportedImageSteps = listOf(8, 12, 16, 20, 24, 30),
+                            defaultImageStep = 16,
+                            supportedVideoQualities = emptyList(),
+                            supportedVideoResolutions = emptyList(),
+                            supportedVideoDurations = emptyList(),
+                            supportsVideo = false,
+                        ),
+                )
+
+            val result =
+                generator.generate(
+                    prompt = "sunset",
+                    target = sdxlTarget,
+                    settings = ImageGenerationSettings(imageResolution = "1024x1024", diffusionSteps = 8),
+                )
+
+            assertTrue(result.isSuccess)
+            assertEquals(1024, capturedRequest.captured.width)
+            assertEquals(1024, capturedRequest.captured.height)
+            assertEquals(8, capturedRequest.captured.steps)
+            assertEquals(1.5f, capturedRequest.captured.cfgScale)
+            assertEquals("lcm", capturedRequest.captured.scheduler)
+        }
+
+    @Test
     fun `INF-003 stale SD15 1024 request fails before native launch with exact error`() =
         runTest {
             val engine = mockk<LocalImageGenerationEngine>()
@@ -147,6 +229,45 @@ class LocalStableDiffusionImageGeneratorFailureTest {
             )
 
             assertTrue(result.isSuccess)
+            assertEquals(16, capturedRequest.captured.steps)
+        }
+
+    @Test
+    fun `MUT-003 lazy any-step implementation fails because step 13 must clamp to 16`() =
+        runTest {
+            val capturedRequest = io.mockk.slot<LocalImageGenerationNativeRequest>()
+            val engine = mockk<LocalImageGenerationEngine> {
+                coEvery { generate(capture(capturedRequest)) } returns Result.success(
+                    LocalImageGenerationNativeResult(emptyList(), 1024, 1024, 0L)
+                )
+            }
+            val context = mockk<Context>(relaxed = true)
+            every { context.cacheDir } returns java.io.File.createTempFile("cache", "").parentFile!!
+            val generator = LocalStableDiffusionImageGenerator(context, engine, lockManager)
+
+            val sdxlTarget = localTarget().copy(
+                modelId = LocalImageGenerationModelId.SDXL_QNN,
+                capabilities = ProviderCapabilities(
+                    supportedAspectRatios = listOf(AspectRatio.ONE_ONE),
+                    supportedImageQualities = listOf(GenerationQuality.SPEED),
+                    supportedImageResolutions = listOf("1024x1024"),
+                    supportedImageSteps = listOf(8, 12, 16, 20, 24, 30),
+                    defaultImageStep = 16,
+                    supportedVideoQualities = emptyList(),
+                    supportedVideoResolutions = emptyList(),
+                    supportedVideoDurations = emptyList(),
+                    supportsVideo = false,
+                )
+            )
+
+            val result = generator.generate(
+                prompt = "sunset",
+                target = sdxlTarget,
+                settings = ImageGenerationSettings(imageResolution = "1024x1024", diffusionSteps = 13)
+            )
+
+            assertTrue(result.isSuccess)
+            // A lazy forwarder would emit 13 unchanged; the unsupported step must clamp to 16.
             assertEquals(16, capturedRequest.captured.steps)
         }
 }
