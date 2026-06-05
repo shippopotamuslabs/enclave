@@ -31,6 +31,7 @@ data class StudioUiState(
     val prompt: String = "",
     val isGenerating: Boolean = false,
     val activeGenerationPrompt: String? = null,
+    val generationProgressLabel: String? = null,
     val mediaType: MediaCapability = MediaCapability.IMAGE,
     val gallery: List<StudioMediaUi> = emptyList(),
     val selectedMediaItemIds: Set<String> = emptySet(),

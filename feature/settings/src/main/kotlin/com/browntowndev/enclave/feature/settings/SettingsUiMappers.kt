@@ -12,6 +12,8 @@ import com.browntowndev.enclave.domain.model.error.ActiveModelConfigurationDecry
 import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelSource
+import com.browntowndev.enclave.domain.model.media.LocalStableDiffusionModelPolicy
+import com.browntowndev.enclave.domain.port.media.LOCAL_ON_DEVICE_IMAGE_GENERATION_ENABLED
 import com.browntowndev.enclave.domain.usecase.settings.ReassignmentCandidate
 import javax.inject.Inject
 
@@ -102,6 +104,7 @@ class LocalModelAssetUiMapper
                     ModelFileFormat.LITERTLM, ModelFileFormat.LITERT_ALIAS -> "LiteRT"
                     ModelFileFormat.BIN -> "BIN"
                     ModelFileFormat.ONNX -> "ONNX"
+                    ModelFileFormat.SAFETENSORS -> "SAFETENSORS"
                     ModelFileFormat.TXT -> "TXT"
                 }
 
@@ -130,6 +133,9 @@ class LocalModelAssetUiMapper
                 sizeInBytes = asset.metadata.sizeInBytes,
                 configurations = asset.configurations.map(::mapConfig),
                 isMultimodal = asset.metadata.isMultimodal,
+                isImageGenerationCapable =
+                    LOCAL_ON_DEVICE_IMAGE_GENERATION_ENABLED &&
+                        LocalStableDiffusionModelPolicy.supports(asset),
                 isSoftDeleted = asset.configurations.isEmpty(),
             )
         }
@@ -221,6 +227,7 @@ class ReassignmentOptionUiMapper
             candidates.map { candidate ->
                 ReassignmentOptionUi(
                     configId = candidate.configId,
+                    mediaProviderId = candidate.mediaProviderId,
                     displayName =
                         when (candidate.source) {
                             ModelSource.ON_DEVICE -> candidate.configDisplayName.ifBlank { candidate.assetDisplayName }

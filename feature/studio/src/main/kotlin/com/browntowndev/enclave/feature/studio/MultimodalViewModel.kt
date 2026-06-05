@@ -2,12 +2,17 @@ package com.browntowndev.enclave.feature.studio
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.inference.ModelType
+import com.browntowndev.enclave.domain.model.media.ImageGenerationTarget
+import com.browntowndev.enclave.domain.model.media.LocalStableDiffusionCapabilities
 import com.browntowndev.enclave.domain.model.media.ProviderCapabilities
 import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
 import com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase
 import com.browntowndev.enclave.domain.usecase.inference.ShouldModeratePromptUseCase
+import com.browntowndev.enclave.domain.usecase.media.GetImageGenerationCapabilitiesUseCase
 import com.browntowndev.enclave.domain.usecase.media.ResolveMediaModelTypeUseCase
 import com.browntowndev.enclave.feature.studio.coordinators.CapabilitiesPlaybackInputs
 import com.browntowndev.enclave.feature.studio.coordinators.GenerationInputs
@@ -35,7 +40,9 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -51,6 +58,7 @@ class MultimodalViewModel
         private val moderatePromptUseCase: ModeratePromptUseCase,
         private val shouldModeratePromptUseCase: ShouldModeratePromptUseCase,
         private val resolveMediaModelTypeUseCase: ResolveMediaModelTypeUseCase,
+        private val getImageGenerationCapabilitiesUseCase: GetImageGenerationCapabilitiesUseCase,
         private val generationCoordinator: StudioGenerationCoordinator,
         private val albumSelectionCoordinator: StudioAlbumSelectionCoordinator,
         private val speechCoordinator: StudioSpeechCoordinator,
@@ -83,6 +91,25 @@ class MultimodalViewModel
                     flowOf(null)
                 }
             }
+
+        /**
+         * Emits the on-device backend capabilities while the active image-generation slot is a
+         * local stable-diffusion (Bonsai) assignment, or `null` for remote/other slots so the
+         * remote capabilities coordinator stays in charge of provider-backed schemas.
+         *
+         * Capabilities are sourced through [GetImageGenerationCapabilitiesUseCase] so Studio drives
+         * its pickers from the same capability shape as remote providers.
+         */
+        private val localImageCapabilitiesFlow =
+            activeModelFlow
+                .map { assignment ->
+                    assignment
+                        ?.takeIf { it.localConfigId != null && it.mediaProviderId == null }
+                        ?.localConfigId
+                }.distinctUntilChanged()
+                .map { localConfigId ->
+                    localConfigId?.let { getImageGenerationCapabilitiesUseCase.localCapabilities(it) }
+                }
 
         private val _capabilities = MutableStateFlow<ProviderCapabilities?>(null)
         private val _isCapabilitiesLoading = MutableStateFlow(false)
@@ -161,15 +188,18 @@ class MultimodalViewModel
                 generationCoordinator.lastSubmittedPrompt,
                 generationCoordinator.isContinualGenerationActive,
                 generationCoordinator.error,
-                generationCoordinator.videoGenerationState,
-            ) { isGenerating, lastSubmittedPrompt, isContinualGenerationActive, error, videoGenerationState ->
+                generationCoordinator.generationProgressLabel,
+            ) { isGenerating, lastSubmittedPrompt, isContinualGenerationActive, error, generationProgressLabel ->
                 GenerationInputs(
                     isGenerating = isGenerating,
                     lastSubmittedPrompt = lastSubmittedPrompt,
                     isContinualGenerationActive = isContinualGenerationActive,
                     error = error,
-                    videoGenerationState = videoGenerationState,
+                    generationProgressLabel = generationProgressLabel,
+                    videoGenerationState = VideoGenerationState.Idle,
                 )
+            }.combine(generationCoordinator.videoGenerationState) { generationInputs, videoGenerationState ->
+                generationInputs.copy(videoGenerationState = videoGenerationState)
             }
 
         private val selectionInputsFlow =
@@ -238,6 +268,15 @@ class MultimodalViewModel
                 capabilities = _capabilities,
                 isCapabilitiesLoading = _isCapabilitiesLoading,
             )
+            // The remote coordinator only resolves provider-backed schemas; feed the on-device
+            // stable-diffusion capabilities directly when the active image slot is local.
+            localImageCapabilitiesFlow
+                .onEach { localCapabilities ->
+                    if (localCapabilities != null && promptCoordinator.mediaType.value == MediaCapability.IMAGE) {
+                        _isCapabilitiesLoading.value = false
+                        _capabilities.value = localCapabilities
+                    }
+                }.launchIn(viewModelScope)
             mediaActionsCoordinator.attach(
                 scope = viewModelScope,
                 sessionMedia = sessionMedia,
@@ -286,6 +325,7 @@ class MultimodalViewModel
                         continualMode = promptInputs.continualMode,
                         isContinualGenerationActive = generationInputs.isContinualGenerationActive,
                         error = generationInputs.error,
+                        generationProgressLabel = generationInputs.generationProgressLabel,
                         lastSubmittedPrompt = generationInputs.lastSubmittedPrompt,
                         videoGenerationState = generationInputs.videoGenerationState,
                         speechState = playbackInputs.speechState,

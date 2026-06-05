@@ -4,6 +4,7 @@ import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.media.AspectRatio
 import com.browntowndev.enclave.domain.model.media.GenerationQuality
 import com.browntowndev.enclave.domain.model.media.GenerationSettings
+import com.browntowndev.enclave.domain.model.media.ImageGenerationProgress
 import com.browntowndev.enclave.domain.model.media.VideoGenerationSettings
 import com.browntowndev.enclave.domain.port.media.StudioGenerationDispatcherPort
 import com.browntowndev.enclave.domain.port.repository.StudioMediaAsset
@@ -40,6 +41,9 @@ class StudioGenerationCoordinator
         private val _error = MutableStateFlow<String?>(null)
         val error: StateFlow<String?> = _error.asStateFlow()
 
+        private val _generationProgressLabel = MutableStateFlow<String?>(null)
+        val generationProgressLabel: StateFlow<String?> = _generationProgressLabel.asStateFlow()
+
         private val _videoGenerationState = MutableStateFlow<VideoGenerationState>(VideoGenerationState.Idle)
         val videoGenerationState: StateFlow<VideoGenerationState> = _videoGenerationState.asStateFlow()
 
@@ -56,6 +60,7 @@ class StudioGenerationCoordinator
                 .observeEphemeralMedia()
                 .onEach { media ->
                     _isGenerating.value = false
+                    _generationProgressLabel.value = null
                     resolveDetailVideoGeneration(media)
                 }.launchIn(scope)
 
@@ -67,6 +72,7 @@ class StudioGenerationCoordinator
                         _error.value = snackbarMessage
                         _isGenerating.value = false
                         _isContinualGenerationActive.value = false
+                        _generationProgressLabel.value = null
                         pendingDetailVideoSourceAssetId?.let { sourceAssetId ->
                             _videoGenerationState.value =
                                 VideoGenerationState.Error(
@@ -77,11 +83,19 @@ class StudioGenerationCoordinator
                         }
                     }
                 }.launchIn(scope)
+
+            studioRepository
+                .observeGenerationProgress()
+                .onEach { progress ->
+                    _generationProgressLabel.value = progress?.toPresentationLabel()
+                }.launchIn(scope)
         }
 
         fun stopGeneration() {
             _isContinualGenerationActive.value = false
             _isGenerating.value = false
+            _generationProgressLabel.value = null
+            studioRepository.clearGenerationProgress()
             dispatcher.stopGeneration()
         }
 
@@ -90,6 +104,7 @@ class StudioGenerationCoordinator
             mediaType: MediaCapability,
             settings: GenerationSettings,
         ) {
+            _generationProgressLabel.value = null
             dispatcher.startGeneration(prompt, mediaType, settings)
             _isGenerating.value = true
         }
@@ -252,4 +267,12 @@ class StudioGenerationCoordinator
             private const val DEFAULT_DETAIL_VIDEO_DURATION_SECONDS = 5
             private const val DEFAULT_DETAIL_VIDEO_RESOLUTION = "480p"
         }
+
+        private fun ImageGenerationProgress.toPresentationLabel(): String =
+            when (this) {
+                ImageGenerationProgress.PreparingModel -> "Preparing model"
+                ImageGenerationProgress.LoadingModel -> "Loading model"
+                is ImageGenerationProgress.Generating -> "Generating image"
+                ImageGenerationProgress.SavingOutput -> "Saving output"
+            }
     }

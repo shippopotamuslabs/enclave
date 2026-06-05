@@ -769,8 +769,10 @@ class ChatViewModelTest {
                     match {
                         it.message.content.text == "Hello" &&
                             it.message.content.fileAttachments.size == 1 &&
-                            it.message.content.fileAttachments[0].name == "test.txt" &&
-                            it.message.content.fileAttachments[0].content == "Extracted content"
+                            it.message.content.fileAttachments[0]
+                                .name == "test.txt" &&
+                            it.message.content.fileAttachments[0]
+                                .content == "Extracted content"
                     },
                 )
             }

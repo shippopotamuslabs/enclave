@@ -8,6 +8,7 @@ import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.download.DownloadKey
 import com.browntowndev.enclave.domain.model.download.DownloadRequestKind
 import com.browntowndev.enclave.domain.model.download.ScheduledDownload
+import com.browntowndev.enclave.domain.usecase.modelconfig.ReDownloadModelPackUseCase
 import com.browntowndev.enclave.domain.usecase.modelconfig.ReDownloadModelUseCase
 import io.mockk.coEvery
 import io.mockk.every
@@ -26,12 +27,13 @@ import org.junit.jupiter.api.extension.ExtendWith
 @OptIn(ExperimentalCoroutinesApi::class)
 class ModelReDownloadViewModelTest {
     private val reDownloadModelUseCase = mockk<ReDownloadModelUseCase>()
+    private val reDownloadModelPackUseCase = mockk<ReDownloadModelPackUseCase>(relaxed = true)
     private val downloadWorkRepository = mockk<DownloadWorkRepository>()
     private lateinit var viewModel: ModelReDownloadViewModel
 
     @BeforeEach
     fun setup() {
-        viewModel = ModelReDownloadViewModel(reDownloadModelUseCase, downloadWorkRepository)
+        viewModel = ModelReDownloadViewModel(reDownloadModelUseCase, reDownloadModelPackUseCase, downloadWorkRepository)
     }
 
     @Test

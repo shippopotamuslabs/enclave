@@ -4,12 +4,12 @@ interface CriminalIntentModerationPort {
     suspend fun classify(prompt: String): PromptModerationScores
 
     companion object {
-        val Dummy = object : CriminalIntentModerationPort {
-            override suspend fun classify(prompt: String): PromptModerationScores {
-                return PromptModerationScores(
-                    scoresByLabel = emptyMap()
-                )
+        val Dummy =
+            object : CriminalIntentModerationPort {
+                override suspend fun classify(prompt: String): PromptModerationScores =
+                    PromptModerationScores(
+                        scoresByLabel = emptyMap(),
+                    )
             }
-        }
     }
 }

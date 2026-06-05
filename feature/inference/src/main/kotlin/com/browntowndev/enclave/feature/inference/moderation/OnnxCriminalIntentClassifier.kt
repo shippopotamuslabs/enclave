@@ -35,9 +35,10 @@ class OnnxCriminalIntentClassifier
                 val logits = model.session.runModeration(encoded, model.config.maxSequenceLength)
                 // Multi-label sequence classification output has sigmoid probabilities
                 val probabilities = logits.map { logit -> sigmoid(logit) }
-                val scoresByLabel = model.config.labels.zip(probabilities).associate { (label, score) ->
-                    label to score
-                }
+                val scoresByLabel =
+                    model.config.labels.zip(probabilities).associate { (label, score) ->
+                        label to score
+                    }
                 PromptModerationScores(
                     scoresByLabel = scoresByLabel,
                     labelAliases = model.config.labelAliases,
@@ -57,15 +58,17 @@ class OnnxCriminalIntentClassifier
             val config = ModerationAssetConfig.parse(readAssetText(CONFIG_ASSET_PATH))
             val modelFile = copyAssetToModelDirectory(config.modelPath)
             val vocabLines = readAssetLines("$ASSET_BASE_PATH/vocab.txt")
-            val tokenizer = HuggingFaceWordPieceTokenizer(
-                vocabLines = vocabLines,
-                maxSequenceLength = config.maxSequenceLength,
-            )
+            val tokenizer =
+                HuggingFaceWordPieceTokenizer(
+                    vocabLines = vocabLines,
+                    maxSequenceLength = config.maxSequenceLength,
+                )
             val environment = OrtEnvironment.getEnvironment()
-            val session = OrtSession.SessionOptions().use { sessionOptions ->
-                sessionOptions.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
-                environment.createSession(modelFile.absolutePath, sessionOptions)
-            }
+            val session =
+                OrtSession.SessionOptions().use { sessionOptions ->
+                    sessionOptions.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
+                    environment.createSession(modelFile.absolutePath, sessionOptions)
+                }
             return LoadedCriminalIntentModel(
                 config = config,
                 tokenizer = tokenizer,
@@ -78,11 +81,12 @@ class OnnxCriminalIntentClassifier
             maxSequenceLength: Int,
         ): FloatArray {
             val shape = longArrayOf(1L, maxSequenceLength.toLong())
-            val tensors = mutableListOf(
-                OnnxTensor.createTensor(OrtEnvironment.getEnvironment(), LongBuffer.wrap(encoded.inputIds), shape),
-                OnnxTensor.createTensor(OrtEnvironment.getEnvironment(), LongBuffer.wrap(encoded.attentionMask), shape),
-                OnnxTensor.createTensor(OrtEnvironment.getEnvironment(), LongBuffer.wrap(encoded.tokenTypeIds), shape),
-            )
+            val tensors =
+                mutableListOf(
+                    OnnxTensor.createTensor(OrtEnvironment.getEnvironment(), LongBuffer.wrap(encoded.inputIds), shape),
+                    OnnxTensor.createTensor(OrtEnvironment.getEnvironment(), LongBuffer.wrap(encoded.attentionMask), shape),
+                    OnnxTensor.createTensor(OrtEnvironment.getEnvironment(), LongBuffer.wrap(encoded.tokenTypeIds), shape),
+                )
             val inputs = mutableMapOf<String, OnnxTensor>()
             try {
                 val expectedInputNames = this.inputNames
@@ -107,10 +111,16 @@ class OnnxCriminalIntentClassifier
         }
 
         private fun readAssetText(path: String): String =
-            context.assets.open(path).bufferedReader().use { reader -> reader.readText() }
+            context.assets
+                .open(path)
+                .bufferedReader()
+                .use { reader -> reader.readText() }
 
         private fun readAssetLines(path: String): List<String> =
-            context.assets.open(path).bufferedReader().readLines()
+            context.assets
+                .open(path)
+                .bufferedReader()
+                .readLines()
 
         private fun copyAssetToModelDirectory(modelPath: String): File {
             val targetDirectory = File(context.noBackupFilesDir, ASSET_BASE_PATH)
@@ -150,5 +160,4 @@ class OnnxCriminalIntentClassifier
         }
     }
 
-private fun sigmoid(logit: Float): Double =
-    1.0 / (1.0 + exp(-logit.toDouble()))
+private fun sigmoid(logit: Float): Double = 1.0 / (1.0 + exp(-logit.toDouble()))

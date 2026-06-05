@@ -11,6 +11,7 @@ import com.browntowndev.enclave.domain.model.settings.SearchProvider
 import com.browntowndev.enclave.domain.model.telemetry.UsageSpendSummary
 import com.browntowndev.enclave.domain.port.auth.AuthState
 import com.browntowndev.enclave.domain.port.repository.SettingsData
+import com.browntowndev.enclave.domain.usecase.modelconfig.ModelPackSettingsRow
 import com.browntowndev.enclave.domain.usecase.settings.ApiModelDiscoveryScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
@@ -148,6 +149,7 @@ internal data class SettingsUiStateSources(
     val reindexProgress: Flow<Float>,
     val vaultReauthSheet: StateFlow<VaultReauthSheetState>,
     val usageSpendSummary: Flow<UsageSpendSummary>,
+    val modelPackRows: Flow<List<ModelPackSettingsRow>> = kotlinx.coroutines.flow.flowOf(emptyList()),
 )
 
 class SettingsUiStateFactory
@@ -161,7 +163,8 @@ class SettingsUiStateFactory
                 SettingsUiStateFlowCombiner.observeEditorSlice(sources),
                 SettingsUiStateFlowCombiner.observeSearchAndVaultSlice(sources),
                 sources.usageSpendSummary,
-            ) { repository, editor, searchAndVault, usageSpendSummary ->
+                sources.modelPackRows,
+            ) { repository, editor, searchAndVault, usageSpendSummary, modelPackRows ->
                 assembler.create(
                     persistedSettings = repository.persistedSettings,
                     localAssets = repository.localAssets,
@@ -190,6 +193,7 @@ class SettingsUiStateFactory
                     reindexProgress = searchAndVault.reindexProgress,
                     vaultReauthSheet = searchAndVault.vaultReauthSheet,
                     usageSpendSummary = usageSpendSummary,
+                    modelPackRows = modelPackRows,
                 )
             }
 
@@ -222,6 +226,7 @@ class SettingsUiStateFactory
             reindexProgress: Float,
             vaultReauthSheet: VaultReauthSheetState,
             usageSpendSummary: UsageSpendSummary,
+            modelPackRows: List<ModelPackSettingsRow> = emptyList(),
         ): SettingsUiState =
             assembler.create(
                 persistedSettings,
@@ -251,5 +256,6 @@ class SettingsUiStateFactory
                 reindexProgress,
                 vaultReauthSheet,
                 usageSpendSummary,
+                modelPackRows,
             )
     }

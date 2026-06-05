@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.domain.port.repository
 
+import com.browntowndev.enclave.domain.model.media.ImageGenerationProgress
 import kotlinx.coroutines.flow.Flow
 
 interface StudioMediaId {
@@ -33,9 +34,15 @@ interface StudioRepositoryPort {
 
     fun observeGenerationError(): Flow<String?>
 
+    fun observeGenerationProgress(): Flow<ImageGenerationProgress?>
+
     suspend fun reportGenerationError(message: String?)
 
     suspend fun clearGenerationError()
+
+    fun reportGenerationProgress(progress: ImageGenerationProgress?)
+
+    fun clearGenerationProgress()
 
     suspend fun addEphemeralMedia(asset: StudioMediaAsset)
 

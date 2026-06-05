@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.domain.usecase
 
+import com.browntowndev.enclave.domain.model.media.ImageGenerationProgress
 import com.browntowndev.enclave.domain.port.repository.StudioAlbumAsset
 import com.browntowndev.enclave.domain.port.repository.StudioMediaAsset
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
@@ -40,9 +41,15 @@ class FakeStudioRepository : StudioRepositoryPort {
 
     override fun observeGenerationError(): Flow<String?> = throw UnsupportedOperationException()
 
+    override fun observeGenerationProgress(): Flow<ImageGenerationProgress?> = throw UnsupportedOperationException()
+
     override suspend fun reportGenerationError(message: String?) = unsupported()
 
     override suspend fun clearGenerationError() = unsupported()
+
+    override fun reportGenerationProgress(progress: ImageGenerationProgress?) = unsupported()
+
+    override fun clearGenerationProgress() = unsupported()
 
     override suspend fun addEphemeralMedia(asset: StudioMediaAsset) = unsupported()
 

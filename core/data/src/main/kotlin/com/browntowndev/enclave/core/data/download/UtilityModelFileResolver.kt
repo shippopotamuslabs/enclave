@@ -1,8 +1,11 @@
 package com.browntowndev.enclave.core.data.download
 
 import android.content.Context
+import com.browntowndev.enclave.domain.model.config.LocalModelMetadata
 import com.browntowndev.enclave.domain.model.config.UtilityType
 import com.browntowndev.enclave.domain.model.download.ModelConfig
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationPaths
+import com.browntowndev.enclave.domain.port.download.HashingPort
 import com.browntowndev.enclave.domain.port.repository.UtilityModelFilePort
 import com.browntowndev.enclave.domain.port.repository.UtilityModelRepositoryPort
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -18,13 +21,30 @@ class UtilityModelFileResolver
     constructor(
         @param:ApplicationContext private val context: Context,
         private val utilityModelRepository: UtilityModelRepositoryPort,
+        private val hashingPort: HashingPort,
     ) : UtilityModelFilePort {
         override suspend fun resolveUtilityModelPath(utilityType: UtilityType): String? =
             withContext(Dispatchers.IO) {
                 val metadata = utilityModelRepository.getByUtilityType(utilityType) ?: return@withContext null
                 val modelsDir = File(context.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
+                if (utilityType == UtilityType.SD15_QNN_PACK) {
+                    val packDir = File(modelsDir, LocalImageGenerationPaths.SD15_QNN_SUBDIR)
+                    return@withContext packDir.takeIf(LocalImageGenerationPaths::hasQnnArtifacts)?.absolutePath
+                }
                 val file = safeFile(modelsDir, metadata.localFileName)
-                if (file.exists() && file.length() == metadata.sizeInBytes) {
+                if (file.matches(metadata.sizeInBytes, metadata.sha256)) {
+                    file.absolutePath
+                } else {
+                    null
+                }
+            }
+
+        override suspend fun resolveLocalModelPath(metadata: LocalModelMetadata): String? =
+            withContext(Dispatchers.IO) {
+                if (metadata.localFileName.isBlank()) return@withContext null
+                val modelsDir = File(context.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
+                val file = safeFile(modelsDir, metadata.localFileName)
+                if (file.matches(metadata.sizeInBytes, metadata.sha256)) {
                     file.absolutePath
                 } else {
                     null
@@ -53,4 +73,16 @@ class UtilityModelFileResolver
             }
             return resolvedFile
         }
+
+        private fun File.matches(
+            expectedSizeInBytes: Long,
+            expectedSha256: String,
+        ): Boolean =
+            try {
+                exists() &&
+                    length() == expectedSizeInBytes &&
+                    hashingPort.calculateSha256(absolutePath).equals(expectedSha256, ignoreCase = true)
+            } catch (_: Exception) {
+                false
+            }
     }

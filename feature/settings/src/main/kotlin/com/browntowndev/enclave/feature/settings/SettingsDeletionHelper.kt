@@ -3,6 +3,7 @@ package com.browntowndev.enclave.feature.settings
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.usecase.settings.ModelDeletionTarget
 import com.browntowndev.enclave.domain.usecase.settings.PreparedModelDeletion
 import com.browntowndev.enclave.domain.usecase.settings.SettingsDeletionUseCases
@@ -43,6 +44,7 @@ internal class SettingsDeletionHelper
                                         modelTypesNeedingReassignment = emptyList(),
                                         replacementLocalConfigId = null,
                                         replacementApiConfigId = null,
+                                        replacementMediaProviderId = null,
                                     ).getOrThrow()
                                 onImmediateSuccess?.invoke()
                             }
@@ -65,6 +67,7 @@ internal class SettingsDeletionHelper
             deletionState: MutableStateFlow<DeletionTransientState>,
             replacementLocalConfigId: LocalModelConfigurationId?,
             replacementApiConfigId: ApiModelConfigurationId?,
+            replacementMediaProviderId: MediaProviderId? = null,
         ) {
             val currentState = deletionState.value
             val pendingTarget = currentState.pendingTarget ?: return
@@ -81,6 +84,7 @@ internal class SettingsDeletionHelper
                         modelTypesNeedingReassignment = currentState.modelTypesNeedingReassignment,
                         replacementLocalConfigId = replacementLocalConfigId,
                         replacementApiConfigId = replacementApiConfigId,
+                        replacementMediaProviderId = replacementMediaProviderId,
                     ).getOrThrow()
                 onDismissDeletionSafety(deletionState)
             }
@@ -96,5 +100,6 @@ internal class SettingsDeletionHelper
                 is PendingDeletionTarget.LocalModelPreset -> ModelDeletionTarget.LocalModelPreset(id)
                 is PendingDeletionTarget.ApiProvider -> ModelDeletionTarget.ApiProvider(id)
                 is PendingDeletionTarget.ApiPreset -> ModelDeletionTarget.ApiPreset(id)
+                is PendingDeletionTarget.ModelPack -> ModelDeletionTarget.ModelPack(packId)
             }
     }

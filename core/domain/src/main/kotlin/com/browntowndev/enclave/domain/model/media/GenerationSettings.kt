@@ -14,6 +14,7 @@ data class ImageGenerationSettings(
     override val quality: GenerationQuality = GenerationQuality.SPEED,
     /** Provider-native resolution (e.g. fal OpenAPI `resolution` enum). */
     val imageResolution: String? = null,
+    val diffusionSteps: Int? = null,
     override val referenceImageUri: String? = null,
     override val seed: String = "",
     val generationCount: Int = 1,
@@ -87,6 +88,8 @@ data class ProviderCapabilities(
     val supportedAspectRatios: List<AspectRatio>,
     val supportedImageQualities: List<GenerationQuality>,
     val supportedImageResolutions: List<String> = emptyList(),
+    val supportedImageSteps: List<Int> = emptyList(),
+    val defaultImageStep: Int? = null,
     val supportedVideoQualities: List<GenerationQuality>,
     val supportedVideoResolutions: List<String>,
     val supportedVideoDurations: List<Int>,

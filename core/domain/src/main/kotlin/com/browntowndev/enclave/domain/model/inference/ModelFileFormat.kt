@@ -25,6 +25,9 @@ enum class ModelFileFormat(
     @SerialName("ONNX")
     ONNX(".onnx"),
 
+    @SerialName("SAFETENSORS")
+    SAFETENSORS(".safetensors"),
+
     @SerialName("TXT")
     TXT(".txt"),
 }

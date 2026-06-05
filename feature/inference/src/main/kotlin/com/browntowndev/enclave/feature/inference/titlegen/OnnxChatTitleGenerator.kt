@@ -176,7 +176,10 @@ class OnnxChatTitleGenerator
         }
 
         private fun readAssetText(path: String): String =
-            context.assets.open(path).bufferedReader().use { reader -> reader.readText() }
+            context.assets
+                .open(path)
+                .bufferedReader()
+                .use { reader -> reader.readText() }
 
         private data class LoadedTitleModel(
             val config: TitleGenAssetConfig,

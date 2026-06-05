@@ -65,8 +65,7 @@ class StudioRemoteCapabilitiesCoordinator
             }.launchIn(scope)
         }
 
-        fun requiresRemoteCapabilitiesLoading(provider: MediaProviderAsset?): Boolean =
-            requiresRemoteCapabilities(provider)
+        fun requiresRemoteCapabilitiesLoading(provider: MediaProviderAsset?): Boolean = requiresRemoteCapabilities(provider)
 
         private data class CapabilitiesLoadSnapshot(
             val isLoading: Boolean,
@@ -86,4 +85,4 @@ class StudioRemoteCapabilitiesCoordinator
                 append('|')
                 append(provider?.modelName.orEmpty())
             }
-            }
+    }

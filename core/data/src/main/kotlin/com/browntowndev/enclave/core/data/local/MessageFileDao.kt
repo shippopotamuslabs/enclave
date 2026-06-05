@@ -85,13 +85,17 @@ interface MessageFileDao {
     @Query("DELETE FROM message_file WHERE id IN (:ids) AND deleted = 1")
     suspend fun purgeDeleted(ids: List<String>)
 
-    @Query("UPDATE message_file SET deleted = 1, sync_status = 'PENDING_UPLOAD', updated_at = :timestamp WHERE message_id = :messageId AND deleted = 0")
+    @Query(
+        "UPDATE message_file SET deleted = 1, sync_status = 'PENDING_UPLOAD', updated_at = :timestamp WHERE message_id = :messageId AND deleted = 0",
+    )
     suspend fun softDeleteByMessageId(
         messageId: MessageId,
         timestamp: Long = System.currentTimeMillis(),
     )
 
-    @Query("UPDATE message_file SET deleted = 1, sync_status = 'PENDING_UPLOAD', updated_at = :timestamp WHERE message_id IN (SELECT id FROM message WHERE chat_id = :chatId) AND deleted = 0")
+    @Query(
+        "UPDATE message_file SET deleted = 1, sync_status = 'PENDING_UPLOAD', updated_at = :timestamp WHERE message_id IN (SELECT id FROM message WHERE chat_id = :chatId) AND deleted = 0",
+    )
     suspend fun softDeleteByChatId(
         chatId: ChatId,
         timestamp: Long = System.currentTimeMillis(),

@@ -2,12 +2,12 @@ package com.browntowndev.enclave.domain.usecase.chat
 
 import com.browntowndev.enclave.domain.port.repository.CloudSyncPort
 import com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase
-import javax.inject.Inject
-import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import javax.inject.Inject
+import kotlin.coroutines.coroutineContext
 
 class ProcessPromptWithSafetyGateUseCase
     @Inject
@@ -89,4 +89,3 @@ class ProcessPromptWithSafetyGateUseCase
             }
         }
     }
-

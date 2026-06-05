@@ -102,7 +102,7 @@ class SettingsScreenTest {
                     onSelectLocalModelConfig = {},
                     onDeleteLocalModelAsset = {},
                     onDeleteLocalModelConfig = {},
-                    onConfirmDeletionWithReassignment = { _, _ -> },
+                    onConfirmDeletionWithReassignment = { _, _, _ -> },
                     onDismissDeletionSafety = {},
                 )
             }

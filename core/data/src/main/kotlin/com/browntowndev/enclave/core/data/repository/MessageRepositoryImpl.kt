@@ -27,9 +27,7 @@ class MessageRepositoryImpl
         private val reads: MessageReadCoordinator,
         private val vision: MessageVisionWriter,
     ) : MessageRepository {
-        override suspend fun saveMessage(
-            message: Message,
-        ): MessageId = persistence.saveMessage(message, scheduleCloudSync = false)
+        override suspend fun saveMessage(message: Message): MessageId = persistence.saveMessage(message, scheduleCloudSync = false)
 
         override suspend fun saveEmbedding(
             messageId: MessageId,

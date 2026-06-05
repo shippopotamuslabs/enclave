@@ -36,6 +36,7 @@ internal data class GenerationInputs(
     val lastSubmittedPrompt: String?,
     val isContinualGenerationActive: Boolean,
     val error: String?,
+    val generationProgressLabel: String?,
     val videoGenerationState: VideoGenerationState,
 )
 

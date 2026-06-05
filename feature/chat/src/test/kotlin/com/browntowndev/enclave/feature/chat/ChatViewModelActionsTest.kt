@@ -1,6 +1,7 @@
 package com.browntowndev.enclave.feature.chat
 
 import androidx.lifecycle.SavedStateHandle
+import app.cash.turbine.test
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
@@ -23,11 +24,10 @@ import com.browntowndev.enclave.domain.usecase.chat.ProcessFileAttachmentUseCase
 import com.browntowndev.enclave.domain.usecase.chat.StageImageAttachmentUseCase
 import com.browntowndev.enclave.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
+import com.browntowndev.enclave.domain.usecase.inference.SubmitModerationReportUseCase
 import com.browntowndev.enclave.domain.usecase.settings.SettingsAssignmentUseCases
 import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.enclave.domain.usecase.share.ShareChatUseCase
-import app.cash.turbine.test
-import com.browntowndev.enclave.domain.usecase.inference.SubmitModerationReportUseCase
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -540,26 +540,27 @@ class ChatViewModelActionsTest {
     fun `reportBlockedPrompt submits blocked outcome report and emits feedback message`() =
         runTest {
             val submitModerationReportUseCase = mockk<SubmitModerationReportUseCase>(relaxed = true)
-            val customViewModel = ChatViewModelTestSupport.createViewModel(
-                settingsUseCases = settingsUseCases,
-                chatUseCases = chatUseCases,
-                savedStateHandle = SavedStateHandle(),
-                cancelInferenceUseCase = cancelInferenceUseCase,
-                inferenceLockManager = inferenceLockManager,
-                modelDisplayNamesUseCase = modelDisplayNamesUseCase,
-                activeModelProvider = activeModelProvider,
-                toolExecutionEventPort = toolExecutionEventPort,
-                errorHandler = errorHandler,
-                loggingPort = loggingPort,
-                activeChatTurnSnapshotPort = activeChatTurnStore,
-                playbackController = playbackController,
-                studioRepository = studioRepository,
-                shareChatUseCase = shareChatUseCase,
-                chatRepository = mockk(relaxed = true),
-                exportArtifactDocumentsUseCase = mockk(relaxed = true),
-                stageImageAttachmentUseCase = stageImageAttachmentUseCase,
-                submitModerationReportUseCase = submitModerationReportUseCase,
-            )
+            val customViewModel =
+                ChatViewModelTestSupport.createViewModel(
+                    settingsUseCases = settingsUseCases,
+                    chatUseCases = chatUseCases,
+                    savedStateHandle = SavedStateHandle(),
+                    cancelInferenceUseCase = cancelInferenceUseCase,
+                    inferenceLockManager = inferenceLockManager,
+                    modelDisplayNamesUseCase = modelDisplayNamesUseCase,
+                    activeModelProvider = activeModelProvider,
+                    toolExecutionEventPort = toolExecutionEventPort,
+                    errorHandler = errorHandler,
+                    loggingPort = loggingPort,
+                    activeChatTurnSnapshotPort = activeChatTurnStore,
+                    playbackController = playbackController,
+                    studioRepository = studioRepository,
+                    shareChatUseCase = shareChatUseCase,
+                    chatRepository = mockk(relaxed = true),
+                    exportArtifactDocumentsUseCase = mockk(relaxed = true),
+                    stageImageAttachmentUseCase = stageImageAttachmentUseCase,
+                    submitModerationReportUseCase = submitModerationReportUseCase,
+                )
 
             customViewModel.moderationMessages.test {
                 customViewModel.reportBlockedPrompt("Test blocked prompt")
@@ -573,26 +574,27 @@ class ChatViewModelActionsTest {
     fun `reportUnblockedPrompt submits allowed outcome report and emits feedback message`() =
         runTest {
             val submitModerationReportUseCase = mockk<SubmitModerationReportUseCase>(relaxed = true)
-            val customViewModel = ChatViewModelTestSupport.createViewModel(
-                settingsUseCases = settingsUseCases,
-                chatUseCases = chatUseCases,
-                savedStateHandle = SavedStateHandle(),
-                cancelInferenceUseCase = cancelInferenceUseCase,
-                inferenceLockManager = inferenceLockManager,
-                modelDisplayNamesUseCase = modelDisplayNamesUseCase,
-                activeModelProvider = activeModelProvider,
-                toolExecutionEventPort = toolExecutionEventPort,
-                errorHandler = errorHandler,
-                loggingPort = loggingPort,
-                activeChatTurnSnapshotPort = activeChatTurnStore,
-                playbackController = playbackController,
-                studioRepository = studioRepository,
-                shareChatUseCase = shareChatUseCase,
-                chatRepository = mockk(relaxed = true),
-                exportArtifactDocumentsUseCase = mockk(relaxed = true),
-                stageImageAttachmentUseCase = stageImageAttachmentUseCase,
-                submitModerationReportUseCase = submitModerationReportUseCase,
-            )
+            val customViewModel =
+                ChatViewModelTestSupport.createViewModel(
+                    settingsUseCases = settingsUseCases,
+                    chatUseCases = chatUseCases,
+                    savedStateHandle = SavedStateHandle(),
+                    cancelInferenceUseCase = cancelInferenceUseCase,
+                    inferenceLockManager = inferenceLockManager,
+                    modelDisplayNamesUseCase = modelDisplayNamesUseCase,
+                    activeModelProvider = activeModelProvider,
+                    toolExecutionEventPort = toolExecutionEventPort,
+                    errorHandler = errorHandler,
+                    loggingPort = loggingPort,
+                    activeChatTurnSnapshotPort = activeChatTurnStore,
+                    playbackController = playbackController,
+                    studioRepository = studioRepository,
+                    shareChatUseCase = shareChatUseCase,
+                    chatRepository = mockk(relaxed = true),
+                    exportArtifactDocumentsUseCase = mockk(relaxed = true),
+                    stageImageAttachmentUseCase = stageImageAttachmentUseCase,
+                    submitModerationReportUseCase = submitModerationReportUseCase,
+                )
 
             customViewModel.moderationMessages.test {
                 customViewModel.reportUnblockedPrompt("Test unblocked prompt")

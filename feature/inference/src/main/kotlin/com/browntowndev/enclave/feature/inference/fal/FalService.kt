@@ -1,7 +1,7 @@
 package com.browntowndev.enclave.feature.inference.fal
 
-import kotlinx.serialization.json.Json
 import com.browntowndev.enclave.domain.model.media.ModelGenerationOutputSchema
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
@@ -298,6 +298,7 @@ class FalService
                     null
                 }
             }
+
             private const val MAX_RETRY_ATTEMPTS = 3
             private const val RETRY_BACKOFF_MILLIS = 1_000L
             private const val HTTP_TOO_MANY_REQUESTS = 429

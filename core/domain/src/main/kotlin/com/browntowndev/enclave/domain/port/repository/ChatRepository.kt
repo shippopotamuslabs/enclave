@@ -133,7 +133,10 @@ interface ChatRepository {
      * @param chat The chat to create
      * @return The ID of the newly created chat
      */
-    suspend fun createChat(chat: Chat, scheduleCloudSync: Boolean = true): ChatId
+    suspend fun createChat(
+        chat: Chat,
+        scheduleCloudSync: Boolean = true,
+    ): ChatId
 
     /**
      * Saves an assistant message to the database.

@@ -9,8 +9,8 @@ import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.enclave.domain.model.onboarding.OnboardingFlowMode
 import com.browntowndev.enclave.domain.usecase.FakeSettingsRepository
-import com.browntowndev.enclave.domain.usecase.onboarding.ResolveOnboardingFlowModeUseCase
 import com.browntowndev.enclave.domain.usecase.media.SaveMediaProviderUseCase
+import com.browntowndev.enclave.domain.usecase.onboarding.ResolveOnboardingFlowModeUseCase
 import com.browntowndev.enclave.domain.usecase.settings.ApiModelDiscoveryResult
 import com.browntowndev.enclave.domain.usecase.settings.ApiModelDiscoveryScope
 import com.browntowndev.enclave.domain.usecase.settings.DiscoverApiModelsUseCase

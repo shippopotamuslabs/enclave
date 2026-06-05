@@ -2,7 +2,6 @@ package com.browntowndev.enclave.domain.usecase.inference
 
 import com.browntowndev.enclave.domain.port.inference.CriminalIntentModerationPort
 import com.browntowndev.enclave.domain.port.inference.PromptModerationPort
-import com.browntowndev.enclave.domain.port.inference.PromptModerationScores
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import javax.inject.Inject
@@ -46,10 +45,11 @@ class ModeratePromptUseCase
                     koalaScores.labelAliases.mapValues { (_, labels) ->
                         labels.maxOfOrNull { label -> koalaScores.scoresByLabel[label] ?: 0.0 } ?: 0.0
                     }
-                val koalaSexualMinorsScore = koalaCanonicalScores["sexual/minors"]
-                    ?: koalaScores.scoresByLabel["sexual/minors"]
-                    ?: koalaScores.scoresByLabel["S3"] // fallback to raw label
-                    ?: 0.0
+                val koalaSexualMinorsScore =
+                    koalaCanonicalScores["sexual/minors"]
+                        ?: koalaScores.scoresByLabel["sexual/minors"]
+                        ?: koalaScores.scoresByLabel["S3"] // fallback to raw label
+                        ?: 0.0
 
                 val koalaSexualMinorsThreshold = koalaThresholds["sexual/minors"] ?: DEFAULT_KOALA_SEXUAL_MINORS_THRESHOLD
                 val koalaTriggered = koalaSexualMinorsScore > koalaSexualMinorsThreshold
@@ -76,11 +76,12 @@ class ModeratePromptUseCase
                 }
                 triggeredLabels.addAll(triggeredCriminalLabels)
 
-                val combinedIllegalScore = criminalScores.scoresByLabel["criminal_intent_harmful"]
-                    ?: max(
-                        triggeredCriminalLabels.maxOfOrNull { label -> criminalScores.scoresByLabel[label] ?: 0.0 } ?: 0.0,
-                        koalaSexualMinorsScore
-                    )
+                val combinedIllegalScore =
+                    criminalScores.scoresByLabel["criminal_intent_harmful"]
+                        ?: max(
+                            triggeredCriminalLabels.maxOfOrNull { label -> criminalScores.scoresByLabel[label] ?: 0.0 } ?: 0.0,
+                            koalaSexualMinorsScore,
+                        )
 
                 val blocked = triggeredLabels.isNotEmpty()
 

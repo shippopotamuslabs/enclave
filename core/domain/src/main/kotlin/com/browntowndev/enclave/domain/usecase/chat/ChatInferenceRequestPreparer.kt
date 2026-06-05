@@ -271,6 +271,7 @@ class ChatInferenceRequestPreparer(
                         ModelFileFormat.GGUF -> ToolCallStrategy.JSON_XML_ENVELOPE
                         ModelFileFormat.BIN,
                         ModelFileFormat.ONNX,
+                        ModelFileFormat.SAFETENSORS,
                         ModelFileFormat.TXT,
                         -> ToolCallStrategy.JSON_XML_ENVELOPE
                         null -> ToolCallStrategy.JSON_XML_ENVELOPE
@@ -282,11 +283,16 @@ class ChatInferenceRequestPreparer(
         val toolingEnabled = true // Memory tools are always available
         val imageAssignment = defaultModelRepository.getDefault(ModelType.IMAGE_GENERATION)
         val imageTool =
-            if (imageAssignment?.mediaProviderId != null) {
-                val provider = mediaProviderRepository.getMediaProvider(imageAssignment.mediaProviderId)
-                mediaToolDefinitionFactory.buildImageToolDefinition(provider?.provider?.name)
-            } else {
-                null
+            when {
+                imageAssignment?.mediaProviderId != null -> {
+                    val provider = mediaProviderRepository.getMediaProvider(imageAssignment.mediaProviderId)
+                    mediaToolDefinitionFactory.buildImageToolDefinition(provider?.provider?.name)
+                }
+                // Local on-device image generation (e.g. Bonsai) has no media provider; the
+                // generate_image tool stays available so chat can still trigger generation.
+                imageAssignment?.localConfigId != null ->
+                    mediaToolDefinitionFactory.buildImageToolDefinition(null)
+                else -> null
             }
 
         val videoAssignment = defaultModelRepository.getDefault(ModelType.VIDEO_GENERATION)

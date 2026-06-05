@@ -23,6 +23,7 @@ internal data class TitleGenAssetConfig(
     companion object {
         fun parse(configJson: String): TitleGenAssetConfig {
             val root = Json.parseToJsonElement(configJson).jsonObject
+
             fun int(
                 key: String,
                 default: Int,

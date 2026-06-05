@@ -1,5 +1,4 @@
 package com.browntowndev.enclave.feature.settings
-import com.browntowndev.enclave.core.ui.component.sheet.TosBottomSheet
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -58,6 +57,7 @@ import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
 import com.browntowndev.enclave.core.ui.component.neo.NeoSettingsSection
 import com.browntowndev.enclave.core.ui.component.neo.NeoThemeChip
 import com.browntowndev.enclave.core.ui.component.neo.NeoToggleRow
+import com.browntowndev.enclave.core.ui.component.sheet.TosBottomSheet
 import com.browntowndev.enclave.core.ui.component.vault.VaultAuthUiState
 import com.browntowndev.enclave.core.ui.component.vault.VaultReauthBottomSheet
 import com.browntowndev.enclave.core.ui.component.vault.VaultUserUiState
@@ -152,8 +152,9 @@ fun SettingsScreen(
     onSelectLocalModelConfig: (LocalModelConfigUi?) -> Unit,
     onDeleteLocalModelAsset: (LocalModelId) -> Unit,
     onDeleteLocalModelConfig: (LocalModelConfigurationId) -> Unit,
-    onConfirmDeletionWithReassignment: (LocalModelConfigurationId?, ApiModelConfigurationId?) -> Unit,
+    onConfirmDeletionWithReassignment: (LocalModelConfigurationId?, ApiModelConfigurationId?, MediaProviderId?) -> Unit,
     onDismissDeletionSafety: () -> Unit,
+    onDeleteModelPack: (String) -> Unit = {},
     onSubmitVaultReauthPassword: (String) -> Unit = {},
     onConfirmAdoptCloudFromSettings: () -> Unit = {},
     onCancelVaultReauth: () -> Unit = {},
@@ -416,6 +417,7 @@ fun SettingsScreen(
                 onDeleteLocalModelConfig = onDeleteLocalModelConfig,
                 onConfirmDeletionWithReassignment = onConfirmDeletionWithReassignment,
                 onDismissDeletionSafety = onDismissDeletionSafety,
+                onDeleteModelPack = onDeleteModelPack,
             )
         }
 
@@ -777,7 +779,7 @@ fun PreviewSettingsScreen() {
             onSelectLocalModelConfig = {},
             onDeleteLocalModelAsset = {},
             onDeleteLocalModelConfig = {},
-            onConfirmDeletionWithReassignment = { _, _ -> },
+            onConfirmDeletionWithReassignment = { _, _, _ -> },
             onDismissDeletionSafety = {},
         )
     }

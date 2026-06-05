@@ -6,6 +6,7 @@ import android.content.Intent
 import com.browntowndev.enclave.core.data.R
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.media.GeneratedMediaAsset
+import com.browntowndev.enclave.domain.model.media.ImageGenerationProgress
 import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
 import com.browntowndev.enclave.domain.model.media.MediaGenerationRequest
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
@@ -15,6 +16,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.slot
+import io.mockk.verify
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -47,12 +49,12 @@ class MultimediaGenerationServiceTest {
 
     @Test
     fun `S-STU-01 IMAGE start invokes GenerateMediaUseCase exactly once`() {
-        coEvery { generateMediaUseCase(any()) } returns Result.success(emptyList())
+        coEvery { generateMediaUseCase(any(), any()) } returns Result.success(emptyList())
 
         service.onStartCommand(startImageIntent(prompt = "hello"), 0, 1)
         awaitServiceWork()
 
-        coVerify(exactly = 1) { generateMediaUseCase(any()) }
+        coVerify(exactly = 1) { generateMediaUseCase(any(), any()) }
     }
 
     @Test
@@ -64,7 +66,7 @@ class MultimediaGenerationServiceTest {
 
     @Test
     fun `S-STU-03 Success path does not call reportGenerationError`() {
-        coEvery { generateMediaUseCase(any()) } returns
+        coEvery { generateMediaUseCase(any(), any()) } returns
             Result.success(
                 listOf(
                     GeneratedMediaAsset(
@@ -85,7 +87,7 @@ class MultimediaGenerationServiceTest {
 
     @Test
     fun `S-STU-04 Use case failure calls reportGenerationError with provider message`() {
-        coEvery { generateMediaUseCase(any()) } returns
+        coEvery { generateMediaUseCase(any(), any()) } returns
             Result.failure(IllegalStateException("No image generation provider assigned"))
 
         service.onStartCommand(startImageIntent(prompt = "hello"), 0, 1)
@@ -107,13 +109,13 @@ class MultimediaGenerationServiceTest {
         service.onStartCommand(intent, 0, 1)
         awaitServiceWork()
 
-        coVerify(exactly = 0) { generateMediaUseCase(any()) }
+        coVerify(exactly = 0) { generateMediaUseCase(any(), any()) }
     }
 
     @Test
     fun `S-STU-06 Intent image settings with generationCount 3 reach use case request`() {
         val requestSlot = slot<MediaGenerationRequest>()
-        coEvery { generateMediaUseCase(capture(requestSlot)) } returns Result.success(emptyList())
+        coEvery { generateMediaUseCase(capture(requestSlot), any()) } returns Result.success(emptyList())
 
         val intent =
             startImageIntent(prompt = "hello").apply {
@@ -141,7 +143,7 @@ class MultimediaGenerationServiceTest {
         service.onStartCommand(intent, 0, 1)
         awaitServiceWork()
 
-        coVerify(exactly = 0) { generateMediaUseCase(any()) }
+        coVerify(exactly = 0) { generateMediaUseCase(any(), any()) }
     }
 
     @Test
@@ -155,14 +157,29 @@ class MultimediaGenerationServiceTest {
     @Test
     fun `M-STU-01 Studio IMAGE uses GenerateMediaUseCase not ImageGenerationPort`() {
         val requestSlot = slot<MediaGenerationRequest>()
-        coEvery { generateMediaUseCase(capture(requestSlot)) } returns Result.success(emptyList())
+        coEvery { generateMediaUseCase(capture(requestSlot), any()) } returns Result.success(emptyList())
 
         service.onStartCommand(startImageIntent(prompt = "port-check"), 0, 1)
         awaitServiceWork()
 
-        coVerify(exactly = 1) { generateMediaUseCase(any()) }
+        coVerify(exactly = 1) { generateMediaUseCase(any(), any()) }
         assertEquals("port-check", requestSlot.captured.prompt)
         assertEquals(MediaCapability.IMAGE, requestSlot.captured.capability)
+    }
+
+    @Test
+    fun `S-STU-08 image progress is reported and cleared`() {
+        val progressSlot = slot<(ImageGenerationProgress) -> Unit>()
+        coEvery { generateMediaUseCase(any(), capture(progressSlot)) } answers {
+            progressSlot.captured(ImageGenerationProgress.LoadingModel)
+            Result.success(emptyList())
+        }
+
+        service.onStartCommand(startImageIntent(prompt = "hello"), 0, 1)
+        awaitServiceWork()
+
+        verify(exactly = 1) { studioRepository.reportGenerationProgress(ImageGenerationProgress.LoadingModel) }
+        verify(exactly = 1) { studioRepository.clearGenerationProgress() }
     }
 
     private fun startImageIntent(prompt: String): Intent =

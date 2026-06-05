@@ -35,9 +35,10 @@ class OnnxPromptModerationClassifier
                 val logits = model.session.runModeration(encoded, model.config.maxSequenceLength)
                 val probabilities = softmax(logits)
                 PromptModerationScores(
-                    scoresByLabel = model.config.labels.zip(probabilities.asIterable()).associate { (label, score) ->
-                        label to score.toDouble()
-                    },
+                    scoresByLabel =
+                        model.config.labels.zip(probabilities.asIterable()).associate { (label, score) ->
+                            label to score.toDouble()
+                        },
                     labelAliases = model.config.labelAliases,
                     thresholds = model.config.thresholds,
                     combinedIllegalLabels = model.config.combinedIllegalLabels,
@@ -61,10 +62,11 @@ class OnnxPromptModerationClassifier
                     maxSequenceLength = config.maxSequenceLength,
                 )
             val environment = OrtEnvironment.getEnvironment()
-            val session = OrtSession.SessionOptions().use { sessionOptions ->
-                sessionOptions.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
-                environment.createSession(modelFile.absolutePath, sessionOptions)
-            }
+            val session =
+                OrtSession.SessionOptions().use { sessionOptions ->
+                    sessionOptions.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
+                    environment.createSession(modelFile.absolutePath, sessionOptions)
+                }
             return LoadedModerationModel(
                 config = config,
                 tokenizer = tokenizer,
@@ -107,7 +109,10 @@ class OnnxPromptModerationClassifier
         }
 
         private fun readAssetText(path: String): String =
-            context.assets.open(path).bufferedReader().use { reader -> reader.readText() }
+            context.assets
+                .open(path)
+                .bufferedReader()
+                .use { reader -> reader.readText() }
 
         private fun copyAssetToModelDirectory(modelPath: String): File {
             val targetDirectory = File(context.noBackupFilesDir, ASSET_BASE_PATH)

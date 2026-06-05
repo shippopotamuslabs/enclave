@@ -32,7 +32,6 @@ import com.browntowndev.enclave.core.ui.component.FullscreenMediaViewer
 import com.browntowndev.enclave.core.ui.component.sheet.CustomAnimationPromptPane
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 
-
 @Composable
 fun GalleryDetailScreen(
     albumId: String,

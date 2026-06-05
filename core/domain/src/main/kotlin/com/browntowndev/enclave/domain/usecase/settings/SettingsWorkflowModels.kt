@@ -9,6 +9,7 @@ import com.browntowndev.enclave.domain.model.config.LocalModelAsset
 import com.browntowndev.enclave.domain.model.config.LocalModelConfiguration
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelId
+import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.config.ModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.OpenRouterRoutingConfiguration
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
@@ -56,17 +57,28 @@ sealed interface ModelDeletionTarget {
     data class ApiPreset(
         val id: ApiModelConfigurationId,
     ) : ModelDeletionTarget
+
+    data class ModelPack(
+        val packId: String,
+    ) : ModelDeletionTarget
 }
 
 data class ReassignmentCandidate(
-    val configId: ModelConfigurationId,
+    val configId: ModelConfigurationId? = null,
+    val mediaProviderId: MediaProviderId? = null,
     val source: ModelSource,
     val assetDisplayName: String,
     val configDisplayName: String,
     val providerName: String? = null,
     val apiCredentialsId: ApiCredentialsId? = null,
     val localModelId: LocalModelId? = null,
-)
+) {
+    init {
+        require((configId != null) xor (mediaProviderId != null)) {
+            "Reassignment candidate must specify either a model config or a media provider"
+        }
+    }
+}
 
 sealed interface PreparedModelDeletion {
     data object BlockedLastModel : PreparedModelDeletion

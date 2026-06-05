@@ -26,6 +26,7 @@ import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.inference.ModelSource
 import com.browntowndev.enclave.domain.model.inference.ModelType
 
@@ -33,7 +34,7 @@ import com.browntowndev.enclave.domain.model.inference.ModelType
 fun ReassignmentView(
     modelTypes: List<ModelType>,
     reassignmentOptions: List<ReassignmentOptionUi>,
-    onConfirm: (LocalModelConfigurationId?, ApiModelConfigurationId?) -> Unit,
+    onConfirm: (LocalModelConfigurationId?, ApiModelConfigurationId?, MediaProviderId?) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var selectedOption by remember { mutableStateOf<ReassignmentOptionUi?>(null) }
@@ -83,7 +84,12 @@ fun ReassignmentView(
                 selectedOption?.let { opt ->
                     onConfirm(
                         if (opt.source == ModelSource.ON_DEVICE) opt.configId as? LocalModelConfigurationId else null,
-                        if (opt.source == ModelSource.API) opt.configId as? ApiModelConfigurationId else null,
+                        if (opt.source == ModelSource.API && opt.mediaProviderId == null) {
+                            opt.configId as? ApiModelConfigurationId
+                        } else {
+                            null
+                        },
+                        opt.mediaProviderId,
                     )
                 }
             },

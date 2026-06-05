@@ -2,6 +2,7 @@ package com.browntowndev.enclave.feature.studio
 
 import app.cash.turbine.test
 import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
+import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.config.MediaProviderAsset
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
@@ -11,12 +12,12 @@ import com.browntowndev.enclave.domain.model.media.AspectRatio
 import com.browntowndev.enclave.domain.model.media.GenerationQuality
 import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
 import com.browntowndev.enclave.domain.model.media.ProviderCapabilities
+import com.browntowndev.enclave.domain.port.inference.PromptModerationPort
+import com.browntowndev.enclave.domain.port.inference.PromptModerationScores
 import com.browntowndev.enclave.domain.port.media.ShareMediaPort
 import com.browntowndev.enclave.domain.port.media.SpeechState
 import com.browntowndev.enclave.domain.port.media.StudioGenerationDispatcherPort
 import com.browntowndev.enclave.domain.port.media.TtsPlaybackControllerPort
-import com.browntowndev.enclave.domain.port.inference.PromptModerationPort
-import com.browntowndev.enclave.domain.port.inference.PromptModerationScores
 import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.StudioAlbumAsset
@@ -25,6 +26,7 @@ import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
 import com.browntowndev.enclave.domain.usecase.chat.ListenToSpeechUseCase
 import com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase
+import com.browntowndev.enclave.domain.usecase.media.GetImageGenerationCapabilitiesUseCase
 import com.browntowndev.enclave.domain.usecase.media.ResolveMediaModelTypeUseCase
 import com.browntowndev.enclave.domain.usecase.media.ResolveMediaProviderCapabilitiesUseCase
 import com.browntowndev.enclave.feature.studio.coordinators.StudioAlbumSelectionCoordinator
@@ -69,6 +71,7 @@ class MultimodalViewModelTest {
     private val defaultModelRepository = mockk<DefaultModelRepositoryPort>(relaxed = true)
     private val mediaProviderRepository = mockk<MediaProviderRepositoryPort>(relaxed = true)
     private val resolveMediaProviderCapabilitiesUseCase = mockk<ResolveMediaProviderCapabilitiesUseCase>()
+    private val getImageGenerationCapabilitiesUseCase = mockk<GetImageGenerationCapabilitiesUseCase>(relaxed = true)
     private val chatUseCases = mockk<ChatUseCases>()
     private val listenToSpeechUseCase = mockk<ListenToSpeechUseCase>()
     private val playbackController = mockk<TtsPlaybackControllerPort>(relaxed = true)
@@ -193,6 +196,7 @@ class MultimodalViewModelTest {
             moderatePromptUseCase = ModeratePromptUseCase(moderationPort),
             shouldModeratePromptUseCase = allowShouldModeratePromptUseCase(),
             resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase(),
+            getImageGenerationCapabilitiesUseCase = getImageGenerationCapabilitiesUseCase,
             generationCoordinator = generationCoordinator,
             albumSelectionCoordinator = albumSelectionCoordinator,
             speechCoordinator = speechCoordinator,
@@ -278,6 +282,7 @@ class MultimodalViewModelTest {
                     moderatePromptUseCase = ModeratePromptUseCase(moderationPort),
                     shouldModeratePromptUseCase = shouldModerateMock,
                     resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase(),
+                    getImageGenerationCapabilitiesUseCase = getImageGenerationCapabilitiesUseCase,
                     generationCoordinator = generationCoordinator,
                     albumSelectionCoordinator = albumSelectionCoordinator,
                     speechCoordinator = speechCoordinator,
@@ -355,6 +360,40 @@ class MultimodalViewModelTest {
             val state = viewModel.uiState.value
             assertEquals(listOf(AspectRatio.ONE_ONE, AspectRatio.SIXTEEN_NINE), state.capabilities?.supportedAspectRatios)
             assertEquals(listOf(GenerationQuality.SPEED, GenerationQuality.HD), state.capabilities?.supportedImageQualities)
+            job.cancel()
+        }
+
+    @Test
+    fun `local image generation assignment surfaces on-device capabilities`() =
+        runTest {
+            val localConfigId =
+                com.browntowndev.enclave.domain.model.config
+                    .LocalModelConfigurationId("sd15-local-config")
+            val localImageAssignment =
+                DefaultModelAssignment(
+                    modelType = ModelType.IMAGE_GENERATION,
+                    localConfigId = localConfigId,
+                )
+            every { defaultModelRepository.observeDefaults() } returns flowOf(listOf(localImageAssignment))
+            every { mediaProviderRepository.getMediaProviders() } returns flowOf(emptyList())
+
+            viewModel = createViewModel()
+            val job =
+                backgroundScope.launch(testDispatcher) {
+                    viewModel.uiState.collect {}
+                }
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals(
+                com.browntowndev.enclave.domain.model.media.LocalStableDiffusionCapabilities.supportedAspectRatios,
+                state.capabilities?.supportedAspectRatios,
+            )
+            assertEquals(
+                com.browntowndev.enclave.domain.model.media.LocalStableDiffusionCapabilities.supportedImageResolutions,
+                state.capabilities?.supportedImageResolutions,
+            )
+            assertFalse(state.isCapabilitiesLoading)
             job.cancel()
         }
 
@@ -1022,4 +1061,77 @@ class MultimodalViewModelTest {
 
             job.cancel()
         }
+
+    @Test
+    fun `STU-001 active SD15 exposes exactly 512x512`() =
+        runTest {
+            val localConfigId = LocalModelConfigurationId("sd15-local-config")
+            val localImageAssignment =
+                DefaultModelAssignment(
+                    modelType = ModelType.IMAGE_GENERATION,
+                    localConfigId = localConfigId,
+                )
+            every { defaultModelRepository.observeDefaults() } returns flowOf(listOf(localImageAssignment))
+            
+            // To ensure it is in RED state (failing/throwing as expected when not implemented), we let the mock run.
+            // By default, it will not return the expected values, causing the assertions below to fail.
+            viewModel = createViewModel()
+            val job =
+                backgroundScope.launch(testDispatcher) {
+                    viewModel.uiState.collect {}
+                }
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals(listOf("512x512"), state.capabilities?.supportedImageResolutions)
+            job.cancel()
+        }
+
+    @Test
+    fun `STU-002 active SDXL exposes exactly 1024x1024`() =
+        runTest {
+            val localConfigId = LocalModelConfigurationId("sdxl-local-config")
+            val localImageAssignment =
+                DefaultModelAssignment(
+                    modelType = ModelType.IMAGE_GENERATION,
+                    localConfigId = localConfigId,
+                )
+            every { defaultModelRepository.observeDefaults() } returns flowOf(listOf(localImageAssignment))
+
+            viewModel = createViewModel()
+            val job =
+                backgroundScope.launch(testDispatcher) {
+                    viewModel.uiState.collect {}
+                }
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals(listOf("1024x1024"), state.capabilities?.supportedImageResolutions)
+            job.cancel()
+        }
+
+    @Test
+    fun `STU-003 active SDXL exposes exact step options and default 16`() =
+        runTest {
+            val localConfigId = LocalModelConfigurationId("sdxl-local-config")
+            val localImageAssignment =
+                DefaultModelAssignment(
+                    modelType = ModelType.IMAGE_GENERATION,
+                    localConfigId = localConfigId,
+                )
+            every { defaultModelRepository.observeDefaults() } returns flowOf(listOf(localImageAssignment))
+
+            viewModel = createViewModel()
+            val job =
+                backgroundScope.launch(testDispatcher) {
+                    viewModel.uiState.collect {}
+                }
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals(listOf(8, 12, 16, 20, 24, 30), state.capabilities?.supportedImageSteps)
+            assertEquals(16, state.capabilities?.defaultImageStep)
+            job.cancel()
+        }
 }
+

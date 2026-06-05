@@ -67,6 +67,10 @@ class SettingsLocalModelUseCasesImpl
         override val getRestorableLocalModels: GetRestorableLocalModelsUseCase,
         override val saveLocalModelPreset: SaveLocalModelPresetUseCase,
         override val reDownloadModel: ReDownloadModelUseCase,
+        override val getModelPacksForSettings: com.browntowndev.enclave.domain.usecase.modelconfig.GetModelPacksForSettingsUseCase,
+        override val observeActiveUtilityModels: com.browntowndev.enclave.domain.usecase.modelconfig.ObserveActiveUtilityModelsUseCase,
+        override val reDownloadModelPack: com.browntowndev.enclave.domain.usecase.modelconfig.ReDownloadModelPackUseCase,
+        override val deleteModelPack: com.browntowndev.enclave.domain.usecase.modelconfig.DeleteModelPackUseCase,
     ) : SettingsLocalModelUseCases
 
 class SettingsApiProviderUseCasesImpl

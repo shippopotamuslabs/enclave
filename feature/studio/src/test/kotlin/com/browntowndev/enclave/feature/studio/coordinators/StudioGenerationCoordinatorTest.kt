@@ -2,6 +2,7 @@ package com.browntowndev.enclave.feature.studio.coordinators
 
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.media.GenerationSettings
+import com.browntowndev.enclave.domain.model.media.ImageGenerationProgress
 import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
 import com.browntowndev.enclave.domain.model.media.VideoGenerationSettings
 import com.browntowndev.enclave.domain.port.media.StudioGenerationDispatcherPort
@@ -33,6 +34,7 @@ class StudioGenerationCoordinatorTest {
     private val dispatcher = mockk<StudioGenerationDispatcherPort>(relaxed = true)
     private val ephemeralMediaFlow = MutableStateFlow(emptyList<com.browntowndev.enclave.domain.port.repository.StudioMediaAsset>())
     private val generationErrorFlow = MutableStateFlow<String?>(null)
+    private val generationProgressFlow = MutableStateFlow<ImageGenerationProgress?>(null)
 
     private lateinit var coordinator: StudioGenerationCoordinator
 
@@ -40,6 +42,7 @@ class StudioGenerationCoordinatorTest {
     fun setup() {
         every { studioRepository.observeEphemeralMedia() } returns ephemeralMediaFlow
         every { studioRepository.observeGenerationError() } returns generationErrorFlow
+        every { studioRepository.observeGenerationProgress() } returns generationProgressFlow
         coordinator = StudioGenerationCoordinator(studioRepository, dispatcher)
     }
 
@@ -171,6 +174,26 @@ class StudioGenerationCoordinatorTest {
             assertEquals(expected, coordinator.error.value)
             val videoError = coordinator.videoGenerationState.value as VideoGenerationState.Error
             assertEquals(expected, videoError.message)
+
+            coroutineContext[Job]?.cancelChildren(CancellationException("test complete"))
+        }
+
+    @Test
+    fun observeGenerationProgress_mapsDomainEventsToPresentationLabels() =
+        runTest {
+            coordinator.startObservers(this)
+
+            generationProgressFlow.value = ImageGenerationProgress.LoadingModel
+            advanceUntilIdle()
+            assertEquals("Loading model", coordinator.generationProgressLabel.value)
+
+            generationProgressFlow.value = ImageGenerationProgress.SavingOutput
+            advanceUntilIdle()
+            assertEquals("Saving output", coordinator.generationProgressLabel.value)
+
+            generationProgressFlow.value = null
+            advanceUntilIdle()
+            assertEquals(null, coordinator.generationProgressLabel.value)
 
             coroutineContext[Job]?.cancelChildren(CancellationException("test complete"))
         }

@@ -170,8 +170,22 @@ data class FeedbackUiState(
 )
 
 @Immutable
+data class ModelPackUi(
+    val packId: String,
+    val displayName: String,
+    val completenessLabel: String,
+    val installedCount: Int,
+    val totalCount: Int,
+    val showDownloadAction: Boolean,
+    val isDiffusionSoftDeleted: Boolean,
+    val disabledReason: String? = null,
+    val isEligible: Boolean = true,
+)
+
+@Immutable
 data class LocalModelsSheetUiState(
     val isVisible: Boolean = false,
+    val modelPacks: List<ModelPackUi> = emptyList(),
     val models: List<LocalModelAssetUi> = emptyList(),
     val availableDownloads: List<LocalModelAssetUi> = emptyList(),
     val selectedAsset: LocalModelAssetUi? = null,
@@ -300,6 +314,10 @@ sealed interface PendingDeletionTarget {
     data class ApiPreset(
         val id: ApiModelConfigurationId,
     ) : PendingDeletionTarget
+
+    data class ModelPack(
+        val packId: String,
+    ) : PendingDeletionTarget
 }
 
 internal fun ModelDeletionTarget.toUi(): PendingDeletionTarget =
@@ -308,11 +326,13 @@ internal fun ModelDeletionTarget.toUi(): PendingDeletionTarget =
         is ModelDeletionTarget.LocalModelPreset -> PendingDeletionTarget.LocalModelPreset(id)
         is ModelDeletionTarget.ApiProvider -> PendingDeletionTarget.ApiProvider(id)
         is ModelDeletionTarget.ApiPreset -> PendingDeletionTarget.ApiPreset(id)
+        is ModelDeletionTarget.ModelPack -> PendingDeletionTarget.ModelPack(packId)
     }
 
 @Immutable
 data class ReassignmentOptionUi(
-    val configId: ModelConfigurationId,
+    val configId: ModelConfigurationId? = null,
+    val mediaProviderId: MediaProviderId? = null,
     val displayName: String,
     val source: ModelSource,
     val providerName: String? = null,
@@ -446,6 +466,7 @@ data class LocalModelAssetUi(
     val configurations: List<LocalModelConfigUi>,
     val isExpanded: Boolean = false,
     val isMultimodal: Boolean = false,
+    val isImageGenerationCapable: Boolean = false,
     val isSoftDeleted: Boolean = false,
 )
 

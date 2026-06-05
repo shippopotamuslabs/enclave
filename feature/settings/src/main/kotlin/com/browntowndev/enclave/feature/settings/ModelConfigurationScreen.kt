@@ -1,6 +1,14 @@
 package com.browntowndev.enclave.feature.settings
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.runtime.State
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -96,6 +104,24 @@ fun ModelConfigurationScreen(
             )
         },
     ) { padding ->
+        val colorScheme = MaterialTheme.colorScheme
+        val shimmerBaseColor = colorScheme.onSurface.copy(alpha = 0.05f)
+        val shimmerHighlightColor = colorScheme.onSurface.copy(alpha = 0.15f)
+
+        val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
+        val shimmerProgress =
+            infiniteTransition.animateFloat(
+                initialValue = 0f,
+                targetValue = 1f,
+                animationSpec =
+                    infiniteRepeatable(
+                        animation = tween(durationMillis = 1500, easing = LinearEasing),
+                        repeatMode = RepeatMode.Restart,
+                    ),
+                label = "shimmerProgress",
+            )
+        val isLoading = uiState.assignments.assignments.isEmpty()
+
         LazyColumn(
             modifier =
                 Modifier
@@ -120,6 +146,11 @@ fun ModelConfigurationScreen(
                     title = "General Chat",
                     assignments = uiState.assignments.assignments.filter { it.modelType in generalChatTypes },
                     onEditAssignment = { onShowAssignmentDialog(true, it) },
+                    isLoading = isLoading,
+                    shimmerProgress = shimmerProgress,
+                    shimmerBaseColor = shimmerBaseColor,
+                    shimmerHighlightColor = shimmerHighlightColor,
+                    skeletonCount = 2,
                 )
             }
             item {
@@ -127,6 +158,11 @@ fun ModelConfigurationScreen(
                     title = "Crew Mode",
                     assignments = uiState.assignments.assignments.filter { it.modelType in crewModeTypes },
                     onEditAssignment = { onShowAssignmentDialog(true, it) },
+                    isLoading = isLoading,
+                    shimmerProgress = shimmerProgress,
+                    shimmerBaseColor = shimmerBaseColor,
+                    shimmerHighlightColor = shimmerHighlightColor,
+                    skeletonCount = 4,
                 )
             }
             item {
@@ -134,6 +170,11 @@ fun ModelConfigurationScreen(
                     title = "Voice & Audio",
                     assignments = uiState.assignments.assignments.filter { it.modelType in audioTypes },
                     onEditAssignment = { onShowAssignmentDialog(true, it) },
+                    isLoading = isLoading,
+                    shimmerProgress = shimmerProgress,
+                    shimmerBaseColor = shimmerBaseColor,
+                    shimmerHighlightColor = shimmerHighlightColor,
+                    skeletonCount = 1,
                 )
             }
             item {
@@ -141,6 +182,11 @@ fun ModelConfigurationScreen(
                     title = "Studio & Media",
                     assignments = uiState.assignments.assignments.filter { it.modelType in studioMediaTypes },
                     onEditAssignment = { onShowAssignmentDialog(true, it) },
+                    isLoading = isLoading,
+                    shimmerProgress = shimmerProgress,
+                    shimmerBaseColor = shimmerBaseColor,
+                    shimmerHighlightColor = shimmerHighlightColor,
+                    skeletonCount = 4,
                 )
             }
             item { Spacer(modifier = Modifier.height(24.dp)) }
@@ -164,7 +210,11 @@ fun ModelConfigurationScreen(
                         ModelType.IMAGE_TO_VIDEO,
                         ModelType.MUSIC_GENERATION,
                     )
-            val localAssets = if (isVisionSlot || isTtsSlot || isMediaSlot) emptyList() else uiState.localModelsSheet.models
+            val localAssets =
+                selectableLocalAssetsForSlot(
+                    modelType = assignmentSlot,
+                    assets = uiState.localModelsSheet.models,
+                )
             val apiAssets =
                 when {
                     isVisionSlot -> uiState.apiProvidersSheet.assets.filter { asset -> asset.configurations.any { it.isMultimodal } }
@@ -199,26 +249,61 @@ fun ModelConfigurationScreen(
     }
 }
 
+internal fun selectableLocalAssetsForSlot(
+    modelType: ModelType,
+    assets: List<LocalModelAssetUi>,
+): List<LocalModelAssetUi> =
+    when {
+        modelType == ModelType.IMAGE_GENERATION -> assets.filter { it.isImageGenerationCapable }
+        modelType in LOCAL_MODEL_UNSUPPORTED_ASSIGNMENT_TYPES -> emptyList()
+        else -> assets
+    }
+
+private val LOCAL_MODEL_UNSUPPORTED_ASSIGNMENT_TYPES =
+    setOf(
+        ModelType.VISION,
+        ModelType.TTS,
+        ModelType.IMAGE_EDIT,
+        ModelType.VIDEO_GENERATION,
+        ModelType.IMAGE_TO_VIDEO,
+        ModelType.MUSIC_GENERATION,
+    )
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DefaultAssignmentsCard(
     title: String,
     assignments: List<DefaultModelAssignmentUi>,
     onEditAssignment: (ModelType) -> Unit,
+    isLoading: Boolean,
+    shimmerProgress: State<Float>,
+    shimmerBaseColor: Color,
+    shimmerHighlightColor: Color,
+    skeletonCount: Int,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing)) {
         NeoSectionHeader(text = title)
-        assignments.forEach { assignment ->
-            val rowDisplay = assignment.assignmentRowDisplay
-            SettingsAssignmentRow(
-                displayLabel = assignment.displayLabel,
-                presetName = rowDisplay.presetName,
-                providerName = rowDisplay.providerName,
-                modelName = rowDisplay.modelName,
-                isMultimodal = assignment.isMultimodal,
-                modelTypeDescription = assignment.modelType.description,
-                onEditClick = { onEditAssignment(assignment.modelType) },
-            )
+        if (isLoading) {
+            repeat(skeletonCount) {
+                SettingsAssignmentRowSkeleton(
+                    progressState = shimmerProgress,
+                    baseColor = shimmerBaseColor,
+                    highlightColor = shimmerHighlightColor,
+                )
+            }
+        } else {
+            assignments.forEach { assignment ->
+                val rowDisplay = assignment.assignmentRowDisplay
+                SettingsAssignmentRow(
+                    displayLabel = assignment.displayLabel,
+                    presetName = rowDisplay.presetName,
+                    providerName = rowDisplay.providerName,
+                    modelName = rowDisplay.modelName,
+                    isMultimodal = assignment.isMultimodal,
+                    modelTypeDescription = assignment.modelType.description,
+                    onEditClick = { onEditAssignment(assignment.modelType) },
+                )
+            }
         }
     }
 }
@@ -667,6 +752,11 @@ fun PreviewDefaultAssignmentsCard() {
                     MockSettingsData.baseUiState.assignments.assignments
                         .take(3),
                 onEditAssignment = {},
+                isLoading = false,
+                shimmerProgress = remember { mutableStateOf(0f) },
+                shimmerBaseColor = Color.LightGray,
+                shimmerHighlightColor = Color.Gray,
+                skeletonCount = 2,
             )
         }
     }

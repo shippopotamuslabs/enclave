@@ -1,17 +1,16 @@
 package com.browntowndev.enclave.presentation
 
-import com.browntowndev.enclave.domain.port.repository.SyncOrchestrator
-import com.browntowndev.enclave.domain.port.repository.SyncProgress
 import com.browntowndev.enclave.core.data.security.AndroidBiometricManager
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.download.DownloadModelsResult
 import com.browntowndev.enclave.domain.model.download.ModelScanResult
-import com.browntowndev.enclave.domain.model.sync.CloudSyncReplayProgress
 import com.browntowndev.enclave.domain.port.auth.UserProfile
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.repository.CloudSyncPort
 import com.browntowndev.enclave.domain.port.repository.SettingsRepository
+import com.browntowndev.enclave.domain.port.repository.SyncOrchestrator
+import com.browntowndev.enclave.domain.port.repository.SyncProgress
 import com.browntowndev.enclave.domain.port.security.BiometricPort
 import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
 import com.browntowndev.enclave.domain.port.security.VaultMetadataPort
@@ -40,7 +39,6 @@ import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
@@ -182,9 +180,10 @@ class MainViewModelTest {
 
         coEvery { syncOrchestrator.startInitialSync(any()) } answers {
             val uploadLocalFirst = firstArg<Boolean>()
-            val result = runBlocking {
-                workerStartCloudSyncUseCase(uploadLocalFirst, null)
-            }
+            val result =
+                runBlocking {
+                    workerStartCloudSyncUseCase(uploadLocalFirst, null)
+                }
             if (result.isSuccess) {
                 Result.success(Unit)
             } else {
@@ -746,10 +745,11 @@ class MainViewModelTest {
             coEvery { detectVaultReconciliationStateUseCase("password") } returns
                 Result.success(VaultReconciliationOutcome.AlreadyMatching)
 
-            val flow = kotlinx.coroutines.flow.flowOf(
-                SyncProgress(0.5f, "Syncing updates (100/200)..."),
-                null
-            )
+            val flow =
+                kotlinx.coroutines.flow.flowOf(
+                    SyncProgress(0.5f, "Syncing updates (100/200)..."),
+                    null,
+                )
             every { syncOrchestrator.syncProgress } returns flow
             coEvery { syncOrchestrator.startInitialSync(any()) } returns Result.success(Unit)
 

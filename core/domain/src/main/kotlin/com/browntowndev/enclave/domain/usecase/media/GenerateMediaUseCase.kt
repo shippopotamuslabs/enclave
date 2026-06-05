@@ -2,6 +2,7 @@ package com.browntowndev.enclave.domain.usecase.media
 
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.media.GeneratedMediaAsset
+import com.browntowndev.enclave.domain.model.media.ImageGenerationProgress
 import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
 import com.browntowndev.enclave.domain.model.media.MediaGenerationOrigin
 import com.browntowndev.enclave.domain.model.media.MediaGenerationRequest
@@ -22,7 +23,10 @@ class GenerateMediaUseCase
         private val studioRepository: StudioRepositoryPort,
         private val clock: Clock,
     ) {
-        suspend operator fun invoke(request: MediaGenerationRequest): Result<List<GeneratedMediaAsset>> {
+        suspend operator fun invoke(
+            request: MediaGenerationRequest,
+            onImageProgress: (ImageGenerationProgress) -> Unit = {},
+        ): Result<List<GeneratedMediaAsset>> {
             val mediaType = request.capability.name
 
             val bytesResult =
@@ -36,7 +40,7 @@ class GenerateMediaUseCase
                                 ),
                             )
                         }
-                        generateImageUseCase(request.prompt, settings)
+                        generateImageUseCase(request.prompt, settings, onImageProgress)
                     }
                     MediaCapability.VIDEO -> {
                         val settings = request.settings

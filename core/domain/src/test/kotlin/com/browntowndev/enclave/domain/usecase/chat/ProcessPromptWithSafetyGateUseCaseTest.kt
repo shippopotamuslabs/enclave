@@ -8,11 +8,10 @@ import com.browntowndev.enclave.domain.model.chat.MessageState
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.port.inference.PromptModerationPort
 import com.browntowndev.enclave.domain.port.inference.PromptModerationScores
-import com.browntowndev.enclave.domain.port.repository.MessageRepository
-import com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase
 import com.browntowndev.enclave.domain.port.repository.CloudSyncPort
 import com.browntowndev.enclave.domain.usecase.FakeChatRepository
 import com.browntowndev.enclave.domain.usecase.FakeMessageRepository
+import com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -25,10 +24,10 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertInstanceOf
 import org.junit.jupiter.api.Assertions.assertTrue
-import kotlin.test.assertFailsWith
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import kotlin.test.assertFailsWith
 
 class ProcessPromptWithSafetyGateUseCaseTest {
     private lateinit var createUserMessageUseCase: CreateUserMessageUseCase
@@ -135,9 +134,7 @@ class ProcessPromptWithSafetyGateUseCaseTest {
         runTest {
             val throwingPort =
                 object : PromptModerationPort {
-                    override suspend fun classify(prompt: String): PromptModerationScores {
-                        throw RuntimeException("ONNX failure")
-                    }
+                    override suspend fun classify(prompt: String): PromptModerationScores = throw RuntimeException("ONNX failure")
                 }
             useCase = buildUseCase(ModeratePromptUseCase(throwingPort))
             coEvery { createUserMessageUseCase(any(), scheduleCloudSync = false) } returns
@@ -350,7 +347,6 @@ class ProcessPromptWithSafetyGateUseCaseTest {
         }
 
     private object AllowPromptModerationPort : PromptModerationPort {
-        override suspend fun classify(prompt: String): PromptModerationScores =
-            PromptModerationScores(scoresByLabel = mapOf("OK" to 1.0))
+        override suspend fun classify(prompt: String): PromptModerationScores = PromptModerationScores(scoresByLabel = mapOf("OK" to 1.0))
     }
 }

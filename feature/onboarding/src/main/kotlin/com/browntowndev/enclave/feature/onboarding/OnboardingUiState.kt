@@ -1,8 +1,8 @@
 package com.browntowndev.enclave.feature.onboarding
 
-import com.browntowndev.enclave.domain.model.onboarding.OnboardingFlowMode
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
+import com.browntowndev.enclave.domain.model.onboarding.OnboardingFlowMode
 import com.browntowndev.enclave.domain.usecase.settings.MediaProviderDraft
 import com.browntowndev.enclave.domain.usecase.settings.TtsProviderDraft
 
@@ -32,6 +32,7 @@ enum class ModelChoice {
     UNDECIDED,
     LOCAL,
     API,
+
     /** Existing account with synced model configuration; skip setup steps. */
     RESTORED,
 }

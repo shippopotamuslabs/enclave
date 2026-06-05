@@ -6,6 +6,8 @@ import com.browntowndev.enclave.domain.model.config.RemoteModelAsset
 import com.browntowndev.enclave.domain.model.config.RemoteModelConfiguration
 import com.browntowndev.enclave.domain.model.config.UtilityType
 import com.browntowndev.enclave.domain.model.download.DownloadSource
+import com.browntowndev.enclave.domain.model.download.ModelPackRole
+import com.browntowndev.enclave.domain.model.download.ModelPackTestFixtures
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.download.ModelUrlProviderPort
@@ -18,13 +20,20 @@ import okhttp3.OkHttpClient
 import okhttp3.Protocol
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
+import androidx.test.core.app.ApplicationProvider
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class ModelConfigFetcherImplTest {
     private lateinit var mockOkHttpClient: OkHttpClient
     private lateinit var mockModelUrlProvider: ModelUrlProviderPort
@@ -44,7 +53,12 @@ class ModelConfigFetcherImplTest {
 
         every { mockModelUrlProvider.getConfigUrl() } returns "https://config.example.com/model_config.json"
 
-        fetcher = ModelConfigFetcherImpl(mockOkHttpClient, mockModelUrlProvider)
+        fetcher =
+            ModelConfigFetcherImpl(
+                ApplicationProvider.getApplicationContext(),
+                mockOkHttpClient,
+                mockModelUrlProvider,
+            )
     }
 
     @AfterEach
@@ -615,6 +629,97 @@ class ModelConfigFetcherImplTest {
         }
 
     @Test
+    @DisplayName("MPK-001 Parse modelPacks from model_config.json")
+    fun mpk001_parseModelPacksFromConfig() =
+        runTest {
+            val json = sd15PackConfigJson()
+            mockConfigResponse(json)
+
+            val result = fetcher.fetchParsedCatalog()
+
+            assertTrue(result.isSuccess)
+            val catalog = result.getOrThrow()
+            assertEquals(1, catalog.packs.size)
+            assertEquals(ModelPackTestFixtures.PACK_ID, catalog.packs[0].packId)
+            assertEquals(ModelPackTestFixtures.PACK_DISPLAY, catalog.packs[0].displayName)
+            assertEquals(1, catalog.packs[0].members.size)
+        }
+
+    @Test
+    @DisplayName("MPK-002 Pack member assets resolve from assets[]")
+    fun mpk002_packMemberAssetsResolveFromAssets() =
+        runTest {
+            mockConfigResponse(sd15PackConfigJson())
+            val catalog = fetcher.fetchParsedCatalog().getOrThrow()
+            val pack = catalog.packById(ModelPackTestFixtures.PACK_ID)!!
+            val diffusion = pack.members.single { it.role == ModelPackRole.DIFFUSION }
+
+            assertEquals(ModelPackTestFixtures.DIFFUSION_SHA, diffusion.asset.metadata.sha256)
+            assertEquals(ModelPackTestFixtures.DIFFUSION_FILE, diffusion.asset.metadata.localFileName)
+        }
+
+    @Test
+    @DisplayName("MPK-003 Invalid pack member fileName fails parse")
+    fun mpk003_invalidPackMemberFileNameFailsParse() =
+        runTest {
+            val json =
+                sd15PackConfigJson(
+                    packMembers =
+                        """
+                        { "role": "diffusion", "fileName": "missing-file.gguf" }
+                        """.trimIndent(),
+                )
+            mockConfigResponse(json)
+
+            val result = fetcher.fetchParsedCatalog()
+
+            assertTrue(result.isFailure)
+            assertTrue(
+                result.exceptionOrNull()?.message?.contains("Pack member file not found in assets") == true,
+            )
+        }
+
+    @Test
+    @DisplayName("MPK-027 fetchParsedCatalog reuses last successful catalog on network failure")
+    fun mpk027_fetchParsedCatalogReusesLastSuccessfulCatalog() =
+        runTest {
+            mockConfigResponse(sd15PackConfigJson())
+            fetcher.fetchParsedCatalog().getOrThrow()
+
+            val mockCall = mockk<okhttp3.Call>()
+            every { mockOkHttpClient.newCall(any()) } returns mockCall
+            every { mockCall.execute() } throws java.io.IOException("offline")
+
+            val result = fetcher.fetchParsedCatalog()
+
+            assertTrue(result.isSuccess)
+            assertEquals(ModelPackTestFixtures.PACK_ID, result.getOrThrow().packs.single().packId)
+        }
+
+    @Test
+    @DisplayName("MPK-028 getPersistedParsedCatalog reads on-disk cache without network")
+    fun mpk028_getPersistedParsedCatalogReadsDiskWithoutNetwork() =
+        runTest {
+            mockConfigResponse(sd15PackConfigJson())
+            fetcher.fetchParsedCatalog().getOrThrow()
+
+            val offlineFetcher =
+                ModelConfigFetcherImpl(
+                    ApplicationProvider.getApplicationContext(),
+                    mockOkHttpClient,
+                    mockModelUrlProvider,
+                )
+            val mockCall = mockk<okhttp3.Call>()
+            every { mockOkHttpClient.newCall(any()) } returns mockCall
+            every { mockCall.execute() } throws java.io.IOException("offline")
+
+            val result = offlineFetcher.getPersistedParsedCatalog()
+
+            assertTrue(result.isSuccess)
+            assertEquals(ModelPackTestFixtures.PACK_ID, result.getOrThrow().packs.single().packId)
+        }
+
+    @Test
     fun `SCN-FETCH-001 fetcher maps asset displayName into metadata`() =
         runTest {
             val remoteAssets =
@@ -767,6 +872,163 @@ class ModelConfigFetcherImplTest {
 
             assertEquals(1, modelAssets.size)
             assertEquals("", modelAssets[0].metadata.displayName)
+        }
+
+    private fun mockConfigResponse(json: String) {
+        val mockCall = mockk<okhttp3.Call>()
+        val response =
+            Response
+                .Builder()
+                .request(mockk())
+                .protocol(Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .body(json.toResponseBody())
+                .build()
+
+        every { mockOkHttpClient.newCall(any()) } returns mockCall
+        every { mockCall.execute() } returns response
+    }
+
+    private fun sd15PackConfigJson(
+        packMembers: String =
+            """
+            { "role": "diffusion", "fileName": "${ModelPackTestFixtures.DIFFUSION_FILE}" }
+            """.trimIndent(),
+    ): String =
+        """
+        {
+          "assets": [
+            {
+              "displayName": "${ModelPackTestFixtures.PACK_DISPLAY}",
+              "huggingFaceModelName": "gpustack/stable-diffusion-v1-5-GGUF",
+              "fileName": "${ModelPackTestFixtures.DIFFUSION_FILE}",
+              "sha256": "${ModelPackTestFixtures.DIFFUSION_SHA}",
+              "sizeInBytes": 1747190784,
+              "modelFileFormat": "GGUF",
+              "source": "HF",
+              "configurations": [
+                {
+                  "configId": "${ModelPackTestFixtures.SD15_CONFIG_ID}",
+                  "displayName": "${ModelPackTestFixtures.PACK_DISPLAY}",
+                  "systemPrompt": "",
+                  "temperature": 0.0,
+                  "topK": 1,
+                  "topP": 1.0,
+                  "minP": 0.0,
+                  "repetitionPenalty": 1.0,
+                  "maxTokens": 0,
+                  "contextWindow": 0,
+                  "defaultAssignments": ["image_generation"]
+                }
+              ]
+            }
+          ],
+          "modelPacks": [
+            {
+              "packId": "${ModelPackTestFixtures.PACK_ID}",
+              "displayName": "${ModelPackTestFixtures.PACK_DISPLAY}",
+              "slot": "image_generation",
+              "members": [ $packMembers ]
+            }
+          ]
+        }
+        """.trimIndent()
+
+    @Test
+    fun `DL-001 catalog parses sd15-t2i and sdxl-t2i`() =
+        runTest {
+            val json = """
+            {
+              "assets": [
+                {
+                  "displayName": "Stable Diffusion 1.5 (NPU)",
+                  "fileName": "stable-diffusion-v1-5-Q4_0.gguf",
+                  "sha256": "c2f6e92f9d08d69cc673a1003528ac8199274b3c0eaec88d5fbefe5af67bd42b",
+                  "configurations": [
+                    {
+                      "configId": "sd15-local-config",
+                      "displayName": "Stable Diffusion 1.5 (NPU)",
+                      "systemPrompt": "",
+                      "temperature": 0.0,
+                      "topK": 1,
+                      "topP": 1.0,
+                      "minP": 0.0,
+                      "repetitionPenalty": 1.0,
+                      "contextWindow": 0,
+                      "maxTokens": 0,
+                      "thinkingEnabled": false,
+                      "defaultAssignments": ["image_generation"]
+                    }
+                  ]
+                },
+                {
+                  "displayName": "Stable Diffusion XL (NPU)",
+                  "fileName": "realvis_xl_v5_dmd2.gguf",
+                  "sha256": "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83",
+                  "configurations": [
+                    {
+                      "configId": "sdxl-local-config",
+                      "displayName": "Stable Diffusion XL (NPU)",
+                      "systemPrompt": "",
+                      "temperature": 0.0,
+                      "topK": 1,
+                      "topP": 1.0,
+                      "minP": 0.0,
+                      "repetitionPenalty": 1.0,
+                      "contextWindow": 0,
+                      "maxTokens": 0,
+                      "thinkingEnabled": false,
+                      "defaultAssignments": ["image_generation"]
+                    }
+                  ]
+                },
+                {
+                  "displayName": "SDXL NPU weights",
+                  "fileName": "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip",
+                  "sha256": "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83",
+                  "utilityType": "sdxl_qnn_pack",
+                  "configurations": []
+                }
+              ],
+              "modelPacks": [
+                {
+                  "packId": "sd15-t2i",
+                  "displayName": "Stable Diffusion 1.5 (NPU)",
+                  "slot": "image_generation",
+                  "members": [
+                    {
+                      "role": "diffusion",
+                      "fileName": "stable-diffusion-v1-5-Q4_0.gguf"
+                    }
+                  ]
+                },
+                {
+                  "packId": "sdxl-t2i",
+                  "displayName": "Stable Diffusion XL (NPU)",
+                  "slot": "image_generation",
+                  "members": [
+                    {
+                      "role": "diffusion",
+                      "fileName": "realvis_xl_v5_dmd2.gguf"
+                    },
+                    {
+                      "role": "text_encoder",
+                      "fileName": "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip",
+                      "utilityType": "sdxl_qnn_pack"
+                    }
+                  ]
+                }
+              ]
+            }
+            """.trimIndent()
+            mockConfigResponse(json)
+
+            val result = fetcher.fetchParsedCatalog()
+
+            assertTrue(result.isSuccess)
+            val catalog = result.getOrThrow()
+            assertEquals(listOf("sd15-t2i", "sdxl-t2i"), catalog.packs.map { it.packId })
         }
 }
 
