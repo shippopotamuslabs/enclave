@@ -3,7 +3,6 @@ package com.browntowndev.enclave.presentation
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.browntowndev.enclave.core.data.security.AndroidBiometricManager
-import com.browntowndev.enclave.domain.port.repository.SyncOrchestrator
 import com.browntowndev.enclave.core.ui.component.vault.VaultAuthUiState
 import com.browntowndev.enclave.core.ui.component.vault.toVaultAuthUiState
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
@@ -11,6 +10,7 @@ import com.browntowndev.enclave.domain.model.download.DownloadModelsResult
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.repository.CloudSyncPort
 import com.browntowndev.enclave.domain.port.repository.SettingsRepository
+import com.browntowndev.enclave.domain.port.repository.SyncOrchestrator
 import com.browntowndev.enclave.domain.port.security.BiometricPort
 import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
 import com.browntowndev.enclave.domain.port.security.VaultMetadataPort
@@ -32,7 +32,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.crypto.Cipher
@@ -469,20 +468,21 @@ class MainViewModel
         }
 
         private suspend fun startCloudSyncAndListen(initialUpload: Boolean): Boolean {
-            val progressJob = viewModelScope.launch {
-                syncOrchestrator.syncProgress.collect { progress ->
-                    _startupState.update { state ->
-                        if (state is AppStartupState.Ready) {
-                            state.copy(
-                                unlockSyncProgress = progress?.fraction,
-                                unlockSyncStatus = progress?.status,
-                            )
-                        } else {
-                            state
+            val progressJob =
+                viewModelScope.launch {
+                    syncOrchestrator.syncProgress.collect { progress ->
+                        _startupState.update { state ->
+                            if (state is AppStartupState.Ready) {
+                                state.copy(
+                                    unlockSyncProgress = progress?.fraction,
+                                    unlockSyncStatus = progress?.status,
+                                )
+                            } else {
+                                state
+                            }
                         }
                     }
                 }
-            }
 
             val result = syncOrchestrator.startInitialSync(initialUpload)
             progressJob.cancel()

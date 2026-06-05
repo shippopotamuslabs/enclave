@@ -27,4 +27,6 @@ interface ModelFileScannerPort {
      * Called during soft-delete of a local model.
      */
     suspend fun deleteModelFile(localModelId: LocalModelId)
+
+    suspend fun deleteModelFileByLocalFileName(localFileName: String)
 }

@@ -28,6 +28,7 @@ rootProject.name = "Enclave"
 include(":app")
 include(":llama-android")
 include(":whisper-android")
+include(":local-image-gen-android")
 
 // Core modules
 include(":core:domain")

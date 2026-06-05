@@ -22,6 +22,7 @@ import com.browntowndev.enclave.domain.port.repository.StudioMediaAsset
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
 import com.browntowndev.enclave.domain.usecase.media.GenerateMusicUseCase
+import com.browntowndev.enclave.domain.usecase.media.GetImageGenerationCapabilitiesUseCase
 import com.browntowndev.enclave.domain.usecase.media.ResolveMediaModelTypeUseCase
 import com.browntowndev.enclave.domain.usecase.media.ResolveMediaProviderCapabilitiesUseCase
 import com.browntowndev.enclave.feature.studio.coordinators.StudioAlbumSelectionCoordinator
@@ -134,6 +135,7 @@ class MultimodalViewModelAnimateTest {
                 moderatePromptUseCase = allowPromptModerationUseCase(),
                 shouldModeratePromptUseCase = allowShouldModeratePromptUseCase(),
                 resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase(),
+                getImageGenerationCapabilitiesUseCase = mockk(relaxed = true),
                 generationCoordinator = generationCoordinator,
                 albumSelectionCoordinator = albumSelectionCoordinator,
                 speechCoordinator = speechCoordinator,

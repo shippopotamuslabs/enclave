@@ -271,6 +271,70 @@ class AutoAssignLocalModelsUseCaseTest {
         }
 
     @Test
+    fun `image generation slot prefers local SD config when present`() =
+        runTest {
+            val bonsaiConfigId = LocalModelConfigurationId("sd15-local-config")
+            val bonsaiAsset =
+                LocalModelAsset(
+                    metadata = mockk<LocalModelMetadata>(),
+                    configurations =
+                        listOf(
+                            LocalModelConfiguration(
+                                id = bonsaiConfigId,
+                                localModelId = LocalModelId("bonsai-model"),
+                                displayName = "Stable Diffusion 1.5",
+                                maxTokens = 0,
+                                contextWindow = 0,
+                                temperature = 0.0,
+                                topP = 1.0,
+                                topK = 1,
+                                repetitionPenalty = 1.0,
+                                systemPrompt = "",
+                                defaultAssignments = listOf(ModelType.IMAGE_GENERATION),
+                            ),
+                        ),
+                )
+            val image = mediaProvider("media-img", MediaCapability.IMAGE)
+            coEvery { getDefaultModelsUseCase() } returns flowOf(emptyList())
+            coEvery { getLocalModelAssetsUseCase() } returns flowOf(listOf(bonsaiAsset))
+            coEvery { getApiModelAssetsUseCase() } returns flowOf(emptyList())
+            coEvery { getTtsProvidersUseCase() } returns flowOf(emptyList())
+            coEvery { getMediaProvidersUseCase() } returns flowOf(listOf(image))
+
+            useCase()
+
+            coVerify {
+                setDefaultModelUseCase(
+                    modelType = ModelType.IMAGE_GENERATION,
+                    localConfigId = bonsaiConfigId,
+                    apiConfigId = null,
+                    ttsProviderId = null,
+                    mediaProviderId = null,
+                )
+            }
+            coVerify {
+                setDefaultModelUseCase(ModelType.IMAGE_EDIT, null, null, null, image.id)
+            }
+        }
+
+    @Test
+    fun `image generation slot falls back to media provider when no local image config`() =
+        runTest {
+            val image = mediaProvider("media-img", MediaCapability.IMAGE)
+            coEvery { getDefaultModelsUseCase() } returns flowOf(emptyList())
+            coEvery { getLocalModelAssetsUseCase() } returns flowOf(listOf(localAsset))
+            coEvery { getApiModelAssetsUseCase() } returns flowOf(emptyList())
+            coEvery { getTtsProvidersUseCase() } returns flowOf(emptyList())
+            coEvery { getMediaProvidersUseCase() } returns flowOf(listOf(image))
+
+            useCase()
+
+            coVerify {
+                setDefaultModelUseCase(ModelType.IMAGE_GENERATION, null, null, null, image.id)
+            }
+        }
+
+    @Test
     fun `valid existing assignment preserved`() =
         runTest {
             val existing =

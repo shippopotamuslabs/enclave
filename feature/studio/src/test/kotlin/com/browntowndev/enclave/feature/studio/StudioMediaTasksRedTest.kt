@@ -289,6 +289,7 @@ class StudioMediaTasksRedTest {
             moderatePromptUseCase = allowPromptModerationUseCase(),
             shouldModeratePromptUseCase = allowShouldModeratePromptUseCase(),
             resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase(),
+            getImageGenerationCapabilitiesUseCase = mockk(relaxed = true),
             generationCoordinator = generationCoordinator,
             albumSelectionCoordinator = albumSelectionCoordinator,
             speechCoordinator = StudioSpeechCoordinator(chatUseCases),

@@ -9,6 +9,7 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
+import com.browntowndev.enclave.domain.model.media.ImageGenerationProgress
 import com.browntowndev.enclave.domain.model.media.MusicGenerationSettings
 import com.browntowndev.enclave.domain.model.media.VideoGenerationSettings
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
@@ -17,6 +18,7 @@ import com.browntowndev.enclave.domain.usecase.media.GenerateMediaUseCase
 import com.browntowndev.enclave.domain.usecase.media.MediaGenerationRequestMapper
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
@@ -90,14 +92,23 @@ class MultimediaGenerationService : Service() {
                                 capability = mediaType,
                                 settings = settings,
                             )
-                        generateMediaUseCase(mediaRequest).onFailure { error ->
+                        generateMediaUseCase(
+                            request = mediaRequest,
+                            onImageProgress = { progress ->
+                                studioRepository.reportGenerationProgress(progress)
+                                updateNotification(progress.notificationLabel())
+                            },
+                        ).onFailure { error ->
                             logger.error(TAG, "Generation failed", error)
                             studioRepository.reportGenerationError(error.message ?: "Generation failed")
                         }
+                    } catch (e: CancellationException) {
+                        throw e
                     } catch (e: Exception) {
                         logger.error(TAG, "Unexpected error in service", e)
                         studioRepository.reportGenerationError(e.message ?: "Unexpected error during generation")
                     } finally {
+                        studioRepository.clearGenerationProgress()
                         stopForeground(Service.STOP_FOREGROUND_REMOVE)
                         stopSelf()
                     }
@@ -147,4 +158,12 @@ class MultimediaGenerationService : Service() {
         serviceJob.cancel()
         super.onDestroy()
     }
+
+    private fun ImageGenerationProgress.notificationLabel(): String =
+        when (this) {
+            ImageGenerationProgress.PreparingModel -> "Preparing model..."
+            ImageGenerationProgress.LoadingModel -> "Loading model..."
+            is ImageGenerationProgress.Generating -> "Generating image..."
+            ImageGenerationProgress.SavingOutput -> "Saving output..."
+        }
 }

@@ -52,6 +52,7 @@ class StudioUiStateReducerTest {
                     continualMode = false,
                     isContinualGenerationActive = false,
                     error = null,
+                    generationProgressLabel = null,
                     lastSubmittedPrompt = null,
                     videoGenerationState = VideoGenerationState.Idle,
                     speechState = SpeechState.Idle,
@@ -86,6 +87,13 @@ class StudioUiStateReducerTest {
 
         assertEquals("held prompt", generating.activeGenerationPrompt)
         assertEquals(null, idle.activeGenerationPrompt)
+    }
+
+    @Test
+    fun reduce_exposesGenerationProgressLabel() {
+        val state = reducer.reduce(baseParams(generationProgressLabel = "Generating image"))
+
+        assertEquals("Generating image", state.generationProgressLabel)
     }
 
     @Test
@@ -161,6 +169,7 @@ class StudioUiStateReducerTest {
         sessionSavedAssetIds: Set<String> = emptySet(),
         selectedMediaItemIds: Set<String> = emptySet(),
         albums: List<GalleryAlbumUi> = emptyList(),
+        generationProgressLabel: String? = null,
     ): StudioUiStateReducer.ReduceParams =
         StudioUiStateReducer.ReduceParams(
             prompt = prompt,
@@ -179,6 +188,7 @@ class StudioUiStateReducerTest {
             continualMode = false,
             isContinualGenerationActive = false,
             error = null,
+            generationProgressLabel = generationProgressLabel,
             lastSubmittedPrompt = lastSubmittedPrompt,
             videoGenerationState = VideoGenerationState.Idle,
             speechState = SpeechState.Idle,

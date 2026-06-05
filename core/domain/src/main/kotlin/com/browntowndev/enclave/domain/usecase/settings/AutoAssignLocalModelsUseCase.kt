@@ -11,6 +11,7 @@ import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.config.TtsProviderAsset
 import com.browntowndev.enclave.domain.model.config.TtsProviderId
 import com.browntowndev.enclave.domain.model.inference.ModelType
+import com.browntowndev.enclave.domain.port.media.LOCAL_ON_DEVICE_IMAGE_GENERATION_ENABLED
 import com.browntowndev.enclave.domain.usecase.byok.GetApiModelAssetsUseCase
 import com.browntowndev.enclave.domain.usecase.byok.GetDefaultModelsUseCase
 import com.browntowndev.enclave.domain.usecase.byok.SetDefaultModelUseCase
@@ -80,6 +81,13 @@ class AutoAssignLocalModelsUseCase
                 } ?: false
             val ttsExists = assignment.ttsProviderId?.let { id -> ttsProviders.any { it.id == id } } ?: false
             val mediaExists = assignment.mediaProviderId?.let { id -> mediaProviders.any { it.id == id } } ?: false
+            val localImageGenerationDisabled =
+                assignment.modelType == ModelType.IMAGE_GENERATION &&
+                    assignment.localConfigId != null &&
+                    !LOCAL_ON_DEVICE_IMAGE_GENERATION_ENABLED
+            if (localImageGenerationDisabled) {
+                return false
+            }
             return localExists || apiExists || ttsExists || mediaExists
         }
 
@@ -93,7 +101,12 @@ class AutoAssignLocalModelsUseCase
             when (modelType) {
                 ModelType.VISION -> firstMultimodalApi(apiAssets)?.let { Candidate(apiConfigId = it) }
                 ModelType.TTS -> ttsProviders.firstOrNull()?.id?.let { Candidate(ttsProviderId = it) }
-                ModelType.IMAGE_GENERATION, ModelType.IMAGE_EDIT ->
+                ModelType.IMAGE_GENERATION ->
+                    firstLocalImageGenerationConfig(localAssets)?.let { Candidate(localConfigId = it) }
+                        ?: mediaProviders.firstOrNull { it.capability == MediaCapability.IMAGE }?.id?.let {
+                            Candidate(mediaProviderId = it)
+                        }
+                ModelType.IMAGE_EDIT ->
                     mediaProviders.firstOrNull { it.capability == MediaCapability.IMAGE }?.id?.let {
                         Candidate(mediaProviderId = it)
                     }
@@ -127,6 +140,17 @@ class AutoAssignLocalModelsUseCase
                     .firstOrNull()
                     ?.id
             return apiId?.let { Candidate(apiConfigId = it) }
+        }
+
+        private fun firstLocalImageGenerationConfig(localAssets: List<LocalModelAsset>): LocalModelConfigurationId? {
+            if (!LOCAL_ON_DEVICE_IMAGE_GENERATION_ENABLED) {
+                return null
+            }
+            return localAssets
+                .asSequence()
+                .flatMap { it.configurations.asSequence() }
+                .firstOrNull { ModelType.IMAGE_GENERATION in it.defaultAssignments }
+                ?.id
         }
 
         private fun firstMultimodalApi(apiAssets: List<ApiModelAsset>): ApiModelConfigurationId? =

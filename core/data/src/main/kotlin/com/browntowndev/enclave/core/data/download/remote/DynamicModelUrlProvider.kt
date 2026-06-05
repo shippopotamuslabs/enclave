@@ -36,23 +36,15 @@ class DynamicModelUrlProvider
                 .toString()
 
         override fun getModelDownloadUrl(spec: DownloadFileSpec): String {
-            val source =
-                try {
-                    DownloadSource.valueOf(spec.source)
-                } catch (e: IllegalArgumentException) {
-                    throw IllegalArgumentException(
-                        "Unknown download source: '${spec.source}'. " +
-                            "Valid sources: ${DownloadSource.entries.joinToString()}",
-                        e,
-                    )
-                }
+            val source = resolveSource(spec.source)
             return when (source) {
                 DownloadSource.CLOUDFLARE_R2 -> {
                     val builder = R2_BUCKET_URL.newBuilder()
                     spec.huggingFacePath?.takeIf { it.isNotBlank() }?.let { path ->
                         path.split('/').forEach { builder.addPathSegment(it) }
                     }
-                    builder.addPathSegment(DownloadSecurity.requireSafeFileName(spec.remoteFileName, "remoteFileName"))
+                    builder
+                        .addPathSegment(DownloadSecurity.requireSafeFileName(spec.remoteFileName, "remoteFileName"))
                         .build()
                         .toString()
                 }
@@ -79,4 +71,19 @@ class DynamicModelUrlProvider
                 }
             }
         }
+
+        /**
+         * Resolves a catalog source token into a [DownloadSource].
+         *
+         * Accepts both the enum name (`HUGGING_FACE`, `CLOUDFLARE_R2`) used by persisted
+         * metadata and the short catalog token (`HF`, `R2`) used directly in `model_config.json`.
+         */
+        private fun resolveSource(raw: String): DownloadSource =
+            runCatching { DownloadSource.valueOf(raw) }
+                .getOrNull()
+                ?: DownloadSource.entries.firstOrNull { it.sourceName.equals(raw, ignoreCase = true) }
+                ?: throw IllegalArgumentException(
+                    "Unknown download source: '$raw'. " +
+                        "Valid sources: ${DownloadSource.entries.joinToString { "${it.name}/${it.sourceName}" }}",
+                )
     }

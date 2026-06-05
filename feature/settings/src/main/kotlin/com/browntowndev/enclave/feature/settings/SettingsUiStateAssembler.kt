@@ -10,11 +10,14 @@ import com.browntowndev.enclave.domain.model.config.TtsProviderAsset
 import com.browntowndev.enclave.domain.model.inference.ApiModelParameterSupport
 import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.enclave.domain.model.inference.ModelSource
+import com.browntowndev.enclave.domain.model.download.ModelPackRole
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.telemetry.UsageSpendSummary
 import com.browntowndev.enclave.domain.port.auth.AuthState
 import com.browntowndev.enclave.domain.port.auth.UserProfile
 import com.browntowndev.enclave.domain.port.repository.SettingsData
+
+import com.browntowndev.enclave.domain.usecase.modelconfig.ModelPackSettingsRow
 import com.browntowndev.enclave.domain.usecase.settings.ApplyApiModelMetadataDefaultsUseCase
 import com.browntowndev.enclave.feature.settings.usage.UsageSpendUiMapper
 import javax.inject.Inject
@@ -29,6 +32,7 @@ class SettingsUiStateAssembler
         private val apiDiscoveryUiFilter: ApiDiscoveryUiFilter,
         private val applyApiModelMetadataDefaultsUseCase: ApplyApiModelMetadataDefaultsUseCase,
         private val usageSpendUiMapper: UsageSpendUiMapper,
+        private val modelPackUiMapper: ModelPackUiMapper,
     ) {
         @Suppress("LongParameterList", "CyclomaticComplexMethod")
         internal fun create(
@@ -59,8 +63,24 @@ class SettingsUiStateAssembler
             reindexProgress: Float,
             vaultReauthSheet: VaultReauthSheetState,
             usageSpendSummary: UsageSpendSummary,
+            modelPackRows: List<ModelPackSettingsRow> = emptyList(),
         ): SettingsUiState {
-            val localModels = localAssets.map(localModelAssetUiMapper::map)
+            val resolvedPackRows = modelPackRows
+            // Utility pack members (VAE, text encoder) live only on the pack row. Diffusion stays in
+            // the flat list so Model Configuration can assign local IMAGE_GENERATION; the Local AI
+            // Models sheet hides image-gen rows via isImageGenerationCapable.
+            val packMemberUtilityFileNames =
+                resolvedPackRows
+                    .flatMap { row ->
+                        row.pack.members
+                            .filter { it.role != ModelPackRole.DIFFUSION }
+                            .map { it.asset.metadata.localFileName }
+                    }
+                    .toSet()
+            val localModels =
+                localAssets
+                    .filter { asset -> asset.metadata.localFileName !in packMemberUtilityFileNames }
+                    .map(localModelAssetUiMapper::map)
             val refreshedSelectedLocalAsset =
                 localModelsState.selectedAsset?.let { selected ->
                     if (selected.metadataId.value.isEmpty()) {
@@ -98,18 +118,21 @@ class SettingsUiStateAssembler
                     }
                 }
 
-            val defaultImageProviderIds = defaultModels
-                .filter { it.modelType == ModelType.IMAGE_GENERATION || it.modelType == ModelType.IMAGE_EDIT }
-                .mapNotNull { it.mediaProviderId }
-                .toSet()
-            val defaultVideoProviderIds = defaultModels
-                .filter { it.modelType == ModelType.VIDEO_GENERATION || it.modelType == ModelType.IMAGE_TO_VIDEO }
-                .mapNotNull { it.mediaProviderId }
-                .toSet()
-            val defaultMusicProviderIds = defaultModels
-                .filter { it.modelType == ModelType.MUSIC_GENERATION }
-                .mapNotNull { it.mediaProviderId }
-                .toSet()
+            val defaultImageProviderIds =
+                defaultModels
+                    .filter { it.modelType == ModelType.IMAGE_GENERATION || it.modelType == ModelType.IMAGE_EDIT }
+                    .mapNotNull { it.mediaProviderId }
+                    .toSet()
+            val defaultVideoProviderIds =
+                defaultModels
+                    .filter { it.modelType == ModelType.VIDEO_GENERATION || it.modelType == ModelType.IMAGE_TO_VIDEO }
+                    .mapNotNull { it.mediaProviderId }
+                    .toSet()
+            val defaultMusicProviderIds =
+                defaultModels
+                    .filter { it.modelType == ModelType.MUSIC_GENERATION }
+                    .mapNotNull { it.mediaProviderId }
+                    .toSet()
 
             val mediaModels =
                 mediaAssets.map { asset ->
@@ -287,6 +310,7 @@ class SettingsUiStateAssembler
                 localModelsSheet =
                     LocalModelsSheetUiState(
                         isVisible = localModelsState.isSheetOpen,
+                        modelPacks = resolvedPackRows.map(modelPackUiMapper::map),
                         models = localModels.filter { !it.isSoftDeleted },
                         availableDownloads = localModels.filter { it.isSoftDeleted },
                         selectedAsset = refreshedSelectedLocalAsset,

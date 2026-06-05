@@ -599,16 +599,17 @@ class ChatViewModel
                     "Could not send message. Please try again.",
                 ),
             ) {
-                val shouldModerate = when (chatInputCoordinator.selectedMode.value) {
-                    ChatModeUi.FAST -> shouldModeratePromptUseCase(ModelType.FAST)
-                    ChatModeUi.THINKING -> shouldModeratePromptUseCase(ModelType.THINKING)
-                    ChatModeUi.COUNCIL -> {
-                        shouldModeratePromptUseCase(ModelType.DRAFT_ONE) ||
-                            shouldModeratePromptUseCase(ModelType.DRAFT_TWO) ||
-                            shouldModeratePromptUseCase(ModelType.MAIN) ||
-                            shouldModeratePromptUseCase(ModelType.FINAL_SYNTHESIS)
+                val shouldModerate =
+                    when (chatInputCoordinator.selectedMode.value) {
+                        ChatModeUi.FAST -> shouldModeratePromptUseCase(ModelType.FAST)
+                        ChatModeUi.THINKING -> shouldModeratePromptUseCase(ModelType.THINKING)
+                        ChatModeUi.COUNCIL -> {
+                            shouldModeratePromptUseCase(ModelType.DRAFT_ONE) ||
+                                shouldModeratePromptUseCase(ModelType.DRAFT_TWO) ||
+                                shouldModeratePromptUseCase(ModelType.MAIN) ||
+                                shouldModeratePromptUseCase(ModelType.FINAL_SYNTHESIS)
+                        }
                     }
-                }
                 val selectedImageUris =
                     if (photoAttachmentPolicyResolver.resolve(chatInputCoordinator.selectedMode.value).isEnabled) {
                         chatInputCoordinator.selectedImageUris.value

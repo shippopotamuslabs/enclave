@@ -142,3 +142,7 @@ build_output.txt
 # Exclude generated model binaries and tokenizers from git tracking
 /app/src/main/assets/models/**/*
 !/app/src/main/assets/models/**/model_config.json
+
+# Bonsai model and build artifacts
+bonsai-*.gguf
+bonsai-unpacked/

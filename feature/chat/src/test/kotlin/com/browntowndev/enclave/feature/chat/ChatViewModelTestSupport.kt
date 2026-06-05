@@ -16,7 +16,6 @@ import com.browntowndev.enclave.domain.usecase.chat.GetModelDisplayNameUseCase
 import com.browntowndev.enclave.domain.usecase.chat.StageImageAttachmentUseCase
 import com.browntowndev.enclave.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
-import com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase
 import com.browntowndev.enclave.domain.usecase.inference.ShouldModeratePromptUseCase
 import com.browntowndev.enclave.domain.usecase.inference.SubmitModerationReportUseCase
 import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
@@ -66,9 +65,10 @@ object ChatViewModelTestSupport {
         chatRepository: ChatRepository,
         exportArtifactDocumentsUseCase: ExportArtifactDocumentsUseCase,
         stageImageAttachmentUseCase: StageImageAttachmentUseCase,
-        shouldModeratePromptUseCase: ShouldModeratePromptUseCase = mockk(relaxed = true) {
-            coEvery { this@mockk.invoke(any()) } returns true
-        },
+        shouldModeratePromptUseCase: ShouldModeratePromptUseCase =
+            mockk(relaxed = true) {
+                coEvery { this@mockk.invoke(any()) } returns true
+            },
         submitModerationReportUseCase: SubmitModerationReportUseCase = mockk(relaxed = true),
     ): ChatViewModel =
         createHarness(
@@ -113,9 +113,10 @@ object ChatViewModelTestSupport {
         chatRepository: ChatRepository,
         exportArtifactDocumentsUseCase: ExportArtifactDocumentsUseCase,
         stageImageAttachmentUseCase: StageImageAttachmentUseCase,
-        shouldModeratePromptUseCase: ShouldModeratePromptUseCase = mockk(relaxed = true) {
-            coEvery { this@mockk.invoke(any()) } returns true
-        },
+        shouldModeratePromptUseCase: ShouldModeratePromptUseCase =
+            mockk(relaxed = true) {
+                coEvery { this@mockk.invoke(any()) } returns true
+            },
         submitModerationReportUseCase: SubmitModerationReportUseCase = mockk(relaxed = true),
     ): Harness {
         val chatMessageUiMapper = ChatMessageUiMapper()

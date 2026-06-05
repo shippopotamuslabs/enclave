@@ -361,6 +361,13 @@ private fun buildMinimalViewModel(): SettingsViewModel {
     val clearExaApiKeyUseCase = mockk<ClearExaApiKeyUseCase>(relaxed = true)
     val updateShowSearchProviderSwitchAlertUseCase = mockk<UpdateShowSearchProviderSwitchAlertUseCase>(relaxed = true)
 
+    val observeActiveUtilityModelsUseCase =
+        mockk<com.browntowndev.enclave.domain.usecase.modelconfig.ObserveActiveUtilityModelsUseCase>()
+    every { observeActiveUtilityModelsUseCase() } returns
+        kotlinx.coroutines.flow.flowOf(
+            emptyList<com.browntowndev.enclave.domain.model.config.UtilityModelMetadata>(),
+        )
+
     val settingsUseCases =
         SettingsUseCasesImpl(
             preferences =
@@ -391,6 +398,10 @@ private fun buildMinimalViewModel(): SettingsViewModel {
                     getRestorableLocalModels = mockk(relaxed = true),
                     saveLocalModelPreset = mockk(relaxed = true),
                     reDownloadModel = mockk<ReDownloadModelUseCase>(relaxed = true),
+                    getModelPacksForSettings = mockk(relaxed = true),
+                    observeActiveUtilityModels = observeActiveUtilityModelsUseCase,
+                    reDownloadModelPack = mockk(relaxed = true),
+                    deleteModelPack = mockk(relaxed = true),
                 ),
             apiProviders =
                 SettingsApiProviderUseCasesImpl(
@@ -445,6 +456,9 @@ private fun buildMinimalViewModel(): SettingsViewModel {
     val embeddingProgressPort = mockk<EmbeddingProgressPort>()
     every { embeddingProgressPort.isReindexing } returns MutableStateFlow(false)
     every { embeddingProgressPort.progress } returns MutableStateFlow(0f)
+
+    val downloadWorkRepository = mockk<com.browntowndev.enclave.core.data.repository.DownloadWorkRepository>()
+    every { downloadWorkRepository.observeDownloadProgress() } returns kotlinx.coroutines.flow.flowOf(null)
 
     val detectVaultReconciliationStateUseCase = mockk<DetectVaultReconciliationStateUseCase>(relaxed = true)
     val adoptCloudVaultUseCase = mockk<AdoptCloudVaultUseCase>(relaxed = true)
@@ -521,5 +535,6 @@ private fun buildMinimalViewModel(): SettingsViewModel {
         deletionHelper = deletionHelper,
         errorHandler = errorHandler,
         embeddingProgressPort = embeddingProgressPort,
+        downloadWorkRepository = downloadWorkRepository,
     )
 }

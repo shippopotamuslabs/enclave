@@ -81,7 +81,8 @@ class FalQueuePoller(
         val explicitResponseUrl = request.responseUrl
         val fetchUrl =
             explicitResponseUrl
-                ?: FalService.deriveResponseUrl(request.statusUrl)
+                ?: FalService
+                    .deriveResponseUrl(request.statusUrl)
                     .takeIf { falService.mediaUrls(status).isEmpty() }
         return if (fetchUrl != null) {
             val result = fetchQueueResult(apiKey = apiKey, fetchUrl = fetchUrl, request = request, status = status)
@@ -123,12 +124,11 @@ class FalQueuePoller(
     private fun failResultFetch(
         fetchUrl: String,
         cause: Throwable?,
-    ): Nothing {
+    ): Nothing =
         throw IllegalStateException(
             "$errorPrefix failed: could not fetch queue result from $fetchUrl" +
                 (cause?.message?.let { " ($it)" } ?: ""),
         )
-    }
 
     private fun failGenerationDetail(message: String): Nothing = throw IllegalStateException("$errorPrefix failed: $message")
 

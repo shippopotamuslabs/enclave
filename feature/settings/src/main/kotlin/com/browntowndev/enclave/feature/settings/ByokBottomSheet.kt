@@ -49,6 +49,7 @@ import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import kotlinx.coroutines.launch
 
@@ -76,7 +77,11 @@ fun ByokBottomSheet(
     onSelectApiModelConfig: (ApiModelConfigUi?) -> Unit,
     onDeleteApiModelAsset: (ApiCredentialsId, () -> Unit) -> Unit,
     onDeleteApiModelConfig: (ApiModelConfigurationId, () -> Unit) -> Unit,
-    onConfirmDeletionWithReassignment: (LocalModelConfigurationId?, ApiModelConfigurationId?) -> Unit,
+    onConfirmDeletionWithReassignment: (
+        LocalModelConfigurationId?,
+        ApiModelConfigurationId?,
+        MediaProviderId?,
+    ) -> Unit,
     onDismissDeletionSafety: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -164,8 +169,8 @@ fun ByokBottomSheet(
                         ReassignmentView(
                             modelTypes = state.modelTypes,
                             reassignmentOptions = state.options,
-                            onConfirm = { local, api ->
-                                onConfirmDeletionWithReassignment(local, api)
+                            onConfirm = { local, api, media ->
+                                onConfirmDeletionWithReassignment(local, api, media)
                                 scope.launch {
                                     sheetState.hide()
                                     onDismiss()
@@ -465,7 +470,7 @@ fun PreviewByokBottomSheetAssets() {
             onDeleteApiModelAsset = { _, _ -> },
             onDeleteApiModelConfig = { _, _ -> },
             onDismissDeletionSafety = {},
-            onConfirmDeletionWithReassignment = { _, _ -> },
+            onConfirmDeletionWithReassignment = { _, _, _ -> },
         )
     }
 }
@@ -490,7 +495,7 @@ fun PreviewByokBottomSheetContext() {
             onDeleteApiModelAsset = { _, _ -> },
             onDeleteApiModelConfig = { _, _ -> },
             onDismissDeletionSafety = {},
-            onConfirmDeletionWithReassignment = { _, _ -> },
+            onConfirmDeletionWithReassignment = { _, _, _ -> },
         )
     }
 }

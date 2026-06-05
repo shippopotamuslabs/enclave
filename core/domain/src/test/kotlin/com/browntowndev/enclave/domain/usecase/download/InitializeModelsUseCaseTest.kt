@@ -9,16 +9,22 @@ import com.browntowndev.enclave.domain.model.config.LocalModelMetadata
 import com.browntowndev.enclave.domain.model.config.UtilityType
 import com.browntowndev.enclave.domain.model.download.DownloadModelsResult
 import com.browntowndev.enclave.domain.model.download.DownloadSource
+import com.browntowndev.enclave.domain.model.download.ModelPackTestFixtures
 import com.browntowndev.enclave.domain.model.download.ModelScanResult
+import com.browntowndev.enclave.domain.model.download.ParsedModelCatalog
+import com.browntowndev.enclave.domain.model.device.SnapdragonTier
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
+import com.browntowndev.enclave.domain.port.device.SnapdragonTierPort
 import com.browntowndev.enclave.domain.port.download.ModelDownloadOrchestratorPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.domain.port.media.GpuCapabilityPort
+import com.browntowndev.enclave.domain.port.media.LocalImageGenerationCapabilityPort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.ModelConfigFetcherPort
-import com.browntowndev.enclave.domain.port.repository.UtilityModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.TrustedDomainRepositoryPort
+import com.browntowndev.enclave.domain.port.repository.UtilityModelRepositoryPort
 import com.browntowndev.enclave.domain.usecase.FakeUtilityModelRepository
 import com.browntowndev.enclave.domain.usecase.modelconfig.SyncLocalModelRegistryUseCase
 import com.browntowndev.enclave.domain.usecase.modelconfig.SyncUtilityModelRegistryUseCase
@@ -26,12 +32,16 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
+import io.mockk.verify
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
@@ -47,6 +57,9 @@ class InitializeModelsUseCaseTest {
     private lateinit var utilityModelRepository: UtilityModelRepositoryPort
     private lateinit var logPort: LoggingPort
     private lateinit var trustedDomainRepository: TrustedDomainRepositoryPort
+    private lateinit var gpuCapabilityPort: GpuCapabilityPort
+    private lateinit var capabilityPort: LocalImageGenerationCapabilityPort
+    private lateinit var resolveSd15QnnPackCatalogAssetUseCase: ResolveSd15QnnPackCatalogAssetUseCase
     private lateinit var useCase: InitializeModelsUseCase
 
     @BeforeEach
@@ -54,17 +67,36 @@ class InitializeModelsUseCaseTest {
         modelConfigFetcher = mockk()
         activeModelProvider = mockk()
         syncLocalModelRegistryUseCase = mockk(relaxed = true)
-        localModelRepository = mockk()
+        localModelRepository = mockk(relaxed = true)
         modelDownloadOrchestrator = mockk(relaxed = true)
         checkModelsUseCase = mockk()
         utilityModelRepository = FakeUtilityModelRepository()
         logPort = mockk(relaxed = true)
         trustedDomainRepository = mockk(relaxed = true)
+        gpuCapabilityPort = mockk()
+        capabilityPort = mockk()
         syncUtilityModelRegistryUseCase =
             SyncUtilityModelRegistryUseCase(utilityModelRepository, logPort)
 
         // Default: no active config for any slot — treated as "include for local download"
         coEvery { activeModelProvider.getActiveConfiguration(any()) } returns null
+        every { gpuCapabilityPort.isLocalImageGenerationSupported() } returns true
+        every { capabilityPort.getCapabilities() } returns
+            com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilities(
+                npuAvailable = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
+                sd15NpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
+                sd15CpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.NO,
+                sdxlNpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.NO,
+                recommendedBackend = com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind.QNN_NPU,
+                recommendedModelId = com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId.SD15_QNN,
+                diagnostics = emptyList(),
+            )
+        resolveSd15QnnPackCatalogAssetUseCase =
+            ResolveSd15QnnPackCatalogAssetUseCase(
+                object : SnapdragonTierPort {
+                    override fun currentTier(): SnapdragonTier = SnapdragonTier.GEN1
+                },
+            )
 
         useCase =
             InitializeModelsUseCase(
@@ -76,8 +108,11 @@ class InitializeModelsUseCaseTest {
                 checkModelsUseCase,
                 syncUtilityModelRegistryUseCase,
                 trustedDomainRepository,
+                gpuCapabilityPort,
+                capabilityPort,
+                resolveSd15QnnPackCatalogAssetUseCase,
                 externalScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
-                logPort,
+                logPort = logPort,
             )
     }
 
@@ -91,7 +126,7 @@ class InitializeModelsUseCaseTest {
             // Remote config says R2
             val remoteAsset = createMockAsset(sha, fileName, source = DownloadSource.CLOUDFLARE_R2)
             val remoteAssets = listOf(remoteAsset)
-            coEvery { modelConfigFetcher.fetchRemoteConfig() } returns Result.success(remoteAssets)
+            coEvery { modelConfigFetcher.fetchParsedCatalog() } returns Result.success(catalogOf(remoteAssets))
 
             // Local DB has soft-deleted asset with default HF source
             val softDeletedAsset = createMockAsset(sha, fileName, source = DownloadSource.HUGGING_FACE)
@@ -145,7 +180,7 @@ class InitializeModelsUseCaseTest {
                         ),
                     configurations = emptyList(),
                 )
-            coEvery { modelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(assignedAsset, utilityAsset))
+            coEvery { modelConfigFetcher.fetchParsedCatalog() } returns Result.success(catalogOf(listOf(assignedAsset, utilityAsset)))
             coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
 
             val resultWithUtility =
@@ -194,7 +229,7 @@ class InitializeModelsUseCaseTest {
                         ),
                     configurations = emptyList(),
                 )
-            coEvery { modelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(utilityAsset))
+            coEvery { modelConfigFetcher.fetchParsedCatalog() } returns Result.success(catalogOf(listOf(utilityAsset)))
             coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
             coEvery {
                 checkModelsUseCase(
@@ -242,7 +277,7 @@ class InitializeModelsUseCaseTest {
                         ),
                     configurations = emptyList(),
                 )
-            coEvery { modelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(utilityAsset))
+            coEvery { modelConfigFetcher.fetchParsedCatalog() } returns Result.success(catalogOf(listOf(utilityAsset)))
             coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
             coEvery {
                 checkModelsUseCase(
@@ -269,7 +304,7 @@ class InitializeModelsUseCaseTest {
     fun `scnInitApi01 slot configured as API is excluded from checkModelsUseCase expectedModels`() =
         runTest {
             val localAsset = createMockAsset("sha-main", "main.gguf", DownloadSource.HUGGING_FACE)
-            coEvery { modelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(localAsset))
+            coEvery { modelConfigFetcher.fetchParsedCatalog() } returns Result.success(catalogOf(listOf(localAsset)))
             coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
 
             val apiConfig = mockk<ActiveModelConfiguration> { every { isLocal } returns false }
@@ -289,7 +324,7 @@ class InitializeModelsUseCaseTest {
     fun `scnInitApi02 slot with no active config is included in checkModelsUseCase expectedModels`() =
         runTest {
             val localAsset = createMockAsset("sha-main", "main.gguf", DownloadSource.HUGGING_FACE)
-            coEvery { modelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(localAsset))
+            coEvery { modelConfigFetcher.fetchParsedCatalog() } returns Result.success(catalogOf(listOf(localAsset)))
             coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
             // activeModelProvider already returns null for all slots from @BeforeEach
 
@@ -310,7 +345,7 @@ class InitializeModelsUseCaseTest {
     fun `scnInitApi03 slot configured as local is included in checkModelsUseCase expectedModels`() =
         runTest {
             val localAsset = createMockAsset("sha-main", "main.gguf", DownloadSource.HUGGING_FACE)
-            coEvery { modelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(localAsset))
+            coEvery { modelConfigFetcher.fetchParsedCatalog() } returns Result.success(catalogOf(listOf(localAsset)))
             coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
 
             val localConfig = mockk<ActiveModelConfiguration> { every { isLocal } returns true }
@@ -360,8 +395,8 @@ class InitializeModelsUseCaseTest {
                         ),
                 )
 
-            coEvery { modelConfigFetcher.fetchRemoteConfig() } returns
-                Result.success(listOf(mainAsset, visionAsset))
+            coEvery { modelConfigFetcher.fetchParsedCatalog() } returns
+                Result.success(catalogOf(listOf(mainAsset, visionAsset)))
             coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
 
             val apiConfig = mockk<ActiveModelConfiguration> { every { isLocal } returns false }
@@ -381,11 +416,188 @@ class InitializeModelsUseCaseTest {
         }
 
     @Test
+    @DisplayName("MPK-005 API IMAGE_GENERATION skips entire pack on InitializeModelsUseCase")
+    fun mpk005_apiImageGenerationSkipsEntirePack() =
+        runTest {
+            val catalogAssets =
+                listOf(
+                    ModelPackTestFixtures.diffusionAsset(),
+                    ModelPackTestFixtures.whisperAsset(),
+                )
+            coEvery { modelConfigFetcher.fetchParsedCatalog() } returns
+                Result.success(ModelPackTestFixtures.parsedCatalog())
+            coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
+
+            val apiConfig = mockk<ActiveModelConfiguration> { every { isLocal } returns false }
+            coEvery { activeModelProvider.getActiveConfiguration(ModelType.IMAGE_GENERATION) } returns apiConfig
+
+            val utilitySlot = slot<List<LocalModelAsset>>()
+            coEvery {
+                checkModelsUseCase(expectedModels = emptyMap(), utilityAssets = capture(utilitySlot))
+            } returns emptyDownloadResult()
+
+            useCase()
+
+            coVerify {
+                checkModelsUseCase(expectedModels = emptyMap(), utilityAssets = any())
+            }
+            assertFalse(utilitySlot.captured.any { it.metadata.sha256 in ModelPackTestFixtures.packMemberShas })
+        }
+
+    @Test
+    @DisplayName("MPK-025 Catalog failure still excludes pack for API IMAGE_GENERATION")
+    fun mpk025_catalogFailureStillExcludesPackForApiImageGeneration() =
+        runTest {
+            val mainAsset = createMockAsset("main-sha", "main.gguf", DownloadSource.CLOUDFLARE_R2)
+            val localConfig =
+                mockk<ActiveModelConfiguration> {
+                    every { isLocal } returns true
+                    every { id } returns LocalModelConfigurationId("main-config")
+                }
+            coEvery { modelConfigFetcher.fetchParsedCatalog() } returns
+                Result.failure(IllegalStateException("offline"))
+            coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
+            coEvery { localModelRepository.getAllLocalAssets() } returns
+                listOf(
+                    ModelPackTestFixtures.diffusionAsset(),
+                )
+            coEvery { activeModelProvider.getActiveConfiguration(ModelType.MAIN) } returns localConfig
+            coEvery { localModelRepository.getAssetByConfigId(LocalModelConfigurationId("main-config")) } returns
+                mainAsset
+            coEvery { activeModelProvider.getActiveConfiguration(ModelType.IMAGE_GENERATION) } returns
+                mockk<ActiveModelConfiguration> { every { isLocal } returns false }
+
+            val packHeavy =
+                DownloadModelsResult(
+                    allModels = mapOf(ModelType.MAIN to mainAsset),
+                    utilityAssets = emptyList(),
+                    modelsToDownload =
+                        listOf(
+                            mainAsset,
+                            ModelPackTestFixtures.diffusionAsset(),
+                        ),
+                    scanResult = ModelScanResult(emptyList(), emptyMap(), false),
+                )
+            coEvery { checkModelsUseCase(expectedModels = mapOf(ModelType.MAIN to mainAsset)) } returns packHeavy
+
+            val result = useCase()
+
+            assertEquals(1, result.modelsToDownload.size)
+            assertEquals(
+                mainAsset.metadata.sha256,
+                result.modelsToDownload
+                    .single()
+                    .metadata.sha256,
+            )
+            assertTrue(result.utilityAssets.isEmpty())
+            assertEquals(ModelPackTestFixtures.packMemberShas, result.imageGenerationPackMemberSha256s)
+        }
+
+    @Test
+    @DisplayName("MPK-012 Whisper utility still downloads when IMAGE_GENERATION is API")
+    fun mpk012_whisperStillDownloadsWhenImageGenerationApi() =
+        runTest {
+            val whisper = ModelPackTestFixtures.whisperAsset()
+            coEvery { modelConfigFetcher.fetchParsedCatalog() } returns
+                Result.success(ModelPackTestFixtures.parsedCatalog(includeWhisper = true))
+            coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
+
+            val apiConfig = mockk<ActiveModelConfiguration> { every { isLocal } returns false }
+            coEvery { activeModelProvider.getActiveConfiguration(ModelType.IMAGE_GENERATION) } returns apiConfig
+
+            val utilitySlot = slot<List<LocalModelAsset>>()
+            coEvery {
+                checkModelsUseCase(expectedModels = emptyMap(), utilityAssets = capture(utilitySlot))
+            } returns
+                DownloadModelsResult(
+                    allModels = emptyMap(),
+                    utilityAssets = listOf(whisper),
+                    modelsToDownload = listOf(whisper),
+                    scanResult = ModelScanResult(listOf(whisper), emptyMap(), false),
+                )
+
+            useCase()
+
+            assertEquals(1, utilitySlot.captured.size)
+            assertEquals(
+                ModelPackTestFixtures.WHISPER_SHA,
+                utilitySlot.captured
+                    .single()
+                    .metadata.sha256,
+            )
+        }
+
+    @Test
+    @DisplayName("MPK-019 Lazy impl must not download SD15 pack utilities when IMAGE_GENERATION is API")
+    fun mpk019_apiImageGenerationExcludesPackFromModelsToDownload() =
+        runTest {
+            val catalogAssets =
+                listOf(
+                    ModelPackTestFixtures.diffusionAsset(),
+                )
+            coEvery { modelConfigFetcher.fetchParsedCatalog() } returns
+                Result.success(ModelPackTestFixtures.parsedCatalog(includeWhisper = false))
+            coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
+
+            val apiConfig = mockk<ActiveModelConfiguration> { every { isLocal } returns false }
+            coEvery { activeModelProvider.getActiveConfiguration(ModelType.IMAGE_GENERATION) } returns apiConfig
+
+            val packAssets =
+                listOf(
+                    ModelPackTestFixtures.diffusionAsset(),
+                )
+            coEvery { checkModelsUseCase(any(), any()) } returns
+                DownloadModelsResult(
+                    allModels = emptyMap(),
+                    utilityAssets = catalogAssets.filter { it.metadata.utilityType != null },
+                    modelsToDownload = packAssets,
+                    scanResult = ModelScanResult(packAssets, emptyMap(), false),
+                )
+
+            val result = useCase()
+
+            assertEquals(0, result.modelsToDownload.count { it.metadata.sha256 == ModelPackTestFixtures.DIFFUSION_SHA })
+        }
+
+    @Test
+    fun `unsupported device excludes image generation pack before orchestrator initialization`() =
+        runTest {
+            every { gpuCapabilityPort.isLocalImageGenerationSupported() } returns false
+            coEvery { modelConfigFetcher.fetchParsedCatalog() } returns
+                Result.success(ModelPackTestFixtures.parsedCatalog(includeWhisper = true))
+            coEvery { localModelRepository.getSoftDeletedModels() } returns
+                listOf(ModelPackTestFixtures.diffusionAsset())
+
+            val packAssets =
+                listOf(
+                    ModelPackTestFixtures.diffusionAsset(),
+                )
+            val whisper = ModelPackTestFixtures.whisperAsset()
+            coEvery { checkModelsUseCase(any(), any()) } returns
+                DownloadModelsResult(
+                    allModels = mapOf(ModelType.IMAGE_GENERATION to ModelPackTestFixtures.diffusionAsset()),
+                    utilityAssets = listOf(whisper),
+                    modelsToDownload = packAssets + whisper,
+                    scanResult = ModelScanResult(packAssets + whisper, emptyMap(), false),
+                )
+
+            val result = useCase()
+
+            assertEquals(listOf(whisper), result.modelsToDownload)
+            assertTrue(result.availableToRedownload.isEmpty())
+            verify {
+                modelDownloadOrchestrator.initializeWithStartupResult(
+                    match { startupResult -> startupResult.modelsToDownload == listOf(whisper) },
+                )
+            }
+        }
+
+    @Test
     @DisplayName("SCN-INIT-API-05 — soft-deleted asset with API config excluded via soft-delete path")
     fun `scnInitApi05 soft-deleted asset is excluded regardless of API config`() =
         runTest {
             val localAsset = createMockAsset("sha-main", "main.gguf", DownloadSource.HUGGING_FACE)
-            coEvery { modelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(localAsset))
+            coEvery { modelConfigFetcher.fetchParsedCatalog() } returns Result.success(catalogOf(listOf(localAsset)))
             coEvery { localModelRepository.getSoftDeletedModels() } returns listOf(localAsset)
 
             // API config set, but should never even be reached (soft-delete check is first)
@@ -400,6 +612,17 @@ class InitializeModelsUseCaseTest {
                 checkModelsUseCase(expectedModels = emptyMap(), utilityAssets = emptyList())
             }
         }
+
+    private fun catalogOf(assets: List<LocalModelAsset>): ParsedModelCatalog {
+        val hasPackMembers = assets.any { it.metadata.sha256 in ModelPackTestFixtures.packMemberShas }
+        return if (hasPackMembers) {
+            ModelPackTestFixtures.parsedCatalog(
+                includeWhisper = assets.any { it.metadata.sha256 == ModelPackTestFixtures.WHISPER_SHA },
+            )
+        } else {
+            ParsedModelCatalog(assets = assets, packs = emptyList())
+        }
+    }
 
     private fun emptyDownloadResult() =
         DownloadModelsResult(
@@ -443,4 +666,130 @@ class InitializeModelsUseCaseTest {
                     ),
                 ),
         )
+
+    @Test
+    fun `DL-002 Gen2 startup result includes SD15 and excludes SDXL`() =
+        runTest {
+            every { capabilityPort.getCapabilities() } returns
+                com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilities(
+                    npuAvailable = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
+                    sd15NpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
+                    sd15CpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.NO,
+                    sdxlNpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.NO,
+                    recommendedBackend = com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind.QNN_NPU,
+                    recommendedModelId = com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId.SD15_QNN,
+                    diagnostics = emptyList()
+                )
+
+            val parsedCatalog = ParsedModelCatalog(
+                assets = listOf(
+                    ModelPackTestFixtures.diffusionAsset(),
+                    createMockAsset("5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83", "realvis_xl.gguf", DownloadSource.HUGGING_FACE)
+                ),
+                packs = listOf(
+                    ModelPackTestFixtures.sd15Pack(),
+                    com.browntowndev.enclave.domain.model.download.ModelPack(
+                        packId = "sdxl-t2i",
+                        displayName = "Stable Diffusion XL",
+                        slot = ModelType.IMAGE_GENERATION,
+                        members = listOf(
+                            com.browntowndev.enclave.domain.model.download.ModelPackMember(
+                                role = com.browntowndev.enclave.domain.model.download.ModelPackRole.DIFFUSION,
+                                asset = createMockAsset("5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83", "realvis_xl.gguf", DownloadSource.HUGGING_FACE)
+                            )
+                        )
+                    )
+                )
+            )
+
+            coEvery { modelConfigFetcher.fetchParsedCatalog() } returns Result.success(parsedCatalog)
+            coEvery { checkModelsUseCase(any(), any()) } returns
+                DownloadModelsResult(
+                    allModels = emptyMap(),
+                    utilityAssets = emptyList(),
+                    modelsToDownload = listOf(ModelPackTestFixtures.diffusionAsset()),
+                    scanResult = ModelScanResult(emptyList(), emptyMap(), false),
+                )
+
+            val result = useCase()
+
+            assertTrue(result.modelsToDownload.any { it.metadata.sha256 == ModelPackTestFixtures.DIFFUSION_SHA })
+            assertTrue(result.modelsToDownload.none { it.metadata.sha256 == "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83" })
+        }
+
+    @Test
+    fun `DL-003 Gen3+ startup result includes SD15 and SDXL eligible pack files`() =
+        runTest {
+            every { capabilityPort.getCapabilities() } returns
+                com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilities(
+                    npuAvailable = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
+                    sd15NpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
+                    sd15CpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.NO,
+                    sdxlNpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
+                    recommendedBackend = com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind.QNN_NPU,
+                    recommendedModelId = com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId.SD15_QNN,
+                    diagnostics = emptyList()
+                )
+
+            val sdxlAsset = createMockAsset("5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83", "realvis_xl.gguf", DownloadSource.HUGGING_FACE)
+            val parsedCatalog = ParsedModelCatalog(
+                assets = listOf(
+                    ModelPackTestFixtures.diffusionAsset(),
+                    sdxlAsset
+                ),
+                packs = listOf(
+                    ModelPackTestFixtures.sd15Pack(),
+                    com.browntowndev.enclave.domain.model.download.ModelPack(
+                        packId = "sdxl-t2i",
+                        displayName = "Stable Diffusion XL",
+                        slot = ModelType.IMAGE_GENERATION,
+                        members = listOf(
+                            com.browntowndev.enclave.domain.model.download.ModelPackMember(
+                                role = com.browntowndev.enclave.domain.model.download.ModelPackRole.DIFFUSION,
+                                asset = sdxlAsset
+                            )
+                        )
+                    )
+                )
+            )
+
+            coEvery { modelConfigFetcher.fetchParsedCatalog() } returns Result.success(parsedCatalog)
+            coEvery { checkModelsUseCase(any(), any()) } returns
+                DownloadModelsResult(
+                    allModels = emptyMap(),
+                    utilityAssets = emptyList(),
+                    modelsToDownload = listOf(ModelPackTestFixtures.diffusionAsset(), sdxlAsset),
+                    scanResult = ModelScanResult(emptyList(), emptyMap(), false),
+                )
+
+            val result = useCase()
+
+            assertTrue(result.modelsToDownload.any { it.metadata.sha256 == ModelPackTestFixtures.DIFFUSION_SHA })
+            assertTrue(result.modelsToDownload.any { it.metadata.sha256 == "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83" })
+        }
+
+    @Test
+    fun `DL-004 API assignment suppresses local image pack downloads`() =
+        runTest {
+            val apiConfig = mockk<ActiveModelConfiguration> { every { isLocal } returns false }
+            coEvery { activeModelProvider.getActiveConfiguration(ModelType.IMAGE_GENERATION) } returns apiConfig
+
+            val parsedCatalog = ParsedModelCatalog(
+                assets = listOf(ModelPackTestFixtures.diffusionAsset()),
+                packs = listOf(ModelPackTestFixtures.sd15Pack())
+            )
+
+            coEvery { modelConfigFetcher.fetchParsedCatalog() } returns Result.success(parsedCatalog)
+            coEvery { checkModelsUseCase(any(), any()) } returns
+                DownloadModelsResult(
+                    allModels = emptyMap(),
+                    utilityAssets = emptyList(),
+                    modelsToDownload = listOf(ModelPackTestFixtures.diffusionAsset()),
+                    scanResult = ModelScanResult(emptyList(), emptyMap(), false),
+                )
+
+            val result = useCase()
+
+            assertTrue(result.modelsToDownload.none { it.metadata.sha256 == ModelPackTestFixtures.DIFFUSION_SHA })
+        }
 }

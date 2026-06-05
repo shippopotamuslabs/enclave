@@ -28,12 +28,24 @@ import com.browntowndev.enclave.domain.usecase.byok.SetDefaultModelUseCase
 import com.browntowndev.enclave.domain.usecase.media.DeleteMediaProviderUseCase
 import com.browntowndev.enclave.domain.usecase.media.GetMediaProvidersUseCase
 import com.browntowndev.enclave.domain.usecase.media.SaveMediaProviderUseCase
+import com.browntowndev.enclave.domain.model.config.LocalModelAsset
+import com.browntowndev.enclave.domain.model.config.LocalModelConfiguration
+import com.browntowndev.enclave.domain.model.config.LocalModelMetadata
+import com.browntowndev.enclave.domain.model.download.DownloadSource
+import com.browntowndev.enclave.domain.model.download.ModelPack
+import com.browntowndev.enclave.domain.model.download.ModelPackCompleteness
+import com.browntowndev.enclave.domain.model.download.ModelPackMember
+import com.browntowndev.enclave.domain.model.download.ModelPackRole
+import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.usecase.modelconfig.GetLocalModelAssetsUseCase
+import com.browntowndev.enclave.domain.usecase.modelconfig.GetModelPacksForSettingsUseCase
+import com.browntowndev.enclave.domain.usecase.modelconfig.ModelPackSettingsRow
 import com.browntowndev.enclave.domain.usecase.modelconfig.ReDownloadModelUseCase
 import com.browntowndev.enclave.domain.usecase.security.CreateVaultUseCase
 import com.browntowndev.enclave.domain.usecase.settings.*
 import com.browntowndev.enclave.domain.usecase.settings.SettingsMemoriesUseCasesImpl
 import com.browntowndev.enclave.domain.usecase.telemetry.ObserveUsageSpendSummaryUseCase
+import org.junit.jupiter.api.DisplayName
 import com.browntowndev.enclave.feature.settings.usage.UsageSpendUiMapper
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -75,6 +87,7 @@ class SettingsViewModelTest {
     private val getRestorableLocalModelsUseCase = mockk<GetRestorableLocalModelsUseCase>(relaxed = true)
     private val saveLocalModelPresetUseCase = mockk<SaveLocalModelPresetUseCase>(relaxed = true)
     private val reDownloadModelUseCase = mockk<ReDownloadModelUseCase>(relaxed = true)
+    private val getModelPacksForSettingsUseCase = mockk<GetModelPacksForSettingsUseCase>(relaxed = true)
     private val getApiModelAssetsUseCase = mockk<GetApiModelAssetsUseCase>()
     private val saveApiProviderDraftUseCase = mockk<SaveApiProviderDraftUseCase>(relaxed = true)
     private val saveApiPresetUseCase = mockk<SaveApiPresetUseCase>(relaxed = true)
@@ -151,6 +164,13 @@ class SettingsViewModelTest {
         val clearExaApiKeyUseCase = mockk<ClearExaApiKeyUseCase>()
         val updateShowSearchProviderSwitchAlertUseCase = mockk<UpdateShowSearchProviderSwitchAlertUseCase>()
 
+        val observeActiveUtilityModelsUseCase =
+            mockk<com.browntowndev.enclave.domain.usecase.modelconfig.ObserveActiveUtilityModelsUseCase>()
+        every { observeActiveUtilityModelsUseCase() } returns
+            kotlinx.coroutines.flow.flowOf(
+                emptyList<com.browntowndev.enclave.domain.model.config.UtilityModelMetadata>(),
+            )
+
         val dataControlsUseCases = mockk<SettingsDataControlsUseCases>(relaxed = true)
 
         val settingsUseCases =
@@ -183,6 +203,10 @@ class SettingsViewModelTest {
                         getRestorableLocalModels = getRestorableLocalModelsUseCase,
                         saveLocalModelPreset = saveLocalModelPresetUseCase,
                         reDownloadModel = reDownloadModelUseCase,
+                        getModelPacksForSettings = getModelPacksForSettingsUseCase,
+                        observeActiveUtilityModels = observeActiveUtilityModelsUseCase,
+                        reDownloadModelPack = mockk(relaxed = true),
+                        deleteModelPack = mockk(relaxed = true),
                     ),
                 apiProviders =
                     SettingsApiProviderUseCasesImpl(
@@ -230,6 +254,9 @@ class SettingsViewModelTest {
         val embeddingProgressPort = mockk<com.browntowndev.enclave.domain.port.repository.EmbeddingProgressPort>()
         every { embeddingProgressPort.isReindexing } returns MutableStateFlow(false)
         every { embeddingProgressPort.progress } returns MutableStateFlow(0f)
+
+        val downloadWorkRepository = mockk<com.browntowndev.enclave.core.data.repository.DownloadWorkRepository>()
+        every { downloadWorkRepository.observeDownloadProgress() } returns kotlinx.coroutines.flow.flowOf(null)
 
         val detectVaultReconciliationStateUseCase =
             mockk<com.browntowndev.enclave.domain.usecase.security.DetectVaultReconciliationStateUseCase>(relaxed = true)
@@ -303,6 +330,7 @@ class SettingsViewModelTest {
                 deletionHelper = deletionHelper,
                 errorHandler = errorHandler,
                 embeddingProgressPort = embeddingProgressPort,
+                downloadWorkRepository = downloadWorkRepository,
             )
     }
 
@@ -759,7 +787,9 @@ class SettingsViewModelTest {
                     reassignmentCandidates = emptyList(),
                 )
             coEvery { prepareModelDeletionUseCase(any()) } returns prepared
-            coEvery { executeModelDeletionWithReassignmentUseCase(any(), any(), any(), any()) } returns Result.success<Unit>(Unit)
+            coEvery {
+                executeModelDeletionWithReassignmentUseCase(any(), any(), any(), any(), any())
+            } returns Result.success<Unit>(Unit)
 
             // Trigger deletion prep
             viewModel.onDeleteLocalModelAsset(target.id)
@@ -778,6 +808,7 @@ class SettingsViewModelTest {
                     modelTypesNeedingReassignment = listOf(ModelType.MAIN),
                     replacementLocalConfigId = replacementConfigId,
                     replacementApiConfigId = null,
+                    replacementMediaProviderId = null,
                 )
             }
         }
@@ -997,6 +1028,144 @@ class SettingsViewModelTest {
 
             assertTrue(viewModel.uiState.value.home.isApiProvidersSheetOpen)
             assertTrue(viewModel.uiState.value.apiProvidersSheet.isVisible)
+        }
+
+    @Test
+    @DisplayName("SET-001 Gen3+ installed SDXL appears in local TextToImage assignment options")
+    fun set001_installedSdxlAppearsInAssignmentOptions() =
+        runTest {
+            val sdxlSha = "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83"
+            val sdxlAsset = LocalModelAsset(
+                metadata = LocalModelMetadata(
+                    id = LocalModelId("sdxl-model"),
+                    displayName = "Stable Diffusion XL",
+                    huggingFaceModelName = "xororz/sdxl-qnn",
+                    remoteFileName = "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip",
+                    localFileName = "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip",
+                    sha256 = sdxlSha,
+                    sizeInBytes = 3_504_485_672L,
+                    modelFileFormat = ModelFileFormat.BIN,
+                    source = DownloadSource.HUGGING_FACE,
+                ),
+                configurations = listOf(
+                    LocalModelConfiguration(
+                        id = com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId("sdxl-local-config"),
+                        localModelId = LocalModelId("sdxl-model"),
+                        displayName = "Stable Diffusion XL",
+                        maxTokens = 0,
+                        contextWindow = 0,
+                        temperature = 0.0,
+                        topP = 1.0,
+                        topK = 1,
+                        repetitionPenalty = 1.0,
+                        systemPrompt = "",
+                        defaultAssignments = listOf(ModelType.IMAGE_GENERATION),
+                    )
+                )
+            )
+            val sdxlPack = ModelPack(
+                packId = "sdxl-t2i",
+                displayName = "Stable Diffusion XL",
+                slot = ModelType.IMAGE_GENERATION,
+                members = listOf(ModelPackMember(ModelPackRole.DIFFUSION, sdxlAsset)),
+            )
+            val packRow = ModelPackSettingsRow(
+                pack = sdxlPack,
+                completeness = ModelPackCompleteness(
+                    packId = "sdxl-t2i",
+                    installedCount = 1,
+                    totalCount = 1,
+                    isComplete = true,
+                    members = emptyList(),
+                ),
+                isDiffusionSoftDeleted = false,
+                areUtilityRegistryEntriesAbsent = false,
+                showDownloadAction = false,
+                disabledReason = null,
+                isEligible = true,
+            )
+
+            every { getLocalModelAssetsUseCase() } returns MutableStateFlow(listOf(sdxlAsset))
+            coEvery { getModelPacksForSettingsUseCase() } returns listOf(packRow)
+
+            viewModel.onShowModelConfigSheet(show = true)
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            val mappedModel = state.localModelsSheet.models.first { it.metadataId == LocalModelId("sdxl-model") }
+            assertTrue(mappedModel.isImageGenerationCapable)
+        }
+
+    @Test
+    @DisplayName("SET-002 Gen2 hides SDXL from assignment and shows disabled reason")
+    fun set002_disabledSdxlHiddenFromAssignment() =
+        runTest {
+            val sdxlSha = "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83"
+            val sdxlAsset = LocalModelAsset(
+                metadata = LocalModelMetadata(
+                    id = LocalModelId("sdxl-model"),
+                    displayName = "Stable Diffusion XL",
+                    huggingFaceModelName = "xororz/sdxl-qnn",
+                    remoteFileName = "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip",
+                    localFileName = "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip",
+                    sha256 = sdxlSha,
+                    sizeInBytes = 3_504_485_672L,
+                    modelFileFormat = ModelFileFormat.BIN,
+                    source = DownloadSource.HUGGING_FACE,
+                ),
+                configurations = listOf(
+                    LocalModelConfiguration(
+                        id = com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId("sdxl-local-config"),
+                        localModelId = LocalModelId("sdxl-model"),
+                        displayName = "Stable Diffusion XL",
+                        maxTokens = 0,
+                        contextWindow = 0,
+                        temperature = 0.0,
+                        topP = 1.0,
+                        topK = 1,
+                        repetitionPenalty = 1.0,
+                        systemPrompt = "",
+                        defaultAssignments = listOf(ModelType.IMAGE_GENERATION),
+                    )
+                )
+            )
+            val sdxlPack = ModelPack(
+                packId = "sdxl-t2i",
+                displayName = "Stable Diffusion XL",
+                slot = ModelType.IMAGE_GENERATION,
+                members = listOf(ModelPackMember(ModelPackRole.DIFFUSION, sdxlAsset)),
+            )
+            val packRow = ModelPackSettingsRow(
+                pack = sdxlPack,
+                completeness = ModelPackCompleteness(
+                    packId = "sdxl-t2i",
+                    installedCount = 0,
+                    totalCount = 1,
+                    isComplete = false,
+                    members = emptyList(),
+                ),
+                isDiffusionSoftDeleted = false,
+                areUtilityRegistryEntriesAbsent = true,
+                showDownloadAction = false,
+                disabledReason = "Requires Snapdragon 8 Gen 3+ with QNN.",
+                isEligible = false,
+            )
+
+            every { getLocalModelAssetsUseCase() } returns MutableStateFlow(listOf(sdxlAsset))
+            coEvery { getModelPacksForSettingsUseCase() } returns listOf(packRow)
+
+            viewModel.onShowModelConfigSheet(show = true)
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            val mappedModel = state.localModelsSheet.models.firstOrNull { it.metadataId == LocalModelId("sdxl-model") }
+            // If mappedModel is present, it must NOT be image generation capable (so it's hidden from assignments options list)
+            if (mappedModel != null) {
+                assertFalse(mappedModel.isImageGenerationCapable)
+            }
+            val mappedPack = state.localModelsSheet.modelPacks.first { it.packId == "sdxl-t2i" }
+            assertEquals("Requires Snapdragon 8 Gen 3+ with QNN.", mappedPack.disabledReason)
+            assertFalse(mappedPack.isEligible)
         }
 }
 

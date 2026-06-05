@@ -6,7 +6,6 @@ import com.browntowndev.enclave.core.data.remote.firestore.FirestoreCloudPurgeCl
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreListenerCoordinator
 import com.browntowndev.enclave.core.data.remote.firestore.FirestorePendingSyncEngine
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncAdapterRegistry
-import com.browntowndev.enclave.core.data.remote.firestore.handlers.SearchToolSettingsSyncHandler
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncContext
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncDaos
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncDependencies
@@ -17,6 +16,7 @@ import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncHydratio
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncStateStore
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreVaultClient
 import com.browntowndev.enclave.core.data.remote.firestore.StudioSyncDaos
+import com.browntowndev.enclave.core.data.remote.firestore.handlers.SearchToolSettingsSyncHandler
 import com.browntowndev.enclave.core.data.repository.SettingsRepositoryImpl
 import com.browntowndev.enclave.core.data.security.ApiKeyManager
 import com.browntowndev.enclave.core.data.security.LocalDataEncryptionService

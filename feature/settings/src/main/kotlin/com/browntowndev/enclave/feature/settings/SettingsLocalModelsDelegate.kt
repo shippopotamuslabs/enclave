@@ -135,6 +135,38 @@ internal class SettingsLocalModelsDelegate
             }
         }
 
+        fun onDownloadModelPack(
+            scope: CoroutineScope,
+            tag: String,
+            packId: String,
+        ) {
+            scope.launch(errorHandler.coroutineExceptionHandler(tag, "Failed to download model pack", "Failed to download pack")) {
+                localModelUseCases.reDownloadModelPack(packId)
+            }
+        }
+
+        fun onReDownloadModelPack(
+            scope: CoroutineScope,
+            tag: String,
+            packId: String,
+        ) = onDownloadModelPack(scope, tag, packId)
+
+        fun onDeleteModelPack(
+            scope: CoroutineScope,
+            deletionState: MutableStateFlow<DeletionTransientState>,
+            tag: String,
+            packId: String,
+        ) {
+            deletionHelper.prepareDeletion(
+                scope = scope,
+                deletionState = deletionState,
+                target = ModelDeletionTarget.ModelPack(packId),
+                tag = tag,
+                failureMessage = "Failed to delete model pack",
+                userMessage = "Failed to delete pack",
+            )
+        }
+
         private fun LocalModelConfigUi.toDomain(): com.browntowndev.enclave.domain.usecase.settings.LocalModelPresetDraft =
             com.browntowndev.enclave.domain.usecase.settings.LocalModelPresetDraft(
                 id = id,

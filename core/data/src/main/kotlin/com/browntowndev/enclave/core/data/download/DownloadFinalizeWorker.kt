@@ -10,6 +10,8 @@ import com.browntowndev.enclave.core.data.sync.EmbeddingRegenerationCoordinator
 import com.browntowndev.enclave.domain.model.config.LocalModelAsset
 import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.config.UtilityType
+import com.browntowndev.enclave.domain.model.download.Sd15QnnPackCatalog
+import com.browntowndev.enclave.domain.usecase.download.ResolveSd15QnnPackCatalogAssetUseCase
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.ModelConfigFetcherPort
@@ -47,6 +49,8 @@ class DownloadFinalizeWorker
         private val modelConfigFetcher: ModelConfigFetcherPort,
         private val syncLocalModelRegistryUseCase: SyncLocalModelRegistryUseCase,
         private val syncUtilityModelRegistryUseCase: SyncUtilityModelRegistryUseCase,
+        private val sd15QnnPackInstaller: Sd15QnnPackInstaller,
+        private val resolveSd15QnnPackCatalogAssetUseCase: ResolveSd15QnnPackCatalogAssetUseCase,
         private val embeddingCoordinator: EmbeddingRegenerationCoordinator,
         private val logger: LoggingPort,
     ) : CoroutineWorker(context, workerParams) {
@@ -121,11 +125,7 @@ class DownloadFinalizeWorker
 
                 val remoteConfig = remoteConfigResult.getOrNull() ?: emptyList()
 
-                // Find assets whose SHA matches downloaded SHAs and resolve slot assignments
-                val matchingAssets =
-                    remoteConfig.filter { asset ->
-                        asset.metadata.sha256 in downloadedShas
-                    }
+                val matchingAssets = resolveMatchingAssets(remoteConfig, downloadedShas)
 
                 logger.info(TAG, "Found ${matchingAssets.size} matching assets for ${downloadedShas.size} downloaded SHAs")
 
@@ -267,6 +267,33 @@ class DownloadFinalizeWorker
             }
         }
 
+        private fun resolveMatchingAssets(
+            remoteConfig: List<LocalModelAsset>,
+            downloadedShas: List<String>,
+        ): List<LocalModelAsset> =
+            remoteConfig
+                .filter { asset ->
+                    asset.metadata.sha256 in downloadedShas ||
+                        (
+                            asset.metadata.utilityType == UtilityType.SD15_QNN_PACK &&
+                                downloadedShas.any { sha -> Sd15QnnPackCatalog.findBySha256(sha) != null }
+                        )
+                }.map { asset ->
+                    if (asset.metadata.utilityType != UtilityType.SD15_QNN_PACK) {
+                        asset
+                    } else {
+                        val variant =
+                            downloadedShas.firstNotNullOfOrNull { sha ->
+                                Sd15QnnPackCatalog.findBySha256(sha)
+                            }
+                        if (variant != null) {
+                            resolveSd15QnnPackCatalogAssetUseCase.applyVariant(asset, variant)
+                        } else {
+                            asset
+                        }
+                    }
+                }
+
         private suspend fun syncMatchingAssets(matchingAssets: List<LocalModelAsset>) {
             for (asset in matchingAssets) {
                 if (asset.metadata.utilityType != null) {
@@ -279,6 +306,13 @@ class DownloadFinalizeWorker
 
         private suspend fun syncUtilityAsset(asset: LocalModelAsset) {
             try {
+                if (asset.metadata.utilityType == UtilityType.SD15_QNN_PACK) {
+                    val installed = sd15QnnPackInstaller.installIfNeeded(asset.metadata)
+                    if (!installed) {
+                        logger.warning(TAG, "SD15 QNN pack was not installed; skipping utility registry sync")
+                        return
+                    }
+                }
                 persistUtilityAsset(asset)
             } catch (e: Exception) {
                 logger.warning(

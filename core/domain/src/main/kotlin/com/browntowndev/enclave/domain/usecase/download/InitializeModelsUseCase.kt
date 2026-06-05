@@ -2,16 +2,21 @@ package com.browntowndev.enclave.domain.usecase.download
 
 import com.browntowndev.enclave.domain.model.config.LocalModelAsset
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.enclave.domain.model.config.UtilityType
 import com.browntowndev.enclave.domain.model.download.DownloadModelsResult
+import com.browntowndev.enclave.domain.model.download.ImageGenerationPackMemberFilter
+import com.browntowndev.enclave.domain.model.download.filterForDownload
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.download.ModelDownloadOrchestratorPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.domain.port.media.GpuCapabilityPort
+import com.browntowndev.enclave.domain.port.media.LocalImageGenerationCapabilityPort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.ModelConfigFetcherPort
-import com.browntowndev.enclave.domain.usecase.modelconfig.SyncLocalModelRegistryUseCase
-import com.browntowndev.enclave.domain.usecase.modelconfig.SyncUtilityModelRegistryUseCase
 import com.browntowndev.enclave.domain.port.repository.TrustedDomainRepositoryPort
 import com.browntowndev.enclave.domain.qualifier.ApplicationScope
+import com.browntowndev.enclave.domain.usecase.modelconfig.SyncLocalModelRegistryUseCase
+import com.browntowndev.enclave.domain.usecase.modelconfig.SyncUtilityModelRegistryUseCase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -33,6 +38,9 @@ class InitializeModelsUseCase
         private val checkModelsUseCase: CheckModelsUseCase,
         private val syncUtilityModelRegistryUseCase: SyncUtilityModelRegistryUseCase,
         private val trustedDomainRepository: TrustedDomainRepositoryPort,
+        private val gpuCapabilityPort: GpuCapabilityPort,
+        private val capabilityPort: LocalImageGenerationCapabilityPort,
+        private val resolveSd15QnnPackCatalogAssetUseCase: ResolveSd15QnnPackCatalogAssetUseCase,
         @param:ApplicationScope private val externalScope: CoroutineScope,
         private val logPort: LoggingPort,
     ) {
@@ -54,6 +62,8 @@ class InitializeModelsUseCase
          * This allows passing scan results downstream to avoid duplicate scanning.
          */
         private suspend fun checkModelsResult(): DownloadModelsResult {
+            val localImageGenerationSupported = gpuCapabilityPort.isLocalImageGenerationSupported()
+
             // Sync trusted domains asynchronously at startup
             externalScope.launch {
                 runCatching {
@@ -61,13 +71,11 @@ class InitializeModelsUseCase
                 }
             }
 
-            // Fetch remote config
-            val remoteConfigResult = modelConfigFetcher.fetchRemoteConfig()
-            val remoteAssets =
-                remoteConfigResult.getOrElse {
+            val catalogResult = modelConfigFetcher.fetchParsedCatalog()
+            val catalog =
+                catalogResult.getOrElse {
                     logPort.error(TAG, "Failed to fetch remote config: ${it.message}")
 
-                    // If config fetch error occurs, fallback to using current models
                     val currentModels =
                         ModelType.entries
                             .associateWith { modelType ->
@@ -80,29 +88,43 @@ class InitializeModelsUseCase
                             }.filterValues { it != null }
                             .mapValues { it.value!! }
 
-                    // If there are no current models, throw the error
                     if (currentModels.isEmpty()) throw it
 
-                    // Return a minimal result with current models
-                    return checkModelsUseCase(expectedModels = currentModels)
-                }
-
-            logPort.debug(TAG, "Fetched ${remoteAssets.size} remote assets")
-
-            // Build slot-to-asset map from defaultAssignments
-            val slotAssignments = mutableMapOf<ModelType, LocalModelAsset>()
-            val utilityAssets = mutableListOf<LocalModelAsset>()
-            for (asset in remoteAssets) {
-                if (asset.metadata.utilityType != null) {
-                    utilityAssets += asset
-                } else {
-                    for (config in asset.configurations) {
-                        for (modelType in config.defaultAssignments) {
-                            slotAssignments[modelType] = asset
-                        }
+                    val imageGenerationIsApi =
+                        activeModelProvider.getActiveConfiguration(ModelType.IMAGE_GENERATION)?.isLocal == false
+                    val suppressImageGenerationDownloads =
+                        imageGenerationIsApi || !localImageGenerationSupported
+                    val registryAssets = localModelRepository.getAllLocalAssets()
+                    val fallbackPackShas =
+                        ImageGenerationPackMemberFilter.sha256sFromAssets(
+                            currentModels.values + registryAssets,
+                        )
+                    val modelsResult =
+                        checkModelsUseCase(expectedModels = currentModels).copy(
+                            imageGenerationPackMemberSha256s = fallbackPackShas,
+                        )
+                    return if (suppressImageGenerationDownloads) {
+                        ImageGenerationPackMemberFilter.excludeFromDownloadResult(modelsResult)
+                    } else {
+                        modelsResult
                     }
                 }
-            }
+
+            val remoteAssets = catalog.assets
+            logPort.debug(TAG, "Fetched ${remoteAssets.size} remote assets")
+
+            val imageGenerationIsApi =
+                activeModelProvider.getActiveConfiguration(ModelType.IMAGE_GENERATION)?.isLocal == false
+            val suppressImageGenerationDownloads =
+                imageGenerationIsApi || !localImageGenerationSupported
+            val downloadSlice = filterForDownload(catalog, suppressImageGenerationDownloads)
+            val slotAssignments = downloadSlice.slotAssignments
+            val utilityAssets =
+                augmentSd15QnnPackUtilities(
+                    utilities = downloadSlice.utilityAssets,
+                    suppressImageGenerationDownloads = suppressImageGenerationDownloads,
+                    hasLocalImageGenerationSlot = ModelType.IMAGE_GENERATION in downloadSlice.slotAssignments,
+                )
 
             // Source of truth for soft-deleted models is getSoftDeletedModels()
             val softDeletedAssets = localModelRepository.getSoftDeletedModels()
@@ -119,6 +141,7 @@ class InitializeModelsUseCase
             // Exclude soft-deleted model types and slots the user has actively configured as API
             // so CheckModelsUseCase doesn't queue them for download.
             val softDeletedShaSet = softDeletedAssets.mapTo(mutableSetOf()) { it.metadata.sha256 }
+            val imageGenPackMemberShas = catalog.packMemberSha256sForSlot(ModelType.IMAGE_GENERATION)
             val filteredSlotAssignments =
                 buildMap<ModelType, LocalModelAsset> {
                     for ((modelType, asset) in slotAssignments) {
@@ -135,8 +158,26 @@ class InitializeModelsUseCase
                     }
                 }
             val filteredUtilityAssets =
-                utilityAssets.filter { asset ->
-                    asset.metadata.sha256 !in softDeletedShaSet
+                buildList {
+                    addAll(
+                        utilityAssets.filter { asset ->
+                            val suppressedSd15 =
+                                suppressImageGenerationDownloads &&
+                                    asset.metadata.utilityType == UtilityType.SD15_QNN_PACK
+                            !suppressedSd15 && asset.metadata.sha256 !in softDeletedShaSet
+                        },
+                    )
+                    if (!suppressImageGenerationDownloads) {
+                        val packUtilityAssets =
+                            remoteAssets.filter { asset ->
+                                asset.metadata.utilityType != null && asset.metadata.sha256 in imageGenPackMemberShas
+                            }
+                        addAll(
+                            packUtilityAssets.filter { asset ->
+                                asset.metadata.sha256 !in softDeletedShaSet
+                            },
+                        )
+                    }
                 }
 
             // Check if models are ready using CheckModelsUseCase
@@ -196,14 +237,39 @@ class InitializeModelsUseCase
                 }
             }
 
-            // Initialize the orchestrator with the startup result
-            modelDownloadOrchestrator.initializeWithStartupResult(modelsResult)
+            val startupResultWithAvailableModels =
+                modelsResult.copy(
+                    availableToRedownload = availableToRedownload,
+                    imageGenerationPackMemberSha256s = imageGenPackMemberShas,
+                )
+            val startupResult =
+                if (suppressImageGenerationDownloads) {
+                    ImageGenerationPackMemberFilter.excludeFromDownloadResult(startupResultWithAvailableModels)
+                } else {
+                    startupResultWithAvailableModels
+                }
 
-            // Return result with soft-deleted models included in availableToRedownload
-            return modelsResult.copy(availableToRedownload = availableToRedownload)
+            // Initialize the orchestrator only after device/API download gating is applied.
+            modelDownloadOrchestrator.initializeWithStartupResult(startupResult)
+            return startupResult
         }
 
         private suspend fun persistUtilityAsset(asset: LocalModelAsset) {
             syncUtilityModelRegistryUseCase(asset)
+        }
+
+        private fun augmentSd15QnnPackUtilities(
+            utilities: List<LocalModelAsset>,
+            suppressImageGenerationDownloads: Boolean,
+            hasLocalImageGenerationSlot: Boolean,
+        ): List<LocalModelAsset> {
+            if (suppressImageGenerationDownloads || !hasLocalImageGenerationSlot) {
+                return utilities.map(resolveSd15QnnPackCatalogAssetUseCase::invoke)
+            }
+            val resolved = utilities.map(resolveSd15QnnPackCatalogAssetUseCase::invoke)
+            if (resolved.any { it.metadata.utilityType == UtilityType.SD15_QNN_PACK }) {
+                return resolved
+            }
+            return resolved + resolveSd15QnnPackCatalogAssetUseCase.syntheticAsset()
         }
     }

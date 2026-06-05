@@ -41,7 +41,14 @@ class GenerateChatTitleUseCaseTest {
         runTest {
             useCaseReturning("Weekend trip plan")(chatId, "Help me plan a weekend trip to the coast")
 
-            assertEquals("Weekend trip plan", chatRepository.getAllChats().first().single().name)
+            assertEquals(
+                "Weekend trip plan",
+                chatRepository
+                    .getAllChats()
+                    .first()
+                    .single()
+                    .name,
+            )
         }
 
     @Test
@@ -49,7 +56,14 @@ class GenerateChatTitleUseCaseTest {
         runTest {
             useCaseReturning(null)(chatId, "Help me plan a weekend trip")
 
-            assertEquals("Fallback truncated title", chatRepository.getAllChats().first().single().name)
+            assertEquals(
+                "Fallback truncated title",
+                chatRepository
+                    .getAllChats()
+                    .first()
+                    .single()
+                    .name,
+            )
         }
 
     @Test
@@ -57,7 +71,14 @@ class GenerateChatTitleUseCaseTest {
         runTest {
             useCaseReturning("   ")(chatId, "Help me plan a weekend trip")
 
-            assertEquals("Fallback truncated title", chatRepository.getAllChats().first().single().name)
+            assertEquals(
+                "Fallback truncated title",
+                chatRepository
+                    .getAllChats()
+                    .first()
+                    .single()
+                    .name,
+            )
         }
 
     @Test
@@ -80,7 +101,14 @@ class GenerateChatTitleUseCaseTest {
             useCase(chatId, "   ")
 
             assertEquals(false, called)
-            assertEquals("Fallback truncated title", chatRepository.getAllChats().first().single().name)
+            assertEquals(
+                "Fallback truncated title",
+                chatRepository
+                    .getAllChats()
+                    .first()
+                    .single()
+                    .name,
+            )
         }
 
     @Test
@@ -88,7 +116,14 @@ class GenerateChatTitleUseCaseTest {
         runTest {
             useCaseReturning("<pad> \"Budget travel tips\" </s>")(chatId, "cheap travel")
 
-            assertEquals("Budget travel tips", chatRepository.getAllChats().first().single().name)
+            assertEquals(
+                "Budget travel tips",
+                chatRepository
+                    .getAllChats()
+                    .first()
+                    .single()
+                    .name,
+            )
         }
 
     @Test
@@ -106,6 +141,13 @@ class GenerateChatTitleUseCaseTest {
 
             useCase(chatId, "anything")
 
-            assertEquals("Fallback truncated title", chatRepository.getAllChats().first().single().name)
+            assertEquals(
+                "Fallback truncated title",
+                chatRepository
+                    .getAllChats()
+                    .first()
+                    .single()
+                    .name,
+            )
         }
 }

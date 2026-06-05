@@ -24,9 +24,7 @@ interface MessageRepository {
      * @param message The message to save
      * @return The ID of the saved message
      */
-    suspend fun saveMessage(
-        message: Message,
-    ): MessageId
+    suspend fun saveMessage(message: Message): MessageId
 
     /**
      * Saves a vector embedding for a message.

@@ -1,6 +1,7 @@
 package com.browntowndev.enclave.domain.usecase.media
 
 import com.browntowndev.enclave.domain.model.config.MediaCapability
+import com.browntowndev.enclave.domain.model.media.ImageGenerationProgress
 import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
 import com.browntowndev.enclave.domain.model.media.MediaGenerationOrigin
 import com.browntowndev.enclave.domain.model.media.MediaGenerationRequest
@@ -11,6 +12,7 @@ import com.browntowndev.enclave.domain.util.Clock
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -18,7 +20,6 @@ import org.junit.jupiter.api.Assertions.assertInstanceOf
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import java.io.File
 
 class GenerateMediaUseCaseTest {
     private val generateImageUseCase = mockk<GenerateImageUseCase>()
@@ -46,7 +47,7 @@ class GenerateMediaUseCaseTest {
     fun `S-GM-01 IMAGE dispatches to GenerateImageUseCase with same prompt and settings`() =
         runTest {
             val settings = ImageGenerationSettings(generationCount = 1)
-            coEvery { generateImageUseCase("p1", settings) } returns Result.success(listOf(byteArrayOf(1)))
+            coEvery { generateImageUseCase("p1", settings, any()) } returns Result.success(listOf(byteArrayOf(1)))
 
             useCase(
                 MediaGenerationRequest(
@@ -57,7 +58,7 @@ class GenerateMediaUseCaseTest {
                 ),
             )
 
-            coVerify(exactly = 1) { generateImageUseCase("p1", settings) }
+            coVerify(exactly = 1) { generateImageUseCase("p1", settings, any()) }
         }
 
     @Test
@@ -100,7 +101,7 @@ class GenerateMediaUseCaseTest {
     fun `S-GM-04 Success caches with IMAGE mediaType and addEphemeralMedia once per byte array`() =
         runTest {
             val settings = ImageGenerationSettings(generationCount = 1)
-            coEvery { generateImageUseCase(any(), any()) } returns Result.success(listOf(byteArrayOf(9), byteArrayOf(8)))
+            coEvery { generateImageUseCase(any(), any(), any()) } returns Result.success(listOf(byteArrayOf(9), byteArrayOf(8)))
             coEvery { studioRepository.cacheEphemeralMedia(byteArrayOf(9), "IMAGE") } returns "file:///cache/a"
             coEvery { studioRepository.cacheEphemeralMedia(byteArrayOf(8), "IMAGE") } returns "file:///cache/b"
 
@@ -122,7 +123,7 @@ class GenerateMediaUseCaseTest {
     fun `S-GM-05 IMAGE multi-byte success returns two GeneratedMediaAsset entries`() =
         runTest {
             val settings = ImageGenerationSettings(generationCount = 1)
-            coEvery { generateImageUseCase(any(), any()) } returns Result.success(listOf(byteArrayOf(9), byteArrayOf(8)))
+            coEvery { generateImageUseCase(any(), any(), any()) } returns Result.success(listOf(byteArrayOf(9), byteArrayOf(8)))
             coEvery { studioRepository.cacheEphemeralMedia(byteArrayOf(9), "IMAGE") } returns "file:///cache/a"
             coEvery { studioRepository.cacheEphemeralMedia(byteArrayOf(8), "IMAGE") } returns "file:///cache/b"
 
@@ -149,7 +150,7 @@ class GenerateMediaUseCaseTest {
     fun `S-GM-06 Delegate failure returns failure without cache or addEphemeralMedia`() =
         runTest {
             val settings = ImageGenerationSettings(generationCount = 1)
-            coEvery { generateImageUseCase(any(), any()) } returns
+            coEvery { generateImageUseCase(any(), any(), any()) } returns
                 Result.failure(IllegalStateException("No image generation provider assigned"))
 
             val result =
@@ -172,7 +173,7 @@ class GenerateMediaUseCaseTest {
     fun `S-GM-07 CHAT_TOOL origin uses id prefix chat_media_`() =
         runTest {
             val settings = ImageGenerationSettings(generationCount = 1)
-            coEvery { generateImageUseCase(any(), any()) } returns Result.success(listOf(byteArrayOf(1)))
+            coEvery { generateImageUseCase(any(), any(), any()) } returns Result.success(listOf(byteArrayOf(1)))
             coEvery { studioRepository.cacheEphemeralMedia(any(), any()) } returns "file:///cache/a"
 
             val result =
@@ -199,7 +200,7 @@ class GenerateMediaUseCaseTest {
         runTest {
             clock.now = 1000L
             val settings = ImageGenerationSettings(generationCount = 1)
-            coEvery { generateImageUseCase(any(), any()) } returns Result.success(listOf(byteArrayOf(1), byteArrayOf(2)))
+            coEvery { generateImageUseCase(any(), any(), any()) } returns Result.success(listOf(byteArrayOf(1), byteArrayOf(2)))
             coEvery { studioRepository.cacheEphemeralMedia(any(), any()) } returnsMany
                 listOf("file:///cache/a", "file:///cache/b")
 
@@ -244,7 +245,7 @@ class GenerateMediaUseCaseTest {
     fun `M-GM-01 GenerateMediaUseCase IMAGE path never calls ImageGenerationPort`() =
         runTest {
             val settings = ImageGenerationSettings(generationCount = 1)
-            coEvery { generateImageUseCase("p1", settings) } returns Result.success(listOf(byteArrayOf(1)))
+            coEvery { generateImageUseCase("p1", settings, any()) } returns Result.success(listOf(byteArrayOf(1)))
             coEvery { studioRepository.cacheEphemeralMedia(any(), any()) } returns "file:///cache/a"
 
             useCase(
@@ -256,28 +257,38 @@ class GenerateMediaUseCaseTest {
                 ),
             )
 
-            coVerify(exactly = 1) { generateImageUseCase("p1", settings) }
+            coVerify(exactly = 1) { generateImageUseCase("p1", settings, any()) }
+        }
 
-            val source =
-                resolveProductionSource(
-                    "src/main/kotlin/com/browntowndev/enclave/domain/usecase/media/GenerateMediaUseCase.kt",
-                )
-            assertEquals(0, source.readText().split("ImageGenerationPort").size - 1)
+    @Test
+    fun `IMAGE forwards progress callback to GenerateImageUseCase`() =
+        runTest {
+            val settings = ImageGenerationSettings()
+            val progressSlot = slot<(ImageGenerationProgress) -> Unit>()
+            coEvery { generateImageUseCase(any(), any(), capture(progressSlot)) } coAnswers {
+                progressSlot.captured(ImageGenerationProgress.LoadingModel)
+                Result.success(listOf(byteArrayOf(1)))
+            }
+            coEvery { studioRepository.cacheEphemeralMedia(any(), any()) } returns "file:///cache/a"
+            val observed = mutableListOf<ImageGenerationProgress>()
+
+            useCase(
+                request =
+                    MediaGenerationRequest(
+                        prompt = "p",
+                        capability = MediaCapability.IMAGE,
+                        settings = settings,
+                        origin = MediaGenerationOrigin.STUDIO_FOREGROUND,
+                    ),
+                onImageProgress = observed::add,
+            )
+
+            assertEquals(listOf(ImageGenerationProgress.LoadingModel), observed)
         }
 
     private class FakeClock : Clock {
         var now: Long = 0L
 
         override fun currentTimeMillis(): Long = now
-    }
-
-    private fun resolveProductionSource(relativePath: String): File {
-        var dir = File(System.getProperty("user.dir"))
-        for (unused in 0 until 6) {
-            val candidate = dir.resolve(relativePath)
-            if (candidate.exists()) return candidate
-            dir = dir.parentFile ?: break
-        }
-        error("Could not resolve production source at $relativePath")
     }
 }

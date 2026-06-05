@@ -3,12 +3,15 @@ package com.browntowndev.enclave.domain.usecase.settings
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelId
+import com.browntowndev.enclave.domain.model.config.MediaProviderId
+import com.browntowndev.enclave.domain.model.download.ModelPackTestFixtures
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.usecase.byok.DeleteApiCredentialsUseCase
 import com.browntowndev.enclave.domain.usecase.byok.DeleteApiModelConfigurationUseCase
 import com.browntowndev.enclave.domain.usecase.byok.SetDefaultModelUseCase
 import com.browntowndev.enclave.domain.usecase.modelconfig.DeleteLocalModelConfigurationUseCase
 import com.browntowndev.enclave.domain.usecase.modelconfig.DeleteLocalModelUseCase
+import com.browntowndev.enclave.domain.usecase.modelconfig.DeleteModelPackUseCase
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -23,6 +26,7 @@ class ExecuteModelDeletionWithReassignmentUseCaseTest {
     private val deleteApiCredentialsUseCase: DeleteApiCredentialsUseCase = mockk()
     private val deleteApiModelConfigurationUseCase: DeleteApiModelConfigurationUseCase = mockk()
     private val setDefaultModelUseCase: SetDefaultModelUseCase = mockk()
+    private val deleteModelPackUseCase: DeleteModelPackUseCase = mockk(relaxed = true)
 
     private lateinit var useCase: ExecuteModelDeletionWithReassignmentUseCase
 
@@ -35,6 +39,7 @@ class ExecuteModelDeletionWithReassignmentUseCaseTest {
                 deleteApiCredentialsUseCase,
                 deleteApiModelConfigurationUseCase,
                 setDefaultModelUseCase,
+                deleteModelPackUseCase,
             )
     }
 
@@ -59,7 +64,14 @@ class ExecuteModelDeletionWithReassignmentUseCaseTest {
             val id = LocalModelId("test-id")
             val replacementId = LocalModelConfigurationId("replacement-id")
 
-            coEvery { deleteLocalModelUseCase(id, replacementId, null) } returns Result.success(Unit)
+            coEvery {
+                deleteLocalModelUseCase(
+                    modelId = id,
+                    replacementLocalConfigId = replacementId,
+                    replacementApiConfigId = null,
+                    replacementMediaProviderId = null,
+                )
+            } returns Result.success(Unit)
 
             val result =
                 useCase(
@@ -70,7 +82,47 @@ class ExecuteModelDeletionWithReassignmentUseCaseTest {
                 )
 
             assertTrue(result.isSuccess)
-            coVerify { deleteLocalModelUseCase(id, replacementId, null) }
+            coVerify {
+                deleteLocalModelUseCase(
+                    modelId = id,
+                    replacementLocalConfigId = replacementId,
+                    replacementApiConfigId = null,
+                    replacementMediaProviderId = null,
+                )
+            }
+        }
+
+    @Test
+    fun `invoke model pack deletion forwards media provider reassignment`() =
+        runTest {
+            val mediaId = MediaProviderId("fal-image")
+            coEvery {
+                deleteModelPackUseCase(
+                    packId = ModelPackTestFixtures.PACK_ID,
+                    replacementLocalConfigId = null,
+                    replacementApiConfigId = null,
+                    replacementMediaProviderId = mediaId,
+                )
+            } returns Result.success(Unit)
+
+            val result =
+                useCase(
+                    target = ModelDeletionTarget.ModelPack(ModelPackTestFixtures.PACK_ID),
+                    modelTypesNeedingReassignment = listOf(ModelType.IMAGE_GENERATION),
+                    replacementLocalConfigId = null,
+                    replacementApiConfigId = null,
+                    replacementMediaProviderId = mediaId,
+                )
+
+            assertTrue(result.isSuccess)
+            coVerify {
+                deleteModelPackUseCase(
+                    packId = ModelPackTestFixtures.PACK_ID,
+                    replacementLocalConfigId = null,
+                    replacementApiConfigId = null,
+                    replacementMediaProviderId = mediaId,
+                )
+            }
         }
 
     @Test

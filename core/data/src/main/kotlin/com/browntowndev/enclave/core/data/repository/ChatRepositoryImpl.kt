@@ -5,11 +5,11 @@ import com.browntowndev.enclave.core.data.local.DocumentDao
 import com.browntowndev.enclave.core.data.local.DocumentEntity
 import com.browntowndev.enclave.core.data.local.MessageDao
 import com.browntowndev.enclave.core.data.local.MessageEntity
+import com.browntowndev.enclave.core.data.local.MessageFileDao
 import com.browntowndev.enclave.core.data.local.MessageInferenceTelemetryDao
 import com.browntowndev.enclave.core.data.local.MessageTranscriptSegmentDao
 import com.browntowndev.enclave.core.data.local.MessageTranscriptSegmentEntity
 import com.browntowndev.enclave.core.data.local.MessageWithFiles
-import com.browntowndev.enclave.core.data.local.MessageFileDao
 import com.browntowndev.enclave.core.data.local.WebSearchSourceDao
 import com.browntowndev.enclave.core.data.local.WebSearchSourceEntity
 import com.browntowndev.enclave.core.data.local.dao.message.MessagePersistPayload
@@ -264,7 +264,10 @@ class ChatRepositoryImpl
             return entity.id
         }
 
-        override suspend fun createChat(chat: Chat, scheduleCloudSync: Boolean): ChatId {
+        override suspend fun createChat(
+            chat: Chat,
+            scheduleCloudSync: Boolean,
+        ): ChatId {
             val entity = SensitiveEntityFieldEncryptors.encrypt(chat.toEntity(), healer)
             chatDao.upsert(entity)
             if (scheduleCloudSync) {

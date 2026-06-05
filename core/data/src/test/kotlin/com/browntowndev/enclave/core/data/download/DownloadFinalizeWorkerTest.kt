@@ -17,6 +17,7 @@ import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.ModelConfigFetcherPort
 import com.browntowndev.enclave.domain.usecase.FakeUtilityModelRepository
+import com.browntowndev.enclave.domain.usecase.download.ResolveSd15QnnPackCatalogAssetUseCase
 import com.browntowndev.enclave.domain.usecase.modelconfig.SyncLocalModelRegistryUseCase
 import com.browntowndev.enclave.domain.usecase.modelconfig.SyncUtilityModelRegistryUseCase
 import io.mockk.MockKAnnotations
@@ -94,6 +95,12 @@ class DownloadFinalizeWorkerTest {
     @MockK
     private lateinit var mockLoggingPort: LoggingPort
 
+    @MockK
+    private lateinit var mockSd15QnnPackInstaller: Sd15QnnPackInstaller
+
+    @MockK
+    private lateinit var mockResolveSd15QnnPackCatalogAssetUseCase: ResolveSd15QnnPackCatalogAssetUseCase
+
     private lateinit var worker: DownloadFinalizeWorker
 
     @BeforeEach
@@ -125,6 +132,7 @@ class DownloadFinalizeWorkerTest {
         every { mockLoggingPort.warning(any(), any()) } returns Unit
         every { mockLoggingPort.error(any(), any()) } returns Unit
         every { mockLoggingPort.error(any(), any(), any()) } returns Unit
+        coEvery { mockSd15QnnPackInstaller.installIfNeeded(any()) } returns true
 
         // Create the worker with all dependencies
         worker =
@@ -135,6 +143,8 @@ class DownloadFinalizeWorkerTest {
                 modelConfigFetcher = mockModelConfigFetcher,
                 syncLocalModelRegistryUseCase = mockSyncLocalModelRegistryUseCase,
                 syncUtilityModelRegistryUseCase = syncUtilityModelRegistryUseCase,
+                sd15QnnPackInstaller = mockSd15QnnPackInstaller,
+                resolveSd15QnnPackCatalogAssetUseCase = mockResolveSd15QnnPackCatalogAssetUseCase,
                 embeddingCoordinator = mockEmbeddingCoordinator,
                 logger = mockLoggingPort,
             )
@@ -1015,6 +1025,56 @@ class DownloadFinalizeWorkerTest {
             assertEquals(
                 "whisper-sha",
                 fakeUtilityModelRepository.getByUtilityType(UtilityType.WHISPER)?.sha256,
+            )
+        }
+
+    @Test
+    @DisplayName("DL-009 registers SDXL without overriding the SD1.5 default")
+    fun dl009_registersSdxlWithoutOverridingSd15Default() =
+        runTest {
+            val sdxlSha = "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83"
+            val sdxlAsset = createTestAsset("realvis_xl_v5_dmd2_qnn2.28_8gen3.zip", sdxlSha).let { asset ->
+                asset.copy(
+                    metadata = asset.metadata.copy(
+                        id = LocalModelId("sdxl-qnn-pack"),
+                        utilityType = UtilityType.SDXL_QNN_PACK
+                    ),
+                    configurations = listOf(
+                        LocalModelConfiguration(
+                            id = com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId("sdxl-local-config"),
+                            localModelId = LocalModelId("sdxl-qnn-pack"),
+                            displayName = "Stable Diffusion XL",
+                            temperature = 0.0,
+                            topK = 1,
+                            topP = 1.0,
+                            minP = 0.0,
+                            repetitionPenalty = 1.0,
+                            maxTokens = 0,
+                            contextWindow = 0,
+                            systemPrompt = "",
+                            isSystemPreset = true,
+                            thinkingEnabled = false,
+                            defaultAssignments = listOf(ModelType.IMAGE_GENERATION),
+                        )
+                    ),
+                )
+            }
+            setInputData(
+                workDataOf(
+                    KEY_SESSION_ID to SESSION_ID,
+                    KEY_REQUEST_KIND to REQUEST_INITIALIZE,
+                    KEY_DOWNLOADED_SHAS to Json.encodeToString(listOf(sdxlSha)),
+                ),
+            )
+            coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(sdxlAsset))
+            coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) } returns mockk()
+
+            worker.doWork()
+
+            coVerify(exactly = 0) { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) }
+            assertEquals(
+                sdxlSha,
+                fakeUtilityModelRepository.getByUtilityType(UtilityType.SDXL_QNN_PACK)?.sha256,
             )
         }
 

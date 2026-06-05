@@ -8,6 +8,7 @@ import com.browntowndev.enclave.core.data.repository.DownloadWorkRepository
 import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.download.DownloadKey
 import com.browntowndev.enclave.domain.model.inference.ModelType
+import com.browntowndev.enclave.domain.usecase.modelconfig.ReDownloadModelPackUseCase
 import com.browntowndev.enclave.domain.usecase.modelconfig.ReDownloadModelUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
@@ -16,6 +17,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.takeWhile
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -43,6 +45,7 @@ class ModelReDownloadViewModel
     @Inject
     constructor(
         private val reDownloadModelUseCase: ReDownloadModelUseCase,
+        private val reDownloadModelPackUseCase: ReDownloadModelPackUseCase,
         private val downloadWorkRepository: DownloadWorkRepository,
     ) : ViewModel() {
         private companion object {
@@ -52,6 +55,9 @@ class ModelReDownloadViewModel
 
         private val _reDownloadStates = MutableStateFlow<Map<LocalModelId, ReDownloadProgress>>(emptyMap())
         val reDownloadStates: StateFlow<Map<LocalModelId, ReDownloadProgress>> = _reDownloadStates.asStateFlow()
+
+        private val _packReDownloadStates = MutableStateFlow<Map<String, ReDownloadProgress>>(emptyMap())
+        val packReDownloadStates: StateFlow<Map<String, ReDownloadProgress>> = _packReDownloadStates.asStateFlow()
 
         fun reDownloadModel(modelId: LocalModelId) {
             viewModelScope.launch {
@@ -66,6 +72,76 @@ class ModelReDownloadViewModel
                         delay(FAILURE_DELAY_MS)
                         _reDownloadStates.value = _reDownloadStates.value - modelId
                     }
+            }
+        }
+
+        fun reDownloadPack(packId: String) {
+            viewModelScope.launch {
+                _packReDownloadStates.update { it + (packId to ReDownloadProgress.Preparing) }
+
+                reDownloadModelPackUseCase(packId)
+                    .onSuccess { scheduled ->
+                        if (scheduled.isEmpty()) {
+                            _packReDownloadStates.update { it - packId }
+                        } else {
+                            observePackDownloadProgress(packId)
+                        }
+                    }.onFailure { error ->
+                        _packReDownloadStates.update { it + (packId to ReDownloadProgress.Failed(error.message ?: "Unknown error")) }
+                        delay(FAILURE_DELAY_MS)
+                        _packReDownloadStates.update { it - packId }
+                    }
+            }
+        }
+
+        private fun observePackDownloadProgress(packId: String) {
+            viewModelScope.launch {
+                downloadWorkRepository
+                    .observeDownloadProgress()
+                    .takeWhile { workInfo ->
+                        if (workInfo == null) return@takeWhile true
+
+                        val filesProgress = workInfo.progress.getStringArray(DownloadKey.FILES_PROGRESS.key)
+                        val fileFractions =
+                            filesProgress
+                                ?.mapNotNull { entry ->
+                                    val parts = entry.split("|")
+                                    if (parts.size >= 3) {
+                                        val downloaded = parts[1].toLongOrNull() ?: 0L
+                                        val total = parts[2].toLongOrNull() ?: 1L
+                                        if (total > 0) downloaded.toFloat() / total else null
+                                    } else {
+                                        null
+                                    }
+                                }.orEmpty()
+                        if (fileFractions.isNotEmpty()) {
+                            val aggregate = fileFractions.sum() / fileFractions.size
+                            _packReDownloadStates.update { it + (packId to ReDownloadProgress.Downloading(aggregate)) }
+                        }
+
+                        when (workInfo.state) {
+                            WorkInfo.State.SUCCEEDED -> {
+                                val stage =
+                                    runCatching {
+                                        workInfo.outputData.getString(DownloadWorkKeys.KEY_WORKER_STAGE)
+                                    }.getOrNull()
+                                if (stage == DownloadWorkKeys.STAGE_DOWNLOAD) {
+                                    return@takeWhile true
+                                }
+                                _packReDownloadStates.update { it + (packId to ReDownloadProgress.Complete) }
+                                delay(SUCCESS_DELAY_MS)
+                                _packReDownloadStates.update { it - packId }
+                                false
+                            }
+                            WorkInfo.State.FAILED, WorkInfo.State.CANCELLED -> {
+                                _packReDownloadStates.update { it + (packId to ReDownloadProgress.Failed("Download failed")) }
+                                delay(FAILURE_DELAY_MS)
+                                _packReDownloadStates.update { it - packId }
+                                false
+                            }
+                            else -> true
+                        }
+                    }.collect()
             }
         }
 

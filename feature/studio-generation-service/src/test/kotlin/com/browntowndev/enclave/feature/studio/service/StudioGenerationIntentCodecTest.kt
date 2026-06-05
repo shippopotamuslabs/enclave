@@ -54,6 +54,8 @@ class StudioGenerationIntentCodecTest {
                 referenceImageUri = "content://ref",
                 seed = "seed",
                 generationCount = 3,
+                imageResolution = "1024x1024",
+                diffusionSteps = 24,
             )
 
         StudioGenerationIntentCodec.writeSettings(intent, settings)

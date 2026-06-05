@@ -8,7 +8,9 @@ import com.browntowndev.enclave.domain.usecase.byok.DeleteApiCredentialsUseCase
 import com.browntowndev.enclave.domain.usecase.byok.DeleteApiModelConfigurationUseCase
 import com.browntowndev.enclave.domain.usecase.byok.GetApiModelAssetsUseCase
 import com.browntowndev.enclave.domain.usecase.byok.GetDefaultModelsUseCase
+import com.browntowndev.enclave.domain.usecase.download.ResolveModelCatalogUseCase
 import com.browntowndev.enclave.domain.usecase.modelconfig.DeleteLocalModelUseCase
+import com.browntowndev.enclave.domain.usecase.media.GetMediaProvidersUseCase
 import com.browntowndev.enclave.domain.usecase.modelconfig.GetLocalModelAssetsUseCase
 import io.mockk.coEvery
 import io.mockk.mockk
@@ -26,11 +28,14 @@ class PrepareModelDeletionUseCaseTest {
     private val deleteLocalModelUseCase: DeleteLocalModelUseCase = mockk()
     private val deleteApiCredentialsUseCase: DeleteApiCredentialsUseCase = mockk()
     private val deleteApiModelConfigurationUseCase: DeleteApiModelConfigurationUseCase = mockk()
+    private val resolveModelCatalog: ResolveModelCatalogUseCase = mockk(relaxed = true)
+    private val getMediaProvidersUseCase: GetMediaProvidersUseCase = mockk()
 
     private lateinit var useCase: PrepareModelDeletionUseCase
 
     @BeforeEach
     fun setUp() {
+        coEvery { getMediaProvidersUseCase() } returns flowOf(emptyList())
         useCase =
             PrepareModelDeletionUseCase(
                 getDefaultModelsUseCase,
@@ -39,6 +44,8 @@ class PrepareModelDeletionUseCaseTest {
                 deleteLocalModelUseCase,
                 deleteApiCredentialsUseCase,
                 deleteApiModelConfigurationUseCase,
+                resolveModelCatalog,
+                getMediaProvidersUseCase,
             )
     }
 

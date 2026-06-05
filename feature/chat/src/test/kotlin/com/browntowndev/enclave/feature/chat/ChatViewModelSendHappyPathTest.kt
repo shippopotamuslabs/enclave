@@ -15,7 +15,6 @@ import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnSnapshotPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
-
 import com.browntowndev.enclave.domain.port.inference.ToolExecutionEventPort
 import com.browntowndev.enclave.domain.port.media.TtsPlaybackControllerPort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
@@ -24,14 +23,13 @@ import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.domain.usecase.byok.GetDefaultModelsUseCase
 import com.browntowndev.enclave.domain.usecase.chat.ChatTurnTiming
 import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
-import com.browntowndev.enclave.domain.usecase.chat.PromptSafetyGateRequest
-import com.browntowndev.enclave.domain.usecase.chat.PromptSafetyGateResult
 import com.browntowndev.enclave.domain.usecase.chat.GetModelDisplayNameUseCase
 import com.browntowndev.enclave.domain.usecase.chat.ListenToSpeechUseCase
 import com.browntowndev.enclave.domain.usecase.chat.MergeMessagesUseCase
 import com.browntowndev.enclave.domain.usecase.chat.ProcessFileAttachmentUseCase
+import com.browntowndev.enclave.domain.usecase.chat.PromptSafetyGateRequest
+import com.browntowndev.enclave.domain.usecase.chat.PromptSafetyGateResult
 import com.browntowndev.enclave.domain.usecase.chat.StageImageAttachmentUseCase
-import com.browntowndev.enclave.domain.usecase.chat.UserPromptResult
 import com.browntowndev.enclave.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.enclave.domain.usecase.inference.ShouldModeratePromptUseCase
@@ -345,9 +343,10 @@ class ChatViewModelSendHappyPathTest {
     @DisplayName("DOPG-V-04 — trusted model bypass passes shouldModerate false to orchestrator and gate")
     fun dopgV04_trustedBypassPassesShouldModerateFalse() =
         runTest {
-            val shouldModerateMock = mockk<ShouldModeratePromptUseCase> {
-                coEvery { this@mockk.invoke(any()) } returns false
-            }
+            val shouldModerateMock =
+                mockk<ShouldModeratePromptUseCase> {
+                    coEvery { this@mockk.invoke(any()) } returns false
+                }
             harness =
                 ChatViewModelTestSupport.createHarness(
                     settingsUseCases = settingsUseCases,
@@ -395,5 +394,4 @@ class ChatViewModelSendHappyPathTest {
                 )
             }
         }
-
 }

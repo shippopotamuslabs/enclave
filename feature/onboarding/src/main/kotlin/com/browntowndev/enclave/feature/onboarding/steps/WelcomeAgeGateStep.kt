@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.MaterialTheme
@@ -17,7 +18,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
@@ -157,7 +157,7 @@ fun WelcomeAgeGateStep(
                             text = "Please review the Terms of Service to enable agreement.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                            modifier = Modifier.padding(start = 48.dp)
+                            modifier = Modifier.padding(start = 48.dp),
                         )
                     }
                 }
@@ -211,8 +211,7 @@ private fun AgeGateCheckboxRow(
                     enabled = enabled,
                     role = Role.Checkbox,
                     onValueChange = onCheckedChange,
-                )
-                .semantics {
+                ).semantics {
                     this.contentDescription = contentDescription
                 },
     ) {

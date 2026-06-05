@@ -63,11 +63,12 @@ fun EnclaveApp(
                 errorMessage = errorMessage,
                 onShowSnackbar = { message, actionLabel, onActionClick ->
                     scope.launch {
-                        val result = snackbarHostState.showSnackbar(
-                            message = message,
-                            actionLabel = actionLabel,
-                            withDismissAction = actionLabel != null,
-                        )
+                        val result =
+                            snackbarHostState.showSnackbar(
+                                message = message,
+                                actionLabel = actionLabel,
+                                withDismissAction = actionLabel != null,
+                            )
                         if (result == SnackbarResult.ActionPerformed) {
                             onActionClick?.invoke()
                         }

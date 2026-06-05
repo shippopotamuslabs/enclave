@@ -5,7 +5,9 @@ import android.util.Log
 import com.browntowndev.enclave.domain.model.config.LocalModelAsset
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelId
+import com.browntowndev.enclave.domain.model.config.UtilityType
 import com.browntowndev.enclave.domain.model.config.requiredArtifacts
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationPaths
 import com.browntowndev.enclave.domain.model.download.ModelConfig
 import com.browntowndev.enclave.domain.model.download.ModelScanResult
 import com.browntowndev.enclave.domain.model.inference.ModelType
@@ -87,6 +89,13 @@ class ModelFileScanner
 
                 // Iterate over expected assets (what we want to have)
                 for (expectedAsset in expectedAssets) {
+                    if (expectedAsset.metadata.utilityType == UtilityType.SD15_QNN_PACK) {
+                        val packDir = File(modelsDir, LocalImageGenerationPaths.SD15_QNN_SUBDIR)
+                        if (!LocalImageGenerationPaths.hasQnnArtifacts(packDir)) {
+                            missingModels.add(expectedAsset)
+                        }
+                        continue
+                    }
                     var assetMissing = false
                     var assetInvalid = false
                     expectedAsset.metadata.requiredArtifacts().forEach { artifact ->
@@ -206,6 +215,27 @@ class ModelFileScanner
                     }
                 } else {
                     Log.w(TAG, "Could not find model with ID $localModelId to delete file")
+                }
+            }
+        }
+
+        override suspend fun deleteModelFileByLocalFileName(localFileName: String) {
+            withContext(Dispatchers.IO) {
+                val modelsDir = File(context.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
+                val file = getSafeFile(modelsDir, localFileName)
+                if (file.exists()) {
+                    val deleted = file.delete()
+                    if (!deleted) {
+                        Log.w(TAG, "Failed to delete model file: ${file.absolutePath}")
+                    }
+                }
+                val tempFile = getSafeFile(modelsDir, "${localFileName}${ModelConfig.TEMP_EXTENSION}")
+                if (tempFile.exists()) {
+                    tempFile.delete()
+                }
+                val metaFile = getSafeFile(modelsDir, "${localFileName}${ModelConfig.TEMP_META_EXTENSION}")
+                if (metaFile.exists()) {
+                    metaFile.delete()
                 }
             }
         }

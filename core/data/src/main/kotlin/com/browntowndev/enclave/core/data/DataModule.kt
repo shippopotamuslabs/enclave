@@ -11,6 +11,7 @@ import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.work.WorkManager
 import com.browntowndev.enclave.core.data.auth.FirebaseGoogleAuthManager
+import com.browntowndev.enclave.core.data.device.SnapdragonTierPortImpl
 import com.browntowndev.enclave.core.data.download.DownloadNotificationManager
 import com.browntowndev.enclave.core.data.download.DownloadProgressTracker
 import com.browntowndev.enclave.core.data.download.DownloadSpeedTracker
@@ -18,6 +19,7 @@ import com.browntowndev.enclave.core.data.download.HashingService
 import com.browntowndev.enclave.core.data.download.ModelConfigFetcherImpl
 import com.browntowndev.enclave.core.data.download.ModelDownloadOrchestratorImpl
 import com.browntowndev.enclave.core.data.download.ModelFileScanner
+import com.browntowndev.enclave.core.data.download.ModelPackVerifierImpl
 import com.browntowndev.enclave.core.data.download.UtilityModelFileResolver
 import com.browntowndev.enclave.core.data.download.remote.DynamicModelUrlProvider
 import com.browntowndev.enclave.core.data.download.remote.HttpFileDownloader
@@ -68,8 +70,6 @@ import com.browntowndev.enclave.core.data.repository.ActiveModelProviderImpl
 import com.browntowndev.enclave.core.data.repository.ApiModelRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.ChatRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.CompositeToolExecutor
-import com.browntowndev.enclave.core.data.repository.TrustedDomainRepositoryImpl
-import com.browntowndev.enclave.core.data.repository.ModerationReportRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.DefaultModelRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.DeviceEnvironmentRepository
 import com.browntowndev.enclave.core.data.repository.ExtractedUrlTracker
@@ -79,12 +79,14 @@ import com.browntowndev.enclave.core.data.repository.MediaProviderRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.MemoriesRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.MessageRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.ModelConfigProviderImpl
+import com.browntowndev.enclave.core.data.repository.ModerationReportRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.PipelineStateRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.RoomTransactionProvider
 import com.browntowndev.enclave.core.data.repository.SettingsRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.StudioRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.TelemetryEventRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.ToolExecutionEventBus
+import com.browntowndev.enclave.core.data.repository.TrustedDomainRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.TtsProviderRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.UtilityModelRepositoryImpl
 import com.browntowndev.enclave.core.data.security.ApiKeyProviderImpl
@@ -93,13 +95,16 @@ import com.browntowndev.enclave.core.data.security.LocalDataEncryptionService
 import com.browntowndev.enclave.core.data.security.LocalVaultMetadataStore
 import com.browntowndev.enclave.core.data.security.SensitiveFieldCatalog
 import com.browntowndev.enclave.core.data.security.StaticSensitiveFieldCatalog
+import com.browntowndev.enclave.core.data.sync.SyncOrchestratorImpl
 import com.browntowndev.enclave.core.data.sync.TelemetryUploadConfig
 import com.browntowndev.enclave.domain.port.auth.AuthManager
 import com.browntowndev.enclave.domain.port.download.DownloadSpeedTrackerPort
 import com.browntowndev.enclave.domain.port.download.FileDownloaderPort
 import com.browntowndev.enclave.domain.port.download.HashingPort
+import com.browntowndev.enclave.domain.port.device.SnapdragonTierPort
 import com.browntowndev.enclave.domain.port.download.ModelDownloadOrchestratorPort
 import com.browntowndev.enclave.domain.port.download.ModelFileScannerPort
+import com.browntowndev.enclave.domain.port.download.ModelPackVerifierPort
 import com.browntowndev.enclave.domain.port.download.ModelUrlProviderPort
 import com.browntowndev.enclave.domain.port.inference.CommittedInferencePromptPort
 import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
@@ -126,17 +131,16 @@ import com.browntowndev.enclave.domain.port.repository.MemoriesRepository
 import com.browntowndev.enclave.domain.port.repository.MessageRepository
 import com.browntowndev.enclave.domain.port.repository.ModelConfigFetcherPort
 import com.browntowndev.enclave.domain.port.repository.ModelConfigProvider
+import com.browntowndev.enclave.domain.port.repository.ModerationReportRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.PipelineStateRepository
 import com.browntowndev.enclave.domain.port.repository.SettingsRepository
-import com.browntowndev.enclave.domain.port.repository.TrustedDomainRepositoryPort
-import com.browntowndev.enclave.domain.port.repository.ModerationReportRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
+import com.browntowndev.enclave.domain.port.repository.SyncOrchestrator
 import com.browntowndev.enclave.domain.port.repository.TransactionProvider
+import com.browntowndev.enclave.domain.port.repository.TrustedDomainRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.TtsProviderRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.UtilityModelFilePort
 import com.browntowndev.enclave.domain.port.repository.UtilityModelRepositoryPort
-import com.browntowndev.enclave.domain.port.repository.SyncOrchestrator
-import com.browntowndev.enclave.core.data.sync.SyncOrchestratorImpl
 import com.browntowndev.enclave.domain.port.security.ApiKeyProviderPort
 import com.browntowndev.enclave.domain.port.security.VaultMetadataPort
 import com.browntowndev.enclave.domain.port.telemetry.TelemetryEventPort
@@ -533,6 +537,10 @@ abstract class DataRepositoryModule {
 
     @Binds
     @Singleton
+    abstract fun bindSnapdragonTierPort(impl: SnapdragonTierPortImpl): SnapdragonTierPort
+
+    @Binds
+    @Singleton
     abstract fun bindModelDownloadOrchestrator(impl: ModelDownloadOrchestratorImpl): ModelDownloadOrchestratorPort
 
     @Binds
@@ -542,6 +550,10 @@ abstract class DataRepositoryModule {
     @Binds
     @Singleton
     abstract fun bindModelConfigFetcher(impl: ModelConfigFetcherImpl): ModelConfigFetcherPort
+
+    @Binds
+    @Singleton
+    abstract fun bindModelPackVerifier(impl: ModelPackVerifierImpl): ModelPackVerifierPort
 
     @Binds
     @Singleton
@@ -651,7 +663,5 @@ abstract class DataRepositoryModule {
 
     @Binds
     @Singleton
-    abstract fun bindSyncOrchestrator(
-        impl: SyncOrchestratorImpl,
-    ): SyncOrchestrator
+    abstract fun bindSyncOrchestrator(impl: SyncOrchestratorImpl): SyncOrchestrator
 }

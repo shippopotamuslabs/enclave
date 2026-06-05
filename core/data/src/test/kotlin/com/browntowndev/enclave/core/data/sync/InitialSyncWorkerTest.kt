@@ -84,11 +84,12 @@ class InitialSyncWorkerTest {
             appContext: Context,
             workerClassName: String,
             workerParameters: WorkerParameters,
-        ): ListenableWorker? = InitialSyncWorker(
-            appContext,
-            workerParameters,
-            startCloudSyncListeningUseCase,
-            loggingPort
-        )
+        ): ListenableWorker? =
+            InitialSyncWorker(
+                appContext,
+                workerParameters,
+                startCloudSyncListeningUseCase,
+                loggingPort,
+            )
     }
 }

@@ -14,6 +14,7 @@ import com.browntowndev.enclave.domain.model.settings.AppTheme
 import com.browntowndev.enclave.domain.model.settings.SearchProvider
 import com.browntowndev.enclave.domain.model.settings.SystemPromptOption
 import com.browntowndev.enclave.domain.model.telemetry.UsagePeriod
+import com.browntowndev.enclave.core.data.repository.DownloadWorkRepository
 import com.browntowndev.enclave.domain.port.repository.EmbeddingProgressPort
 import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.enclave.domain.usecase.telemetry.ObserveUsageSpendSummaryUseCase
@@ -24,7 +25,12 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import androidx.work.WorkInfo
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -48,6 +54,7 @@ internal class SettingsViewModel
         private val observeUsageSpendSummaryUseCase: ObserveUsageSpendSummaryUseCase,
         private val errorHandler: ViewModelErrorHandler,
         private val embeddingProgressPort: EmbeddingProgressPort,
+        private val downloadWorkRepository: DownloadWorkRepository,
     ) : ViewModel() {
         companion object {
             private const val TAG = "SettingsViewModel"
@@ -84,6 +91,25 @@ internal class SettingsViewModel
         private val memoriesUseCases = settingsUseCases.memories
 
         private val localModelAssetsFlow = localModelUseCases.getLocalModelAssets()
+        private val utilityModelsFlow = localModelUseCases.observeActiveUtilityModels()
+        private val downloadTerminalEventsFlow =
+            downloadWorkRepository
+                .observeDownloadProgress()
+                .map { workInfo -> workInfo?.state }
+                .distinctUntilChanged()
+                .map { state ->
+                    state == WorkInfo.State.SUCCEEDED ||
+                        state == WorkInfo.State.FAILED ||
+                        state == WorkInfo.State.CANCELLED
+                }
+
+        @OptIn(ExperimentalCoroutinesApi::class)
+        private val modelPackRowsFlow =
+            combine(localModelAssetsFlow, utilityModelsFlow, downloadTerminalEventsFlow) { _, _, _ ->
+                Unit
+            }.flatMapLatest {
+                flow { emit(localModelUseCases.getModelPacksForSettings()) }
+            }
         private val memoriesFlow =
             memoriesUseCases.getAllMemoriesFlow().map { memories ->
                 memories.map { StoredMemory(it.id, it.content, it.category) }
@@ -125,6 +151,7 @@ internal class SettingsViewModel
                         reindexProgress = embeddingProgressPort.progress,
                         vaultReauthSheet = _vaultReauthSheet,
                         usageSpendSummary = usageSpendSummaryFlow,
+                        modelPackRows = modelPackRowsFlow,
                     ),
                 ).stateIn(
                     scope = viewModelScope,
@@ -263,6 +290,12 @@ internal class SettingsViewModel
 
         fun onReDownloadLocalModel(id: com.browntowndev.enclave.domain.model.config.LocalModelId) =
             localModelsDelegate.onReDownloadLocalModel(viewModelScope, TAG, id)
+
+        fun onDownloadModelPack(packId: String) = localModelsDelegate.onDownloadModelPack(viewModelScope, TAG, packId)
+
+        fun onReDownloadModelPack(packId: String) = localModelsDelegate.onReDownloadModelPack(viewModelScope, TAG, packId)
+
+        fun onDeleteModelPack(packId: String) = localModelsDelegate.onDeleteModelPack(viewModelScope, _deletionState, TAG, packId)
 
         fun onClearSelectedLocalModel() {
             _localModelsState.value = _localModelsState.value.copy(selectedAsset = null, configDraft = null)
@@ -652,12 +685,14 @@ internal class SettingsViewModel
         fun onConfirmDeletionWithReassignment(
             replacementLocalConfigId: LocalModelConfigurationId?,
             replacementApiConfigId: ApiModelConfigurationId?,
+            replacementMediaProviderId: MediaProviderId? = null,
         ) = deletionHelper.onConfirmDeletionWithReassignment(
             viewModelScope,
             TAG,
             _deletionState,
             replacementLocalConfigId,
             replacementApiConfigId,
+            replacementMediaProviderId,
         )
 
         fun onDismissDeletionSafety() = deletionHelper.onDismissDeletionSafety(_deletionState)

@@ -30,9 +30,7 @@ class FakeMessageRepository : MessageRepository {
     // Methods to simulate errors
     var shouldThrowOnSaveMessage = false
 
-    override suspend fun saveMessage(
-        message: Message,
-    ): MessageId {
+    override suspend fun saveMessage(message: Message): MessageId {
         if (shouldThrowOnSaveMessage) throw RuntimeException("Simulated error on saveMessage")
         val persisted = message.copy(id = message.id.takeIf { it.value.isNotBlank() } ?: MessageId(nextMessageId++.toString()))
         savedMessages.add(persisted)
@@ -124,8 +122,7 @@ class FakeMessageRepository : MessageRepository {
         }
     }
 
-    fun activeMessagesForChat(chatId: ChatId): List<Message> =
-        messages[chatId]?.filter { it.id !in softDeletedMessageIds }.orEmpty()
+    fun activeMessagesForChat(chatId: ChatId): List<Message> = messages[chatId]?.filter { it.id !in softDeletedMessageIds }.orEmpty()
 
     fun setMessagesForChat(messages: List<Message>) {
         getMessagesForChatResult = messages
