@@ -127,6 +127,8 @@ class ModelPackVerifierImplTest {
             val result = verifier.verifyPack(sdxlQnnPack(), ModelPackVerificationDepth.SHA256_INTEGRITY)
 
             assertFalse(result.isComplete)
+            // The extracted directory is missing tokenizer.json, so it does not satisfy the QNN artifact contract.
+            assertFalse(LocalImageGenerationPaths.hasQnnArtifacts(packDir))
         }
 
     private fun testPack(

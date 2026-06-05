@@ -3,7 +3,6 @@ package com.browntowndev.enclave.domain.model.media
 import com.browntowndev.enclave.domain.model.device.SnapdragonTier
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class LocalImageGenerationCapabilityPolicyTest {
@@ -12,6 +11,7 @@ class LocalImageGenerationCapabilityPolicyTest {
         val capabilities = LocalImageGenerationCapabilityPolicy.resolve(SnapdragonTier.GEN2, LocalImageGenTriState.YES)
 
         assertEquals(LocalImageGenTriState.YES, capabilities.sd15NpuSupported)
+        assertEquals(LocalImageGenTriState.NO, capabilities.sdxlNpuSupported)
         assertEquals("Requires Snapdragon 8 Gen 3+ with QNN.", capabilities.disabledReasonsByModelId[LocalImageGenerationModelId.SDXL_QNN])
     }
 
@@ -28,20 +28,12 @@ class LocalImageGenerationCapabilityPolicyTest {
         val capabilities = LocalImageGenerationCapabilityPolicy.resolve(SnapdragonTier.GEN3_PLUS, LocalImageGenTriState.NO)
 
         assertFalse(capabilities.isAnyBackendUsable)
+        assertEquals(LocalImageGenTriState.NO, capabilities.sd15NpuSupported)
+        assertEquals(LocalImageGenTriState.NO, capabilities.sdxlNpuSupported)
     }
 
-    @Test
-    fun `CAP-008 insufficient RAM blocks local image packs with diagnostic`() {
-        val capabilities =
-            LocalImageGenerationCapabilityPolicy.resolve(
-                snapdragonTier = SnapdragonTier.GEN3_PLUS,
-                npuAvailable = LocalImageGenTriState.YES,
-                totalMemoryBytes = 8_589_934_591L,
-            )
-
-        assertTrue(capabilities.diagnostics.contains("Insufficient RAM for local diffusion (need >= 8 GiB)."))
-        assertFalse(capabilities.isAnyBackendUsable)
-    }
+    // CAP-008 ("When LocalImageGenerationCapabilityPortImpl.getCapabilities() runs") is asserted once
+    // in feature/inference/.../LocalImageGenerationDevicePolicyTest.kt per its test_spec "When" clause.
 
     @Test
     fun `MUT-002 QNN only SDXL gate fails because Gen2 QNN blocks SDXL`() {

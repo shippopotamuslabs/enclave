@@ -39,25 +39,18 @@ class ModelPackUiMapperTest {
     }
 
     @Test
-    @DisplayName("SET-002 ModelPackUiMapper maps disabled reason for blocked SDXL pack")
-    fun set002_modelPackUiMapperMapsDisabledReasonForBlockedSdxl() {
-        val completeness =
-            ModelPackCompleteness(
-                packId = "sdxl-t2i",
-                installedCount = 0,
-                totalCount = 2,
-                isComplete = false,
-                members = emptyList(),
-            )
+    fun mapsDisabledReasonAndIneligibilityFromPackSettingsRow() {
         val row =
             ModelPackSettingsRow(
-                pack = com.browntowndev.enclave.domain.model.download.ModelPack(
-                    packId = "sdxl-t2i",
-                    displayName = "Stable Diffusion XL",
-                    slot = com.browntowndev.enclave.domain.model.inference.ModelType.IMAGE_GENERATION,
-                    members = emptyList(),
-                ),
-                completeness = completeness,
+                pack = ModelPackTestFixtures.sdxlPack(),
+                completeness =
+                    ModelPackCompleteness(
+                        packId = ModelPackTestFixtures.SDXL_PACK_ID,
+                        installedCount = 0,
+                        totalCount = 2,
+                        isComplete = false,
+                        members = emptyList(),
+                    ),
                 isDiffusionSoftDeleted = false,
                 areUtilityRegistryEntriesAbsent = true,
                 showDownloadAction = false,

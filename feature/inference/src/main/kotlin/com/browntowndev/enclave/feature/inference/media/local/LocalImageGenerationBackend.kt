@@ -11,6 +11,7 @@ data class LocalImageGenerationNativeRequest(
     val height: Int,
     val steps: Int,
     val cfgScale: Float,
+    val scheduler: String,
     val seed: Long,
     val outputPathPrefix: String,
 )

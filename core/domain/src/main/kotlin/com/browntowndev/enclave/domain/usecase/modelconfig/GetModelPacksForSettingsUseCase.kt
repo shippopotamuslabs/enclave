@@ -5,6 +5,7 @@ import com.browntowndev.enclave.domain.model.download.ModelPackCompleteness
 import com.browntowndev.enclave.domain.model.download.ModelPackRole
 import com.browntowndev.enclave.domain.port.download.ModelPackVerifierPort
 import com.browntowndev.enclave.domain.port.media.LOCAL_ON_DEVICE_IMAGE_GENERATION_ENABLED
+import com.browntowndev.enclave.domain.port.media.LocalImageGenerationCapabilityPort
 import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.UtilityModelRepositoryPort
 import com.browntowndev.enclave.domain.usecase.download.ResolveModelCatalogUseCase
@@ -31,6 +32,7 @@ class GetModelPacksForSettingsUseCase
         private val modelPackVerifier: ModelPackVerifierPort,
         private val localModelRepository: LocalModelRepositoryPort,
         private val utilityModelRepository: UtilityModelRepositoryPort,
+        private val capabilityPort: LocalImageGenerationCapabilityPort,
     ) {
         suspend operator fun invoke(): List<ModelPackSettingsRow> {
             if (!LOCAL_ON_DEVICE_IMAGE_GENERATION_ENABLED) {
@@ -70,6 +72,7 @@ class GetModelPacksForSettingsUseCase
                             val utilityType = member.asset.metadata.utilityType ?: return@all true
                             utilityModelRepository.getByUtilityType(utilityType) == null
                         }
+                val (isEligible, disabledReason) = packEligibility(pack.packId)
                 ModelPackSettingsRow(
                     pack = pack,
                     completeness = completeness,
@@ -79,8 +82,17 @@ class GetModelPacksForSettingsUseCase
                         diffusionSoftDeleted ||
                             areUtilityRegistryEntriesAbsent ||
                             !completeness.isComplete,
+                    disabledReason = disabledReason,
+                    isEligible = isEligible,
                 )
             }
+        }
+
+        private fun packEligibility(packId: String): Pair<Boolean, String?> {
+            if (packId != SDXL_PACK_ID) {
+                return true to null
+            }
+            throw NotImplementedError("TDD Red")
         }
 
         private fun incompleteCompleteness(pack: ModelPack): ModelPackCompleteness =
@@ -91,4 +103,8 @@ class GetModelPacksForSettingsUseCase
                 isComplete = false,
                 members = emptyList(),
             )
+
+        private companion object {
+            const val SDXL_PACK_ID = "sdxl-t2i"
+        }
     }

@@ -4,8 +4,6 @@ import android.app.ActivityManager
 import android.content.Context
 import com.browntowndev.enclave.domain.model.device.SnapdragonTier
 import com.browntowndev.enclave.domain.model.media.LocalImageGenTriState
-import com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind
-import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId
 import com.browntowndev.enclave.domain.port.media.LOCAL_ON_DEVICE_IMAGE_GENERATION_ENABLED
 import com.browntowndev.enclave.feature.inference.media.local.SnapdragonDeviceClassifier
 import com.browntowndev.enclave.localimagegen.NativeLocalImageGenRuntime
@@ -14,7 +12,13 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowBuild
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class LocalImageGenerationDevicePolicyTest {
     private val context = mockk<Context>(relaxed = true)
     private val nativeRuntime = mockk<NativeLocalImageGenRuntime>(relaxed = true)
@@ -22,6 +26,7 @@ class LocalImageGenerationDevicePolicyTest {
 
     @BeforeEach
     fun setUp() {
+        ShadowBuild.setSupportedAbis(arrayOf("arm64-v8a"))
         mockkObject(SnapdragonDeviceClassifier)
         every { context.getSystemService(ActivityManager::class.java) } returns activityManager
         val memoryInfo = ActivityManager.MemoryInfo().apply { totalMem = 16L * 1024 * 1024 * 1024 }
@@ -42,43 +47,11 @@ class LocalImageGenerationDevicePolicyTest {
         assertTrue(LOCAL_ON_DEVICE_IMAGE_GENERATION_ENABLED)
     }
 
-    @Test
-    fun `CAP-005 Gen2 QNN supports SD15 and blocks SDXL with exact reason`() {
-        every { SnapdragonDeviceClassifier.tier() } returns SnapdragonTier.GEN2
-
-        val port = LocalImageGenerationCapabilityPortImpl(context, nativeRuntime)
-        val caps = port.getCapabilities()
-
-        assertEquals(LocalImageGenTriState.YES, caps.sd15NpuSupported)
-        assertEquals(LocalImageGenTriState.NO, caps.sdxlNpuSupported)
-        assertEquals(
-            "Requires Snapdragon 8 Gen 3+ with QNN.",
-            caps.disabledReasonsByModelId[LocalImageGenerationModelId.SDXL_QNN]
-        )
-    }
-
-    @Test
-    fun `CAP-006 Gen3plus QNN supports SD15 and SDXL`() {
-        every { SnapdragonDeviceClassifier.tier() } returns SnapdragonTier.GEN3_PLUS
-
-        val port = LocalImageGenerationCapabilityPortImpl(context, nativeRuntime)
-        val caps = port.getCapabilities()
-
-        assertEquals(LocalImageGenTriState.YES, caps.sd15NpuSupported)
-        assertEquals(LocalImageGenTriState.YES, caps.sdxlNpuSupported)
-    }
-
-    @Test
-    fun `CAP-007 QNN probe failure blocks all local image pack downloads`() {
-        every { SnapdragonDeviceClassifier.tier() } returns SnapdragonTier.GEN3_PLUS
-        every { nativeRuntime.probe(LocalImageGenerationBackendKind.QNN_NPU) } returns 0
-
-        val port = LocalImageGenerationCapabilityPortImpl(context, nativeRuntime)
-        val caps = port.getCapabilities()
-
-        assertEquals(LocalImageGenTriState.NO, caps.sd15NpuSupported)
-        assertEquals(LocalImageGenTriState.NO, caps.sdxlNpuSupported)
-    }
+    // CAP-005, CAP-006, CAP-007 and MUT-002 are covered against the pure domain seam
+    // `LocalImageGenerationCapabilityPolicy.resolve(...)` in
+    // core/domain/.../media/LocalImageGenerationCapabilityPolicyTest.kt per their test_spec
+    // "When ... eligibility is resolved" clauses. CAP-008 lives here because its "When" clause
+    // names `LocalImageGenerationCapabilityPortImpl.getCapabilities()`.
 
     @Test
     fun `CAP-008 insufficient RAM blocks all local image pack downloads with the literal diagnostic`() {
