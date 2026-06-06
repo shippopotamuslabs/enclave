@@ -114,6 +114,11 @@ object LocalImageGenerationPaths {
         fileNames: List<String>,
     ): Boolean = fileNames.all { File(dir, it).isFile }
 
+    val OPTIONAL_IMG2IMG_QNN_FILES: List<String> = listOf("vae_encoder.bin")
+
+    fun hasImg2ImgCapability(dir: File): Boolean =
+        OPTIONAL_IMG2IMG_QNN_FILES.all { File(dir, it).isFile }
+
     val REQUIRED_SD15_QNN_FILES: List<String> =
         listOf(
             "clip_v2.mnn",

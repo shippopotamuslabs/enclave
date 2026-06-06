@@ -11,6 +11,7 @@ object QnnRuntimeLibraryCatalog {
         listOf(
             "libQnnHtp.so",
             "libQnnSystem.so",
+            "libQnnHtpPrepare.so",
         )
 
     fun runtimeLibrariesFor(tier: SnapdragonTier): List<String> =
@@ -23,7 +24,7 @@ object QnnRuntimeLibraryCatalog {
     /** Primary skeleton library that must exist before launching QNN for [modelId]. */
     fun primarySkelLibraryFor(modelId: LocalImageGenerationModelId): String =
         when (modelId) {
-            LocalImageGenerationModelId.SDXL_QNN -> "libQnnHtpV81Skel.so"
+            LocalImageGenerationModelId.SDXL_QNN -> "libQnnHtpV79Skel.so"
             LocalImageGenerationModelId.SD15_QNN,
             LocalImageGenerationModelId.SD15_CPU,
             -> "libQnnHtpV73Skel.so"
@@ -33,9 +34,9 @@ object QnnRuntimeLibraryCatalog {
         when (modelId) {
             LocalImageGenerationModelId.SDXL_QNN ->
                 variant(
-                    stub = "libQnnHtpV81Stub.so",
-                    lib = "libQnnHtpV81.so",
-                    skel = "libQnnHtpV81Skel.so",
+                    stub = "libQnnHtpV79Stub.so",
+                    lib = "libQnnHtpV79.so",
+                    skel = "libQnnHtpV79Skel.so",
                 )
             LocalImageGenerationModelId.SD15_QNN ->
                 variant(
@@ -48,15 +49,14 @@ object QnnRuntimeLibraryCatalog {
 
     private fun hexagonLibrariesFor(tier: SnapdragonTier): List<String> =
         when (tier) {
-            // Gen3+ runs SD1.5 from the 8gen2 (V73) pack and SDXL from the 8gen3 (V81) pack.
-            // Both Hexagon families must be present or one model loads the wrong skel and crashes.
+            // Gen3+ runs SD1.5 from the 8gen2 (V73) pack and SDXL from the 8gen3 (V79) pack.
             SnapdragonTier.GEN3_PLUS ->
                 hexagonLibrariesForModel(LocalImageGenerationModelId.SD15_QNN) +
                     hexagonLibrariesForModel(LocalImageGenerationModelId.SDXL_QNN) +
                     variant(
-                        stub = "libQnnHtpV79Stub.so",
-                        lib = "libQnnHtpV79.so",
-                        skel = "libQnnHtpV79Skel.so",
+                        stub = "libQnnHtpV81Stub.so",
+                        lib = "libQnnHtpV81.so",
+                        skel = "libQnnHtpV81Skel.so",
                     )
             SnapdragonTier.GEN2,
             SnapdragonTier.GEN1,

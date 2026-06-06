@@ -223,7 +223,7 @@ class OssLicensesBottomSheetTest {
                 "Anthropic Java SDK",
                 "Firebase Android SDK",
                 "llama.cpp",
-                "Local Dream (libstable_diffusion_core)",
+                "Enclave diffusion engine",
                 "Qualcomm AI Runtime (QNN)",
                 "stb_image_write",
                 "whisper.cpp",
@@ -281,11 +281,10 @@ class OssLicensesBottomSheetTest {
 
         // S4-09
         @Test
-        fun `Local Dream entry discloses non-commercial license`() {
-            val localDream =
-                OssLicenses.entries.first { it.name == "Local Dream (libstable_diffusion_core)" }
-            assertTrue(localDream.licenseType.contains("BY-NC"))
-            assertTrue(localDream.licenseText.contains("NonCommercial", ignoreCase = true))
+        fun `Enclave diffusion engine entry discloses Apache license`() {
+            val engine = OssLicenses.entries.first { it.name == "Enclave diffusion engine" }
+            assertTrue(engine.licenseType.contains("Apache"))
+            assertTrue(engine.licenseText.contains("Apache License", ignoreCase = true))
         }
 
         // S4-10

@@ -1,6 +1,8 @@
 package com.browntowndev.enclave.feature.inference.media.local
 
+import android.app.ActivityManager
 import android.content.Context
+import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.media.AspectRatio
 import com.browntowndev.enclave.domain.model.media.GenerationQuality
@@ -25,6 +27,8 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class LocalStableDiffusionImageGeneratorFailureTest {
+    private val studioRepository = mockk<StudioRepositoryPort>(relaxed = true)
+
     private val lockManager =
         mockk<InferenceLockManager> {
             every { acquireLock(InferenceType.ON_DEVICE) } returns true
@@ -46,7 +50,7 @@ class LocalStableDiffusionImageGeneratorFailureTest {
                 }
             val context = mockk<Context>(relaxed = true)
             every { context.cacheDir } returns java.io.File.createTempFile("cache", "").parentFile!!
-            val generator = LocalStableDiffusionImageGenerator(context, engine, lockManager)
+            val generator = createGenerator(context, engine)
 
             val result =
                 generator.generate(
@@ -58,6 +62,15 @@ class LocalStableDiffusionImageGeneratorFailureTest {
             assertTrue(result.isFailure)
             assertTrue(result.exceptionOrNull() is LocalImageGenerationError.RuntimeNotPackaged)
         }
+
+    private fun createGenerator(
+        context: Context,
+        engine: LocalImageGenerationEngine,
+    ): LocalStableDiffusionImageGenerator {
+        val activityManager = mockk<ActivityManager> { every { memoryClass } returns 512 }
+        every { context.getSystemService(Context.ACTIVITY_SERVICE) } returns activityManager
+        return LocalStableDiffusionImageGenerator(context, engine, lockManager, studioRepository)
+    }
 
     private fun localTarget(): ImageGenerationTarget.LocalStableDiffusion =
         ImageGenerationTarget.LocalStableDiffusion(
@@ -102,7 +115,7 @@ class LocalStableDiffusionImageGeneratorFailureTest {
                 }
             val context = mockk<Context>(relaxed = true)
             every { context.cacheDir } returns java.io.File.createTempFile("cache", "").parentFile!!
-            val generator = LocalStableDiffusionImageGenerator(context, engine, lockManager)
+            val generator = createGenerator(context, engine)
 
             val result =
                 generator.generate(
@@ -137,7 +150,7 @@ class LocalStableDiffusionImageGeneratorFailureTest {
                 }
             val context = mockk<Context>(relaxed = true)
             every { context.cacheDir } returns java.io.File.createTempFile("cache", "").parentFile!!
-            val generator = LocalStableDiffusionImageGenerator(context, engine, lockManager)
+            val generator = createGenerator(context, engine)
 
             val sdxlTarget =
                 localTarget().copy(
@@ -177,7 +190,7 @@ class LocalStableDiffusionImageGeneratorFailureTest {
             val engine = mockk<LocalImageGenerationEngine>()
             val context = mockk<Context>(relaxed = true)
             every { context.cacheDir } returns java.io.File.createTempFile("cache", "").parentFile!!
-            val generator = LocalStableDiffusionImageGenerator(context, engine, lockManager)
+            val generator = createGenerator(context, engine)
 
             val result = generator.generate(
                 prompt = "sunset",
@@ -205,7 +218,7 @@ class LocalStableDiffusionImageGeneratorFailureTest {
             }
             val context = mockk<Context>(relaxed = true)
             every { context.cacheDir } returns java.io.File.createTempFile("cache", "").parentFile!!
-            val generator = LocalStableDiffusionImageGenerator(context, engine, lockManager)
+            val generator = createGenerator(context, engine)
 
             val sdxlTarget = localTarget().copy(
                 modelId = LocalImageGenerationModelId.SDXL_QNN,
@@ -243,7 +256,7 @@ class LocalStableDiffusionImageGeneratorFailureTest {
             }
             val context = mockk<Context>(relaxed = true)
             every { context.cacheDir } returns java.io.File.createTempFile("cache", "").parentFile!!
-            val generator = LocalStableDiffusionImageGenerator(context, engine, lockManager)
+            val generator = createGenerator(context, engine)
 
             val sdxlTarget = localTarget().copy(
                 modelId = LocalImageGenerationModelId.SDXL_QNN,

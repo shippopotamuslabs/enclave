@@ -15,6 +15,22 @@ android {
         externalNativeBuild {
             cmake {
                 cppFlags += listOf("-std=c++17", "-fexceptions", "-frtti")
+                val cmakeArgs = mutableListOf<String>()
+                val localProps = rootProject.file("local.properties")
+                if (localProps.exists()) {
+                    val qnnSdkDir =
+                        localProps
+                            .readLines()
+                            .firstOrNull { it.startsWith("qnn.sdk.dir=") }
+                            ?.substringAfter("=")
+                            ?.trim()
+                    if (!qnnSdkDir.isNullOrEmpty()) {
+                        cmakeArgs += "-DQNN_SDK_ROOT=$qnnSdkDir"
+                    }
+                }
+                if (cmakeArgs.isNotEmpty()) {
+                    arguments(*cmakeArgs.toTypedArray())
+                }
             }
         }
         ndk {
@@ -46,6 +62,7 @@ android {
     externalNativeBuild {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
         }
     }
 

@@ -1,13 +1,23 @@
 package com.browntowndev.enclave.localimagegen
 
+import android.util.Log
+
 /**
- * JNI surface for QNN (Hexagon NPU) and MNN (CPU) backends.
+ * JNI surface for the Enclave in-process diffusion engine (QNN + MNN CLIP).
  *
- * Probe return codes: 0 = not packaged, 1 = packaged not ready, 2 = ready.
+ * Probe return codes: 0 = not packaged, 1 = partial, 2 = ready.
  * Generate return codes: 0 = success, negative = failure (see logcat).
  */
 internal object LocalImageGenNative {
+    private const val TAG = "LocalImageGenNative"
+
     init {
+        // Vendor lib only — do not bundle libcdsprpc.so in jniLibs (HIDL deps live in vendor ns).
+        try {
+            System.loadLibrary("cdsprpc")
+        } catch (e: UnsatisfiedLinkError) {
+            Log.e(TAG, "Failed to load vendor libcdsprpc.so", e)
+        }
         System.loadLibrary("local_image_gen_jni")
     }
 
@@ -31,6 +41,10 @@ internal object LocalImageGenNative {
         scheduler: String,
         seed: Long,
         outputPath: String,
+        mode: Int,
+        denoiseStrength: Float,
+        initImagePath: String?,
+        memoryPolicy: Int,
     ): Int
 
     external fun nativeGenerateMnn(
@@ -44,5 +58,13 @@ internal object LocalImageGenNative {
         scheduler: String,
         seed: Long,
         outputPath: String,
+        mode: Int,
+        denoiseStrength: Float,
+        initImagePath: String?,
+        memoryPolicy: Int,
     ): Int
+
+    external fun nativeCancel()
+
+    external fun nativeOnTrimMemory(level: Int)
 }

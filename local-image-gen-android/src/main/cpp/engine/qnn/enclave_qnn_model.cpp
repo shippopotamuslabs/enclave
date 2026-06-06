@@ -1,0 +1,587 @@
+#include "enclave_qnn_model.h"
+
+#include "HTP/QnnHtpDevice.h"
+#include "qnn_graph_info.h"
+#include "qnn_log.h"
+#include "qnn_runtime.h"
+#include "qnn_tensor_access.h"
+#include "qnn_tensor_io.h"
+
+#include <dlfcn.h>
+
+#include <cstring>
+#include <fstream>
+#include <vector>
+
+namespace enclave::diffusion {
+namespace {
+
+void* inputClientData(Qnn_Tensor_t* inputs, uint32_t index) {
+    if (inputs == nullptr || !qnn_tensor_access::isSupportedVersion(inputs[index].version)) {
+        return nullptr;
+    }
+    return qnn_tensor_access::clientData(inputs[index]);
+}
+
+bool readBinaryFile(const std::string& path, std::vector<uint8_t>& buffer, std::string& error) {
+    std::ifstream input(path, std::ios::binary | std::ios::ate);
+    if (!input) {
+        error = "Failed to open QNN binary: " + path;
+        return false;
+    }
+    const auto size = input.tellg();
+    if (size <= 0) {
+        error = "QNN binary is empty: " + path;
+        return false;
+    }
+    buffer.resize(static_cast<size_t>(size));
+    input.seekg(0, std::ios::beg);
+    if (!input.read(reinterpret_cast<char*>(buffer.data()), size)) {
+        error = "Failed to read QNN binary: " + path;
+        return false;
+    }
+    return true;
+}
+
+bool devicePropertySupported(const EnclaveQnnApis& apis) {
+    if (apis.core.propertyHasCapability == nullptr) {
+        return false;
+    }
+    const auto status = apis.core.propertyHasCapability(QNN_PROPERTY_GROUP_DEVICE);
+    return status != QNN_PROPERTY_NOT_SUPPORTED && status != QNN_PROPERTY_ERROR_UNKNOWN_KEY;
+}
+
+QnnHtpDevice_Arch_t htpArchFromStubLibrary(const char* stub_library) {
+    if (stub_library == nullptr || stub_library[0] == '\0') {
+        return QNN_HTP_DEVICE_ARCH_NONE;
+    }
+    if (std::strstr(stub_library, "V89") != nullptr) {
+        return QNN_HTP_DEVICE_ARCH_V89;
+    }
+    if (std::strstr(stub_library, "V85") != nullptr) {
+        return QNN_HTP_DEVICE_ARCH_V85;
+    }
+    if (std::strstr(stub_library, "V81") != nullptr) {
+        return QNN_HTP_DEVICE_ARCH_V81;
+    }
+    if (std::strstr(stub_library, "V79") != nullptr) {
+        return QNN_HTP_DEVICE_ARCH_V79;
+    }
+    if (std::strstr(stub_library, "V75") != nullptr) {
+        return QNN_HTP_DEVICE_ARCH_V75;
+    }
+    if (std::strstr(stub_library, "V73") != nullptr) {
+        return QNN_HTP_DEVICE_ARCH_V73;
+    }
+    if (std::strstr(stub_library, "V69") != nullptr) {
+        return QNN_HTP_DEVICE_ARCH_V69;
+    }
+    if (std::strstr(stub_library, "V68") != nullptr) {
+        return QNN_HTP_DEVICE_ARCH_V68;
+    }
+    return QNN_HTP_DEVICE_ARCH_NONE;
+}
+
+bool createHtpDevice(
+    EnclaveQnnApis& apis,
+    QnnHtpDevice_Arch_t arch,
+    Qnn_DeviceHandle_t& device) {
+    device = nullptr;
+    if (!devicePropertySupported(apis) || apis.core.deviceCreate == nullptr) {
+        return true;
+    }
+
+    QnnHtpDevice_CustomConfig_t arch_config {};
+    QnnHtpDevice_CustomConfig_t signed_config {};
+    QnnDevice_Config_t arch_device_config = QNN_DEVICE_CONFIG_INIT;
+    QnnDevice_Config_t signed_device_config = QNN_DEVICE_CONFIG_INIT;
+    const QnnDevice_Config_t* device_configs[3] = {nullptr, nullptr, nullptr};
+    uint32_t config_count = 0;
+
+    if (arch != QNN_HTP_DEVICE_ARCH_NONE) {
+        arch_config.option = QNN_HTP_DEVICE_CONFIG_OPTION_ARCH;
+        arch_config.arch.deviceId = 0;
+        arch_config.arch.arch = arch;
+        arch_device_config.option = QNN_DEVICE_CONFIG_OPTION_CUSTOM;
+        arch_device_config.customConfig = &arch_config;
+        device_configs[config_count++] = &arch_device_config;
+        ENCLAVE_QNN_LOGI("Requesting HTP device arch %u.", static_cast<unsigned>(arch));
+    }
+
+    signed_config.option = QNN_HTP_DEVICE_CONFIG_OPTION_SIGNEDPD;
+    signed_config.useSignedProcessDomain.deviceId = 0;
+    signed_config.useSignedProcessDomain.useSignedProcessDomain = false;
+    signed_device_config.option = QNN_DEVICE_CONFIG_OPTION_CUSTOM;
+    signed_device_config.customConfig = &signed_config;
+    device_configs[config_count++] = &signed_device_config;
+
+    const auto status = apis.core.deviceCreate(
+        nullptr,
+        config_count > 0 ? device_configs : nullptr,
+        &device);
+    if (status == QNN_SUCCESS) {
+        ENCLAVE_QNN_LOGI("deviceCreate succeeded.");
+        return true;
+    }
+    if (status == QNN_DEVICE_ERROR_UNSUPPORTED_FEATURE) {
+        return true;
+    }
+    ENCLAVE_QNN_LOGW("deviceCreate failed: %lu", static_cast<unsigned long>(status));
+    device = nullptr;
+    return true;
+}
+
+}  // namespace
+
+struct EnclaveQnnModel::Impl {
+    EnclaveQnnApis apis {};
+    void* backend_handle = nullptr;
+    void* system_handle = nullptr;
+    Qnn_BackendHandle_t backend = nullptr;
+    Qnn_DeviceHandle_t device = nullptr;
+    Qnn_ContextHandle_t context = nullptr;
+    EnclaveGraphInfoPtr* graphs_info = nullptr;
+    uint32_t graphs_count = 0;
+    Qnn_Tensor_t* inputs = nullptr;
+    Qnn_Tensor_t* outputs = nullptr;
+    bool initialized = false;
+    std::string binary_path;
+    QnnHtpDevice_Arch_t htp_arch = QNN_HTP_DEVICE_ARCH_NONE;
+};
+
+EnclaveQnnModel::~EnclaveQnnModel() { shutdown(); }
+
+void EnclaveQnnModel::shutdown() {
+    if (impl_ == nullptr) {
+        return;
+    }
+    if (impl_->inputs != nullptr || impl_->outputs != nullptr) {
+        const auto& graph = impl_->graphs_info != nullptr && impl_->graphs_count > 0
+            ? *impl_->graphs_info[0]
+            : EnclaveGraphInfo {};
+        tearDownExecutionTensors(
+            impl_->inputs,
+            impl_->outputs,
+            graph.num_input_tensors,
+            graph.num_output_tensors);
+        impl_->inputs = nullptr;
+        impl_->outputs = nullptr;
+    }
+    if (impl_->context != nullptr && impl_->apis.core.contextFree != nullptr) {
+        impl_->apis.core.contextFree(impl_->context, nullptr);
+        impl_->context = nullptr;
+    }
+    if (impl_->device != nullptr && impl_->apis.core.deviceFree != nullptr) {
+        impl_->apis.core.deviceFree(impl_->device);
+        impl_->device = nullptr;
+    }
+    if (impl_->backend != nullptr && impl_->apis.core.backendFree != nullptr) {
+        impl_->apis.core.backendFree(impl_->backend);
+        impl_->backend = nullptr;
+    }
+    if (impl_->graphs_info != nullptr) {
+        freeEnclaveGraphsInfo(&impl_->graphs_info, impl_->graphs_count);
+        impl_->graphs_count = 0;
+    }
+    if (impl_->backend_handle != nullptr) {
+        dlclose(impl_->backend_handle);
+        impl_->backend_handle = nullptr;
+    }
+    if (impl_->system_handle != nullptr) {
+        releaseEnclaveQnnSystem(impl_->system_handle);
+        impl_->system_handle = nullptr;
+    }
+    impl_->initialized = false;
+}
+
+bool EnclaveQnnModel::loadContextFromBinary(const std::string& binary_path, std::string& error) {
+    if (impl_ == nullptr) {
+        error = "QNN model is not configured.";
+        return false;
+    }
+    if (impl_->apis.system.systemContextCreate == nullptr ||
+        impl_->apis.system.systemContextGetBinaryInfo == nullptr ||
+        impl_->apis.system.systemContextFree == nullptr) {
+        error = "QNN system interface is incomplete.";
+        return false;
+    }
+
+    std::vector<uint8_t> buffer;
+    if (!readBinaryFile(binary_path, buffer, error)) {
+        return false;
+    }
+
+    QnnSystemContext_Handle_t system_context = nullptr;
+    if (impl_->apis.system.systemContextCreate(&system_context) != QNN_SUCCESS) {
+        error = "systemContextCreate failed.";
+        return false;
+    }
+
+    const QnnSystemContext_BinaryInfo_t* binary_info = nullptr;
+    Qnn_ContextBinarySize_t binary_info_size = 0;
+    if (impl_->apis.system.systemContextGetBinaryInfo(
+            system_context,
+            buffer.data(),
+            buffer.size(),
+            &binary_info,
+            &binary_info_size) != QNN_SUCCESS) {
+        impl_->apis.system.systemContextFree(system_context);
+        error = "systemContextGetBinaryInfo failed.";
+        return false;
+    }
+
+    if (!copyBinaryMetadataToGraphs(binary_info, &impl_->graphs_info, impl_->graphs_count)) {
+        impl_->apis.system.systemContextFree(system_context);
+        error = "Failed to parse QNN graph metadata.";
+        return false;
+    }
+    impl_->apis.system.systemContextFree(system_context);
+
+    if (impl_->apis.core.backendCreate == nullptr) {
+        error = "backendCreate is unavailable.";
+        return false;
+    }
+    if (impl_->apis.core.backendCreate(nullptr, nullptr, &impl_->backend) != QNN_BACKEND_NO_ERROR) {
+        error = "backendCreate failed.";
+        return false;
+    }
+
+    if (!createHtpDevice(impl_->apis, impl_->htp_arch, impl_->device)) {
+        error = "deviceCreate failed.";
+        return false;
+    }
+
+    if (impl_->apis.core.contextCreateFromBinary == nullptr) {
+        error = "contextCreateFromBinary is unavailable.";
+        return false;
+    }
+    ENCLAVE_QNN_LOGI("Loading QNN context from %s (%zu bytes).", binary_path.c_str(), buffer.size());
+    if (impl_->apis.core.contextCreateFromBinary(
+            impl_->backend,
+            impl_->device,
+            nullptr,
+            buffer.data(),
+            buffer.size(),
+            &impl_->context,
+            nullptr) != QNN_CONTEXT_NO_ERROR) {
+        error = "contextCreateFromBinary failed.";
+        return false;
+    }
+
+    for (uint32_t graph_idx = 0; graph_idx < impl_->graphs_count; ++graph_idx) {
+        if (impl_->apis.core.graphRetrieve == nullptr) {
+            error = "graphRetrieve is unavailable.";
+            return false;
+        }
+        auto* graph = impl_->graphs_info[graph_idx];
+        if (impl_->apis.core.graphRetrieve(
+                impl_->context,
+                graph->graph_name,
+                &graph->graph) != QNN_SUCCESS) {
+            error = "graphRetrieve failed.";
+            return false;
+        }
+    }
+    return true;
+}
+
+bool EnclaveQnnModel::initializeGraph(std::string& error) {
+    if (impl_ == nullptr) {
+        error = "QNN model is not configured.";
+        return false;
+    }
+    if (impl_->initialized) {
+        return true;
+    }
+    if (!loadContextFromBinary(impl_->binary_path, error)) {
+        return false;
+    }
+    impl_->initialized = true;
+    return true;
+}
+
+bool EnclaveQnnModel::ensureIoTensors(std::string& error) {
+    if (impl_ == nullptr || impl_->graphs_info == nullptr || impl_->graphs_count == 0) {
+        error = "QNN graph metadata is missing.";
+        return false;
+    }
+    if (impl_->inputs != nullptr && impl_->outputs != nullptr) {
+        return true;
+    }
+    return setupExecutionTensors(
+        &impl_->inputs,
+        &impl_->outputs,
+        *impl_->graphs_info[0],
+        error);
+}
+
+bool EnclaveQnnModel::runGraph(std::string& error) {
+    if (!ensureIoTensors(error)) {
+        return false;
+    }
+    const auto& graph = *impl_->graphs_info[0];
+    if (impl_->apis.core.graphExecute == nullptr) {
+        error = "graphExecute is unavailable.";
+        return false;
+    }
+    if (impl_->apis.core.graphExecute(
+            graph.graph,
+            impl_->inputs,
+            graph.num_input_tensors,
+            impl_->outputs,
+            graph.num_output_tensors,
+            nullptr,
+            nullptr) != QNN_GRAPH_NO_ERROR) {
+        error = "QNN graphExecute failed.";
+        return false;
+    }
+    return true;
+}
+
+bool EnclaveQnnModel::executeSd15Unet(
+    const float* latents,
+    int timestep,
+    const float* text_embedding,
+    int text_embedding_size,
+    int sample_width,
+    int sample_height,
+    float* noise_pred,
+    std::string& error) {
+    if (!initializeGraph(error)) {
+        return false;
+    }
+    if (!ensureIoTensors(error)) {
+        return false;
+    }
+    const auto& graph = *impl_->graphs_info[0];
+    if (graph.num_input_tensors < 3) {
+        error = "SD15 UNet graph has unexpected input count.";
+        return false;
+    }
+    const int latent_count = 4 * sample_width * sample_height;
+    if (inputClientData(impl_->inputs, 0) == nullptr ||
+        inputClientData(impl_->inputs, 1) == nullptr ||
+        inputClientData(impl_->inputs, 2) == nullptr) {
+        error = "SD15 UNet input tensors are invalid.";
+        return false;
+    }
+    if (!writeFloatValuesToTensor(
+            impl_->inputs[0], latents, static_cast<size_t>(latent_count), error) ||
+        !writeFloatValuesToTensor(
+            impl_->inputs[2],
+            text_embedding,
+            static_cast<size_t>(77 * text_embedding_size),
+            error)) {
+        return false;
+    }
+    reinterpret_cast<int32_t*>(inputClientData(impl_->inputs, 1))[0] = timestep;
+
+    if (!runGraph(error)) {
+        return false;
+    }
+    float* tmp = nullptr;
+    if (!convertTensorOutputToFloat(impl_->outputs[0], &tmp, error)) {
+        return false;
+    }
+    std::memcpy(noise_pred, tmp, static_cast<size_t>(latent_count) * sizeof(float));
+    std::free(tmp);
+    return true;
+}
+
+bool EnclaveQnnModel::executeSdxlUnet(
+    const float* latents,
+    int timestep,
+    const float* encoder_hidden_states,
+    const float* text_embeds,
+    const float* time_ids,
+    int sample_width,
+    int sample_height,
+    float* noise_pred,
+    std::string& error) {
+    if (!initializeGraph(error)) {
+        return false;
+    }
+    if (!ensureIoTensors(error)) {
+        return false;
+    }
+    const auto& graph = *impl_->graphs_info[0];
+    if (graph.num_input_tensors < 5) {
+        error = "SDXL UNet graph has unexpected input count.";
+        return false;
+    }
+    const int latent_count = 4 * sample_width * sample_height;
+    if (!writeFloatValuesToTensor(
+            impl_->inputs[0], latents, static_cast<size_t>(latent_count), error) ||
+        !writeFloatValuesToTensor(
+            impl_->inputs[1],
+            encoder_hidden_states,
+            static_cast<size_t>(77 * 2048),
+            error) ||
+        !writeFloatValuesToTensor(impl_->inputs[3], time_ids, 6, error) ||
+        !writeFloatValuesToTensor(impl_->inputs[4], text_embeds, 1280, error)) {
+        return false;
+    }
+    reinterpret_cast<int32_t*>(inputClientData(impl_->inputs, 2))[0] = timestep;
+
+    if (!runGraph(error)) {
+        return false;
+    }
+    float* tmp = nullptr;
+    if (!convertTensorOutputToFloat(impl_->outputs[0], &tmp, error)) {
+        return false;
+    }
+    std::memcpy(noise_pred, tmp, static_cast<size_t>(latent_count) * sizeof(float));
+    std::free(tmp);
+    return true;
+}
+
+bool EnclaveQnnModel::executeSd15VaeEncoder(
+    const float* pixel_values,
+    int width,
+    int height,
+    float* mean,
+    float* std_dev,
+    std::string& error) {
+    if (!initializeGraph(error)) {
+        return false;
+    }
+    if (!ensureIoTensors(error)) {
+        return false;
+    }
+    const int pixel_count = 3 * width * height;
+    if (inputClientData(impl_->inputs, 0) == nullptr) {
+        error = "VAE encoder input tensor is invalid.";
+        return false;
+    }
+    if (!writeFloatValuesToTensor(
+            impl_->inputs[0],
+            pixel_values,
+            static_cast<size_t>(pixel_count),
+            error)) {
+        return false;
+    }
+    if (!runGraph(error)) {
+        return false;
+    }
+    const int latent_count = 4 * (width / 8) * (height / 8);
+    float* tmp_mean = nullptr;
+    float* tmp_std = nullptr;
+    if (!convertTensorOutputToFloat(impl_->outputs[0], &tmp_mean, error) ||
+        !convertTensorOutputToFloat(impl_->outputs[1], &tmp_std, error)) {
+        std::free(tmp_mean);
+        std::free(tmp_std);
+        return false;
+    }
+    std::memcpy(mean, tmp_mean, static_cast<size_t>(latent_count) * sizeof(float));
+    std::memcpy(std_dev, tmp_std, static_cast<size_t>(latent_count) * sizeof(float));
+    std::free(tmp_mean);
+    std::free(tmp_std);
+    return true;
+}
+
+bool EnclaveQnnModel::executeSd15VaeDecoder(
+    const float* latents,
+    int sample_width,
+    int sample_height,
+    int output_width,
+    int output_height,
+    float* pixel_values,
+    std::string& error) {
+    if (!initializeGraph(error)) {
+        return false;
+    }
+    if (!ensureIoTensors(error)) {
+        return false;
+    }
+    const int latent_count = 4 * sample_width * sample_height;
+    if (inputClientData(impl_->inputs, 0) == nullptr) {
+        error = "VAE decoder input tensor is invalid.";
+        return false;
+    }
+    if (!writeFloatValuesToTensor(
+            impl_->inputs[0], latents, static_cast<size_t>(latent_count), error)) {
+        return false;
+    }
+    if (!runGraph(error)) {
+        return false;
+    }
+    float* tmp = nullptr;
+    if (!convertTensorOutputToFloat(impl_->outputs[0], &tmp, error)) {
+        return false;
+    }
+    const int pixel_count = 3 * output_width * output_height;
+    std::memcpy(pixel_values, tmp, static_cast<size_t>(pixel_count) * sizeof(float));
+    std::free(tmp);
+    return true;
+}
+
+bool EnclaveQnnModel::executeSdxlVaeEncoder(
+    const float* pixel_values,
+    int width,
+    int height,
+    float* mean,
+    float* std_dev,
+    std::string& error) {
+    return executeSd15VaeEncoder(pixel_values, width, height, mean, std_dev, error);
+}
+
+bool EnclaveQnnModel::executeSdxlVaeDecoder(
+    const float* latents,
+    int sample_width,
+    int sample_height,
+    int output_width,
+    int output_height,
+    float* pixel_values,
+    std::string& error) {
+    return executeSd15VaeDecoder(
+        latents,
+        sample_width,
+        sample_height,
+        output_width,
+        output_height,
+        pixel_values,
+        error);
+}
+
+bool createQnnModelFromBinary(
+    const std::string& bin_path,
+    const std::string& backend_path,
+    const std::string& system_path,
+    const std::string& dsp_library_path,
+    const char* htp_stub_library,
+    std::unique_ptr<EnclaveQnnModel>& out,
+    std::string& error) {
+    setDspLibraryPath(dsp_library_path);
+    if (!preloadQnnHtpLibraries(dsp_library_path, htp_stub_library, error)) {
+        return false;
+    }
+    auto model = std::make_unique<EnclaveQnnModel>();
+    model->impl_ = std::make_unique<EnclaveQnnModel::Impl>();
+    model->impl_->binary_path = bin_path;
+    model->impl_->htp_arch = htpArchFromStubLibrary(htp_stub_library);
+
+    if (!acquireEnclaveQnnSystem(
+            system_path,
+            model->impl_->apis,
+            &model->impl_->system_handle,
+            error)) {
+        return false;
+    }
+    if (!loadEnclaveQnnBackend(
+            backend_path,
+            model->impl_->apis,
+            &model->impl_->backend_handle,
+            error)) {
+        releaseEnclaveQnnSystem(model->impl_->system_handle);
+        model->impl_->system_handle = nullptr;
+        return false;
+    }
+    if (!model->initializeGraph(error)) {
+        model.reset();
+        return false;
+    }
+    out = std::move(model);
+    return true;
+}
+
+}  // namespace enclave::diffusion

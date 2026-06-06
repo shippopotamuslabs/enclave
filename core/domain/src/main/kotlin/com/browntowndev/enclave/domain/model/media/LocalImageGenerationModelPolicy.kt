@@ -3,6 +3,20 @@ package com.browntowndev.enclave.domain.model.media
 import com.browntowndev.enclave.domain.model.config.LocalModelAsset
 
 object LocalImageGenerationModelPolicy {
+    const val DEFAULT_IMG2IMG_DENOISE_STRENGTH = 0.75f
+    private const val LOW_RAM_MEMORY_CLASS_MB = 384
+
+    fun memoryPolicyFor(modelId: LocalImageGenerationModelId, memoryClassMb: Int): LocalImageGenerationMemoryPolicy {
+        if (modelId == LocalImageGenerationModelId.SDXL_QNN) {
+            return LocalImageGenerationMemoryPolicy.LOW_RAM
+        }
+        return if (memoryClassMb <= LOW_RAM_MEMORY_CLASS_MB) {
+            LocalImageGenerationMemoryPolicy.LOW_RAM
+        } else {
+            LocalImageGenerationMemoryPolicy.FULL
+        }
+    }
+
     private val policies: Map<LocalImageGenerationModelId, LocalImageGenerationPolicy> =
         mapOf(
             LocalImageGenerationModelId.SD15_QNN to
@@ -111,6 +125,11 @@ data class LocalImageGenerationPolicy(
     val cfgScale: Float,
     val scheduler: String,
 )
+
+enum class LocalImageGenerationMemoryPolicy {
+    FULL,
+    LOW_RAM,
+}
 
 data class NormalizedLocalImageGenerationRequest(
     val imageResolution: String,

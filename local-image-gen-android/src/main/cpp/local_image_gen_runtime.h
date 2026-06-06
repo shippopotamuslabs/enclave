@@ -12,7 +12,7 @@ const std::string& qnn_runtime_dir();
 /** 0 = missing, 1 = partial, 2 = ready */
 int probe_qnn_libs();
 int probe_mnn_libs();
-bool probe_stable_diffusion_core_executable();
+bool file_exists_in_dir(const std::string& dir, const char* filename);
 
 bool prepare_qnn_runtime_libs(char* error_out, int error_out_len);
 bool qnn_model_dir_ready(const char* model_dir, char* error_out, int error_out_len);

@@ -17,6 +17,7 @@ class LocalImageGenerationEngine
 
         fun cancel() {
             cancelled = true
+            qnnBackend.cancel()
         }
 
         suspend fun generate(request: LocalImageGenerationNativeRequest): Result<LocalImageGenerationNativeResult> {

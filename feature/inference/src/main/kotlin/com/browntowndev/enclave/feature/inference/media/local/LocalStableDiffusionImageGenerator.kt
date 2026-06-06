@@ -1,12 +1,16 @@
 package com.browntowndev.enclave.feature.inference.media.local
 
+import android.app.ActivityManager
 import android.content.Context
 import com.browntowndev.enclave.domain.model.media.ImageGenerationProgress
 import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
 import com.browntowndev.enclave.domain.model.media.ImageGenerationTarget
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationError
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationMemoryPolicy
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelPolicy
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationPaths
 import com.browntowndev.enclave.domain.port.inference.InferenceBusyException
+import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.enclave.domain.usecase.inference.InferenceType
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -36,6 +40,7 @@ class LocalStableDiffusionImageGenerator
         @param:ApplicationContext private val context: Context,
         private val engine: LocalImageGenerationEngine,
         private val inferenceLockManager: InferenceLockManager,
+        private val studioRepository: StudioRepositoryPort,
         private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
     ) {
         suspend fun generate(
@@ -66,6 +71,38 @@ class LocalStableDiffusionImageGenerator
                             totalSteps = normalized.diffusionSteps,
                         ),
                     )
+                    val referenceUri = settings.referenceImageUri
+                    val mode =
+                        if (referenceUri != null) {
+                            LocalImageGenerationMode.IMG2IMG
+                        } else {
+                            LocalImageGenerationMode.TXT2IMG
+                        }
+                    if (mode == LocalImageGenerationMode.IMG2IMG &&
+                        !LocalImageGenerationPaths.hasImg2ImgCapability(java.io.File(target.modelDir))
+                    ) {
+                        throw LocalImageGenerationError.GenerationFailed(
+                            target.selectedBackend,
+                            "IMG2IMG_ENCODER_MISSING: model pack lacks vae_encoder.bin",
+                        )
+                    }
+                    val initImagePath =
+                        referenceUri?.let { uri ->
+                            val bytes =
+                                studioRepository.readMediaBytes(uri)
+                                    ?: throw LocalImageGenerationError.GenerationFailed(
+                                        target.selectedBackend,
+                                        "Reference image could not be read.",
+                                    )
+                            val initFile = File(outputDir, "init-${UUID.randomUUID()}.png")
+                            initFile.writeBytes(bytes)
+                            initFile.absolutePath
+                        }
+                    val memoryClass =
+                        (context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager)
+                            .memoryClass
+                    val memoryPolicy =
+                        LocalImageGenerationModelPolicy.memoryPolicyFor(target.modelId, memoryClass)
                     val nativeRequest =
                         LocalImageGenerationNativeRequest(
                             backend = target.selectedBackend,
@@ -80,6 +117,10 @@ class LocalStableDiffusionImageGenerator
                             scheduler = normalized.scheduler,
                             seed = settings.seed.toLongOrNull() ?: System.nanoTime(),
                             outputPathPrefix = outputPrefix,
+                            mode = mode,
+                            initImagePath = initImagePath,
+                            denoiseStrength = LocalImageGenerationModelPolicy.DEFAULT_IMG2IMG_DENOISE_STRENGTH,
+                            memoryPolicy = memoryPolicy,
                         )
                     val output =
                         withContext(dispatcher) {
