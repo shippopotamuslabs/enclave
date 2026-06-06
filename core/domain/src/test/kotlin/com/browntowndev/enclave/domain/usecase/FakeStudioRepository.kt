@@ -96,6 +96,13 @@ class FakeStudioRepository : StudioRepositoryPort {
 
     override suspend fun getMediaById(id: String): StudioMediaAsset? = unsupported()
 
+    override suspend fun getMediaPendingDownload(): List<StudioMediaAsset> = unsupported()
+
+    override suspend fun materializeDownloadedMedia(
+        id: String,
+        bytes: ByteArray,
+    ) = unsupported()
+
     override suspend fun createAlbum(name: String): String = unsupported()
 
     override suspend fun renameAlbum(

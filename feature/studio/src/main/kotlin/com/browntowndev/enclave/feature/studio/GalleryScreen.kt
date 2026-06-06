@@ -56,6 +56,7 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -784,7 +785,14 @@ private fun AlbumMediaItem(
                     },
                 ),
     ) {
-        if (item.mediaType == MediaCapability.VIDEO) {
+        if (item.isAwaitingDownload) {
+            DownloadingTile(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .clip(tileShape),
+            )
+        } else if (item.mediaType == MediaCapability.VIDEO) {
             VideoThumbnail(
                 videoUri = item.localUri,
                 thumbnail = videoThumbnail,
@@ -873,6 +881,21 @@ private fun AlbumMediaItem(
                         .padding(8.dp),
             )
         }
+    }
+}
+
+@Composable
+private fun DownloadingTile(modifier: Modifier = Modifier) {
+    Box(
+        modifier =
+            modifier.background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(28.dp),
+            strokeWidth = 2.5.dp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

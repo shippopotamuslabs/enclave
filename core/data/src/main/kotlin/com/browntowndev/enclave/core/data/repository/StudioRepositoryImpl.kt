@@ -255,6 +255,47 @@ class StudioRepositoryImpl
             return out
         }
 
+        override suspend fun getMediaPendingDownload(): List<StudioMediaAsset> {
+            val repairs = mutableListOf<SensitiveRoomReadRepair>()
+            val out =
+                studioMediaDao
+                    .getUploaded()
+                    .map { it.toDomain(repairs) }
+                    .filter { asset -> !asset.remoteUrl.isNullOrBlank() && !localFileExists(asset.localUri) }
+            readRepairApplier.apply(repairs)
+            return out
+        }
+
+        override suspend fun materializeDownloadedMedia(
+            id: String,
+            bytes: ByteArray,
+        ) {
+            val raw = studioMediaDao.getMediaById(id) ?: return
+            val plain = SensitiveEntityFieldEncryptors.decrypt(raw, healer, null)
+            val extension =
+                when (plain.mediaType) {
+                    "VIDEO" -> "mp4"
+                    "MUSIC" -> "mp3"
+                    else -> "jpg"
+                }
+            val file = File(context.filesDir, "studio_synced_$id.$extension")
+            file.writeBytes(bytes)
+
+            val updated = plain.copy(mediaUri = "file://${file.absolutePath}")
+            studioMediaDao.insertMedia(SensitiveEntityFieldEncryptors.encrypt(updated, healer))
+        }
+
+        private fun localFileExists(localUri: String): Boolean {
+            if (localUri.startsWith("content://")) {
+                return runCatching {
+                    context.contentResolver.openInputStream(android.net.Uri.parse(localUri))?.use { true } ?: false
+                }.getOrDefault(false)
+            }
+            val path = localUri.replace("file://", "")
+            if (path.isBlank() || path.startsWith("http")) return false
+            return File(path).exists()
+        }
+
         override suspend fun createAlbum(name: String): String {
             val id =
                 java.util.UUID

@@ -100,6 +100,22 @@ interface StudioRepositoryPort {
 
     suspend fun getMediaById(id: String): StudioMediaAsset?
 
+    /**
+     * Cloud-uploaded media whose bytes are not yet present on this device (synced-down rows whose
+     * [StudioMediaAsset.localUri] still points at the remote URL). The cloud download worker fetches
+     * + decrypts these and calls [materializeDownloadedMedia].
+     */
+    suspend fun getMediaPendingDownload(): List<StudioMediaAsset>
+
+    /**
+     * Persists decrypted [bytes] for an already-synced media row to a local file and repoints its
+     * [StudioMediaAsset.localUri] at it, without marking the row for re-upload.
+     */
+    suspend fun materializeDownloadedMedia(
+        id: String,
+        bytes: ByteArray,
+    )
+
     suspend fun createAlbum(name: String): String
 
     suspend fun renameAlbum(

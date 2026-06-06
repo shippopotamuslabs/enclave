@@ -372,6 +372,13 @@ private class FakeStudioRepository : StudioRepositoryPort {
 
     override suspend fun getMediaById(id: String): StudioMediaAsset? = media.value.firstOrNull { it.id == id }
 
+    override suspend fun getMediaPendingDownload(): List<StudioMediaAsset> = emptyList()
+
+    override suspend fun materializeDownloadedMedia(
+        id: String,
+        bytes: ByteArray,
+    ) = Unit
+
     override fun observeEphemeralMedia(): Flow<List<StudioMediaAsset>> = flowOf(emptyList())
 
     override fun observeGenerationError(): Flow<String?> = flowOf(null)

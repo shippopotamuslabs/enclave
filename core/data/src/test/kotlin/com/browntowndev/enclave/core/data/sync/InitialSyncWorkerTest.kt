@@ -25,6 +25,7 @@ class InitialSyncWorkerTest {
     private lateinit var context: Context
     private val startCloudSyncListeningUseCase = mockk<StartCloudSyncListeningUseCase>()
     private val loggingPort = mockk<LoggingPort>(relaxed = true)
+    private val cloudSyncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
 
     @BeforeEach
     fun setup() {
@@ -45,6 +46,7 @@ class InitialSyncWorkerTest {
 
             assertEquals(ListenableWorker.Result.success(), result)
             coVerify(exactly = 1) { startCloudSyncListeningUseCase(uploadLocalFirst = true, any()) }
+            io.mockk.verify(exactly = 1) { cloudSyncTrigger.triggerMediaDownload() }
         }
 
     @Test
@@ -77,6 +79,7 @@ class InitialSyncWorkerTest {
             val result = worker.doWork()
 
             assertEquals(ListenableWorker.Result.failure(workDataOf(InitialSyncWorker.KEY_PROGRESS_STATUS to "Sync error")), result)
+            io.mockk.verify(exactly = 0) { cloudSyncTrigger.triggerMediaDownload() }
         }
 
     private inner class InitialSyncWorkerFactory : androidx.work.WorkerFactory() {
@@ -90,6 +93,7 @@ class InitialSyncWorkerTest {
                 workerParameters,
                 startCloudSyncListeningUseCase,
                 loggingPort,
+                cloudSyncTrigger,
             )
     }
 }
