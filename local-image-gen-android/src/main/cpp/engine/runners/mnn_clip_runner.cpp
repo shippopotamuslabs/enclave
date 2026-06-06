@@ -25,6 +25,10 @@ struct MnnSession {
     int hidden = 0;
 };
 
+bool sessionReady(const MnnSession& session) {
+    return session.interpreter != nullptr && session.session != nullptr && session.hidden > 0;
+}
+
 bool createSession(const std::string& path, int hidden, MnnSession& out, std::string& error) {
     out.interpreter.reset(MNN::Interpreter::createFromFile(path.c_str()));
     if (!out.interpreter) {
@@ -190,6 +194,10 @@ bool MnnClipRunner::encode(
 #else
     if (!impl_->loaded) {
         error = "CLIP runner is not loaded.";
+        return false;
+    }
+    if (!sessionReady(impl_->clip) || (impl_->manifest.sdxl && !sessionReady(impl_->clip_2))) {
+        error = "CLIP MNN session was unloaded; retry generation.";
         return false;
     }
     const std::vector<int32_t> positive = tokenizer.encode(prompt, kClipTokenCount);

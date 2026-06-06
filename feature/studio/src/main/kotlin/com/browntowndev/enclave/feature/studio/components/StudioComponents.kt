@@ -781,7 +781,8 @@ private fun ImageSettingsSection(
             if (caps.supportedImageSteps.isNotEmpty()) {
                 val stepOptions = caps.supportedImageSteps.map(Int::toString)
                 val selectedStep =
-                    (settings.diffusionSteps ?: caps.defaultImageStep).toString()
+                    (settings.diffusionSteps ?: caps.defaultImageStep ?: caps.supportedImageSteps.first())
+                        .toString()
                 SettingRow(
                     label = "Diffusion Steps",
                     controlFullWidth = true,

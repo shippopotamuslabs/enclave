@@ -34,7 +34,8 @@ object LocalImageGenerationModelPolicy {
                     supportedImageResolutions = listOf("1024x1024"),
                     defaultImageResolution = "1024x1024",
                     supportedDiffusionSteps = listOf(8, 12, 16, 20, 24, 30),
-                    defaultDiffusionSteps = 16,
+                    // Matches enclave_diffusion_engine SDXL LCM default (DMD2 pack is tuned for ~8).
+                    defaultDiffusionSteps = 8,
                     fixedDiffusionSteps = null,
                     cfgScale = 1.5f,
                     scheduler = "lcm",
@@ -50,7 +51,8 @@ object LocalImageGenerationModelPolicy {
         val policy = policyFor(id)
         return ProviderCapabilities(
             supportedAspectRatios = listOf(AspectRatio.ONE_ONE),
-            supportedImageQualities = listOf(GenerationQuality.SPEED),
+            // Local packs are fixed square resolutions; Studio shows Resolution only (not Quality).
+            supportedImageQualities = emptyList(),
             supportedImageResolutions = policy.supportedImageResolutions,
             supportedImageSteps = policy.supportedDiffusionSteps,
             defaultImageStep = policy.defaultDiffusionSteps,

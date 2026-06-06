@@ -76,10 +76,12 @@ class StudioCapabilitiesCoordinator
                             updated
                         }
                     else -> {
+                        val defaultStep =
+                            caps.defaultImageStep ?: caps.supportedImageSteps.firstOrNull()
                         val step =
                             updated.diffusionSteps?.takeIf { it in caps.supportedImageSteps }
-                                ?: caps.defaultImageStep
-                        if (step != updated.diffusionSteps) {
+                                ?: defaultStep
+                        if (step != null && step != updated.diffusionSteps) {
                             updated.copy(diffusionSteps = step)
                         } else {
                             updated

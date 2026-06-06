@@ -8,6 +8,7 @@ import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId
 import com.browntowndev.enclave.domain.model.media.QnnRuntimeLibraryCatalog
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
+import java.util.concurrent.Executors
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -37,6 +38,7 @@ class NativeLocalImageGenRuntime
         @param:ApplicationContext private val context: Context,
     ) : ComponentCallbacks2 {
         private val qnnRuntime = QnnRuntimeDirResolver.resolve(context)
+        private val trimExecutor = Executors.newSingleThreadExecutor()
 
         init {
             LocalImageGenNative.nativeInit(
@@ -118,7 +120,10 @@ class NativeLocalImageGenRuntime
             }
 
         override fun onTrimMemory(level: Int) {
-            LocalImageGenNative.nativeOnTrimMemory(level)
+            // ComponentCallbacks2 runs on the main thread; native trim must not block on generation.
+            trimExecutor.execute {
+                LocalImageGenNative.nativeOnTrimMemory(level)
+            }
         }
 
         override fun onConfigurationChanged(newConfig: Configuration) = Unit

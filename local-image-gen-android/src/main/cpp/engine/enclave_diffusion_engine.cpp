@@ -71,6 +71,8 @@ struct EnclaveDiffusionHandle {
     enclave::diffusion::MnnClipRunner clip;
     enclave::diffusion::QnnGraphRunner qnn;
     std::atomic<bool> cancelled {false};
+    /** Trim requested while generate holds mutex; applied when the lock is free. */
+    std::atomic<int> pending_trim_level {-1};
     std::mutex mutex;
 };
 
@@ -102,6 +104,39 @@ bool ensureNotCancelled(EnclaveDiffusionHandle* handle, std::string& error) {
         return false;
     }
     return true;
+}
+
+void forceUnloadAll(EnclaveDiffusionHandle* handle) {
+    handle->clip.unload();
+    handle->tokenizer.unload();
+    handle->qnn.unloadAll();
+}
+
+void applyTrimMemory(EnclaveDiffusionHandle* handle, int level) {
+    if (handle == nullptr || level < 0) {
+        return;
+    }
+    if (level >= 10) {
+        handle->clip.unload();
+        handle->tokenizer.unload();
+    }
+    if (level >= 15) {
+        handle->qnn.unloadAll();
+    }
+}
+
+void enqueueTrimLevel(EnclaveDiffusionHandle* handle, int level) {
+    int previous = handle->pending_trim_level.load();
+    while (level > previous &&
+           !handle->pending_trim_level.compare_exchange_weak(previous, level)) {
+    }
+}
+
+void drainPendingTrim(EnclaveDiffusionHandle* handle) {
+    const int pending = handle->pending_trim_level.exchange(-1);
+    if (pending >= 0) {
+        applyTrimMemory(handle, pending);
+    }
 }
 
 void unloadAfterStage(EnclaveDiffusionHandle* handle, PipelineStage stage, EnclaveMemoryPolicy policy) {
@@ -284,6 +319,10 @@ bool runPipeline(
         error = "Diffusion pipeline completed without decoded pixels.";
         return false;
     }
+    if (policy == ENCLAVE_MEMORY_POLICY_LOW_RAM) {
+        forceUnloadAll(handle);
+    }
+    drainPendingTrim(handle);
     return writePngRgbFloat(params.output_png_path != nullptr ? params.output_png_path : "", rgb, width, height, error);
 }
 
@@ -313,6 +352,11 @@ extern "C" EnclaveDiffusionHandle* enclave_diffusion_create(
 }
 
 extern "C" void enclave_diffusion_destroy(EnclaveDiffusionHandle* handle) {
+    if (handle == nullptr) {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(handle->mutex);
+    enclave::diffusion::forceUnloadAll(handle);
     delete handle;
 }
 
@@ -332,6 +376,7 @@ extern "C" int enclave_diffusion_generate(
     std::string error;
     const bool ok = enclave::diffusion::runPipeline(handle, *params, progress, user, error);
     if (!ok) {
+        enclave::diffusion::drainPendingTrim(handle);
         enclave::diffusion::copyError(error, err, err_len);
         return -1;
     }
@@ -348,11 +393,12 @@ extern "C" void enclave_diffusion_on_trim_memory(EnclaveDiffusionHandle* handle,
     if (handle == nullptr) {
         return;
     }
-    if (level >= 10) {
-        handle->clip.unload();
-        handle->tokenizer.unload();
+    // Never block the UI thread (or trim callback thread) on an in-flight ~minute-long generate.
+    std::unique_lock<std::mutex> lock(handle->mutex, std::try_to_lock);
+    if (!lock.owns_lock()) {
+        enclave::diffusion::enqueueTrimLevel(handle, level);
+        return;
     }
-    if (level >= 15) {
-        handle->qnn.unloadAll();
-    }
+    enclave::diffusion::applyTrimMemory(handle, level);
+    enclave::diffusion::drainPendingTrim(handle);
 }

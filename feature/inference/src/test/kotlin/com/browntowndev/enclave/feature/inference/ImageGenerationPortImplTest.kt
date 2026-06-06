@@ -272,7 +272,7 @@ class ImageGenerationPortImplTest {
                             supportedImageQualities = listOf(GenerationQuality.SPEED),
                             supportedImageResolutions = listOf("1024x1024"),
                             supportedImageSteps = listOf(8, 12, 16, 20, 24, 30),
-                            defaultImageStep = 16,
+                            defaultImageStep = 8,
                             supportedVideoQualities = emptyList(),
                             supportedVideoResolutions = emptyList(),
                             supportedVideoDurations = emptyList(),

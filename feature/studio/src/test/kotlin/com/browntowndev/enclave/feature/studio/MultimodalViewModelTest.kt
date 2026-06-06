@@ -1137,7 +1137,7 @@ class MultimodalViewModelTest {
         }
 
     @Test
-    fun `STU-003 active SDXL exposes exact step options and default 16`() =
+    fun `STU-003 active SDXL exposes exact step options and default 8`() =
         runTest {
             val localConfigId = LocalModelConfigurationId("sdxl-local-config")
             val localImageAssignment =
@@ -1156,7 +1156,7 @@ class MultimodalViewModelTest {
 
             val state = viewModel.uiState.value
             assertEquals(listOf(8, 12, 16, 20, 24, 30), state.capabilities?.supportedImageSteps)
-            assertEquals(16, state.capabilities?.defaultImageStep)
+            assertEquals(8, state.capabilities?.defaultImageStep)
             job.cancel()
         }
 }
