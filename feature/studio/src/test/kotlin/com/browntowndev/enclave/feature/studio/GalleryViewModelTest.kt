@@ -378,6 +378,8 @@ private class FakeStudioRepository : StudioRepositoryPort {
 
     override fun observeGenerationProgress(): Flow<com.browntowndev.enclave.domain.model.media.ImageGenerationProgress?> = flowOf(null)
 
+    override fun observeActiveGeneration(): Flow<com.browntowndev.enclave.domain.port.repository.ActiveStudioGeneration?> = flowOf(null)
+
     override suspend fun reportGenerationError(message: String?) {}
 
     override suspend fun clearGenerationError() {}
@@ -385,6 +387,12 @@ private class FakeStudioRepository : StudioRepositoryPort {
     override fun reportGenerationProgress(progress: com.browntowndev.enclave.domain.model.media.ImageGenerationProgress?) {}
 
     override fun clearGenerationProgress() {}
+
+    override fun reportActiveGeneration(
+        generation: com.browntowndev.enclave.domain.port.repository.ActiveStudioGeneration,
+    ): Boolean = true
+
+    override fun clearActiveGeneration() {}
 
     override suspend fun addEphemeralMedia(asset: StudioMediaAsset) {}
 

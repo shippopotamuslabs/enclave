@@ -14,4 +14,9 @@ class RoutesTest {
     fun `gallery route is declared`() {
         assertEquals("gallery", Routes.GALLERY)
     }
+
+    @Test
+    fun `studio route declares notification deep link pattern`() {
+        assertEquals("enclave://studio", Routes.STUDIO_DEEP_LINK_PATTERN)
+    }
 }

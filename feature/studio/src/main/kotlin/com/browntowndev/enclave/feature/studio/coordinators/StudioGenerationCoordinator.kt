@@ -7,6 +7,7 @@ import com.browntowndev.enclave.domain.model.media.GenerationSettings
 import com.browntowndev.enclave.domain.model.media.ImageGenerationProgress
 import com.browntowndev.enclave.domain.model.media.VideoGenerationSettings
 import com.browntowndev.enclave.domain.port.media.StudioGenerationDispatcherPort
+import com.browntowndev.enclave.domain.port.repository.ActiveStudioGeneration
 import com.browntowndev.enclave.domain.port.repository.StudioMediaAsset
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.feature.studio.STUDIO_ANIMATE_I2V_UNAVAILABLE
@@ -16,6 +17,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -48,6 +50,7 @@ class StudioGenerationCoordinator
         val videoGenerationState: StateFlow<VideoGenerationState> = _videoGenerationState.asStateFlow()
 
         private val consumedScrollAnchors = mutableSetOf<String>()
+        private var observedEphemeralMediaIds: Set<String>? = null
 
         var lastProcessedEditAssetId: String? = null
         var lastProcessedAnimateAssetId: String? = null
@@ -55,13 +58,32 @@ class StudioGenerationCoordinator
         private var pendingDetailVideoSourceAssetId: String? = null
         private var pendingDetailVideoSourceCreatedAt: Long? = null
 
-        fun startObservers(scope: CoroutineScope) {
+        fun startObservers(
+            scope: CoroutineScope,
+            onActiveGeneration: (ActiveStudioGeneration) -> Unit = {},
+        ) {
             studioRepository
                 .observeEphemeralMedia()
                 .onEach { media ->
-                    _isGenerating.value = false
-                    _generationProgressLabel.value = null
+                    val mediaIds = media.map { it.id }.toSet()
+                    if (observedEphemeralMediaIds?.let { previousIds -> mediaIds.any { it !in previousIds } } == true) {
+                        _isGenerating.value = false
+                        _generationProgressLabel.value = null
+                    }
+                    observedEphemeralMediaIds = mediaIds
                     resolveDetailVideoGeneration(media)
+                }.launchIn(scope)
+
+            studioRepository
+                .observeActiveGeneration()
+                .onEach { activeGeneration ->
+                    _isGenerating.value = activeGeneration != null
+                    if (activeGeneration == null) {
+                        _generationProgressLabel.value = null
+                    } else {
+                        _lastSubmittedPrompt.value = activeGeneration.prompt
+                        onActiveGeneration(activeGeneration)
+                    }
                 }.launchIn(scope)
 
             studioRepository
@@ -96,6 +118,7 @@ class StudioGenerationCoordinator
             _isGenerating.value = false
             _generationProgressLabel.value = null
             studioRepository.clearGenerationProgress()
+            studioRepository.clearActiveGeneration()
             dispatcher.stopGeneration()
         }
 
@@ -105,9 +128,24 @@ class StudioGenerationCoordinator
             settings: GenerationSettings,
         ) {
             _generationProgressLabel.value = null
+            val claimedGeneration =
+                studioRepository.reportActiveGeneration(
+                    ActiveStudioGeneration(
+                        prompt = prompt,
+                        mediaType = mediaType,
+                        settings = settings,
+                    ),
+                )
+            if (!claimedGeneration) {
+                _error.value = GENERATION_ALREADY_ACTIVE_MESSAGE
+                _isContinualGenerationActive.value = false
+                return
+            }
             dispatcher.startGeneration(prompt, mediaType, settings)
             _isGenerating.value = true
         }
+
+        suspend fun isGenerationActive(): Boolean = studioRepository.observeActiveGeneration().first() != null
 
         fun setVideoGenerationError(
             sourceAssetId: String?,
@@ -266,6 +304,7 @@ class StudioGenerationCoordinator
         private companion object {
             private const val DEFAULT_DETAIL_VIDEO_DURATION_SECONDS = 5
             private const val DEFAULT_DETAIL_VIDEO_RESOLUTION = "480p"
+            private const val GENERATION_ALREADY_ACTIVE_MESSAGE = "Another media generation is already in progress."
         }
 
         private fun ImageGenerationProgress.toPresentationLabel(): String =

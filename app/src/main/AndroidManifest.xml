@@ -50,6 +50,9 @@
                 <data
                     android:host="shared"
                     android:scheme="enclave" />
+                <data
+                    android:host="studio"
+                    android:scheme="enclave" />
             </intent-filter>
         </activity>
 

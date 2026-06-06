@@ -15,6 +15,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import androidx.navigation.navDeepLink
 import com.browntowndev.enclave.feature.studio.GalleryDetailScreen
 import com.browntowndev.enclave.feature.studio.GalleryRoute
 import com.browntowndev.enclave.feature.studio.GalleryViewModel
@@ -30,6 +31,12 @@ fun NavGraphBuilder.studioNavGraph(
     composable(
         route = Routes.STUDIO_WITH_ARGS,
         arguments = studioWithArgsNavArguments(),
+        deepLinks =
+            listOf(
+                navDeepLink {
+                    uriPattern = Routes.STUDIO_DEEP_LINK_PATTERN
+                },
+            ),
         enterTransition = { hierarchicalEnterTransition() },
         exitTransition = { hierarchicalExitTransition() },
         popEnterTransition = { hierarchicalPopEnterTransition() },
@@ -198,7 +205,7 @@ private fun StudioRoute(
             )
             isStudioInitialized = true
         } else if (!isStudioInitialized) {
-            studioViewModel.clearSession()
+            studioViewModel.clearSessionIfIdle()
             isStudioInitialized = true
         }
     }

@@ -21,10 +21,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RuntimeEnvironment
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import java.lang.reflect.Field
 
@@ -152,6 +154,31 @@ class MultimediaGenerationServiceTest {
 
         assertEquals(R.drawable.ic_notification, notification.smallIcon.resId)
         assertEquals("Enclave", notification.extras.getString(Notification.EXTRA_TITLE))
+    }
+
+    @Test
+    fun `S-STU-09 foreground notification opens Studio deep link`() {
+        val notification = invokeCreateNotification(service, "Generating...")
+
+        assertNotNull(notification.contentIntent)
+        val contentIntent = shadowOf(notification.contentIntent).savedIntent
+        assertEquals(Intent.ACTION_VIEW, contentIntent.action)
+        assertEquals(StudioNotificationDeepLink.URI_PATTERN, contentIntent.dataString)
+    }
+
+    @Test
+    fun `S-STU-10 duplicate start while generation active is ignored`() {
+        coEvery { generateMediaUseCase(any(), any()) } coAnswers {
+            delay(1_000)
+            Result.success(emptyList())
+        }
+
+        service.onStartCommand(startImageIntent(prompt = "first"), 0, 1)
+        service.onStartCommand(startImageIntent(prompt = "second"), 0, 2)
+        runBlocking { delay(100) }
+
+        coVerify(exactly = 1) { generateMediaUseCase(any(), any()) }
+        service.onDestroy()
     }
 
     @Test
