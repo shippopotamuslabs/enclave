@@ -1,8 +1,10 @@
 package com.browntowndev.enclave.domain.usecase.modelconfig
 
+import com.browntowndev.enclave.domain.model.config.LocalModelMetadata
 import com.browntowndev.enclave.domain.model.download.DownloadFileSpec
 import com.browntowndev.enclave.domain.model.download.DownloadRequestKind
 import com.browntowndev.enclave.domain.model.download.DownloadWorkRequest
+import com.browntowndev.enclave.domain.model.download.ModelPackMember
 import com.browntowndev.enclave.domain.model.download.ScheduledDownload
 import com.browntowndev.enclave.domain.port.download.DownloadWorkSchedulerPort
 import com.browntowndev.enclave.domain.usecase.download.ResolveModelCatalogUseCase
@@ -35,42 +37,64 @@ class ReDownloadModelPackUseCase
                         .map { it.fileName }
                         .toSet()
 
-                val fileSpecs = pack.members
-                    .filter { it.asset.metadata.localFileName in missingFileNames }
-                    .map { member ->
-                        val metadata = member.asset.metadata
-                        DownloadFileSpec(
-                            remoteFileName = metadata.remoteFileName,
-                            localFileName = metadata.localFileName,
-                            sha256 = metadata.sha256,
-                            sizeInBytes = metadata.sizeInBytes,
-                            huggingFaceModelName = metadata.huggingFaceModelName,
-                            huggingFacePath = metadata.huggingFacePath,
-                            source = metadata.source.name,
-                            modelFileFormat = metadata.modelFileFormat.name,
-                            utilityType = metadata.utilityType?.name,
-                        )
+                val fileSpecs =
+                    pack.members
+                        .filter { it.asset.metadata.localFileName in missingFileNames }
+                        .distinctBy { it.asset.metadata.sha256 }
+                        .map { it.toDownloadFileSpec() }
+
+                val specsToEnqueue =
+                    fileSpecs.ifEmpty {
+                        if (missingFileNames.isEmpty()) {
+                            emptyList()
+                        } else {
+                            pack.members
+                                .distinctBy { it.asset.metadata.sha256 }
+                                .map { it.toDownloadFileSpec() }
+                        }
                     }
 
-                if (fileSpecs.isEmpty()) {
+                if (specsToEnqueue.isEmpty()) {
                     emptyList()
                 } else {
-                    val sessionId = UUID.randomUUID().toString()
-                    val request =
-                        DownloadWorkRequest(
-                            files = fileSpecs,
-                            sessionId = sessionId,
-                            requestKind = DownloadRequestKind.INITIALIZE_MODELS,
-                            targetModelId = null,
-                            wifiOnly = true,
-                        )
-                    downloadWorkScheduler.enqueue(request)
-                    listOf(
-                        ScheduledDownload(
-                            sessionId = sessionId,
-                            requestKind = DownloadRequestKind.INITIALIZE_MODELS,
-                        )
-                    )
+                    enqueuePackDownload(specsToEnqueue)
                 }
             }
+
+        private fun enqueuePackDownload(fileSpecs: List<DownloadFileSpec>): List<ScheduledDownload> {
+            val sessionId = UUID.randomUUID().toString()
+            val request =
+                DownloadWorkRequest(
+                    files = fileSpecs,
+                    sessionId = sessionId,
+                    requestKind = DownloadRequestKind.INITIALIZE_MODELS,
+                    targetModelId = null,
+                    wifiOnly = true,
+                )
+            downloadWorkScheduler.enqueue(request)
+            return listOf(
+                ScheduledDownload(
+                    sessionId = sessionId,
+                    requestKind = DownloadRequestKind.INITIALIZE_MODELS,
+                ),
+            )
+        }
+
+        private fun ModelPackMember.toDownloadFileSpec(): DownloadFileSpec {
+            val metadata = asset.metadata
+            return metadata.toDownloadFileSpec()
+        }
+
+        private fun LocalModelMetadata.toDownloadFileSpec(): DownloadFileSpec =
+            DownloadFileSpec(
+                remoteFileName = remoteFileName,
+                localFileName = localFileName,
+                sha256 = sha256,
+                sizeInBytes = sizeInBytes,
+                huggingFaceModelName = huggingFaceModelName,
+                huggingFacePath = huggingFacePath,
+                source = source.name,
+                modelFileFormat = modelFileFormat.name,
+                utilityType = utilityType?.name,
+            )
     }

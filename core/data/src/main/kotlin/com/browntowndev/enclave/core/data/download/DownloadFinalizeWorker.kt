@@ -11,10 +11,13 @@ import com.browntowndev.enclave.domain.model.config.LocalModelAsset
 import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.config.UtilityType
 import com.browntowndev.enclave.domain.model.download.Sd15QnnPackCatalog
-import com.browntowndev.enclave.domain.usecase.download.ResolveSd15QnnPackCatalogAssetUseCase
+import com.browntowndev.enclave.domain.model.download.SdxlQnnPackCatalog
+import com.browntowndev.enclave.domain.port.download.QnnPackInstallerPort
+import com.browntowndev.enclave.domain.port.download.QnnPackInstallProgressListener
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.ModelConfigFetcherPort
+import com.browntowndev.enclave.domain.usecase.download.ResolveSd15QnnPackCatalogAssetUseCase
 import com.browntowndev.enclave.domain.usecase.modelconfig.SyncLocalModelRegistryUseCase
 import com.browntowndev.enclave.domain.usecase.modelconfig.SyncUtilityModelRegistryUseCase
 import dagger.assisted.Assisted
@@ -49,7 +52,7 @@ class DownloadFinalizeWorker
         private val modelConfigFetcher: ModelConfigFetcherPort,
         private val syncLocalModelRegistryUseCase: SyncLocalModelRegistryUseCase,
         private val syncUtilityModelRegistryUseCase: SyncUtilityModelRegistryUseCase,
-        private val sd15QnnPackInstaller: Sd15QnnPackInstaller,
+        private val qnnPackInstaller: QnnPackInstallerPort,
         private val resolveSd15QnnPackCatalogAssetUseCase: ResolveSd15QnnPackCatalogAssetUseCase,
         private val embeddingCoordinator: EmbeddingRegenerationCoordinator,
         private val logger: LoggingPort,
@@ -129,7 +132,7 @@ class DownloadFinalizeWorker
 
                 logger.info(TAG, "Found ${matchingAssets.size} matching assets for ${downloadedShas.size} downloaded SHAs")
 
-                syncMatchingAssets(matchingAssets)
+                syncMatchingAssets(matchingAssets, downloadedShas)
 
                 // Trigger embedding regeneration if any embedding models were finalized
                 val hasEmbeddingModel =
@@ -277,41 +280,63 @@ class DownloadFinalizeWorker
                         (
                             asset.metadata.utilityType == UtilityType.SD15_QNN_PACK &&
                                 downloadedShas.any { sha -> Sd15QnnPackCatalog.findBySha256(sha) != null }
+                        ) ||
+                        (
+                            asset.metadata.utilityType == UtilityType.SDXL_QNN_PACK &&
+                                downloadedShas.any { sha -> SdxlQnnPackCatalog.findBySha256(sha) != null }
                         )
                 }.map { asset ->
-                    if (asset.metadata.utilityType != UtilityType.SD15_QNN_PACK) {
-                        asset
-                    } else {
-                        val variant =
-                            downloadedShas.firstNotNullOfOrNull { sha ->
-                                Sd15QnnPackCatalog.findBySha256(sha)
+                    when (asset.metadata.utilityType) {
+                        UtilityType.SD15_QNN_PACK -> {
+                            val variant =
+                                downloadedShas.firstNotNullOfOrNull { sha ->
+                                    Sd15QnnPackCatalog.findBySha256(sha)
+                                }
+                            if (variant != null) {
+                                resolveSd15QnnPackCatalogAssetUseCase.applyVariant(asset, variant)
+                            } else {
+                                asset
                             }
-                        if (variant != null) {
-                            resolveSd15QnnPackCatalogAssetUseCase.applyVariant(asset, variant)
-                        } else {
-                            asset
                         }
+                        else -> asset
                     }
                 }
 
-        private suspend fun syncMatchingAssets(matchingAssets: List<LocalModelAsset>) {
+        private suspend fun syncMatchingAssets(
+            matchingAssets: List<LocalModelAsset>,
+            downloadedShas: List<String>,
+        ) {
             for (asset in matchingAssets) {
                 if (asset.metadata.utilityType != null) {
-                    syncUtilityAsset(asset)
+                    syncUtilityAsset(asset, downloadedShas)
                 } else {
                     syncSlotAsset(asset)
                 }
             }
         }
 
-        private suspend fun syncUtilityAsset(asset: LocalModelAsset) {
+        private suspend fun syncUtilityAsset(
+            asset: LocalModelAsset,
+            downloadedShas: List<String>,
+        ) {
             try {
-                if (asset.metadata.utilityType == UtilityType.SD15_QNN_PACK) {
-                    val installed = sd15QnnPackInstaller.installIfNeeded(asset.metadata)
-                    if (!installed) {
-                        logger.warning(TAG, "SD15 QNN pack was not installed; skipping utility registry sync")
-                        return
+                when (asset.metadata.utilityType) {
+                    UtilityType.SD15_QNN_PACK, UtilityType.SDXL_QNN_PACK -> {
+                        val requiresInstall = asset.metadata.sha256 in downloadedShas
+                        val installed =
+                            qnnPackInstaller.installIfNeeded(
+                                asset.metadata,
+                                progressListener = qnnPackProgressListener(),
+                            )
+                        if (requiresInstall && !installed) {
+                            error("QNN pack install failed for ${asset.metadata.localFileName}")
+                        }
+                        if (!installed) {
+                            logger.warning(TAG, "QNN pack was not installed; skipping utility registry sync")
+                            return
+                        }
                     }
+                    else -> Unit
                 }
                 persistUtilityAsset(asset)
             } catch (e: Exception) {
@@ -319,8 +344,26 @@ class DownloadFinalizeWorker
                     TAG,
                     "Failed to sync utility ${asset.metadata.utilityType}: ${e.message}",
                 )
+                if (asset.metadata.utilityType in setOf(UtilityType.SD15_QNN_PACK, UtilityType.SDXL_QNN_PACK) &&
+                    asset.metadata.sha256 in downloadedShas
+                ) {
+                    throw e
+                }
             }
         }
+
+        private fun qnnPackProgressListener(): QnnPackInstallProgressListener =
+            QnnPackInstallProgressListener { bytesExtracted, totalBytes ->
+                runCatching {
+                    setProgress(
+                        workDataOf(
+                            DownloadWorkKeys.KEY_WORKER_STAGE to DownloadWorkKeys.STAGE_FINALIZE,
+                            com.browntowndev.enclave.domain.model.download.DownloadKey.POST_PROCESS_BYTES.key to bytesExtracted,
+                            com.browntowndev.enclave.domain.model.download.DownloadKey.POST_PROCESS_TOTAL.key to totalBytes,
+                        ),
+                    )
+                }
+            }
 
         private suspend fun syncSlotAsset(asset: LocalModelAsset) {
             for (config in asset.configurations) {

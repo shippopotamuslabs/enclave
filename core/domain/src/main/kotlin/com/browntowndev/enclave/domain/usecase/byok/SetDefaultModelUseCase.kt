@@ -6,6 +6,8 @@ import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.config.TtsProviderId
 import com.browntowndev.enclave.domain.model.download.ModelPackRole
 import com.browntowndev.enclave.domain.model.inference.ModelType
+import com.browntowndev.enclave.domain.model.media.LocalImageGenTriState
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilityPolicy
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelRegistry
 import com.browntowndev.enclave.domain.model.media.LocalStableDiffusionModelPolicy
@@ -138,19 +140,22 @@ class SetDefaultModelUseCaseImpl
         }
 
         private suspend fun requireImageGenerationPackComplete(asset: com.browntowndev.enclave.domain.model.config.LocalModelAsset) {
-            val catalog =
-                resolveModelCatalog().getOrElse {
-                    throw IllegalArgumentException("Unable to verify model pack download status.")
-                }
             val packId =
-                catalog.packs
-                    .firstOrNull { pack ->
-                        pack.members.any { member ->
-                            member.role == ModelPackRole.DIFFUSION &&
-                                member.asset.metadata.sha256
-                                    .equals(asset.metadata.sha256, ignoreCase = true)
-                        }
-                    }?.packId
+                LocalImageGenerationModelRegistry.descriptorFor(asset)?.packId
+                    ?: run {
+                        val catalog =
+                            resolveModelCatalog().getOrElse {
+                                throw IllegalArgumentException("Unable to verify model pack download status.")
+                            }
+                        catalog.packs
+                            .firstOrNull { pack ->
+                                pack.members.any { member ->
+                                    member.role == ModelPackRole.DIFFUSION &&
+                                        member.asset.metadata.sha256
+                                            .equals(asset.metadata.sha256, ignoreCase = true)
+                                }
+                            }?.packId
+                    }
                     ?: return
             val completeness =
                 verifyModelPackCompleteness(packId).getOrElse {
@@ -164,7 +169,12 @@ class SetDefaultModelUseCaseImpl
             if (modelId != LocalImageGenerationModelId.SDXL_QNN) {
                 return
             }
-            capabilityPort.getCapabilities()
-            throw NotImplementedError("TDD Red")
+            val capabilities = capabilityPort.getCapabilities()
+            if (capabilities.sdxlNpuSupported != LocalImageGenTriState.YES) {
+                val reason =
+                    capabilities.disabledReasonsByModelId[LocalImageGenerationModelId.SDXL_QNN]
+                        ?: LocalImageGenerationCapabilityPolicy.SDXL_BLOCKED_REASON
+                throw IllegalArgumentException(reason)
+            }
         }
     }

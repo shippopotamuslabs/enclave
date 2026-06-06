@@ -417,6 +417,13 @@ BackendProcess spawn_backend(
     if (!prepare_qnn_runtime_libs(error_out, error_out_len)) {
         return {};
     }
+    const bool sdxl_layout = file_exists(config.model_dir + "/clip_2.mnn");
+    const char* required_skel =
+        sdxl_layout ? "libQnnHtpV81Skel.so" : "libQnnHtpV73Skel.so";
+    if (!file_exists(qnn_runtime_dir() + "/" + required_skel)) {
+        copy_error("Missing QNN Hexagon skeleton library.", error_out, error_out_len);
+        return {};
+    }
 
     std::vector<std::string> args;
     args.emplace_back(executable);
@@ -439,12 +446,7 @@ BackendProcess spawn_backend(
             args.push_back(config.model_dir + "/vae_encoder.mnn");
         }
     } else {
-        // IMPORTANT: pass the "clip.mnn" sentinel, NOT clip_v2.mnn. The backend only
-        // runs its clip_v2 auto-upgrade (which sets use_clip_v2=true and loads
-        // token_emb.bin/pos_emb.bin) when the --clip arg ends in exactly "clip.mnn"
-        // (see local-dream main.cpp). The sentinel file itself need not exist; the
-        // backend resolves clip_v2.mnn in the same dir. Passing clip_v2.mnn directly
-        // leaves use_clip_v2=false and crashes on a null "input_ids" tensor at startup.
+        const bool sdxl_layout = file_exists(config.model_dir + "/clip_2.mnn");
         args.push_back("--clip");
         args.push_back(config.model_dir + "/clip.mnn");
         args.push_back("--unet");
@@ -459,9 +461,21 @@ BackendProcess spawn_backend(
         args.push_back(qnn_runtime_dir() + "/libQnnSystem.so");
         args.push_back("--port");
         args.push_back(std::to_string(port));
-        args.push_back("--text_embedding_size");
-        args.push_back("768");
-        args.push_back("--use_cpu_clip");
+        if (sdxl_layout) {
+            // SDXL dual-encoder path: local-dream loads clip.mnn + clip_2.mnn on MNN and
+            // sets text_embedding_size/text_embedding_size_2 when --sdxl is present.
+            args.push_back("--sdxl");
+        } else {
+            // SD 1.5: pass the "clip.mnn" sentinel, NOT clip_v2.mnn. The backend only
+            // runs its clip_v2 auto-upgrade (which sets use_clip_v2=true and loads
+            // token_emb.bin/pos_emb.bin) when the --clip arg ends in exactly "clip.mnn"
+            // (see local-dream main.cpp). The sentinel file itself need not exist; the
+            // backend resolves clip_v2.mnn in the same dir. Passing clip_v2.mnn directly
+            // leaves use_clip_v2=false and crashes on a null "input_ids" tensor at startup.
+            args.push_back("--text_embedding_size");
+            args.push_back("768");
+            args.push_back("--use_cpu_clip");
+        }
         if (file_exists(config.model_dir + "/vae_encoder.bin")) {
             args.push_back("--vae_encoder");
             args.push_back(config.model_dir + "/vae_encoder.bin");
@@ -488,14 +502,13 @@ BackendProcess spawn_backend(
     const pid_t pid = fork();
     if (pid == 0) {
         close(log_pipe[0]);
+        const std::string runtime = qnn_runtime_dir();
+        // Match Local Dream: runtime dir first on LD path; skel loads from DSP path only.
         const std::string ld_path =
-            qnn_runtime_dir() + ":/vendor/lib64:/vendor/lib/rfsa/adsp:/system/lib64";
-        const std::string dsp_path = qnn_runtime_dir() + ":/vendor/lib/rfsa/adsp";
-        const std::string adsp_path =
-            qnn_runtime_dir() + ";/vendor/lib/rfsa/adsp;/vendor/dsp/cdsp;/system/lib/rfsa/adsp";
+            runtime + ":/system/lib64:/vendor/lib64:/vendor/lib64/egl";
         setenv("LD_LIBRARY_PATH", ld_path.c_str(), 1);
-        setenv("DSP_LIBRARY_PATH", dsp_path.c_str(), 1);
-        setenv("ADSP_LIBRARY_PATH", adsp_path.c_str(), 1);
+        setenv("DSP_LIBRARY_PATH", runtime.c_str(), 1);
+        unsetenv("ADSP_LIBRARY_PATH");
         dup2(log_pipe[1], STDOUT_FILENO);
         dup2(log_pipe[1], STDERR_FILENO);
         close(log_pipe[1]);

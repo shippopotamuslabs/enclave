@@ -14,4 +14,5 @@ data class DownloadProgressUpdate(
     val waitingForUnmeteredNetwork: Boolean? = null,
     val errorMessage: String? = null,
     val clearSession: Boolean = false,
+    val postProcessProgress: Float? = null,
 )

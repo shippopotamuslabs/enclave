@@ -332,7 +332,7 @@ fun SettingsScreen(
                         onClick = { onShowFeedbackSheet(true) },
                     )
                     NeoNavRow(
-                        title = "Open Source Licenses",
+                        title = "Licenses & Attributions",
                         icon = Icons.Default.Info,
                         onClick = { onShowOssLicensesSheet(true) },
                     )

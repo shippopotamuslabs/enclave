@@ -1,6 +1,7 @@
 package com.browntowndev.enclave.feature.inference.media.local
 
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -24,6 +25,7 @@ class FakePlaceholderImageGenerationBackendTest {
                     .generate(
                         LocalImageGenerationNativeRequest(
                             backend = LocalImageGenerationBackendKind.CPU_MNN,
+                            modelId = LocalImageGenerationModelId.SD15_CPU,
                             modelDir = tempDir.absolutePath,
                             prompt = "test",
                             negativePrompt = null,

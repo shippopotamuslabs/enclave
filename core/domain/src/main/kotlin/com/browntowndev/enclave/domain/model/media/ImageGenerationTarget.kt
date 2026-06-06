@@ -29,15 +29,3 @@ sealed interface ImageGenerationTarget {
 object LocalStableDiffusionModelPolicy {
     fun supports(asset: LocalModelAsset): Boolean = LocalImageGenerationModelRegistry.descriptorFor(asset) != null
 }
-
-val LocalStableDiffusionCapabilities: ProviderCapabilities =
-    ProviderCapabilities(
-        supportedAspectRatios = listOf(AspectRatio.ONE_ONE, AspectRatio.SIXTEEN_NINE, AspectRatio.NINE_SIXTEEN),
-        supportedImageQualities = listOf(GenerationQuality.SPEED),
-        supportedImageResolutions = listOf("512x512", "1024x1024"),
-        supportedVideoQualities = emptyList(),
-        supportedVideoResolutions = emptyList(),
-        supportedVideoDurations = emptyList(),
-        supportsVideo = false,
-        supportsMusic = false,
-    )

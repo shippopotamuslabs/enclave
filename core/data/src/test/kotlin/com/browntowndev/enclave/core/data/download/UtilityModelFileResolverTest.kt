@@ -160,7 +160,33 @@ class UtilityModelFileResolverTest {
         }
 
     @Test
-    @DisplayName("SCN-RESOLVE-LOCAL-001")
+    fun resolveLocalModelPath_returnsSdxlQnnDirWhenCatalogAssetInstalled() =
+        runTest {
+            val modelsDir = File(tempDir, ModelConfig.MODELS_DIR).apply { mkdirs() }
+            val packDir = File(modelsDir, LocalImageGenerationPaths.SDXL_QNN_SUBDIR).apply { mkdirs() }
+            listOf("clip_v2.mnn", "token_emb.bin", "pos_emb.bin", "unet.bin", "vae_decoder.bin", "tokenizer.json").forEach { name ->
+                File(packDir, name).writeBytes(byteArrayOf(1))
+            }
+            val resolver = resolver()
+
+            val path =
+                resolver.resolveLocalModelPath(
+                    LocalModelMetadata(
+                        id = LocalModelId("sdxl-diffusion"),
+                        displayName = "Stable Diffusion XL (NPU)",
+                        huggingFaceModelName = "xororz/sdxl-qnn",
+                        remoteFileName = "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip",
+                        localFileName = "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip",
+                        sha256 = "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83",
+                        sizeInBytes = 3_504_485_672L,
+                        modelFileFormat = ModelFileFormat.BIN,
+                    ),
+                )
+
+            assertEquals(packDir.absolutePath, path)
+        }
+
+    @Test
     fun scnResolveLocal001_returnsAbsolutePathWhenLocalModelPresentAndSizeAndHashMatch() =
         runTest {
             val modelsDir = File(tempDir, ModelConfig.MODELS_DIR).apply { mkdirs() }

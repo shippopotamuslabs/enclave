@@ -55,7 +55,7 @@ class Sd15QnnPackInstallerTest {
 
             assertTrue(installer.installIfNeeded(metadata))
             val packDir = File(modelsDir, LocalImageGenerationPaths.SD15_QNN_SUBDIR)
-            assertTrue(LocalImageGenerationPaths.hasQnnArtifacts(packDir))
+            assertTrue(LocalImageGenerationPaths.hasSd15QnnArtifacts(packDir))
             assertTrue(!zipFile.exists())
         }
 
@@ -98,7 +98,7 @@ class Sd15QnnPackInstallerTest {
             val filesDir = File(tempDir, "files").apply { mkdirs() }
             val modelsDir = File(filesDir, ModelConfig.MODELS_DIR).apply { mkdirs() }
             val zipFile = File(modelsDir, "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip")
-            writeMinimalPackZip(zipFile)
+            writeMinimalSdxlPackZip(zipFile)
 
             val context = mockk<Context>(relaxed = true)
             every { context.getExternalFilesDir(null) } returns filesDir
@@ -122,7 +122,7 @@ class Sd15QnnPackInstallerTest {
 
             assertTrue(installer.installIfNeeded(metadata))
             val packDir = File(modelsDir, "sdxl-qnn")
-            assertTrue(LocalImageGenerationPaths.hasQnnArtifacts(packDir))
+            assertTrue(LocalImageGenerationPaths.hasSdxlQnnArtifacts(packDir))
         }
 
     @Test
@@ -131,7 +131,7 @@ class Sd15QnnPackInstallerTest {
             val filesDir = File(tempDir, "files").apply { mkdirs() }
             val modelsDir = File(filesDir, ModelConfig.MODELS_DIR).apply { mkdirs() }
             val zipFile = File(modelsDir, "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip")
-            writeMinimalPackZip(zipFile)
+            writeMinimalSdxlPackZip(zipFile)
 
             val context = mockk<Context>(relaxed = true)
             every { context.getExternalFilesDir(null) } returns filesDir
@@ -157,9 +157,20 @@ class Sd15QnnPackInstallerTest {
             assertFalse(zipFile.exists())
         }
 
+    private fun writeMinimalSdxlPackZip(zipFile: File) {
+        writePackZip(zipFile, LocalImageGenerationPaths.REQUIRED_SDXL_QNN_FILES)
+    }
+
     private fun writeMinimalPackZip(zipFile: File) {
+        writePackZip(zipFile, LocalImageGenerationPaths.REQUIRED_SD15_QNN_FILES)
+    }
+
+    private fun writePackZip(
+        zipFile: File,
+        artifactNames: List<String>,
+    ) {
         ZipOutputStream(zipFile.outputStream()).use { zip ->
-            listOf("clip_v2.mnn", "token_emb.bin", "pos_emb.bin", "unet.bin", "vae_decoder.bin", "tokenizer.json").forEach { name ->
+            artifactNames.forEach { name ->
                 zip.putNextEntry(ZipEntry(name))
                 zip.write(byteArrayOf(1, 2, 3))
                 zip.closeEntry()

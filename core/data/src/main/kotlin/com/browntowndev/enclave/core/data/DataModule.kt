@@ -20,6 +20,7 @@ import com.browntowndev.enclave.core.data.download.ModelConfigFetcherImpl
 import com.browntowndev.enclave.core.data.download.ModelDownloadOrchestratorImpl
 import com.browntowndev.enclave.core.data.download.ModelFileScanner
 import com.browntowndev.enclave.core.data.download.ModelPackVerifierImpl
+import com.browntowndev.enclave.core.data.download.Sd15QnnPackInstaller
 import com.browntowndev.enclave.core.data.download.UtilityModelFileResolver
 import com.browntowndev.enclave.core.data.download.remote.DynamicModelUrlProvider
 import com.browntowndev.enclave.core.data.download.remote.HttpFileDownloader
@@ -105,6 +106,7 @@ import com.browntowndev.enclave.domain.port.device.SnapdragonTierPort
 import com.browntowndev.enclave.domain.port.download.ModelDownloadOrchestratorPort
 import com.browntowndev.enclave.domain.port.download.ModelFileScannerPort
 import com.browntowndev.enclave.domain.port.download.ModelPackVerifierPort
+import com.browntowndev.enclave.domain.port.download.QnnPackInstallerPort
 import com.browntowndev.enclave.domain.port.download.ModelUrlProviderPort
 import com.browntowndev.enclave.domain.port.inference.CommittedInferencePromptPort
 import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
@@ -554,6 +556,10 @@ abstract class DataRepositoryModule {
     @Binds
     @Singleton
     abstract fun bindModelPackVerifier(impl: ModelPackVerifierImpl): ModelPackVerifierPort
+
+    @Binds
+    @Singleton
+    abstract fun bindQnnPackInstaller(impl: Sd15QnnPackInstaller): QnnPackInstallerPort
 
     @Binds
     @Singleton

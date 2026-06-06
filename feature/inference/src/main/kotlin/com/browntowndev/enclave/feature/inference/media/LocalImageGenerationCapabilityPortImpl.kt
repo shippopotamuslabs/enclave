@@ -6,6 +6,7 @@ import android.os.Build
 import com.browntowndev.enclave.domain.model.media.LocalImageGenTriState
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilities
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilityPolicy
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId
 import com.browntowndev.enclave.domain.port.media.LocalImageGenerationCapabilityPort
 import com.browntowndev.enclave.domain.model.device.SnapdragonTier
@@ -45,11 +46,25 @@ class LocalImageGenerationCapabilityPortImpl
             val npuAvailable = resolveNpuAvailable(snapdragon, qnnProbe, diagnostics)
             val sd15Npu = resolveSd15Npu(arm64, totalMem, minRam, npuAvailable, snapdragon)
             val sd15Cpu = resolveSd15Cpu(arm64, totalMem, minRam, mnnProbe)
-            val sdxlNpu = resolveSdxlNpu(tier, npuAvailable)
+            val sdxlNpu = resolveSdxlNpu(arm64, totalMem, minRam, tier, npuAvailable)
 
             val (recommendedBackend, recommendedModelId) = recommendBackend(sd15Npu, sd15Cpu)
 
+            val disabledReasons =
+                buildMap {
+                    if (sdxlNpu == LocalImageGenTriState.NO &&
+                        npuAvailable == LocalImageGenTriState.YES &&
+                        tier != SnapdragonTier.GEN3_PLUS
+                    ) {
+                        put(
+                            LocalImageGenerationModelId.SDXL_QNN,
+                            LocalImageGenerationCapabilityPolicy.SDXL_BLOCKED_REASON,
+                        )
+                    }
+                }
+
             return LocalImageGenerationCapabilities(
+                snapdragonTier = tier,
                 npuAvailable = npuAvailable,
                 sd15NpuSupported = sd15Npu,
                 sd15CpuSupported = sd15Cpu,
@@ -57,6 +72,7 @@ class LocalImageGenerationCapabilityPortImpl
                 recommendedBackend = recommendedBackend,
                 recommendedModelId = recommendedModelId,
                 diagnostics = diagnostics,
+                disabledReasonsByModelId = disabledReasons,
             )
         }
 
@@ -122,10 +138,14 @@ class LocalImageGenerationCapabilityPortImpl
             }
 
         private fun resolveSdxlNpu(
+            arm64: Boolean,
+            totalMem: Long,
+            minRam: Long,
             tier: SnapdragonTier,
             npuAvailable: LocalImageGenTriState,
         ): LocalImageGenTriState =
             when {
+                !arm64 || totalMem < minRam -> LocalImageGenTriState.NO
                 tier == SnapdragonTier.GEN3_PLUS && npuAvailable == LocalImageGenTriState.YES ->
                     LocalImageGenTriState.YES
                 tier == SnapdragonTier.GEN3_PLUS && npuAvailable == LocalImageGenTriState.UNKNOWN ->

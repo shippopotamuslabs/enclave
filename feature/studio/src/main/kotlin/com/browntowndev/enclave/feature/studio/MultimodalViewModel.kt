@@ -6,7 +6,6 @@ import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.media.ImageGenerationTarget
-import com.browntowndev.enclave.domain.model.media.LocalStableDiffusionCapabilities
 import com.browntowndev.enclave.domain.model.media.ProviderCapabilities
 import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
@@ -39,6 +38,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
@@ -107,8 +107,14 @@ class MultimodalViewModel
                         ?.takeIf { it.localConfigId != null && it.mediaProviderId == null }
                         ?.localConfigId
                 }.distinctUntilChanged()
-                .map { localConfigId ->
-                    localConfigId?.let { getImageGenerationCapabilitiesUseCase.localCapabilities(it) }
+                .flatMapLatest { localConfigId: LocalModelConfigurationId? ->
+                    if (localConfigId == null) {
+                        flowOf<ProviderCapabilities?>(null)
+                    } else {
+                        flow {
+                            emit(getImageGenerationCapabilitiesUseCase.localCapabilities(localConfigId))
+                        }
+                    }
                 }
 
         private val _capabilities = MutableStateFlow<ProviderCapabilities?>(null)

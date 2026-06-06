@@ -46,6 +46,7 @@ class ModelConfigFetcherImpl
         companion object {
             private const val TAG = "ModelConfigFetcher"
             private const val CATALOG_CACHE_FILE_NAME = "model_config_cache.json"
+            private const val LEGACY_SDXL_DIFFUSION_FILE = "realvis_xl_v5_dmd2.gguf"
             private val json =
                 Json {
                     ignoreUnknownKeys = true
@@ -58,7 +59,13 @@ class ModelConfigFetcherImpl
 
         override suspend fun getPersistedParsedCatalog(): Result<ParsedModelCatalog> =
             withContext(Dispatchers.IO) {
-                lastSuccessfulCatalog?.let { return@withContext Result.success(it) }
+                discardStaleCatalogCacheIfNeeded()
+                lastSuccessfulCatalog?.let { cached ->
+                    if (!isStaleCatalog(cached)) {
+                        return@withContext Result.success(cached)
+                    }
+                    lastSuccessfulCatalog = null
+                }
                 loadCatalogFromDisk()?.let { catalog ->
                     lastSuccessfulCatalog = catalog
                     return@withContext Result.success(catalog)
@@ -68,6 +75,7 @@ class ModelConfigFetcherImpl
 
         override suspend fun fetchParsedCatalog(): Result<ParsedModelCatalog> =
             withContext(Dispatchers.IO) {
+                discardStaleCatalogCacheIfNeeded()
                 try {
                     val bodyString = fetchRemoteConfigBody()
                     val catalog = parseCatalogFromJson(bodyString)
@@ -84,8 +92,11 @@ class ModelConfigFetcherImpl
 
         private fun resolveCatalogAfterFetchFailure(cause: Exception): Result<ParsedModelCatalog> {
             lastSuccessfulCatalog?.let { cached ->
-                Log.w(TAG, "Serving in-memory model catalog (${cached.packs.size} packs)")
-                return Result.success(cached)
+                if (!isStaleCatalog(cached)) {
+                    Log.w(TAG, "Serving in-memory model catalog (${cached.packs.size} packs)")
+                    return Result.success(cached)
+                }
+                lastSuccessfulCatalog = null
             }
             loadCatalogFromDisk()?.let { catalog ->
                 lastSuccessfulCatalog = catalog
@@ -93,6 +104,27 @@ class ModelConfigFetcherImpl
                 return Result.success(catalog)
             }
             return Result.failure(cause)
+        }
+
+        private fun isStaleCatalogJson(bodyString: String): Boolean = bodyString.contains(LEGACY_SDXL_DIFFUSION_FILE)
+
+        private fun isStaleCatalog(catalog: ParsedModelCatalog): Boolean =
+            catalog.assets.any { asset -> asset.metadata.localFileName == LEGACY_SDXL_DIFFUSION_FILE }
+
+        private fun discardStaleCatalogCacheIfNeeded() {
+            val file = catalogCacheFile()
+            if (!file.exists()) {
+                return
+            }
+            val body =
+                runCatching { file.readText() }.getOrNull()
+                    ?: return
+            if (!isStaleCatalogJson(body)) {
+                return
+            }
+            Log.w(TAG, "Discarding stale model catalog cache (legacy SDXL GGUF filename)")
+            file.delete()
+            lastSuccessfulCatalog = null
         }
 
         private fun catalogCacheFile(): File = File(context.filesDir, CATALOG_CACHE_FILE_NAME)
@@ -110,10 +142,21 @@ class ModelConfigFetcherImpl
             if (!file.exists()) {
                 return null
             }
+            val body =
+                runCatching { file.readText() }
+                    .onFailure { error ->
+                        Log.w(TAG, "Failed to read model catalog cache: ${error.message}")
+                    }.getOrNull()
+                    ?: return null
+            if (isStaleCatalogJson(body)) {
+                Log.w(TAG, "Discarding stale model catalog cache (legacy SDXL GGUF filename)")
+                file.delete()
+                return null
+            }
             return runCatching {
-                parseCatalogFromJson(file.readText())
+                parseCatalogFromJson(body)
             }.onFailure { error ->
-                Log.w(TAG, "Failed to read model catalog cache: ${error.message}")
+                Log.w(TAG, "Failed to parse model catalog cache: ${error.message}")
             }.getOrNull()
         }
 
@@ -147,9 +190,7 @@ class ModelConfigFetcherImpl
             remotePacks: List<RemoteModelPack>,
             assets: List<LocalModelAsset>,
         ): List<ModelPack> {
-            val assetsByFileName = assets.associateBy { it.metadata.localFileName }
             val packIds = mutableSetOf<String>()
-            val memberFileNames = mutableSetOf<String>()
 
             return remotePacks.map { remotePack ->
                 require(packIds.add(remotePack.packId)) {
@@ -157,17 +198,10 @@ class ModelConfigFetcherImpl
                 }
                 val members =
                     remotePack.members.map { member ->
-                        require(memberFileNames.add(member.fileName)) {
-                            "Duplicate pack member fileName across packs: ${member.fileName}"
-                        }
                         val role =
                             ModelPackRole.fromApiValue(member.role)
                                 ?: throw IllegalArgumentException("Unknown pack member role: ${member.role}")
-                        val asset =
-                            assetsByFileName[member.fileName]
-                                ?: throw IllegalArgumentException(
-                                    "Pack member file not found in assets: ${member.fileName}",
-                                )
+                        val asset = resolvePackMemberAsset(member, role, assets)
                         validatePackMember(role, member, asset)
                         ModelPackMember(role = role, asset = asset)
                     }
@@ -177,6 +211,42 @@ class ModelConfigFetcherImpl
                     slot = remotePack.slot,
                     members = members,
                 )
+            }
+        }
+
+        /**
+         * Resolves a pack member to the correct catalog asset when multiple [assets] rows share
+         * the same [RemoteModelPackMember.fileName] (e.g. SDXL diffusion + utility zip).
+         */
+        private fun resolvePackMemberAsset(
+            member: RemoteModelPackMember,
+            role: ModelPackRole,
+            assets: List<LocalModelAsset>,
+        ): LocalModelAsset {
+            val candidates = assets.filter { it.metadata.localFileName == member.fileName }
+            require(candidates.isNotEmpty()) {
+                "Pack member file not found in assets: ${member.fileName}"
+            }
+            return when (role) {
+                ModelPackRole.DIFFUSION ->
+                    candidates.firstOrNull { asset ->
+                        asset.metadata.utilityType == null &&
+                            asset.configurations.any { ModelType.IMAGE_GENERATION in it.defaultAssignments }
+                    } ?: error(
+                        "Diffusion pack member must reference a non-utility image asset: ${member.fileName}",
+                    )
+                ModelPackRole.VAE,
+                ModelPackRole.TEXT_ENCODER,
+                -> {
+                    val utilityType =
+                        requireNotNull(member.utilityType) {
+                            "Utility pack member must declare utilityType: ${member.fileName}"
+                        }
+                    candidates.firstOrNull { it.metadata.utilityType == utilityType }
+                        ?: error(
+                            "Pack member utilityType mismatch for ${member.fileName}: expected $utilityType",
+                        )
+                }
             }
         }
 

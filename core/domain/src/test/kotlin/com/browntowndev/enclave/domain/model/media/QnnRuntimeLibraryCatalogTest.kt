@@ -1,22 +1,41 @@
 package com.browntowndev.enclave.domain.model.media
 
 import com.browntowndev.enclave.domain.model.device.SnapdragonTier
-import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class QnnRuntimeLibraryCatalogTest {
     @Test
-    fun `Gen3 includes V73 skel so the 8gen2 pack can load on newer SoCs`() {
-        // Gen3+ devices run the 8gen2 (HTP V73) SD pack, so the V73 runtime family must be
-        // present at runtime even though the device's native Hexagon version is newer.
-        // Without V73 the backend dereferences a null QNN backend and crashes (regression guard).
+    fun `Gen3 includes V73 and V81 skel for SD15 and SDXL packs`() {
         val libraries = QnnRuntimeLibraryCatalog.runtimeLibrariesFor(SnapdragonTier.GEN3_PLUS)
 
         assertTrue("libQnnHtpV73Skel.so" in libraries)
-        assertTrue("libQnnHtpV73Stub.so" in libraries)
-        assertTrue("libQnnHtpV73.so" in libraries)
-        assertTrue("libQnnHtpV79.so" in libraries)
-        assertFalse(libraries.any { it.contains("V81") })
+        assertTrue("libQnnHtpV81Skel.so" in libraries)
+        assertTrue("libQnnHtpV79Skel.so" in libraries)
+    }
+
+    @Test
+    fun `SDXL model runtime uses V81 hexagon family`() {
+        val libraries =
+            QnnRuntimeLibraryCatalog.runtimeLibrariesForModel(LocalImageGenerationModelId.SDXL_QNN)
+
+        assertTrue("libQnnHtpV81Skel.so" in libraries)
+        assertEquals(
+            "libQnnHtpV81Skel.so",
+            QnnRuntimeLibraryCatalog.primarySkelLibraryFor(LocalImageGenerationModelId.SDXL_QNN),
+        )
+    }
+
+    @Test
+    fun `SD15 QNN model runtime uses V73 hexagon family`() {
+        val libraries =
+            QnnRuntimeLibraryCatalog.runtimeLibrariesForModel(LocalImageGenerationModelId.SD15_QNN)
+
+        assertTrue("libQnnHtpV73Skel.so" in libraries)
+        assertEquals(
+            "libQnnHtpV73Skel.so",
+            QnnRuntimeLibraryCatalog.primarySkelLibraryFor(LocalImageGenerationModelId.SD15_QNN),
+        )
     }
 }

@@ -8,7 +8,6 @@ import com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKi
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelPolicy
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelRegistry
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationPaths
-import com.browntowndev.enclave.domain.model.media.LocalStableDiffusionCapabilities
 import com.browntowndev.enclave.domain.port.media.GpuCapabilityPort
 import com.browntowndev.enclave.domain.port.media.LOCAL_IMAGE_GENERATION_UNSUPPORTED_MESSAGE
 import com.browntowndev.enclave.domain.port.media.LocalImageGenerationCapabilityPort
@@ -17,6 +16,7 @@ import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.UtilityModelFilePort
 import com.browntowndev.enclave.domain.model.inference.ModelType
+import java.io.File
 import javax.inject.Inject
 
 class ResolveAssignedImageGenerationTargetUseCase
@@ -66,7 +66,6 @@ class ResolveAssignedImageGenerationTargetUseCase
 
             val modelFilePath =
                 requireNotNull(utilityModelFilePort.resolveLocalModelPath(asset.metadata)) { NOT_DOWNLOADED }
-            val modelDir = java.io.File(modelFilePath).parentFile?.absolutePath ?: modelFilePath
 
             val deviceCapabilities = capabilityPort.getCapabilities()
             val selection =
@@ -82,10 +81,17 @@ class ResolveAssignedImageGenerationTargetUseCase
             val effectiveModelDir =
                 when (selection.backend) {
                     LocalImageGenerationBackendKind.QNN_NPU ->
-                        LocalImageGenerationPaths.resolveQnnModelDir(modelDir, descriptor.relativeModelDir)
-                    LocalImageGenerationBackendKind.CPU_MNN ->
-                        LocalImageGenerationPaths.resolveMnnModelDir(modelDir)
-                    else -> modelDir
+                        LocalImageGenerationPaths.resolveQnnLaunchDir(
+                            resolvedStoragePath = modelFilePath,
+                            family = descriptor.family,
+                            relativePackSubdir = descriptor.relativeModelDir,
+                        )
+                    LocalImageGenerationBackendKind.CPU_MNN -> {
+                        val modelsDir =
+                            File(modelFilePath).parentFile?.absolutePath ?: modelFilePath
+                        LocalImageGenerationPaths.resolveMnnModelDir(modelsDir)
+                    }
+                    else -> modelFilePath
                 }
 
             return ImageGenerationTarget.LocalStableDiffusion(
@@ -95,7 +101,7 @@ class ResolveAssignedImageGenerationTargetUseCase
                 modelDir = effectiveModelDir,
                 catalogSha256 = asset.metadata.sha256,
                 selectedBackend = selection.backend,
-                capabilities = LocalStableDiffusionCapabilities,
+                capabilities = LocalImageGenerationModelPolicy.providerCapabilitiesFor(descriptor.id),
                 deviceCapabilities = deviceCapabilities,
             )
         }

@@ -222,6 +222,13 @@ class OssLicensesBottomSheetTest {
                 "jtokkit",
                 "Anthropic Java SDK",
                 "Firebase Android SDK",
+                "llama.cpp",
+                "Local Dream (libstable_diffusion_core)",
+                "Qualcomm AI Runtime (QNN)",
+                "stb_image_write",
+                "whisper.cpp",
+                "Model: Stable Diffusion 1.5",
+                "Model: Stable Diffusion XL NPU pack",
                 "Dataset: AdvBench",
                 "Dataset: ClearHarm",
                 "Dataset: CLINC150",
@@ -270,6 +277,24 @@ class OssLicensesBottomSheetTest {
                         "BSD entry '${entry.name}' must include Copyright in licenseText",
                     )
                 }
+        }
+
+        // S4-09
+        @Test
+        fun `Local Dream entry discloses non-commercial license`() {
+            val localDream =
+                OssLicenses.entries.first { it.name == "Local Dream (libstable_diffusion_core)" }
+            assertTrue(localDream.licenseType.contains("BY-NC"))
+            assertTrue(localDream.licenseText.contains("NonCommercial", ignoreCase = true))
+        }
+
+        // S4-10
+        @Test
+        fun `QNN entry discloses proprietary Qualcomm terms`() {
+            val qnn = OssLicenses.entries.first { it.name == "Qualcomm AI Runtime (QNN)" }
+            assertTrue(qnn.licenseType.contains("Proprietary"))
+            assertTrue(qnn.licenseText.contains("Qualcomm"))
+            assertTrue(qnn.licenseText.contains("QAIRT"))
         }
     }
 }

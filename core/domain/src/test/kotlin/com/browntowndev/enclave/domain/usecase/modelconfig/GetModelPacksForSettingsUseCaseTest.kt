@@ -125,6 +125,104 @@ class GetModelPacksForSettingsUseCaseTest {
         }
 
     @Test
+    @DisplayName("SET-002 Gen2 blocked incomplete SDXL pack hides download action")
+    fun set002_gen2BlockedIncompleteSdxlPackHidesDownloadAction() =
+        runTest {
+            every { capabilityPort.getCapabilities() } returns
+                LocalImageGenerationCapabilities(
+                    npuAvailable = LocalImageGenTriState.YES,
+                    sd15NpuSupported = LocalImageGenTriState.YES,
+                    sd15CpuSupported = LocalImageGenTriState.NO,
+                    sdxlNpuSupported = LocalImageGenTriState.NO,
+                    recommendedBackend = LocalImageGenerationBackendKind.QNN_NPU,
+                    recommendedModelId = LocalImageGenerationModelId.SD15_QNN,
+                    diagnostics = emptyList(),
+                    disabledReasonsByModelId =
+                        mapOf(
+                            LocalImageGenerationModelId.SDXL_QNN to
+                                "Requires Snapdragon 8 Gen 3+ with QNN.",
+                        ),
+                )
+            coEvery { resolveModelCatalog() } returns Result.success(ModelPackTestFixtures.parsedCatalogWithSdxl())
+            coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
+            coEvery { utilityModelRepository.getByUtilityType(UtilityType.SD15_QNN_PACK) } returns mockk(relaxed = true)
+            coEvery { utilityModelRepository.getByUtilityType(UtilityType.SDXL_QNN_PACK) } returns null
+            coEvery { verifyModelPackCompleteness(ModelPackTestFixtures.PACK_ID) } returns
+                Result.success(
+                    ModelPackCompleteness(
+                        packId = ModelPackTestFixtures.PACK_ID,
+                        installedCount = 2,
+                        totalCount = 2,
+                        isComplete = true,
+                        members = emptyList(),
+                    ),
+                )
+            coEvery { verifyModelPackCompleteness(ModelPackTestFixtures.SDXL_PACK_ID) } returns
+                Result.success(
+                    ModelPackCompleteness(
+                        packId = ModelPackTestFixtures.SDXL_PACK_ID,
+                        installedCount = 0,
+                        totalCount = 2,
+                        isComplete = false,
+                        members = emptyList(),
+                    ),
+                )
+
+            val rows = useCase()
+            val sdxlRow = rows.single { it.pack.packId == ModelPackTestFixtures.SDXL_PACK_ID }
+
+            assertEquals("Requires Snapdragon 8 Gen 3+ with QNN.", sdxlRow.disabledReason)
+            assertFalse(sdxlRow.isEligible)
+            assertFalse(sdxlRow.showDownloadAction)
+        }
+
+    @Test
+    fun surfacesRamBlockedReasonForIneligibleSdxlPackRow() =
+        runTest {
+            every { capabilityPort.getCapabilities() } returns
+                LocalImageGenerationCapabilities(
+                    npuAvailable = LocalImageGenTriState.YES,
+                    sd15NpuSupported = LocalImageGenTriState.NO,
+                    sd15CpuSupported = LocalImageGenTriState.NO,
+                    sdxlNpuSupported = LocalImageGenTriState.NO,
+                    recommendedBackend = LocalImageGenerationBackendKind.NONE,
+                    recommendedModelId = null,
+                    diagnostics = listOf("Insufficient RAM for local diffusion (need >= 8 GiB)."),
+                )
+            coEvery { resolveModelCatalog() } returns Result.success(ModelPackTestFixtures.parsedCatalogWithSdxl())
+            coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
+            coEvery { utilityModelRepository.getByUtilityType(UtilityType.SD15_QNN_PACK) } returns null
+            coEvery { utilityModelRepository.getByUtilityType(UtilityType.SDXL_QNN_PACK) } returns null
+            coEvery { verifyModelPackCompleteness(ModelPackTestFixtures.PACK_ID) } returns
+                Result.success(
+                    ModelPackCompleteness(
+                        packId = ModelPackTestFixtures.PACK_ID,
+                        installedCount = 0,
+                        totalCount = 2,
+                        isComplete = false,
+                        members = emptyList(),
+                    ),
+                )
+            coEvery { verifyModelPackCompleteness(ModelPackTestFixtures.SDXL_PACK_ID) } returns
+                Result.success(
+                    ModelPackCompleteness(
+                        packId = ModelPackTestFixtures.SDXL_PACK_ID,
+                        installedCount = 0,
+                        totalCount = 2,
+                        isComplete = false,
+                        members = emptyList(),
+                    ),
+                )
+
+            val rows = useCase()
+            val sdxlRow = rows.single { it.pack.packId == ModelPackTestFixtures.SDXL_PACK_ID }
+
+            assertFalse(sdxlRow.isEligible)
+            assertEquals("Insufficient RAM for local diffusion (need >= 8 GiB).", sdxlRow.disabledReason)
+            assertFalse(sdxlRow.showDownloadAction)
+        }
+
+    @Test
     fun returnsEmptyWhenCatalogHasNoModelPacks() =
         runTest {
             coEvery { resolveModelCatalog() } returns

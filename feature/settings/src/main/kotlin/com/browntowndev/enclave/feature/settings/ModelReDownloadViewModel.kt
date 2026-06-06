@@ -3,10 +3,9 @@ package com.browntowndev.enclave.feature.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkInfo
-import com.browntowndev.enclave.core.data.download.DownloadWorkKeys
+import com.browntowndev.enclave.core.data.download.DownloadWorkChainObserver
 import com.browntowndev.enclave.core.data.repository.DownloadWorkRepository
 import com.browntowndev.enclave.domain.model.config.LocalModelId
-import com.browntowndev.enclave.domain.model.download.DownloadKey
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.usecase.modelconfig.ReDownloadModelPackUseCase
 import com.browntowndev.enclave.domain.usecase.modelconfig.ReDownloadModelUseCase
@@ -31,6 +30,10 @@ sealed class ReDownloadProgress {
 
     data class Downloading(
         val progress: Float,
+    ) : ReDownloadProgress()
+
+    data class Finalizing(
+        val progress: Float?,
     ) : ReDownloadProgress()
 
     object Complete : ReDownloadProgress()
@@ -87,7 +90,9 @@ class ModelReDownloadViewModel
                             observePackDownloadProgress(packId)
                         }
                     }.onFailure { error ->
-                        _packReDownloadStates.update { it + (packId to ReDownloadProgress.Failed(error.message ?: "Unknown error")) }
+                        _packReDownloadStates.update {
+                            it + (packId to ReDownloadProgress.Failed(error.message ?: "Unknown error"))
+                        }
                         delay(FAILURE_DELAY_MS)
                         _packReDownloadStates.update { it - packId }
                     }
@@ -96,104 +101,137 @@ class ModelReDownloadViewModel
 
         private fun observePackDownloadProgress(packId: String) {
             viewModelScope.launch {
+                var awaitingFinalizer = false
                 downloadWorkRepository
                     .observeDownloadProgress()
                     .takeWhile { workInfo ->
-                        if (workInfo == null) return@takeWhile true
-
-                        val filesProgress = workInfo.progress.getStringArray(DownloadKey.FILES_PROGRESS.key)
-                        val fileFractions =
-                            filesProgress
-                                ?.mapNotNull { entry ->
-                                    val parts = entry.split("|")
-                                    if (parts.size >= 3) {
-                                        val downloaded = parts[1].toLongOrNull() ?: 0L
-                                        val total = parts[2].toLongOrNull() ?: 1L
-                                        if (total > 0) downloaded.toFloat() / total else null
-                                    } else {
-                                        null
-                                    }
-                                }.orEmpty()
-                        if (fileFractions.isNotEmpty()) {
-                            val aggregate = fileFractions.sum() / fileFractions.size
-                            _packReDownloadStates.update { it + (packId to ReDownloadProgress.Downloading(aggregate)) }
+                        if (workInfo == null) {
+                            if (awaitingFinalizer) {
+                                markPackComplete(packId)
+                            } else {
+                                _packReDownloadStates.update { it - packId }
+                            }
+                            return@takeWhile false
                         }
 
-                        when (workInfo.state) {
-                            WorkInfo.State.SUCCEEDED -> {
-                                val stage =
-                                    runCatching {
-                                        workInfo.outputData.getString(DownloadWorkKeys.KEY_WORKER_STAGE)
-                                    }.getOrNull()
-                                if (stage == DownloadWorkKeys.STAGE_DOWNLOAD) {
-                                    return@takeWhile true
-                                }
-                                _packReDownloadStates.update { it + (packId to ReDownloadProgress.Complete) }
-                                delay(SUCCESS_DELAY_MS)
-                                _packReDownloadStates.update { it - packId }
-                                false
+                        when {
+                            DownloadWorkChainObserver.isTerminalSuccess(workInfo) -> {
+                                markPackComplete(packId)
+                                return@takeWhile false
                             }
-                            WorkInfo.State.FAILED, WorkInfo.State.CANCELLED -> {
-                                _packReDownloadStates.update { it + (packId to ReDownloadProgress.Failed("Download failed")) }
-                                delay(FAILURE_DELAY_MS)
-                                _packReDownloadStates.update { it - packId }
-                                false
+                            DownloadWorkChainObserver.isTerminalFailure(workInfo) -> {
+                                markPackFailed(packId)
+                                return@takeWhile false
                             }
-                            else -> true
+                            DownloadWorkChainObserver.isIntermediateDownloadSuccess(workInfo) -> {
+                                awaitingFinalizer = true
+                                updatePackFinalizing(workInfo, packId)
+                            }
+                            DownloadWorkChainObserver.isFinalizing(workInfo) -> {
+                                awaitingFinalizer = true
+                                updatePackFinalizing(workInfo, packId)
+                            }
+                            workInfo.state == WorkInfo.State.RUNNING ||
+                                workInfo.state == WorkInfo.State.ENQUEUED ||
+                                workInfo.state == WorkInfo.State.BLOCKED -> {
+                                updatePackDownloading(workInfo, packId)
+                            }
                         }
+                        true
                     }.collect()
             }
         }
 
         private fun observeDownloadProgress(modelId: LocalModelId) {
             viewModelScope.launch {
+                var awaitingFinalizer = false
                 downloadWorkRepository
                     .observeDownloadProgress()
                     .takeWhile { workInfo ->
-                        // Null = work not started yet; keep the flow alive.
-                        if (workInfo == null) return@takeWhile true
-
-                        val filesProgress = workInfo.progress.getStringArray(DownloadKey.FILES_PROGRESS.key)
-                        val modelProgress = filesProgress?.find { it.contains(ModelType.UNASSIGNED.apiValue) }
-
-                        if (modelProgress != null) {
-                            val parts = modelProgress.split("|")
-                            if (parts.size >= 3) {
-                                val downloaded = parts[1].toLongOrNull() ?: 0L
-                                val total = parts[2].toLongOrNull() ?: 1L
-                                val progress = if (total > 0) downloaded.toFloat() / total else 0f
-                                _reDownloadStates.value = _reDownloadStates.value +
-                                    (modelId to ReDownloadProgress.Downloading(progress))
+                        if (workInfo == null) {
+                            if (awaitingFinalizer) {
+                                markModelComplete(modelId)
+                            } else {
+                                _reDownloadStates.value = _reDownloadStates.value - modelId
                             }
+                            return@takeWhile false
                         }
 
-                        when (workInfo.state) {
-                            WorkInfo.State.SUCCEEDED -> {
-                                // In a two-worker chain, the downloader SUCCEEDED is intermediate.
-                                // Wait for the finalizer to complete before marking as done.
-                                val stage =
-                                    runCatching {
-                                        workInfo.outputData.getString(DownloadWorkKeys.KEY_WORKER_STAGE)
-                                    }.getOrNull()
-                                if (stage == DownloadWorkKeys.STAGE_DOWNLOAD) {
-                                    return@takeWhile true
+                        val modelProgress =
+                            workInfo.progress
+                                .getStringArray(com.browntowndev.enclave.domain.model.download.DownloadKey.FILES_PROGRESS.key)
+                                ?.find { it.contains(ModelType.UNASSIGNED.apiValue) }
+
+                        when {
+                            DownloadWorkChainObserver.isTerminalSuccess(workInfo) -> {
+                                markModelComplete(modelId)
+                                return@takeWhile false
+                            }
+                            DownloadWorkChainObserver.isTerminalFailure(workInfo) -> {
+                                markModelFailed(modelId)
+                                return@takeWhile false
+                            }
+                            DownloadWorkChainObserver.isIntermediateDownloadSuccess(workInfo) ||
+                                DownloadWorkChainObserver.isFinalizing(workInfo) -> {
+                                awaitingFinalizer = true
+                                val extractProgress = DownloadWorkChainObserver.readPostProcessProgress(workInfo)
+                                _reDownloadStates.value = _reDownloadStates.value +
+                                    (modelId to ReDownloadProgress.Finalizing(extractProgress))
+                            }
+                            modelProgress != null -> {
+                                val parts = modelProgress.split("|")
+                                if (parts.size >= 3) {
+                                    val downloaded = parts[1].toLongOrNull() ?: 0L
+                                    val total = parts[2].toLongOrNull() ?: 1L
+                                    val progress = if (total > 0) downloaded.toFloat() / total else 0f
+                                    _reDownloadStates.value = _reDownloadStates.value +
+                                        (modelId to ReDownloadProgress.Downloading(progress))
                                 }
-                                _reDownloadStates.value = _reDownloadStates.value +
-                                    (modelId to ReDownloadProgress.Complete)
-                                delay(SUCCESS_DELAY_MS)
-                                _reDownloadStates.value = _reDownloadStates.value - modelId
-                                false
                             }
-                            WorkInfo.State.FAILED, WorkInfo.State.CANCELLED -> {
-                                _reDownloadStates.value = _reDownloadStates.value +
-                                    (modelId to ReDownloadProgress.Failed("Download failed"))
-                                delay(FAILURE_DELAY_MS)
-                                _reDownloadStates.value = _reDownloadStates.value - modelId
-                                false
-                            }
-                            else -> true
                         }
+                        true
                     }.collect()
             }
+        }
+
+        private suspend fun markPackComplete(packId: String) {
+            _packReDownloadStates.update { it + (packId to ReDownloadProgress.Complete) }
+            delay(SUCCESS_DELAY_MS)
+            _packReDownloadStates.update { it - packId }
+        }
+
+        private suspend fun markPackFailed(packId: String) {
+            _packReDownloadStates.update { it + (packId to ReDownloadProgress.Failed("Download failed")) }
+            delay(FAILURE_DELAY_MS)
+            _packReDownloadStates.update { it - packId }
+        }
+
+        private suspend fun markModelComplete(modelId: LocalModelId) {
+            _reDownloadStates.value = _reDownloadStates.value + (modelId to ReDownloadProgress.Complete)
+            delay(SUCCESS_DELAY_MS)
+            _reDownloadStates.value = _reDownloadStates.value - modelId
+        }
+
+        private suspend fun markModelFailed(modelId: LocalModelId) {
+            _reDownloadStates.value = _reDownloadStates.value +
+                (modelId to ReDownloadProgress.Failed("Download failed"))
+            delay(FAILURE_DELAY_MS)
+            _reDownloadStates.value = _reDownloadStates.value - modelId
+        }
+
+        private fun updatePackDownloading(
+            workInfo: WorkInfo,
+            packId: String,
+        ) {
+            val aggregate = DownloadWorkChainObserver.readDownloadAggregateProgress(workInfo) ?: return
+            _packReDownloadStates.update { it + (packId to ReDownloadProgress.Downloading(aggregate)) }
+        }
+
+        private fun updatePackFinalizing(
+            workInfo: WorkInfo,
+            packId: String,
+        ) {
+            val extractProgress = DownloadWorkChainObserver.readPostProcessProgress(workInfo)
+            _packReDownloadStates.update { it + (packId to ReDownloadProgress.Finalizing(extractProgress)) }
         }
     }

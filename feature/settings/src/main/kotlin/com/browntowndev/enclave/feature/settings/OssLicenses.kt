@@ -331,6 +331,41 @@ internal object OssLicenses {
                 licenseText = "Copyright 2010-2024 JetBrains s.r.o. and Kotlin Programming Language contributors.\n\nLicensed under the Apache License, Version 2.0.",
             ),
             OssLicenseEntry(
+                name = "llama.cpp",
+                version = "vendor",
+                licenseType = "MIT",
+                copyrightHolder = "Georgi Gerganov and llama.cpp contributors",
+                licenseText =
+                    """
+                    MIT License
+
+                    Copyright (c) 2023-2024 Georgi Gerganov and contributors
+
+                    Used for on-device GGUF language-model inference (llama-android).
+                    https://github.com/ggerganov/llama.cpp
+                    """.trimIndent(),
+            ),
+            OssLicenseEntry(
+                name = "Local Dream (libstable_diffusion_core)",
+                version = "2.6.1",
+                licenseType = "CC BY-NC 4.0",
+                copyrightHolder = "xororz (Local Dream)",
+                licenseText =
+                    """
+                    Creative Commons Attribution-NonCommercial 4.0 International
+
+                    Copyright xororz and Local Dream contributors
+
+                    libstable_diffusion_core.so is sourced from the Local Dream project and is used
+                    for on-device Stable Diffusion inference on Qualcomm NPUs. Non-commercial use
+                    only under this license; commercial redistribution requires separate rights from
+                    the licensor or a replacement backend built under your own license.
+
+                    https://github.com/xororz/local-dream
+                    https://creativecommons.org/licenses/by-nc/4.0/
+                    """.trimIndent(),
+            ),
+            OssLicenseEntry(
                 name = "kotlinx-serialization",
                 version = "1.11.0",
                 licenseType = "Apache 2.0",
@@ -343,6 +378,131 @@ internal object OssLicenses {
                 licenseType = "Apache 2.0",
                 copyrightHolder = "Google LLC",
                 licenseText = "Copyright 2024 Google LLC\n\nLicensed under the Apache License, Version 2.0.",
+            ),
+            OssLicenseEntry(
+                name = "Model: Gemma 4 E4B",
+                version = "litert-lm",
+                licenseType = "Gemma Terms of Use",
+                copyrightHolder = "Google LLC",
+                licenseText =
+                    """
+                    Gemma is provided under the Gemma Terms of Use.
+
+                    Bundled for on-device chat inference when assigned in Model Configuration.
+                    https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm
+                    https://ai.google.dev/gemma/terms
+                    """.trimIndent(),
+            ),
+            OssLicenseEntry(
+                name = "Model: Jamba Reasoning 3B",
+                version = "Q8_0",
+                licenseType = "Jamba Open Model License",
+                copyrightHolder = "AI21 Labs",
+                licenseText =
+                    """
+                    Provided under the Jamba Open Model License by AI21 Labs.
+
+                    Bundled GGUF weights for on-device drafting/synthesis when assigned.
+                    https://huggingface.co/bartowski/ai21labs_AI21-Jamba-Reasoning-3B-GGUF
+                    """.trimIndent(),
+            ),
+            OssLicenseEntry(
+                name = "Model: MiniCPM-V-4.6",
+                version = "Q8_0",
+                licenseType = "Apache 2.0",
+                copyrightHolder = "OpenBMB",
+                licenseText =
+                    """
+                    Copyright OpenBMB contributors
+
+                    Licensed under the Apache License, Version 2.0.
+                    Bundled multimodal GGUF weights for on-device inference when assigned.
+                    https://huggingface.co/openbmb/MiniCPM-V-4.6-Thinking-gguf
+                    """.trimIndent(),
+            ),
+            OssLicenseEntry(
+                name = "Model: Qwen 3.5 2B",
+                version = "Q8_0",
+                licenseType = "Apache 2.0",
+                copyrightHolder = "Alibaba Cloud",
+                licenseText =
+                    """
+                    Copyright Alibaba Cloud and contributors
+
+                    Licensed under the Apache License, Version 2.0 (per upstream model card).
+                    Bundled GGUF weights for on-device inference when assigned.
+                    https://huggingface.co/Jackrong/Qwen3.5-2B-Claude-4.6-Opus-Reasoning-Distilled-GGUF
+                    """.trimIndent(),
+            ),
+            OssLicenseEntry(
+                name = "Model: Sentence Transformers (all-MiniLM-L6-v2)",
+                version = "ONNX",
+                licenseType = "Apache 2.0",
+                copyrightHolder = "UKPLab",
+                licenseText =
+                    """
+                    Copyright UKPLab and sentence-transformers contributors
+
+                    Licensed under the Apache License, Version 2.0.
+                    Bundled ONNX embedding model for on-device memory/search features.
+                    https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2
+                    """.trimIndent(),
+            ),
+            OssLicenseEntry(
+                name = "Model: Stable Diffusion 1.5",
+                version = "Q4_0 GGUF",
+                licenseType = "CreativeML Open RAIL-M",
+                copyrightHolder = "Runway ML / Stability AI community",
+                licenseText =
+                    """
+                    Stable Diffusion v1.5 is licensed under the CreativeML Open RAIL-M license.
+                    Use is subject to the model card restrictions (research and responsible use).
+
+                    Bundled for local text-to-image when the SD 1.5 pack is installed and assigned.
+                    https://huggingface.co/gpustack/stable-diffusion-v1-5-GGUF
+                    """.trimIndent(),
+            ),
+            OssLicenseEntry(
+                name = "Model: Stable Diffusion 1.5 NPU pack",
+                version = "QNN 2.28 / 8 Gen 2",
+                licenseType = "Upstream model terms",
+                copyrightHolder = "xororz / Anything V5 derivative",
+                licenseText =
+                    """
+                    QNN-converted weights distributed via xororz/sd-qnn (AnythingV5 derivative).
+                    Subject to the base Stable Diffusion 1.5 license and upstream model-card terms.
+
+                    Used with libstable_diffusion_core for Hexagon NPU inference on supported devices.
+                    https://huggingface.co/xororz/sd-qnn
+                    """.trimIndent(),
+            ),
+            OssLicenseEntry(
+                name = "Model: Stable Diffusion XL NPU pack",
+                version = "QNN 2.28 / 8 Gen 3",
+                licenseType = "Open RAIL++-M (SDXL base)",
+                copyrightHolder = "xororz / RealVis XL derivative",
+                licenseText =
+                    """
+                    QNN-converted SDXL weights (RealVis XL V5 DMD2) distributed via xororz/sdxl-qnn.
+                    SDXL base models use the Open RAIL++-M license; derivative checkpoints may add terms.
+
+                    Used with libstable_diffusion_core for Hexagon NPU inference on Gen 3+ devices.
+                    https://huggingface.co/xororz/sdxl-qnn
+                    """.trimIndent(),
+            ),
+            OssLicenseEntry(
+                name = "Model: Whisper (ggml-base.en)",
+                version = "base.en",
+                licenseType = "MIT (code) / model terms",
+                copyrightHolder = "OpenAI / ggerganov",
+                licenseText =
+                    """
+                    whisper.cpp is MIT-licensed. Whisper model weights are distributed separately;
+                    use is subject to the upstream model terms on Hugging Face.
+
+                    Bundled for on-device speech-to-text utility features.
+                    https://huggingface.co/ggerganov/whisper.cpp
+                    """.trimIndent(),
             ),
             OssLicenseEntry(
                 name = "markdown-parser & markdown-renderer",
@@ -366,6 +526,39 @@ internal object OssLicenses {
                 licenseText = "Copyright OpenAI\n\nLicensed under the Apache License, Version 2.0.",
             ),
             OssLicenseEntry(
+                name = "Qualcomm AI Runtime (QNN)",
+                version = "QAIRT (dev extract)",
+                licenseType = "Proprietary (Qualcomm EULA)",
+                copyrightHolder = "Qualcomm Technologies, Inc.",
+                licenseText =
+                    """
+                    Qualcomm AI Runtime (QNN) libraries (libQnn*.so, Hexagon skeleton libraries, etc.)
+                    are proprietary and redistributable only under Qualcomm's license terms.
+
+                    Debug builds may bundle QNN libraries extracted from a third-party APK for
+                    development convenience. Release builds must use libraries synced from an
+                    authorized QAIRT install after accepting Qualcomm's EULA:
+                    https://softwarecenter.qualcomm.com/
+
+                    Run ./scripts/sync-qnn-jniLibs.sh with qnn.sdk.dir set in local.properties.
+                    Redistribution is limited to Snapdragon-targeted applications per Qualcomm terms.
+                    """.trimIndent(),
+            ),
+            OssLicenseEntry(
+                name = "stb_image_write",
+                version = "1.16",
+                licenseType = "Public Domain",
+                copyrightHolder = "Sean Barrett",
+                licenseText =
+                    """
+                    stb_image_write - public domain
+
+                    Copyright Sean Barrett (2010-2015). No warranty implied; use at your own risk.
+                    Vendored in local-image-gen-android for PNG output from generated images.
+                    http://nothings.org/stb
+                    """.trimIndent(),
+            ),
+            OssLicenseEntry(
                 name = "Telephoto",
                 version = "0.19.0",
                 licenseType = "Apache 2.0",
@@ -378,6 +571,21 @@ internal object OssLicenses {
                 licenseType = "Apache 2.0",
                 copyrightHolder = "Ubique Innovation AG",
                 licenseText = "Copyright Ubique Innovation AG\n\nLicensed under the Apache License, Version 2.0.",
+            ),
+            OssLicenseEntry(
+                name = "whisper.cpp",
+                version = "vendor",
+                licenseType = "MIT",
+                copyrightHolder = "Georgi Gerganov and whisper.cpp contributors",
+                licenseText =
+                    """
+                    MIT License
+
+                    Copyright (c) 2023 Georgi Gerganov and contributors
+
+                    Used for on-device speech-to-text inference (whisper-android).
+                    https://github.com/ggerganov/whisper.cpp
+                    """.trimIndent(),
             ),
         ).sortedBy { it.name.lowercase() }
 }

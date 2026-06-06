@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # Bundles QNN runtime (assets only) + libstable_diffusion_core.so (jniLibs) for :local-image-gen-android.
 #
-# Preferred (requires Qualcomm QAIRT license):
-#   ./scripts/sync-qnn-jniLibs.sh
+# Preferred for release (requires Qualcomm QAIRT EULA acceptance):
+#   qnn.sdk.dir in local.properties → ./scripts/sync-qnn-jniLibs.sh
 #   ./scripts/build-stable-diffusion-core.sh
 #
 # Fallback when qnn.sdk.dir is not set: extract from a published Local Dream APK.
+# Suitable for local dev only — QNN libs remain Qualcomm-proprietary; libstable_diffusion_core
+# is CC BY-NC 4.0 (see Settings → Licenses & Attributions and docs/local-image-generation/README.md).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

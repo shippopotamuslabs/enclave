@@ -9,6 +9,8 @@ import com.browntowndev.enclave.domain.model.download.ModelPackCompleteness
 import com.browntowndev.enclave.domain.model.download.ModelPackMemberStatus
 import com.browntowndev.enclave.domain.model.download.ModelPackVerificationDepth
 import com.browntowndev.enclave.domain.model.download.ParsedModelCatalog
+import com.browntowndev.enclave.domain.model.download.Sd15QnnPackCatalog
+import com.browntowndev.enclave.domain.model.download.SdxlQnnPackCatalog
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationPaths
 import com.browntowndev.enclave.domain.port.download.HashingPort
 import com.browntowndev.enclave.domain.port.download.ModelPackVerifierPort
@@ -35,20 +37,16 @@ class ModelPackVerifierImpl
                 val memberStatuses =
                     pack.members.map { member ->
                         val verified =
-                            if (member.asset.metadata.utilityType == UtilityType.SD15_QNN_PACK) {
-                                LocalImageGenerationPaths.hasQnnArtifacts(
-                                    File(modelsDir, LocalImageGenerationPaths.SD15_QNN_SUBDIR),
-                                )
-                            } else {
-                                member.asset.metadata.requiredArtifacts().all { artifact ->
-                                    verifyArtifact(
-                                        modelsDir = modelsDir,
-                                        localFileName = artifact.localFileName,
-                                        expectedSizeInBytes = artifact.sizeInBytes,
-                                        expectedSha256 = artifact.sha256,
-                                        depth = depth,
+                            when (member.asset.metadata.utilityType) {
+                                UtilityType.SD15_QNN_PACK ->
+                                    LocalImageGenerationPaths.hasSd15QnnArtifacts(
+                                        File(modelsDir, LocalImageGenerationPaths.SD15_QNN_SUBDIR),
                                     )
-                                }
+                                UtilityType.SDXL_QNN_PACK ->
+                                    LocalImageGenerationPaths.hasSdxlQnnArtifacts(
+                                        File(modelsDir, LocalImageGenerationPaths.SDXL_QNN_SUBDIR),
+                                    )
+                                else -> verifyNonUtilityMember(modelsDir, member, depth)
                             }
                         ModelPackMemberStatus(
                             role = member.role,
@@ -74,6 +72,38 @@ class ModelPackVerifierImpl
         ): ModelPackCompleteness? {
             val pack = catalog.packById(packId) ?: return null
             return verifyPack(pack, depth)
+        }
+
+        private fun verifyNonUtilityMember(
+            modelsDir: File,
+            member: com.browntowndev.enclave.domain.model.download.ModelPackMember,
+            depth: ModelPackVerificationDepth,
+        ): Boolean {
+            val sha256 = member.asset.metadata.sha256
+            val qnnPackDir =
+                when {
+                    SdxlQnnPackCatalog.findBySha256(sha256) != null ->
+                        File(modelsDir, LocalImageGenerationPaths.SDXL_QNN_SUBDIR)
+                    Sd15QnnPackCatalog.findBySha256(sha256) != null ->
+                        File(modelsDir, LocalImageGenerationPaths.SD15_QNN_SUBDIR)
+                    else -> null
+                }
+            if (qnnPackDir != null) {
+                return when {
+                    SdxlQnnPackCatalog.findBySha256(sha256) != null ->
+                        LocalImageGenerationPaths.hasSdxlQnnArtifacts(qnnPackDir)
+                    else -> LocalImageGenerationPaths.hasSd15QnnArtifacts(qnnPackDir)
+                }
+            }
+            return member.asset.metadata.requiredArtifacts().all { artifact ->
+                verifyArtifact(
+                    modelsDir = modelsDir,
+                    localFileName = artifact.localFileName,
+                    expectedSizeInBytes = artifact.sizeInBytes,
+                    expectedSha256 = artifact.sha256,
+                    depth = depth,
+                )
+            }
         }
 
         private fun verifyArtifact(

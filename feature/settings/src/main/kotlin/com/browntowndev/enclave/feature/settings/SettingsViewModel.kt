@@ -15,6 +15,7 @@ import com.browntowndev.enclave.domain.model.settings.SearchProvider
 import com.browntowndev.enclave.domain.model.settings.SystemPromptOption
 import com.browntowndev.enclave.domain.model.telemetry.UsagePeriod
 import com.browntowndev.enclave.core.data.repository.DownloadWorkRepository
+import com.browntowndev.enclave.core.data.download.DownloadWorkChainObserver
 import com.browntowndev.enclave.domain.port.repository.EmbeddingProgressPort
 import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.enclave.domain.usecase.telemetry.ObserveUsageSpendSummaryUseCase
@@ -25,7 +26,6 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import androidx.work.WorkInfo
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -95,13 +95,13 @@ internal class SettingsViewModel
         private val downloadTerminalEventsFlow =
             downloadWorkRepository
                 .observeDownloadProgress()
-                .map { workInfo -> workInfo?.state }
-                .distinctUntilChanged()
-                .map { state ->
-                    state == WorkInfo.State.SUCCEEDED ||
-                        state == WorkInfo.State.FAILED ||
-                        state == WorkInfo.State.CANCELLED
-                }
+                .map { workInfo ->
+                    workInfo != null &&
+                        (
+                            DownloadWorkChainObserver.isTerminalSuccess(workInfo) ||
+                                DownloadWorkChainObserver.isTerminalFailure(workInfo)
+                        )
+                }.distinctUntilChanged()
 
         @OptIn(ExperimentalCoroutinesApi::class)
         private val modelPackRowsFlow =

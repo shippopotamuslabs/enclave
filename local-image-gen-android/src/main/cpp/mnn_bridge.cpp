@@ -13,6 +13,7 @@ extern "C" int mnn_generate_image(
     int height,
     int steps,
     float cfg_scale,
+    const char* scheduler,
     long seed,
     const char* output_path,
     char* error_out,
@@ -39,6 +40,7 @@ extern "C" int mnn_generate_image(
     request.height = height;
     request.steps = steps;
     request.cfg_scale = cfg_scale;
+    request.scheduler = scheduler != nullptr ? scheduler : "dpm";
     request.seed = seed;
     request.output_path = output_path != nullptr ? output_path : "";
 

@@ -459,6 +459,46 @@ class WorkProgressParserTest {
     }
 
     @Test
+    fun `parseRunning with failed file returns error status and message`() {
+        val workInfo =
+            mockk<WorkInfo> {
+                every { state } returns WorkInfo.State.RUNNING
+                every { progress } returns
+                    mockk {
+                        every { getFloat(DownloadKey.OVERALL_PROGRESS.key, 0f) } returns 0f
+                        every { getInt(DownloadKey.MODELS_COMPLETE.key, 0) } returns 0
+                        every { getInt(DownloadKey.MODELS_TOTAL.key, any()) } returns 1
+                        every { getDouble(DownloadKey.SPEED_MBPS.key, 0.0) } returns 0.0
+                        every { getLong(DownloadKey.ETA_SECONDS.key, -1L) } returns -1L
+                        every { getStringArray(DownloadKey.FILES_PROGRESS.key) } returns
+                            arrayOf(
+                                "realvis_xl_v5_dmd2.gguf|0|3504485672|FAILED|0.0|sha-sdxl",
+                            )
+                    }
+                every { outputData } returns mockk { every { getString(any()) } returns null }
+            }
+
+        val currentDownloads =
+            listOf(
+                FileProgress(
+                    filename = "realvis_xl_v5_dmd2.gguf",
+                    sha256 = "sha-sdxl",
+                    modelTypes = listOf(ModelType.IMAGE_GENERATION),
+                    bytesDownloaded = 0L,
+                    totalBytes = 3_504_485_672L,
+                    status = FileStatus.QUEUED,
+                ),
+            )
+
+        val result = parser.parse(workInfo, currentDownloads)
+
+        assertNotNull(result)
+        assertEquals(DownloadStatus.ERROR, result!!.status)
+        assertEquals("Failed to download realvis_xl_v5_dmd2.gguf", result.errorMessage)
+        assertEquals(FileStatus.FAILED, result.currentDownloads!!.single().status)
+    }
+
+    @Test
     fun `parseRunning with empty FILES_PROGRESS returns empty currentDownloads`() {
         // Given: WorkInfo in RUNNING state with empty FILES_PROGRESS array
         val workInfo =

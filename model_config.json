@@ -156,11 +156,11 @@
     },
     {
       "displayName": "Stable Diffusion XL (NPU)",
-      "huggingFaceModelName": "gpustack/stable-diffusion-xl-base-1.0-GGUF",
-      "fileName": "realvis_xl_v5_dmd2.gguf",
+      "huggingFaceModelName": "xororz/sdxl-qnn",
+      "fileName": "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip",
       "sha256": "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83",
       "sizeInBytes": 3504485672,
-      "modelFileFormat": "GGUF",
+      "modelFileFormat": "BIN",
       "source": "HF",
       "isMultimodal": false,
       "configurations": [
@@ -295,7 +295,7 @@
       "members": [
         {
           "role": "diffusion",
-          "fileName": "realvis_xl_v5_dmd2.gguf"
+          "fileName": "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip"
         },
         {
           "role": "text_encoder",

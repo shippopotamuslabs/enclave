@@ -7,6 +7,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
@@ -43,6 +44,7 @@ class StudioCapabilitiesCoordinatorTest {
                 settings = settingsFlow,
                 capabilitiesFlow = flowOf(sd15Caps)
             )
+            advanceUntilIdle()
 
             val updated = settingsFlow.value as ImageGenerationSettings
             assertEquals("512x512", updated.imageResolution)
@@ -75,6 +77,7 @@ class StudioCapabilitiesCoordinatorTest {
                 settings = settingsFlow,
                 capabilitiesFlow = flowOf(sdxlCaps)
             )
+            advanceUntilIdle()
 
             val updated = settingsFlow.value as ImageGenerationSettings
             assertEquals("1024x1024", updated.imageResolution)

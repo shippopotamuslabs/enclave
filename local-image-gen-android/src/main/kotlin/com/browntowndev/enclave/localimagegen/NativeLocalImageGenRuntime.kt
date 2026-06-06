@@ -2,6 +2,8 @@ package com.browntowndev.enclave.localimagegen
 
 import android.content.Context
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId
+import com.browntowndev.enclave.domain.model.media.QnnRuntimeLibraryCatalog
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import javax.inject.Inject
@@ -12,10 +14,11 @@ import javax.inject.Singleton
 class NativeLocalImageGenRuntime
     @Inject
     constructor(
-        @param:ApplicationContext context: Context,
+        @param:ApplicationContext private val context: Context,
     ) {
+        private val qnnRuntimeDir = File(context.filesDir, QNN_RUNTIME_SUBDIR)
+
         init {
-            val qnnRuntimeDir = File(context.filesDir, QNN_RUNTIME_SUBDIR)
             QnnRuntimeBootstrap.install(context, qnnRuntimeDir)
             LocalImageGenNative.nativeInit(
                 nativeLibraryDir = context.applicationInfo.nativeLibraryDir,
@@ -32,6 +35,19 @@ class NativeLocalImageGenRuntime
                 -> 0
             }
 
+        fun ensureQnnRuntimeForModel(modelId: LocalImageGenerationModelId) {
+            QnnRuntimeBootstrap.installLibraries(
+                context,
+                qnnRuntimeDir,
+                QnnRuntimeLibraryCatalog.runtimeLibrariesForModel(modelId),
+            )
+        }
+
+        fun isQnnRuntimeReadyForModel(modelId: LocalImageGenerationModelId): Boolean {
+            val skel = File(qnnRuntimeDir, QnnRuntimeLibraryCatalog.primarySkelLibraryFor(modelId))
+            return skel.isFile && skel.length() > 0L
+        }
+
         fun generate(
             backend: LocalImageGenerationBackendKind,
             modelDir: String,
@@ -41,6 +57,7 @@ class NativeLocalImageGenRuntime
             height: Int,
             steps: Int,
             cfgScale: Float,
+            scheduler: String,
             seed: Long,
             outputPath: String,
         ): Int =
@@ -54,6 +71,7 @@ class NativeLocalImageGenRuntime
                         height,
                         steps,
                         cfgScale,
+                        scheduler,
                         seed,
                         outputPath,
                     )
@@ -66,6 +84,7 @@ class NativeLocalImageGenRuntime
                         height,
                         steps,
                         cfgScale,
+                        scheduler,
                         seed,
                         outputPath,
                     )

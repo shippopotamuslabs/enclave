@@ -112,6 +112,80 @@ class ModelPackSettingsUiTest {
     }
 
     @Test
+    @DisplayName("MPK-013 Settings keeps SDXL diffusion when utility shares the same zip file name")
+    fun mpk013_settingsKeepsSdxlDiffusionWhenUtilitySharesZipFileName() {
+        val state =
+            assembler.create(
+                persistedSettings = SettingsData(),
+                localAssets =
+                    listOf(
+                        ModelPackTestFixtures.sdxlDiffusionAsset(),
+                        ModelPackTestFixtures.sdxlQnnPackUtilityAsset(),
+                    ),
+                apiAssets = emptyList(),
+                ttsAssets = emptyList(),
+                mediaAssets = emptyList(),
+                defaultModels = emptyList(),
+                authState = AuthState.Unauthenticated,
+                sheetVisibility = SheetVisibilityState(),
+                memories = emptyList(),
+                feedbackText = "",
+                localModelsState = LocalModelsTransientState(isSheetOpen = true),
+                apiState = ApiProvidersTransientState(),
+                ttsState = TtsProvidersTransientState(),
+                mediaState = MediaProvidersTransientState(),
+                searchSkillState = SearchSkillTransientState(),
+                assignmentsState = AssignmentDialogTransientState(),
+                deletionState = DeletionTransientState(),
+                memoriesState = MemoriesTransientState(),
+                dataControlsState = DataControlsTransientState(),
+                currentTavilyApiKey = "",
+                currentExaApiKey = "",
+                currentXApiKey = "",
+                xSearchState = XSearchTransientState(),
+                isReindexing = false,
+                reindexProgress = 0f,
+                vaultReauthSheet = VaultReauthSheetState.Hidden,
+                usageSpendSummary =
+                    UsageSpendSummary(
+                        period = UsagePeriod.LIFETIME,
+                        periodStartUtcMs = null,
+                        periodEndUtcMs = null,
+                        totalCostUsd = BigDecimal.ZERO,
+                        telemetryBackedTurnCount = 0,
+                        missingCostTurnCount = 0,
+                        providerBreakdown = emptyList(),
+                    ),
+                modelPackRows =
+                    listOf(
+                        ModelPackSettingsRow(
+                            pack = ModelPackTestFixtures.sdxlPack(),
+                            completeness =
+                                ModelPackCompleteness(
+                                    packId = ModelPackTestFixtures.SDXL_PACK_ID,
+                                    installedCount = 2,
+                                    totalCount = 2,
+                                    isComplete = true,
+                                    members = emptyList(),
+                                ),
+                            isDiffusionSoftDeleted = false,
+                            areUtilityRegistryEntriesAbsent = false,
+                            showDownloadAction = false,
+                            isEligible = true,
+                        ),
+                    ),
+            )
+
+        assertEquals(1, state.localModelsSheet.models.size)
+        assertTrue(
+            state.localModelsSheet.models.single().configurations.any {
+                it.id.value == ModelPackTestFixtures.SDXL_CONFIG_ID
+            },
+        )
+        assertTrue(state.localModelsSheet.models.single().isImageGenerationCapable)
+    }
+
+    @Test
     @DisplayName("MPK-012 Settings omits model packs section when pack rows are empty")
     fun mpk012_settingsOmitsModelPacksSectionWhenEmpty() {
         val state =

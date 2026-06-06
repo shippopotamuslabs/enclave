@@ -43,6 +43,7 @@ class DownloadViewModel
         @Assisted private val modelsResult: DownloadModelsResult,
         @Assisted private val initialErrorMessage: String?,
         @Assisted private val autoStartDownloads: Boolean = true,
+        @Assisted private val refreshDownloadPlan: DownloadPlanRefresher? = null,
     ) : ViewModel() {
         companion object {
             private const val TAG = "DownloadViewModel"
@@ -63,6 +64,7 @@ class DownloadViewModel
                 modelsResult: DownloadModelsResult,
                 initialErrorMessage: String? = null,
                 autoStartDownloads: Boolean = true,
+                refreshDownloadPlan: DownloadPlanRefresher? = null,
             ): DownloadViewModel
         }
 
@@ -304,6 +306,8 @@ class DownloadViewModel
             Log.i(TAG, "User action: retry failed downloads")
             downloadsStarted = false
             viewModelScope.launch {
+                modelDownloadOrchestrator.pauseDownloads()
+                refreshDownloadPlan?.refresh()
                 modelDownloadOrchestrator.retryFailed()
                 observeWorkProgress()
             }
