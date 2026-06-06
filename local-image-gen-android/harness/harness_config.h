@@ -22,6 +22,7 @@ struct HarnessOptions {
     int height = 0;
     int steps = 0;
     float cfg_scale = 0.0f;
+    float denoise_strength = 0.75f;
     std::string scheduler;
     int64_t seed = 42;
     std::string resolved_backend_path;

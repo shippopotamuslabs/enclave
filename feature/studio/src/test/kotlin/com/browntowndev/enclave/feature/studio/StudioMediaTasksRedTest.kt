@@ -9,6 +9,7 @@ import app.cash.turbine.test
 import com.browntowndev.enclave.core.ui.component.FullscreenMediaAction
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
+import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.config.MediaProviderAsset
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
@@ -160,6 +161,25 @@ class StudioMediaTasksRedTest {
 
                 assertTrue(state.booleanFlag("hasImageEditModel"))
                 assertTrue(state.booleanFlag("hasImageToVideoModel"))
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `VM-02b local image edit default enables reference image affordance`() =
+        runTest {
+            defaultsFlow.value =
+                listOf(
+                    DefaultModelAssignment(
+                        modelType = ModelType.IMAGE_EDIT,
+                        localConfigId = LocalModelConfigurationId("sdxl-local-config"),
+                    ),
+                )
+
+            viewModel.uiState.test {
+                val state = awaitItem()
+
+                assertTrue(state.booleanFlag("hasImageEditModel"))
                 cancelAndIgnoreRemainingEvents()
             }
         }

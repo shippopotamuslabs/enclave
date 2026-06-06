@@ -4,6 +4,7 @@ import android.app.ActivityManager
 import android.content.Context
 import com.browntowndev.enclave.domain.model.media.ImageGenerationProgress
 import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
+import com.browntowndev.enclave.domain.model.media.resolvedImg2ImgDenoiseStrength
 import com.browntowndev.enclave.domain.model.media.ImageGenerationTarget
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationError
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationMemoryPolicy
@@ -119,7 +120,7 @@ class LocalStableDiffusionImageGenerator
                             outputPathPrefix = outputPrefix,
                             mode = mode,
                             initImagePath = initImagePath,
-                            denoiseStrength = LocalImageGenerationModelPolicy.DEFAULT_IMG2IMG_DENOISE_STRENGTH,
+                            denoiseStrength = settings.resolvedImg2ImgDenoiseStrength(),
                             memoryPolicy = memoryPolicy,
                         )
                     val output =

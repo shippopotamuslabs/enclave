@@ -256,7 +256,7 @@ internal fun selectableLocalAssetsForSlot(
     modelPacks: List<ModelPackUi> = emptyList(),
 ): List<LocalModelAssetUi> =
     when {
-        modelType == ModelType.IMAGE_GENERATION -> {
+        modelType == ModelType.IMAGE_GENERATION || modelType == ModelType.IMAGE_EDIT -> {
             val eligibleAssets = applyLocalImageAssignmentEligibility(assets, modelPacks)
             eligibleAssets.filter { it.isImageGenerationCapable }
         }
@@ -306,7 +306,6 @@ private val LOCAL_MODEL_UNSUPPORTED_ASSIGNMENT_TYPES =
     setOf(
         ModelType.VISION,
         ModelType.TTS,
-        ModelType.IMAGE_EDIT,
         ModelType.VIDEO_GENERATION,
         ModelType.IMAGE_TO_VIDEO,
         ModelType.MUSIC_GENERATION,

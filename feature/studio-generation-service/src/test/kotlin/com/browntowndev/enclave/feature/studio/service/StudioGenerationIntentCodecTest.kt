@@ -56,6 +56,7 @@ class StudioGenerationIntentCodecTest {
                 generationCount = 3,
                 imageResolution = "1024x1024",
                 diffusionSteps = 24,
+                img2ImgDenoiseStrength = 0.4f,
             )
 
         StudioGenerationIntentCodec.writeSettings(intent, settings)

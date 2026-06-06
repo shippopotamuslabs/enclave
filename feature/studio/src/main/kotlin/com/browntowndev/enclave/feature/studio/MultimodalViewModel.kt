@@ -133,7 +133,8 @@ class MultimodalViewModel
                 .observeDefaults()
                 .map { assignments ->
                     assignments.any { assignment ->
-                        assignment.modelType == ModelType.IMAGE_EDIT && assignment.mediaProviderId != null
+                        assignment.modelType == ModelType.IMAGE_EDIT &&
+                            (assignment.mediaProviderId != null || assignment.localConfigId != null)
                     }
                 }.distinctUntilChanged()
 

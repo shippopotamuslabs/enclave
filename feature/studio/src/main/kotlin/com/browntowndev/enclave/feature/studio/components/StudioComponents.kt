@@ -28,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.browntowndev.enclave.core.ui.component.PersistentTooltip
 import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
 import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
 import com.browntowndev.enclave.core.ui.component.neo.NeoSegmentedControl
@@ -798,6 +799,13 @@ private fun ImageSettingsSection(
                 }
                 SettingsGroupDivider()
             }
+            if (settings.referenceImageUri != null) {
+                Img2ImgDenoiseSetting(
+                    settings = settings,
+                    onUpdateSettings = onUpdateSettings,
+                )
+                SettingsGroupDivider()
+            }
             SettingRow(label = "Generation Count") {
                 GenerationCountPicker(
                     count = settings.generationCount,
@@ -866,6 +874,58 @@ private fun MusicSettingsSection(
                 onValueChange = { onUpdateSettings(settings.copy(tempo = it.toInt())) },
             )
         }
+    }
+}
+
+private const val IMG2IMG_DENOISE_TOOLTIP =
+    "Controls how much the model changes your reference photo. " +
+        "Lower values preserve more of the original image; higher values follow the prompt more freely."
+
+@Composable
+private fun Img2ImgDenoiseSetting(
+    settings: ImageGenerationSettings,
+    onUpdateSettings: (ImageGenerationSettings) -> Unit,
+) {
+    val denoiseRange =
+        LocalImageGenerationModelPolicy.MIN_IMG2IMG_DENOISE_STRENGTH..
+            LocalImageGenerationModelPolicy.MAX_IMG2IMG_DENOISE_STRENGTH
+    val value = settings.img2ImgDenoiseStrength.coerceIn(denoiseRange)
+    val valueLabel = "${(value * 100).roundToInt()}%"
+
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = "Edit Strength",
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                PersistentTooltip(description = IMG2IMG_DENOISE_TOOLTIP)
+            }
+            Text(
+                text = valueLabel,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+        Slider(
+            value = value,
+            onValueChange = { newValue ->
+                onUpdateSettings(settings.copy(img2ImgDenoiseStrength = newValue.coerceIn(denoiseRange)))
+            },
+            valueRange = denoiseRange,
+        )
     }
 }
 

@@ -106,4 +106,61 @@ class StudioImageSettingsUiTest {
     composeTestRule.onNodeWithText("Quality").assertDoesNotExist()
     composeTestRule.onNodeWithText("Diffusion Steps").assertDoesNotExist()
   }
+
+  @Test
+  fun `STU-007 Studio bottom sheet shows Edit Strength when reference image attached`() {
+    val capabilities =
+      LocalImageGenerationModelPolicy.providerCapabilitiesFor(LocalImageGenerationModelId.SDXL_QNN)
+
+    composeTestRule.setContent {
+      EnclaveTheme {
+        StudioOptionsSheetContent(
+          state =
+            StudioUiState(
+              settings =
+                ImageGenerationSettings(
+                  imageResolution = "1024x1024",
+                  diffusionSteps = 8,
+                  referenceImageUri = "content://reference",
+                  img2ImgDenoiseStrength = 0.4f,
+                ),
+              capabilities = capabilities,
+            ),
+          onDismiss = {},
+          onUpdateSettings = {},
+          onContinualModeChange = {},
+          onMediaTypeChange = {},
+          onTemplateSelected = {},
+        )
+      }
+    }
+
+    composeTestRule.onNodeWithText("Edit Strength").performScrollTo().assertIsDisplayed()
+    composeTestRule.onNodeWithText("40%").performScrollTo().assertIsDisplayed()
+  }
+
+  @Test
+  fun `STU-008 Studio bottom sheet hides Edit Strength without reference image`() {
+    val capabilities =
+      LocalImageGenerationModelPolicy.providerCapabilitiesFor(LocalImageGenerationModelId.SDXL_QNN)
+
+    composeTestRule.setContent {
+      EnclaveTheme {
+        StudioOptionsSheetContent(
+          state =
+            StudioUiState(
+              settings = ImageGenerationSettings(imageResolution = "1024x1024", diffusionSteps = 8),
+              capabilities = capabilities,
+            ),
+          onDismiss = {},
+          onUpdateSettings = {},
+          onContinualModeChange = {},
+          onMediaTypeChange = {},
+          onTemplateSelected = {},
+        )
+      }
+    }
+
+    composeTestRule.onNodeWithText("Edit Strength").assertDoesNotExist()
+  }
 }

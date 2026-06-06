@@ -18,6 +18,8 @@ data class ImageGenerationSettings(
     override val referenceImageUri: String? = null,
     override val seed: String = "",
     val generationCount: Int = 1,
+    /** How strongly img2img deviates from the reference image (0.25–1.0). */
+    val img2ImgDenoiseStrength: Float = LocalImageGenerationModelPolicy.DEFAULT_IMG2IMG_DENOISE_STRENGTH,
 ) : VisualGenerationSettings {
     companion object {
         const val MIN_GENERATION_COUNT = 1
@@ -32,6 +34,12 @@ fun ImageGenerationSettings.withClampedGenerationCount(): ImageGenerationSetting
                 ImageGenerationSettings.MIN_GENERATION_COUNT,
                 ImageGenerationSettings.MAX_GENERATION_COUNT,
             ),
+    )
+
+fun ImageGenerationSettings.resolvedImg2ImgDenoiseStrength(): Float =
+    img2ImgDenoiseStrength.coerceIn(
+        LocalImageGenerationModelPolicy.MIN_IMG2IMG_DENOISE_STRENGTH,
+        LocalImageGenerationModelPolicy.MAX_IMG2IMG_DENOISE_STRENGTH,
     )
 
 data class VideoGenerationSettings(
