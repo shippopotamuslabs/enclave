@@ -31,7 +31,7 @@ class StudioImageSettingsUiTest {
         StudioOptionsSheetContent(
           state =
             StudioUiState(
-              settings = ImageGenerationSettings(imageResolution = "1024x1024", diffusionSteps = 16),
+              settings = ImageGenerationSettings(imageResolution = "1024x1024", diffusionSteps = 8),
               capabilities = capabilities,
             ),
           onDismiss = {},
@@ -45,6 +45,7 @@ class StudioImageSettingsUiTest {
 
     composeTestRule.onNodeWithText("Resolution").performScrollTo().assertIsDisplayed()
     composeTestRule.onNodeWithText("1024x1024").performScrollTo().assertIsDisplayed()
+    composeTestRule.onNodeWithText("Quality").assertDoesNotExist()
   }
 
   @Test
@@ -57,7 +58,7 @@ class StudioImageSettingsUiTest {
         StudioOptionsSheetContent(
           state =
             StudioUiState(
-              settings = ImageGenerationSettings(imageResolution = "1024x1024", diffusionSteps = 16),
+              settings = ImageGenerationSettings(imageResolution = "1024x1024", diffusionSteps = 8),
               capabilities = capabilities,
             ),
           onDismiss = {},
@@ -102,6 +103,7 @@ class StudioImageSettingsUiTest {
 
     composeTestRule.onNodeWithText("Resolution").performScrollTo().assertIsDisplayed()
     composeTestRule.onNodeWithText("512x512").performScrollTo().assertIsDisplayed()
+    composeTestRule.onNodeWithText("Quality").assertDoesNotExist()
     composeTestRule.onNodeWithText("Diffusion Steps").assertDoesNotExist()
   }
 }

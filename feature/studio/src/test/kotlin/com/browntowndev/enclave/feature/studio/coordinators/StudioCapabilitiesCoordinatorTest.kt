@@ -65,7 +65,7 @@ class StudioCapabilitiesCoordinatorTest {
                 supportedImageQualities = emptyList(),
                 supportedImageResolutions = listOf("1024x1024"),
                 supportedImageSteps = listOf(8, 12, 16, 20, 24, 30),
-                defaultImageStep = 16,
+                defaultImageStep = 8,
                 supportedVideoQualities = emptyList(),
                 supportedVideoResolutions = emptyList(),
                 supportedVideoDurations = emptyList(),
@@ -81,6 +81,6 @@ class StudioCapabilitiesCoordinatorTest {
 
             val updated = settingsFlow.value as ImageGenerationSettings
             assertEquals("1024x1024", updated.imageResolution)
-            assertEquals(16, updated.diffusionSteps)
+            assertEquals(8, updated.diffusionSteps)
         }
 }

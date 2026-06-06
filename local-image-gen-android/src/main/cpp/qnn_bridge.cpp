@@ -10,16 +10,21 @@ std::mutex g_engine_mutex;
 EnclaveDiffusionHandle* g_engine = nullptr;
 std::string g_engine_model_dir;
 
+void releaseEngine() {
+    if (g_engine != nullptr) {
+        enclave_diffusion_destroy(g_engine);
+        g_engine = nullptr;
+        g_engine_model_dir.clear();
+    }
+}
+
 EnclaveDiffusionHandle* ensureEngine(const char* model_dir, char* error_out, int error_out_len) {
     const std::string dir = model_dir != nullptr ? model_dir : "";
     std::lock_guard<std::mutex> lock(g_engine_mutex);
     if (g_engine != nullptr && g_engine_model_dir == dir) {
         return g_engine;
     }
-    if (g_engine != nullptr) {
-        enclave_diffusion_destroy(g_engine);
-        g_engine = nullptr;
-    }
+    releaseEngine();
     const bool sdxl = local_image_gen::file_exists_in_dir(dir, "clip_2.mnn");
     EnclaveDiffusionConfig config {};
     config.model_dir = dir.c_str();
@@ -96,7 +101,12 @@ extern "C" int qnn_generate_image(
         memory_policy == 0 ? ENCLAVE_MEMORY_POLICY_FULL : ENCLAVE_MEMORY_POLICY_LOW_RAM;
     params.output_png_path = output_path != nullptr ? output_path : "";
 
-    return enclave_diffusion_generate(engine, &params, nullptr, nullptr, error_out, error_out_len);
+    const int rc = enclave_diffusion_generate(engine, &params, nullptr, nullptr, error_out, error_out_len);
+    if (params.memory_policy == ENCLAVE_MEMORY_POLICY_LOW_RAM) {
+        std::lock_guard<std::mutex> lock(g_engine_mutex);
+        releaseEngine();
+    }
+    return rc;
 }
 
 extern "C" void qnn_cancel_generation() {
