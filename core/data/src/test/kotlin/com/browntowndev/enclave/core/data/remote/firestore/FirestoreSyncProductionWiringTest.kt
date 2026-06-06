@@ -3,6 +3,7 @@ package com.browntowndev.enclave.core.data.remote.firestore
 import androidx.room.withTransaction
 import com.browntowndev.enclave.core.data.local.ChatEntity
 import com.browntowndev.enclave.core.data.local.EnclaveDatabase
+import com.browntowndev.enclave.core.data.local.StudioMediaEntity
 import com.browntowndev.enclave.core.data.remote.EntitySyncAdapter
 import com.browntowndev.enclave.core.data.remote.FirestoreSensitiveFieldRepairer
 import com.browntowndev.enclave.core.data.sync.EmbeddingRegenerationCoordinator
@@ -99,6 +100,56 @@ class FirestoreSyncProductionWiringTest {
             }
 
             assertEquals(4, stateStore.sequence)
+        }
+
+    @Test
+    fun `applying a studio_gallery upsert fires the media download trigger`() =
+        runTest {
+            val entity = StudioMediaEntity(id = "m1", prompt = "p", mediaUri = "u", mediaType = "IMAGE")
+            val adapter = mockk<EntitySyncAdapter<StudioMediaEntity>>(relaxed = true)
+            every { adapter.fromFirestore(any()) } returns entity
+
+            val snapshot = mockk<DocumentSnapshot>()
+            every { snapshot.exists() } returns true
+            every { snapshot.data } returns mapOf("media_type" to "IMAGE")
+            every { snapshot.getString("_sync_device_id") } returns null
+
+            val docRef = mockk<DocumentReference>()
+            val firestore = mockk<FirebaseFirestore>()
+            every { firestore.document("users/alice/studio_gallery/m1") } returns docRef
+            every { docRef.get() } returns Tasks.forResult(snapshot)
+
+            var triggered = false
+            val localStore =
+                RoomFirestoreSyncLocalStore(
+                    database = mockk<EnclaveDatabase>(relaxed = true),
+                    firestore = firestore,
+                    userIdProvider = { "alice" },
+                    adapterLookup = mapOf("studio_gallery" to adapter),
+                    repairer =
+                        mockk<FirestoreSensitiveFieldRepairer>(relaxed = true) {
+                            every { repairInbound(any(), any(), any()) } answers { thirdArg() }
+                        },
+                    embeddingCoordinator = mockk<EmbeddingRegenerationCoordinator>(relaxed = true),
+                    loggingPort = mockk<LoggingPort>(relaxed = true),
+                    syncStateStore = TrackingSyncStateStore(initialSequence = 4),
+                    pendingSyncLookup =
+                        mockk(relaxed = true) {
+                            coEvery { pendingSync(any(), any()) } returns 0
+                        },
+                    mediaDownloadTrigger = { triggered = true },
+                )
+
+            // upsert() runs applyAdapterUpsert directly (no transaction wrapper), exercising the
+            // post-apply collectionPath dispatch.
+            localStore.upsert(
+                collectionPath = "studio_gallery",
+                entityId = "m1",
+                data = mapOf("media_type" to "IMAGE"),
+                eventDeviceId = null,
+            )
+
+            assertEquals(true, triggered)
         }
 }
 

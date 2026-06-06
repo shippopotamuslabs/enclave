@@ -139,6 +139,9 @@ internal class RoomFirestoreSyncLocalStore(
     private val syncStateStore: FirestoreSyncStateStore,
     private val pendingSyncLookup: FirestoreSyncPendingSyncLookup,
     private val cache: FirestoreSyncDocumentCache? = null,
+    // Invoked after a studio_gallery row is applied so the cloud download worker can fetch +
+    // decrypt the bytes for media that arrived as metadata-only (remote URL, no local file).
+    private val mediaDownloadTrigger: () -> Unit = {},
 ) : FirestoreSyncLocalStore {
     override suspend fun upsert(
         collectionPath: String,
@@ -228,6 +231,7 @@ internal class RoomFirestoreSyncLocalStore(
         when (collectionPath) {
             "messages" -> embeddingCoordinator.enqueueMessage(entityId)
             "documents" -> embeddingCoordinator.enqueueDocument(entityId)
+            "studio_gallery" -> mediaDownloadTrigger()
             else -> Unit
         }
     }

@@ -238,6 +238,81 @@ class StudioRepositoryImplTest {
         }
 
     @Test
+    fun `getMediaPendingDownload returns only uploaded rows missing a local file`() =
+        runTest {
+            val localFile = File(filesDir, "present.jpg")
+            localFile.writeText("bytes")
+
+            coEvery { studioMediaDao.getUploaded() } returns
+                listOf(
+                    // Synced down on a fresh device: mediaUri points at the remote URL, no local file.
+                    StudioMediaEntity(
+                        id = "remote-only",
+                        prompt = "PCENC:v1:aes-gcm:p",
+                        mediaUri = "PCENC:v1:aes-gcm:https://storage/users/u/media/remote-only",
+                        mediaType = "IMAGE",
+                        remoteUrl = "PCENC:v1:aes-gcm:https://storage/users/u/media/remote-only",
+                        syncStatus = "UPLOADED",
+                    ),
+                    // Source device: bytes already present locally, must be skipped.
+                    StudioMediaEntity(
+                        id = "has-local",
+                        prompt = "PCENC:v1:aes-gcm:p",
+                        mediaUri = "PCENC:v1:aes-gcm:file://${localFile.absolutePath}",
+                        mediaType = "IMAGE",
+                        remoteUrl = "PCENC:v1:aes-gcm:https://storage/users/u/media/has-local",
+                        syncStatus = "UPLOADED",
+                    ),
+                    // Never uploaded (no remote URL): nothing to download.
+                    StudioMediaEntity(
+                        id = "no-remote",
+                        prompt = "PCENC:v1:aes-gcm:p",
+                        mediaUri = "PCENC:v1:aes-gcm:https://storage/users/u/media/no-remote",
+                        mediaType = "IMAGE",
+                        remoteUrl = null,
+                        syncStatus = "UPLOADED",
+                    ),
+                )
+
+            val pending = repository.getMediaPendingDownload()
+
+            assertEquals(listOf("remote-only"), pending.map { it.id })
+        }
+
+    @Test
+    fun `materializeDownloadedMedia writes bytes locally and repoints the row without re-uploading`() =
+        runTest {
+            val bytes = "decrypted image".toByteArray()
+            coEvery { studioMediaDao.getMediaById("media-1") } returns
+                StudioMediaEntity(
+                    id = "media-1",
+                    prompt = "PCENC:v1:aes-gcm:p",
+                    mediaUri = "PCENC:v1:aes-gcm:https://storage/users/u/media/media-1",
+                    mediaType = "IMAGE",
+                    remoteUrl = "PCENC:v1:aes-gcm:https://storage/users/u/media/media-1",
+                    syncStatus = "UPLOADED",
+                    pendingSync = 0,
+                )
+
+            repository.materializeDownloadedMedia("media-1", bytes)
+
+            val written = File(filesDir, "studio_synced_media-1.jpg")
+            assertTrue(written.exists())
+            assertEquals("decrypted image", written.readText())
+
+            coVerify {
+                studioMediaDao.insertMedia(
+                    match {
+                        it.id == "media-1" &&
+                            it.mediaUri == "PCENC:v1:aes-gcm:file://${written.absolutePath}" &&
+                            it.syncStatus == "UPLOADED" &&
+                            it.pendingSync == 0
+                    },
+                )
+            }
+        }
+
+    @Test
     fun `renameAlbum trims name and updates album row`() =
         runTest {
             coEvery { studioAlbumDao.getAlbumById("42") } returns

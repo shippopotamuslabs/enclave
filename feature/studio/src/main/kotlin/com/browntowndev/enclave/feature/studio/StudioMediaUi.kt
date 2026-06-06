@@ -37,6 +37,20 @@ val StudioMediaUi.bestUri: Any? get() {
     return if (java.io.File(path).exists()) localUri else remoteUrl
 }
 
+/**
+ * True while the bytes for a cloud-synced item still have to be downloaded + decrypted locally
+ * (the row arrived as metadata pointing at the remote URL, no local file yet). Drives the gallery
+ * download spinner. Flips to false automatically once [MediaCloudDownloadWorker] materializes the
+ * file and the row re-emits with a `file://` [localUri].
+ */
+val StudioMediaUi.isAwaitingDownload: Boolean get() {
+    if (remoteUrl.isNullOrBlank()) return false
+    if (localUri.startsWith("content://")) return false
+    val path = localUri.replace("file://", "")
+    if (path.isBlank() || path.startsWith("http")) return true
+    return !java.io.File(path).exists()
+}
+
 internal fun StudioMediaUi.effectiveLocalUri(): String {
     val best = bestUri
     return if (best is String) best else localUri

@@ -298,6 +298,7 @@ class FirestoreSyncDependenciesFacade
             preferencesDataStore: androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences>,
             searchToolSettingsSyncQueue: SearchToolSettingsSyncQueue,
             settingsRepository: SettingsRepositoryImpl,
+            cloudSyncTrigger: com.browntowndev.enclave.core.data.sync.CloudSyncTrigger,
         ) : this(
             firestore = firestore,
             chatSyncDaos = chatSyncDaos,
@@ -315,6 +316,7 @@ class FirestoreSyncDependenciesFacade
             sharedStateStore = FirestoreSyncStateStore(preferencesDataStore),
             searchToolSettingsSyncQueue = searchToolSettingsSyncQueue,
             settingsRepository = settingsRepository,
+            mediaDownloadTrigger = cloudSyncTrigger::triggerMediaDownload,
         )
 
         private constructor(
@@ -334,6 +336,7 @@ class FirestoreSyncDependenciesFacade
             sharedStateStore: FirestoreSyncStateStore,
             searchToolSettingsSyncQueue: SearchToolSettingsSyncQueue,
             settingsRepository: SettingsRepositoryImpl,
+            mediaDownloadTrigger: () -> Unit = {},
             cache: com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncDocumentCache =
                 com.browntowndev.enclave.core.data.remote.firestore
                     .FirestoreSyncDocumentCache(firestore),
@@ -371,6 +374,7 @@ class FirestoreSyncDependenciesFacade
                     searchToolSettingsSyncQueue = searchToolSettingsSyncQueue,
                     settingsRepository = settingsRepository,
                     cache = cache,
+                    mediaDownloadTrigger = mediaDownloadTrigger,
                 ),
             syncStateStore = sharedStateStore,
             documentCache = cache,
@@ -430,6 +434,7 @@ class FirestoreSyncDependenciesFacade
                 searchToolSettingsSyncQueue: SearchToolSettingsSyncQueue,
                 settingsRepository: SettingsRepositoryImpl,
                 cache: com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncDocumentCache,
+                mediaDownloadTrigger: () -> Unit,
             ): FirestoreSyncEventApplier {
                 val healer = SensitivePersistenceSelfHealer(localEncryption, loggingPort)
                 val repairer =
@@ -469,6 +474,7 @@ class FirestoreSyncDependenciesFacade
                                 com.browntowndev.enclave.core.data.remote.firestore
                                     .FirestoreSyncPendingSyncLookup(database),
                             cache = cache,
+                            mediaDownloadTrigger = mediaDownloadTrigger,
                         )
                 val sourceDocStore =
                     com.browntowndev.enclave.core.data.remote.firestore

@@ -23,6 +23,7 @@ class CloudSyncTrigger
         fun trigger() {
             triggerMetadata()
             triggerMedia()
+            triggerMediaDownload()
             triggerFiles()
         }
 
@@ -47,6 +48,21 @@ class CloudSyncTrigger
                 "enclave_media_sync",
                 ExistingWorkPolicy.REPLACE,
                 OneTimeWorkRequestBuilder<MediaCloudSyncWorker>()
+                    .setConstraints(
+                        Constraints
+                            .Builder()
+                            .setRequiredNetworkType(NetworkType.CONNECTED)
+                            .build(),
+                    ).build(),
+            )
+        }
+
+        fun triggerMediaDownload() {
+            loggingPort.debug(TAG, "Enqueuing enclave_media_download (KEEP)")
+            workManager.enqueueUniqueWork(
+                "enclave_media_download",
+                ExistingWorkPolicy.KEEP,
+                OneTimeWorkRequestBuilder<MediaCloudDownloadWorker>()
                     .setConstraints(
                         Constraints
                             .Builder()

@@ -20,6 +20,7 @@ class InitialSyncWorker
         @Assisted params: WorkerParameters,
         private val startCloudSyncListeningUseCase: StartCloudSyncListeningUseCase,
         private val loggingPort: LoggingPort,
+        private val cloudSyncTrigger: CloudSyncTrigger,
     ) : CoroutineWorker(context, params) {
         companion object {
             private const val TAG = "InitialSyncWorker"
@@ -52,6 +53,9 @@ class InitialSyncWorker
 
                 if (syncResult.isSuccess) {
                     loggingPort.info(TAG, "Initial sync completed successfully")
+                    // Synced-down media only carries metadata + encrypted remote URL; pull the bytes
+                    // down and decrypt them so the gallery has local files to render.
+                    cloudSyncTrigger.triggerMediaDownload()
                     Result.success()
                 } else {
                     val error = syncResult.exceptionOrNull()
