@@ -1,6 +1,8 @@
 package com.browntowndev.enclave.localimagegen
 
+import android.content.ComponentCallbacks2
 import android.content.Context
+import android.content.res.Configuration
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId
 import com.browntowndev.enclave.domain.model.media.QnnRuntimeLibraryCatalog
@@ -9,21 +11,39 @@ import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
+data class NativeImageGenGenerateParams(
+    val backend: LocalImageGenerationBackendKind,
+    val modelDir: String,
+    val prompt: String,
+    val negativePrompt: String?,
+    val width: Int,
+    val height: Int,
+    val steps: Int,
+    val cfgScale: Float,
+    val scheduler: String,
+    val seed: Long,
+    val outputPath: String,
+    val mode: Int,
+    val denoiseStrength: Float,
+    val initImagePath: String?,
+    val memoryPolicy: Int,
+)
+
 /** Low-level native runtime probes and blocking generate calls (invoke off main thread). */
 @Singleton
 class NativeLocalImageGenRuntime
     @Inject
     constructor(
         @param:ApplicationContext private val context: Context,
-    ) {
-        private val qnnRuntimeDir = File(context.filesDir, QNN_RUNTIME_SUBDIR)
+    ) : ComponentCallbacks2 {
+        private val qnnRuntime = QnnRuntimeDirResolver.resolve(context)
 
         init {
-            QnnRuntimeBootstrap.install(context, qnnRuntimeDir)
             LocalImageGenNative.nativeInit(
                 nativeLibraryDir = context.applicationInfo.nativeLibraryDir,
-                qnnRuntimeDir = qnnRuntimeDir.absolutePath,
+                qnnRuntimeDir = qnnRuntime.directory.absolutePath,
             )
+            context.registerComponentCallbacks(this)
         }
 
         fun probe(backend: LocalImageGenerationBackendKind): Int =
@@ -36,64 +56,75 @@ class NativeLocalImageGenRuntime
             }
 
         fun ensureQnnRuntimeForModel(modelId: LocalImageGenerationModelId) {
+            if (qnnRuntime.usesJniLibs) {
+                return
+            }
             QnnRuntimeBootstrap.installLibraries(
                 context,
-                qnnRuntimeDir,
+                qnnRuntime.directory,
                 QnnRuntimeLibraryCatalog.runtimeLibrariesForModel(modelId),
             )
         }
 
         fun isQnnRuntimeReadyForModel(modelId: LocalImageGenerationModelId): Boolean {
-            val skel = File(qnnRuntimeDir, QnnRuntimeLibraryCatalog.primarySkelLibraryFor(modelId))
+            val skel =
+                File(qnnRuntime.directory, QnnRuntimeLibraryCatalog.primarySkelLibraryFor(modelId))
             return skel.isFile && skel.length() > 0L
         }
 
-        fun generate(
-            backend: LocalImageGenerationBackendKind,
-            modelDir: String,
-            prompt: String,
-            negativePrompt: String?,
-            width: Int,
-            height: Int,
-            steps: Int,
-            cfgScale: Float,
-            scheduler: String,
-            seed: Long,
-            outputPath: String,
-        ): Int =
-            when (backend) {
+        fun cancel() {
+            LocalImageGenNative.nativeCancel()
+        }
+
+        fun generate(params: NativeImageGenGenerateParams): Int =
+            when (params.backend) {
                 LocalImageGenerationBackendKind.QNN_NPU ->
                     LocalImageGenNative.nativeGenerateQnn(
-                        modelDir,
-                        prompt,
-                        negativePrompt,
-                        width,
-                        height,
-                        steps,
-                        cfgScale,
-                        scheduler,
-                        seed,
-                        outputPath,
+                        params.modelDir,
+                        params.prompt,
+                        params.negativePrompt,
+                        params.width,
+                        params.height,
+                        params.steps,
+                        params.cfgScale,
+                        params.scheduler,
+                        params.seed,
+                        params.outputPath,
+                        params.mode,
+                        params.denoiseStrength,
+                        params.initImagePath,
+                        params.memoryPolicy,
                     )
                 LocalImageGenerationBackendKind.CPU_MNN ->
                     LocalImageGenNative.nativeGenerateMnn(
-                        modelDir,
-                        prompt,
-                        negativePrompt,
-                        width,
-                        height,
-                        steps,
-                        cfgScale,
-                        scheduler,
-                        seed,
-                        outputPath,
+                        params.modelDir,
+                        params.prompt,
+                        params.negativePrompt,
+                        params.width,
+                        params.height,
+                        params.steps,
+                        params.cfgScale,
+                        params.scheduler,
+                        params.seed,
+                        params.outputPath,
+                        params.mode,
+                        params.denoiseStrength,
+                        params.initImagePath,
+                        params.memoryPolicy,
                     )
                 LocalImageGenerationBackendKind.GPU_EXPERIMENTAL,
                 LocalImageGenerationBackendKind.NONE,
                 -> -1
             }
 
-        private companion object {
-            const val QNN_RUNTIME_SUBDIR = "local_image_gen_qnn_runtime"
+        override fun onTrimMemory(level: Int) {
+            LocalImageGenNative.nativeOnTrimMemory(level)
         }
+
+        override fun onConfigurationChanged(newConfig: Configuration) = Unit
+
+        override fun onLowMemory() {
+            onTrimMemory(ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL)
+        }
+
     }

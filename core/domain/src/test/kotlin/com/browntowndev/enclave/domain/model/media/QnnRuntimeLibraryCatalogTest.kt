@@ -7,24 +7,29 @@ import org.junit.jupiter.api.Test
 
 class QnnRuntimeLibraryCatalogTest {
     @Test
-    fun `Gen3 includes V73 and V81 skel for SD15 and SDXL packs`() {
+    fun `Gen3 includes V73 V79 and V81 skel for SD15 SDXL and elite tier`() {
         val libraries = QnnRuntimeLibraryCatalog.runtimeLibrariesFor(SnapdragonTier.GEN3_PLUS)
 
         assertTrue("libQnnHtpV73Skel.so" in libraries)
-        assertTrue("libQnnHtpV81Skel.so" in libraries)
         assertTrue("libQnnHtpV79Skel.so" in libraries)
+        assertTrue("libQnnHtpV81Skel.so" in libraries)
     }
 
     @Test
-    fun `SDXL model runtime uses V81 hexagon family`() {
+    fun `SDXL model runtime uses V79 hexagon family for 8gen3 pack`() {
         val libraries =
             QnnRuntimeLibraryCatalog.runtimeLibrariesForModel(LocalImageGenerationModelId.SDXL_QNN)
 
-        assertTrue("libQnnHtpV81Skel.so" in libraries)
+        assertTrue("libQnnHtpV79Skel.so" in libraries)
         assertEquals(
-            "libQnnHtpV81Skel.so",
+            "libQnnHtpV79Skel.so",
             QnnRuntimeLibraryCatalog.primarySkelLibraryFor(LocalImageGenerationModelId.SDXL_QNN),
         )
+    }
+
+    @Test
+    fun `core libraries include HTP prepare`() {
+        assertTrue("libQnnHtpPrepare.so" in QnnRuntimeLibraryCatalog.coreLibraries)
     }
 
     @Test

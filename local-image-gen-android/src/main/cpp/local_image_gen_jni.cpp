@@ -17,8 +17,14 @@ extern "C" int qnn_generate_image(
     const char* scheduler,
     long seed,
     const char* output_path,
+    int mode,
+    float denoise_strength,
+    const char* init_image_path,
+    int memory_policy,
     char* error_out,
     int error_out_len);
+extern "C" void qnn_cancel_generation();
+extern "C" void qnn_on_trim_memory(int level);
 
 extern "C" int mnn_probe_runtime();
 extern "C" int mnn_generate_image(
@@ -32,8 +38,89 @@ extern "C" int mnn_generate_image(
     const char* scheduler,
     long seed,
     const char* output_path,
+    int mode,
+    float denoise_strength,
+    const char* init_image_path,
+    int memory_policy,
     char* error_out,
     int error_out_len);
+
+static int generateInternal(
+    JNIEnv* env,
+    bool use_qnn,
+    jstring model_dir,
+    jstring prompt,
+    jstring negative_prompt,
+    jint width,
+    jint height,
+    jint steps,
+    jfloat cfg_scale,
+    jstring scheduler,
+    jlong seed,
+    jstring output_path,
+    jint mode,
+    jfloat denoise_strength,
+    jstring init_image_path,
+    jint memory_policy) {
+    const char* model_dir_c = env->GetStringUTFChars(model_dir, nullptr);
+    const char* prompt_c = env->GetStringUTFChars(prompt, nullptr);
+    const char* negative_c = negative_prompt ? env->GetStringUTFChars(negative_prompt, nullptr) : "";
+    const char* scheduler_c = scheduler ? env->GetStringUTFChars(scheduler, nullptr) : "dpm";
+    const char* output_c = env->GetStringUTFChars(output_path, nullptr);
+    const char* init_c = init_image_path ? env->GetStringUTFChars(init_image_path, nullptr) : nullptr;
+    char error[512] = {};
+    const int code = use_qnn
+        ? qnn_generate_image(
+              model_dir_c,
+              prompt_c,
+              negative_c,
+              width,
+              height,
+              steps,
+              cfg_scale,
+              scheduler_c,
+              seed,
+              output_c,
+              mode,
+              denoise_strength,
+              init_c,
+              memory_policy,
+              error,
+              static_cast<int>(sizeof(error)))
+        : mnn_generate_image(
+              model_dir_c,
+              prompt_c,
+              negative_c,
+              width,
+              height,
+              steps,
+              cfg_scale,
+              scheduler_c,
+              seed,
+              output_c,
+              mode,
+              denoise_strength,
+              init_c,
+              memory_policy,
+              error,
+              static_cast<int>(sizeof(error)));
+    env->ReleaseStringUTFChars(model_dir, model_dir_c);
+    env->ReleaseStringUTFChars(prompt, prompt_c);
+    if (negative_prompt) {
+        env->ReleaseStringUTFChars(negative_prompt, negative_c);
+    }
+    if (scheduler) {
+        env->ReleaseStringUTFChars(scheduler, scheduler_c);
+    }
+    env->ReleaseStringUTFChars(output_path, output_c);
+    if (init_image_path) {
+        env->ReleaseStringUTFChars(init_image_path, init_c);
+    }
+    if (code != 0) {
+        __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, "Generate failed: %s", error);
+    }
+    return code;
+}
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_browntowndev_enclave_localimagegen_LocalImageGenNative_nativeInit(
@@ -50,16 +137,12 @@ Java_com_browntowndev_enclave_localimagegen_LocalImageGenNative_nativeInit(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_com_browntowndev_enclave_localimagegen_LocalImageGenNative_nativeProbeQnn(
-    JNIEnv*,
-    jclass) {
+Java_com_browntowndev_enclave_localimagegen_LocalImageGenNative_nativeProbeQnn(JNIEnv*, jclass) {
     return qnn_probe_runtime();
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_com_browntowndev_enclave_localimagegen_LocalImageGenNative_nativeProbeMnn(
-    JNIEnv*,
-    jclass) {
+Java_com_browntowndev_enclave_localimagegen_LocalImageGenNative_nativeProbeMnn(JNIEnv*, jclass) {
     return mnn_probe_runtime();
 }
 
@@ -76,39 +159,28 @@ Java_com_browntowndev_enclave_localimagegen_LocalImageGenNative_nativeGenerateQn
     jfloat cfg_scale,
     jstring scheduler,
     jlong seed,
-    jstring output_path) {
-    const char* model_dir_c = env->GetStringUTFChars(model_dir, nullptr);
-    const char* prompt_c = env->GetStringUTFChars(prompt, nullptr);
-    const char* negative_c = negative_prompt ? env->GetStringUTFChars(negative_prompt, nullptr) : "";
-    const char* scheduler_c = scheduler ? env->GetStringUTFChars(scheduler, nullptr) : "dpm";
-    const char* output_c = env->GetStringUTFChars(output_path, nullptr);
-    char error[512] = {};
-    const int code = qnn_generate_image(
-        model_dir_c,
-        prompt_c,
-        negative_c,
+    jstring output_path,
+    jint mode,
+    jfloat denoise_strength,
+    jstring init_image_path,
+    jint memory_policy) {
+    return generateInternal(
+        env,
+        true,
+        model_dir,
+        prompt,
+        negative_prompt,
         width,
         height,
         steps,
         cfg_scale,
-        scheduler_c,
+        scheduler,
         seed,
-        output_c,
-        error,
-        static_cast<int>(sizeof(error)));
-    env->ReleaseStringUTFChars(model_dir, model_dir_c);
-    env->ReleaseStringUTFChars(prompt, prompt_c);
-    if (negative_prompt) {
-        env->ReleaseStringUTFChars(negative_prompt, negative_c);
-    }
-    if (scheduler) {
-        env->ReleaseStringUTFChars(scheduler, scheduler_c);
-    }
-    env->ReleaseStringUTFChars(output_path, output_c);
-    if (code != 0) {
-        __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, "QNN generate failed: %s", error);
-    }
-    return code;
+        output_path,
+        mode,
+        denoise_strength,
+        init_image_path,
+        memory_policy);
 }
 
 extern "C" JNIEXPORT jint JNICALL
@@ -124,37 +196,39 @@ Java_com_browntowndev_enclave_localimagegen_LocalImageGenNative_nativeGenerateMn
     jfloat cfg_scale,
     jstring scheduler,
     jlong seed,
-    jstring output_path) {
-    const char* model_dir_c = env->GetStringUTFChars(model_dir, nullptr);
-    const char* prompt_c = env->GetStringUTFChars(prompt, nullptr);
-    const char* negative_c = negative_prompt ? env->GetStringUTFChars(negative_prompt, nullptr) : "";
-    const char* scheduler_c = scheduler ? env->GetStringUTFChars(scheduler, nullptr) : "dpm";
-    const char* output_c = env->GetStringUTFChars(output_path, nullptr);
-    char error[512] = {};
-    const int code = mnn_generate_image(
-        model_dir_c,
-        prompt_c,
-        negative_c,
+    jstring output_path,
+    jint mode,
+    jfloat denoise_strength,
+    jstring init_image_path,
+    jint memory_policy) {
+    return generateInternal(
+        env,
+        false,
+        model_dir,
+        prompt,
+        negative_prompt,
         width,
         height,
         steps,
         cfg_scale,
-        scheduler_c,
+        scheduler,
         seed,
-        output_c,
-        error,
-        static_cast<int>(sizeof(error)));
-    env->ReleaseStringUTFChars(model_dir, model_dir_c);
-    env->ReleaseStringUTFChars(prompt, prompt_c);
-    if (negative_prompt) {
-        env->ReleaseStringUTFChars(negative_prompt, negative_c);
-    }
-    if (scheduler) {
-        env->ReleaseStringUTFChars(scheduler, scheduler_c);
-    }
-    env->ReleaseStringUTFChars(output_path, output_c);
-    if (code != 0) {
-        __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, "MNN generate failed: %s", error);
-    }
-    return code;
+        output_path,
+        mode,
+        denoise_strength,
+        init_image_path,
+        memory_policy);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_browntowndev_enclave_localimagegen_LocalImageGenNative_nativeCancel(JNIEnv*, jclass) {
+    qnn_cancel_generation();
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_browntowndev_enclave_localimagegen_LocalImageGenNative_nativeOnTrimMemory(
+    JNIEnv*,
+    jclass,
+    jint level) {
+    qnn_on_trim_memory(level);
 }

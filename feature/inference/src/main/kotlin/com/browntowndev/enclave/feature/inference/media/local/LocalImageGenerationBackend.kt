@@ -2,6 +2,13 @@ package com.browntowndev.enclave.feature.inference.media.local
 
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationMemoryPolicy
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelPolicy
+
+enum class LocalImageGenerationMode {
+    TXT2IMG,
+    IMG2IMG,
+}
 
 data class LocalImageGenerationNativeRequest(
     val backend: LocalImageGenerationBackendKind,
@@ -16,6 +23,10 @@ data class LocalImageGenerationNativeRequest(
     val scheduler: String,
     val seed: Long,
     val outputPathPrefix: String,
+    val mode: LocalImageGenerationMode = LocalImageGenerationMode.TXT2IMG,
+    val initImagePath: String? = null,
+    val denoiseStrength: Float = LocalImageGenerationModelPolicy.DEFAULT_IMG2IMG_DENOISE_STRENGTH,
+    val memoryPolicy: LocalImageGenerationMemoryPolicy = LocalImageGenerationMemoryPolicy.LOW_RAM,
 )
 
 data class LocalImageGenerationNativeResult(
@@ -27,6 +38,8 @@ data class LocalImageGenerationNativeResult(
 
 interface LocalImageGenerationBackend {
     val kind: LocalImageGenerationBackendKind
+
+    fun cancel() {}
 
     suspend fun generate(request: LocalImageGenerationNativeRequest): Result<LocalImageGenerationNativeResult>
 }

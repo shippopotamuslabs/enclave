@@ -119,4 +119,13 @@ class LocalImageGenerationPathsTest {
             File(dir, it).writeText("x")
         }
     }
+
+    @Test
+    fun hasImg2ImgCapability_detectsOptionalEncoder() {
+        val dir = tempDir.toFile()
+        touchQnn(dir)
+        assertFalse(LocalImageGenerationPaths.hasImg2ImgCapability(dir))
+        File(dir, "vae_encoder.bin").writeText("x")
+        assertTrue(LocalImageGenerationPaths.hasImg2ImgCapability(dir))
+    }
 }

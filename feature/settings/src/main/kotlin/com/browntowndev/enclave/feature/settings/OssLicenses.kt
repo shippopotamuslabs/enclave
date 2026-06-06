@@ -346,23 +346,20 @@ internal object OssLicenses {
                     """.trimIndent(),
             ),
             OssLicenseEntry(
-                name = "Local Dream (libstable_diffusion_core)",
-                version = "2.6.1",
-                licenseType = "CC BY-NC 4.0",
-                copyrightHolder = "xororz (Local Dream)",
+                name = "Enclave diffusion engine",
+                version = "1.0",
+                licenseType = "Apache 2.0",
+                copyrightHolder = "BrownTown Dev (Enclave)",
                 licenseText =
                     """
-                    Creative Commons Attribution-NonCommercial 4.0 International
+                    Apache License, Version 2.0
 
-                    Copyright xororz and Local Dream contributors
+                    Copyright BrownTown Dev and Enclave contributors
 
-                    libstable_diffusion_core.so is sourced from the Local Dream project and is used
-                    for on-device Stable Diffusion inference on Qualcomm NPUs. Non-commercial use
-                    only under this license; commercial redistribution requires separate rights from
-                    the licensor or a replacement backend built under your own license.
+                    In-process Stable Diffusion txt2img/img2img engine for Qualcomm QNN packs and
+                    MNN CLIP conditioning. Replaces the former Local Dream fork/HTTP backend.
 
-                    https://github.com/xororz/local-dream
-                    https://creativecommons.org/licenses/by-nc/4.0/
+                    Licensed under the Apache License, Version 2.0.
                     """.trimIndent(),
             ),
             OssLicenseEntry(
@@ -472,7 +469,7 @@ internal object OssLicenses {
                     QNN-converted weights distributed via xororz/sd-qnn (AnythingV5 derivative).
                     Subject to the base Stable Diffusion 1.5 license and upstream model-card terms.
 
-                    Used with libstable_diffusion_core for Hexagon NPU inference on supported devices.
+                    Used with the Enclave diffusion engine for Hexagon NPU inference on supported devices.
                     https://huggingface.co/xororz/sd-qnn
                     """.trimIndent(),
             ),
@@ -486,7 +483,7 @@ internal object OssLicenses {
                     QNN-converted SDXL weights (RealVis XL V5 DMD2) distributed via xororz/sdxl-qnn.
                     SDXL base models use the Open RAIL++-M license; derivative checkpoints may add terms.
 
-                    Used with libstable_diffusion_core for Hexagon NPU inference on Gen 3+ devices.
+                    Used with the Enclave diffusion engine for Hexagon NPU inference on Gen 3+ devices.
                     https://huggingface.co/xororz/sdxl-qnn
                     """.trimIndent(),
             ),

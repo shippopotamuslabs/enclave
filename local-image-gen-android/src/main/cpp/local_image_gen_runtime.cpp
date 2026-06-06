@@ -5,6 +5,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <cstdlib>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
@@ -23,6 +24,7 @@ std::string g_qnn_runtime_dir;
 const char* kQnnRuntimeLibNames[] = {
     "libQnnHtp.so",
     "libQnnSystem.so",
+    "libQnnHtpPrepare.so",
     "libQnnHtpV68Stub.so",
     "libQnnHtpV69Stub.so",
     "libQnnHtpV73Stub.so",
@@ -42,8 +44,6 @@ const char* kQnnRuntimeLibNames[] = {
     "libQnnHtpV81.so",
     "libQnnHtpV81Skel.so",
 };
-
-const char* kCoreExecutableName = "libstable_diffusion_core.so";
 
 bool file_exists(const std::string& path) {
     struct stat st {};
@@ -82,42 +82,50 @@ void copy_error(const char* msg, char* error_out, int error_out_len) {
 
 }  // namespace
 
+void apply_qnn_hexagon_environment() {
+    setenv("DSP_LIBRARY_PATH", g_qnn_runtime_dir.c_str(), 1);
+    setenv("ADSP_LIBRARY_PATH", g_qnn_runtime_dir.c_str(), 1);
+    setenv("CDSP_LIBRARY_PATH", g_qnn_runtime_dir.c_str(), 1);
+    setenv("LD_LIBRARY_PATH", g_qnn_runtime_dir.c_str(), 1);
+}
+
 void set_runtime_paths(const char* native_lib_dir, const char* qnn_runtime_dir) {
     g_native_lib_dir = native_lib_dir != nullptr ? native_lib_dir : "";
     g_qnn_runtime_dir = qnn_runtime_dir != nullptr ? qnn_runtime_dir : "";
+    apply_qnn_hexagon_environment();
 }
 
 const std::string& native_lib_dir() { return g_native_lib_dir; }
 
 const std::string& qnn_runtime_dir() { return g_qnn_runtime_dir; }
 
-bool probe_stable_diffusion_core_executable() {
-    if (g_native_lib_dir.empty()) {
+bool file_exists_in_dir(const std::string& dir, const char* filename) {
+    if (dir.empty() || filename == nullptr) {
         return false;
     }
-    const std::string path = g_native_lib_dir + "/" + kCoreExecutableName;
-    return file_exists(path);
+    return file_exists(dir + "/" + filename);
 }
 
 int probe_qnn_libs() {
     if (g_native_lib_dir.empty() && g_qnn_runtime_dir.empty()) {
         return 0;
     }
-    int found = 0;
-    for (const char* name : kQnnRuntimeLibNames) {
+    auto has = [&](const char* name) -> bool {
         if (!g_qnn_runtime_dir.empty() && file_exists(g_qnn_runtime_dir + "/" + name)) {
-            found++;
-        } else if (!g_native_lib_dir.empty() && file_exists(g_native_lib_dir + "/" + name)) {
-            found++;
+            return true;
         }
-    }
-    if (found == 0) {
+        if (!g_native_lib_dir.empty() && file_exists(g_native_lib_dir + "/" + name)) {
+            return true;
+        }
+        return false;
+    };
+    if (!has("libQnnHtp.so") || !has("libQnnSystem.so")) {
         return 0;
     }
-    if (!probe_stable_diffusion_core_executable()) {
+    if (!has("libQnnHtpPrepare.so")) {
         return 1;
     }
-    return found >= 2 ? 2 : 1;
+    return 2;
 }
 
 int probe_mnn_libs() {
@@ -126,10 +134,10 @@ int probe_mnn_libs() {
     }
     void* handle = dlopen((g_native_lib_dir + "/libMNN.so").c_str(), RTLD_NOW | RTLD_LOCAL);
     if (handle == nullptr) {
-        return probe_stable_diffusion_core_executable() ? 1 : 0;
+        return 0;
     }
     dlclose(handle);
-    return probe_stable_diffusion_core_executable() ? 2 : 1;
+    return 1;
 }
 
 bool prepare_qnn_runtime_libs(char* error_out, int error_out_len) {
@@ -137,21 +145,28 @@ bool prepare_qnn_runtime_libs(char* error_out, int error_out_len) {
         copy_error("Native paths not initialized.", error_out, error_out_len);
         return false;
     }
-    std::error_code ec;
-    std::filesystem::create_directories(g_qnn_runtime_dir, ec);
-    for (const char* name : kQnnRuntimeLibNames) {
-        const std::string dst = g_qnn_runtime_dir + "/" + name;
-        if (file_exists(dst)) {
-            continue;
-        }
-        if (!g_native_lib_dir.empty()) {
-            const std::string src = g_native_lib_dir + "/" + name;
-            if (file_exists(src) && !copy_file_if_needed(src, dst)) {
-                copy_error("Failed to copy QNN runtime library.", error_out, error_out_len);
-                return false;
+    const bool runtime_is_native_lib_dir =
+        !g_native_lib_dir.empty() && g_qnn_runtime_dir == g_native_lib_dir;
+    if (!runtime_is_native_lib_dir) {
+        std::error_code ec;
+        std::filesystem::create_directories(g_qnn_runtime_dir, ec);
+        for (const char* name : kQnnRuntimeLibNames) {
+            const std::string dst = g_qnn_runtime_dir + "/" + name;
+            if (!g_native_lib_dir.empty()) {
+                const std::string src = g_native_lib_dir + "/" + name;
+                if (file_exists(src)) {
+                    if (!copy_file_if_needed(src, dst)) {
+                        copy_error("Failed to copy QNN runtime library.", error_out, error_out_len);
+                        return false;
+                    }
+                }
+            }
+            if (file_exists(dst)) {
+                chmod(dst.c_str(), 0755);
             }
         }
     }
+    apply_qnn_hexagon_environment();
     return true;
 }
 
