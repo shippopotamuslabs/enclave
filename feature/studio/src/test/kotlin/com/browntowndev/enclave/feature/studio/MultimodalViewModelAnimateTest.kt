@@ -103,6 +103,8 @@ class MultimodalViewModelAnimateTest {
         every { mediaProviderRepository.getMediaProviders() } returns flowOf(listOf(providerAsset))
         every { studioRepository.observeAllMedia() } returns flowOf(emptyList())
         every { studioRepository.observeAllAlbums() } returns flowOf(emptyList())
+        every { studioRepository.observeActiveGeneration() } returns flowOf(null)
+        every { studioRepository.reportActiveGeneration(any()) } returns true
         coEvery { videoGenerationPort.generateVideo(any(), any(), any()) } returns Result.success("video".toByteArray())
         coEvery { studioRepository.cacheEphemeralMedia(any(), any()) } returns "cache://video.mp4"
         coEvery { resolveMediaProviderCapabilitiesUseCase(any(), any()) } returns

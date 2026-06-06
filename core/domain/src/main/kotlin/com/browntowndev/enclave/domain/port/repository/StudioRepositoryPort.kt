@@ -1,5 +1,7 @@
 package com.browntowndev.enclave.domain.port.repository
 
+import com.browntowndev.enclave.domain.model.config.MediaCapability
+import com.browntowndev.enclave.domain.model.media.GenerationSettings
 import com.browntowndev.enclave.domain.model.media.ImageGenerationProgress
 import kotlinx.coroutines.flow.Flow
 
@@ -24,6 +26,12 @@ data class StudioAlbumAsset(
     val name: String,
 )
 
+data class ActiveStudioGeneration(
+    val prompt: String,
+    val mediaType: MediaCapability,
+    val settings: GenerationSettings,
+)
+
 @Suppress("TooManyFunctions")
 interface StudioRepositoryPort {
     fun observeAllMedia(): Flow<List<StudioMediaAsset>>
@@ -36,6 +44,8 @@ interface StudioRepositoryPort {
 
     fun observeGenerationProgress(): Flow<ImageGenerationProgress?>
 
+    fun observeActiveGeneration(): Flow<ActiveStudioGeneration?>
+
     suspend fun reportGenerationError(message: String?)
 
     suspend fun clearGenerationError()
@@ -43,6 +53,10 @@ interface StudioRepositoryPort {
     fun reportGenerationProgress(progress: ImageGenerationProgress?)
 
     fun clearGenerationProgress()
+
+    fun reportActiveGeneration(generation: ActiveStudioGeneration): Boolean
+
+    fun clearActiveGeneration()
 
     suspend fun addEphemeralMedia(asset: StudioMediaAsset)
 

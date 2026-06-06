@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.model.media.ImageGenerationTarget
 import com.browntowndev.enclave.domain.model.media.ProviderCapabilities
 import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
@@ -258,7 +257,10 @@ class MultimodalViewModel
             }
 
         init {
-            generationCoordinator.startObservers(viewModelScope)
+            generationCoordinator.startObservers(
+                scope = viewModelScope,
+                onActiveGeneration = promptCoordinator::restoreActiveGeneration,
+            )
             speechCoordinator.observeResults(viewModelScope) { text ->
                 promptCoordinator.prompt.value = text
             }
@@ -369,6 +371,12 @@ class MultimodalViewModel
 
         fun clearSession() {
             promptCoordinator.clearSession(viewModelScope, albumSelectionCoordinator)
+        }
+
+        suspend fun clearSessionIfIdle() {
+            if (!generationCoordinator.isGenerationActive()) {
+                clearSession()
+            }
         }
 
         fun clearError() {

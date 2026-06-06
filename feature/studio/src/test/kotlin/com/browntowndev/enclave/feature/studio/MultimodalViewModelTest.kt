@@ -142,6 +142,8 @@ class MultimodalViewModelTest {
         every { studioRepository.observeAllMedia() } returns allMediaFlow
         every { studioRepository.observeEphemeralMedia() } returns ephemeralMediaFlow
         every { studioRepository.observeGenerationError() } returns generationErrorFlow
+        every { studioRepository.observeActiveGeneration() } returns flowOf(null)
+        every { studioRepository.reportActiveGeneration(any()) } returns true
         every { studioRepository.observeAllAlbums() } returns allAlbumsFlow
         coEvery { studioRepository.updateMedia(any()) } returns Unit
         coEvery { studioRepository.promoteEphemeralMedia(any(), any()) } returns
@@ -1160,4 +1162,3 @@ class MultimodalViewModelTest {
             job.cancel()
         }
 }
-

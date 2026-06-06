@@ -3,8 +3,10 @@ package com.browntowndev.enclave.feature.studio.service
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.net.Uri
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.browntowndev.enclave.domain.model.config.MediaCapability
@@ -13,6 +15,7 @@ import com.browntowndev.enclave.domain.model.media.ImageGenerationProgress
 import com.browntowndev.enclave.domain.model.media.MusicGenerationSettings
 import com.browntowndev.enclave.domain.model.media.VideoGenerationSettings
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.domain.port.repository.ActiveStudioGeneration
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.domain.usecase.media.GenerateMediaUseCase
 import com.browntowndev.enclave.domain.usecase.media.MediaGenerationRequestMapper
@@ -20,6 +23,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -47,6 +51,7 @@ class MultimediaGenerationService : Service() {
 
     private val serviceJob = SupervisorJob()
     private val serviceScope = CoroutineScope(Dispatchers.IO + serviceJob)
+    private var generationJob: Job? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -63,6 +68,10 @@ class MultimediaGenerationService : Service() {
 
         when (intent?.action) {
             ACTION_START -> {
+                if (generationJob?.isActive == true) {
+                    logger.warning(TAG, "Ignoring duplicate generation request while one is active")
+                    return START_NOT_STICKY
+                }
                 startForeground(ONGOING_NOTIFICATION_ID, createNotification("Preparing..."))
                 val prompt = intent.getStringExtra(EXTRA_PROMPT)
                 if (prompt == null) {
@@ -82,9 +91,16 @@ class MultimediaGenerationService : Service() {
                             MediaCapability.MUSIC -> MusicGenerationSettings()
                         }
 
+                studioRepository.reportActiveGeneration(
+                    ActiveStudioGeneration(
+                        prompt = prompt,
+                        mediaType = mediaType,
+                        settings = settings,
+                    ),
+                )
                 updateNotification("Generating...")
 
-                serviceScope.launch {
+                generationJob = serviceScope.launch {
                     try {
                         val mediaRequest =
                             MediaGenerationRequestMapper.fromStudio(
@@ -109,6 +125,7 @@ class MultimediaGenerationService : Service() {
                         studioRepository.reportGenerationError(e.message ?: "Unexpected error during generation")
                     } finally {
                         studioRepository.clearGenerationProgress()
+                        studioRepository.clearActiveGeneration()
                         stopForeground(Service.STOP_FOREGROUND_REMOVE)
                         stopSelf()
                     }
@@ -116,6 +133,8 @@ class MultimediaGenerationService : Service() {
             }
             ACTION_STOP -> {
                 logger.info(TAG, "ACTION_STOP received")
+                generationJob?.cancel()
+                studioRepository.clearActiveGeneration()
                 stopForeground(Service.STOP_FOREGROUND_REMOVE)
                 stopSelf()
             }
@@ -143,10 +162,23 @@ class MultimediaGenerationService : Service() {
             .setContentTitle("Enclave")
             .setContentText(content)
             .setSmallIcon(CoreDataR.drawable.ic_notification)
+            .setContentIntent(createStudioContentIntent())
             .setOngoing(true)
             .setSilent(true)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .build()
+
+    private fun createStudioContentIntent(): PendingIntent {
+        val intent =
+            Intent(Intent.ACTION_VIEW, Uri.parse(StudioNotificationDeepLink.URI_PATTERN))
+                .setPackage(packageName)
+        return PendingIntent.getActivity(
+            this,
+            0,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
 
     private fun updateNotification(content: String) {
         val manager = getSystemService(NotificationManager::class.java)

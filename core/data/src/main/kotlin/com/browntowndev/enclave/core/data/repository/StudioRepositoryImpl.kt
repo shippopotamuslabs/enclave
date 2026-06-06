@@ -12,6 +12,7 @@ import com.browntowndev.enclave.core.data.security.SensitiveRoomReadRepair
 import com.browntowndev.enclave.core.data.security.SensitiveRoomReadRepairApplier
 import com.browntowndev.enclave.core.data.sync.CloudSyncTrigger
 import com.browntowndev.enclave.domain.model.media.ImageGenerationProgress
+import com.browntowndev.enclave.domain.port.repository.ActiveStudioGeneration
 import com.browntowndev.enclave.domain.port.repository.DEFAULT_GALLERY_ALBUM_ID
 import com.browntowndev.enclave.domain.port.repository.StudioAlbumAsset
 import com.browntowndev.enclave.domain.port.repository.StudioMediaAsset
@@ -45,6 +46,7 @@ class StudioRepositoryImpl
         private val ephemeralMedia = MutableStateFlow<List<StudioMediaAsset>>(emptyList())
         private val generationError = MutableStateFlow<String?>(null)
         private val generationProgress = MutableStateFlow<ImageGenerationProgress?>(null)
+        private val activeGeneration = MutableStateFlow<ActiveStudioGeneration?>(null)
 
         override fun observeAllMedia(): Flow<List<StudioMediaAsset>> =
             studioMediaDao.getAllMedia().mapLatest { entities ->
@@ -68,6 +70,8 @@ class StudioRepositoryImpl
 
         override fun observeGenerationProgress(): Flow<ImageGenerationProgress?> = generationProgress
 
+        override fun observeActiveGeneration(): Flow<ActiveStudioGeneration?> = activeGeneration
+
         override suspend fun reportGenerationError(message: String?) {
             generationError.value = message
         }
@@ -82,6 +86,20 @@ class StudioRepositoryImpl
 
         override fun clearGenerationProgress() {
             generationProgress.update { null }
+        }
+
+        @Synchronized
+        override fun reportActiveGeneration(generation: ActiveStudioGeneration): Boolean {
+            if (activeGeneration.value != null) {
+                return false
+            }
+            activeGeneration.update { generation }
+            return true
+        }
+
+        @Synchronized
+        override fun clearActiveGeneration() {
+            activeGeneration.update { null }
         }
 
         override suspend fun addEphemeralMedia(asset: StudioMediaAsset) {
@@ -214,6 +232,7 @@ class StudioRepositoryImpl
             ephemeralMedia.value = emptyList()
             generationError.value = null
             generationProgress.update { null }
+            activeGeneration.update { null }
         }
 
         override suspend fun deleteMedia(id: String) {

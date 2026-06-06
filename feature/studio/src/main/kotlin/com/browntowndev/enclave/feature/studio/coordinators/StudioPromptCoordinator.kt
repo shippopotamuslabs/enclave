@@ -9,6 +9,7 @@ import com.browntowndev.enclave.domain.model.media.VideoGenerationSettings
 import com.browntowndev.enclave.domain.model.media.VisualGenerationSettings
 import com.browntowndev.enclave.domain.model.media.withClampedGenerationCount
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
+import com.browntowndev.enclave.domain.port.repository.ActiveStudioGeneration
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -33,6 +34,11 @@ class StudioPromptCoordinator
             prompt.value = newPrompt
             generationCoordinator.stopGeneration()
             generationCoordinator.clearScrollAnchors()
+        }
+
+        fun restoreActiveGeneration(generation: ActiveStudioGeneration) {
+            mediaType.value = generation.mediaType
+            settings.value = generation.settings
         }
 
         fun onMediaTypeChange(type: MediaCapability) {

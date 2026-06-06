@@ -1,12 +1,16 @@
 package com.browntowndev.enclave.core.data.repository
 
 import android.content.Context
+import app.cash.turbine.test
 import com.browntowndev.enclave.core.data.local.StudioAlbumDao
 import com.browntowndev.enclave.core.data.local.StudioAlbumEntity
 import com.browntowndev.enclave.core.data.local.StudioMediaDao
 import com.browntowndev.enclave.core.data.local.StudioMediaEntity
 import com.browntowndev.enclave.core.data.security.SensitiveRoomReadRepairApplier
 import com.browntowndev.enclave.core.data.sync.CloudSyncTrigger
+import com.browntowndev.enclave.domain.model.config.MediaCapability
+import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
+import com.browntowndev.enclave.domain.port.repository.ActiveStudioGeneration
 import com.browntowndev.enclave.domain.port.repository.DEFAULT_GALLERY_ALBUM_ID
 import com.browntowndev.enclave.domain.port.repository.TransactionProvider
 import io.mockk.coEvery
@@ -17,6 +21,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -87,6 +92,30 @@ class StudioRepositoryImplTest {
             repository.clearEphemeralCache()
 
             assertFalse(ephemeralDir.exists())
+        }
+
+    @Test
+    fun `active generation is observable until cleared`() =
+        runTest {
+            val activeGeneration =
+                ActiveStudioGeneration(
+                    prompt = "in progress",
+                    mediaType = MediaCapability.IMAGE,
+                    settings = ImageGenerationSettings(),
+                )
+
+            repository.observeActiveGeneration().test {
+                assertNull(awaitItem())
+
+                assertTrue(repository.reportActiveGeneration(activeGeneration))
+                assertEquals(activeGeneration, awaitItem())
+
+                assertFalse(repository.reportActiveGeneration(activeGeneration.copy(prompt = "second")))
+                expectNoEvents()
+
+                repository.clearActiveGeneration()
+                assertNull(awaitItem())
+            }
         }
 
     @Test
