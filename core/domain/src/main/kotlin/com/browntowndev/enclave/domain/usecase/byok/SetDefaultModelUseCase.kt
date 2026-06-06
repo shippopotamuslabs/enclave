@@ -10,6 +10,7 @@ import com.browntowndev.enclave.domain.model.media.LocalImageGenTriState
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilityPolicy
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelRegistry
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationPaths
 import com.browntowndev.enclave.domain.model.media.LocalStableDiffusionModelPolicy
 import com.browntowndev.enclave.domain.port.media.GpuCapabilityPort
 import com.browntowndev.enclave.domain.port.media.LOCAL_IMAGE_GENERATION_UNSUPPORTED_MESSAGE
@@ -19,6 +20,8 @@ import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPor
 import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.enclave.domain.usecase.download.ResolveModelCatalogUseCase
 import com.browntowndev.enclave.domain.usecase.download.VerifyModelPackCompletenessUseCase
+import com.browntowndev.enclave.domain.usecase.media.LocalStableDiffusionTargetResolver
+import java.io.File
 import javax.inject.Inject
 
 private val CHAT_SLOT_TYPES = setOf(ModelType.MAIN, ModelType.THINKING)
@@ -43,10 +46,13 @@ class SetDefaultModelUseCaseImpl
         private val resolveModelCatalog: ResolveModelCatalogUseCase,
         private val gpuCapabilityPort: GpuCapabilityPort,
         private val capabilityPort: LocalImageGenerationCapabilityPort,
+        private val localStableDiffusionTargetResolver: LocalStableDiffusionTargetResolver,
     ) : SetDefaultModelUseCase {
         companion object {
             const val PACK_NOT_COMPLETE_MESSAGE =
                 "Local image pack is not fully downloaded. Download all pack files from Local AI Models before assigning."
+            const val IMG2IMG_ENCODER_MISSING_MESSAGE =
+                "Local image edit requires vae_encoder.bin in the model pack."
         }
 
         override suspend fun invoke(
@@ -97,32 +103,25 @@ class SetDefaultModelUseCaseImpl
             }
 
             if (modelType == ModelType.IMAGE_GENERATION) {
-                // Image generation supports either a remote media provider or a local
-                // on-device diffusion model (e.g. bundled SD 1.5 GGUF).
-                require(apiConfigId == null && ttsProviderId == null) {
-                    "Image generation slot accepts a local model or a media provider."
-                }
-                require(localConfigId != null || mediaProviderId != null) {
-                    "Image generation slot requires a local model or a media provider assignment."
-                }
-                require(localConfigId == null || mediaProviderId == null) {
-                    "Image generation slot cannot assign both a local model and a media provider."
-                }
-                if (localConfigId != null) {
-                    require(gpuCapabilityPort.isLocalImageGenerationSupported()) {
-                        LOCAL_IMAGE_GENERATION_UNSUPPORTED_MESSAGE
-                    }
-                    val asset =
-                        localModelRepository.getAssetByConfigId(localConfigId)
-                            ?: throw IllegalArgumentException(
-                                "Image generation slot requires a registered local model configuration.",
-                            )
-                    require(LocalStableDiffusionModelPolicy.supports(asset)) {
-                        "Image generation slot requires a supported local diffusion model."
-                    }
-                    requireLocalImageModelAssignmentAllowed(asset)
-                    requireImageGenerationPackComplete(asset)
-                }
+                validateLocalOrMediaImageSlot(
+                    slotLabel = "Image generation",
+                    localConfigId = localConfigId,
+                    apiConfigId = apiConfigId,
+                    ttsProviderId = ttsProviderId,
+                    mediaProviderId = mediaProviderId,
+                    requireImg2ImgEncoder = false,
+                )
+            }
+
+            if (modelType == ModelType.IMAGE_EDIT) {
+                validateLocalOrMediaImageSlot(
+                    slotLabel = "Image edit",
+                    localConfigId = localConfigId,
+                    apiConfigId = apiConfigId,
+                    ttsProviderId = ttsProviderId,
+                    mediaProviderId = mediaProviderId,
+                    requireImg2ImgEncoder = true,
+                )
             }
 
             if (modelType == ModelType.VIDEO_GENERATION ||
@@ -137,6 +136,46 @@ class SetDefaultModelUseCaseImpl
             }
 
             defaultModelRepository.setDefault(modelType, localConfigId, apiConfigId, ttsProviderId, mediaProviderId)
+        }
+
+        private suspend fun validateLocalOrMediaImageSlot(
+            slotLabel: String,
+            localConfigId: LocalModelConfigurationId?,
+            apiConfigId: ApiModelConfigurationId?,
+            ttsProviderId: TtsProviderId?,
+            mediaProviderId: MediaProviderId?,
+            requireImg2ImgEncoder: Boolean,
+        ) {
+            require(apiConfigId == null && ttsProviderId == null) {
+                "$slotLabel slot accepts a local model or a media provider."
+            }
+            require(localConfigId != null || mediaProviderId != null) {
+                "$slotLabel slot requires a local model or a media provider assignment."
+            }
+            require(localConfigId == null || mediaProviderId == null) {
+                "$slotLabel slot cannot assign both a local model and a media provider."
+            }
+            if (localConfigId != null) {
+                require(gpuCapabilityPort.isLocalImageGenerationSupported()) {
+                    LOCAL_IMAGE_GENERATION_UNSUPPORTED_MESSAGE
+                }
+                val asset =
+                    localModelRepository.getAssetByConfigId(localConfigId)
+                        ?: throw IllegalArgumentException(
+                            "$slotLabel slot requires a registered local model configuration.",
+                        )
+                require(LocalStableDiffusionModelPolicy.supports(asset)) {
+                    "$slotLabel slot requires a supported local diffusion model."
+                }
+                requireLocalImageModelAssignmentAllowed(asset)
+                requireImageGenerationPackComplete(asset)
+                if (requireImg2ImgEncoder) {
+                    val launchDir = localStableDiffusionTargetResolver.resolveLaunchDir(localConfigId)
+                    require(LocalImageGenerationPaths.hasImg2ImgCapability(File(launchDir))) {
+                        IMG2IMG_ENCODER_MISSING_MESSAGE
+                    }
+                }
+            }
         }
 
         private suspend fun requireImageGenerationPackComplete(asset: com.browntowndev.enclave.domain.model.config.LocalModelAsset) {

@@ -29,21 +29,20 @@ std::vector<float> generateGaussianLatents(const LatentShape& shape, int64_t see
     return latents;
 }
 
-std::vector<float> blendImg2ImgLatents(
-    const std::vector<float>& encoded,
-    const std::vector<float>& noise,
-    float denoise_strength,
-    float sigma) {
-    if (encoded.size() != noise.size()) {
-        throw std::invalid_argument("img2img latent/noise size mismatch");
+int img2imgStartStep(int num_inference_steps, float denoise_strength) {
+    if (num_inference_steps <= 0) {
+        return 0;
     }
     const float strength = std::clamp(denoise_strength, 0.0f, 1.0f);
-    const float keep = 1.0f - strength;
-    std::vector<float> out(encoded.size());
-    for (size_t i = 0; i < out.size(); ++i) {
-        out[i] = keep * encoded[i] + strength * sigma * noise[i];
+    if (strength >= 1.0f) {
+        return 0;
     }
-    return out;
+    if (strength <= 0.0f) {
+        return std::max(num_inference_steps - 1, 0);
+    }
+    const int init_timestep =
+        std::min(num_inference_steps - 1, static_cast<int>(num_inference_steps * strength));
+    return std::max(num_inference_steps - init_timestep - 1, 0);
 }
 
 }  // namespace enclave::diffusion

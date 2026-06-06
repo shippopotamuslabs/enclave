@@ -25,6 +25,7 @@ import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.enclave.domain.usecase.FakeDefaultModelRepository
 import com.browntowndev.enclave.domain.usecase.download.ResolveModelCatalogUseCase
 import com.browntowndev.enclave.domain.usecase.download.VerifyModelPackCompletenessUseCase
+import com.browntowndev.enclave.domain.usecase.media.LocalStableDiffusionTargetResolver
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -47,6 +48,7 @@ class SetDefaultModelUseCaseTest {
     private lateinit var resolveModelCatalog: ResolveModelCatalogUseCase
     private lateinit var gpuCapabilityPort: GpuCapabilityPort
     private lateinit var capabilityPort: LocalImageGenerationCapabilityPort
+    private lateinit var localStableDiffusionTargetResolver: LocalStableDiffusionTargetResolver
     private lateinit var useCase: SetDefaultModelUseCase
 
     @BeforeEach
@@ -58,6 +60,7 @@ class SetDefaultModelUseCaseTest {
         resolveModelCatalog = mockk()
         gpuCapabilityPort = mockk()
         capabilityPort = mockk()
+        localStableDiffusionTargetResolver = mockk()
         coEvery { resolveModelCatalog() } returns Result.success(ModelPackTestFixtures.parsedCatalog())
         every { gpuCapabilityPort.isLocalImageGenerationSupported() } returns true
         every { capabilityPort.getCapabilities() } returns
@@ -79,6 +82,7 @@ class SetDefaultModelUseCaseTest {
                 resolveModelCatalog,
                 gpuCapabilityPort,
                 capabilityPort,
+                localStableDiffusionTargetResolver,
             )
     }
 
@@ -501,5 +505,77 @@ class SetDefaultModelUseCaseTest {
                 "Local image pack is not fully downloaded. Download all pack files from Local AI Models before assigning.",
                 error.message,
             )
+        }
+
+    @Test
+    fun `SET-006 local image edit assignment succeeds when vae_encoder is present`() =
+        runTest {
+            val configId = LocalModelConfigurationId("sdxl-local-config")
+            val modelDir = kotlin.io.path.createTempDirectory().toFile()
+            java.io.File(modelDir, "vae_encoder.bin").writeText("encoder")
+            coEvery { localModelRepository.getAssetByConfigId(configId) } returns
+                localAsset(configId, "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83")
+            every { capabilityPort.getCapabilities() } returns
+                com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilities(
+                    npuAvailable = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
+                    sd15NpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
+                    sd15CpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.NO,
+                    sdxlNpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
+                    recommendedBackend = com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind.QNN_NPU,
+                    recommendedModelId = com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId.SDXL_QNN,
+                    diagnostics = emptyList(),
+                )
+            coEvery { verifyModelPackCompleteness("sdxl-t2i") } returns
+                Result.success(
+                    ModelPackCompleteness(
+                        packId = "sdxl-t2i",
+                        installedCount = 1,
+                        totalCount = 1,
+                        isComplete = true,
+                        members = emptyList(),
+                    ),
+                )
+            coEvery { localStableDiffusionTargetResolver.resolveLaunchDir(configId) } returns modelDir.absolutePath
+
+            useCase(ModelType.IMAGE_EDIT, localConfigId = configId, apiConfigId = null)
+
+            assertEquals(configId, repository.getDefault(ModelType.IMAGE_EDIT)?.localConfigId)
+        }
+
+    @Test
+    fun `SET-007 local image edit assignment fails when vae_encoder is missing`() =
+        runTest {
+            val configId = LocalModelConfigurationId("sdxl-local-config")
+            val modelDir = kotlin.io.path.createTempDirectory().toFile()
+            coEvery { localModelRepository.getAssetByConfigId(configId) } returns
+                localAsset(configId, "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83")
+            every { capabilityPort.getCapabilities() } returns
+                com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilities(
+                    npuAvailable = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
+                    sd15NpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
+                    sd15CpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.NO,
+                    sdxlNpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
+                    recommendedBackend = com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind.QNN_NPU,
+                    recommendedModelId = com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId.SDXL_QNN,
+                    diagnostics = emptyList(),
+                )
+            coEvery { verifyModelPackCompleteness("sdxl-t2i") } returns
+                Result.success(
+                    ModelPackCompleteness(
+                        packId = "sdxl-t2i",
+                        installedCount = 1,
+                        totalCount = 1,
+                        isComplete = true,
+                        members = emptyList(),
+                    ),
+                )
+            coEvery { localStableDiffusionTargetResolver.resolveLaunchDir(configId) } returns modelDir.absolutePath
+
+            val error =
+                assertFailsWith<IllegalArgumentException> {
+                    useCase(ModelType.IMAGE_EDIT, localConfigId = configId, apiConfigId = null)
+                }
+
+            assertEquals(SetDefaultModelUseCaseImpl.IMG2IMG_ENCODER_MISSING_MESSAGE, error.message)
         }
 }

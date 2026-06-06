@@ -14,10 +14,7 @@ struct LatentShape {
 
 std::vector<float> generateGaussianLatents(const LatentShape& shape, int64_t seed, float sigma);
 
-std::vector<float> blendImg2ImgLatents(
-    const std::vector<float>& encoded,
-    const std::vector<float>& noise,
-    float denoise_strength,
-    float sigma);
+/** First UNet step index for img2img; matches diffusers strength-based schedule truncation. */
+int img2imgStartStep(int num_inference_steps, float denoise_strength);
 
 }  // namespace enclave::diffusion

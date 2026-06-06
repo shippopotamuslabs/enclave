@@ -72,6 +72,30 @@ class ResolveAssignedImageGenerationTargetUseCaseTest {
         }
 
     @Test
+    fun `IMAGE_EDIT slot resolves local stable diffusion assignment`() =
+        runTest {
+            val modelFile = "/abs/models/${ModelPackTestFixtures.SDXL_DIFFUSION_FILE}"
+            val filePort =
+                mockk<com.browntowndev.enclave.domain.port.repository.UtilityModelFilePort> {
+                    coEvery { resolveLocalModelPath(any()) } returns modelFile
+                }
+            val sdxlConfigId = LocalModelConfigurationId(ModelPackTestFixtures.SDXL_CONFIG_ID)
+            val useCase =
+                useCaseWith(
+                    filePort = filePort,
+                    asset = ModelPackTestFixtures.sdxlDiffusionAsset(),
+                    localConfigId = sdxlConfigId,
+                    slot = ModelType.IMAGE_EDIT,
+                    capabilities = sdxlSupportedCapabilities(),
+                )
+
+            val target = useCase(ModelType.IMAGE_EDIT).getOrThrow() as ImageGenerationTarget.LocalStableDiffusion
+
+            assertEquals("/abs/models/sdxl-qnn", target.modelDir)
+            assertEquals(sdxlConfigId, target.localConfigId)
+        }
+
+    @Test
     fun `missing diffusion file on disk surfaces not-downloaded even when repo row exists`() =
         runTest {
             val filePort =
@@ -84,6 +108,22 @@ class ResolveAssignedImageGenerationTargetUseCaseTest {
 
             assertTrue(result.isFailure)
             assertEquals("Image generation model is not fully downloaded.", result.exceptionOrNull()?.message)
+        }
+
+    @Test
+    fun `IMAGE_EDIT missing assignment surfaces edit-specific message`() =
+        runTest {
+            val useCase =
+                ResolveAssignedImageGenerationTargetUseCase(
+                    defaultModelRepository = FakeDefaultModelRepository(),
+                    mediaProviderRepository = mockk(relaxed = true),
+                    localStableDiffusionTargetResolver = mockk(relaxed = true),
+                )
+
+            val result = useCase(ModelType.IMAGE_EDIT)
+
+            assertTrue(result.isFailure)
+            assertEquals("No image edit model assigned.", result.exceptionOrNull()?.message)
         }
 
     @Test
@@ -121,6 +161,7 @@ class ResolveAssignedImageGenerationTargetUseCaseTest {
         filePort: com.browntowndev.enclave.domain.port.repository.UtilityModelFilePort,
         asset: LocalModelAsset = sd15Asset(),
         localConfigId: LocalModelConfigurationId = LocalModelConfigurationId("sd15-local-config"),
+        slot: ModelType = ModelType.IMAGE_GENERATION,
         capabilities: LocalImageGenerationCapabilities = supportedCapabilities(),
         localImageGenerationSupported: Boolean = true,
     ): ResolveAssignedImageGenerationTargetUseCase {
@@ -138,33 +179,38 @@ class ResolveAssignedImageGenerationTargetUseCaseTest {
                     diagnostics = listOf("Disabled for test."),
                 )
             }
+        val localModelRepository =
+            mockk<com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort> {
+                coEvery { getAssetByConfigId(localConfigId) } returns asset
+            }
+        val resolver =
+            LocalStableDiffusionTargetResolver(
+                localModelRepository = localModelRepository,
+                utilityModelFilePort = filePort,
+                gpuCapabilityPort =
+                    mockk {
+                        every { isLocalImageGenerationSupported() } returns localImageGenerationSupported
+                    },
+                capabilityPort =
+                    mockk {
+                        every { getCapabilities() } returns effectiveCapabilities
+                    },
+                selectBackend = SelectLocalImageGenerationBackendUseCase(),
+            )
         return ResolveAssignedImageGenerationTargetUseCase(
             defaultModelRepository =
                 FakeDefaultModelRepository().apply {
                     seed(
                         listOf(
                             DefaultModelAssignment(
-                                modelType = ModelType.IMAGE_GENERATION,
+                                modelType = slot,
                                 localConfigId = localConfigId,
                             ),
                         ),
                     )
                 },
-            localModelRepository =
-                mockk {
-                    coEvery { getAssetByConfigId(localConfigId) } returns asset
-                },
             mediaProviderRepository = mockk(relaxed = true),
-            utilityModelFilePort = filePort,
-            gpuCapabilityPort =
-                mockk {
-                    every { isLocalImageGenerationSupported() } returns localImageGenerationSupported
-                },
-            capabilityPort =
-                mockk {
-                    every { getCapabilities() } returns effectiveCapabilities
-                },
-            selectBackend = SelectLocalImageGenerationBackendUseCase(),
+            localStableDiffusionTargetResolver = resolver,
         )
     }
 

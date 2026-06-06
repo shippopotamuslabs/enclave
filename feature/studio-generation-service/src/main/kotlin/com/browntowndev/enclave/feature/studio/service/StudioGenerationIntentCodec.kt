@@ -22,6 +22,7 @@ object StudioGenerationIntentCodec {
     private const val EXTRA_GENERATION_COUNT = "GENERATION_COUNT"
     private const val EXTRA_IMAGE_RESOLUTION = "IMAGE_RESOLUTION"
     private const val EXTRA_DIFFUSION_STEPS = "DIFFUSION_STEPS"
+    private const val EXTRA_IMG2IMG_DENOISE_STRENGTH = "IMG2IMG_DENOISE_STRENGTH"
     private const val EXTRA_VIDEO_DURATION = "VIDEO_DURATION"
     private const val EXTRA_VIDEO_RESOLUTION = "VIDEO_RESOLUTION"
     private const val EXTRA_AUTO_GENERATE_VIDEO = "AUTO_GENERATE_VIDEO"
@@ -44,6 +45,7 @@ object StudioGenerationIntentCodec {
                 intent.putExtra(EXTRA_GENERATION_COUNT, settings.generationCount)
                 settings.imageResolution?.let { intent.putExtra(EXTRA_IMAGE_RESOLUTION, it) }
                 settings.diffusionSteps?.let { intent.putExtra(EXTRA_DIFFUSION_STEPS, it) }
+                intent.putExtra(EXTRA_IMG2IMG_DENOISE_STRENGTH, settings.img2ImgDenoiseStrength)
             }
             is VideoGenerationSettings -> {
                 intent.putExtra(EXTRA_SETTINGS_KIND, KIND_VIDEO)
@@ -76,6 +78,11 @@ object StudioGenerationIntentCodec {
                     diffusionSteps =
                         intent.getIntExtra(EXTRA_DIFFUSION_STEPS, Int.MIN_VALUE)
                             .takeIf { it != Int.MIN_VALUE },
+                    img2ImgDenoiseStrength =
+                        intent.getFloatExtra(
+                            EXTRA_IMG2IMG_DENOISE_STRENGTH,
+                            ImageGenerationSettings().img2ImgDenoiseStrength,
+                        ),
                 )
             KIND_VIDEO ->
                 VideoGenerationSettings(

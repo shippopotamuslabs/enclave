@@ -294,6 +294,89 @@ class SettingsMediaTasksRedTest {
     }
 
     @Test
+    fun `SET-006 Gen3+ installed SDXL appears in local Image Edit assignment options`() {
+        val assembler =
+            SettingsUiStateAssembler(
+                localModelAssetUiMapper = LocalModelAssetUiMapper(),
+                apiModelAssetUiMapper = ApiModelAssetUiMapper(),
+                ttsProviderAssetUiMapper = TtsProviderAssetUiMapper(),
+                mediaProviderAssetUiMapper = mockk(relaxed = true),
+                apiDiscoveryUiFilter = ApiDiscoveryUiFilter(),
+                applyApiModelMetadataDefaultsUseCase = ApplyApiModelMetadataDefaultsUseCase(),
+                usageSpendUiMapper = UsageSpendUiMapper(),
+                modelPackUiMapper = ModelPackUiMapper(),
+            )
+        val sdxlPackRow =
+            ModelPackSettingsRow(
+                pack = ModelPackTestFixtures.sdxlPack(),
+                completeness =
+                    ModelPackCompleteness(
+                        packId = ModelPackTestFixtures.SDXL_PACK_ID,
+                        installedCount = 2,
+                        totalCount = 2,
+                        isComplete = true,
+                        members = emptyList(),
+                    ),
+                isDiffusionSoftDeleted = false,
+                areUtilityRegistryEntriesAbsent = false,
+                showDownloadAction = false,
+                disabledReason = null,
+                isEligible = true,
+            )
+        val assembled =
+            assembler.create(
+                persistedSettings = SettingsData(),
+                localAssets = listOf(ModelPackTestFixtures.sdxlDiffusionAsset()),
+                apiAssets = emptyList(),
+                ttsAssets = emptyList(),
+                mediaAssets = emptyList(),
+                defaultModels = emptyList(),
+                authState = AuthState.Unauthenticated,
+                sheetVisibility = SheetVisibilityState(),
+                memories = emptyList(),
+                feedbackText = "",
+                localModelsState = LocalModelsTransientState(),
+                apiState = ApiProvidersTransientState(),
+                ttsState = TtsProvidersTransientState(),
+                mediaState = MediaProvidersTransientState(),
+                searchSkillState = SearchSkillTransientState(),
+                assignmentsState = AssignmentDialogTransientState(isOpen = true, editingSlot = ModelType.IMAGE_EDIT),
+                deletionState = DeletionTransientState(),
+                memoriesState = MemoriesTransientState(),
+                dataControlsState = DataControlsTransientState(),
+                currentTavilyApiKey = "",
+                currentExaApiKey = "",
+                currentXApiKey = "",
+                xSearchState = XSearchTransientState(),
+                isReindexing = false,
+                reindexProgress = 0f,
+                vaultReauthSheet = VaultReauthSheetState.Hidden,
+                usageSpendSummary =
+                    UsageSpendSummary(
+                        period = UsagePeriod.LIFETIME,
+                        periodStartUtcMs = null,
+                        periodEndUtcMs = null,
+                        totalCostUsd = BigDecimal.ZERO,
+                        telemetryBackedTurnCount = 0,
+                        missingCostTurnCount = 0,
+                        providerBreakdown = emptyList(),
+                    ),
+                modelPackRows = listOf(sdxlPackRow),
+            )
+
+        val selectable =
+            selectableLocalAssetsForSlot(
+                modelType = ModelType.IMAGE_EDIT,
+                assets = assembled.localModelsSheet.models,
+                modelPacks = assembled.localModelsSheet.modelPacks,
+            )
+        assertEquals(
+            listOf(LocalModelConfigurationId(ModelPackTestFixtures.SDXL_CONFIG_ID)),
+            selectable.single().configurations.map { it.id },
+        )
+    }
+
+    @Test
     fun `MUT-03 edit-slot picker excludes text-to-image-only providers`() {
         composeModelConfiguration(
             assignments = listOf(assignment(ModelType.IMAGE_EDIT, "Image Edit")),

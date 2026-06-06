@@ -4,6 +4,8 @@ import com.browntowndev.enclave.domain.model.config.LocalModelAsset
 
 object LocalImageGenerationModelPolicy {
     const val DEFAULT_IMG2IMG_DENOISE_STRENGTH = 0.75f
+    const val MIN_IMG2IMG_DENOISE_STRENGTH = 0.25f
+    const val MAX_IMG2IMG_DENOISE_STRENGTH = 1.0f
     private const val LOW_RAM_MEMORY_CLASS_MB = 384
 
     fun memoryPolicyFor(modelId: LocalImageGenerationModelId, memoryClassMb: Int): LocalImageGenerationMemoryPolicy {

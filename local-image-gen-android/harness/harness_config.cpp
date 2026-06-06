@@ -78,6 +78,7 @@ void printUsage(const char* program) {
         << "  --negative-prompt TEXT\n"
         << "  --output PATH             Output PNG for generate\n"
         << "  --width --height --steps --cfg --scheduler --seed\n"
+        << "  --denoise-strength F      img2img noise strength (default 0.75)\n"
         << "  --init-image PATH         img2img input\n"
         << "  --help\n";
 }
@@ -201,6 +202,14 @@ bool parseArgs(int argc, char** argv, HarnessOptions& out, std::string& error) {
                 return false;
             }
             out.cfg_scale = static_cast<float>(std::atof(argv[++i]));
+            continue;
+        }
+        if (std::strcmp(arg, "--denoise-strength") == 0) {
+            if (!needsValue(i, argc)) {
+                error = "--denoise-strength requires a value.";
+                return false;
+            }
+            out.denoise_strength = static_cast<float>(std::atof(argv[++i]));
             continue;
         }
         if (std::strcmp(arg, "--scheduler") == 0) {

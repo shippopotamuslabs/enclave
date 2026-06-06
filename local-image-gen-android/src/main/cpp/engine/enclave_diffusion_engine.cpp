@@ -207,7 +207,12 @@ bool runPipeline(
     const float scale = vaeScale(handle->config.family);
     handle->qnn.setSpatialSize(width, height);
     const LatentShape latent_shape {1, 4, sample_height, sample_width};
-    noise = generateGaussianLatents(latent_shape, params.seed, scheduler->initNoiseSigma());
+    const float denoise_strength =
+        params.denoise_strength > 0.0f ? params.denoise_strength : 0.75f;
+    int img2img_start_step = 0;
+    if (!img2img) {
+        noise = generateGaussianLatents(latent_shape, params.seed, scheduler->initNoiseSigma());
+    }
 
     do {
         if (!ensureNotCancelled(handle, error)) {
@@ -253,48 +258,63 @@ bool runPipeline(
                 if (!handle->qnn.runVaeEncoder(image.pixels, vae_moments, error)) {
                     return false;
                 }
-                if (vae_moments.mean.size() != noise.size() || vae_moments.std.size() != noise.size()) {
+                const size_t latent_count =
+                    static_cast<size_t>(latent_shape.batch) * static_cast<size_t>(latent_shape.channels) *
+                    static_cast<size_t>(latent_shape.height) * static_cast<size_t>(latent_shape.width);
+                if (vae_moments.mean.size() != latent_count || vae_moments.std.size() != latent_count) {
                     error = "VAE encoder output shape does not match latent shape.";
                     return false;
                 }
-                std::vector<float> sampled_latents(noise.size());
-                for (size_t i = 0; i < sampled_latents.size(); ++i) {
-                    sampled_latents[i] = (vae_moments.mean[i] + vae_moments.std[i] * noise[i]) * scale;
+                img2img_start_step = img2imgStartStep(scheduler->numTimesteps(), denoise_strength);
+                const int noise_timestep = scheduler->timestepAt(img2img_start_step);
+                const float noise_t = static_cast<float>(noise_timestep) / 1000.0f;
+                const std::vector<float> vae_sample_noise =
+                    generateGaussianLatents(latent_shape, params.seed ^ 0x5641454ELL, 1.0f);
+                std::vector<float> z0(latent_count);
+                for (size_t i = 0; i < latent_count; ++i) {
+                    z0[i] = (vae_moments.mean[i] + vae_moments.std[i] * vae_sample_noise[i]) * scale;
                 }
-                latents = blendImg2ImgLatents(
-                    sampled_latents,
-                    noise,
-                    params.denoise_strength > 0.0f ? params.denoise_strength : 0.75f,
-                    scheduler->sigmaAt(0));
+                const std::vector<float> diffusion_noise =
+                    generateGaussianLatents(latent_shape, params.seed, 1.0f);
+                latents = scheduler->addNoise(z0, diffusion_noise, noise_t);
                 break;
             }
             case PipelineStage::UnetLoop:
                 if (latents.empty()) {
+                    if (noise.empty()) {
+                        noise = generateGaussianLatents(
+                            latent_shape,
+                            params.seed,
+                            scheduler->initNoiseSigma());
+                    }
                     latents = noise;
                 }
                 if (!handle->qnn.isUnetLoaded() &&
                     !handle->qnn.loadUnet(handle->manifest, handle->qnn_paths, error)) {
                     return false;
                 }
-                for (int i = 0; i < scheduler->numTimesteps(); ++i) {
-                    if (!ensureNotCancelled(handle, error)) {
-                        return false;
-                    }
-                    std::vector<float> noise_pred;
-                    const std::vector<float> scaled_latents =
-                        scheduler->scale_model_input(latents, scheduler->timestepAt(i));
-                    if (!handle->qnn.runUnet(
-                            scaled_latents,
-                            scheduler->timestepAt(i),
-                            conditioning,
-                            cfg_scale,
-                            noise_pred,
-                            error)) {
-                        return false;
-                    }
-                    latents = scheduler->step(latents, noise_pred, i);
-                    if (progress != nullptr) {
-                        progress(i + 1, scheduler->numTimesteps(), user);
+                {
+                    const int total_steps = scheduler->numTimesteps() - img2img_start_step;
+                    for (int i = img2img_start_step; i < scheduler->numTimesteps(); ++i) {
+                        if (!ensureNotCancelled(handle, error)) {
+                            return false;
+                        }
+                        std::vector<float> noise_pred;
+                        const std::vector<float> scaled_latents =
+                            scheduler->scale_model_input(latents, scheduler->timestepAt(i));
+                        if (!handle->qnn.runUnet(
+                                scaled_latents,
+                                scheduler->timestepAt(i),
+                                conditioning,
+                                cfg_scale,
+                                noise_pred,
+                                error)) {
+                            return false;
+                        }
+                        latents = scheduler->step(latents, noise_pred, i);
+                        if (progress != nullptr) {
+                            progress(i + 1 - img2img_start_step, total_steps, user);
+                        }
                     }
                 }
                 break;

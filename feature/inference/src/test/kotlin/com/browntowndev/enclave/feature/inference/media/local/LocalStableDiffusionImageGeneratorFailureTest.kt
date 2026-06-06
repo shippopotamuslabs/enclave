@@ -283,4 +283,40 @@ class LocalStableDiffusionImageGeneratorFailureTest {
             // A lazy forwarder would emit 13 unchanged; the unsupported step must clamp to 16.
             assertEquals(16, capturedRequest.captured.steps)
         }
+
+    @Test
+    fun `INF-005 img2img native request forwards clamped denoise strength`() =
+        runTest {
+            val capturedRequest = io.mockk.slot<LocalImageGenerationNativeRequest>()
+            val engine =
+                mockk<LocalImageGenerationEngine> {
+                    coEvery { generate(capture(capturedRequest)) } returns
+                        Result.success(
+                            LocalImageGenerationNativeResult(emptyList(), 512, 512, 0L),
+                        )
+                }
+            val modelDir = java.io.File.createTempFile("model", "").parentFile!!.resolve("img2img-model")
+            modelDir.mkdirs()
+            java.io.File(modelDir, "vae_encoder.bin").writeBytes(byteArrayOf(1))
+            val context = mockk<Context>(relaxed = true)
+            every { context.cacheDir } returns java.io.File.createTempFile("cache", "").parentFile!!
+            coEvery { studioRepository.readMediaBytes("cache://reference.png") } returns byteArrayOf(1, 2, 3)
+            val generator = createGenerator(context, engine)
+
+            val result =
+                generator.generate(
+                    prompt = "sunset",
+                    target = localTarget().copy(modelDir = modelDir.absolutePath),
+                    settings =
+                        ImageGenerationSettings(
+                            imageResolution = "512x512",
+                            referenceImageUri = "cache://reference.png",
+                            img2ImgDenoiseStrength = 0.4f,
+                        ),
+                )
+
+            assertTrue(result.isSuccess)
+            assertEquals(LocalImageGenerationMode.IMG2IMG, capturedRequest.captured.mode)
+            assertEquals(0.4f, capturedRequest.captured.denoiseStrength)
+        }
 }

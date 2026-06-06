@@ -270,6 +270,7 @@ int runGenerate(HarnessOptions& options) {
     params.cfg_scale = options.cfg_scale;
     params.scheduler = options.scheduler.empty() ? nullptr : options.scheduler.c_str();
     params.seed = options.seed;
+    params.denoise_strength = options.denoise_strength;
     params.init_image_path =
         options.init_image_path.empty() ? nullptr : options.init_image_path.c_str();
     params.memory_policy = ENCLAVE_MEMORY_POLICY_FULL;
