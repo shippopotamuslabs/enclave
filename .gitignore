@@ -57,7 +57,7 @@ tech_docs/
 
 llama-android/src/main/cpp/libs/arm64-v8a/libllama-jni-neon.so
 
-.claude/skills/
+.claude/
 
 modularization-plan.md
 
@@ -142,6 +142,9 @@ build_output.txt
 # Exclude generated model binaries and tokenizers from git tracking
 /app/src/main/assets/models/**/*
 !/app/src/main/assets/models/**/model_config.json
+
+# Enclave diffusion engine deps (scripts/setup-enclave-diffusion-deps.sh)
+local-image-gen-android/src/main/cpp/engine/thirdparty/
 
 # Bonsai model and build artifacts
 bonsai-*.gguf
