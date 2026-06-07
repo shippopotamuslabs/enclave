@@ -308,4 +308,46 @@ class ImageGenerationPortImplTest {
                 )
             }
         }
+
+    @Test
+    fun `generateImage Juggernaut IMAGE_EDIT local target propagates correct parameters`() =
+        runTest {
+            val target =
+                localTarget().copy(
+                    localConfigId = LocalModelConfigurationId("juggernaut-local-config"),
+                    modelId = com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId.JUGGERNAUT_XL_QNN,
+                    capabilities =
+                        ProviderCapabilities(
+                            supportedAspectRatios = listOf(AspectRatio.ONE_ONE),
+                            supportedImageQualities = emptyList(),
+                            supportedImageResolutions = listOf("1024x1024"),
+                            supportedImageSteps = listOf(20, 22, 24, 26, 28, 30),
+                            defaultImageStep = 24,
+                            supportedVideoQualities = emptyList(),
+                            supportedVideoResolutions = emptyList(),
+                            supportedVideoDurations = emptyList(),
+                            supportsVideo = false,
+                        ),
+                )
+            val settings = ImageGenerationSettings(imageResolution = "1024x1024", diffusionSteps = 24)
+            val settingsSlot = io.mockk.slot<ImageGenerationSettings>()
+            coEvery {
+                localStableDiffusionImageGenerator.generate(any(), eq(target), capture(settingsSlot), any())
+            } returns
+                Result.success(
+                    LocalStableDiffusionGenerationResult(
+                        outputFileReferences = listOf("/cache/juggernaut-0.png"),
+                        width = 1024,
+                        height = 1024,
+                        backend = com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind.QNN_NPU,
+                    ),
+                )
+            coEvery { studioRepository.readMediaBytes(any()) } returns "img".toByteArray()
+
+            val result = port.generateImage("bonsai", target, settings)
+
+            assertTrue(result.isSuccess)
+            assertEquals("1024x1024", settingsSlot.captured.imageResolution)
+            assertEquals(24, settingsSlot.captured.diffusionSteps)
+        }
 }

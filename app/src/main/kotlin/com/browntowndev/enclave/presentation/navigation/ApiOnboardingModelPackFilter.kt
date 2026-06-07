@@ -1,11 +1,10 @@
 package com.browntowndev.enclave.presentation.navigation
 
 import com.browntowndev.enclave.domain.model.download.DownloadModelsResult
-import com.browntowndev.enclave.domain.model.download.ImageGenerationPackMemberFilter
-
+import com.browntowndev.enclave.domain.model.download.LocalImagePackMemberFilter
 /**
  * Filters startup download results when the user completes onboarding with API model choice.
- * Must exclude entire IMAGE_GENERATION catalog packs (slot + companion utilities), not whitelist utilities.
+ * Must exclude entire IMAGE_GENERATION and IMAGE_EDIT catalog packs (slot + companion utilities).
  */
 fun filterDownloadModelsResultForApiOnboarding(result: DownloadModelsResult): DownloadModelsResult =
-    ImageGenerationPackMemberFilter.excludeFromDownloadResult(result).copy(allModels = emptyMap())
+    LocalImagePackMemberFilter.excludeForApiOnboarding(result)

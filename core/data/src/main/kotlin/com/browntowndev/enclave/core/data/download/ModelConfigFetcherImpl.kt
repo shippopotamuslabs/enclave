@@ -231,7 +231,10 @@ class ModelConfigFetcherImpl
                 ModelPackRole.DIFFUSION ->
                     candidates.firstOrNull { asset ->
                         asset.metadata.utilityType == null &&
-                            asset.configurations.any { ModelType.IMAGE_GENERATION in it.defaultAssignments }
+                            asset.configurations.any { config ->
+                                ModelType.IMAGE_GENERATION in config.defaultAssignments ||
+                                    ModelType.IMAGE_EDIT in config.defaultAssignments
+                            }
                     } ?: error(
                         "Diffusion pack member must reference a non-utility image asset: ${member.fileName}",
                     )
@@ -265,10 +268,11 @@ class ModelConfigFetcherImpl
                     }
                     require(
                         asset.configurations.any { config ->
-                            ModelType.IMAGE_GENERATION in config.defaultAssignments
+                            ModelType.IMAGE_GENERATION in config.defaultAssignments ||
+                                ModelType.IMAGE_EDIT in config.defaultAssignments
                         },
                     ) {
-                        "Diffusion pack member must default-assign image_generation: ${member.fileName}"
+                        "Diffusion pack member must default-assign image_generation or image_edit: ${member.fileName}"
                     }
                 }
                 ModelPackRole.VAE,

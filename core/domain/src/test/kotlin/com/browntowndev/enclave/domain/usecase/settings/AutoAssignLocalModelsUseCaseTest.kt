@@ -16,8 +16,11 @@ import com.browntowndev.enclave.domain.model.config.MediaProviderAsset
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.config.TtsProviderAsset
 import com.browntowndev.enclave.domain.model.config.TtsProviderId
+import com.browntowndev.enclave.domain.model.download.ModelPackTestFixtures
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ModelType
+import com.browntowndev.enclave.domain.model.media.LocalImageGenTriState
+import com.browntowndev.enclave.domain.port.media.LocalImageGenerationCapabilityPort
 import com.browntowndev.enclave.domain.usecase.byok.GetApiModelAssetsUseCase
 import com.browntowndev.enclave.domain.usecase.byok.GetDefaultModelsUseCase
 import com.browntowndev.enclave.domain.usecase.byok.SetDefaultModelUseCase
@@ -25,7 +28,9 @@ import com.browntowndev.enclave.domain.usecase.media.GetMediaProvidersUseCase
 import com.browntowndev.enclave.domain.usecase.modelconfig.GetLocalModelAssetsUseCase
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
+import org.junit.jupiter.api.BeforeEach
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Test
@@ -37,6 +42,7 @@ class AutoAssignLocalModelsUseCaseTest {
     private val getApiModelAssetsUseCase = mockk<GetApiModelAssetsUseCase>()
     private val getTtsProvidersUseCase = mockk<GetTtsProvidersUseCase>()
     private val getMediaProvidersUseCase = mockk<GetMediaProvidersUseCase>()
+    private val capabilityPort = mockk<LocalImageGenerationCapabilityPort>()
 
     private val useCase =
         AutoAssignLocalModelsUseCase(
@@ -46,7 +52,25 @@ class AutoAssignLocalModelsUseCaseTest {
             getApiModelAssetsUseCase,
             getTtsProvidersUseCase,
             getMediaProvidersUseCase,
+            capabilityPort,
         )
+
+    @BeforeEach
+    fun setupCapabilities() {
+        every { capabilityPort.getCapabilities() } returns
+            com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilities(
+                npuAvailable = LocalImageGenTriState.YES,
+                sd15NpuSupported = LocalImageGenTriState.YES,
+                sd15CpuSupported = LocalImageGenTriState.NO,
+                sdxlNpuSupported = LocalImageGenTriState.YES,
+                juggernautXlNpuSupported = LocalImageGenTriState.YES,
+                recommendedBackend =
+                    com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind.QNN_NPU,
+                recommendedModelId =
+                    com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId.SD15_QNN,
+                diagnostics = emptyList(),
+            )
+    }
 
     private val localConfigId = LocalModelConfigurationId("local-config-1")
     private val localAsset =
@@ -273,27 +297,8 @@ class AutoAssignLocalModelsUseCaseTest {
     @Test
     fun `image generation slot prefers local SD config when present`() =
         runTest {
-            val bonsaiConfigId = LocalModelConfigurationId("sd15-local-config")
-            val bonsaiAsset =
-                LocalModelAsset(
-                    metadata = mockk<LocalModelMetadata>(),
-                    configurations =
-                        listOf(
-                            LocalModelConfiguration(
-                                id = bonsaiConfigId,
-                                localModelId = LocalModelId("bonsai-model"),
-                                displayName = "Stable Diffusion 1.5",
-                                maxTokens = 0,
-                                contextWindow = 0,
-                                temperature = 0.0,
-                                topP = 1.0,
-                                topK = 1,
-                                repetitionPenalty = 1.0,
-                                systemPrompt = "",
-                                defaultAssignments = listOf(ModelType.IMAGE_GENERATION),
-                            ),
-                        ),
-                )
+            val bonsaiAsset = ModelPackTestFixtures.diffusionAsset()
+            val bonsaiConfigId = LocalModelConfigurationId(ModelPackTestFixtures.SD15_CONFIG_ID)
             val image = mediaProvider("media-img", MediaCapability.IMAGE)
             coEvery { getDefaultModelsUseCase() } returns flowOf(emptyList())
             coEvery { getLocalModelAssetsUseCase() } returns flowOf(listOf(bonsaiAsset))
@@ -376,6 +381,30 @@ class AutoAssignLocalModelsUseCaseTest {
                 setDefaultModelUseCase(
                     modelType = ModelType.MAIN,
                     localConfigId = localConfigId,
+                    apiConfigId = null,
+                    ttsProviderId = null,
+                    mediaProviderId = null,
+                )
+            }
+        }
+
+    @Test
+    fun `SET-011 assigns juggernaut-local-config to IMAGE_EDIT when installed`() =
+        runTest {
+            val juggernautConfigId = LocalModelConfigurationId(ModelPackTestFixtures.JUGGERNAUT_CONFIG_ID)
+            val juggernautAsset = ModelPackTestFixtures.juggernautDiffusionAsset()
+            coEvery { getDefaultModelsUseCase() } returns flowOf(emptyList())
+            coEvery { getLocalModelAssetsUseCase() } returns flowOf(listOf(juggernautAsset))
+            coEvery { getApiModelAssetsUseCase() } returns flowOf(emptyList())
+            coEvery { getTtsProvidersUseCase() } returns flowOf(emptyList())
+            coEvery { getMediaProvidersUseCase() } returns flowOf(emptyList())
+
+            useCase()
+
+            coVerify {
+                setDefaultModelUseCase(
+                    modelType = ModelType.IMAGE_EDIT,
+                    localConfigId = juggernautConfigId,
                     apiConfigId = null,
                     ttsProviderId = null,
                     mediaProviderId = null,

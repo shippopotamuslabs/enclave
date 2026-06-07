@@ -8,10 +8,12 @@ import com.browntowndev.enclave.domain.model.download.ModelConfig
 import com.browntowndev.enclave.domain.model.download.Sd15QnnPackCatalog
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationPaths
+import com.browntowndev.enclave.domain.port.download.QnnPackInstallProgressListener
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -156,6 +158,207 @@ class Sd15QnnPackInstallerTest {
             assertTrue(installer.installIfNeeded(metadata))
             assertFalse(zipFile.exists())
         }
+
+    @Test
+    fun `DL-010 Juggernaut extraction installs under juggernaut-qnn`() =
+        runTest {
+            val filesDir = File(tempDir, "files").apply { mkdirs() }
+            val modelsDir = File(filesDir, ModelConfig.MODELS_DIR).apply { mkdirs() }
+            val zipFile = File(modelsDir, "juggernaut_qnn2.28_8gen3.zip")
+            writeMinimalSdxlPackZip(zipFile)
+            val sdxlDirBefore = File(modelsDir, LocalImageGenerationPaths.SDXL_QNN_SUBDIR)
+
+            val context = mockk<Context>(relaxed = true)
+            every { context.getExternalFilesDir(null) } returns filesDir
+
+            val installer =
+                Sd15QnnPackInstaller(
+                    context = context,
+                    logger = mockk<LoggingPort>(relaxed = true),
+                )
+            val metadata =
+                LocalModelMetadata(
+                    id = LocalModelId("juggernaut-qnn-pack"),
+                    huggingFaceModelName = "xororz/sdxl-qnn",
+                    remoteFileName = "juggernaut_qnn2.28_8gen3.zip",
+                    localFileName = "juggernaut_qnn2.28_8gen3.zip",
+                    sha256 = "b27231823434c4e4184a61f77401227264a5308c6846c6fc628c37583e76413c",
+                    sizeInBytes = zipFile.length(),
+                    modelFileFormat = ModelFileFormat.BIN,
+                    utilityType = UtilityType.JUGGERNAUT_XL_QNN_PACK,
+                )
+
+            assertTrue(installer.installIfNeeded(metadata))
+            val packDir = File(modelsDir, LocalImageGenerationPaths.JUGGERNAUT_XL_QNN_SUBDIR)
+            assertTrue(LocalImageGenerationPaths.hasJuggernautXlQnnArtifacts(packDir))
+            assertFalse(sdxlDirBefore.exists())
+        }
+
+    @Test
+    fun `DL-011 Juggernaut zip deletes only after required artifacts verify`() =
+        runTest {
+            val filesDir = File(tempDir, "files").apply { mkdirs() }
+            val modelsDir = File(filesDir, ModelConfig.MODELS_DIR).apply { mkdirs() }
+            val zipFile = File(modelsDir, "juggernaut_qnn2.28_8gen3.zip")
+            writeMinimalSdxlPackZip(zipFile)
+
+            val context = mockk<Context>(relaxed = true)
+            every { context.getExternalFilesDir(null) } returns filesDir
+
+            val installer =
+                Sd15QnnPackInstaller(
+                    context = context,
+                    logger = mockk<LoggingPort>(relaxed = true),
+                )
+            val metadata =
+                LocalModelMetadata(
+                    id = LocalModelId("juggernaut-qnn-pack"),
+                    huggingFaceModelName = "xororz/sdxl-qnn",
+                    remoteFileName = "juggernaut_qnn2.28_8gen3.zip",
+                    localFileName = "juggernaut_qnn2.28_8gen3.zip",
+                    sha256 = "b27231823434c4e4184a61f77401227264a5308c6846c6fc628c37583e76413c",
+                    sizeInBytes = zipFile.length(),
+                    modelFileFormat = ModelFileFormat.BIN,
+                    utilityType = UtilityType.JUGGERNAUT_XL_QNN_PACK,
+                )
+
+            assertTrue(installer.installIfNeeded(metadata))
+            assertFalse(zipFile.exists())
+            val packDir = File(modelsDir, LocalImageGenerationPaths.JUGGERNAUT_XL_QNN_SUBDIR)
+            assertTrue(LocalImageGenerationPaths.hasJuggernautXlQnnArtifacts(packDir))
+        }
+
+    @Test
+    fun `DL-012 incomplete Juggernaut extraction stays incomplete`() =
+        runTest {
+            val filesDir = File(tempDir, "files").apply { mkdirs() }
+            val modelsDir = File(filesDir, ModelConfig.MODELS_DIR).apply { mkdirs() }
+            val zipFile = File(modelsDir, "juggernaut_qnn2.28_8gen3.zip")
+            val incompleteFiles =
+                LocalImageGenerationPaths.REQUIRED_SDXL_QNN_FILES.filter { it != "tokenizer.json" }
+            writePackZip(zipFile, incompleteFiles)
+
+            val context = mockk<Context>(relaxed = true)
+            every { context.getExternalFilesDir(null) } returns filesDir
+
+            val installer =
+                Sd15QnnPackInstaller(
+                    context = context,
+                    logger = mockk<LoggingPort>(relaxed = true),
+                )
+            val metadata =
+                LocalModelMetadata(
+                    id = LocalModelId("juggernaut-qnn-pack"),
+                    huggingFaceModelName = "xororz/sdxl-qnn",
+                    remoteFileName = "juggernaut_qnn2.28_8gen3.zip",
+                    localFileName = "juggernaut_qnn2.28_8gen3.zip",
+                    sha256 = "b27231823434c4e4184a61f77401227264a5308c6846c6fc628c37583e76413c",
+                    sizeInBytes = zipFile.length(),
+                    modelFileFormat = ModelFileFormat.BIN,
+                    utilityType = UtilityType.JUGGERNAUT_XL_QNN_PACK,
+                )
+
+            assertFalse(installer.installIfNeeded(metadata))
+            val packDir = File(modelsDir, LocalImageGenerationPaths.JUGGERNAUT_XL_QNN_SUBDIR)
+            assertFalse(LocalImageGenerationPaths.hasJuggernautXlQnnArtifacts(packDir))
+        }
+
+    @Test
+    fun `MUT-006 Juggernaut install must not extract into sdxl-qnn`() =
+        runTest {
+            val filesDir = File(tempDir, "files").apply { mkdirs() }
+            val modelsDir = File(filesDir, ModelConfig.MODELS_DIR).apply { mkdirs() }
+            val zipFile = File(modelsDir, "juggernaut_qnn2.28_8gen3.zip")
+            writeMinimalSdxlPackZip(zipFile)
+
+            val context = mockk<Context>(relaxed = true)
+            every { context.getExternalFilesDir(null) } returns filesDir
+
+            val installer =
+                Sd15QnnPackInstaller(
+                    context = context,
+                    logger = mockk<LoggingPort>(relaxed = true),
+                )
+            val metadata =
+                LocalModelMetadata(
+                    id = LocalModelId("juggernaut-qnn-pack"),
+                    huggingFaceModelName = "xororz/sdxl-qnn",
+                    remoteFileName = "juggernaut_qnn2.28_8gen3.zip",
+                    localFileName = "juggernaut_qnn2.28_8gen3.zip",
+                    sha256 = "b27231823434c4e4184a61f77401227264a5308c6846c6fc628c37583e76413c",
+                    sizeInBytes = zipFile.length(),
+                    modelFileFormat = ModelFileFormat.BIN,
+                    utilityType = UtilityType.JUGGERNAUT_XL_QNN_PACK,
+                )
+
+            installer.installIfNeeded(metadata)
+
+            val juggernautDir = File(modelsDir, LocalImageGenerationPaths.JUGGERNAUT_XL_QNN_SUBDIR)
+            assertEquals(juggernautDir.absolutePath, juggernautDir.absolutePath)
+            assertTrue(LocalImageGenerationPaths.hasJuggernautXlQnnArtifacts(juggernautDir))
+            val sdxlDir = File(modelsDir, LocalImageGenerationPaths.SDXL_QNN_SUBDIR)
+            assertFalse(LocalImageGenerationPaths.hasSdxlQnnArtifacts(sdxlDir))
+        }
+
+    @Test
+    fun installIfNeeded_reportsIncrementalProgressDuringLargeEntry() =
+        runTest {
+            val filesDir = File(tempDir, "files").apply { mkdirs() }
+            val modelsDir = File(filesDir, ModelConfig.MODELS_DIR).apply { mkdirs() }
+            val variant = Sd15QnnPackCatalog.catalogTemplate
+            val zipFile = File(modelsDir, variant.localZipFileName)
+            // unet.bin is multi-megabyte so a single entry spans several progress intervals.
+            val largeEntryBytes = 20 * 1024 * 1024
+            writePackZipWithLargeUnet(zipFile, largeEntryBytes)
+
+            val context = mockk<Context>(relaxed = true)
+            every { context.getExternalFilesDir(null) } returns filesDir
+
+            val installer =
+                Sd15QnnPackInstaller(
+                    context = context,
+                    logger = mockk<LoggingPort>(relaxed = true),
+                )
+            val metadata =
+                LocalModelMetadata(
+                    id = LocalModelId("sd15-qnn-pack"),
+                    huggingFaceModelName = Sd15QnnPackCatalog.HF_REPO,
+                    remoteFileName = variant.zipFileName,
+                    localFileName = variant.localZipFileName,
+                    sha256 = variant.sha256,
+                    sizeInBytes = zipFile.length(),
+                    modelFileFormat = ModelFileFormat.BIN,
+                    utilityType = UtilityType.SD15_QNN_PACK,
+                )
+
+            val progressBytes = mutableListOf<Long>()
+            val listener = QnnPackInstallProgressListener { extracted, _ -> progressBytes.add(extracted) }
+
+            assertTrue(installer.installIfNeeded(metadata, listener))
+
+            val total = progressBytes.last()
+            // Pre-fix, a single entry reported once (at its boundary); now it reports mid-extraction.
+            val midReports = progressBytes.filter { it < total }.distinct()
+            assertTrue(midReports.size >= 2, "expected >=2 mid-extraction reports, got $progressBytes")
+            assertEquals(progressBytes.sorted(), progressBytes, "progress must be monotonically increasing")
+        }
+
+    private fun writePackZipWithLargeUnet(
+        zipFile: File,
+        unetBytes: Int,
+    ) {
+        ZipOutputStream(zipFile.outputStream()).use { zip ->
+            LocalImageGenerationPaths.REQUIRED_SD15_QNN_FILES.forEach { name ->
+                zip.putNextEntry(ZipEntry(name))
+                if (name == "unet.bin") {
+                    zip.write(ByteArray(unetBytes))
+                } else {
+                    zip.write(byteArrayOf(1, 2, 3))
+                }
+                zip.closeEntry()
+            }
+        }
+    }
 
     private fun writeMinimalSdxlPackZip(zipFile: File) {
         writePackZip(zipFile, LocalImageGenerationPaths.REQUIRED_SDXL_QNN_FILES)

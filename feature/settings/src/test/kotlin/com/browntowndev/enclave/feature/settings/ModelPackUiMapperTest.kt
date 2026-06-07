@@ -63,4 +63,30 @@ class ModelPackUiMapperTest {
         assertEquals("Requires Snapdragon 8 Gen 3+ with QNN.", ui.disabledReason)
         assertEquals(false, ui.isEligible)
     }
+
+    @Test
+    fun `SET-007 maps Juggernaut disabled reason and ineligibility from pack settings row`() {
+        val row =
+            ModelPackSettingsRow(
+                pack = ModelPackTestFixtures.juggernautPack(),
+                completeness =
+                    ModelPackCompleteness(
+                        packId = ModelPackTestFixtures.JUGGERNAUT_PACK_ID,
+                        installedCount = 0,
+                        totalCount = 2,
+                        isComplete = false,
+                        members = emptyList(),
+                    ),
+                isDiffusionSoftDeleted = false,
+                areUtilityRegistryEntriesAbsent = true,
+                showDownloadAction = false,
+                disabledReason = "Requires Snapdragon 8 Gen 3+ with QNN.",
+                isEligible = false,
+            )
+
+        val ui = mapper.map(row)
+
+        assertEquals("Requires Snapdragon 8 Gen 3+ with QNN.", ui.disabledReason)
+        assertEquals(false, ui.isEligible)
+    }
 }

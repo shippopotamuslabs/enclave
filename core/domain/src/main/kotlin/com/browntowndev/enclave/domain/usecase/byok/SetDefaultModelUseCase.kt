@@ -205,13 +205,23 @@ class SetDefaultModelUseCaseImpl
 
         private fun requireLocalImageModelAssignmentAllowed(asset: com.browntowndev.enclave.domain.model.config.LocalModelAsset) {
             val modelId = LocalImageGenerationModelRegistry.descriptorFor(asset)?.id ?: return
-            if (modelId != LocalImageGenerationModelId.SDXL_QNN) {
+            if (modelId != LocalImageGenerationModelId.SDXL_QNN &&
+                modelId != LocalImageGenerationModelId.JUGGERNAUT_XL_QNN
+            ) {
                 return
             }
             val capabilities = capabilityPort.getCapabilities()
-            if (capabilities.sdxlNpuSupported != LocalImageGenTriState.YES) {
+            val supported =
+                when (modelId) {
+                    LocalImageGenerationModelId.SDXL_QNN ->
+                        capabilities.sdxlNpuSupported == LocalImageGenTriState.YES
+                    LocalImageGenerationModelId.JUGGERNAUT_XL_QNN ->
+                        capabilities.juggernautXlNpuSupported == LocalImageGenTriState.YES
+                    else -> true
+                }
+            if (!supported) {
                 val reason =
-                    capabilities.disabledReasonsByModelId[LocalImageGenerationModelId.SDXL_QNN]
+                    capabilities.disabledReasonsByModelId[modelId]
                         ?: LocalImageGenerationCapabilityPolicy.SDXL_BLOCKED_REASON
                 throw IllegalArgumentException(reason)
             }

@@ -12,6 +12,7 @@ import com.browntowndev.enclave.domain.model.error.ActiveModelConfigurationDecry
 import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelSource
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelRegistry
 import com.browntowndev.enclave.domain.model.media.LocalStableDiffusionModelPolicy
 import com.browntowndev.enclave.domain.port.media.LOCAL_ON_DEVICE_IMAGE_GENERATION_ENABLED
 import com.browntowndev.enclave.domain.usecase.settings.ReassignmentCandidate
@@ -123,6 +124,29 @@ class LocalModelAssetUiMapper
                     cleanName.ifBlank { rawName }
                 }
 
+            val isImageGenerationCapable =
+                LOCAL_ON_DEVICE_IMAGE_GENERATION_ENABLED &&
+                    LocalStableDiffusionModelPolicy.supports(asset)
+
+            // The persisted local registry drops each config's defaultAssignments, so derive the
+            // image-gen slot membership from the descriptor; otherwise SD/SDXL/Juggernaut never
+            // surface as assignable options for the Image Generation / Image Edit roles.
+            val imageGenSlots =
+                if (isImageGenerationCapable) {
+                    LocalImageGenerationModelRegistry.assignableSlotsFor(asset)
+                } else {
+                    emptyList()
+                }
+            val configurations =
+                asset.configurations.map { config ->
+                    val mapped = mapConfig(config)
+                    if (mapped.defaultAssignments.isEmpty() && imageGenSlots.isNotEmpty()) {
+                        mapped.copy(defaultAssignments = imageGenSlots)
+                    } else {
+                        mapped
+                    }
+                }
+
             return LocalModelAssetUi(
                 metadataId = asset.metadata.id,
                 huggingFaceModelName = rawName,
@@ -131,11 +155,9 @@ class LocalModelAssetUiMapper
                 format = format,
                 remoteFileName = asset.metadata.remoteFileName,
                 sizeInBytes = asset.metadata.sizeInBytes,
-                configurations = asset.configurations.map(::mapConfig),
+                configurations = configurations,
                 isMultimodal = asset.metadata.isMultimodal,
-                isImageGenerationCapable =
-                    LOCAL_ON_DEVICE_IMAGE_GENERATION_ENABLED &&
-                        LocalStableDiffusionModelPolicy.supports(asset),
+                isImageGenerationCapable = isImageGenerationCapable,
                 isSoftDeleted = asset.configurations.isEmpty(),
             )
         }
@@ -155,6 +177,7 @@ class LocalModelAssetUiMapper
                 systemPrompt = config.systemPrompt,
                 thinkingEnabled = config.thinkingEnabled,
                 isSystemPreset = config.isSystemPreset,
+                defaultAssignments = config.defaultAssignments,
             )
     }
 

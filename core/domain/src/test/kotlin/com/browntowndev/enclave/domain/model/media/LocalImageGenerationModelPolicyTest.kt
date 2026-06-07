@@ -35,6 +35,19 @@ class LocalImageGenerationModelPolicyTest {
     }
 
     @Test
+    fun `SD15 CPU policy mirrors SD15 QNN generation defaults`() {
+        val normalized =
+            LocalImageGenerationModelPolicy.normalizeRequest(
+                LocalImageGenerationModelId.SD15_CPU,
+                ImageGenerationSettings(imageResolution = "512x512", diffusionSteps = 8),
+            )
+
+        assertEquals(20, normalized.diffusionSteps)
+        assertEquals("dpm", normalized.scheduler)
+        assertEquals(7.5f, normalized.cfgScale)
+    }
+
+    @Test
     fun `SD15 normalizeRequest always uses fixed 20 steps`() {
         val normalized =
             LocalImageGenerationModelPolicy.normalizeRequest(
@@ -43,5 +56,45 @@ class LocalImageGenerationModelPolicyTest {
             )
 
         assertEquals(20, normalized.diffusionSteps)
+    }
+
+    @Test
+    fun `STU-009 Juggernaut provider capabilities expose exactly 1024x1024`() {
+        val caps = LocalImageGenerationModelPolicy.providerCapabilitiesFor(LocalImageGenerationModelId.JUGGERNAUT_XL_QNN)
+
+        assertEquals(listOf("1024x1024"), caps.supportedImageResolutions)
+    }
+
+    @Test
+    fun `STU-010 Juggernaut provider capabilities expose exact step ladder with 24 default`() {
+        val caps = LocalImageGenerationModelPolicy.providerCapabilitiesFor(LocalImageGenerationModelId.JUGGERNAUT_XL_QNN)
+
+        assertEquals(listOf(20, 22, 24, 26, 28, 30), caps.supportedImageSteps)
+        assertEquals(24, caps.defaultImageStep)
+    }
+
+    @Test
+    fun `INF-007 stale Juggernaut step 23 clamps to 24`() {
+        val normalized =
+            LocalImageGenerationModelPolicy.normalizeRequest(
+                LocalImageGenerationModelId.JUGGERNAUT_XL_QNN,
+                ImageGenerationSettings(imageResolution = "1024x1024", diffusionSteps = 23),
+            )
+
+        assertEquals(24, normalized.diffusionSteps)
+        assertEquals("dpm", normalized.scheduler)
+        assertEquals(4.0f, normalized.cfgScale)
+    }
+
+    @Test
+    fun `Juggernaut img2img uses lower default denoise strength than SDXL`() {
+        val settings = ImageGenerationSettings(referenceImageUri = "content://image")
+        val denoise =
+            LocalImageGenerationModelPolicy.resolveImg2ImgDenoiseStrength(
+                LocalImageGenerationModelId.JUGGERNAUT_XL_QNN,
+                settings,
+            )
+
+        assertEquals(0.35f, denoise)
     }
 }

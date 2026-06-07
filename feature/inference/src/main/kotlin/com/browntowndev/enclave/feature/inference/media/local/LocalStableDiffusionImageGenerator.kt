@@ -84,7 +84,7 @@ class LocalStableDiffusionImageGenerator
                     ) {
                         throw LocalImageGenerationError.GenerationFailed(
                             target.selectedBackend,
-                            "IMG2IMG_ENCODER_MISSING: model pack lacks vae_encoder.bin",
+                            "IMG2IMG_ENCODER_MISSING: model pack lacks vae_encoder.bin or vae_encoder.mnn",
                         )
                     }
                     val initImagePath =
@@ -120,7 +120,11 @@ class LocalStableDiffusionImageGenerator
                             outputPathPrefix = outputPrefix,
                             mode = mode,
                             initImagePath = initImagePath,
-                            denoiseStrength = settings.resolvedImg2ImgDenoiseStrength(),
+                            denoiseStrength =
+                                LocalImageGenerationModelPolicy.resolveImg2ImgDenoiseStrength(
+                                    target.modelId,
+                                    settings,
+                                ),
                             memoryPolicy = memoryPolicy,
                         )
                     val output =

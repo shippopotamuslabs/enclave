@@ -24,7 +24,9 @@ object QnnRuntimeLibraryCatalog {
     /** Primary skeleton library that must exist before launching QNN for [modelId]. */
     fun primarySkelLibraryFor(modelId: LocalImageGenerationModelId): String =
         when (modelId) {
-            LocalImageGenerationModelId.SDXL_QNN -> "libQnnHtpV79Skel.so"
+            LocalImageGenerationModelId.SDXL_QNN,
+            LocalImageGenerationModelId.JUGGERNAUT_XL_QNN,
+            -> "libQnnHtpV79Skel.so"
             LocalImageGenerationModelId.SD15_QNN,
             LocalImageGenerationModelId.SD15_CPU,
             -> "libQnnHtpV73Skel.so"
@@ -32,7 +34,9 @@ object QnnRuntimeLibraryCatalog {
 
     private fun hexagonLibrariesForModel(modelId: LocalImageGenerationModelId): List<String> =
         when (modelId) {
-            LocalImageGenerationModelId.SDXL_QNN ->
+            LocalImageGenerationModelId.SDXL_QNN,
+            LocalImageGenerationModelId.JUGGERNAUT_XL_QNN,
+            ->
                 variant(
                     stub = "libQnnHtpV79Stub.so",
                     lib = "libQnnHtpV79.so",

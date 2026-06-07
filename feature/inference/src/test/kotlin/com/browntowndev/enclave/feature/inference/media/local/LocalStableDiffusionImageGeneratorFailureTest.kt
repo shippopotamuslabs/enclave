@@ -319,4 +319,139 @@ class LocalStableDiffusionImageGeneratorFailureTest {
             assertEquals(LocalImageGenerationMode.IMG2IMG, capturedRequest.captured.mode)
             assertEquals(0.4f, capturedRequest.captured.denoiseStrength)
         }
+
+    @Test
+    fun `INF-006 Juggernaut native request uses 1024 24 CFG 4_0 and scheduler dpm`() =
+        runTest {
+            val capturedRequest = io.mockk.slot<LocalImageGenerationNativeRequest>()
+            val engine =
+                mockk<LocalImageGenerationEngine> {
+                    coEvery { generate(capture(capturedRequest)) } returns
+                        Result.success(
+                            LocalImageGenerationNativeResult(emptyList(), 1024, 1024, 0L),
+                        )
+                }
+            val context = mockk<Context>(relaxed = true)
+            every { context.cacheDir } returns java.io.File.createTempFile("cache", "").parentFile!!
+            val generator = createGenerator(context, engine)
+
+            val juggernautTarget =
+                localTarget().copy(
+                    modelId = LocalImageGenerationModelId.JUGGERNAUT_XL_QNN,
+                    capabilities =
+                        ProviderCapabilities(
+                            supportedAspectRatios = listOf(AspectRatio.ONE_ONE),
+                            supportedImageQualities = emptyList(),
+                            supportedImageResolutions = listOf("1024x1024"),
+                            supportedImageSteps = listOf(20, 22, 24, 26, 28, 30),
+                            defaultImageStep = 24,
+                            supportedVideoQualities = emptyList(),
+                            supportedVideoResolutions = emptyList(),
+                            supportedVideoDurations = emptyList(),
+                            supportsVideo = false,
+                        ),
+                )
+
+            val result =
+                generator.generate(
+                    prompt = "sunset",
+                    target = juggernautTarget,
+                    settings = ImageGenerationSettings(imageResolution = "1024x1024", diffusionSteps = 24),
+                )
+
+            assertTrue(result.isSuccess)
+            assertEquals(1024, capturedRequest.captured.width)
+            assertEquals(1024, capturedRequest.captured.height)
+            assertEquals(24, capturedRequest.captured.steps)
+            assertEquals(4.0f, capturedRequest.captured.cfgScale)
+            assertEquals("dpm", capturedRequest.captured.scheduler)
+        }
+
+    @Test
+    fun `INF-007 stale Juggernaut step 23 clamps to 24 before native launch`() =
+        runTest {
+            val capturedRequest = io.mockk.slot<LocalImageGenerationNativeRequest>()
+            val engine =
+                mockk<LocalImageGenerationEngine> {
+                    coEvery { generate(capture(capturedRequest)) } returns
+                        Result.success(
+                            LocalImageGenerationNativeResult(emptyList(), 1024, 1024, 0L),
+                        )
+                }
+            val context = mockk<Context>(relaxed = true)
+            every { context.cacheDir } returns java.io.File.createTempFile("cache", "").parentFile!!
+            val generator = createGenerator(context, engine)
+
+            val juggernautTarget =
+                localTarget().copy(
+                    modelId = LocalImageGenerationModelId.JUGGERNAUT_XL_QNN,
+                    capabilities =
+                        ProviderCapabilities(
+                            supportedAspectRatios = listOf(AspectRatio.ONE_ONE),
+                            supportedImageQualities = emptyList(),
+                            supportedImageResolutions = listOf("1024x1024"),
+                            supportedImageSteps = listOf(20, 22, 24, 26, 28, 30),
+                            defaultImageStep = 24,
+                            supportedVideoQualities = emptyList(),
+                            supportedVideoResolutions = emptyList(),
+                            supportedVideoDurations = emptyList(),
+                            supportsVideo = false,
+                        ),
+                )
+
+            val result =
+                generator.generate(
+                    prompt = "sunset",
+                    target = juggernautTarget,
+                    settings = ImageGenerationSettings(imageResolution = "1024x1024", diffusionSteps = 23),
+                )
+
+            assertTrue(result.isSuccess)
+            assertEquals(24, capturedRequest.captured.steps)
+        }
+
+    @Test
+    fun `MUT-005 reusing SDXL lcm policy for Juggernaut fails scheduler and CFG checks`() =
+        runTest {
+            val capturedRequest = io.mockk.slot<LocalImageGenerationNativeRequest>()
+            val engine =
+                mockk<LocalImageGenerationEngine> {
+                    coEvery { generate(capture(capturedRequest)) } returns
+                        Result.success(
+                            LocalImageGenerationNativeResult(emptyList(), 1024, 1024, 0L),
+                        )
+                }
+            val context = mockk<Context>(relaxed = true)
+            every { context.cacheDir } returns java.io.File.createTempFile("cache", "").parentFile!!
+            val generator = createGenerator(context, engine)
+
+            val juggernautTarget =
+                localTarget().copy(
+                    modelId = LocalImageGenerationModelId.JUGGERNAUT_XL_QNN,
+                    capabilities =
+                        ProviderCapabilities(
+                            supportedAspectRatios = listOf(AspectRatio.ONE_ONE),
+                            supportedImageQualities = emptyList(),
+                            supportedImageResolutions = listOf("1024x1024"),
+                            supportedImageSteps = listOf(20, 22, 24, 26, 28, 30),
+                            defaultImageStep = 24,
+                            supportedVideoQualities = emptyList(),
+                            supportedVideoResolutions = emptyList(),
+                            supportedVideoDurations = emptyList(),
+                            supportsVideo = false,
+                        ),
+                )
+
+            val result =
+                generator.generate(
+                    prompt = "sunset",
+                    target = juggernautTarget,
+                    settings = ImageGenerationSettings(imageResolution = "1024x1024", diffusionSteps = 24),
+                )
+
+            assertTrue(result.isSuccess)
+            assertEquals("dpm", capturedRequest.captured.scheduler)
+            assertEquals(4.0f, capturedRequest.captured.cfgScale)
+            assertEquals(24, capturedRequest.captured.steps)
+        }
 }

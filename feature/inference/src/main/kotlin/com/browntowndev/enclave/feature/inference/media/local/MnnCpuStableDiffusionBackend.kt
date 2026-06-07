@@ -22,10 +22,10 @@ class MnnCpuStableDiffusionBackend
         ): Result<LocalImageGenerationNativeResult> =
             runCatching {
                 val probe = nativeRuntime.probe(kind)
-                if (probe < 2) {
+                if (probe < 1) {
                     throw LocalImageGenerationError.RuntimeNotPackaged(
                         kind,
-                        "MNN probe=$probe. Package QNN/MNN runtime and models under ${request.modelDir}.",
+                        "MNN probe=$probe. Package the MNN runtime and models under ${request.modelDir}.",
                     )
                 }
                 val outputPath = "${request.outputPathPrefix}.png"

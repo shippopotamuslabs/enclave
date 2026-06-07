@@ -110,34 +110,70 @@ class SelectLocalImageGenerationBackendUseCase
         private fun selectionForModel(
             modelId: LocalImageGenerationModelId,
             capabilities: LocalImageGenerationCapabilities,
-        ): LocalImageGenerationBackendSelection {
-            val family =
-                when (modelId) {
-                    LocalImageGenerationModelId.SD15_QNN,
-                    LocalImageGenerationModelId.SD15_CPU,
-                    -> LocalImageGenerationModelFamily.SD15
-                    LocalImageGenerationModelId.SDXL_QNN -> LocalImageGenerationModelFamily.SDXL
-                }
-            val auto = invoke(family, capabilities, BackendPreference.AUTO, requestedModelId = null)
-            if (auto.modelId == modelId) {
-                return auto.copy(reasons = auto.reasons + "Matched assigned model $modelId.")
+        ): LocalImageGenerationBackendSelection =
+            when (modelId) {
+                LocalImageGenerationModelId.SD15_QNN -> selectionForAssignedSd15Qnn(capabilities)
+                LocalImageGenerationModelId.SD15_CPU -> selectionForAssignedSd15Cpu(capabilities)
+                LocalImageGenerationModelId.SDXL_QNN ->
+                    selectionForAssignedNpuOnlyModel(
+                        modelId = modelId,
+                        npuSupported = capabilities.sdxlNpuSupported,
+                    )
+                LocalImageGenerationModelId.JUGGERNAUT_XL_QNN ->
+                    selectionForAssignedNpuOnlyModel(
+                        modelId = modelId,
+                        npuSupported = capabilities.juggernautXlNpuSupported,
+                    )
             }
-            val backend =
-                when (modelId) {
-                    LocalImageGenerationModelId.SD15_QNN -> LocalImageGenerationBackendKind.QNN_NPU
-                    LocalImageGenerationModelId.SD15_CPU -> LocalImageGenerationBackendKind.CPU_MNN
-                    LocalImageGenerationModelId.SDXL_QNN -> LocalImageGenerationBackendKind.QNN_NPU
-                }
-            val allowed =
-                when (modelId) {
-                    LocalImageGenerationModelId.SD15_QNN ->
-                        capabilities.sd15NpuSupported == LocalImageGenTriState.YES
-                    LocalImageGenerationModelId.SD15_CPU ->
-                        capabilities.sd15CpuSupported == LocalImageGenTriState.YES
-                    LocalImageGenerationModelId.SDXL_QNN ->
-                        capabilities.sdxlNpuSupported == LocalImageGenTriState.YES
-                }
-            if (!allowed) {
+
+        private fun selectionForAssignedSd15Qnn(
+            capabilities: LocalImageGenerationCapabilities,
+        ): LocalImageGenerationBackendSelection {
+            if (capabilities.sd15NpuSupported == LocalImageGenTriState.YES) {
+                return LocalImageGenerationBackendSelection(
+                    LocalImageGenerationBackendKind.QNN_NPU,
+                    LocalImageGenerationModelId.SD15_QNN,
+                    listOf("Using assigned catalog model SD15_QNN."),
+                )
+            }
+            if (capabilities.sd15CpuSupported == LocalImageGenTriState.YES) {
+                val fallback = selectSd15(capabilities, BackendPreference.AUTO)
+                return fallback.copy(
+                    reasons =
+                        listOf(
+                            "Assigned SD1.5 NPU unavailable; ${fallback.reasons.firstOrNull() ?: "using CPU fallback."}",
+                        ),
+                )
+            }
+            return LocalImageGenerationBackendSelection(
+                LocalImageGenerationBackendKind.NONE,
+                null,
+                listOf("Assigned SD1.5 NPU model is not supported on this device."),
+            )
+        }
+
+        private fun selectionForAssignedSd15Cpu(
+            capabilities: LocalImageGenerationCapabilities,
+        ): LocalImageGenerationBackendSelection {
+            if (capabilities.sd15CpuSupported == LocalImageGenTriState.YES) {
+                return LocalImageGenerationBackendSelection(
+                    LocalImageGenerationBackendKind.CPU_MNN,
+                    LocalImageGenerationModelId.SD15_CPU,
+                    listOf("Using assigned catalog model SD15_CPU."),
+                )
+            }
+            return LocalImageGenerationBackendSelection(
+                LocalImageGenerationBackendKind.NONE,
+                null,
+                listOf("Assigned SD1.5 CPU model is not supported on this device."),
+            )
+        }
+
+        private fun selectionForAssignedNpuOnlyModel(
+            modelId: LocalImageGenerationModelId,
+            npuSupported: LocalImageGenTriState,
+        ): LocalImageGenerationBackendSelection {
+            if (npuSupported != LocalImageGenTriState.YES) {
                 return LocalImageGenerationBackendSelection(
                     LocalImageGenerationBackendKind.NONE,
                     null,
@@ -145,7 +181,7 @@ class SelectLocalImageGenerationBackendUseCase
                 )
             }
             return LocalImageGenerationBackendSelection(
-                backend,
+                LocalImageGenerationBackendKind.QNN_NPU,
                 modelId,
                 listOf("Using assigned catalog model $modelId."),
             )

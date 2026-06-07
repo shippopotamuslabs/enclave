@@ -4,6 +4,8 @@ import android.app.ActivityManager
 import android.content.Context
 import com.browntowndev.enclave.domain.model.device.SnapdragonTier
 import com.browntowndev.enclave.domain.model.media.LocalImageGenTriState
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId
 import com.browntowndev.enclave.domain.port.media.LOCAL_ON_DEVICE_IMAGE_GENERATION_ENABLED
 import com.browntowndev.enclave.feature.inference.media.local.SnapdragonDeviceClassifier
 import com.browntowndev.enclave.localimagegen.NativeLocalImageGenRuntime
@@ -68,5 +70,31 @@ class LocalImageGenerationDevicePolicyTest {
         assertTrue(caps.diagnostics.any { it.contains("Insufficient RAM for local diffusion (need >= 8 GiB).") })
         assertEquals(LocalImageGenTriState.NO, caps.sd15NpuSupported)
         assertEquals(LocalImageGenTriState.NO, caps.sdxlNpuSupported)
+    }
+
+    @Test
+    fun `CAP-010 LocalImageGenerationCapabilityPortImpl exposes juggernautXlNpuSupported NO on Gen2`() {
+        every { SnapdragonDeviceClassifier.tier() } returns SnapdragonTier.GEN2
+
+        val port = LocalImageGenerationCapabilityPortImpl(context, nativeRuntime)
+        val caps = port.getCapabilities()
+
+        assertEquals(LocalImageGenTriState.NO, caps.juggernautXlNpuSupported)
+        assertEquals(
+            "Requires Snapdragon 8 Gen 3+ with QNN.",
+            caps.disabledReasonsByModelId[LocalImageGenerationModelId.JUGGERNAUT_XL_QNN],
+        )
+    }
+
+    @Test
+    fun `MNN probe one marks SD15 CPU fallback available`() {
+        every { SnapdragonDeviceClassifier.tier() } returns SnapdragonTier.UNKNOWN
+        every { nativeRuntime.probe(LocalImageGenerationBackendKind.QNN_NPU) } returns 0
+        every { nativeRuntime.probe(LocalImageGenerationBackendKind.CPU_MNN) } returns 1
+
+        val caps = LocalImageGenerationCapabilityPortImpl(context, nativeRuntime).getCapabilities()
+
+        assertEquals(LocalImageGenTriState.YES, caps.sd15CpuSupported)
+        assertEquals(LocalImageGenerationBackendKind.CPU_MNN, caps.recommendedBackend)
     }
 }

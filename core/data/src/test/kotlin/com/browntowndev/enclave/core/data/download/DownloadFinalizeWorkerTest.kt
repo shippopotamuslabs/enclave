@@ -6,17 +6,22 @@ import androidx.work.Data
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.browntowndev.enclave.core.data.sync.EmbeddingRegenerationCoordinator
+import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
 import com.browntowndev.enclave.domain.model.config.LocalModelAsset
 import com.browntowndev.enclave.domain.model.config.LocalModelConfiguration
+import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.config.LocalModelMetadata
+import com.browntowndev.enclave.domain.model.config.SlotResolvedLocalModel
 import com.browntowndev.enclave.domain.model.config.UtilityType
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.ModelConfigFetcherPort
 import com.browntowndev.enclave.domain.usecase.FakeUtilityModelRepository
+import com.browntowndev.enclave.domain.usecase.byok.SetDefaultModelUseCase
 import com.browntowndev.enclave.domain.usecase.download.ResolveSd15QnnPackCatalogAssetUseCase
 import com.browntowndev.enclave.domain.usecase.modelconfig.SyncLocalModelRegistryUseCase
 import com.browntowndev.enclave.domain.usecase.modelconfig.SyncUtilityModelRegistryUseCase
@@ -93,6 +98,12 @@ class DownloadFinalizeWorkerTest {
     @MockK
     private lateinit var mockSyncLocalModelRegistryUseCase: SyncLocalModelRegistryUseCase
 
+    @MockK
+    private lateinit var mockSetDefaultModelUseCase: SetDefaultModelUseCase
+
+    @MockK
+    private lateinit var mockDefaultModelRepository: DefaultModelRepositoryPort
+
     private lateinit var syncUtilityModelRegistryUseCase: SyncUtilityModelRegistryUseCase
 
     private lateinit var fakeUtilityModelRepository: FakeUtilityModelRepository
@@ -141,6 +152,31 @@ class DownloadFinalizeWorkerTest {
         every { mockLoggingPort.error(any(), any()) } returns Unit
         every { mockLoggingPort.error(any(), any(), any()) } returns Unit
         coEvery { mockQnnPackInstaller.installIfNeeded(any(), any()) } returns true
+        coEvery { mockDefaultModelRepository.getDefault(any()) } returns null
+        coEvery { mockSetDefaultModelUseCase(any(), any(), any(), any(), any()) } returns Unit
+        coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any(), any()) } answers {
+            val modelType = firstArg<ModelType>()
+            val asset = secondArg<LocalModelAsset>()
+            val config =
+                asset.configurations.firstOrNull()
+                    ?: LocalModelConfiguration(
+                        id = LocalModelConfigurationId("test-config"),
+                        localModelId = asset.metadata.id,
+                        displayName = "Test",
+                        temperature = 0.7,
+                        topK = 40,
+                        topP = 0.95,
+                        minP = 0.0,
+                        repetitionPenalty = 1.1,
+                        maxTokens = 4096,
+                        contextWindow = 4096,
+                        systemPrompt = "",
+                        isSystemPreset = true,
+                        thinkingEnabled = false,
+                        defaultAssignments = listOf(modelType),
+                    )
+            SlotResolvedLocalModel(modelType, asset, config)
+        }
 
         // Create the worker with all dependencies
         worker =
@@ -151,6 +187,8 @@ class DownloadFinalizeWorkerTest {
                 modelConfigFetcher = mockModelConfigFetcher,
                 syncLocalModelRegistryUseCase = mockSyncLocalModelRegistryUseCase,
                 syncUtilityModelRegistryUseCase = syncUtilityModelRegistryUseCase,
+                setDefaultModelUseCase = mockSetDefaultModelUseCase,
+                defaultModelRepository = mockDefaultModelRepository,
                 qnnPackInstaller = mockQnnPackInstaller,
                 resolveSd15QnnPackCatalogAssetUseCase = mockResolveSd15QnnPackCatalogAssetUseCase,
                 embeddingCoordinator = mockEmbeddingCoordinator,
@@ -192,7 +230,7 @@ class DownloadFinalizeWorkerTest {
                     asset.copy(metadata = asset.metadata.copy(utilityType = UtilityType.ONNX_MODEL))
                 }
             coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(onnxAsset))
-            coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) } returns mockk()
+            coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any(), any()) } returns mockk()
 
             // When: Run the worker
             worker.doWork()
@@ -226,7 +264,7 @@ class DownloadFinalizeWorkerTest {
                     asset.copy(metadata = asset.metadata.copy(utilityType = UtilityType.ONNX_VOCAB))
                 }
             coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(onnxVocabAsset))
-            coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) } returns mockk()
+            coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any(), any()) } returns mockk()
 
             // When: Run the worker
             worker.doWork()
@@ -257,7 +295,7 @@ class DownloadFinalizeWorkerTest {
 
             val standardAsset = createTestAsset("model1.gguf", SHA_1)
             coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(standardAsset))
-            coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) } returns mockk()
+            coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any(), any()) } returns mockk()
 
             // When: Run the worker
             worker.doWork()
@@ -375,7 +413,7 @@ class DownloadFinalizeWorkerTest {
                 Result.success(
                     listOf(remoteAsset),
                 )
-            coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) } returns mockk()
+            coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any(), any()) } returns mockk()
 
             // When: Run the worker
             val result = worker.doWork()
@@ -409,8 +447,12 @@ class DownloadFinalizeWorkerTest {
             val capturedAsset = slot<LocalModelAsset>()
             coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(remoteAsset))
             coEvery {
-                mockSyncLocalModelRegistryUseCase.invoke(any(), capture(capturedAsset))
-            } returns mockk()
+                mockSyncLocalModelRegistryUseCase.invoke(any(), capture(capturedAsset), any())
+            } answers {
+                val modelType = firstArg<ModelType>()
+                val asset = capturedAsset.captured
+                SlotResolvedLocalModel(modelType, asset, asset.configurations.first())
+            }
 
             worker.doWork()
 
@@ -466,17 +508,17 @@ class DownloadFinalizeWorkerTest {
             val remoteConfig = listOf(remoteAsset1, remoteAsset2)
 
             coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(remoteConfig)
-            coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) } returns mockk()
+            coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any(), any()) } returns mockk()
 
             // When: Run the worker
             worker.doWork()
 
             // Then: SyncLocalModelRegistryUseCase should be called for matching slots
             coVerify {
-                mockSyncLocalModelRegistryUseCase.invoke(ModelType.MAIN, remoteAsset1)
+                mockSyncLocalModelRegistryUseCase.invoke(ModelType.MAIN, remoteAsset1, assignAsDefault = false)
             }
             coVerify {
-                mockSyncLocalModelRegistryUseCase.invoke(ModelType.VISION, remoteAsset2)
+                mockSyncLocalModelRegistryUseCase.invoke(ModelType.VISION, remoteAsset2, assignAsDefault = false)
             }
         }
 
@@ -548,21 +590,21 @@ class DownloadFinalizeWorkerTest {
                 Result.success(
                     listOf(remoteAsset1, remoteAsset2, remoteAsset3),
                 )
-            coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) } returns mockk()
+            coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any(), any()) } returns mockk()
 
             // When: Run the worker
             worker.doWork()
 
             // Then: Only SHA_1 asset should be synced
             coVerify {
-                mockSyncLocalModelRegistryUseCase.invoke(ModelType.MAIN, remoteAsset1)
+                mockSyncLocalModelRegistryUseCase.invoke(ModelType.MAIN, remoteAsset1, assignAsDefault = false)
             }
             // SHA_2 and SHA_3 should NOT be synced (not downloaded)
             coVerify(inverse = true) {
-                mockSyncLocalModelRegistryUseCase.invoke(ModelType.VISION, remoteAsset2)
+                mockSyncLocalModelRegistryUseCase.invoke(ModelType.VISION, remoteAsset2, assignAsDefault = false)
             }
             coVerify(inverse = true) {
-                mockSyncLocalModelRegistryUseCase.invoke(ModelType.DRAFT_ONE, remoteAsset3)
+                mockSyncLocalModelRegistryUseCase.invoke(ModelType.DRAFT_ONE, remoteAsset3, assignAsDefault = false)
             }
         }
 
@@ -590,7 +632,7 @@ class DownloadFinalizeWorkerTest {
                 Result.success(
                     listOf(remoteAsset),
                 )
-            coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) } returns mockk()
+            coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any(), any()) } returns mockk()
 
             // When: Run the worker twice (simulating retry)
             worker.doWork()
@@ -599,7 +641,7 @@ class DownloadFinalizeWorkerTest {
             // Then: Both runs succeed (idempotent behavior)
             // The use case should be called twice but not fail
             coVerify(exactly = 2) {
-                mockSyncLocalModelRegistryUseCase.invoke(ModelType.MAIN, remoteAsset)
+                mockSyncLocalModelRegistryUseCase.invoke(ModelType.MAIN, remoteAsset, assignAsDefault = false)
             }
         }
 
@@ -845,7 +887,7 @@ class DownloadFinalizeWorkerTest {
 
             // Then: SyncLocalModelRegistryUseCase should NOT be called for restore
             coVerify(inverse = true) {
-                mockSyncLocalModelRegistryUseCase.invoke(any(), any())
+                mockSyncLocalModelRegistryUseCase.invoke(any(), any(), any())
             }
         }
 
@@ -904,7 +946,7 @@ class DownloadFinalizeWorkerTest {
                 Result.success(
                     listOf(remoteAsset),
                 )
-            coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) } returns mockk()
+            coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any(), any()) } returns mockk()
 
             // When: Run the worker
             val result = worker.doWork()
@@ -978,7 +1020,7 @@ class DownloadFinalizeWorkerTest {
                 "onnx-sha",
                 fakeUtilityModelRepository.getByUtilityType(UtilityType.ONNX_MODEL)?.sha256,
             )
-            coVerify(exactly = 0) { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) }
+            coVerify(exactly = 0) { mockSyncLocalModelRegistryUseCase.invoke(any(), any(), any()) }
         }
 
     @Test
@@ -1000,7 +1042,7 @@ class DownloadFinalizeWorkerTest {
                 ),
             )
             coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(onnxAsset))
-            coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) } returns mockk()
+            coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any(), any()) } returns mockk()
 
             worker.doWork()
 
@@ -1029,7 +1071,7 @@ class DownloadFinalizeWorkerTest {
 
             worker.doWork()
 
-            coVerify(exactly = 0) { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) }
+            coVerify(exactly = 0) { mockSyncLocalModelRegistryUseCase.invoke(any(), any(), any()) }
             assertEquals(
                 "whisper-sha",
                 fakeUtilityModelRepository.getByUtilityType(UtilityType.WHISPER)?.sha256,
@@ -1101,7 +1143,7 @@ class DownloadFinalizeWorkerTest {
                     any(),
                 )
             }
-            coVerify(exactly = 0) { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) }
+            coVerify(exactly = 0) { mockSyncLocalModelRegistryUseCase.invoke(any(), any(), any()) }
         }
 
     @Test
@@ -1153,7 +1195,7 @@ class DownloadFinalizeWorkerTest {
                     any(),
                 )
             } returns true
-            coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) } answers {
+            coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any(), any()) } answers {
                 val modelType = firstArg<ModelType>()
                 val asset = secondArg<LocalModelAsset>()
                 if (modelType == ModelType.IMAGE_GENERATION) {
@@ -1178,12 +1220,281 @@ class DownloadFinalizeWorkerTest {
             )
             // Finalize must not re-sync the IMAGE_GENERATION slot, so the existing SD1.5 default stands.
             coVerify(exactly = 0) {
-                mockSyncLocalModelRegistryUseCase.invoke(ModelType.IMAGE_GENERATION, any())
+                mockSyncLocalModelRegistryUseCase.invoke(ModelType.IMAGE_GENERATION, any(), assignAsDefault = false)
             }
             assertEquals(existingSd15Default, persistedImageGenerationDefault)
         }
 
+    @Test
+    @DisplayName("DL-013 registers Juggernaut without overriding existing IMAGE_EDIT default")
+    fun dl013_registersJuggernautWithoutOverridingImageEditDefault() =
+        runTest {
+            val juggernautSha = "b27231823434c4e4184a61f77401227264a5308c6846c6fc628c37583e76413c"
+            val juggernautAsset = createTestAsset("juggernaut_qnn2.28_8gen3.zip", juggernautSha).let { asset ->
+                asset.copy(
+                    metadata = asset.metadata.copy(
+                        id = LocalModelId("juggernaut-qnn-pack"),
+                        utilityType = UtilityType.JUGGERNAUT_XL_QNN_PACK,
+                    ),
+                    configurations = listOf(
+                        LocalModelConfiguration(
+                            id = com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId("juggernaut-local-config"),
+                            localModelId = LocalModelId("juggernaut-qnn-pack"),
+                            displayName = "Juggernaut XL",
+                            temperature = 0.0,
+                            topK = 1,
+                            topP = 1.0,
+                            minP = 0.0,
+                            repetitionPenalty = 1.0,
+                            maxTokens = 0,
+                            contextWindow = 0,
+                            systemPrompt = "",
+                            isSystemPreset = true,
+                            thinkingEnabled = false,
+                            defaultAssignments = listOf(ModelType.IMAGE_EDIT),
+                        ),
+                    ),
+                )
+            }
+            setInputData(
+                workDataOf(
+                    KEY_SESSION_ID to SESSION_ID,
+                    KEY_REQUEST_KIND to REQUEST_INITIALIZE,
+                    KEY_DOWNLOADED_SHAS to Json.encodeToString(listOf(juggernautSha)),
+                ),
+            )
+            val existingImageEditDefault =
+                com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId("sdxl-local-config")
+            var persistedImageEditDefault = existingImageEditDefault
+            coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(juggernautAsset))
+            coEvery {
+                mockQnnPackInstaller.installIfNeeded(
+                    match { it.utilityType == UtilityType.JUGGERNAUT_XL_QNN_PACK },
+                    any(),
+                )
+            } returns true
+            coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any(), any()) } answers {
+                val modelType = firstArg<ModelType>()
+                val asset = secondArg<LocalModelAsset>()
+                if (modelType == ModelType.IMAGE_EDIT) {
+                    persistedImageEditDefault = asset.configurations.first().id
+                }
+                mockk()
+            }
+
+            worker.doWork()
+
+            assertEquals(
+                juggernautSha,
+                fakeUtilityModelRepository.getByUtilityType(UtilityType.JUGGERNAUT_XL_QNN_PACK)?.sha256,
+            )
+            coVerify(exactly = 0) {
+                mockSyncLocalModelRegistryUseCase.invoke(ModelType.IMAGE_EDIT, any(), assignAsDefault = false)
+            }
+            assertEquals(existingImageEditDefault, persistedImageEditDefault)
+        }
+
+    @Test
+    @DisplayName("DL-013b assigns Juggernaut to empty IMAGE_EDIT slot when config and pack assets share a SHA")
+    fun dl013b_assignsJuggernautImageEditDefaultWhenConfigAndPackShareSha() =
+        runTest {
+            val juggernautSha = "b27231823434c4e4184a61f77401227264a5308c6846c6fc628c37583e76413c"
+            val configAsset =
+                createTestAsset("juggernaut_qnn2.28_8gen3.zip", juggernautSha).let { asset ->
+                    asset.copy(
+                        metadata = asset.metadata.copy(id = LocalModelId("juggernaut-config")),
+                        configurations =
+                            listOf(
+                                LocalModelConfiguration(
+                                    id = LocalModelConfigurationId("juggernaut-local-config"),
+                                    localModelId = LocalModelId("juggernaut-config"),
+                                    displayName = "Juggernaut XL",
+                                    temperature = 0.0,
+                                    topK = 1,
+                                    topP = 1.0,
+                                    minP = 0.0,
+                                    repetitionPenalty = 1.0,
+                                    maxTokens = 0,
+                                    contextWindow = 0,
+                                    systemPrompt = "",
+                                    isSystemPreset = true,
+                                    thinkingEnabled = false,
+                                    defaultAssignments = listOf(ModelType.IMAGE_EDIT),
+                                ),
+                            ),
+                    )
+                }
+            // Separate pack (utility) asset reuses the same zip SHA as the config asset, exactly
+            // as model_config.json models Juggernaut/SDXL. The shared SHA must not suppress the
+            // slot assignment performed by the config asset.
+            val packAsset =
+                createTestAsset("juggernaut_qnn2.28_8gen3.zip", juggernautSha).let { asset ->
+                    asset.copy(
+                        metadata =
+                            asset.metadata.copy(
+                                id = LocalModelId("juggernaut-qnn-pack"),
+                                utilityType = UtilityType.JUGGERNAUT_XL_QNN_PACK,
+                            ),
+                        configurations = emptyList(),
+                    )
+                }
+            setInputData(
+                workDataOf(
+                    KEY_SESSION_ID to SESSION_ID,
+                    KEY_REQUEST_KIND to REQUEST_INITIALIZE,
+                    KEY_DOWNLOADED_SHAS to Json.encodeToString(listOf(juggernautSha)),
+                ),
+            )
+            coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns
+                Result.success(listOf(configAsset, packAsset))
+            coEvery { mockDefaultModelRepository.getDefault(ModelType.IMAGE_EDIT) } returns null
+
+            worker.doWork()
+
+            assertEquals(
+                juggernautSha,
+                fakeUtilityModelRepository.getByUtilityType(UtilityType.JUGGERNAUT_XL_QNN_PACK)?.sha256,
+            )
+            coVerify(exactly = 1) {
+                mockSyncLocalModelRegistryUseCase.invoke(ModelType.IMAGE_EDIT, any(), assignAsDefault = false)
+            }
+            coVerify(exactly = 1) {
+                mockSetDefaultModelUseCase(
+                    ModelType.IMAGE_EDIT,
+                    LocalModelConfigurationId("juggernaut-local-config"),
+                    any(),
+                    any(),
+                    any(),
+                )
+            }
+        }
+
+    @Test
+    @DisplayName("SDXL supersedes an existing SD1.5 IMAGE_GENERATION default when it finalizes")
+    fun sdxlSupersedesSd15ImageGenerationDefault() =
+        runTest {
+            val sdxlSha = "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83"
+            val sd15Sha = "c2f6e92f9d08d69cc673a1003528ac8199274b3c0eaec88d5fbefe5af67bd42b"
+            val sdxlConfigAsset =
+                imageGenerationConfigAsset(
+                    fileName = "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip",
+                    sha256 = sdxlSha,
+                    modelId = "sdxl-qnn",
+                    configId = "sdxl-local-config",
+                )
+            val sd15ExistingAsset =
+                imageGenerationConfigAsset(
+                    fileName = "stable-diffusion-v1-5-Q4_0.gguf",
+                    sha256 = sd15Sha,
+                    modelId = "sd15-qnn",
+                    configId = "sd15-local-config",
+                )
+            setInputData(
+                workDataOf(
+                    KEY_SESSION_ID to SESSION_ID,
+                    KEY_REQUEST_KIND to REQUEST_INITIALIZE,
+                    KEY_DOWNLOADED_SHAS to Json.encodeToString(listOf(sdxlSha)),
+                ),
+            )
+            coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(sdxlConfigAsset))
+            coEvery { mockDefaultModelRepository.getDefault(ModelType.IMAGE_GENERATION) } returns
+                DefaultModelAssignment(
+                    modelType = ModelType.IMAGE_GENERATION,
+                    localConfigId = LocalModelConfigurationId("sd15-local-config"),
+                )
+            coEvery {
+                mockLocalModelRepository.getAssetByConfigId(LocalModelConfigurationId("sd15-local-config"))
+            } returns sd15ExistingAsset
+
+            worker.doWork()
+
+            coVerify(exactly = 1) {
+                mockSetDefaultModelUseCase(
+                    ModelType.IMAGE_GENERATION,
+                    LocalModelConfigurationId("sdxl-local-config"),
+                    any(),
+                    any(),
+                    any(),
+                )
+            }
+        }
+
+    @Test
+    @DisplayName("SD1.5 does not downgrade an existing SDXL IMAGE_GENERATION default")
+    fun sd15DoesNotDowngradeSdxlImageGenerationDefault() =
+        runTest {
+            val sdxlSha = "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83"
+            val sd15Sha = "c2f6e92f9d08d69cc673a1003528ac8199274b3c0eaec88d5fbefe5af67bd42b"
+            val sd15ConfigAsset =
+                imageGenerationConfigAsset(
+                    fileName = "stable-diffusion-v1-5-Q4_0.gguf",
+                    sha256 = sd15Sha,
+                    modelId = "sd15-qnn",
+                    configId = "sd15-local-config",
+                )
+            val sdxlExistingAsset =
+                imageGenerationConfigAsset(
+                    fileName = "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip",
+                    sha256 = sdxlSha,
+                    modelId = "sdxl-qnn",
+                    configId = "sdxl-local-config",
+                )
+            setInputData(
+                workDataOf(
+                    KEY_SESSION_ID to SESSION_ID,
+                    KEY_REQUEST_KIND to REQUEST_INITIALIZE,
+                    KEY_DOWNLOADED_SHAS to Json.encodeToString(listOf(sd15Sha)),
+                ),
+            )
+            coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(sd15ConfigAsset))
+            coEvery { mockDefaultModelRepository.getDefault(ModelType.IMAGE_GENERATION) } returns
+                DefaultModelAssignment(
+                    modelType = ModelType.IMAGE_GENERATION,
+                    localConfigId = LocalModelConfigurationId("sdxl-local-config"),
+                )
+            coEvery {
+                mockLocalModelRepository.getAssetByConfigId(LocalModelConfigurationId("sdxl-local-config"))
+            } returns sdxlExistingAsset
+
+            worker.doWork()
+
+            coVerify(exactly = 0) {
+                mockSetDefaultModelUseCase(ModelType.IMAGE_GENERATION, any(), any(), any(), any())
+            }
+        }
+
     // ===== Helper method =====
+
+    private fun imageGenerationConfigAsset(
+        fileName: String,
+        sha256: String,
+        modelId: String,
+        configId: String,
+    ): LocalModelAsset =
+        createTestAsset(fileName, sha256).let { asset ->
+            asset.copy(
+                metadata = asset.metadata.copy(id = LocalModelId(modelId)),
+                configurations =
+                    listOf(
+                        LocalModelConfiguration(
+                            id = LocalModelConfigurationId(configId),
+                            localModelId = LocalModelId(modelId),
+                            displayName = configId,
+                            temperature = 0.0,
+                            topK = 1,
+                            topP = 1.0,
+                            minP = 0.0,
+                            repetitionPenalty = 1.0,
+                            maxTokens = 0,
+                            contextWindow = 0,
+                            systemPrompt = "",
+                            isSystemPreset = true,
+                            thinkingEnabled = false,
+                            defaultAssignments = listOf(ModelType.IMAGE_GENERATION),
+                        ),
+                    ),
+            )
+        }
 
     private fun createTestAsset(
         localFileName: String,

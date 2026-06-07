@@ -485,6 +485,7 @@ data class LocalModelConfigUi(
     val systemPrompt: String = "",
     val thinkingEnabled: Boolean = false,
     val isSystemPreset: Boolean = false,
+    val defaultAssignments: List<ModelType> = emptyList(),
 )
 
 @Immutable

@@ -49,6 +49,56 @@ class StableDiffusionSd15T2iRedTest {
     }
 
     @Test
+    fun imageGenerationSelectionSurfacesSd15EvenWhenPersistedConfigDropsAssignments() {
+        // The local registry persists configs without defaultAssignments, so the mapper must
+        // backfill the slot from the descriptor or SD1.5/SDXL vanish from the assignment options.
+        val mapper = LocalModelAssetUiMapper()
+        val sd15 = mapper.map(localAsset("sd15", LocalImageGenerationModelRegistry.SD15_QNN_SHA256, assignments = emptyList()))
+
+        assertTrue(sd15.isImageGenerationCapable)
+        assertTrue(sd15.configurations.any { ModelType.IMAGE_GENERATION in it.defaultAssignments })
+
+        val selectable =
+            selectableLocalAssetsForSlot(
+                modelType = ModelType.IMAGE_GENERATION,
+                assets = listOf(sd15),
+            )
+        assertEquals(listOf(sd15), selectable)
+    }
+
+    @Test
+    fun juggernautIsAssignableToBothImageEditAndImageGeneration() {
+        val mapper = LocalModelAssetUiMapper()
+        val juggernaut =
+            mapper.map(localAsset("juggernaut", LocalImageGenerationModelRegistry.JUGGERNAUT_XL_QNN_SHA256, assignments = emptyList()))
+
+        assertEquals(
+            listOf(juggernaut),
+            selectableLocalAssetsForSlot(modelType = ModelType.IMAGE_EDIT, assets = listOf(juggernaut)),
+        )
+        assertEquals(
+            listOf(juggernaut),
+            selectableLocalAssetsForSlot(modelType = ModelType.IMAGE_GENERATION, assets = listOf(juggernaut)),
+        )
+    }
+
+    @Test
+    fun sdxlIsAssignableToBothImageGenerationAndImageEdit() {
+        val mapper = LocalModelAssetUiMapper()
+        val sdxl =
+            mapper.map(localAsset("sdxl", LocalImageGenerationModelRegistry.SDXL_QNN_SHA256, assignments = emptyList()))
+
+        assertEquals(
+            listOf(sdxl),
+            selectableLocalAssetsForSlot(modelType = ModelType.IMAGE_GENERATION, assets = listOf(sdxl)),
+        )
+        assertEquals(
+            listOf(sdxl),
+            selectableLocalAssetsForSlot(modelType = ModelType.IMAGE_EDIT, assets = listOf(sdxl)),
+        )
+    }
+
+    @Test
     fun applyLocalImageAssignmentEligibility_hidesBlockedSd15AndSdxlFromAssignmentOptions() {
         val mapper = LocalModelAssetUiMapper()
         val sd15 = mapper.map(ModelPackTestFixtures.diffusionAsset())
@@ -97,6 +147,7 @@ class StableDiffusionSd15T2iRedTest {
     private fun localAsset(
         id: String,
         sha256: String,
+        assignments: List<ModelType>? = null,
     ): LocalModelAsset {
         val modelId = LocalModelId(id)
         return LocalModelAsset(
@@ -124,6 +175,13 @@ class StableDiffusionSd15T2iRedTest {
                         topK = 40,
                         repetitionPenalty = 1.0,
                         systemPrompt = "",
+                        defaultAssignments =
+                            assignments
+                                ?: if (sha256 == LocalImageGenerationModelRegistry.SD15_QNN_SHA256) {
+                                    listOf(ModelType.IMAGE_GENERATION)
+                                } else {
+                                    emptyList()
+                                },
                     ),
                 ),
         )

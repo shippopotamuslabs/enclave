@@ -26,9 +26,13 @@ EnclaveDiffusionHandle* ensureEngine(const char* model_dir, char* error_out, int
     }
     releaseEngine();
     const bool sdxl = local_image_gen::file_exists_in_dir(dir, "clip_2.mnn");
+    const bool juggernaut =
+        sdxl && local_image_gen::file_exists_in_dir(dir, "vae_encoder.bin");
     EnclaveDiffusionConfig config {};
     config.model_dir = dir.c_str();
-    config.family = sdxl ? ENCLAVE_MODEL_SDXL_QNN : ENCLAVE_MODEL_SD15_QNN;
+    config.family =
+        juggernaut ? ENCLAVE_MODEL_JUGGERNAUT_XL_QNN
+                   : (sdxl ? ENCLAVE_MODEL_SDXL_QNN : ENCLAVE_MODEL_SD15_QNN);
     const std::string runtime = local_image_gen::qnn_runtime_dir();
     const std::string backend = runtime + "/libQnnHtp.so";
     const std::string system = runtime + "/libQnnSystem.so";

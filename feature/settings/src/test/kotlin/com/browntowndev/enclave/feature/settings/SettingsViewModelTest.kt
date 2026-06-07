@@ -34,6 +34,7 @@ import com.browntowndev.enclave.domain.model.config.LocalModelMetadata
 import com.browntowndev.enclave.domain.model.download.DownloadSource
 import com.browntowndev.enclave.domain.model.download.ModelPack
 import com.browntowndev.enclave.domain.model.download.ModelPackCompleteness
+import com.browntowndev.enclave.domain.model.download.ModelPackTestFixtures
 import com.browntowndev.enclave.domain.model.download.ModelPackMember
 import com.browntowndev.enclave.domain.model.download.ModelPackRole
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
@@ -1031,6 +1032,84 @@ class SettingsViewModelTest {
 
             assertTrue(viewModel.uiState.value.home.isApiProvidersSheetOpen)
             assertTrue(viewModel.uiState.value.apiProvidersSheet.isVisible)
+        }
+
+    @Test
+    @DisplayName("SET-007 Gen2 hides Juggernaut from assignment and shows disabled reason")
+    fun set007_disabledJuggernautHiddenFromAssignment() =
+        runTest {
+            val juggernautSha = ModelPackTestFixtures.JUGGERNAUT_DIFFUSION_SHA
+            val juggernautAsset = LocalModelAsset(
+                metadata = LocalModelMetadata(
+                    id = LocalModelId("juggernaut-model"),
+                    displayName = ModelPackTestFixtures.JUGGERNAUT_PACK_DISPLAY,
+                    huggingFaceModelName = "xororz/sdxl-qnn",
+                    remoteFileName = ModelPackTestFixtures.JUGGERNAUT_DIFFUSION_FILE,
+                    localFileName = ModelPackTestFixtures.JUGGERNAUT_DIFFUSION_FILE,
+                    sha256 = juggernautSha,
+                    sizeInBytes = 3_747_687_306L,
+                    modelFileFormat = ModelFileFormat.BIN,
+                    source = DownloadSource.HUGGING_FACE,
+                ),
+                configurations = listOf(
+                    LocalModelConfiguration(
+                        id = com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId(ModelPackTestFixtures.JUGGERNAUT_CONFIG_ID),
+                        localModelId = LocalModelId("juggernaut-model"),
+                        displayName = ModelPackTestFixtures.JUGGERNAUT_PACK_DISPLAY,
+                        maxTokens = 0,
+                        contextWindow = 0,
+                        temperature = 0.0,
+                        topP = 1.0,
+                        topK = 1,
+                        repetitionPenalty = 1.0,
+                        systemPrompt = "",
+                        defaultAssignments = listOf(ModelType.IMAGE_EDIT),
+                    ),
+                ),
+            )
+            val juggernautPack = ModelPack(
+                packId = ModelPackTestFixtures.JUGGERNAUT_PACK_ID,
+                displayName = ModelPackTestFixtures.JUGGERNAUT_PACK_DISPLAY,
+                slot = ModelType.IMAGE_EDIT,
+                members = listOf(ModelPackMember(ModelPackRole.DIFFUSION, juggernautAsset)),
+            )
+            val packRow = ModelPackSettingsRow(
+                pack = juggernautPack,
+                completeness = ModelPackCompleteness(
+                    packId = ModelPackTestFixtures.JUGGERNAUT_PACK_ID,
+                    installedCount = 0,
+                    totalCount = 2,
+                    isComplete = false,
+                    members = emptyList(),
+                ),
+                isDiffusionSoftDeleted = false,
+                areUtilityRegistryEntriesAbsent = true,
+                showDownloadAction = false,
+                disabledReason = "Requires Snapdragon 8 Gen 3+ with QNN.",
+                isEligible = false,
+            )
+
+            coEvery { getModelPacksForSettingsUseCase() } returns listOf(packRow)
+            localModelAssetsStateFlow.value = listOf(juggernautAsset)
+
+            viewModel.onShowModelConfigSheet(show = true)
+            advanceUntilIdle()
+
+            val assignmentOptions =
+                selectableLocalAssetsForSlot(
+                    modelType = ModelType.IMAGE_EDIT,
+                    assets = viewModel.uiState.value.localModelsSheet.models,
+                    modelPacks = viewModel.uiState.value.localModelsSheet.modelPacks,
+                )
+            assertTrue(
+                assignmentOptions.none { asset ->
+                    asset.configurations.any { it.id.value == ModelPackTestFixtures.JUGGERNAUT_CONFIG_ID }
+                },
+            )
+            assertEquals(
+                "Requires Snapdragon 8 Gen 3+ with QNN.",
+                viewModel.uiState.value.localModelsSheet.modelPacks.single().disabledReason,
+            )
         }
 
     @Test

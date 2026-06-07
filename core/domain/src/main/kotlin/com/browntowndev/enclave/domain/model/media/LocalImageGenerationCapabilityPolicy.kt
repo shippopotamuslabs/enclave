@@ -38,7 +38,7 @@ object LocalImageGenerationCapabilityPolicy {
                 LocalImageGenTriState.UNKNOWN -> LocalImageGenTriState.UNKNOWN
                 LocalImageGenTriState.NO -> LocalImageGenTriState.NO
             }
-        val sdxlNpu =
+        val sdxlFamilyNpu =
             when {
                 npuAvailable != LocalImageGenTriState.YES -> LocalImageGenTriState.NO
                 snapdragonTier == SnapdragonTier.GEN3_PLUS -> LocalImageGenTriState.YES
@@ -47,11 +47,12 @@ object LocalImageGenerationCapabilityPolicy {
             }
         val disabledReasons =
             buildMap {
-                if (sdxlNpu == LocalImageGenTriState.NO &&
+                if (sdxlFamilyNpu == LocalImageGenTriState.NO &&
                     npuAvailable == LocalImageGenTriState.YES &&
                     snapdragonTier != SnapdragonTier.GEN3_PLUS
                 ) {
                     put(LocalImageGenerationModelId.SDXL_QNN, SDXL_BLOCKED_REASON)
+                    put(LocalImageGenerationModelId.JUGGERNAUT_XL_QNN, SDXL_BLOCKED_REASON)
                 }
             }
 
@@ -60,7 +61,8 @@ object LocalImageGenerationCapabilityPolicy {
             npuAvailable = npuAvailable,
             sd15NpuSupported = sd15Npu,
             sd15CpuSupported = LocalImageGenTriState.NO,
-            sdxlNpuSupported = sdxlNpu,
+            sdxlNpuSupported = sdxlFamilyNpu,
+            juggernautXlNpuSupported = sdxlFamilyNpu,
             recommendedBackend = LocalImageGenerationBackendKind.QNN_NPU,
             recommendedModelId = LocalImageGenerationModelId.SD15_QNN,
             diagnostics = emptyList(),
@@ -78,6 +80,7 @@ object LocalImageGenerationCapabilityPolicy {
             sd15NpuSupported = LocalImageGenTriState.NO,
             sd15CpuSupported = LocalImageGenTriState.NO,
             sdxlNpuSupported = LocalImageGenTriState.NO,
+            juggernautXlNpuSupported = LocalImageGenTriState.NO,
             recommendedBackend = LocalImageGenerationBackendKind.NONE,
             recommendedModelId = null,
             diagnostics = emptyList(),

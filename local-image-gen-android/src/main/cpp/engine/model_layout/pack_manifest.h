@@ -1,5 +1,7 @@
 #pragma once
 
+#include "engine/include/enclave_diffusion.h"
+
 #include <string>
 #include <vector>
 
@@ -10,6 +12,9 @@ struct PackManifest {
     std::string unet_bin;
     std::string vae_decoder_bin;
     std::string vae_encoder_bin;
+    std::string unet_mnn;
+    std::string vae_decoder_mnn;
+    std::string vae_encoder_mnn;
     std::string tokenizer_json;
     std::string clip_v2_mnn;
     std::string clip_mnn;
@@ -22,8 +27,8 @@ struct PackManifest {
 
 bool loadPackManifest(const std::string& model_dir, PackManifest& out);
 
-bool hasRequiredArtifacts(const PackManifest& manifest);
+bool hasRequiredArtifacts(const PackManifest& manifest, EnclaveModelFamily family);
 
-bool hasImg2ImgEncoder(const PackManifest& manifest);
+bool hasImg2ImgEncoder(const PackManifest& manifest, EnclaveModelFamily family);
 
 }  // namespace enclave::diffusion

@@ -673,7 +673,7 @@ class InitializeModelsUseCaseTest {
         )
 
     @Test
-    fun `DL-002 Gen2 startup result includes SD15 and excludes SDXL`() =
+    fun `DL-002 Gen2 startup result includes SD15 and excludes SDXL and Juggernaut`() =
         runTest {
             every { capabilityPort.getCapabilities() } returns
                 com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilities(
@@ -682,12 +682,13 @@ class InitializeModelsUseCaseTest {
                     sd15NpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
                     sd15CpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.NO,
                     sdxlNpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.NO,
+                    juggernautXlNpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.NO,
                     recommendedBackend = com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind.QNN_NPU,
                     recommendedModelId = com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId.SD15_QNN,
                     diagnostics = emptyList()
                 )
 
-            val parsedCatalog = ModelPackTestFixtures.parsedCatalogWithSdxl()
+            val parsedCatalog = ModelPackTestFixtures.parsedCatalogWithAllThreeImagePacks()
 
             coEvery { modelConfigFetcher.fetchParsedCatalog() } returns Result.success(parsedCatalog)
             coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
@@ -713,14 +714,17 @@ class InitializeModelsUseCaseTest {
             assertTrue(ModelPackTestFixtures.DIFFUSION_SHA in downloadShas)
             // utilityAssets contains the SD15_QNN_PACK member.
             assertTrue(UtilityType.SD15_QNN_PACK in utilityTypes)
-            // Neither models nor utilities contain any sdxl-t2i member.
+            // Neither models nor utilities contain any sdxl-t2i or juggernaut-xl-t2i member.
             assertFalse(ModelPackTestFixtures.SDXL_DIFFUSION_SHA in downloadShas)
             assertFalse(UtilityType.SDXL_QNN_PACK in utilityTypes)
             assertFalse(ModelPackTestFixtures.SDXL_QNN_PACK_SHA in utilityShas)
+            assertFalse(ModelPackTestFixtures.JUGGERNAUT_DIFFUSION_SHA in downloadShas)
+            assertFalse(UtilityType.JUGGERNAUT_XL_QNN_PACK in utilityTypes)
+            assertFalse(ModelPackTestFixtures.JUGGERNAUT_QNN_PACK_SHA in utilityShas)
         }
 
     @Test
-    fun `DL-003 Gen3+ startup result includes SD15 and SDXL eligible pack files`() =
+    fun `DL-003 Gen3+ startup result includes SD15 SDXL and Juggernaut eligible pack files`() =
         runTest {
             every { capabilityPort.getCapabilities() } returns
                 com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilities(
@@ -729,12 +733,13 @@ class InitializeModelsUseCaseTest {
                     sd15NpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
                     sd15CpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.NO,
                     sdxlNpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
+                    juggernautXlNpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
                     recommendedBackend = com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind.QNN_NPU,
                     recommendedModelId = com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId.SD15_QNN,
                     diagnostics = emptyList()
                 )
 
-            val parsedCatalog = ModelPackTestFixtures.parsedCatalogWithSdxl()
+            val parsedCatalog = ModelPackTestFixtures.parsedCatalogWithAllThreeImagePacks()
 
             coEvery { modelConfigFetcher.fetchParsedCatalog() } returns Result.success(parsedCatalog)
             coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
@@ -747,7 +752,11 @@ class InitializeModelsUseCaseTest {
                     allModels = emptyMap(),
                     utilityAssets = emptyList(),
                     modelsToDownload =
-                        listOf(ModelPackTestFixtures.diffusionAsset(), ModelPackTestFixtures.sdxlDiffusionAsset()),
+                        listOf(
+                            ModelPackTestFixtures.diffusionAsset(),
+                            ModelPackTestFixtures.sdxlDiffusionAsset(),
+                            ModelPackTestFixtures.juggernautDiffusionAsset(),
+                        ),
                     scanResult = ModelScanResult(emptyList(), emptyMap(), false),
                 )
 
@@ -756,29 +765,104 @@ class InitializeModelsUseCaseTest {
             val downloadShas = result.modelsToDownload.map { it.metadata.sha256 }.toSet()
             val utilityTypes = utilitySlot.captured.map { it.metadata.utilityType }.toSet()
 
-            // modelsToDownload contains BOTH the sd15-t2i and sdxl-t2i diffusion members.
+            // modelsToDownload contains sd15-t2i, sdxl-t2i, and juggernaut-xl-t2i diffusion members.
             assertTrue(ModelPackTestFixtures.DIFFUSION_SHA in downloadShas)
             assertTrue(ModelPackTestFixtures.SDXL_DIFFUSION_SHA in downloadShas)
-            // utilityAssets contains BOTH SD15_QNN_PACK and SDXL_QNN_PACK.
+            assertTrue(ModelPackTestFixtures.JUGGERNAUT_DIFFUSION_SHA in downloadShas)
+            // utilityAssets contains SD15_QNN_PACK, SDXL_QNN_PACK, and JUGGERNAUT_XL_QNN_PACK.
             assertTrue(UtilityType.SD15_QNN_PACK in utilityTypes)
             assertTrue(UtilityType.SDXL_QNN_PACK in utilityTypes)
+            assertTrue(UtilityType.JUGGERNAUT_XL_QNN_PACK in utilityTypes)
             verify { capabilityPort.getCapabilities() }
         }
 
     @Test
-    fun `DL-004 API assignment suppresses local image pack downloads`() =
+    fun `DL-004 API IMAGE_GENERATION suppresses SD15 and SDXL but not Juggernaut`() =
         runTest {
+            every { capabilityPort.getCapabilities() } returns
+                com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilities(
+                    snapdragonTier = SnapdragonTier.GEN3_PLUS,
+                    npuAvailable = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
+                    sd15NpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
+                    sd15CpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.NO,
+                    sdxlNpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
+                    juggernautXlNpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
+                    recommendedBackend = com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind.QNN_NPU,
+                    recommendedModelId = com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId.SD15_QNN,
+                    diagnostics = emptyList(),
+                )
+
             val apiConfig = mockk<ActiveModelConfiguration> { every { isLocal } returns false }
             coEvery { activeModelProvider.getActiveConfiguration(ModelType.IMAGE_GENERATION) } returns apiConfig
 
-            val parsedCatalog = ModelPackTestFixtures.parsedCatalogWithSdxl()
+            val parsedCatalog = ModelPackTestFixtures.parsedCatalogWithAllThreeImagePacks()
 
             coEvery { modelConfigFetcher.fetchParsedCatalog() } returns Result.success(parsedCatalog)
             coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
 
             val utilitySlot = slot<List<LocalModelAsset>>()
+            val expectedModelsSlot = slot<Map<ModelType, LocalModelAsset>>()
             coEvery {
-                checkModelsUseCase(expectedModels = any(), utilityAssets = capture(utilitySlot))
+                checkModelsUseCase(
+                    expectedModels = capture(expectedModelsSlot),
+                    utilityAssets = capture(utilitySlot),
+                )
+            } returns
+                DownloadModelsResult(
+                    allModels = emptyMap(),
+                    utilityAssets = emptyList(),
+                    modelsToDownload = listOf(ModelPackTestFixtures.juggernautDiffusionAsset()),
+                    scanResult = ModelScanResult(emptyList(), emptyMap(), false),
+                )
+
+            val result = useCase()
+
+            val downloadShas = result.modelsToDownload.map { it.metadata.sha256 }.toSet()
+            val utilityTypes = utilitySlot.captured.map { it.metadata.utilityType }.toSet()
+            val expectedShas = expectedModelsSlot.captured.values.map { it.metadata.sha256 }.toSet()
+
+            // Startup gating passes only the Juggernaut diffusion slot asset to CheckModelsUseCase.
+            assertFalse(ModelPackTestFixtures.DIFFUSION_SHA in expectedShas)
+            assertFalse(ModelPackTestFixtures.SDXL_DIFFUSION_SHA in expectedShas)
+            assertTrue(ModelPackTestFixtures.JUGGERNAUT_DIFFUSION_SHA in expectedShas)
+            assertTrue(ModelPackTestFixtures.JUGGERNAUT_DIFFUSION_SHA in downloadShas)
+            // utilityAssets contains no SD15_QNN_PACK or SDXL_QNN_PACK but keeps JUGGERNAUT_XL_QNN_PACK.
+            assertFalse(UtilityType.SD15_QNN_PACK in utilityTypes)
+            assertFalse(UtilityType.SDXL_QNN_PACK in utilityTypes)
+            assertTrue(UtilityType.JUGGERNAUT_XL_QNN_PACK in utilityTypes)
+        }
+
+    @Test
+    fun `DL-014 API IMAGE_EDIT suppresses Juggernaut but not SD15 or SDXL`() =
+        runTest {
+            every { capabilityPort.getCapabilities() } returns
+                com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilities(
+                    snapdragonTier = SnapdragonTier.GEN3_PLUS,
+                    npuAvailable = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
+                    sd15NpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
+                    sd15CpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.NO,
+                    sdxlNpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
+                    juggernautXlNpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
+                    recommendedBackend = com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind.QNN_NPU,
+                    recommendedModelId = com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId.SD15_QNN,
+                    diagnostics = emptyList(),
+                )
+
+            val apiConfig = mockk<ActiveModelConfiguration> { every { isLocal } returns false }
+            coEvery { activeModelProvider.getActiveConfiguration(ModelType.IMAGE_EDIT) } returns apiConfig
+
+            val parsedCatalog = ModelPackTestFixtures.parsedCatalogWithAllThreeImagePacks()
+
+            coEvery { modelConfigFetcher.fetchParsedCatalog() } returns Result.success(parsedCatalog)
+            coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
+
+            val expectedModelsSlot = slot<Map<ModelType, LocalModelAsset>>()
+            val utilitySlot = slot<List<LocalModelAsset>>()
+            coEvery {
+                checkModelsUseCase(
+                    expectedModels = capture(expectedModelsSlot),
+                    utilityAssets = capture(utilitySlot),
+                )
             } returns
                 DownloadModelsResult(
                     allModels = emptyMap(),
@@ -787,17 +871,19 @@ class InitializeModelsUseCaseTest {
                     scanResult = ModelScanResult(emptyList(), emptyMap(), false),
                 )
 
-            val result = useCase()
+            useCase()
 
-            val downloadShas = result.modelsToDownload.map { it.metadata.sha256 }.toSet()
+            val expectedShas = expectedModelsSlot.captured.values.map { it.metadata.sha256 }.toSet()
             val utilityTypes = utilitySlot.captured.map { it.metadata.utilityType }.toSet()
+            val utilityShas = utilitySlot.captured.map { it.metadata.sha256 }.toSet()
 
-            // modelsToDownload contains no sd15-t2i or sdxl-t2i member.
-            assertFalse(ModelPackTestFixtures.DIFFUSION_SHA in downloadShas)
-            assertFalse(ModelPackTestFixtures.SDXL_DIFFUSION_SHA in downloadShas)
-            // utilityAssets contains no SD15_QNN_PACK or SDXL_QNN_PACK.
-            assertFalse(UtilityType.SD15_QNN_PACK in utilityTypes)
-            assertFalse(UtilityType.SDXL_QNN_PACK in utilityTypes)
+            assertFalse(ModelPackTestFixtures.JUGGERNAUT_DIFFUSION_SHA in expectedShas)
+            assertFalse(UtilityType.JUGGERNAUT_XL_QNN_PACK in utilityTypes)
+            assertFalse(ModelPackTestFixtures.JUGGERNAUT_QNN_PACK_SHA in utilityShas)
+            // Slot map holds one IMAGE_GENERATION default; both image-gen pack utilities remain eligible.
+            assertTrue(ModelPackTestFixtures.SDXL_DIFFUSION_SHA in expectedShas)
+            assertTrue(UtilityType.SD15_QNN_PACK in utilityTypes)
+            assertTrue(UtilityType.SDXL_QNN_PACK in utilityTypes)
         }
 
     @Test
@@ -847,5 +933,52 @@ class InitializeModelsUseCaseTest {
             assertFalse(UtilityType.SD15_QNN_PACK in utilityTypes)
             assertFalse(UtilityType.SDXL_QNN_PACK in utilityTypes)
             assertFalse(ModelPackTestFixtures.SDXL_QNN_PACK_SHA in utilityShas)
+        }
+
+    @Test
+    @DisplayName("DL-015 Gen2 on-disk Juggernaut is not registry-synced at init")
+    fun dl015_gen2OnDiskJuggernautIsNotRegistrySyncedAtInit() =
+        runTest {
+            every { capabilityPort.getCapabilities() } returns
+                com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilities(
+                    snapdragonTier = SnapdragonTier.GEN2,
+                    npuAvailable = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
+                    sd15NpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
+                    sd15CpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.NO,
+                    sdxlNpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.NO,
+                    juggernautXlNpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.NO,
+                    recommendedBackend = com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind.QNN_NPU,
+                    recommendedModelId = com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId.SD15_QNN,
+                    diagnostics = emptyList(),
+                )
+
+            val parsedCatalog = ModelPackTestFixtures.parsedCatalogWithAllThreeImagePacks()
+
+            coEvery { modelConfigFetcher.fetchParsedCatalog() } returns Result.success(parsedCatalog)
+            coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
+            coEvery {
+                checkModelsUseCase(expectedModels = any(), utilityAssets = any())
+            } returns
+                DownloadModelsResult(
+                    allModels = emptyMap(),
+                    utilityAssets = emptyList(),
+                    modelsToDownload = emptyList(),
+                    scanResult = ModelScanResult(emptyList(), emptyMap(), false),
+                )
+
+            useCase()
+
+            coVerify(exactly = 0) {
+                syncLocalModelRegistryUseCase(
+                    ModelType.IMAGE_EDIT,
+                    match { it.metadata.sha256 == ModelPackTestFixtures.JUGGERNAUT_DIFFUSION_SHA },
+                )
+            }
+            coVerify(exactly = 0) {
+                syncLocalModelRegistryUseCase(
+                    ModelType.IMAGE_GENERATION,
+                    match { it.metadata.sha256 == ModelPackTestFixtures.JUGGERNAUT_DIFFUSION_SHA },
+                )
+            }
         }
 }

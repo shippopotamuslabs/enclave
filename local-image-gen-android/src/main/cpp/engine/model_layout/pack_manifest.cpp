@@ -30,6 +30,9 @@ bool loadPackManifest(const std::string& model_dir, PackManifest& out) {
     out.unet_bin = join(model_dir, "unet.bin");
     out.vae_decoder_bin = join(model_dir, "vae_decoder.bin");
     out.vae_encoder_bin = join(model_dir, "vae_encoder.bin");
+    out.unet_mnn = join(model_dir, "unet.mnn");
+    out.vae_decoder_mnn = join(model_dir, "vae_decoder.mnn");
+    out.vae_encoder_mnn = join(model_dir, "vae_encoder.mnn");
     out.tokenizer_json = join(model_dir, "tokenizer.json");
     out.clip_v2_mnn = join(model_dir, "clip_v2.mnn");
     out.clip_mnn = join(model_dir, "clip.mnn");
@@ -41,7 +44,11 @@ bool loadPackManifest(const std::string& model_dir, PackManifest& out) {
     return !model_dir.empty();
 }
 
-bool hasRequiredArtifacts(const PackManifest& manifest) {
+bool hasRequiredArtifacts(const PackManifest& manifest, EnclaveModelFamily family) {
+    if (family == ENCLAVE_MODEL_SD15_MNN) {
+        return isFile(manifest.clip_mnn) && isFile(manifest.unet_mnn) &&
+               isFile(manifest.vae_decoder_mnn) && isFile(manifest.tokenizer_json);
+    }
     if (!isFile(manifest.unet_bin) || !isFile(manifest.vae_decoder_bin) ||
         !isFile(manifest.tokenizer_json)) {
         return false;
@@ -55,8 +62,9 @@ bool hasRequiredArtifacts(const PackManifest& manifest) {
            isFile(manifest.pos_emb_bin);
 }
 
-bool hasImg2ImgEncoder(const PackManifest& manifest) {
-    return isFile(manifest.vae_encoder_bin);
+bool hasImg2ImgEncoder(const PackManifest& manifest, EnclaveModelFamily family) {
+    return isFile(
+        family == ENCLAVE_MODEL_SD15_MNN ? manifest.vae_encoder_mnn : manifest.vae_encoder_bin);
 }
 
 }  // namespace enclave::diffusion

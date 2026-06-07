@@ -39,6 +39,9 @@ enum class UtilityType(
 
     @SerialName("sdxl_qnn_pack")
     SDXL_QNN_PACK("sdxl_qnn_pack"),
+
+    @SerialName("juggernaut_xl_qnn_pack")
+    JUGGERNAUT_XL_QNN_PACK("juggernaut_xl_qnn_pack"),
     ;
 
     /**
@@ -57,6 +60,7 @@ enum class UtilityType(
             QWEN3_TEXT_ENCODER -> "Qwen3 Text Encoder"
             SD15_QNN_PACK -> "SD 1.5 NPU weights"
             SDXL_QNN_PACK -> "SDXL NPU weights"
+            JUGGERNAUT_XL_QNN_PACK -> "Juggernaut XL NPU weights"
         }
 
     companion object {

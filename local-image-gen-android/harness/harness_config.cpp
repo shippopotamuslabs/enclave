@@ -32,6 +32,9 @@ std::string joinPath(const std::string& dir, const char* leaf) {
 
 EnclaveModelFamily detectFamily(const std::string& model_dir) {
     if (pathExists(joinPath(model_dir, "clip_2.mnn"))) {
+        if (pathExists(joinPath(model_dir, "vae_encoder.bin"))) {
+            return ENCLAVE_MODEL_JUGGERNAUT_XL_QNN;
+        }
         return ENCLAVE_MODEL_SDXL_QNN;
     }
     return ENCLAVE_MODEL_SD15_QNN;
@@ -73,7 +76,7 @@ void printUsage(const char* program) {
         << "  --model-dir PATH          Model pack directory (required)\n"
         << "  --qnn-runtime-dir PATH    Directory with libQnnHtp.so / libQnnSystem.so\n"
         << "  --dsp-library-path PATH   Skel search path (defaults to qnn-runtime-dir)\n"
-        << "  --family sd15|sdxl        Override auto-detected family\n"
+        << "  --family sd15|sdxl|juggernaut  Override auto-detected family\n"
         << "  --prompt TEXT\n"
         << "  --negative-prompt TEXT\n"
         << "  --output PATH             Output PNG for generate\n"
@@ -122,6 +125,9 @@ bool parseArgs(int argc, char** argv, HarnessOptions& out, std::string& error) {
             const char* value = argv[++i];
             if (std::strcmp(value, "sdxl") == 0) {
                 out.family = ENCLAVE_MODEL_SDXL_QNN;
+                out.family_explicit = true;
+            } else if (std::strcmp(value, "juggernaut") == 0) {
+                out.family = ENCLAVE_MODEL_JUGGERNAUT_XL_QNN;
                 out.family_explicit = true;
             } else if (std::strcmp(value, "sd15") == 0) {
                 out.family = ENCLAVE_MODEL_SD15_QNN;
@@ -265,7 +271,7 @@ enclave::diffusion::QnnRuntimePaths buildQnnPaths(const HarnessOptions& options)
 #endif
     paths.dsp_library_path = options.dsp_library_path;
     paths.htp_stub_library =
-        options.family == ENCLAVE_MODEL_SDXL_QNN ? "libQnnHtpV79Stub.so" : "libQnnHtpV73Stub.so";
+        options.family == ENCLAVE_MODEL_SD15_QNN ? "libQnnHtpV73Stub.so" : "libQnnHtpV79Stub.so";
     return paths;
 }
 

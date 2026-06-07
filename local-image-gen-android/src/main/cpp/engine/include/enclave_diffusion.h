@@ -21,6 +21,7 @@ typedef enum {
     ENCLAVE_MODEL_SD15_QNN = 0,
     ENCLAVE_MODEL_SDXL_QNN = 1,
     ENCLAVE_MODEL_SD15_MNN = 2,
+    ENCLAVE_MODEL_JUGGERNAUT_XL_QNN = 3,
 } EnclaveModelFamily;
 
 typedef struct EnclaveDiffusionHandle EnclaveDiffusionHandle;
@@ -70,6 +71,8 @@ int enclave_diffusion_generate(
 void enclave_diffusion_cancel(EnclaveDiffusionHandle* handle);
 
 void enclave_diffusion_on_trim_memory(EnclaveDiffusionHandle* handle, int level);
+
+int enclave_diffusion_mnn_available(void);
 
 #ifdef __cplusplus
 }

@@ -55,9 +55,15 @@ int main(int argc, char** argv) {
         return 2;
     }
 
+    const char* family_label = "sd15";
+    if (options.family == ENCLAVE_MODEL_SDXL_QNN) {
+        family_label = "sdxl";
+    } else if (options.family == ENCLAVE_MODEL_JUGGERNAUT_XL_QNN) {
+        family_label = "juggernaut";
+    }
     std::cout << "enclave-diffusion-harness\n"
               << "  model_dir=" << options.model_dir << '\n'
-              << "  family=" << (options.family == ENCLAVE_MODEL_SDXL_QNN ? "sdxl" : "sd15") << '\n'
+              << "  family=" << family_label << '\n'
               << "  step=" << options.step << '\n'
               << std::flush;
 

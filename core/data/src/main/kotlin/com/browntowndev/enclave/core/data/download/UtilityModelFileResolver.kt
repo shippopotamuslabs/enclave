@@ -4,6 +4,7 @@ import android.content.Context
 import com.browntowndev.enclave.domain.model.config.LocalModelMetadata
 import com.browntowndev.enclave.domain.model.config.UtilityType
 import com.browntowndev.enclave.domain.model.download.ModelConfig
+import com.browntowndev.enclave.domain.model.download.JuggernautXlQnnPackCatalog
 import com.browntowndev.enclave.domain.model.download.SdxlQnnPackCatalog
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationPaths
 import com.browntowndev.enclave.domain.port.download.HashingPort
@@ -36,6 +37,10 @@ class UtilityModelFileResolver
                     val packDir = File(modelsDir, LocalImageGenerationPaths.SDXL_QNN_SUBDIR)
                     return@withContext packDir.takeIf(LocalImageGenerationPaths::hasSdxlQnnArtifacts)?.absolutePath
                 }
+                if (utilityType == UtilityType.JUGGERNAUT_XL_QNN_PACK) {
+                    val packDir = File(modelsDir, LocalImageGenerationPaths.JUGGERNAUT_XL_QNN_SUBDIR)
+                    return@withContext packDir.takeIf(LocalImageGenerationPaths::hasJuggernautXlQnnArtifacts)?.absolutePath
+                }
                 val file = safeFile(modelsDir, metadata.localFileName)
                 if (file.matches(metadata.sizeInBytes, metadata.sha256)) {
                     file.absolutePath
@@ -52,6 +57,13 @@ class UtilityModelFileResolver
                     val packDir = File(modelsDir, LocalImageGenerationPaths.SDXL_QNN_SUBDIR)
                     packDir
                         .takeIf(LocalImageGenerationPaths::hasSdxlQnnArtifacts)
+                        ?.absolutePath
+                        ?.let { return@withContext it }
+                }
+                JuggernautXlQnnPackCatalog.findBySha256(metadata.sha256)?.let {
+                    val packDir = File(modelsDir, LocalImageGenerationPaths.JUGGERNAUT_XL_QNN_SUBDIR)
+                    packDir
+                        .takeIf(LocalImageGenerationPaths::hasJuggernautXlQnnArtifacts)
                         ?.absolutePath
                         ?.let { return@withContext it }
                 }

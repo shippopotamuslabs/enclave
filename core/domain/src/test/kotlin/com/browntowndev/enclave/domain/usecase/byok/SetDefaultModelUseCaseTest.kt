@@ -578,4 +578,114 @@ class SetDefaultModelUseCaseTest {
 
             assertEquals(SetDefaultModelUseCaseImpl.IMG2IMG_ENCODER_MISSING_MESSAGE, error.message)
         }
+
+    @Test
+    fun `SET-008 direct Gen2 Juggernaut assignment throws exact IllegalArgumentException`() =
+        runTest {
+            val configId = LocalModelConfigurationId(ModelPackTestFixtures.JUGGERNAUT_CONFIG_ID)
+            coEvery { localModelRepository.getAssetByConfigId(configId) } returns
+                localAsset(configId, ModelPackTestFixtures.JUGGERNAUT_DIFFUSION_SHA)
+
+            every { capabilityPort.getCapabilities() } returns
+                com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilities(
+                    npuAvailable = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
+                    sd15NpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
+                    sd15CpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.NO,
+                    sdxlNpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.NO,
+                    juggernautXlNpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.NO,
+                    recommendedBackend = com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind.QNN_NPU,
+                    recommendedModelId = com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId.SD15_QNN,
+                    diagnostics = emptyList(),
+                    disabledReasonsByModelId =
+                        mapOf(
+                            com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId.JUGGERNAUT_XL_QNN to
+                                "Requires Snapdragon 8 Gen 3+ with QNN.",
+                        ),
+                )
+
+            val error =
+                assertFailsWith<IllegalArgumentException> {
+                    useCase(ModelType.IMAGE_EDIT, localConfigId = configId, apiConfigId = null)
+                }
+
+            assertEquals("Requires Snapdragon 8 Gen 3+ with QNN.", error.message)
+        }
+
+    @Test
+    fun `SET-009 direct Gen3 Juggernaut IMAGE_EDIT assignment succeeds when pack complete`() =
+        runTest {
+            val configId = LocalModelConfigurationId(ModelPackTestFixtures.JUGGERNAUT_CONFIG_ID)
+            val modelDir = kotlin.io.path.createTempDirectory().toFile()
+            java.io.File(modelDir, "vae_encoder.bin").writeText("encoder")
+            coEvery { localModelRepository.getAssetByConfigId(configId) } returns
+                localAsset(configId, ModelPackTestFixtures.JUGGERNAUT_DIFFUSION_SHA)
+
+            every { capabilityPort.getCapabilities() } returns
+                com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilities(
+                    npuAvailable = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
+                    sd15NpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
+                    sd15CpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.NO,
+                    sdxlNpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
+                    juggernautXlNpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
+                    recommendedBackend = com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind.QNN_NPU,
+                    recommendedModelId = com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId.SD15_QNN,
+                    diagnostics = emptyList(),
+                )
+
+            coEvery { verifyModelPackCompleteness(ModelPackTestFixtures.JUGGERNAUT_PACK_ID) } returns
+                Result.success(
+                    ModelPackCompleteness(
+                        packId = ModelPackTestFixtures.JUGGERNAUT_PACK_ID,
+                        installedCount = 2,
+                        totalCount = 2,
+                        isComplete = true,
+                        members = emptyList(),
+                    ),
+                )
+            coEvery { localStableDiffusionTargetResolver.resolveLaunchDir(configId) } returns modelDir.absolutePath
+
+            useCase(ModelType.IMAGE_EDIT, localConfigId = configId, apiConfigId = null)
+
+            assertEquals(configId, repository.getDefault(ModelType.IMAGE_EDIT)?.localConfigId)
+        }
+
+    @Test
+    fun `SET-010 Juggernaut IMAGE_EDIT assignment without vae_encoder throws encoder message`() =
+        runTest {
+            val configId = LocalModelConfigurationId(ModelPackTestFixtures.JUGGERNAUT_CONFIG_ID)
+            val modelDir = kotlin.io.path.createTempDirectory().toFile()
+            coEvery { localModelRepository.getAssetByConfigId(configId) } returns
+                localAsset(configId, ModelPackTestFixtures.JUGGERNAUT_DIFFUSION_SHA)
+
+            every { capabilityPort.getCapabilities() } returns
+                com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilities(
+                    npuAvailable = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
+                    sd15NpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
+                    sd15CpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.NO,
+                    sdxlNpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
+                    juggernautXlNpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
+                    recommendedBackend = com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind.QNN_NPU,
+                    recommendedModelId = com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId.SD15_QNN,
+                    diagnostics = emptyList(),
+                )
+
+            coEvery { verifyModelPackCompleteness(ModelPackTestFixtures.JUGGERNAUT_PACK_ID) } returns
+                Result.success(
+                    ModelPackCompleteness(
+                        packId = ModelPackTestFixtures.JUGGERNAUT_PACK_ID,
+                        installedCount = 2,
+                        totalCount = 2,
+                        isComplete = true,
+                        members = emptyList(),
+                    ),
+                )
+            coEvery { localStableDiffusionTargetResolver.resolveLaunchDir(configId) } returns modelDir.absolutePath
+
+            val error =
+                assertFailsWith<IllegalArgumentException> {
+                    useCase(ModelType.IMAGE_EDIT, localConfigId = configId, apiConfigId = null)
+                }
+
+            assertEquals(SetDefaultModelUseCaseImpl.IMG2IMG_ENCODER_MISSING_MESSAGE, error.message)
+        }
 }

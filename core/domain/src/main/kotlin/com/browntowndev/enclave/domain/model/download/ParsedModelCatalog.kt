@@ -30,31 +30,51 @@ data class DownloadCatalogSlice(
 
 fun filterForDownload(
     catalog: ParsedModelCatalog,
-    imageGenerationIsApi: Boolean,
+    suppressImageGenerationSlot: Boolean,
+    suppressImageEditSlot: Boolean = false,
 ): DownloadCatalogSlice {
-    val imageGenPacks = catalog.packs.filter { it.slot == ModelType.IMAGE_GENERATION }
     val imageGenPackMemberShas = catalog.packMemberSha256sForSlot(ModelType.IMAGE_GENERATION)
+    val imageEditPackMemberShas = catalog.packMemberSha256sForSlot(ModelType.IMAGE_EDIT)
     val suppressedPackIds =
-        if (imageGenerationIsApi) {
-            imageGenPacks.map { it.packId }.toSet()
-        } else {
-            emptySet()
+        buildSet {
+            if (suppressImageGenerationSlot) {
+                catalog.packs
+                    .filter { it.slot == ModelType.IMAGE_GENERATION }
+                    .forEach { add(it.packId) }
+            }
+            if (suppressImageEditSlot) {
+                catalog.packs
+                    .filter { it.slot == ModelType.IMAGE_EDIT }
+                    .forEach { add(it.packId) }
+            }
         }
 
     val slotAssignments = mutableMapOf<ModelType, LocalModelAsset>()
     val utilityAssets = mutableListOf<LocalModelAsset>()
 
     for (asset in catalog.assets) {
-        val isImageGenPackMember = asset.metadata.sha256 in imageGenPackMemberShas
+        val sha = asset.metadata.sha256
+        val isImageGenPackMember = sha in imageGenPackMemberShas
+        val isImageEditPackMember = sha in imageEditPackMemberShas
         if (asset.metadata.utilityType != null) {
-            if (!isImageGenPackMember) {
+            val includeUtility =
+                when {
+                    isImageGenPackMember -> !suppressImageGenerationSlot
+                    isImageEditPackMember -> !suppressImageEditSlot
+                    else -> true
+                }
+            if (includeUtility) {
                 utilityAssets += asset
             }
         } else {
             for (config in asset.configurations) {
                 for (modelType in config.defaultAssignments) {
                     val includeSlot =
-                        modelType != ModelType.IMAGE_GENERATION || !imageGenerationIsApi
+                        when (modelType) {
+                            ModelType.IMAGE_GENERATION -> !suppressImageGenerationSlot
+                            ModelType.IMAGE_EDIT -> !suppressImageEditSlot
+                            else -> true
+                        }
                     if (includeSlot) {
                         slotAssignments[modelType] = asset
                     }

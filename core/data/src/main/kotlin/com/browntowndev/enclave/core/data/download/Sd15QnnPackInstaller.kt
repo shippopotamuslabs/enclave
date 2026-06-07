@@ -4,6 +4,7 @@ import android.content.Context
 import com.browntowndev.enclave.domain.model.config.LocalModelMetadata
 import com.browntowndev.enclave.domain.model.config.UtilityType
 import com.browntowndev.enclave.domain.model.download.ModelConfig
+import com.browntowndev.enclave.domain.model.download.JuggernautXlQnnPackCatalog
 import com.browntowndev.enclave.domain.model.download.Sd15QnnPackCatalog
 import com.browntowndev.enclave.domain.model.download.SdxlQnnPackCatalog
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationPaths
@@ -15,6 +16,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.InputStream
+import java.io.OutputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 import java.util.zip.ZipInputStream
@@ -31,6 +33,7 @@ class Sd15QnnPackInstaller
         companion object {
             private const val TAG = "Sd15QnnPackInstaller"
             private const val PROGRESS_REPORT_INTERVAL_BYTES = 8 * 1024 * 1024L
+            private const val COPY_BUFFER_BYTES = 1 * 1024 * 1024
         }
 
         override suspend fun installIfNeeded(
@@ -56,6 +59,15 @@ class Sd15QnnPackInstaller
                             label = "SDXL",
                             progressListener = progressListener,
                             artifactsPresent = LocalImageGenerationPaths::hasSdxlQnnArtifacts,
+                        )
+                    UtilityType.JUGGERNAUT_XL_QNN_PACK ->
+                        installQnnPack(
+                            metadata = metadata,
+                            packSubdir = LocalImageGenerationPaths.JUGGERNAUT_XL_QNN_SUBDIR,
+                            variantLookup = JuggernautXlQnnPackCatalog::findBySha256,
+                            label = "Juggernaut XL",
+                            progressListener = progressListener,
+                            artifactsPresent = LocalImageGenerationPaths::hasJuggernautXlQnnArtifacts,
                         )
                     else -> false
                 }
@@ -157,33 +169,71 @@ class Sd15QnnPackInstaller
             totalBytes: Long,
             progressListener: QnnPackInstallProgressListener?,
         ) {
-            var extractedBytes = 0L
-            var lastReportedBytes = 0L
+            val progress = ZipExtractionProgress()
             ZipInputStream(input).use { zip ->
                 var entry: ZipEntry? = zip.nextEntry
                 while (entry != null) {
-                    val outFile = resolveZipEntry(targetDir, entry)
-                    if (entry.isDirectory) {
-                        outFile.mkdirs()
-                    } else {
-                        outFile.parentFile?.mkdirs()
-                        outFile.outputStream().use { out ->
-                            val copied = zip.copyTo(out)
-                            extractedBytes += copied
-                            if (progressListener != null &&
-                                extractedBytes - lastReportedBytes >= PROGRESS_REPORT_INTERVAL_BYTES
-                            ) {
-                                progressListener.onProgress(extractedBytes, totalBytes)
-                                lastReportedBytes = extractedBytes
-                            }
-                        }
-                    }
+                    writeZipEntry(zip, targetDir, entry, totalBytes, progressListener, progress)
                     zip.closeEntry()
                     entry = zip.nextEntry
                 }
             }
-            progressListener?.onProgress(extractedBytes.coerceAtMost(totalBytes), totalBytes)
+            progressListener?.onProgress(progress.extractedBytes.coerceAtMost(totalBytes), totalBytes)
         }
+
+        private suspend fun writeZipEntry(
+            zip: ZipInputStream,
+            targetDir: File,
+            entry: ZipEntry,
+            totalBytes: Long,
+            progressListener: QnnPackInstallProgressListener?,
+            progress: ZipExtractionProgress,
+        ) {
+            val outFile = resolveZipEntry(targetDir, entry)
+            if (entry.isDirectory) {
+                outFile.mkdirs()
+                return
+            }
+            outFile.parentFile?.mkdirs()
+            outFile.outputStream().buffered().use { out ->
+                copyZipEntryBytes(zip, out, totalBytes, progressListener, progress)
+            }
+        }
+
+        private suspend fun copyZipEntryBytes(
+            zip: ZipInputStream,
+            out: OutputStream,
+            totalBytes: Long,
+            progressListener: QnnPackInstallProgressListener?,
+            progress: ZipExtractionProgress,
+        ) {
+            // Copy in chunks so a single large entry (e.g. multi-GB unet.bin)
+            // reports incremental progress instead of jumping at entry boundaries.
+            val buffer = ByteArray(COPY_BUFFER_BYTES)
+            while (true) {
+                val read = zip.read(buffer)
+                if (read < 0) break
+                out.write(buffer, 0, read)
+                progress.extractedBytes += read
+                reportExtractionProgress(progressListener, progress, totalBytes)
+            }
+        }
+
+        private suspend fun reportExtractionProgress(
+            progressListener: QnnPackInstallProgressListener?,
+            progress: ZipExtractionProgress,
+            totalBytes: Long,
+        ) {
+            if (progressListener == null) return
+            if (progress.extractedBytes - progress.lastReportedBytes < PROGRESS_REPORT_INTERVAL_BYTES) return
+            progressListener.onProgress(progress.extractedBytes.coerceAtMost(totalBytes), totalBytes)
+            progress.lastReportedBytes = progress.extractedBytes
+        }
+
+        private class ZipExtractionProgress(
+            var extractedBytes: Long = 0L,
+            var lastReportedBytes: Long = 0L,
+        )
 
         private fun estimateUncompressedZipBytes(zipFile: File): Long =
             runCatching {

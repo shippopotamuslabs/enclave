@@ -242,6 +242,88 @@ class ModelPackVerifierImplTest {
         )
     }
 
+    @Test
+    @DisplayName("DL-008 ASG-001 SD15 SDXL and Juggernaut packs verify complete simultaneously")
+    fun dl008_asg001_allThreeQnnPacksVerifyComplete() =
+        runTest {
+            val modelsDir = File(appContext.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
+            val sd15Dir = File(modelsDir, LocalImageGenerationPaths.SD15_QNN_SUBDIR).apply { mkdirs() }
+            listOf("clip_v2.mnn", "token_emb.bin", "pos_emb.bin", "unet.bin", "vae_decoder.bin", "tokenizer.json").forEach { name ->
+                File(sd15Dir, name).writeBytes(byteArrayOf(1))
+            }
+            val sdxlDir = File(modelsDir, LocalImageGenerationPaths.SDXL_QNN_SUBDIR).apply { mkdirs() }
+            LocalImageGenerationPaths.REQUIRED_SDXL_QNN_FILES.forEach { name ->
+                File(sdxlDir, name).writeBytes(byteArrayOf(1))
+            }
+            val juggernautDir = File(modelsDir, LocalImageGenerationPaths.JUGGERNAUT_XL_QNN_SUBDIR).apply { mkdirs() }
+            LocalImageGenerationPaths.REQUIRED_SDXL_QNN_FILES.forEach { name ->
+                File(juggernautDir, name).writeBytes(byteArrayOf(1))
+            }
+            File(juggernautDir, "vae_encoder.bin").writeBytes(byteArrayOf(1))
+
+            assertTrue(verifier.verifyPack(sd15QnnPack(), ModelPackVerificationDepth.SHA256_INTEGRITY).isComplete)
+            assertTrue(verifier.verifyPack(sdxlQnnPack(), ModelPackVerificationDepth.SHA256_INTEGRITY).isComplete)
+            assertTrue(verifier.verifyPack(juggernautQnnPack(), ModelPackVerificationDepth.SHA256_INTEGRITY).isComplete)
+        }
+
+    @Test
+    @DisplayName("DL-017 Juggernaut IMAGE_EDIT pack requires vae_encoder.bin for completeness")
+    fun dl017_juggernautImageEditPackRequiresVaeEncoder() =
+        runTest {
+            val modelsDir = File(appContext.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
+            val juggernautDir = File(modelsDir, LocalImageGenerationPaths.JUGGERNAUT_XL_QNN_SUBDIR).apply { mkdirs() }
+            LocalImageGenerationPaths.REQUIRED_SDXL_QNN_FILES.forEach { name ->
+                File(juggernautDir, name).writeBytes(byteArrayOf(1))
+            }
+
+            assertFalse(verifier.verifyPack(juggernautQnnPack(), ModelPackVerificationDepth.SHA256_INTEGRITY).isComplete)
+        }
+
+    @Test
+    @DisplayName("DL-018 Juggernaut completes when artifacts incl vae_encoder live in a nested subdir")
+    fun dl018_juggernautCompletesWithNestedArtifacts() =
+        runTest {
+            val modelsDir = File(appContext.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
+            // QNN packs may extract into a nested artifact folder; vae_encoder.bin sits there too.
+            val nestedDir =
+                File(
+                    File(modelsDir, LocalImageGenerationPaths.JUGGERNAUT_XL_QNN_SUBDIR),
+                    "juggernaut_qnn2.28_8gen3",
+                ).apply { mkdirs() }
+            LocalImageGenerationPaths.REQUIRED_SDXL_QNN_FILES.forEach { name ->
+                File(nestedDir, name).writeBytes(byteArrayOf(1))
+            }
+            File(nestedDir, "vae_encoder.bin").writeBytes(byteArrayOf(1))
+
+            assertTrue(verifier.verifyPack(juggernautQnnPack(), ModelPackVerificationDepth.SHA256_INTEGRITY).isComplete)
+        }
+
+    private fun juggernautQnnPack(): ModelPack {
+        val asset =
+            LocalModelAsset(
+                metadata =
+                    LocalModelMetadata(
+                        id = LocalModelId("juggernaut-qnn-pack"),
+                        displayName = "Juggernaut XL NPU weights",
+                        huggingFaceModelName = "xororz/sdxl-qnn",
+                        remoteFileName = "juggernaut_qnn2.28_8gen3.zip",
+                        localFileName = "juggernaut_qnn2.28_8gen3.zip",
+                        sha256 = "unused-after-install",
+                        sizeInBytes = 3_747_687_306L,
+                        modelFileFormat = ModelFileFormat.BIN,
+                        source = DownloadSource.HUGGING_FACE,
+                        utilityType = UtilityType.JUGGERNAUT_XL_QNN_PACK,
+                    ),
+                configurations = emptyList(),
+            )
+        return ModelPack(
+            packId = ModelPackTestFixtures.JUGGERNAUT_PACK_ID,
+            displayName = ModelPackTestFixtures.JUGGERNAUT_PACK_DISPLAY,
+            slot = ModelType.IMAGE_EDIT,
+            members = listOf(ModelPackMember(ModelPackRole.TEXT_ENCODER, asset)),
+        )
+    }
+
     private fun sdxlQnnPack(): ModelPack {
         val asset =
             LocalModelAsset(

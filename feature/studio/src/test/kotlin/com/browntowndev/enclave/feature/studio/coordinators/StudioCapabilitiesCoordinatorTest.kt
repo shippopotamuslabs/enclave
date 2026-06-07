@@ -83,4 +83,37 @@ class StudioCapabilitiesCoordinatorTest {
             assertEquals("1024x1024", updated.imageResolution)
             assertEquals(8, updated.diffusionSteps)
         }
+
+    @Test
+    fun `STU-011 switching RealVis SDXL to Juggernaut clamps stale SDXL steps to Juggernaut defaults`() =
+        runTest {
+            val settingsFlow: MutableStateFlow<GenerationSettings> = MutableStateFlow(
+                ImageGenerationSettings(
+                    imageResolution = "1024x1024",
+                    diffusionSteps = 8,
+                ),
+            )
+            val juggernautCaps = ProviderCapabilities(
+                supportedAspectRatios = emptyList(),
+                supportedImageQualities = emptyList(),
+                supportedImageResolutions = listOf("1024x1024"),
+                supportedImageSteps = listOf(20, 22, 24, 26, 28, 30),
+                defaultImageStep = 24,
+                supportedVideoQualities = emptyList(),
+                supportedVideoResolutions = emptyList(),
+                supportedVideoDurations = emptyList(),
+                supportsVideo = false,
+            )
+
+            coordinator.observe(
+                scope = this,
+                settings = settingsFlow,
+                capabilitiesFlow = flowOf(juggernautCaps),
+            )
+            advanceUntilIdle()
+
+            val updated = settingsFlow.value as ImageGenerationSettings
+            assertEquals("1024x1024", updated.imageResolution)
+            assertEquals(24, updated.diffusionSteps)
+        }
 }
