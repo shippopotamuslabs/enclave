@@ -14,6 +14,7 @@ import com.browntowndev.enclave.feature.chat.ChatMessage
 import com.browntowndev.enclave.feature.chat.ChatMessageProjector
 import com.browntowndev.enclave.feature.chat.ChatModeUi
 import com.browntowndev.enclave.feature.chat.ChatUiState
+import com.browntowndev.enclave.feature.chat.LiveVoiceUiState
 import com.browntowndev.enclave.feature.chat.IndicatorState
 import com.browntowndev.enclave.feature.chat.MessageRole
 import com.browntowndev.enclave.feature.chat.ResponseHapticPhase
@@ -57,6 +58,8 @@ class ChatUiStateReducer
             val artifactExportSheet: ArtifactExportSheetState,
             val chatId: ChatId?,
             val modelDisplayNames: Map<ModelType, String>,
+            val liveVoiceState: LiveVoiceUiState = LiveVoiceUiState.Idle,
+            val hasLiveVoiceProviderAssigned: Boolean = false,
         )
 
         data class ReduceResult(
@@ -157,6 +160,15 @@ class ChatUiStateReducer
                     photoAttachmentMaxItems = params.attachmentPolicy.maxItems,
                     photoAttachmentDisabledReason = params.attachmentPolicy.disabledReason,
                     selectedMode = params.selectedMode,
+                    selectedModeModelName =
+                        resolveModelNameForMode(
+                            mode = params.selectedMode,
+                            modelDisplayNames = params.modelDisplayNames,
+                        ),
+                    modeModelNames =
+                        ChatModeUi.entries.associateWith { mode ->
+                            resolveModelNameForMode(mode, params.modelDisplayNames)
+                        },
                     isGlobalInferenceBlocked = params.isGlobalInferenceBlocked,
                     hapticResponse = params.settings.hapticResponse,
                     responseHapticPhase = responseHapticPhase,
@@ -169,6 +181,8 @@ class ChatUiStateReducer
                     activeToolCallBanner = activeToolCallBanner,
                     backgroundInferenceEnabled = params.settings.backgroundInferenceEnabled,
                     hasTtsProviderAssigned = params.hasTtsProviderAssigned,
+                    liveVoiceState = params.liveVoiceState,
+                    hasLiveVoiceProviderAssigned = params.hasLiveVoiceProviderAssigned,
                     isPlayingTts = params.isPlayingTts,
                     isLoadingTts = params.isLoadingTts,
                     isPausedTts = params.isPausedTts,
@@ -232,6 +246,20 @@ class ChatUiStateReducer
                     visibleTextLength = message.visibleAnswerTextLength(),
                 )
             }
+
+        private fun resolveModelNameForMode(
+            mode: ChatModeUi,
+            modelDisplayNames: Map<ModelType, String>,
+        ): String? {
+            val modelType =
+                when (mode) {
+                    ChatModeUi.FAST -> ModelType.FAST
+                    ChatModeUi.THINKING -> ModelType.THINKING
+                    // Council fans out to up to 4 models; there is no single name to show.
+                    ChatModeUi.COUNCIL -> return null
+                }
+            return modelDisplayNames[modelType]?.takeIf { it.isNotEmpty() }
+        }
 
         private fun ChatMessage.visibleAnswerTextLength(): Int {
             val answerTextLength =

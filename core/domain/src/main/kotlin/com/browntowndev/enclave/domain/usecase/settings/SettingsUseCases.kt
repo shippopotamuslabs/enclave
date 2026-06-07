@@ -99,6 +99,12 @@ interface SettingsTtsUseCases {
     val deleteTtsProvider: DeleteTtsProviderUseCase
 }
 
+interface SettingsLiveVoiceUseCases {
+    val getLiveVoiceProviders: GetLiveVoiceProvidersUseCase
+    val saveLiveVoiceProvider: SaveLiveVoiceProviderUseCase
+    val deleteLiveVoiceProvider: DeleteLiveVoiceProviderUseCase
+}
+
 interface SettingsMediaUseCases {
     val getMediaProviders: GetMediaProvidersUseCase
     val saveMediaProvider: SaveMediaProviderUseCase
@@ -143,6 +149,7 @@ interface SettingsUseCases {
     val assignments: SettingsAssignmentUseCases
     val deletion: SettingsDeletionUseCases
     val tts: SettingsTtsUseCases
+    val liveVoice: SettingsLiveVoiceUseCases
     val media: SettingsMediaUseCases
     val auth: SettingsAuthUseCases
     val memories: SettingsMemoriesUseCases

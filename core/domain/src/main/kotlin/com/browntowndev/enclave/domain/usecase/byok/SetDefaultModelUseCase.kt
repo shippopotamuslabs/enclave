@@ -2,6 +2,7 @@ package com.browntowndev.enclave.domain.usecase.byok
 
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.config.TtsProviderId
 import com.browntowndev.enclave.domain.model.download.ModelPackRole
@@ -33,6 +34,7 @@ interface SetDefaultModelUseCase {
         apiConfigId: ApiModelConfigurationId?,
         ttsProviderId: TtsProviderId? = null,
         mediaProviderId: MediaProviderId? = null,
+        liveVoiceProviderId: LiveVoiceProviderId? = null,
     )
 }
 
@@ -61,6 +63,7 @@ class SetDefaultModelUseCaseImpl
             apiConfigId: ApiModelConfigurationId?,
             ttsProviderId: TtsProviderId?,
             mediaProviderId: MediaProviderId?,
+            liveVoiceProviderId: LiveVoiceProviderId?,
         ) {
             if (modelType in CHAT_SLOT_TYPES && apiConfigId != null) {
                 val config =
@@ -94,11 +97,20 @@ class SetDefaultModelUseCaseImpl
             }
 
             if (modelType == ModelType.TTS) {
-                require(localConfigId == null && apiConfigId == null && mediaProviderId == null) {
+                require(localConfigId == null && apiConfigId == null && mediaProviderId == null && liveVoiceProviderId == null) {
                     "TTS slot is TTS-only."
                 }
                 requireNotNull(ttsProviderId) {
                     "TTS slot requires a TTS provider assignment."
+                }
+            }
+
+            if (modelType == ModelType.LIVE_VOICE) {
+                require(localConfigId == null && apiConfigId == null && ttsProviderId == null && mediaProviderId == null) {
+                    "Live Voice slot is LIVE_VOICE-only."
+                }
+                requireNotNull(liveVoiceProviderId) {
+                    "Live Voice slot requires a Live Voice provider assignment."
                 }
             }
 
@@ -135,7 +147,14 @@ class SetDefaultModelUseCaseImpl
                 }
             }
 
-            defaultModelRepository.setDefault(modelType, localConfigId, apiConfigId, ttsProviderId, mediaProviderId)
+            defaultModelRepository.setDefault(
+                modelType,
+                localConfigId,
+                apiConfigId,
+                ttsProviderId,
+                mediaProviderId,
+                liveVoiceProviderId,
+            )
         }
 
         private suspend fun validateLocalOrMediaImageSlot(

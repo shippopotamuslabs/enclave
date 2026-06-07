@@ -3,11 +3,13 @@ package com.browntowndev.enclave.feature.settings
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.usecase.settings.SettingsApiProviderUseCases
 import com.browntowndev.enclave.domain.usecase.settings.SettingsMediaUseCases
+import com.browntowndev.enclave.domain.usecase.settings.SettingsLiveVoiceUseCases
 import com.browntowndev.enclave.domain.usecase.settings.SettingsTtsUseCases
 
 internal fun createSettingsApiProvidersDelegate(
     apiProviderUseCases: SettingsApiProviderUseCases,
     ttsUseCases: SettingsTtsUseCases,
+    liveVoiceUseCases: SettingsLiveVoiceUseCases,
     mediaUseCases: SettingsMediaUseCases,
     deletionHelper: SettingsDeletionHelper,
     apiModelAssetUiMapper: ApiModelAssetUiMapper = ApiModelAssetUiMapper(),
@@ -25,6 +27,12 @@ internal fun createSettingsApiProvidersDelegate(
             TtsProvidersCoordinator(
                 apiProviderUseCases = apiProviderUseCases,
                 ttsUseCases = ttsUseCases,
+                errorHandler = errorHandler,
+            ),
+        liveVoiceCoordinator =
+            LiveVoiceProvidersCoordinator(
+                apiProviderUseCases = apiProviderUseCases,
+                liveVoiceUseCases = liveVoiceUseCases,
                 errorHandler = errorHandler,
             ),
         mediaCoordinator =

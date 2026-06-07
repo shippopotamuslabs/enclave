@@ -7,6 +7,7 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.config.TtsProviderId
 import com.browntowndev.enclave.domain.model.inference.ModelType
@@ -38,12 +39,19 @@ import com.browntowndev.enclave.domain.model.inference.ModelType
             childColumns = ["media_provider_id"],
             onDelete = ForeignKey.RESTRICT,
         ),
+        ForeignKey(
+            entity = LiveVoiceProviderEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["live_voice_provider_id"],
+            onDelete = ForeignKey.RESTRICT,
+        ),
     ],
     indices = [
         Index(value = ["local_config_id"]),
         Index(value = ["api_config_id"]),
         Index(value = ["tts_provider_id"]),
         Index(value = ["media_provider_id"]),
+        Index(value = ["live_voice_provider_id"]),
     ],
 )
 data class DefaultModelEntity(
@@ -58,6 +66,8 @@ data class DefaultModelEntity(
     val ttsProviderId: TtsProviderId? = null,
     @ColumnInfo(name = "media_provider_id")
     val mediaProviderId: MediaProviderId? = null,
+    @ColumnInfo(name = "live_voice_provider_id")
+    val liveVoiceProviderId: LiveVoiceProviderId? = null,
     @ColumnInfo(name = "updated_at")
     val updatedAt: Long = System.currentTimeMillis(),
     @ColumnInfo(name = "pending_sync")
@@ -66,9 +76,10 @@ data class DefaultModelEntity(
     val deleted: Boolean = false,
 ) {
     init {
-        val nonNullCount = listOf(localConfigId, apiConfigId, ttsProviderId, mediaProviderId).count { it != null }
+        val nonNullCount =
+            listOf(localConfigId, apiConfigId, ttsProviderId, mediaProviderId, liveVoiceProviderId).count { it != null }
         require(nonNullCount == 1) {
-            "Exactly one of localConfigId, apiConfigId, ttsProviderId, or mediaProviderId must be non-null"
+            "Exactly one of localConfigId, apiConfigId, ttsProviderId, mediaProviderId, or liveVoiceProviderId must be non-null"
         }
     }
 }

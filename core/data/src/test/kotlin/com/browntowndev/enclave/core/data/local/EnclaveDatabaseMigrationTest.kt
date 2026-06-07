@@ -295,4 +295,74 @@ class EnclaveDatabaseMigrationTest {
             db.close()
         }
     }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("LV-DB-001")
+    fun lvDb001_liveVoiceProvidersTableExists() {
+        val db =
+            Room
+                .inMemoryDatabaseBuilder(
+                    ApplicationProvider.getApplicationContext(),
+                    EnclaveDatabase::class.java,
+                ).allowMainThreadQueries()
+                .build()
+
+        try {
+            val sqliteDb = db.openHelper.writableDatabase
+            val cursor =
+                sqliteDb.query(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                    arrayOf("live_voice_providers"),
+                )
+            assertTrue(cursor.use { it.count == 1 })
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("LV-DB-002")
+    fun lvDb002_defaultModelsHasLiveVoiceProviderIdColumn() {
+        val db =
+            Room
+                .inMemoryDatabaseBuilder(
+                    ApplicationProvider.getApplicationContext(),
+                    EnclaveDatabase::class.java,
+                ).allowMainThreadQueries()
+                .build()
+
+        try {
+            val sqliteDb = db.openHelper.writableDatabase
+            val cursor = sqliteDb.query("PRAGMA table_info('default_models')")
+            val columnNames =
+                buildList {
+                    cursor.use {
+                        while (it.moveToNext()) {
+                            add(it.getString(it.getColumnIndexOrThrow("name")))
+                        }
+                    }
+                }
+            assertTrue(columnNames.contains("live_voice_provider_id"))
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("LV-DB-VERSION-001")
+    fun lvDbVersion001_databaseVersionIsTwo() {
+        val db =
+            Room
+                .inMemoryDatabaseBuilder(
+                    ApplicationProvider.getApplicationContext(),
+                    EnclaveDatabase::class.java,
+                ).allowMainThreadQueries()
+                .build()
+
+        try {
+            assertEquals(2, db.openHelper.writableDatabase.version)
+        } finally {
+            db.close()
+        }
+    }
 }

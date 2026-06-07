@@ -5,6 +5,7 @@ import com.browntowndev.enclave.core.data.local.ApiModelConfigurationEntity
 import com.browntowndev.enclave.core.data.local.ChatEntity
 import com.browntowndev.enclave.core.data.local.ChatSummaryEntity
 import com.browntowndev.enclave.core.data.local.DocumentEntity
+import com.browntowndev.enclave.core.data.local.LiveVoiceProviderEntity
 import com.browntowndev.enclave.core.data.local.LocalModelConfigurationEntity
 import com.browntowndev.enclave.core.data.local.MediaProviderEntity
 import com.browntowndev.enclave.core.data.local.MemoriesEntity
@@ -235,6 +236,29 @@ object SensitiveEntityFieldEncryptors {
             voiceName = healer.decrypt("TtsProviderEntity", "voiceName", entity.id, entity.voiceName, readRepairs),
             modelName = healer.decryptNullable("TtsProviderEntity", "modelName", entity.id, entity.modelName, readRepairs),
             baseUrl = healer.decryptNullable("TtsProviderEntity", "baseUrl", entity.id, entity.baseUrl, readRepairs),
+        )
+
+    fun encrypt(
+        entity: LiveVoiceProviderEntity,
+        healer: SensitivePersistenceSelfHealer,
+    ): LiveVoiceProviderEntity =
+        entity.copy(
+            displayName = healer.repair("LiveVoiceProviderEntity", "displayName", entity.id, entity.displayName),
+            voiceName = healer.repair("LiveVoiceProviderEntity", "voiceName", entity.id, entity.voiceName),
+            modelName = healer.repairNullable("LiveVoiceProviderEntity", "modelName", entity.id, entity.modelName),
+            baseUrl = healer.repairNullable("LiveVoiceProviderEntity", "baseUrl", entity.id, entity.baseUrl),
+        )
+
+    fun decrypt(
+        entity: LiveVoiceProviderEntity,
+        healer: SensitivePersistenceSelfHealer,
+        readRepairs: MutableList<SensitiveRoomReadRepair>? = null,
+    ): LiveVoiceProviderEntity =
+        entity.copy(
+            displayName = healer.decrypt("LiveVoiceProviderEntity", "displayName", entity.id, entity.displayName, readRepairs),
+            voiceName = healer.decrypt("LiveVoiceProviderEntity", "voiceName", entity.id, entity.voiceName, readRepairs),
+            modelName = healer.decryptNullable("LiveVoiceProviderEntity", "modelName", entity.id, entity.modelName, readRepairs),
+            baseUrl = healer.decryptNullable("LiveVoiceProviderEntity", "baseUrl", entity.id, entity.baseUrl, readRepairs),
         )
 
     fun encrypt(

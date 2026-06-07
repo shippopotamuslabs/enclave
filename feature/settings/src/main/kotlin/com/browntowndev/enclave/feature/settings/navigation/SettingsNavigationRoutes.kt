@@ -18,6 +18,7 @@ import com.browntowndev.enclave.feature.settings.MediaConfigureRoute
 import com.browntowndev.enclave.feature.settings.ModelConfigurationRoute
 import com.browntowndev.enclave.feature.settings.ProfileBuilderRoute
 import com.browntowndev.enclave.feature.settings.SettingsRoute
+import com.browntowndev.enclave.feature.settings.LiveVoiceConfigureRoute
 import com.browntowndev.enclave.feature.settings.TtsConfigureRoute
 
 internal fun NavGraphBuilder.settingsMainRoute(
@@ -39,6 +40,9 @@ internal fun NavGraphBuilder.settingsMainRoute(
             },
             onNavigateToTtsConfigure = {
                 navController.navigate(SettingsDestination.TTS_CONFIGURE)
+            },
+            onNavigateToLiveVoiceConfigure = {
+                navController.navigate(SettingsDestination.LIVE_VOICE_CONFIGURE)
             },
             onNavigateToLocalModelConfigure = {
                 navController.navigate(SettingsDestination.LOCAL_MODEL_CONFIGURE)
@@ -86,6 +90,21 @@ internal fun NavGraphBuilder.settingsTtsConfigureRoute(navController: NavControl
         popExitTransition = { settingsPopExitTransition() },
     ) { backStackEntry ->
         TtsConfigureRoute(
+            onNavigateBack = { navController.popBackStack() },
+            viewModel = settingsGraphViewModel(backStackEntry, navController),
+        )
+    }
+}
+
+internal fun NavGraphBuilder.settingsLiveVoiceConfigureRoute(navController: NavController) {
+    composable(
+        route = SettingsDestination.LIVE_VOICE_CONFIGURE,
+        enterTransition = { settingsEnterTransition() },
+        exitTransition = { settingsExitTransition() },
+        popEnterTransition = { settingsPopEnterTransition() },
+        popExitTransition = { settingsPopExitTransition() },
+    ) { backStackEntry ->
+        LiveVoiceConfigureRoute(
             onNavigateBack = { navController.popBackStack() },
             viewModel = settingsGraphViewModel(backStackEntry, navController),
         )

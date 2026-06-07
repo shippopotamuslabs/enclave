@@ -12,6 +12,7 @@ internal class FirestoreSyncDaos private constructor(
     val memoriesDao = configSyncDaos.memoriesDao
     val webSearchSourceDao = chatSyncDaos.webSearchSourceDao
     val ttsProviderDao = configSyncDaos.ttsProviderDao
+    val liveVoiceProviderDao = configSyncDaos.liveVoiceProviderDao
     val mediaProviderDao = configSyncDaos.mediaProviderDao
     val apiModelConfigurationsDao = configSyncDaos.apiModelConfigurationsDao
     val localModelsDao = configSyncDaos.localModelsDao

@@ -353,9 +353,11 @@ internal fun reusableCredentialsForProvider(
     apiAssets: List<ApiModelAssetUi>,
     mediaAssets: List<MediaProviderAssetUi> = emptyList(),
     ttsAssets: List<TtsProviderAssetUi> = emptyList(),
+    liveVoiceAssets: List<LiveVoiceProviderAssetUi> = emptyList(),
     excludeApiCredentialsId: com.browntowndev.enclave.domain.model.config.ApiCredentialsId? = null,
     excludeMediaProviderId: com.browntowndev.enclave.domain.model.config.MediaProviderId? = null,
     excludeTtsProviderId: com.browntowndev.enclave.domain.model.config.TtsProviderId? = null,
+    excludeLiveVoiceProviderId: com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId? = null,
 ): List<ReusableApiCredentialUi> {
     val fromApi =
         apiAssets
@@ -403,7 +405,23 @@ internal fun reusableCredentialsForProvider(
                     credentialAlias = asset.credentialAlias,
                 )
             }
-    return (fromApi + fromMedia + fromTts).distinctBy { it.credentialAlias }
+    val fromLiveVoice =
+        liveVoiceAssets
+            .filter { asset ->
+                asset.provider == provider &&
+                    asset.id != excludeLiveVoiceProviderId &&
+                    asset.credentialAlias.isNotBlank()
+            }.map { asset ->
+                ReusableApiCredentialUi(
+                    credentialsId =
+                        com.browntowndev.enclave.domain.model.config
+                            .ApiCredentialsId(""),
+                    displayName = asset.displayName,
+                    providerLabel = asset.provider.displayName,
+                    credentialAlias = asset.credentialAlias,
+                )
+            }
+    return (fromApi + fromMedia + fromTts + fromLiveVoice).distinctBy { it.credentialAlias }
 }
 
 internal fun resolveSelectedReusableCredential(

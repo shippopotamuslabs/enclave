@@ -35,6 +35,7 @@ import com.browntowndev.enclave.core.data.local.DefaultModelsDao
 import com.browntowndev.enclave.core.data.local.EmbeddingDao
 import com.browntowndev.enclave.core.data.local.EnclaveDatabase
 import com.browntowndev.enclave.core.data.local.FirestoreSyncPlaceholderDao
+import com.browntowndev.enclave.core.data.local.LiveVoiceProviderDao
 import com.browntowndev.enclave.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.enclave.core.data.local.LocalModelsDao
 import com.browntowndev.enclave.core.data.local.MediaProviderDao
@@ -75,6 +76,7 @@ import com.browntowndev.enclave.core.data.repository.DefaultModelRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.DeviceEnvironmentRepository
 import com.browntowndev.enclave.core.data.repository.ExtractedUrlTracker
 import com.browntowndev.enclave.core.data.repository.InferenceTelemetryRepositoryImpl
+import com.browntowndev.enclave.core.data.repository.LiveVoiceProviderRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.LocalModelRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.MediaProviderRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.MemoriesRepositoryImpl
@@ -140,6 +142,7 @@ import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.SyncOrchestrator
 import com.browntowndev.enclave.domain.port.repository.TransactionProvider
 import com.browntowndev.enclave.domain.port.repository.TrustedDomainRepositoryPort
+import com.browntowndev.enclave.domain.port.repository.LiveVoiceProviderRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.TtsProviderRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.UtilityModelFilePort
 import com.browntowndev.enclave.domain.port.repository.UtilityModelRepositoryPort
@@ -284,6 +287,9 @@ object DataModule {
 
     @Provides
     fun provideTtsProviderDao(database: EnclaveDatabase): TtsProviderDao = database.ttsProviderDao()
+
+    @Provides
+    fun provideLiveVoiceProviderDao(database: EnclaveDatabase): LiveVoiceProviderDao = database.liveVoiceProviderDao()
 
     @Provides
     fun provideMediaProviderDao(database: EnclaveDatabase): MediaProviderDao = database.mediaProviderDao()
@@ -584,6 +590,10 @@ abstract class DataRepositoryModule {
     @Binds
     @Singleton
     abstract fun bindTtsProviderRepository(impl: TtsProviderRepositoryImpl): TtsProviderRepositoryPort
+
+    @Binds
+    @Singleton
+    abstract fun bindLiveVoiceProviderRepository(impl: LiveVoiceProviderRepositoryImpl): LiveVoiceProviderRepositoryPort
 
     @Binds
     @Singleton

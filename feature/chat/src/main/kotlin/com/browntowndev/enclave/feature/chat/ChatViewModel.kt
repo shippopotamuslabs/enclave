@@ -35,6 +35,7 @@ import com.browntowndev.enclave.feature.chat.delegates.ChatShareCoordinator
 import com.browntowndev.enclave.feature.chat.delegates.ChatTelemetryCoordinator
 import com.browntowndev.enclave.feature.chat.delegates.ChatUiStateReducer
 import com.browntowndev.enclave.feature.chat.delegates.InferenceOrchestrator
+import com.browntowndev.enclave.feature.chat.delegates.LiveVoiceCoordinator
 import com.browntowndev.enclave.feature.chat.delegates.SpeechInputCoordinator
 import com.browntowndev.enclave.feature.chat.delegates.ToolExecutionBannerCoordinator
 import com.browntowndev.enclave.feature.chat.delegates.TtsController
@@ -72,7 +73,7 @@ import javax.inject.Inject
  */
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 @HiltViewModel
-@Suppress("TooManyFunctions", "LongParameterList")
+@Suppress("TooManyFunctions", "LongParameterList", "LargeClass")
 class ChatViewModel
     @Inject
     constructor(
@@ -98,6 +99,7 @@ class ChatViewModel
         private val chatUiStateReducer: ChatUiStateReducer,
         private val chatMessageUiMapper: ChatMessageUiMapper,
         private val photoAttachmentPolicyResolver: PhotoAttachmentPolicyResolver,
+        private val liveVoiceCoordinator: LiveVoiceCoordinator,
     ) : ViewModel() {
         private val mergeDbMessagesWithOptimisticUseCase = MergeDbMessagesWithOptimisticUseCase()
 
@@ -129,6 +131,16 @@ class ChatViewModel
                 .map { assignments ->
                     assignments.any { assignment ->
                         assignment.modelType == ModelType.TTS && assignment.ttsProviderId != null
+                    }
+                }.distinctUntilChanged()
+
+        private val hasLiveVoiceProviderAssignedFlow =
+            settingsUseCases.assignments
+                .getDefaultModels()
+                .map { assignments ->
+                    assignments.any { assignment ->
+                        assignment.modelType == ModelType.LIVE_VOICE &&
+                            assignment.liveVoiceProviderId != null
                     }
                 }.distinctUntilChanged()
 
@@ -366,6 +378,8 @@ class ChatViewModel
                 artifactExportCoordinator.artifactExportSheet,
                 _modelDisplayNames,
                 activeChatIdFlow,
+                hasLiveVoiceProviderAssignedFlow,
+                liveVoiceCoordinator.state,
                 chatTelemetryCoordinator.responseStatsSheet,
                 chatTelemetryCoordinator.chatStatsSheet,
             ) { args: Array<Any?> ->
@@ -377,6 +391,10 @@ class ChatViewModel
             )
 
         init {
+            liveVoiceCoordinator.onChatIdPersisted = { chatId ->
+                inferenceOrchestrator.adoptChatId(chatId)
+            }
+
             viewModelScope.launch {
                 activeTurnSnapshotObserveKeyFlow.collectLatest { key ->
                     if (key == null) {
@@ -575,6 +593,7 @@ class ChatViewModel
 
         fun createNewChat() {
             onStopTts()
+            liveVoiceCoordinator.cancel()
             speechInputCoordinator.stopListening()
             activeTurnKeyFlow.value?.let { key ->
                 viewModelScope.launch {
@@ -706,6 +725,23 @@ class ChatViewModel
             speechInputCoordinator.onMicClick(viewModelScope, chatInputCoordinator.inputText.value)
         }
 
+        fun onStartLiveVoice() {
+            onStopTts()
+            speechInputCoordinator.stopListening()
+            liveVoiceCoordinator.start(
+                scope = viewModelScope,
+                chatId = uiState.value.chatId,
+            )
+        }
+
+        fun onEndLiveVoice() {
+            liveVoiceCoordinator.end(viewModelScope)
+        }
+
+        fun onToggleMute() {
+            liveVoiceCoordinator.toggleMute()
+        }
+
         internal fun mapToChatMessageForTesting(message: Message): ChatMessage = chatMessageUiMapper.map(message, _modelDisplayNames.value)
 
         private fun markWebSearchSourceExtracted(url: String) {
@@ -721,6 +757,7 @@ class ChatViewModel
         override fun onCleared() {
             super.onCleared()
             inferenceOrchestrator.cancelInference()
+            liveVoiceCoordinator.cancel()
             speechInputCoordinator.stopListening()
             onStopTts()
         }
@@ -734,8 +771,10 @@ class ChatViewModel
     }
 
 private const val UI_STATE_CHAT_ID_INDEX = 11
-private const val UI_STATE_RESPONSE_STATS_INDEX = 12
-private const val UI_STATE_CHAT_STATS_INDEX = 13
+private const val UI_STATE_HAS_LIVE_VOICE_PROVIDER_INDEX = 12
+private const val UI_STATE_LIVE_VOICE_STATE_INDEX = 13
+private const val UI_STATE_RESPONSE_STATS_INDEX = 14
+private const val UI_STATE_CHAT_STATS_INDEX = 15
 
 @Suppress("LongMethod")
 private fun reduceChatUiStateFromArgs(
@@ -755,6 +794,8 @@ private fun reduceChatUiStateFromArgs(
     val artifactExportSheet = args[9] as ArtifactExportSheetState
     val modelDisplayNames = args[10] as Map<ModelType, String>
     val chatId = args[UI_STATE_CHAT_ID_INDEX] as ChatId?
+    val hasLiveVoiceProviderAssigned = args[UI_STATE_HAS_LIVE_VOICE_PROVIDER_INDEX] as Boolean
+    val liveVoiceState = args[UI_STATE_LIVE_VOICE_STATE_INDEX] as LiveVoiceUiState
     val responseStatsSheet =
         args[UI_STATE_RESPONSE_STATS_INDEX] as com.browntowndev.enclave.feature.chat.stats.ResponseStatsSheetUiState
     val chatStatsSheet =
@@ -787,6 +828,8 @@ private fun reduceChatUiStateFromArgs(
                 artifactExportSheet = artifactExportSheet,
                 chatId = chatId,
                 modelDisplayNames = modelDisplayNames,
+                liveVoiceState = liveVoiceState,
+                hasLiveVoiceProviderAssigned = hasLiveVoiceProviderAssigned,
             ),
         )
     reduceResult.acknowledgedTurnKey?.let { key ->

@@ -64,6 +64,7 @@ import com.browntowndev.enclave.core.ui.component.neo.NeoSheetTabRow
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
@@ -91,7 +92,14 @@ internal fun ModelConfigurationRoute(
 fun ModelConfigurationScreen(
     uiState: SettingsUiState,
     onNavigateBack: () -> Unit,
-    onSetDefaultModel: (ModelType, LocalModelConfigurationId?, ApiModelConfigurationId?, TtsProviderId?, MediaProviderId?) -> Unit,
+    onSetDefaultModel: (
+        ModelType,
+        LocalModelConfigurationId?,
+        ApiModelConfigurationId?,
+        TtsProviderId?,
+        MediaProviderId?,
+        LiveVoiceProviderId?,
+    ) -> Unit,
     onShowAssignmentDialog: (Boolean, ModelType?) -> Unit,
 ) {
     Scaffold(
@@ -132,7 +140,7 @@ fun ModelConfigurationScreen(
         ) {
             val generalChatTypes = listOf(ModelType.FAST, ModelType.THINKING)
             val crewModeTypes = listOf(ModelType.DRAFT_ONE, ModelType.DRAFT_TWO, ModelType.MAIN, ModelType.FINAL_SYNTHESIS)
-            val audioTypes = listOf(ModelType.TTS)
+            val audioTypes = listOf(ModelType.TTS, ModelType.LIVE_VOICE)
             val studioMediaTypes =
                 listOf(
                     ModelType.IMAGE_GENERATION,
@@ -174,7 +182,7 @@ fun ModelConfigurationScreen(
                     shimmerProgress = shimmerProgress,
                     shimmerBaseColor = shimmerBaseColor,
                     shimmerHighlightColor = shimmerHighlightColor,
-                    skeletonCount = 1,
+                    skeletonCount = 2,
                 )
             }
             item {
@@ -201,6 +209,7 @@ fun ModelConfigurationScreen(
 
             val isVisionSlot = assignmentSlot == ModelType.VISION
             val isTtsSlot = assignmentSlot == ModelType.TTS
+            val isLiveVoiceSlot = assignmentSlot == ModelType.LIVE_VOICE
             val isMediaSlot =
                 assignmentSlot in
                     listOf(
@@ -219,10 +228,16 @@ fun ModelConfigurationScreen(
             val apiAssets =
                 when {
                     isVisionSlot -> uiState.apiProvidersSheet.assets.filter { asset -> asset.configurations.any { it.isMultimodal } }
-                    isTtsSlot || isMediaSlot -> emptyList()
+                    isTtsSlot || isLiveVoiceSlot || isMediaSlot -> emptyList()
                     else -> uiState.apiProvidersSheet.assets
                 }
             val ttsAssets = if (isTtsSlot) uiState.ttsProvidersSheet.assets else emptyList()
+            val liveVoiceAssets =
+                if (isLiveVoiceSlot) {
+                    uiState.liveVoiceProvidersSheet.assets
+                } else {
+                    emptyList()
+                }
             val mediaAssets =
                 if (isMediaSlot) {
                     val slotTask = assignmentSlot.toMediaTaskOrNull()
@@ -240,10 +255,11 @@ fun ModelConfigurationScreen(
                 localAssets = localAssets,
                 apiAssets = apiAssets,
                 ttsAssets = ttsAssets,
+                liveVoiceAssets = liveVoiceAssets,
                 mediaAssets = mediaAssets,
                 onDismiss = { onShowAssignmentDialog(false, null) },
-                onSelect = { localId, apiId, ttsId, mediaId ->
-                    onSetDefaultModel(assignmentSlot, localId, apiId, ttsId, mediaId)
+                onSelect = { localId, apiId, ttsId, mediaId, liveVoiceId ->
+                    onSetDefaultModel(assignmentSlot, localId, apiId, ttsId, mediaId, liveVoiceId)
                 },
             )
         }
@@ -311,6 +327,7 @@ private val LOCAL_MODEL_UNSUPPORTED_ASSIGNMENT_TYPES =
     setOf(
         ModelType.VISION,
         ModelType.TTS,
+        ModelType.LIVE_VOICE,
         ModelType.VIDEO_GENERATION,
         ModelType.IMAGE_TO_VIDEO,
         ModelType.MUSIC_GENERATION,
@@ -362,6 +379,7 @@ fun AssignmentSelectionBottomSheet(
     localAssets: List<LocalModelAssetUi>,
     apiAssets: List<ApiModelAssetUi>,
     ttsAssets: List<TtsProviderAssetUi>,
+    liveVoiceAssets: List<LiveVoiceProviderAssetUi>,
     mediaAssets: List<MediaProviderAssetUi>,
     onDismiss: () -> Unit,
     onSelect: (
@@ -369,6 +387,7 @@ fun AssignmentSelectionBottomSheet(
         apiId: ApiModelConfigurationId?,
         ttsId: TtsProviderId?,
         mediaId: MediaProviderId?,
+        liveVoiceId: LiveVoiceProviderId?,
     ) -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -383,6 +402,7 @@ fun AssignmentSelectionBottomSheet(
             localAssets = localAssets,
             apiAssets = apiAssets,
             ttsAssets = ttsAssets,
+            liveVoiceAssets = liveVoiceAssets,
             mediaAssets = mediaAssets,
             onDismiss = onDismiss,
             onSelect = onSelect,
@@ -411,6 +431,7 @@ fun AssignmentSelectionContent(
     localAssets: List<LocalModelAssetUi>,
     apiAssets: List<ApiModelAssetUi>,
     ttsAssets: List<TtsProviderAssetUi>,
+    liveVoiceAssets: List<LiveVoiceProviderAssetUi>,
     mediaAssets: List<MediaProviderAssetUi>,
     onDismiss: () -> Unit,
     onBack: (() -> Unit)? = null,
@@ -419,22 +440,28 @@ fun AssignmentSelectionContent(
         apiId: ApiModelConfigurationId?,
         ttsId: TtsProviderId?,
         mediaId: MediaProviderId?,
+        liveVoiceId: LiveVoiceProviderId?,
     ) -> Unit,
 ) {
     var selectedLocalId by remember { mutableStateOf<LocalModelConfigurationId?>(null) }
     var selectedApiId by remember { mutableStateOf<ApiModelConfigurationId?>(null) }
     var selectedTtsId by remember { mutableStateOf<TtsProviderId?>(null) }
     var selectedMediaId by remember { mutableStateOf<MediaProviderId?>(null) }
+    var selectedLiveVoiceId by remember { mutableStateOf<LiveVoiceProviderId?>(null) }
     val hasLocalTab = localAssets.isNotEmpty()
     val hasApiTab = apiAssets.isNotEmpty()
     val hasTtsTab = ttsAssets.isNotEmpty()
+    val hasLiveVoiceTab = liveVoiceAssets.isNotEmpty()
     val hasMediaTab = mediaAssets.isNotEmpty()
-    var selectedTabIndex by remember(hasLocalTab, hasApiTab, hasTtsTab, hasMediaTab) { mutableIntStateOf(0) }
+    var selectedTabIndex by remember(hasLocalTab, hasApiTab, hasTtsTab, hasLiveVoiceTab, hasMediaTab) {
+        mutableIntStateOf(0)
+    }
     val tabs =
         buildList {
             if (hasLocalTab) add("Local Models")
             if (hasApiTab) add("API Models")
             if (hasTtsTab) add("TTS Providers")
+            if (hasLiveVoiceTab) add("Live Voice Providers")
             if (hasMediaTab) add("Media Providers")
         }
     var viewState by remember { mutableStateOf<AssignmentSelectionView>(AssignmentSelectionView.AssetList) }
@@ -492,9 +519,11 @@ fun AssignmentSelectionContent(
                         AnimatedContent(
                             targetState =
                                 when {
-                                    hasLocalTab && (hasApiTab || hasTtsTab || hasMediaTab) -> selectedTabIndex
+                                    hasLocalTab &&
+                                        (hasApiTab || hasTtsTab || hasLiveVoiceTab || hasMediaTab) ->
+                                        selectedTabIndex
                                     hasLocalTab -> 0
-                                    hasApiTab || hasTtsTab || hasMediaTab -> selectedTabIndex
+                                    hasApiTab || hasTtsTab || hasLiveVoiceTab || hasMediaTab -> selectedTabIndex
                                     else -> 0
                                 },
                             label = "AssignmentSelectionTabTransition",
@@ -546,6 +575,24 @@ fun AssignmentSelectionContent(
                                                     selectedLocalId = null
                                                     selectedApiId = null
                                                     selectedMediaId = null
+                                                    selectedLiveVoiceId = null
+                                                },
+                                            )
+                                        }
+                                    }
+                                    "Live Voice Providers" -> {
+                                        items(liveVoiceAssets, key = { "live_voice_${it.id.value}" }) { asset ->
+                                            NeoChevronCard(
+                                                title = asset.displayName,
+                                                subtitle = "${asset.provider.displayName} • ${asset.voiceName}",
+                                                footer = "1 Preset(s) available",
+                                                isSelected = selectedLiveVoiceId == asset.id,
+                                                onClick = {
+                                                    selectedLiveVoiceId = asset.id
+                                                    selectedLocalId = null
+                                                    selectedApiId = null
+                                                    selectedTtsId = null
+                                                    selectedMediaId = null
                                                 },
                                             )
                                         }
@@ -562,6 +609,7 @@ fun AssignmentSelectionContent(
                                                     selectedLocalId = null
                                                     selectedApiId = null
                                                     selectedTtsId = null
+                                                    selectedLiveVoiceId = null
                                                 },
                                             )
                                         }
@@ -643,8 +691,21 @@ fun AssignmentSelectionContent(
             )
             NeoPrimaryButton(
                 text = "Confirm",
-                onClick = { onSelect(selectedLocalId, selectedApiId, selectedTtsId, selectedMediaId) },
-                enabled = selectedLocalId != null || selectedApiId != null || selectedTtsId != null || selectedMediaId != null,
+                onClick = {
+                    onSelect(
+                        selectedLocalId,
+                        selectedApiId,
+                        selectedTtsId,
+                        selectedMediaId,
+                        selectedLiveVoiceId,
+                    )
+                },
+                enabled =
+                    selectedLocalId != null ||
+                        selectedApiId != null ||
+                        selectedTtsId != null ||
+                        selectedMediaId != null ||
+                        selectedLiveVoiceId != null,
                 modifier = Modifier.weight(1f),
             )
         }
@@ -782,7 +843,7 @@ fun PreviewModelConfigurationScreen() {
         ModelConfigurationScreen(
             uiState = MockSettingsData.baseUiState,
             onNavigateBack = {},
-            onSetDefaultModel = { _, _, _, _, _ -> },
+            onSetDefaultModel = { _, _, _, _, _, _ -> },
             onShowAssignmentDialog = { _, _ -> },
         )
     }
@@ -819,9 +880,10 @@ fun PreviewAssignmentSelectionContent() {
             localAssets = MockSettingsData.localModels,
             apiAssets = MockSettingsData.apiModels,
             ttsAssets = emptyList(),
+            liveVoiceAssets = emptyList(),
             mediaAssets = emptyList(),
             onDismiss = {},
-            onSelect = { _, _, _, _ -> },
+            onSelect = { _, _, _, _, _ -> },
         )
     }
 }

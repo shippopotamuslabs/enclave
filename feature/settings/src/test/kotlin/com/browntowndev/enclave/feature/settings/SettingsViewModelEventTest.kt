@@ -71,6 +71,9 @@ class SettingsViewModelEventTest {
         val getTtsProvidersUseCase = mockk<GetTtsProvidersUseCase>()
         every { getTtsProvidersUseCase() } returns MutableStateFlow<List<TtsProviderAsset>>(emptyList())
 
+        val getLiveVoiceProvidersUseCase = mockk<GetLiveVoiceProvidersUseCase>()
+        every { getLiveVoiceProvidersUseCase() } returns MutableStateFlow<List<LiveVoiceProviderAsset>>(emptyList())
+
         val getMediaProvidersUseCase = mockk<GetMediaProvidersUseCase>()
         every { getMediaProvidersUseCase() } returns MutableStateFlow<List<MediaProviderAsset>>(emptyList())
 
@@ -106,6 +109,10 @@ class SettingsViewModelEventTest {
                 every { tts } returns
                     mockk(relaxed = true) {
                         every { getTtsProviders } returns getTtsProvidersUseCase
+                    }
+                every { liveVoice } returns
+                    mockk(relaxed = true) {
+                        every { getLiveVoiceProviders } returns getLiveVoiceProvidersUseCase
                     }
                 every { media } returns
                     mockk(relaxed = true) {
@@ -165,6 +172,7 @@ class SettingsViewModelEventTest {
             createSettingsApiProvidersDelegate(
                 apiProviderUseCases = settingsUseCases.apiProviders,
                 ttsUseCases = settingsUseCases.tts,
+                liveVoiceUseCases = settingsUseCases.liveVoice,
                 mediaUseCases = settingsUseCases.media,
                 deletionHelper = deletionHelper,
                 apiModelAssetUiMapper = apiModelAssetUiMapper,

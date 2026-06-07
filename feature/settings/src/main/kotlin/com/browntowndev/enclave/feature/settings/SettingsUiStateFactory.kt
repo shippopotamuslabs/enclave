@@ -4,6 +4,7 @@ import com.browntowndev.enclave.domain.model.config.ApiModelAsset
 import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
 import com.browntowndev.enclave.domain.model.config.LocalModelAsset
 import com.browntowndev.enclave.domain.model.config.MediaProviderAsset
+import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderAsset
 import com.browntowndev.enclave.domain.model.config.TtsProviderAsset
 import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.enclave.domain.model.inference.ModelType
@@ -79,6 +80,21 @@ internal data class XSearchTransientState(
     val enabled: Boolean? = null,
 )
 
+internal data class LiveVoiceProvidersTransientState(
+    val isSheetOpen: Boolean = false,
+    val selectedAsset: LiveVoiceProviderAssetUi? = null,
+    val assetDraft: LiveVoiceProviderAssetUi? = null,
+    val selectedReusableApiCredentialAlias: String? = null,
+    val selectedReusableApiCredentialName: String? = null,
+    val discoveredApiModels: List<DiscoveredApiModel> = emptyList(),
+    val discoveredApiModelScope: ApiModelDiscoveryScope? = null,
+    val isDiscoveringApiModels: Boolean = false,
+    val isDiscoveryTruncated: Boolean = false,
+    val modelSearchQuery: String = "",
+    val modelProviderFilters: Set<String> = emptySet(),
+    val modelSortOption: ModelSortOption = ModelSortOption.A_TO_Z,
+)
+
 internal data class TtsProvidersTransientState(
     val isSheetOpen: Boolean = false,
     val selectedAsset: TtsProviderAssetUi? = null,
@@ -126,6 +142,7 @@ internal data class SettingsUiStateSources(
     val localAssets: Flow<List<LocalModelAsset>>,
     val apiAssets: Flow<List<ApiModelAsset>>,
     val ttsAssets: Flow<List<TtsProviderAsset>>,
+    val liveVoiceAssets: Flow<List<LiveVoiceProviderAsset>>,
     val mediaAssets: Flow<List<MediaProviderAsset>>,
     val defaultModels: Flow<List<DefaultModelAssignment>>,
     val authState: Flow<AuthState>,
@@ -135,6 +152,7 @@ internal data class SettingsUiStateSources(
     val localModelsState: StateFlow<LocalModelsTransientState>,
     val apiState: StateFlow<ApiProvidersTransientState>,
     val ttsState: StateFlow<TtsProvidersTransientState>,
+    val liveVoiceState: StateFlow<LiveVoiceProvidersTransientState>,
     val mediaState: StateFlow<MediaProvidersTransientState>,
     val searchSkillState: StateFlow<SearchSkillTransientState>,
     val assignmentsState: StateFlow<AssignmentDialogTransientState>,
@@ -170,6 +188,7 @@ class SettingsUiStateFactory
                     localAssets = repository.localAssets,
                     apiAssets = repository.apiAssets,
                     ttsAssets = repository.ttsAssets,
+                    liveVoiceAssets = repository.liveVoiceAssets,
                     mediaAssets = repository.mediaAssets,
                     defaultModels = repository.defaultModels,
                     authState = repository.authState,
@@ -179,6 +198,7 @@ class SettingsUiStateFactory
                     localModelsState = editor.localModelsState,
                     apiState = editor.apiState,
                     ttsState = editor.ttsState,
+                    liveVoiceState = editor.liveVoiceState,
                     mediaState = editor.mediaState,
                     searchSkillState = editor.searchSkillState,
                     assignmentsState = editor.assignmentsState,
@@ -203,6 +223,7 @@ class SettingsUiStateFactory
             localAssets: List<LocalModelAsset>,
             apiAssets: List<ApiModelAsset>,
             ttsAssets: List<TtsProviderAsset>,
+            liveVoiceAssets: List<LiveVoiceProviderAsset> = emptyList(),
             mediaAssets: List<MediaProviderAsset>,
             defaultModels: List<DefaultModelAssignment>,
             authState: AuthState,
@@ -212,6 +233,7 @@ class SettingsUiStateFactory
             localModelsState: LocalModelsTransientState,
             apiState: ApiProvidersTransientState,
             ttsState: TtsProvidersTransientState,
+            liveVoiceState: LiveVoiceProvidersTransientState = LiveVoiceProvidersTransientState(),
             mediaState: MediaProvidersTransientState,
             searchSkillState: SearchSkillTransientState,
             assignmentsState: AssignmentDialogTransientState,
@@ -233,6 +255,7 @@ class SettingsUiStateFactory
                 localAssets,
                 apiAssets,
                 ttsAssets,
+                liveVoiceAssets,
                 mediaAssets,
                 defaultModels,
                 authState,
@@ -242,6 +265,7 @@ class SettingsUiStateFactory
                 localModelsState,
                 apiState,
                 ttsState,
+                liveVoiceState,
                 mediaState,
                 searchSkillState,
                 assignmentsState,

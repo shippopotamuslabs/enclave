@@ -6,6 +6,7 @@ import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
 import com.browntowndev.enclave.domain.model.config.LocalModelAsset
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.config.MediaProviderAsset
+import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderAsset
 import com.browntowndev.enclave.domain.model.config.TtsProviderAsset
 import com.browntowndev.enclave.domain.model.inference.ApiModelParameterSupport
 import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
@@ -28,18 +29,41 @@ class SettingsUiStateAssembler
         private val localModelAssetUiMapper: LocalModelAssetUiMapper,
         private val apiModelAssetUiMapper: ApiModelAssetUiMapper,
         private val ttsProviderAssetUiMapper: TtsProviderAssetUiMapper,
+        private val liveVoiceProviderAssetUiMapper: LiveVoiceProviderAssetUiMapper,
         private val mediaProviderAssetUiMapper: MediaProviderAssetUiMapper,
         private val apiDiscoveryUiFilter: ApiDiscoveryUiFilter,
         private val applyApiModelMetadataDefaultsUseCase: ApplyApiModelMetadataDefaultsUseCase,
         private val usageSpendUiMapper: UsageSpendUiMapper,
         private val modelPackUiMapper: ModelPackUiMapper,
     ) {
-        @Suppress("LongParameterList", "CyclomaticComplexMethod")
+        constructor(
+            localModelAssetUiMapper: LocalModelAssetUiMapper,
+            apiModelAssetUiMapper: ApiModelAssetUiMapper,
+            ttsProviderAssetUiMapper: TtsProviderAssetUiMapper,
+            mediaProviderAssetUiMapper: MediaProviderAssetUiMapper,
+            apiDiscoveryUiFilter: ApiDiscoveryUiFilter,
+            applyApiModelMetadataDefaultsUseCase: ApplyApiModelMetadataDefaultsUseCase,
+            usageSpendUiMapper: UsageSpendUiMapper,
+            modelPackUiMapper: ModelPackUiMapper,
+        ) : this(
+            localModelAssetUiMapper = localModelAssetUiMapper,
+            apiModelAssetUiMapper = apiModelAssetUiMapper,
+            ttsProviderAssetUiMapper = ttsProviderAssetUiMapper,
+            liveVoiceProviderAssetUiMapper = LiveVoiceProviderAssetUiMapper(),
+            mediaProviderAssetUiMapper = mediaProviderAssetUiMapper,
+            apiDiscoveryUiFilter = apiDiscoveryUiFilter,
+            applyApiModelMetadataDefaultsUseCase = applyApiModelMetadataDefaultsUseCase,
+            usageSpendUiMapper = usageSpendUiMapper,
+            modelPackUiMapper = modelPackUiMapper,
+        )
+
+        @Suppress("LongParameterList", "CyclomaticComplexMethod", "LongMethod")
         internal fun create(
             persistedSettings: SettingsData,
             localAssets: List<LocalModelAsset>,
             apiAssets: List<ApiModelAsset>,
             ttsAssets: List<TtsProviderAsset>,
+            liveVoiceAssets: List<LiveVoiceProviderAsset> = emptyList(),
             mediaAssets: List<MediaProviderAsset>,
             defaultModels: List<DefaultModelAssignment>,
             authState: AuthState,
@@ -49,6 +73,7 @@ class SettingsUiStateAssembler
             localModelsState: LocalModelsTransientState,
             apiState: ApiProvidersTransientState,
             ttsState: TtsProvidersTransientState,
+            liveVoiceState: LiveVoiceProvidersTransientState = LiveVoiceProvidersTransientState(),
             mediaState: MediaProvidersTransientState,
             searchSkillState: SearchSkillTransientState,
             assignmentsState: AssignmentDialogTransientState,
@@ -103,6 +128,20 @@ class SettingsUiStateAssembler
                         selected
                     } else {
                         ttsModels.find { it.id == selected.id } ?: selected
+                    }
+                }
+
+            val defaultLiveVoiceProviderId = defaultModels.find { it.modelType == ModelType.LIVE_VOICE }?.liveVoiceProviderId
+            val liveVoiceModels =
+                liveVoiceAssets.map { asset ->
+                    liveVoiceProviderAssetUiMapper.map(asset, isDefault = asset.id == defaultLiveVoiceProviderId)
+                }
+            val refreshedSelectedLiveVoiceAsset =
+                liveVoiceState.selectedAsset?.let { selected ->
+                    if (selected.id.value.isEmpty()) {
+                        selected
+                    } else {
+                        liveVoiceModels.find { it.id == selected.id } ?: selected
                     }
                 }
 
@@ -168,6 +207,15 @@ class SettingsUiStateAssembler
                     ttsModels = ttsModels,
                 )
 
+            val selectedLiveVoiceReusableCredential =
+                resolveSelectedReusableCredential(
+                    alias = liveVoiceState.selectedReusableApiCredentialAlias,
+                    displayNameFallback = liveVoiceState.selectedReusableApiCredentialName,
+                    apiModels = apiModels,
+                    mediaModels = mediaModels,
+                    ttsModels = ttsModels,
+                )
+
             val selectedMediaReusableCredential =
                 resolveSelectedReusableCredential(
                     alias = mediaState.selectedReusableApiCredentialAlias,
@@ -223,6 +271,15 @@ class SettingsUiStateAssembler
                     sortOption = ttsState.modelSortOption,
                 )
 
+            val discoveredLiveVoiceModels = liveVoiceState.discoveredApiModels.map(DiscoveredApiModel::toUi)
+            val filteredDiscoveredLiveVoiceModels =
+                apiDiscoveryUiFilter.filter(
+                    models = discoveredLiveVoiceModels,
+                    query = liveVoiceState.modelSearchQuery,
+                    providerFilters = liveVoiceState.modelProviderFilters,
+                    sortOption = liveVoiceState.modelSortOption,
+                )
+
             val discoveredMediaModels = mediaState.discoveredApiModels.map(DiscoveredApiModel::toUi)
             val filteredDiscoveredMediaModels =
                 apiDiscoveryUiFilter.filter(
@@ -254,6 +311,7 @@ class SettingsUiStateAssembler
                         isUsageSpendSheetOpen = sheetVisibility.usageSpend,
                         isVisionSettingsSheetOpen = sheetVisibility.visionSettings,
                         isTtsProvidersSheetOpen = ttsState.isSheetOpen,
+                        isLiveVoiceProvidersSheetOpen = liveVoiceState.isSheetOpen,
                         isMediaProvidersSheetOpen = mediaState.isSheetOpen,
                         isSearchSkillSheetOpen = sheetVisibility.searchSkill,
                         isOssLicensesSheetOpen = sheetVisibility.ossLicenses,
@@ -357,6 +415,28 @@ class SettingsUiStateAssembler
                                 searchQuery = ttsState.modelSearchQuery,
                                 providerFilters = ttsState.modelProviderFilters,
                                 sortOption = ttsState.modelSortOption,
+                            ),
+                    ),
+                liveVoiceProvidersSheet =
+                    LiveVoiceProvidersSheetUiState(
+                        isVisible = liveVoiceState.isSheetOpen,
+                        assets = liveVoiceModels,
+                        selectedAsset = refreshedSelectedLiveVoiceAsset,
+                    ),
+                liveVoiceProviderEditor =
+                    LiveVoiceProviderEditorUiState(
+                        isEditing = liveVoiceState.selectedAsset != null || liveVoiceState.assetDraft != null,
+                        assetDraft = liveVoiceState.assetDraft,
+                        selectedReusableCredential = selectedLiveVoiceReusableCredential,
+                        discovery =
+                            ApiModelDiscoveryUiState(
+                                models = discoveredLiveVoiceModels,
+                                filteredModels = filteredDiscoveredLiveVoiceModels,
+                                isLoading = liveVoiceState.isDiscoveringApiModels,
+                                isTruncated = liveVoiceState.isDiscoveryTruncated,
+                                searchQuery = liveVoiceState.modelSearchQuery,
+                                providerFilters = liveVoiceState.modelProviderFilters,
+                                sortOption = liveVoiceState.modelSortOption,
                             ),
                     ),
                 mediaProvidersSheet =
@@ -490,6 +570,7 @@ class SettingsUiStateAssembler
                     ModelType.MAIN,
                     ModelType.FINAL_SYNTHESIS,
                     ModelType.TTS,
+                    ModelType.LIVE_VOICE,
                     ModelType.IMAGE_GENERATION,
                     ModelType.IMAGE_EDIT,
                     ModelType.VIDEO_GENERATION,

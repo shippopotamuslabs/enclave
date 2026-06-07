@@ -415,8 +415,17 @@ class FakeDefaultModelRepository : DefaultModelRepositoryPort {
         apiConfigId: ApiModelConfigurationId?,
         ttsProviderId: TtsProviderId?,
         mediaProviderId: MediaProviderId?,
+        liveVoiceProviderId: com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId?,
     ) {
-        val assignment = DefaultModelAssignment(modelType, localConfigId, apiConfigId, ttsProviderId, mediaProviderId)
+        val assignment =
+            DefaultModelAssignment(
+                modelType,
+                localConfigId,
+                apiConfigId,
+                ttsProviderId,
+                mediaProviderId,
+                liveVoiceProviderId,
+            )
         _defaults.value = _defaults.value.filter { it.modelType != modelType } + assignment
     }
 

@@ -68,6 +68,8 @@ data class SettingsUiState(
     val xSearchEditor: XSearchEditorUiState = XSearchEditorUiState(),
     val ttsProvidersSheet: TtsProvidersSheetUiState = TtsProvidersSheetUiState(),
     val ttsProviderEditor: TtsProviderEditorUiState = TtsProviderEditorUiState(),
+    val liveVoiceProvidersSheet: LiveVoiceProvidersSheetUiState = LiveVoiceProvidersSheetUiState(),
+    val liveVoiceProviderEditor: LiveVoiceProviderEditorUiState = LiveVoiceProviderEditorUiState(),
     val mediaProvidersSheet: MediaProvidersSheetUiState = MediaProvidersSheetUiState(),
     val mediaProviderEditor: MediaProviderEditorUiState = MediaProviderEditorUiState(),
     val assignments: ModelAssignmentsUiState = ModelAssignmentsUiState(),
@@ -115,6 +117,7 @@ data class SettingsHomeUiState(
     val isUsageSpendSheetOpen: Boolean = false,
     val isVisionSettingsSheetOpen: Boolean = false,
     val isTtsProvidersSheetOpen: Boolean = false,
+    val isLiveVoiceProvidersSheetOpen: Boolean = false,
     val isMediaProvidersSheetOpen: Boolean = false,
     val isSearchSkillSheetOpen: Boolean = false,
     val isOssLicensesSheetOpen: Boolean = false,
@@ -215,6 +218,21 @@ data class TtsProvidersSheetUiState(
 data class TtsProviderEditorUiState(
     val isEditing: Boolean = false,
     val assetDraft: TtsProviderAssetUi? = null,
+    val selectedReusableCredential: ReusableApiCredentialUi? = null,
+    val discovery: ApiModelDiscoveryUiState = ApiModelDiscoveryUiState(),
+)
+
+@Immutable
+data class LiveVoiceProvidersSheetUiState(
+    val isVisible: Boolean = false,
+    val assets: List<LiveVoiceProviderAssetUi> = emptyList(),
+    val selectedAsset: LiveVoiceProviderAssetUi? = null,
+)
+
+@Immutable
+data class LiveVoiceProviderEditorUiState(
+    val isEditing: Boolean = false,
+    val assetDraft: LiveVoiceProviderAssetUi? = null,
     val selectedReusableCredential: ReusableApiCredentialUi? = null,
     val discovery: ApiModelDiscoveryUiState = ApiModelDiscoveryUiState(),
 )
@@ -345,6 +363,20 @@ data class TtsProviderAssetUi(
     val id: com.browntowndev.enclave.domain.model.config.TtsProviderId =
         com.browntowndev.enclave.domain.model.config
             .TtsProviderId(""),
+    val displayName: String = "",
+    val provider: ApiProvider = ApiProvider.OPENAI,
+    val voiceName: String = "",
+    val modelName: String? = null,
+    val baseUrl: String? = null,
+    val credentialAlias: String = "",
+    val useAsDefault: Boolean = false,
+)
+
+@Immutable
+data class LiveVoiceProviderAssetUi(
+    val id: com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId =
+        com.browntowndev.enclave.domain.model.config
+            .LiveVoiceProviderId(""),
     val displayName: String = "",
     val provider: ApiProvider = ApiProvider.OPENAI,
     val voiceName: String = "",
@@ -544,7 +576,9 @@ internal val DefaultModelAssignmentUi.assignmentRowDisplay: AssignmentRowDisplay
                             providerName = providerName,
                             modelName = presetName.toReadableAssignmentLabel(),
                         )
-                    ModelType.TTS ->
+                    ModelType.TTS,
+                    ModelType.LIVE_VOICE,
+                    ->
                         AssignmentRowDisplay(
                             presetName = currentModelName.toReadableAssignmentLabel() ?: currentModelName,
                             providerName = providerName,
@@ -568,6 +602,7 @@ internal val ModelType.displayLabel: String
             ModelType.THINKING -> "Thinking"
             ModelType.VISION -> "Vision (API)"
             ModelType.TTS -> "Text-to-Speech"
+            ModelType.LIVE_VOICE -> "Live Voice"
             ModelType.IMAGE_GENERATION -> "Image Generation"
             ModelType.IMAGE_EDIT -> "Image Edit"
             ModelType.VIDEO_GENERATION -> "Video Generation"
@@ -587,6 +622,7 @@ internal val ModelType.description: String
             ModelType.THINKING -> "A reasoning model with extended context for complex tasks."
             ModelType.VISION -> "A dedicated API vision model that acts as the chat's eyes for image inspection."
             ModelType.TTS -> "Synthesize text responses into natural-sounding speech."
+            ModelType.LIVE_VOICE -> "Realtime speech-to-speech voice conversation."
             ModelType.IMAGE_GENERATION -> "Generate images from text prompts."
             ModelType.IMAGE_EDIT -> "Edit or transform images using a reference image."
             ModelType.VIDEO_GENERATION -> "Generate videos from text prompts."
@@ -735,6 +771,22 @@ object MockSettingsData {
                 isMultimodal = true,
             ),
             DefaultModelAssignmentUi(ModelType.THINKING, ModelSource.ON_DEVICE, "Llama 3 8B (Precise)", "Thinking"),
+            DefaultModelAssignmentUi(
+                ModelType.TTS,
+                ModelSource.API,
+                "Default OpenAI TTS",
+                "Text-to-Speech",
+                "OpenAI",
+                presetName = "alloy",
+            ),
+            DefaultModelAssignmentUi(
+                ModelType.LIVE_VOICE,
+                ModelSource.API,
+                "Gemini Live",
+                "Live Voice",
+                "Google",
+                presetName = "Puck",
+            ),
         )
 
     val baseUiState =
@@ -761,6 +813,20 @@ object MockSettingsData {
                                 displayName = "Default OpenAI TTS",
                                 provider = ApiProvider.OPENAI,
                                 voiceName = "alloy",
+                            ),
+                        ),
+                ),
+            liveVoiceProvidersSheet =
+                LiveVoiceProvidersSheetUiState(
+                    assets =
+                        listOf(
+                            LiveVoiceProviderAssetUi(
+                                id =
+                                    com.browntowndev.enclave.domain.model.config
+                                        .LiveVoiceProviderId("lv-1"),
+                                displayName = "Gemini Live",
+                                provider = ApiProvider.GOOGLE,
+                                voiceName = "Puck",
                             ),
                         ),
                 ),

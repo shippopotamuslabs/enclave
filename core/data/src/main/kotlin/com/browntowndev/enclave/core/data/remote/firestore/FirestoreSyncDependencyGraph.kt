@@ -67,6 +67,7 @@ internal object FirestoreSyncDependencyGraph {
             firstNonBlankString(source, "api_config_id", "api_model_config_id")
         val ttsProviderId = source["tts_provider_id"] as? String
         val mediaProviderId = source["media_provider_id"] as? String
+        val liveVoiceProviderId = source["live_voice_provider_id"] as? String
         buildList {
             if (!localModelConfigId.isNullOrBlank()) {
                 add(ParentRef("local_model_configs", localModelConfigId))
@@ -75,6 +76,9 @@ internal object FirestoreSyncDependencyGraph {
                 add(ParentRef("api_model_configs", apiModelConfigId))
             }
             if (!ttsProviderId.isNullOrBlank()) add(ParentRef("tts_providers", ttsProviderId))
+            if (!liveVoiceProviderId.isNullOrBlank()) {
+                add(ParentRef("live_voice_providers", liveVoiceProviderId))
+            }
             if (!mediaProviderId.isNullOrBlank()) {
                 add(ParentRef("media_providers", mediaProviderId))
             }
@@ -106,6 +110,7 @@ internal object FirestoreSyncDependencyGraph {
             "local_model_configs" to LOCAL_MODEL_CONFIG_PARENTS,
             "default_models" to DEFAULT_MODEL_PARENTS,
             "tts_providers" to NO_PARENTS,
+            "live_voice_providers" to NO_PARENTS,
             "media_providers" to NO_PARENTS,
             "studio_albums" to NO_PARENTS,
             "studio_gallery" to STUDIO_GALLERY_PARENTS,

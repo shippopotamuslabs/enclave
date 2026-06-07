@@ -24,10 +24,8 @@ class FirestoreSyncDependencyGraphTest {
                 .toSet()
         val graphPaths = FirestoreSyncDependencyGraph.collectionPaths()
 
-        // 22 = production total after `SearchToolSettingsSyncHandler` is registered
-        // (21 prior + 1 new). See `FirestoreSyncAdapterRegistryTest` for the matching
-        // assertion on the registry side.
-        assertEquals(22, registryPaths.size)
+        // 23 = production total after `LiveVoiceProviderSyncHandler` is registered.
+        assertEquals(23, registryPaths.size)
         assertEquals(0, registryPaths.minus(graphPaths).size)
         assertEquals(0, graphPaths.minus(registryPaths).size)
     }

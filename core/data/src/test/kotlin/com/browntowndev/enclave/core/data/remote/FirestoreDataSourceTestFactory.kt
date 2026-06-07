@@ -114,6 +114,7 @@ internal fun createTestFirestoreDataSource(
                 ConfigSyncDaos(
                     memoriesDao = memoriesDao,
                     ttsProviderDao = ttsProviderDao,
+                    liveVoiceProviderDao = mockk(relaxed = true),
                     mediaProviderDao = mediaProviderDao,
                     apiModelConfigurationsDao = apiModelConfigurationsDao,
                     localModelsDao = localModelsDao,
@@ -236,6 +237,7 @@ internal fun testFirestoreSyncDaos(
             ConfigSyncDaos(
                 memoriesDao = memoriesDao,
                 ttsProviderDao = ttsProviderDao,
+                liveVoiceProviderDao = mockk(relaxed = true),
                 mediaProviderDao = mediaProviderDao,
                 apiModelConfigurationsDao = apiModelConfigurationsDao,
                 localModelsDao = localModelsDao,

@@ -18,6 +18,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.feature.chat.components.InputBar
+import com.browntowndev.enclave.feature.chat.LiveVoiceUiState
+import com.browntowndev.enclave.feature.chat.components.LiveVoiceOverlay
 import com.browntowndev.enclave.feature.chat.components.ShareBottomSheet
 import com.browntowndev.enclave.feature.chat.components.ShieldOverlay
 import com.browntowndev.enclave.feature.chat.components.StreamingResponseHapticEffect
@@ -33,6 +35,9 @@ fun ChatScreen(
     onSendMessage: (String) -> Unit,
     onStopGenerating: () -> Unit,
     onModeChange: (ChatModeUi) -> Unit,
+    onStartLiveVoice: () -> Unit = {},
+    onEndLiveVoice: () -> Unit = {},
+    onToggleLiveVoiceMute: () -> Unit = {},
     onInputChange: (String) -> Unit,
     onEditMessage: (String) -> Unit,
     onPlayAudio: (String) -> Unit,
@@ -96,6 +101,10 @@ fun ChatScreen(
             containerColor = MaterialTheme.colorScheme.background,
             topBar = {
                 ChatTopBar(
+                    selectedMode = uiState.selectedMode,
+                    selectedModeModelName = uiState.selectedModeModelName,
+                    modeModelNames = uiState.modeModelNames,
+                    onModeChange = onModeChange,
                     onMenuClick = onNavigateToHistory,
                     onNewChatClick = onNewChat,
                     onViewChatStatsClick = onViewChatStatsClick,
@@ -162,12 +171,11 @@ fun ChatScreen(
                         isPhotoAttachmentEnabled = uiState.isPhotoAttachmentEnabled,
                         photoAttachmentMaxItems = uiState.photoAttachmentMaxItems,
                         photoAttachmentDisabledReason = uiState.photoAttachmentDisabledReason,
-                        selectedMode = uiState.selectedMode,
                         isGenerating = uiState.isGenerating,
                         canStop = uiState.canStop,
                         isGlobalInferenceBlocked = uiState.isGlobalInferenceBlocked,
+                        isLiveVoiceEnabled = uiState.hasLiveVoiceProviderAssigned,
                         onInputChange = onInputChange,
-                        onModeChange = onModeChange,
                         onSend = onSendMessage,
                         onStopGenerating = onStopGenerating,
                         onImageAttach = {
@@ -196,8 +204,17 @@ fun ChatScreen(
                         onClearImage = onRemoveImage,
                         onClearFile = onClearFile,
                         onMicClick = onMicClick,
+                        onLiveVoiceClick = onStartLiveVoice,
                     )
                 }
+            }
+
+            if (uiState.liveVoiceState !is LiveVoiceUiState.Idle) {
+                LiveVoiceOverlay(
+                    state = uiState.liveVoiceState,
+                    onEnd = onEndLiveVoice,
+                    onToggleMute = onToggleLiveVoiceMute,
+                )
             }
         }
     }
