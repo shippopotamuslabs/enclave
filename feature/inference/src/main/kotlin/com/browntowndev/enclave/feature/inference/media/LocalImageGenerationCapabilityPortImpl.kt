@@ -47,6 +47,8 @@ class LocalImageGenerationCapabilityPortImpl
             val sd15Npu = resolveSd15Npu(arm64, totalMem, minRam, npuAvailable, snapdragon)
             val sd15Cpu = resolveSd15Cpu(arm64, totalMem, minRam, mnnProbe)
             val sdxlNpu = resolveSdxlNpu(arm64, totalMem, minRam, tier, npuAvailable)
+            // Juggernaut shares the SDXL-family QNN gate (Gen3+).
+            val juggernautNpu = sdxlNpu
 
             val (recommendedBackend, recommendedModelId) = recommendBackend(sd15Npu, sd15Cpu)
 
@@ -60,6 +62,10 @@ class LocalImageGenerationCapabilityPortImpl
                             LocalImageGenerationModelId.SDXL_QNN,
                             LocalImageGenerationCapabilityPolicy.SDXL_BLOCKED_REASON,
                         )
+                        put(
+                            LocalImageGenerationModelId.JUGGERNAUT_XL_QNN,
+                            LocalImageGenerationCapabilityPolicy.SDXL_BLOCKED_REASON,
+                        )
                     }
                 }
 
@@ -69,6 +75,7 @@ class LocalImageGenerationCapabilityPortImpl
                 sd15NpuSupported = sd15Npu,
                 sd15CpuSupported = sd15Cpu,
                 sdxlNpuSupported = sdxlNpu,
+                juggernautXlNpuSupported = juggernautNpu,
                 recommendedBackend = recommendedBackend,
                 recommendedModelId = recommendedModelId,
                 diagnostics = diagnostics,
@@ -132,8 +139,7 @@ class LocalImageGenerationCapabilityPortImpl
         ): LocalImageGenTriState =
             when {
                 !arm64 || totalMem < minRam -> LocalImageGenTriState.NO
-                mnnProbe >= 2 -> LocalImageGenTriState.YES
-                mnnProbe == 1 -> LocalImageGenTriState.UNKNOWN
+                mnnProbe >= 1 -> LocalImageGenTriState.YES
                 else -> LocalImageGenTriState.NO
             }
 

@@ -260,6 +260,44 @@
       "configurations": []
     },
     {
+      "displayName": "Juggernaut XL (NPU)",
+      "huggingFaceModelName": "xororz/sdxl-qnn",
+      "fileName": "juggernaut_qnn2.28_8gen3.zip",
+      "sha256": "b27231823434c4e4184a61f77401227264a5308c6846c6fc628c37583e76413c",
+      "sizeInBytes": 3747687306,
+      "modelFileFormat": "BIN",
+      "source": "HF",
+      "isMultimodal": false,
+      "configurations": [
+        {
+          "configId": "juggernaut-local-config",
+          "displayName": "Juggernaut XL (NPU)",
+          "systemPrompt": "",
+          "temperature": 0.0,
+          "topK": 1,
+          "topP": 1.0,
+          "minP": 0.0,
+          "repetitionPenalty": 1.0,
+          "contextWindow": 0,
+          "maxTokens": 0,
+          "thinkingEnabled": false,
+          "defaultAssignments": ["image_edit"]
+        }
+      ]
+    },
+    {
+      "displayName": "Juggernaut XL NPU weights",
+      "huggingFaceModelName": "xororz/sdxl-qnn",
+      "fileName": "juggernaut_qnn2.28_8gen3.zip",
+      "sha256": "b27231823434c4e4184a61f77401227264a5308c6846c6fc628c37583e76413c",
+      "sizeInBytes": 3747687306,
+      "modelFileFormat": "BIN",
+      "source": "HF",
+      "utilityType": "juggernaut_xl_qnn_pack",
+      "isMultimodal": false,
+      "configurations": []
+    },
+    {
       "huggingFaceModelName": null,
       "huggingFacePath": "chat_title_generator",
       "fileName": "tokenizer.json",
@@ -301,6 +339,22 @@
           "role": "text_encoder",
           "fileName": "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip",
           "utilityType": "sdxl_qnn_pack"
+        }
+      ]
+    },
+    {
+      "packId": "juggernaut-xl-t2i",
+      "displayName": "Juggernaut XL (NPU)",
+      "slot": "image_edit",
+      "members": [
+        {
+          "role": "diffusion",
+          "fileName": "juggernaut_qnn2.28_8gen3.zip"
+        },
+        {
+          "role": "text_encoder",
+          "fileName": "juggernaut_qnn2.28_8gen3.zip",
+          "utilityType": "juggernaut_xl_qnn_pack"
         }
       ]
     }

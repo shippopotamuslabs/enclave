@@ -27,4 +27,8 @@ data class DownloadModelsResult(
      * Populated at init from `modelPacks[]` so API onboarding can exclude the full pack without hardcoded policy.
      */
     val imageGenerationPackMemberSha256s: Set<String> = emptySet(),
+    /**
+     * SHA-256 hashes of all members in [ModelType.IMAGE_EDIT] catalog packs.
+     */
+    val imageEditPackMemberSha256s: Set<String> = emptySet(),
 )

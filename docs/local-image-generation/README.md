@@ -9,7 +9,7 @@ GGML Vulkan on Adreno (including Razr Fold 2026-class devices) hit `vk::DeviceLo
 | Backend | Enum | SD 1.5 | SDXL | Status |
 |---------|------|--------|------|--------|
 | Qualcomm QNN (Hexagon NPU) | `QNN_NPU` | Yes | Gen 3+ only | **Enclave diffusion engine** — in-process JNI (`enclave_diffusion_engine`) |
-| MNN CPU | `CPU_MNN` | Fallback | No | Routes through same engine (MNN CLIP + QNN graphs) |
+| MNN CPU | `CPU_MNN` | Fallback | No | Full MNN CPU pipeline (CLIP + UNet + VAE) |
 | Vulkan / GGML | — | No | No | Removed |
 
 Backend selection lives in `SelectLocalImageGenerationBackendUseCase` (domain). Runtime wiring is `LocalImageGenerationEngine` in `:feature:inference`.
@@ -43,7 +43,12 @@ Optional CPU package uses registry SHA placeholder `000…001` until a real cata
 
 1. Run `./scripts/setup-enclave-diffusion-deps.sh` so MNN links statically into `liblocal_image_gen_jni.so`.
 2. Place SD 1.5 CPU models under `files/models/sd15-cpu/` (`clip.mnn`, `unet.mnn`, `vae_decoder.mnn`, `tokenizer.json`).
-3. `mnn_bridge.cpp` launches the same backend with `--cpu` when MNN artifacts are present.
+3. Add optional `vae_encoder.mnn` for img2img.
+4. `mnn_bridge.cpp` launches the in-process MNN CPU pipeline when the required artifacts are present.
+
+The CPU model layout and tensor names follow [Local Dream](https://github.com/xororz/local-dream):
+`clip.mnn` uses `input_ids`, `unet.mnn` uses `sample` / `timestep` /
+`encoder_hidden_states`, and the VAE models use `input` or `latent_sample`.
 
 ## SD 1.5 QNN model pack (catalog SHA unchanged)
 

@@ -32,6 +32,15 @@ object ModelPackTestFixtures {
     const val SDXL_QNN_PACK_FILE = "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip"
     const val SDXL_QNN_PACK_SHA = "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83"
 
+    // Juggernaut pack fixtures (verified metadata from juggernaut-xl-qnn spec).
+    const val JUGGERNAUT_PACK_ID = "juggernaut-xl-t2i"
+    const val JUGGERNAUT_PACK_DISPLAY = "Juggernaut XL (NPU)"
+    const val JUGGERNAUT_DIFFUSION_FILE = "juggernaut_qnn2.28_8gen3.zip"
+    const val JUGGERNAUT_DIFFUSION_SHA = LocalImageGenerationModelRegistry.JUGGERNAUT_XL_QNN_SHA256
+    const val JUGGERNAUT_CONFIG_ID = "juggernaut-local-config"
+    const val JUGGERNAUT_QNN_PACK_FILE = "juggernaut_qnn2.28_8gen3.zip"
+    const val JUGGERNAUT_QNN_PACK_SHA = "b27231823434c4e4184a61f77401227264a5308c6846c6fc628c37583e76413c"
+
     val packMemberShas: Set<String> = parsedCatalog(includeWhisper = false).packMemberSha256sForSlot(ModelType.IMAGE_GENERATION)
 
     fun diffusionAsset(): LocalModelAsset =
@@ -169,6 +178,87 @@ object ModelPackTestFixtures {
      * Catalog carrying BOTH the SD1.5 and SDXL image-generation packs with their QNN utility members,
      * so download-slice scenarios can exercise per-pack inclusion / suppression.
      */
+    fun juggernautDiffusionAsset(): LocalModelAsset =
+        LocalModelAsset(
+            metadata =
+                LocalModelMetadata(
+                    id = LocalModelId("juggernaut-diffusion"),
+                    displayName = JUGGERNAUT_PACK_DISPLAY,
+                    huggingFaceModelName = "xororz/sdxl-qnn",
+                    remoteFileName = JUGGERNAUT_DIFFUSION_FILE,
+                    localFileName = JUGGERNAUT_DIFFUSION_FILE,
+                    sha256 = JUGGERNAUT_DIFFUSION_SHA,
+                    sizeInBytes = 3_747_687_306L,
+                    modelFileFormat = ModelFileFormat.BIN,
+                    source = DownloadSource.HUGGING_FACE,
+                ),
+            configurations =
+                listOf(
+                    LocalModelConfiguration(
+                        id = LocalModelConfigurationId(JUGGERNAUT_CONFIG_ID),
+                        localModelId = LocalModelId("juggernaut-diffusion"),
+                        displayName = JUGGERNAUT_PACK_DISPLAY,
+                        maxTokens = 0,
+                        contextWindow = 0,
+                        temperature = 0.0,
+                        topP = 1.0,
+                        topK = 1,
+                        repetitionPenalty = 1.0,
+                        systemPrompt = "",
+                        defaultAssignments = listOf(ModelType.IMAGE_EDIT),
+                    ),
+                ),
+        )
+
+    fun juggernautQnnPackUtilityAsset(): LocalModelAsset =
+        utilityAsset(
+            fileName = JUGGERNAUT_QNN_PACK_FILE,
+            sha256 = JUGGERNAUT_QNN_PACK_SHA,
+            sizeInBytes = 3_747_687_306L,
+            utilityType = com.browntowndev.enclave.domain.model.config.UtilityType.JUGGERNAUT_XL_QNN_PACK,
+            format = ModelFileFormat.BIN,
+        )
+
+    fun juggernautPack(): ModelPack =
+        ModelPack(
+            packId = JUGGERNAUT_PACK_ID,
+            displayName = JUGGERNAUT_PACK_DISPLAY,
+            slot = ModelType.IMAGE_EDIT,
+            members =
+                listOf(
+                    ModelPackMember(ModelPackRole.DIFFUSION, juggernautDiffusionAsset()),
+                    ModelPackMember(ModelPackRole.TEXT_ENCODER, juggernautQnnPackUtilityAsset()),
+                ),
+        )
+
+    fun parsedCatalogWithAllThreeImagePacks(): ParsedModelCatalog =
+        ParsedModelCatalog(
+            assets =
+                listOf(
+                    diffusionAsset(),
+                    sd15QnnPackUtilityAsset(),
+                    sdxlDiffusionAsset(),
+                    sdxlQnnPackUtilityAsset(),
+                    juggernautDiffusionAsset(),
+                    juggernautQnnPackUtilityAsset(),
+                ),
+            packs =
+                listOf(
+                    ModelPack(
+                        packId = PACK_ID,
+                        displayName = PACK_DISPLAY,
+                        slot = ModelType.IMAGE_GENERATION,
+                        members =
+                            listOf(
+                                ModelPackMember(ModelPackRole.DIFFUSION, diffusionAsset()),
+                                ModelPackMember(ModelPackRole.TEXT_ENCODER, sd15QnnPackUtilityAsset()),
+                            ),
+                    ),
+                    sdxlPack(),
+                    juggernautPack(),
+                ),
+        )
+
     fun parsedCatalogWithSdxl(): ParsedModelCatalog =
         ParsedModelCatalog(
             assets =

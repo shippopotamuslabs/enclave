@@ -11,6 +11,14 @@ std::mutex g_mnn_engine_mutex;
 EnclaveDiffusionHandle* g_mnn_engine = nullptr;
 std::string g_mnn_engine_model_dir;
 
+void releaseMnnEngine() {
+    if (g_mnn_engine != nullptr) {
+        enclave_diffusion_destroy(g_mnn_engine);
+        g_mnn_engine = nullptr;
+        g_mnn_engine_model_dir.clear();
+    }
+}
+
 void copyError(const char* message, char* error_out, int error_out_len) {
     if (error_out == nullptr || error_out_len <= 0) {
         return;
@@ -26,8 +34,7 @@ EnclaveDiffusionHandle* ensureMnnEngine(const char* model_dir, char* error_out, 
         return g_mnn_engine;
     }
     if (g_mnn_engine != nullptr) {
-        enclave_diffusion_destroy(g_mnn_engine);
-        g_mnn_engine = nullptr;
+        releaseMnnEngine();
     }
     EnclaveDiffusionConfig config {};
     config.model_dir = dir.c_str();
@@ -42,7 +49,7 @@ EnclaveDiffusionHandle* ensureMnnEngine(const char* model_dir, char* error_out, 
 
 }  // namespace
 
-extern "C" int mnn_probe_runtime() { return local_image_gen::probe_mnn_libs(); }
+extern "C" int mnn_probe_runtime() { return enclave_diffusion_mnn_available(); }
 
 extern "C" int mnn_generate_image(
     const char* model_dir,
@@ -65,6 +72,9 @@ extern "C" int mnn_generate_image(
         copyError("MNN runtime not ready for local image generation.", error_out, error_out_len);
         return -1;
     }
+    if (!local_image_gen::mnn_model_dir_ready(model_dir, error_out, error_out_len)) {
+        return -1;
+    }
     EnclaveDiffusionHandle* engine = ensureMnnEngine(model_dir, error_out, error_out_len);
     if (engine == nullptr) {
         return -1;
@@ -85,5 +95,24 @@ extern "C" int mnn_generate_image(
     params.memory_policy =
         memory_policy == 0 ? ENCLAVE_MEMORY_POLICY_FULL : ENCLAVE_MEMORY_POLICY_LOW_RAM;
     params.output_png_path = output_path != nullptr ? output_path : "";
-    return enclave_diffusion_generate(engine, &params, nullptr, nullptr, error_out, error_out_len);
+    const int rc = enclave_diffusion_generate(engine, &params, nullptr, nullptr, error_out, error_out_len);
+    if (params.memory_policy == ENCLAVE_MEMORY_POLICY_LOW_RAM) {
+        std::lock_guard<std::mutex> lock(g_mnn_engine_mutex);
+        releaseMnnEngine();
+    }
+    return rc;
+}
+
+extern "C" void mnn_cancel_generation() {
+    std::lock_guard<std::mutex> lock(g_mnn_engine_mutex);
+    if (g_mnn_engine != nullptr) {
+        enclave_diffusion_cancel(g_mnn_engine);
+    }
+}
+
+extern "C" void mnn_on_trim_memory(int level) {
+    std::lock_guard<std::mutex> lock(g_mnn_engine_mutex);
+    if (g_mnn_engine != nullptr) {
+        enclave_diffusion_on_trim_memory(g_mnn_engine, level);
+    }
 }

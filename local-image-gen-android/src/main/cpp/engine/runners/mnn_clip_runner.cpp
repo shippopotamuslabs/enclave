@@ -23,13 +23,26 @@ struct MnnSession {
     std::shared_ptr<MNN::Interpreter> interpreter;
     MNN::Session* session = nullptr;
     int hidden = 0;
+    bool uses_input_embedding = false;
 };
 
 bool sessionReady(const MnnSession& session) {
     return session.interpreter != nullptr && session.session != nullptr && session.hidden > 0;
 }
 
-bool createSession(const std::string& path, int hidden, MnnSession& out, std::string& error) {
+void releaseSession(MnnSession& session) {
+    if (session.interpreter != nullptr && session.session != nullptr) {
+        session.interpreter->releaseSession(session.session);
+    }
+    session = MnnSession{};
+}
+
+bool createSession(
+    const std::string& path,
+    int hidden,
+    bool uses_input_embedding,
+    MnnSession& out,
+    std::string& error) {
     out.interpreter.reset(MNN::Interpreter::createFromFile(path.c_str()));
     if (!out.interpreter) {
         error = "Failed to create MNN interpreter for " + path;
@@ -48,27 +61,15 @@ bool createSession(const std::string& path, int hidden, MnnSession& out, std::st
         return false;
     }
     out.hidden = hidden;
+    out.uses_input_embedding = uses_input_embedding;
     return true;
 }
 
-bool runClipSession(
+bool readClipOutputs(
     MnnSession& clip,
-    const std::vector<float>& input_embedding,
     std::vector<float>& hidden_states,
     std::vector<float>* pooled,
     std::string& error) {
-    MNN::Tensor* input = clip.interpreter->getSessionInput(clip.session, "input_embedding");
-    if (input == nullptr) {
-        error = "MNN CLIP input tensor input_embedding not found.";
-        return false;
-    }
-    std::vector<int> dims {1, kClipTokenCount, clip.hidden};
-    clip.interpreter->resizeTensor(input, dims);
-    clip.interpreter->resizeSession(clip.session);
-
-    MNN::Tensor input_host(input, MNN::Tensor::CAFFE);
-    std::copy(input_embedding.begin(), input_embedding.end(), input_host.host<float>());
-    input->copyFromHostTensor(&input_host);
     if (clip.interpreter->runSession(clip.session) != MNN::NO_ERROR) {
         error = "MNN CLIP session execution failed.";
         return false;
@@ -96,6 +97,46 @@ bool runClipSession(
     }
     return true;
 }
+
+bool runClipEmbeddingSession(
+    MnnSession& clip,
+    const std::vector<float>& input_embedding,
+    std::vector<float>& hidden_states,
+    std::vector<float>* pooled,
+    std::string& error) {
+    MNN::Tensor* input = clip.interpreter->getSessionInput(clip.session, "input_embedding");
+    if (input == nullptr) {
+        error = "MNN CLIP input tensor input_embedding not found.";
+        return false;
+    }
+    clip.interpreter->resizeTensor(input, {1, kClipTokenCount, clip.hidden});
+    clip.interpreter->resizeSession(clip.session);
+
+    MNN::Tensor input_host(input, MNN::Tensor::CAFFE);
+    std::copy(input_embedding.begin(), input_embedding.end(), input_host.host<float>());
+    input->copyFromHostTensor(&input_host);
+    return readClipOutputs(clip, hidden_states, pooled, error);
+}
+
+bool runClipTokenSession(
+    MnnSession& clip,
+    const std::vector<int32_t>& input_ids,
+    std::vector<float>& hidden_states,
+    std::vector<float>* pooled,
+    std::string& error) {
+    MNN::Tensor* input = clip.interpreter->getSessionInput(clip.session, "input_ids");
+    if (input == nullptr) {
+        error = "MNN CLIP input tensor input_ids not found.";
+        return false;
+    }
+    clip.interpreter->resizeTensor(input, {1, kClipTokenCount});
+    clip.interpreter->resizeSession(clip.session);
+
+    MNN::Tensor input_host(input, MNN::Tensor::CAFFE);
+    std::copy(input_ids.begin(), input_ids.end(), input_host.host<int32_t>());
+    input->copyFromHostTensor(&input_host);
+    return readClipOutputs(clip, hidden_states, pooled, error);
+}
 #endif
 
 }  // namespace
@@ -115,7 +156,7 @@ struct MnnClipRunner::Impl {
 
 MnnClipRunner::MnnClipRunner() : impl_(std::make_unique<Impl>()) {}
 
-MnnClipRunner::~MnnClipRunner() = default;
+MnnClipRunner::~MnnClipRunner() { unload(); }
 
 bool MnnClipRunner::load(const PackManifest& manifest, std::string& error) {
 #ifndef ENCLAVE_DIFFUSION_HAS_MNN
@@ -129,29 +170,31 @@ bool MnnClipRunner::load(const PackManifest& manifest, std::string& error) {
             error = "SDXL requires clip.mnn and clip_2.mnn.";
             return false;
         }
-    } else if (!exists(manifest.clip_v2_mnn)) {
-        error = "SD1.5 requires clip_v2.mnn.";
-        return false;
-    }
-    if (!readFp16EmbeddingFile(manifest.token_emb_bin, impl_->token_emb, error) ||
-        !readFp32EmbeddingFile(manifest.pos_emb_bin, impl_->pos_emb, error)) {
-        return false;
-    }
-    if (manifest.sdxl &&
-        (!readFp16EmbeddingFile(manifest.token_emb_2_bin, impl_->token_emb_2, error) ||
-         !readFp32EmbeddingFile(manifest.pos_emb_2_bin, impl_->pos_emb_2, error))) {
+    } else if (!exists(manifest.clip_v2_mnn) && !exists(manifest.clip_mnn)) {
+        error = "SD1.5 requires clip_v2.mnn or clip.mnn.";
         return false;
     }
 
     if (manifest.sdxl) {
-        if (!createSession(manifest.clip_mnn, 768, impl_->clip, error) ||
-            !createSession(manifest.clip_2_mnn, 1280, impl_->clip_2, error)) {
+        if (!readFp16EmbeddingFile(manifest.token_emb_bin, impl_->token_emb, error) ||
+            !readFp32EmbeddingFile(manifest.pos_emb_bin, impl_->pos_emb, error) ||
+            !readFp16EmbeddingFile(manifest.token_emb_2_bin, impl_->token_emb_2, error) ||
+            !readFp32EmbeddingFile(manifest.pos_emb_2_bin, impl_->pos_emb_2, error) ||
+            !createSession(manifest.clip_mnn, 768, true, impl_->clip, error) ||
+            !createSession(manifest.clip_2_mnn, 1280, true, impl_->clip_2, error)) {
             unload();
             return false;
         }
-    } else if (!createSession(manifest.clip_v2_mnn, 768, impl_->clip, error)) {
-        unload();
-        return false;
+    } else {
+        const bool use_embedding = exists(manifest.clip_v2_mnn);
+        const std::string& clip_path = use_embedding ? manifest.clip_v2_mnn : manifest.clip_mnn;
+        if ((use_embedding &&
+             (!readFp16EmbeddingFile(manifest.token_emb_bin, impl_->token_emb, error) ||
+              !readFp32EmbeddingFile(manifest.pos_emb_bin, impl_->pos_emb, error))) ||
+            !createSession(clip_path, 768, use_embedding, impl_->clip, error)) {
+            unload();
+            return false;
+        }
     }
     impl_->manifest = manifest;
     impl_->loaded = true;
@@ -167,8 +210,8 @@ void MnnClipRunner::unload() {
     impl_->pos_emb.clear();
     impl_->pos_emb_2.clear();
 #ifdef ENCLAVE_DIFFUSION_HAS_MNN
-    impl_->clip = MnnSession{};
-    impl_->clip_2 = MnnSession{};
+    releaseSession(impl_->clip);
+    releaseSession(impl_->clip_2);
 #endif
 }
 
@@ -209,9 +252,12 @@ bool MnnClipRunner::encode(
                          const std::vector<float>& pos_emb,
                          std::vector<float>& hidden,
                          std::vector<float>* pooled) -> bool {
+        if (!session.uses_input_embedding) {
+            return runClipTokenSession(session, tokens, hidden, pooled, error);
+        }
         std::vector<float> input;
         return buildClipInputEmbedding(tokens, token_emb, pos_emb, session.hidden, input, error) &&
-               runClipSession(session, input, hidden, pooled, error);
+               runClipEmbeddingSession(session, input, hidden, pooled, error);
     };
 
     conditioning = ClipConditioning{};

@@ -11,12 +11,17 @@ import com.browntowndev.enclave.domain.model.config.LocalModelAsset
 import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.config.UtilityType
 import com.browntowndev.enclave.domain.model.download.Sd15QnnPackCatalog
+import com.browntowndev.enclave.domain.model.download.JuggernautXlQnnPackCatalog
 import com.browntowndev.enclave.domain.model.download.SdxlQnnPackCatalog
+import com.browntowndev.enclave.domain.model.inference.ModelType
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelRegistry
 import com.browntowndev.enclave.domain.port.download.QnnPackInstallerPort
 import com.browntowndev.enclave.domain.port.download.QnnPackInstallProgressListener
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.ModelConfigFetcherPort
+import com.browntowndev.enclave.domain.usecase.byok.SetDefaultModelUseCase
 import com.browntowndev.enclave.domain.usecase.download.ResolveSd15QnnPackCatalogAssetUseCase
 import com.browntowndev.enclave.domain.usecase.modelconfig.SyncLocalModelRegistryUseCase
 import com.browntowndev.enclave.domain.usecase.modelconfig.SyncUtilityModelRegistryUseCase
@@ -52,6 +57,8 @@ class DownloadFinalizeWorker
         private val modelConfigFetcher: ModelConfigFetcherPort,
         private val syncLocalModelRegistryUseCase: SyncLocalModelRegistryUseCase,
         private val syncUtilityModelRegistryUseCase: SyncUtilityModelRegistryUseCase,
+        private val setDefaultModelUseCase: SetDefaultModelUseCase,
+        private val defaultModelRepository: DefaultModelRepositoryPort,
         private val qnnPackInstaller: QnnPackInstallerPort,
         private val resolveSd15QnnPackCatalogAssetUseCase: ResolveSd15QnnPackCatalogAssetUseCase,
         private val embeddingCoordinator: EmbeddingRegenerationCoordinator,
@@ -284,6 +291,10 @@ class DownloadFinalizeWorker
                         (
                             asset.metadata.utilityType == UtilityType.SDXL_QNN_PACK &&
                                 downloadedShas.any { sha -> SdxlQnnPackCatalog.findBySha256(sha) != null }
+                        ) ||
+                        (
+                            asset.metadata.utilityType == UtilityType.JUGGERNAUT_XL_QNN_PACK &&
+                                downloadedShas.any { sha -> JuggernautXlQnnPackCatalog.findBySha256(sha) != null }
                         )
                 }.map { asset ->
                     when (asset.metadata.utilityType) {
@@ -306,11 +317,24 @@ class DownloadFinalizeWorker
             matchingAssets: List<LocalModelAsset>,
             downloadedShas: List<String>,
         ) {
+            // Utilities install first so the QNN pack is on disk before any slot assignment
+            // validates pack completeness. Track utility and slot SHAs separately: a slot
+            // (config) asset legitimately shares its SHA with the QNN pack utility asset
+            // (same zip, e.g. Juggernaut/SDXL), so a processed utility SHA must not suppress
+            // the matching slot assignment.
+            val processedUtilityShas = mutableSetOf<String>()
             for (asset in matchingAssets) {
                 if (asset.metadata.utilityType != null) {
+                    if (asset.metadata.sha256 in processedUtilityShas) continue
                     syncUtilityAsset(asset, downloadedShas)
-                } else {
+                    processedUtilityShas += asset.metadata.sha256
+                }
+            }
+            val processedSlotShas = mutableSetOf<String>()
+            for (asset in matchingAssets) {
+                if (asset.metadata.utilityType == null && asset.metadata.sha256 !in processedSlotShas) {
                     syncSlotAsset(asset)
+                    processedSlotShas += asset.metadata.sha256
                 }
             }
         }
@@ -321,7 +345,10 @@ class DownloadFinalizeWorker
         ) {
             try {
                 when (asset.metadata.utilityType) {
-                    UtilityType.SD15_QNN_PACK, UtilityType.SDXL_QNN_PACK -> {
+                    UtilityType.SD15_QNN_PACK,
+                    UtilityType.SDXL_QNN_PACK,
+                    UtilityType.JUGGERNAUT_XL_QNN_PACK,
+                    -> {
                         val requiresInstall = asset.metadata.sha256 in downloadedShas
                         val installed =
                             qnnPackInstaller.installIfNeeded(
@@ -344,7 +371,13 @@ class DownloadFinalizeWorker
                     TAG,
                     "Failed to sync utility ${asset.metadata.utilityType}: ${e.message}",
                 )
-                if (asset.metadata.utilityType in setOf(UtilityType.SD15_QNN_PACK, UtilityType.SDXL_QNN_PACK) &&
+                if (
+                    asset.metadata.utilityType in
+                        setOf(
+                            UtilityType.SD15_QNN_PACK,
+                            UtilityType.SDXL_QNN_PACK,
+                            UtilityType.JUGGERNAUT_XL_QNN_PACK,
+                        ) &&
                     asset.metadata.sha256 in downloadedShas
                 ) {
                     throw e
@@ -369,13 +402,56 @@ class DownloadFinalizeWorker
             for (config in asset.configurations) {
                 for (modelType in config.defaultAssignments) {
                     try {
-                        syncLocalModelRegistryUseCase.invoke(modelType, asset)
+                        val resolved =
+                            syncLocalModelRegistryUseCase.invoke(
+                                modelType,
+                                asset,
+                                assignAsDefault = false,
+                            )
+                        if (shouldAssignDefaultForSlot(modelType, asset)) {
+                            runCatching {
+                                setDefaultModelUseCase(
+                                    modelType = modelType,
+                                    localConfigId = resolved.selectedConfig.id,
+                                    apiConfigId = null,
+                                )
+                            }.onFailure { error ->
+                                logger.warning(
+                                    TAG,
+                                    "Skipped default assignment for $modelType: ${error.message}",
+                                )
+                            }
+                        }
                         logger.debug(TAG, "Synced $modelType: ${asset.metadata.localFileName}")
                     } catch (e: Exception) {
                         logger.warning(TAG, "Failed to sync $modelType: ${e.message}")
                     }
                 }
             }
+        }
+
+        /**
+         * Empty slots are always filled. The IMAGE_GENERATION slot additionally lets a
+         * higher-priority local model supersede a lower-priority auto-assigned default, so
+         * SDXL wins over SD1.5 regardless of which pack finalizes first. Other slots and
+         * non-local assignments are never overwritten here.
+         */
+        private suspend fun shouldAssignDefaultForSlot(
+            modelType: ModelType,
+            incomingAsset: LocalModelAsset,
+        ): Boolean {
+            val existing = defaultModelRepository.getDefault(modelType) ?: return true
+            if (modelType != ModelType.IMAGE_GENERATION) {
+                return false
+            }
+            val existingConfigId = existing.localConfigId ?: return false
+            val existingModelId =
+                localModelRepository
+                    .getAssetByConfigId(existingConfigId)
+                    ?.let { LocalImageGenerationModelRegistry.descriptorFor(it)?.id }
+            val incomingModelId = LocalImageGenerationModelRegistry.descriptorFor(incomingAsset)?.id
+            return LocalImageGenerationModelRegistry.imageGenerationSlotPriority(incomingModelId) >
+                LocalImageGenerationModelRegistry.imageGenerationSlotPriority(existingModelId)
         }
 
         private suspend fun persistUtilityAsset(asset: LocalModelAsset) {

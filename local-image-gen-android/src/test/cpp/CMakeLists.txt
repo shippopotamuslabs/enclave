@@ -30,3 +30,9 @@ add_engine_test(scheduler_dpm_test)
 add_engine_test(scheduler_lcm_test)
 add_engine_test(latent_init_test)
 add_engine_test(pack_manifest_test)
+
+add_executable(generate_request_body_test generate_request_body_test.cpp)
+target_include_directories(generate_request_body_test PRIVATE
+    ${ENGINE_CPP}
+)
+add_test(NAME generate_request_body_test COMMAND generate_request_body_test)

@@ -10,6 +10,7 @@ object LocalImageGenerationPaths {
     const val SD15_QNN_SUBDIR = "sd15-qnn"
     const val SD15_CPU_SUBDIR = "sd15-cpu"
     const val SDXL_QNN_SUBDIR = "sdxl-qnn"
+    const val JUGGERNAUT_XL_QNN_SUBDIR = "juggernaut-qnn"
 
     fun resolveQnnModelDir(downloadedModelParentDir: String, relativeModelDir: String = SD15_QNN_SUBDIR): String =
         resolveQnnLaunchDir(
@@ -72,6 +73,9 @@ object LocalImageGenerationPaths {
     fun hasSdxlQnnArtifacts(dir: File): Boolean =
         qnnArtifactsDir(dir, REQUIRED_SDXL_QNN_FILES) != null
 
+    fun hasJuggernautXlQnnArtifacts(dir: File): Boolean =
+        qnnArtifactsDir(dir, REQUIRED_SDXL_QNN_FILES) != null
+
     @Deprecated(
         message = "Use hasSd15QnnArtifacts or hasSdxlQnnArtifacts for pack-specific checks.",
         replaceWith = ReplaceWith("hasSd15QnnArtifacts(dir)"),
@@ -116,8 +120,11 @@ object LocalImageGenerationPaths {
 
     val OPTIONAL_IMG2IMG_QNN_FILES: List<String> = listOf("vae_encoder.bin")
 
+    val OPTIONAL_IMG2IMG_MNN_FILES: List<String> = listOf("vae_encoder.mnn")
+
     fun hasImg2ImgCapability(dir: File): Boolean =
-        OPTIONAL_IMG2IMG_QNN_FILES.all { File(dir, it).isFile }
+        OPTIONAL_IMG2IMG_QNN_FILES.all { File(dir, it).isFile } ||
+            OPTIONAL_IMG2IMG_MNN_FILES.all { File(dir, it).isFile }
 
     val REQUIRED_SD15_QNN_FILES: List<String> =
         listOf(

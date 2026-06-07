@@ -72,27 +72,29 @@ class ResolveAssignedImageGenerationTargetUseCaseTest {
         }
 
     @Test
-    fun `IMAGE_EDIT slot resolves local stable diffusion assignment`() =
+    fun `Juggernaut IMAGE_EDIT assignment resolves juggernaut-qnn model directory`() =
         runTest {
-            val modelFile = "/abs/models/${ModelPackTestFixtures.SDXL_DIFFUSION_FILE}"
+            val modelFile = "/abs/models/${ModelPackTestFixtures.JUGGERNAUT_DIFFUSION_FILE}"
             val filePort =
                 mockk<com.browntowndev.enclave.domain.port.repository.UtilityModelFilePort> {
                     coEvery { resolveLocalModelPath(any()) } returns modelFile
                 }
-            val sdxlConfigId = LocalModelConfigurationId(ModelPackTestFixtures.SDXL_CONFIG_ID)
+            val juggernautConfigId = LocalModelConfigurationId(ModelPackTestFixtures.JUGGERNAUT_CONFIG_ID)
             val useCase =
                 useCaseWith(
                     filePort = filePort,
-                    asset = ModelPackTestFixtures.sdxlDiffusionAsset(),
-                    localConfigId = sdxlConfigId,
+                    asset = ModelPackTestFixtures.juggernautDiffusionAsset(),
+                    localConfigId = juggernautConfigId,
                     slot = ModelType.IMAGE_EDIT,
-                    capabilities = sdxlSupportedCapabilities(),
+                    capabilities = juggernautSupportedCapabilities(),
                 )
 
             val target = useCase(ModelType.IMAGE_EDIT).getOrThrow() as ImageGenerationTarget.LocalStableDiffusion
 
-            assertEquals("/abs/models/sdxl-qnn", target.modelDir)
-            assertEquals(sdxlConfigId, target.localConfigId)
+            assertEquals("/abs/models/juggernaut-qnn", target.modelDir)
+            assertEquals(LocalImageGenerationModelId.JUGGERNAUT_XL_QNN, target.modelId)
+            assertEquals(LocalImageGenerationBackendKind.QNN_NPU, target.selectedBackend)
+            assertEquals(juggernautConfigId, target.localConfigId)
         }
 
     @Test
@@ -142,6 +144,36 @@ class ResolveAssignedImageGenerationTargetUseCaseTest {
                 "Assigned local model is not compatible with image generation.",
                 result.exceptionOrNull()?.message,
             )
+        }
+
+    @Test
+    fun `SD15 assignment falls back to CPU MNN when NPU unavailable`() =
+        runTest {
+            val modelFile = "/abs/models/stable-diffusion-v1-5-Q4_0.gguf"
+            val filePort =
+                mockk<com.browntowndev.enclave.domain.port.repository.UtilityModelFilePort> {
+                    coEvery { resolveLocalModelPath(any()) } returns modelFile
+                }
+            val useCase =
+                useCaseWith(
+                    filePort = filePort,
+                    capabilities =
+                        LocalImageGenerationCapabilities(
+                            npuAvailable = LocalImageGenTriState.NO,
+                            sd15NpuSupported = LocalImageGenTriState.NO,
+                            sd15CpuSupported = LocalImageGenTriState.YES,
+                            sdxlNpuSupported = LocalImageGenTriState.NO,
+                            recommendedBackend = LocalImageGenerationBackendKind.CPU_MNN,
+                            recommendedModelId = LocalImageGenerationModelId.SD15_CPU,
+                            diagnostics = emptyList(),
+                        ),
+                )
+
+            val target = useCase().getOrThrow() as ImageGenerationTarget.LocalStableDiffusion
+
+            assertEquals("/abs/models/sd15-cpu", target.modelDir)
+            assertEquals(LocalImageGenerationModelId.SD15_CPU, target.modelId)
+            assertEquals(LocalImageGenerationBackendKind.CPU_MNN, target.selectedBackend)
         }
 
     @Test
@@ -231,6 +263,18 @@ class ResolveAssignedImageGenerationTargetUseCaseTest {
             sd15NpuSupported = LocalImageGenTriState.YES,
             sd15CpuSupported = LocalImageGenTriState.NO,
             sdxlNpuSupported = LocalImageGenTriState.YES,
+            recommendedBackend = LocalImageGenerationBackendKind.QNN_NPU,
+            recommendedModelId = LocalImageGenerationModelId.SD15_QNN,
+            diagnostics = emptyList(),
+        )
+
+    private fun juggernautSupportedCapabilities(): LocalImageGenerationCapabilities =
+        LocalImageGenerationCapabilities(
+            npuAvailable = LocalImageGenTriState.YES,
+            sd15NpuSupported = LocalImageGenTriState.YES,
+            sd15CpuSupported = LocalImageGenTriState.NO,
+            sdxlNpuSupported = LocalImageGenTriState.YES,
+            juggernautXlNpuSupported = LocalImageGenTriState.YES,
             recommendedBackend = LocalImageGenerationBackendKind.QNN_NPU,
             recommendedModelId = LocalImageGenerationModelId.SD15_QNN,
             diagnostics = emptyList(),

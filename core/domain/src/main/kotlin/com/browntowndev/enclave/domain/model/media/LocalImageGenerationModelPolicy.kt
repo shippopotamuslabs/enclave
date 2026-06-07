@@ -4,12 +4,15 @@ import com.browntowndev.enclave.domain.model.config.LocalModelAsset
 
 object LocalImageGenerationModelPolicy {
     const val DEFAULT_IMG2IMG_DENOISE_STRENGTH = 0.75f
+    const val JUGGERNAUT_DEFAULT_IMG2IMG_DENOISE_STRENGTH = 0.35f
     const val MIN_IMG2IMG_DENOISE_STRENGTH = 0.25f
     const val MAX_IMG2IMG_DENOISE_STRENGTH = 1.0f
     private const val LOW_RAM_MEMORY_CLASS_MB = 384
 
     fun memoryPolicyFor(modelId: LocalImageGenerationModelId, memoryClassMb: Int): LocalImageGenerationMemoryPolicy {
-        if (modelId == LocalImageGenerationModelId.SDXL_QNN) {
+        if (modelId == LocalImageGenerationModelId.SDXL_QNN ||
+            modelId == LocalImageGenerationModelId.JUGGERNAUT_XL_QNN
+        ) {
             return LocalImageGenerationMemoryPolicy.LOW_RAM
         }
         return if (memoryClassMb <= LOW_RAM_MEMORY_CLASS_MB) {
@@ -22,15 +25,9 @@ object LocalImageGenerationModelPolicy {
     private val policies: Map<LocalImageGenerationModelId, LocalImageGenerationPolicy> =
         mapOf(
             LocalImageGenerationModelId.SD15_QNN to
-                LocalImageGenerationPolicy(
-                    supportedImageResolutions = listOf("512x512"),
-                    defaultImageResolution = "512x512",
-                    supportedDiffusionSteps = emptyList(),
-                    defaultDiffusionSteps = 20,
-                    fixedDiffusionSteps = 20,
-                    cfgScale = 7.5f,
-                    scheduler = "dpm",
-                ),
+                sd15Policy(),
+            LocalImageGenerationModelId.SD15_CPU to
+                sd15Policy(),
             LocalImageGenerationModelId.SDXL_QNN to
                 LocalImageGenerationPolicy(
                     supportedImageResolutions = listOf("1024x1024"),
@@ -41,6 +38,17 @@ object LocalImageGenerationModelPolicy {
                     fixedDiffusionSteps = null,
                     cfgScale = 1.5f,
                     scheduler = "lcm",
+                ),
+            LocalImageGenerationModelId.JUGGERNAUT_XL_QNN to
+                LocalImageGenerationPolicy(
+                    supportedImageResolutions = listOf("1024x1024"),
+                    defaultImageResolution = "1024x1024",
+                    supportedDiffusionSteps = listOf(20, 22, 24, 26, 28, 30),
+                    defaultDiffusionSteps = 24,
+                    fixedDiffusionSteps = null,
+                    cfgScale = 4.0f,
+                    scheduler = "dpm",
+                    defaultImg2ImgDenoiseStrength = JUGGERNAUT_DEFAULT_IMG2IMG_DENOISE_STRENGTH,
                 ),
         )
 
@@ -91,7 +99,7 @@ object LocalImageGenerationModelPolicy {
                     if (requested in policy.supportedDiffusionSteps) {
                         requested
                     } else {
-                        policy.defaultDiffusionSteps
+                        clampToSupportedDiffusionSteps(requested, policy)
                     }
                 }
                 else -> fixed
@@ -108,6 +116,44 @@ object LocalImageGenerationModelPolicy {
             scheduler = policy.scheduler,
         )
     }
+
+    private fun clampToSupportedDiffusionSteps(
+        requested: Int,
+        policy: LocalImageGenerationPolicy,
+    ): Int {
+        val supported = policy.supportedDiffusionSteps
+        if (supported.isEmpty()) {
+            return policy.defaultDiffusionSteps
+        }
+        return supported.filter { it >= requested }.minOrNull()
+            ?: supported.max()
+    }
+
+    fun resolveImg2ImgDenoiseStrength(
+        modelId: LocalImageGenerationModelId,
+        settings: ImageGenerationSettings,
+    ): Float {
+        val policy = policyFor(modelId)
+        val requested = settings.resolvedImg2ImgDenoiseStrength()
+        return if (settings.img2ImgDenoiseStrength == DEFAULT_IMG2IMG_DENOISE_STRENGTH &&
+            policy.defaultImg2ImgDenoiseStrength != DEFAULT_IMG2IMG_DENOISE_STRENGTH
+        ) {
+            policy.defaultImg2ImgDenoiseStrength
+        } else {
+            requested
+        }
+    }
+
+    private fun sd15Policy(): LocalImageGenerationPolicy =
+        LocalImageGenerationPolicy(
+            supportedImageResolutions = listOf("512x512"),
+            defaultImageResolution = "512x512",
+            supportedDiffusionSteps = emptyList(),
+            defaultDiffusionSteps = 20,
+            fixedDiffusionSteps = 20,
+            cfgScale = 7.5f,
+            scheduler = "dpm",
+        )
 
     private fun parseSquareResolution(resolution: String): Pair<Int, Int> {
         val parts =
@@ -128,6 +174,7 @@ data class LocalImageGenerationPolicy(
     val fixedDiffusionSteps: Int?,
     val cfgScale: Float,
     val scheduler: String,
+    val defaultImg2ImgDenoiseStrength: Float = LocalImageGenerationModelPolicy.DEFAULT_IMG2IMG_DENOISE_STRENGTH,
 )
 
 enum class LocalImageGenerationMemoryPolicy {

@@ -44,6 +44,8 @@ extern "C" int mnn_generate_image(
     int memory_policy,
     char* error_out,
     int error_out_len);
+extern "C" void mnn_cancel_generation();
+extern "C" void mnn_on_trim_memory(int level);
 
 static int generateInternal(
     JNIEnv* env,
@@ -223,6 +225,7 @@ Java_com_browntowndev_enclave_localimagegen_LocalImageGenNative_nativeGenerateMn
 extern "C" JNIEXPORT void JNICALL
 Java_com_browntowndev_enclave_localimagegen_LocalImageGenNative_nativeCancel(JNIEnv*, jclass) {
     qnn_cancel_generation();
+    mnn_cancel_generation();
 }
 
 extern "C" JNIEXPORT void JNICALL
@@ -231,4 +234,5 @@ Java_com_browntowndev_enclave_localimagegen_LocalImageGenNative_nativeOnTrimMemo
     jclass,
     jint level) {
     qnn_on_trim_memory(level);
+    mnn_on_trim_memory(level);
 }

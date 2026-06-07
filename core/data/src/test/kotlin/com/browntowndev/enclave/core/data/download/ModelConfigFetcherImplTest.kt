@@ -936,11 +936,10 @@ class ModelConfigFetcherImplTest {
         """.trimIndent()
 
     @Test
-    fun `DL-001 catalog parses sd15-t2i and sdxl-t2i`() =
+    fun `DL-001 catalog parses sd15-t2i sdxl-t2i and juggernaut-xl-t2i`() =
         runTest {
             // Parse the SHIPPED model_config.json rather than hand-crafted JSON so the
-            // scenario is red until the production catalog carries BOTH packs with the
-            // SDXL utility (`sdxl_qnn_pack`) membership wired through the parser.
+            // scenario is red until the production catalog carries all three image packs.
             val configFile =
                 listOf(
                     java.io.File("model_config.json"),
@@ -954,8 +953,8 @@ class ModelConfigFetcherImplTest {
             assertTrue(result.isSuccess)
             val catalog = result.getOrThrow()
 
-            // Both image-generation packs are present in catalog order.
-            assertEquals(listOf("sd15-t2i", "sdxl-t2i"), catalog.packs.map { it.packId })
+            // All three local image packs are present in catalog order.
+            assertEquals(listOf("sd15-t2i", "sdxl-t2i", "juggernaut-xl-t2i"), catalog.packs.map { it.packId })
 
             // SD1.5 pack carries its utility (`sd15_qnn_pack`) member.
             val sd15Pack = catalog.packById("sd15-t2i")!!
@@ -977,6 +976,21 @@ class ModelConfigFetcherImplTest {
             assertEquals(
                 UtilityType.SDXL_QNN_PACK,
                 sdxlPack.members
+                    .single { it.role == ModelPackRole.TEXT_ENCODER }
+                    .asset.metadata.utilityType,
+            )
+
+            val juggernautPack = catalog.packById("juggernaut-xl-t2i")!!
+            assertEquals(ModelType.IMAGE_EDIT, juggernautPack.slot)
+            assertEquals(
+                "juggernaut_qnn2.28_8gen3.zip",
+                juggernautPack.members
+                    .single { it.role == ModelPackRole.DIFFUSION }
+                    .asset.metadata.localFileName,
+            )
+            assertEquals(
+                UtilityType.JUGGERNAUT_XL_QNN_PACK,
+                juggernautPack.members
                     .single { it.role == ModelPackRole.TEXT_ENCODER }
                     .asset.metadata.utilityType,
             )

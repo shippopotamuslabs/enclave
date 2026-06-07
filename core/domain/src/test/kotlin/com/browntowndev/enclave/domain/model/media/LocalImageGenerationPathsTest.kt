@@ -121,11 +121,39 @@ class LocalImageGenerationPathsTest {
     }
 
     @Test
+    fun `DL-010 hasJuggernautXlQnnArtifacts detects separate juggernaut-qnn directory`() {
+        val parent = tempDir.toFile()
+        val juggernautDir = File(parent, LocalImageGenerationPaths.JUGGERNAUT_XL_QNN_SUBDIR).apply { mkdirs() }
+        touchSdxlQnn(juggernautDir)
+
+        assertTrue(LocalImageGenerationPaths.hasJuggernautXlQnnArtifacts(juggernautDir))
+        val sdxlDir = File(parent, LocalImageGenerationPaths.SDXL_QNN_SUBDIR)
+        assertFalse(sdxlDir.exists())
+    }
+
+    @Test
+    fun `MUT-006 Juggernaut must not share sdxl-qnn subdirectory constant`() {
+        assertEquals("juggernaut-qnn", LocalImageGenerationPaths.JUGGERNAUT_XL_QNN_SUBDIR)
+        assertFalse(LocalImageGenerationPaths.JUGGERNAUT_XL_QNN_SUBDIR == LocalImageGenerationPaths.SDXL_QNN_SUBDIR)
+    }
+
+    @Test
     fun hasImg2ImgCapability_detectsOptionalEncoder() {
         val dir = tempDir.toFile()
         touchQnn(dir)
         assertFalse(LocalImageGenerationPaths.hasImg2ImgCapability(dir))
         File(dir, "vae_encoder.bin").writeText("x")
+        assertTrue(LocalImageGenerationPaths.hasImg2ImgCapability(dir))
+    }
+
+    @Test
+    fun hasImg2ImgCapability_detectsMnnEncoder() {
+        val dir = File(tempDir.toFile(), "sd15-cpu").apply { mkdirs() }
+        listOf("clip.mnn", "unet.mnn", "vae_decoder.mnn", "tokenizer.json").forEach { name ->
+            File(dir, name).writeText("x")
+        }
+        assertFalse(LocalImageGenerationPaths.hasImg2ImgCapability(dir))
+        File(dir, "vae_encoder.mnn").writeText("x")
         assertTrue(LocalImageGenerationPaths.hasImg2ImgCapability(dir))
     }
 }

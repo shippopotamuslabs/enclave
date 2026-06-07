@@ -8,6 +8,7 @@ data class LocalImageGenerationCapabilities(
     val sd15NpuSupported: LocalImageGenTriState,
     val sd15CpuSupported: LocalImageGenTriState,
     val sdxlNpuSupported: LocalImageGenTriState,
+    val juggernautXlNpuSupported: LocalImageGenTriState = LocalImageGenTriState.NO,
     val recommendedBackend: LocalImageGenerationBackendKind,
     val recommendedModelId: LocalImageGenerationModelId?,
     val diagnostics: List<String>,
@@ -16,5 +17,6 @@ data class LocalImageGenerationCapabilities(
     val isAnyBackendUsable: Boolean =
         sd15NpuSupported == LocalImageGenTriState.YES ||
             sd15CpuSupported == LocalImageGenTriState.YES ||
-            sdxlNpuSupported == LocalImageGenTriState.YES
+            sdxlNpuSupported == LocalImageGenTriState.YES ||
+            juggernautXlNpuSupported == LocalImageGenTriState.YES
 }

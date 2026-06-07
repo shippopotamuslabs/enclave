@@ -19,6 +19,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
@@ -72,6 +73,40 @@ class GetModelPacksForSettingsUseCaseTest {
             val rows = useCase()
 
             assertEquals(ModelPackTestFixtures.PACK_ID, rows.single().pack.packId)
+        }
+
+    @Test
+    fun `SD15 pack remains eligible when only CPU MNN fallback is available`() =
+        runTest {
+            every { capabilityPort.getCapabilities() } returns
+                LocalImageGenerationCapabilities(
+                    npuAvailable = LocalImageGenTriState.NO,
+                    sd15NpuSupported = LocalImageGenTriState.NO,
+                    sd15CpuSupported = LocalImageGenTriState.YES,
+                    sdxlNpuSupported = LocalImageGenTriState.NO,
+                    recommendedBackend = LocalImageGenerationBackendKind.CPU_MNN,
+                    recommendedModelId = LocalImageGenerationModelId.SD15_CPU,
+                    diagnostics = emptyList(),
+                )
+            coEvery { resolveModelCatalog() } returns Result.success(ModelPackTestFixtures.parsedCatalog())
+            coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
+            coEvery { utilityModelRepository.getByUtilityType(any()) } returns null
+            coEvery { verifyModelPackCompleteness(ModelPackTestFixtures.PACK_ID) } returns
+                Result.success(
+                    ModelPackCompleteness(
+                        packId = ModelPackTestFixtures.PACK_ID,
+                        installedCount = 0,
+                        totalCount = 1,
+                        isComplete = false,
+                        members = emptyList(),
+                    ),
+                )
+
+            val rows = useCase()
+            val sd15Row = rows.single { it.pack.packId == ModelPackTestFixtures.PACK_ID }
+
+            assertTrue(sd15Row.isEligible)
+            assertNull(sd15Row.disabledReason)
         }
 
     @Test
@@ -174,6 +209,69 @@ class GetModelPacksForSettingsUseCaseTest {
             assertEquals("Requires Snapdragon 8 Gen 3+ with QNN.", sdxlRow.disabledReason)
             assertFalse(sdxlRow.isEligible)
             assertFalse(sdxlRow.showDownloadAction)
+        }
+
+    @Test
+    @DisplayName("SET-007 Gen2 hides Juggernaut from assignment and shows disabled pack reason")
+    fun set007_gen2BlockedJuggernautPackShowsDisabledReason() =
+        runTest {
+            every { capabilityPort.getCapabilities() } returns
+                LocalImageGenerationCapabilities(
+                    npuAvailable = LocalImageGenTriState.YES,
+                    sd15NpuSupported = LocalImageGenTriState.YES,
+                    sd15CpuSupported = LocalImageGenTriState.NO,
+                    sdxlNpuSupported = LocalImageGenTriState.NO,
+                    juggernautXlNpuSupported = LocalImageGenTriState.NO,
+                    recommendedBackend = LocalImageGenerationBackendKind.QNN_NPU,
+                    recommendedModelId = LocalImageGenerationModelId.SD15_QNN,
+                    diagnostics = emptyList(),
+                    disabledReasonsByModelId =
+                        mapOf(
+                            LocalImageGenerationModelId.JUGGERNAUT_XL_QNN to
+                                "Requires Snapdragon 8 Gen 3+ with QNN.",
+                        ),
+                )
+            coEvery { resolveModelCatalog() } returns Result.success(ModelPackTestFixtures.parsedCatalogWithAllThreeImagePacks())
+            coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
+            coEvery { utilityModelRepository.getByUtilityType(UtilityType.SD15_QNN_PACK) } returns mockk(relaxed = true)
+            coEvery { utilityModelRepository.getByUtilityType(UtilityType.SDXL_QNN_PACK) } returns null
+            coEvery { utilityModelRepository.getByUtilityType(UtilityType.JUGGERNAUT_XL_QNN_PACK) } returns null
+            coEvery { verifyModelPackCompleteness(ModelPackTestFixtures.PACK_ID) } returns
+                Result.success(
+                    ModelPackCompleteness(
+                        packId = ModelPackTestFixtures.PACK_ID,
+                        installedCount = 2,
+                        totalCount = 2,
+                        isComplete = true,
+                        members = emptyList(),
+                    ),
+                )
+            coEvery { verifyModelPackCompleteness(ModelPackTestFixtures.SDXL_PACK_ID) } returns
+                Result.success(
+                    ModelPackCompleteness(
+                        packId = ModelPackTestFixtures.SDXL_PACK_ID,
+                        installedCount = 0,
+                        totalCount = 2,
+                        isComplete = false,
+                        members = emptyList(),
+                    ),
+                )
+            coEvery { verifyModelPackCompleteness(ModelPackTestFixtures.JUGGERNAUT_PACK_ID) } returns
+                Result.success(
+                    ModelPackCompleteness(
+                        packId = ModelPackTestFixtures.JUGGERNAUT_PACK_ID,
+                        installedCount = 0,
+                        totalCount = 2,
+                        isComplete = false,
+                        members = emptyList(),
+                    ),
+                )
+
+            val rows = useCase()
+            val juggernautRow = rows.single { it.pack.packId == ModelPackTestFixtures.JUGGERNAUT_PACK_ID }
+
+            assertEquals("Requires Snapdragon 8 Gen 3+ with QNN.", juggernautRow.disabledReason)
+            assertFalse(juggernautRow.isEligible)
         }
 
     @Test

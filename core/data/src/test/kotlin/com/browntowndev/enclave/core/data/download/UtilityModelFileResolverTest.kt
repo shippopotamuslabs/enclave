@@ -148,7 +148,7 @@ class UtilityModelFileResolverTest {
         runTest {
             val modelsDir = File(tempDir, ModelConfig.MODELS_DIR).apply { mkdirs() }
             val packDir = File(modelsDir, LocalImageGenerationPaths.SDXL_QNN_SUBDIR).apply { mkdirs() }
-            listOf("clip_v2.mnn", "token_emb.bin", "pos_emb.bin", "unet.bin", "vae_decoder.bin", "tokenizer.json").forEach { name ->
+            LocalImageGenerationPaths.REQUIRED_SDXL_QNN_FILES.forEach { name ->
                 File(packDir, name).writeBytes(byteArrayOf(1))
             }
             val repository = repositoryReturning(sdxlQnnPackMetadata())
@@ -160,11 +160,28 @@ class UtilityModelFileResolverTest {
         }
 
     @Test
+    @DisplayName("DL-010 resolves installed Juggernaut QNN pack directory")
+    fun dl010_resolvesInstalledJuggernautQnnPackDirectory() =
+        runTest {
+            val modelsDir = File(tempDir, ModelConfig.MODELS_DIR).apply { mkdirs() }
+            val packDir = File(modelsDir, LocalImageGenerationPaths.JUGGERNAUT_XL_QNN_SUBDIR).apply { mkdirs() }
+            LocalImageGenerationPaths.REQUIRED_SDXL_QNN_FILES.forEach { name ->
+                File(packDir, name).writeBytes(byteArrayOf(1))
+            }
+            val repository = repositoryReturning(juggernautQnnPackMetadata())
+            val resolver = resolver(repository)
+
+            val path = resolver.resolveUtilityModelPath(UtilityType.JUGGERNAUT_XL_QNN_PACK)
+
+            assertEquals(packDir.absolutePath, path)
+        }
+
+    @Test
     fun resolveLocalModelPath_returnsSdxlQnnDirWhenCatalogAssetInstalled() =
         runTest {
             val modelsDir = File(tempDir, ModelConfig.MODELS_DIR).apply { mkdirs() }
             val packDir = File(modelsDir, LocalImageGenerationPaths.SDXL_QNN_SUBDIR).apply { mkdirs() }
-            listOf("clip_v2.mnn", "token_emb.bin", "pos_emb.bin", "unet.bin", "vae_decoder.bin", "tokenizer.json").forEach { name ->
+            LocalImageGenerationPaths.REQUIRED_SDXL_QNN_FILES.forEach { name ->
                 File(packDir, name).writeBytes(byteArrayOf(1))
             }
             val resolver = resolver()
@@ -325,6 +342,19 @@ class UtilityModelFileResolverTest {
             localFileName = "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip",
             sha256 = "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83",
             sizeInBytes = 3_504_485_672L,
+            modelFileFormat = ModelFileFormat.BIN,
+            source = DownloadSource.HUGGING_FACE,
+        )
+
+    private fun juggernautQnnPackMetadata() =
+        UtilityModelMetadata(
+            id = UtilityModelId("juggernaut-qnn-id"),
+            utilityType = UtilityType.JUGGERNAUT_XL_QNN_PACK,
+            huggingFaceModelName = "xororz/sdxl-qnn",
+            remoteFileName = "juggernaut_qnn2.28_8gen3.zip",
+            localFileName = "juggernaut_qnn2.28_8gen3.zip",
+            sha256 = "b27231823434c4e4184a61f77401227264a5308c6846c6fc628c37583e76413c",
+            sizeInBytes = 3_747_687_306L,
             modelFileFormat = ModelFileFormat.BIN,
             source = DownloadSource.HUGGING_FACE,
         )

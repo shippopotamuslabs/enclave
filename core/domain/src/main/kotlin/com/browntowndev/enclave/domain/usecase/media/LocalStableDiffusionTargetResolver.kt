@@ -69,14 +69,18 @@ class LocalStableDiffusionTargetResolver
                     else -> modelFilePath
                 }
 
+            val effectiveModelId =
+                selection.modelId
+                    ?: descriptor.id
+
             return ImageGenerationTarget.LocalStableDiffusion(
                 localConfigId = localConfigId,
                 displayName = asset.displayLabel(),
-                modelId = descriptor.id,
+                modelId = effectiveModelId,
                 modelDir = effectiveModelDir,
                 catalogSha256 = asset.metadata.sha256,
                 selectedBackend = selection.backend,
-                capabilities = LocalImageGenerationModelPolicy.providerCapabilitiesFor(descriptor.id),
+                capabilities = LocalImageGenerationModelPolicy.providerCapabilitiesFor(effectiveModelId),
                 deviceCapabilities = deviceCapabilities,
             )
         }

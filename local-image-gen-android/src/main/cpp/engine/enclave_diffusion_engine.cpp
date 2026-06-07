@@ -5,6 +5,7 @@
 #include "engine/pipeline/image_io.h"
 #include "engine/pipeline/latent_init.h"
 #include "engine/runners/mnn_clip_runner.h"
+#include "engine/runners/mnn_graph_runner.h"
 #include "engine/runners/qnn_graph_runner.h"
 #include "engine/runners/tokenizer_runner.h"
 #include "engine/schedulers/scheduler.h"
@@ -30,11 +31,16 @@ void copyError(const std::string& message, char* err, int err_len) {
 }
 
 bool isSdxl(EnclaveModelFamily family) {
-    return family == ENCLAVE_MODEL_SDXL_QNN;
+    return family == ENCLAVE_MODEL_SDXL_QNN || family == ENCLAVE_MODEL_JUGGERNAUT_XL_QNN;
+}
+
+bool isJuggernaut(EnclaveModelFamily family) {
+    return family == ENCLAVE_MODEL_JUGGERNAUT_XL_QNN;
 }
 
 bool isQnn(EnclaveModelFamily family) {
-    return family == ENCLAVE_MODEL_SD15_QNN || family == ENCLAVE_MODEL_SDXL_QNN;
+    return family == ENCLAVE_MODEL_SD15_QNN || family == ENCLAVE_MODEL_SDXL_QNN ||
+           family == ENCLAVE_MODEL_JUGGERNAUT_XL_QNN;
 }
 
 int defaultWidth(EnclaveModelFamily family) {
@@ -42,10 +48,16 @@ int defaultWidth(EnclaveModelFamily family) {
 }
 
 int defaultSteps(EnclaveModelFamily family) {
+    if (isJuggernaut(family)) {
+        return 24;
+    }
     return isSdxl(family) ? 8 : 20;
 }
 
 float defaultCfg(EnclaveModelFamily family) {
+    if (isJuggernaut(family)) {
+        return 4.0f;
+    }
     return isSdxl(family) ? 1.5f : 7.5f;
 }
 
@@ -54,6 +66,9 @@ float vaeScale(EnclaveModelFamily family) {
 }
 
 const char* defaultScheduler(EnclaveModelFamily family) {
+    if (isJuggernaut(family)) {
+        return "dpm";
+    }
     return isSdxl(family) ? "lcm" : "dpm";
 }
 
@@ -69,6 +84,7 @@ struct EnclaveDiffusionHandle {
     enclave::diffusion::QnnRuntimePaths qnn_paths {};
     enclave::diffusion::TokenizerRunner tokenizer;
     enclave::diffusion::MnnClipRunner clip;
+    enclave::diffusion::MnnGraphRunner mnn;
     enclave::diffusion::QnnGraphRunner qnn;
     std::atomic<bool> cancelled {false};
     /** Trim requested while generate holds mutex; applied when the lock is free. */
@@ -87,7 +103,7 @@ bool validateCreateConfig(
         error = "Diffusion model directory is empty.";
         return false;
     }
-    if (!loadPackManifest(cfg->model_dir, manifest) || !hasRequiredArtifacts(manifest)) {
+    if (!loadPackManifest(cfg->model_dir, manifest) || !hasRequiredArtifacts(manifest, cfg->family)) {
         error = "Diffusion model directory is missing required artifacts.";
         return false;
     }
@@ -109,6 +125,7 @@ bool ensureNotCancelled(EnclaveDiffusionHandle* handle, std::string& error) {
 void forceUnloadAll(EnclaveDiffusionHandle* handle) {
     handle->clip.unload();
     handle->tokenizer.unload();
+    handle->mnn.unloadAll();
     handle->qnn.unloadAll();
 }
 
@@ -121,6 +138,7 @@ void applyTrimMemory(EnclaveDiffusionHandle* handle, int level) {
         handle->tokenizer.unload();
     }
     if (level >= 15) {
+        handle->mnn.unloadAll();
         handle->qnn.unloadAll();
     }
 }
@@ -149,13 +167,25 @@ void unloadAfterStage(EnclaveDiffusionHandle* handle, PipelineStage stage, Encla
             handle->tokenizer.unload();
             break;
         case PipelineStage::VaeEncode:
-            handle->qnn.unloadVaeEncoder();
+            if (isQnn(handle->config.family)) {
+                handle->qnn.unloadVaeEncoder();
+            } else {
+                handle->mnn.unloadVaeEncoder();
+            }
             break;
         case PipelineStage::UnetLoop:
-            handle->qnn.unloadUnet();
+            if (isQnn(handle->config.family)) {
+                handle->qnn.unloadUnet();
+            } else {
+                handle->mnn.unloadUnet();
+            }
             break;
         case PipelineStage::VaeDecode:
-            handle->qnn.unloadVaeDecoder();
+            if (isQnn(handle->config.family)) {
+                handle->qnn.unloadVaeDecoder();
+            } else {
+                handle->mnn.unloadVaeDecoder();
+            }
             break;
         case PipelineStage::Tokenizer:
             break;
@@ -173,14 +203,13 @@ bool runPipeline(
         error = "Inpaint is not enabled in this engine build.";
         return false;
     }
-    if (img2img && !hasImg2ImgEncoder(handle->manifest)) {
-        error = "img2img requires vae_encoder.bin in the model directory.";
+    if (img2img && !hasImg2ImgEncoder(handle->manifest, handle->config.family)) {
+        error = isQnn(handle->config.family)
+            ? "img2img requires vae_encoder.bin in the model directory."
+            : "img2img requires vae_encoder.mnn in the model directory.";
         return false;
     }
-    if (!isQnn(handle->config.family)) {
-        error = "MNN full diffusion is not enabled; CLIP runs through MNN and diffusion graphs run through QNN.";
-        return false;
-    }
+    const bool use_qnn = isQnn(handle->config.family);
 
     const int width = params.width > 0 ? params.width : defaultWidth(handle->config.family);
     const int height = params.height > 0 ? params.height : defaultWidth(handle->config.family);
@@ -206,6 +235,7 @@ bool runPipeline(
     const int sample_height = std::max(height / 8, 1);
     const float scale = vaeScale(handle->config.family);
     handle->qnn.setSpatialSize(width, height);
+    handle->mnn.setSpatialSize(width, height);
     const LatentShape latent_shape {1, 4, sample_height, sample_width};
     const float denoise_strength =
         params.denoise_strength > 0.0f ? params.denoise_strength : 0.75f;
@@ -251,12 +281,22 @@ bool runPipeline(
                         error)) {
                     return false;
                 }
-                if (!handle->qnn.isVaeEncoderLoaded() &&
-                    !handle->qnn.loadVaeEncoder(handle->manifest, handle->qnn_paths, error)) {
-                    return false;
-                }
-                if (!handle->qnn.runVaeEncoder(image.pixels, vae_moments, error)) {
-                    return false;
+                if (use_qnn) {
+                    if (!handle->qnn.isVaeEncoderLoaded() &&
+                        !handle->qnn.loadVaeEncoder(handle->manifest, handle->qnn_paths, error)) {
+                        return false;
+                    }
+                    if (!handle->qnn.runVaeEncoder(image.pixels, vae_moments, error)) {
+                        return false;
+                    }
+                } else {
+                    if (!handle->mnn.isVaeEncoderLoaded() &&
+                        !handle->mnn.loadVaeEncoder(handle->manifest, error)) {
+                        return false;
+                    }
+                    if (!handle->mnn.runVaeEncoder(image.pixels, vae_moments, error)) {
+                        return false;
+                    }
                 }
                 const size_t latent_count =
                     static_cast<size_t>(latent_shape.batch) * static_cast<size_t>(latent_shape.channels) *
@@ -289,8 +329,13 @@ bool runPipeline(
                     }
                     latents = noise;
                 }
-                if (!handle->qnn.isUnetLoaded() &&
-                    !handle->qnn.loadUnet(handle->manifest, handle->qnn_paths, error)) {
+                if (use_qnn) {
+                    if (!handle->qnn.isUnetLoaded() &&
+                        !handle->qnn.loadUnet(handle->manifest, handle->qnn_paths, error)) {
+                        return false;
+                    }
+                } else if (!handle->mnn.isUnetLoaded() &&
+                           !handle->mnn.loadUnet(handle->manifest, error)) {
                     return false;
                 }
                 {
@@ -302,13 +347,22 @@ bool runPipeline(
                         std::vector<float> noise_pred;
                         const std::vector<float> scaled_latents =
                             scheduler->scale_model_input(latents, scheduler->timestepAt(i));
-                        if (!handle->qnn.runUnet(
-                                scaled_latents,
-                                scheduler->timestepAt(i),
-                                conditioning,
-                                cfg_scale,
-                                noise_pred,
-                                error)) {
+                        const bool ran_unet = use_qnn
+                            ? handle->qnn.runUnet(
+                                  scaled_latents,
+                                  scheduler->timestepAt(i),
+                                  conditioning,
+                                  cfg_scale,
+                                  noise_pred,
+                                  error)
+                            : handle->mnn.runUnet(
+                                  scaled_latents,
+                                  scheduler->timestepAt(i),
+                                  conditioning,
+                                  cfg_scale,
+                                  noise_pred,
+                                  error);
+                        if (!ran_unet) {
                             return false;
                         }
                         latents = scheduler->step(latents, noise_pred, i);
@@ -319,15 +373,23 @@ bool runPipeline(
                 }
                 break;
             case PipelineStage::VaeDecode:
-                if (!handle->qnn.isVaeDecoderLoaded() &&
-                    !handle->qnn.loadVaeDecoder(handle->manifest, handle->qnn_paths, error)) {
+                if (use_qnn) {
+                    if (!handle->qnn.isVaeDecoderLoaded() &&
+                        !handle->qnn.loadVaeDecoder(handle->manifest, handle->qnn_paths, error)) {
+                        return false;
+                    }
+                } else if (!handle->mnn.isVaeDecoderLoaded() &&
+                           !handle->mnn.loadVaeDecoder(handle->manifest, error)) {
                     return false;
                 }
                 std::vector<float> decode_latents(latents.size());
                 for (size_t i = 0; i < latents.size(); ++i) {
                     decode_latents[i] = latents[i] / scale;
                 }
-                if (!handle->qnn.runVaeDecoder(decode_latents, rgb, error)) {
+                const bool decoded = use_qnn
+                    ? handle->qnn.runVaeDecoder(decode_latents, rgb, error)
+                    : handle->mnn.runVaeDecoder(decode_latents, rgb, error);
+                if (!decoded) {
                     return false;
                 }
                 break;
@@ -367,7 +429,7 @@ extern "C" EnclaveDiffusionHandle* enclave_diffusion_create(
     handle->qnn_paths.dsp_library_path = cfg->dsp_library_path != nullptr ? cfg->dsp_library_path : "";
     // SDXL catalog pack (qnn2.28_8gen3) targets Hexagon V79 on 8 Gen 3 / 8s Gen 3 class SoCs.
     handle->qnn_paths.htp_stub_library =
-        cfg->family == ENCLAVE_MODEL_SDXL_QNN ? "libQnnHtpV79Stub.so" : "libQnnHtpV73Stub.so";
+        cfg->family == ENCLAVE_MODEL_SD15_QNN ? "libQnnHtpV73Stub.so" : "libQnnHtpV79Stub.so";
     return handle;
 }
 
@@ -421,4 +483,12 @@ extern "C" void enclave_diffusion_on_trim_memory(EnclaveDiffusionHandle* handle,
     }
     enclave::diffusion::applyTrimMemory(handle, level);
     enclave::diffusion::drainPendingTrim(handle);
+}
+
+extern "C" int enclave_diffusion_mnn_available() {
+#ifdef ENCLAVE_DIFFUSION_HAS_MNN
+    return 1;
+#else
+    return 0;
+#endif
 }

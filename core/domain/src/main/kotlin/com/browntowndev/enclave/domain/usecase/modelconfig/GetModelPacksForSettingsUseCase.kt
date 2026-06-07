@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.domain.usecase.modelconfig
 
+import com.browntowndev.enclave.domain.model.download.LocalImagePackIds
 import com.browntowndev.enclave.domain.model.download.ModelPack
 import com.browntowndev.enclave.domain.model.download.ModelPackCompleteness
 import com.browntowndev.enclave.domain.model.download.ModelPackRole
@@ -95,7 +96,7 @@ class GetModelPacksForSettingsUseCase
         private fun packEligibility(packId: String): Pair<Boolean, String?> {
             val capabilities = capabilityPort.getCapabilities()
             return when (packId) {
-                SDXL_PACK_ID -> {
+                LocalImagePackIds.SDXL -> {
                     val isEligible = capabilities.sdxlNpuSupported == LocalImageGenTriState.YES
                     val disabledReason =
                         if (isEligible) {
@@ -106,9 +107,22 @@ class GetModelPacksForSettingsUseCase
                         }
                     isEligible to disabledReason
                 }
-                SD15_PACK_ID -> {
-                    val isEligible = capabilities.sd15NpuSupported == LocalImageGenTriState.YES
+                LocalImagePackIds.SD15 -> {
+                    val isEligible =
+                        capabilities.sd15NpuSupported == LocalImageGenTriState.YES ||
+                            capabilities.sd15CpuSupported == LocalImageGenTriState.YES
                     val disabledReason = if (isEligible) null else packBlockedReason(capabilities)
+                    isEligible to disabledReason
+                }
+                LocalImagePackIds.JUGGERNAUT -> {
+                    val isEligible = capabilities.juggernautXlNpuSupported == LocalImageGenTriState.YES
+                    val disabledReason =
+                        if (isEligible) {
+                            null
+                        } else {
+                            capabilities.disabledReasonsByModelId[LocalImageGenerationModelId.JUGGERNAUT_XL_QNN]
+                                ?: packBlockedReason(capabilities)
+                        }
                     isEligible to disabledReason
                 }
                 else -> true to null
@@ -130,8 +144,4 @@ class GetModelPacksForSettingsUseCase
                 members = emptyList(),
             )
 
-        private companion object {
-            const val SD15_PACK_ID = "sd15-t2i"
-            const val SDXL_PACK_ID = "sdxl-t2i"
-        }
     }

@@ -32,6 +32,7 @@ class SyncLocalModelRegistryUseCase
         suspend operator fun invoke(
             modelType: ModelType,
             asset: LocalModelAsset,
+            assignAsDefault: Boolean = true,
         ): SlotResolvedLocalModel =
             transactionProvider.runInTransaction {
                 val assetId = localModelRepository.upsertLocalAsset(asset)
@@ -109,7 +110,7 @@ class SyncLocalModelRegistryUseCase
                         "thinking=${primaryConfig.thinkingEnabled} configId=${persistedConfigId.value}",
                 )
 
-                if (existingAssignment == null) {
+                if (assignAsDefault && existingAssignment == null) {
                     defaultModelRepository.setDefault(modelType, localConfigId = persistedConfigId, apiConfigId = null)
                 }
 

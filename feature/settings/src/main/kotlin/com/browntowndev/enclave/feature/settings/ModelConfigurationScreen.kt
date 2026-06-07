@@ -258,7 +258,12 @@ internal fun selectableLocalAssetsForSlot(
     when {
         modelType == ModelType.IMAGE_GENERATION || modelType == ModelType.IMAGE_EDIT -> {
             val eligibleAssets = applyLocalImageAssignmentEligibility(assets, modelPacks)
-            eligibleAssets.filter { it.isImageGenerationCapable }
+            eligibleAssets.filter { asset ->
+                asset.isImageGenerationCapable &&
+                    asset.configurations.any { config ->
+                        modelType in config.defaultAssignments
+                    }
+            }
         }
         modelType in LOCAL_MODEL_UNSUPPORTED_ASSIGNMENT_TYPES -> emptyList()
         else -> assets
@@ -288,16 +293,16 @@ internal fun applyLocalImageAssignmentEligibility(
     }
 }
 
-private const val SD15_PACK_ID = "sd15-t2i"
-private const val SDXL_PACK_ID = "sdxl-t2i"
 private const val SD15_LOCAL_CONFIG_ID = "sd15-local-config"
 private const val SDXL_LOCAL_CONFIG_ID = "sdxl-local-config"
+private const val JUGGERNAUT_LOCAL_CONFIG_ID = "juggernaut-local-config"
 
 private fun LocalModelAssetUi.imageGenerationPackId(): String? =
     configurations.firstNotNullOfOrNull { config ->
         when (config.id.value) {
-            SD15_LOCAL_CONFIG_ID -> SD15_PACK_ID
-            SDXL_LOCAL_CONFIG_ID -> SDXL_PACK_ID
+            SD15_LOCAL_CONFIG_ID -> "sd15-t2i"
+            SDXL_LOCAL_CONFIG_ID -> "sdxl-t2i"
+            JUGGERNAUT_LOCAL_CONFIG_ID -> "juggernaut-xl-t2i"
             else -> null
         }
     }

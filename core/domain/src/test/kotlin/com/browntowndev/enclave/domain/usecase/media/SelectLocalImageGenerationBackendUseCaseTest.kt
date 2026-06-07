@@ -39,7 +39,7 @@ class SelectLocalImageGenerationBackendUseCaseTest {
     }
 
     @Test
-    fun `assigned SD15 QNN is rejected when NPU support is unknown`() {
+    fun `assigned SD15 QNN is rejected when NPU support is unknown and CPU unavailable`() {
         val selection =
             useCase(
                 family = LocalImageGenerationModelFamily.SD15,
@@ -48,6 +48,23 @@ class SelectLocalImageGenerationBackendUseCaseTest {
             )
 
         assertEquals(LocalImageGenerationBackendKind.NONE, selection.backend)
+    }
+
+    @Test
+    fun `assigned SD15 QNN falls back to CPU when NPU unavailable`() {
+        val selection =
+            useCase(
+                family = LocalImageGenerationModelFamily.SD15,
+                capabilities =
+                    capabilities(
+                        sd15Npu = LocalImageGenTriState.NO,
+                        sd15Cpu = LocalImageGenTriState.YES,
+                    ),
+                requestedModelId = LocalImageGenerationModelId.SD15_QNN,
+            )
+
+        assertEquals(LocalImageGenerationBackendKind.CPU_MNN, selection.backend)
+        assertEquals(LocalImageGenerationModelId.SD15_CPU, selection.modelId)
     }
 
     @Test

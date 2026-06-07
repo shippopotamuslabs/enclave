@@ -184,6 +184,11 @@ class MultimodalViewModelTest {
         coEvery {
             localModelRepository.getAssetByConfigId(LocalModelConfigurationId("sdxl-local-config"))
         } returns ModelPackTestFixtures.sdxlDiffusionAsset()
+        coEvery {
+            localModelRepository.getAssetByConfigId(
+                LocalModelConfigurationId(ModelPackTestFixtures.JUGGERNAUT_CONFIG_ID),
+            )
+        } returns ModelPackTestFixtures.juggernautDiffusionAsset()
 
         every { listenToSpeechUseCase.invoke(any(), any()) } returns speechEvents
         every { chatUseCases.listenToSpeechUseCase } returns listenToSpeechUseCase
@@ -1159,6 +1164,61 @@ class MultimodalViewModelTest {
             val state = viewModel.uiState.value
             assertEquals(listOf(8, 12, 16, 20, 24, 30), state.capabilities?.supportedImageSteps)
             assertEquals(8, state.capabilities?.defaultImageStep)
+            job.cancel()
+        }
+
+    @Test
+    fun `STU-009 active Juggernaut exposes exactly 1024x1024`() =
+        runTest {
+            val localConfigId = LocalModelConfigurationId(ModelPackTestFixtures.JUGGERNAUT_CONFIG_ID)
+            val localImageAssignment =
+                DefaultModelAssignment(
+                    modelType = ModelType.IMAGE_EDIT,
+                    localConfigId = localConfigId,
+                )
+            every { defaultModelRepository.observeDefaults() } returns flowOf(listOf(localImageAssignment))
+            every { mediaProviderRepository.getMediaProviders() } returns flowOf(emptyList())
+            coEvery { localModelRepository.getAssetByConfigId(localConfigId) } returns
+                ModelPackTestFixtures.juggernautDiffusionAsset()
+
+            viewModel = createViewModel()
+            viewModel.promptCoordinator.onUpdateReferenceImage("file://reference.jpg")
+            val job =
+                backgroundScope.launch(testDispatcher) {
+                    viewModel.uiState.collect {}
+                }
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals(listOf("1024x1024"), state.capabilities?.supportedImageResolutions)
+            job.cancel()
+        }
+
+    @Test
+    fun `STU-010 active Juggernaut exposes exact step options and default 24`() =
+        runTest {
+            val localConfigId = LocalModelConfigurationId(ModelPackTestFixtures.JUGGERNAUT_CONFIG_ID)
+            val localImageAssignment =
+                DefaultModelAssignment(
+                    modelType = ModelType.IMAGE_EDIT,
+                    localConfigId = localConfigId,
+                )
+            every { defaultModelRepository.observeDefaults() } returns flowOf(listOf(localImageAssignment))
+            every { mediaProviderRepository.getMediaProviders() } returns flowOf(emptyList())
+            coEvery { localModelRepository.getAssetByConfigId(localConfigId) } returns
+                ModelPackTestFixtures.juggernautDiffusionAsset()
+
+            viewModel = createViewModel()
+            viewModel.promptCoordinator.onUpdateReferenceImage("file://reference.jpg")
+            val job =
+                backgroundScope.launch(testDispatcher) {
+                    viewModel.uiState.collect {}
+                }
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals(listOf(20, 22, 24, 26, 28, 30), state.capabilities?.supportedImageSteps)
+            assertEquals(24, state.capabilities?.defaultImageStep)
             job.cancel()
         }
 }

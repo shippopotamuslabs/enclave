@@ -294,7 +294,7 @@ class SettingsMediaTasksRedTest {
     }
 
     @Test
-    fun `SET-006 Gen3+ installed SDXL appears in local Image Edit assignment options`() {
+    fun `SET-006 Gen3+ installed Juggernaut appears in local Image Edit assignment options`() {
         val assembler =
             SettingsUiStateAssembler(
                 localModelAssetUiMapper = LocalModelAssetUiMapper(),
@@ -306,12 +306,12 @@ class SettingsMediaTasksRedTest {
                 usageSpendUiMapper = UsageSpendUiMapper(),
                 modelPackUiMapper = ModelPackUiMapper(),
             )
-        val sdxlPackRow =
+        val juggernautPackRow =
             ModelPackSettingsRow(
-                pack = ModelPackTestFixtures.sdxlPack(),
+                pack = ModelPackTestFixtures.juggernautPack(),
                 completeness =
                     ModelPackCompleteness(
-                        packId = ModelPackTestFixtures.SDXL_PACK_ID,
+                        packId = ModelPackTestFixtures.JUGGERNAUT_PACK_ID,
                         installedCount = 2,
                         totalCount = 2,
                         isComplete = true,
@@ -326,7 +326,7 @@ class SettingsMediaTasksRedTest {
         val assembled =
             assembler.create(
                 persistedSettings = SettingsData(),
-                localAssets = listOf(ModelPackTestFixtures.sdxlDiffusionAsset()),
+                localAssets = listOf(ModelPackTestFixtures.juggernautDiffusionAsset()),
                 apiAssets = emptyList(),
                 ttsAssets = emptyList(),
                 mediaAssets = emptyList(),
@@ -361,7 +361,7 @@ class SettingsMediaTasksRedTest {
                         missingCostTurnCount = 0,
                         providerBreakdown = emptyList(),
                     ),
-                modelPackRows = listOf(sdxlPackRow),
+                modelPackRows = listOf(juggernautPackRow),
             )
 
         val selectable =
@@ -371,8 +371,107 @@ class SettingsMediaTasksRedTest {
                 modelPacks = assembled.localModelsSheet.modelPacks,
             )
         assertEquals(
-            listOf(LocalModelConfigurationId(ModelPackTestFixtures.SDXL_CONFIG_ID)),
+            listOf(LocalModelConfigurationId(ModelPackTestFixtures.JUGGERNAUT_CONFIG_ID)),
             selectable.single().configurations.map { it.id },
+        )
+        val generationSelectable =
+            selectableLocalAssetsForSlot(
+                modelType = ModelType.IMAGE_GENERATION,
+                assets = assembled.localModelsSheet.models,
+                modelPacks = assembled.localModelsSheet.modelPacks,
+            )
+        assertTrue(
+            generationSelectable.none { asset ->
+                asset.configurations.any { it.id.value == ModelPackTestFixtures.JUGGERNAUT_CONFIG_ID }
+            },
+        )
+    }
+
+    @Test
+    fun `SET-007 Gen2 hides Juggernaut from assignment and shows disabled pack reason`() {
+        val assembler =
+            SettingsUiStateAssembler(
+                localModelAssetUiMapper = LocalModelAssetUiMapper(),
+                apiModelAssetUiMapper = ApiModelAssetUiMapper(),
+                ttsProviderAssetUiMapper = TtsProviderAssetUiMapper(),
+                mediaProviderAssetUiMapper = mockk(relaxed = true),
+                apiDiscoveryUiFilter = ApiDiscoveryUiFilter(),
+                applyApiModelMetadataDefaultsUseCase = ApplyApiModelMetadataDefaultsUseCase(),
+                usageSpendUiMapper = UsageSpendUiMapper(),
+                modelPackUiMapper = ModelPackUiMapper(),
+            )
+        val juggernautPackRow =
+            ModelPackSettingsRow(
+                pack = ModelPackTestFixtures.juggernautPack(),
+                completeness =
+                    ModelPackCompleteness(
+                        packId = ModelPackTestFixtures.JUGGERNAUT_PACK_ID,
+                        installedCount = 0,
+                        totalCount = 2,
+                        isComplete = false,
+                        members = emptyList(),
+                    ),
+                isDiffusionSoftDeleted = false,
+                areUtilityRegistryEntriesAbsent = true,
+                showDownloadAction = false,
+                disabledReason = "Requires Snapdragon 8 Gen 3+ with QNN.",
+                isEligible = false,
+            )
+        val assembled =
+            assembler.create(
+                persistedSettings = SettingsData(),
+                localAssets = listOf(ModelPackTestFixtures.juggernautDiffusionAsset()),
+                apiAssets = emptyList(),
+                ttsAssets = emptyList(),
+                mediaAssets = emptyList(),
+                defaultModels = emptyList(),
+                authState = AuthState.Unauthenticated,
+                sheetVisibility = SheetVisibilityState(),
+                memories = emptyList(),
+                feedbackText = "",
+                localModelsState = LocalModelsTransientState(),
+                apiState = ApiProvidersTransientState(),
+                ttsState = TtsProvidersTransientState(),
+                mediaState = MediaProvidersTransientState(),
+                searchSkillState = SearchSkillTransientState(),
+                assignmentsState = AssignmentDialogTransientState(isOpen = true, editingSlot = ModelType.IMAGE_EDIT),
+                deletionState = DeletionTransientState(),
+                memoriesState = MemoriesTransientState(),
+                dataControlsState = DataControlsTransientState(),
+                currentTavilyApiKey = "",
+                currentExaApiKey = "",
+                currentXApiKey = "",
+                xSearchState = XSearchTransientState(),
+                isReindexing = false,
+                reindexProgress = 0f,
+                vaultReauthSheet = VaultReauthSheetState.Hidden,
+                usageSpendSummary =
+                    UsageSpendSummary(
+                        period = UsagePeriod.LIFETIME,
+                        periodStartUtcMs = null,
+                        periodEndUtcMs = null,
+                        totalCostUsd = BigDecimal.ZERO,
+                        telemetryBackedTurnCount = 0,
+                        missingCostTurnCount = 0,
+                        providerBreakdown = emptyList(),
+                    ),
+                modelPackRows = listOf(juggernautPackRow),
+            )
+
+        val selectable =
+            selectableLocalAssetsForSlot(
+                modelType = ModelType.IMAGE_EDIT,
+                assets = assembled.localModelsSheet.models,
+                modelPacks = assembled.localModelsSheet.modelPacks,
+            )
+        assertTrue(
+            selectable.none { asset ->
+                asset.configurations.any { it.id.value == ModelPackTestFixtures.JUGGERNAUT_CONFIG_ID }
+            },
+        )
+        assertEquals(
+            "Requires Snapdragon 8 Gen 3+ with QNN.",
+            assembled.localModelsSheet.modelPacks.single().disabledReason,
         )
     }
 

@@ -7,10 +7,14 @@ import com.browntowndev.enclave.domain.model.download.ModelConfig
 import com.browntowndev.enclave.domain.model.download.ModelPack
 import com.browntowndev.enclave.domain.model.download.ModelPackCompleteness
 import com.browntowndev.enclave.domain.model.download.ModelPackMemberStatus
+import com.browntowndev.enclave.domain.model.download.LocalImagePackIds
 import com.browntowndev.enclave.domain.model.download.ModelPackVerificationDepth
 import com.browntowndev.enclave.domain.model.download.ParsedModelCatalog
+import com.browntowndev.enclave.domain.model.inference.ModelType
+import com.browntowndev.enclave.domain.model.download.JuggernautXlQnnPackCatalog
 import com.browntowndev.enclave.domain.model.download.Sd15QnnPackCatalog
 import com.browntowndev.enclave.domain.model.download.SdxlQnnPackCatalog
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelFamily
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationPaths
 import com.browntowndev.enclave.domain.port.download.HashingPort
 import com.browntowndev.enclave.domain.port.download.ModelPackVerifierPort
@@ -46,6 +50,10 @@ class ModelPackVerifierImpl
                                     LocalImageGenerationPaths.hasSdxlQnnArtifacts(
                                         File(modelsDir, LocalImageGenerationPaths.SDXL_QNN_SUBDIR),
                                     )
+                                UtilityType.JUGGERNAUT_XL_QNN_PACK ->
+                                    LocalImageGenerationPaths.hasJuggernautXlQnnArtifacts(
+                                        File(modelsDir, LocalImageGenerationPaths.JUGGERNAUT_XL_QNN_SUBDIR),
+                                    )
                                 else -> verifyNonUtilityMember(modelsDir, member, depth)
                             }
                         ModelPackMemberStatus(
@@ -56,11 +64,30 @@ class ModelPackVerifierImpl
                     }
                 val installedCount = memberStatuses.count { it.isVerifiedOnDisk }
                 val totalCount = memberStatuses.size
+                val baseComplete = installedCount == totalCount && totalCount > 0
+                val requiresImg2ImgEncoder =
+                    pack.slot == ModelType.IMAGE_EDIT && pack.packId == LocalImagePackIds.JUGGERNAUT
+                val img2ImgReady =
+                    if (requiresImg2ImgEncoder) {
+                        val juggernautDir = File(modelsDir, LocalImageGenerationPaths.JUGGERNAUT_XL_QNN_SUBDIR)
+                        // Resolve the artifact dir the same way the generator does: the QNN pack may
+                        // extract into a nested subdir, so vae_encoder.bin sits beside the other
+                        // artifacts there, not at the pack root.
+                        val launchDir =
+                            LocalImageGenerationPaths.resolveQnnLaunchDir(
+                                resolvedStoragePath = juggernautDir.absolutePath,
+                                family = LocalImageGenerationModelFamily.SDXL,
+                                relativePackSubdir = LocalImageGenerationPaths.JUGGERNAUT_XL_QNN_SUBDIR,
+                            )
+                        LocalImageGenerationPaths.hasImg2ImgCapability(File(launchDir))
+                    } else {
+                        true
+                    }
                 ModelPackCompleteness(
                     packId = pack.packId,
                     installedCount = installedCount,
                     totalCount = totalCount,
-                    isComplete = installedCount == totalCount && totalCount > 0,
+                    isComplete = baseComplete && img2ImgReady,
                     members = memberStatuses,
                 )
             }
@@ -82,6 +109,8 @@ class ModelPackVerifierImpl
             val sha256 = member.asset.metadata.sha256
             val qnnPackDir =
                 when {
+                    JuggernautXlQnnPackCatalog.findBySha256(sha256) != null ->
+                        File(modelsDir, LocalImageGenerationPaths.JUGGERNAUT_XL_QNN_SUBDIR)
                     SdxlQnnPackCatalog.findBySha256(sha256) != null ->
                         File(modelsDir, LocalImageGenerationPaths.SDXL_QNN_SUBDIR)
                     Sd15QnnPackCatalog.findBySha256(sha256) != null ->
@@ -90,6 +119,8 @@ class ModelPackVerifierImpl
                 }
             if (qnnPackDir != null) {
                 return when {
+                    JuggernautXlQnnPackCatalog.findBySha256(sha256) != null ->
+                        LocalImageGenerationPaths.hasJuggernautXlQnnArtifacts(qnnPackDir)
                     SdxlQnnPackCatalog.findBySha256(sha256) != null ->
                         LocalImageGenerationPaths.hasSdxlQnnArtifacts(qnnPackDir)
                     else -> LocalImageGenerationPaths.hasSd15QnnArtifacts(qnnPackDir)

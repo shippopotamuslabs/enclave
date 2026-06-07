@@ -166,7 +166,7 @@ int runValidate(const HarnessOptions& options) {
     if (!enclave::diffusion::loadPackManifest(options.model_dir, manifest)) {
         return failStep("validate", "loadPackManifest failed.");
     }
-    if (!enclave::diffusion::hasRequiredArtifacts(manifest)) {
+    if (!enclave::diffusion::hasRequiredArtifacts(manifest, options.family)) {
         return failStep("validate", "Required artifacts are missing.");
     }
     const std::string detail = manifest.sdxl ? "sdxl pack" : "sd15 pack";

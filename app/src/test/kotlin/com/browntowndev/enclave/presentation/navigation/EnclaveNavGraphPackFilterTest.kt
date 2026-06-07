@@ -33,6 +33,30 @@ class EnclaveNavGraphPackFilterTest {
     }
 
     @Test
+    @DisplayName("DL-016 API onboarding excludes IMAGE_EDIT Juggernaut pack members")
+    fun dl016_apiOnboardingExcludesImageEditPackMembers() {
+        val juggernautDiffusion = ModelPackTestFixtures.juggernautDiffusionAsset()
+        val juggernautUtility = ModelPackTestFixtures.juggernautQnnPackUtilityAsset()
+        val modelsResult =
+            DownloadModelsResult(
+                allModels = mapOf(ModelType.IMAGE_EDIT to juggernautDiffusion),
+                utilityAssets = listOf(juggernautUtility),
+                modelsToDownload = listOf(juggernautDiffusion, juggernautUtility),
+                scanResult = ModelScanResult(listOf(juggernautDiffusion), emptyMap(), false),
+                imageGenerationPackMemberSha256s = emptySet(),
+                imageEditPackMemberSha256s =
+                    setOf(
+                        juggernautDiffusion.metadata.sha256,
+                        juggernautUtility.metadata.sha256,
+                    ),
+            )
+        val filtered = filterDownloadModelsResultForApiOnboarding(modelsResult)
+
+        assertEquals(0, filtered.modelsToDownload.size)
+        assertTrue(filtered.utilityAssets.isEmpty())
+    }
+
+    @Test
     @DisplayName("MPK-020 Onboarding must not whitelist pack utilities for API users")
     fun mpk020_onboardingMustNotWhitelistPackUtilitiesForApiUsers() {
         val modelsResult = packHeavyDownloadResult()

@@ -189,10 +189,36 @@ run_device() {
   echo "=== logcat (enclave-qnn) ==="
   adb logcat -d -s enclave-qnn:V Enclave:V AndroidRuntime:E | tail -200
 
-  if [[ "$rc" -eq 0 && "${STEP:-}" == "generate" ]]; then
+  local effective_step="${STEP:-}"
+  if [[ -z "$effective_step" ]]; then
+    for arg in "${forwarded[@]}"; do
+      if [[ "$arg" == "generate" ]]; then
+        effective_step="generate"
+        break
+      fi
+    done
+    if [[ -z "$effective_step" ]]; then
+      for ((i = 0; i < ${#forwarded[@]}; i++)); do
+        if [[ "${forwarded[i]}" == "--step" && $((i + 1)) -lt ${#forwarded[@]} ]]; then
+          effective_step="${forwarded[i + 1]}"
+          break
+        fi
+      done
+    fi
+  fi
+
+  local pull_from="$DEVICE_OUTPUT"
+  for ((i = 0; i < ${#forwarded[@]}; i++)); do
+    if [[ "${forwarded[i]}" == "--output" && $((i + 1)) -lt ${#forwarded[@]} ]]; then
+      pull_from="${forwarded[i + 1]}"
+      break
+    fi
+  done
+
+  if [[ "$rc" -eq 0 && "$effective_step" == "generate" ]]; then
     local pull_to="$ROOT/build/enclave-diffusion-harness/last-device-output.png"
-    adb pull "$DEVICE_OUTPUT" "$pull_to" >/dev/null
-    echo "Pulled output image to $pull_to"
+    adb pull "$pull_from" "$pull_to" >/dev/null
+    echo "Pulled output image from $pull_from to $pull_to"
   fi
   exit "$rc"
 }

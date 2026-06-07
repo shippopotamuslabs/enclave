@@ -91,6 +91,7 @@ set(ENGINE_SOURCES
     ${ENGINE_DIR}/runners/clip_prompt_utils.cpp
     ${ENGINE_DIR}/runners/tokenizer_runner.cpp
     ${ENGINE_DIR}/runners/mnn_clip_runner.cpp
+    ${ENGINE_DIR}/runners/mnn_graph_runner.cpp
     ${ENGINE_DIR}/runners/qnn_graph_runner.cpp
 )
 

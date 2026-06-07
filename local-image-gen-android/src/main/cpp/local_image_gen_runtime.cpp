@@ -1,7 +1,6 @@
 #include "local_image_gen_runtime.h"
 
 #include <android/log.h>
-#include <dlfcn.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -126,18 +125,6 @@ int probe_qnn_libs() {
         return 1;
     }
     return 2;
-}
-
-int probe_mnn_libs() {
-    if (g_native_lib_dir.empty()) {
-        return 0;
-    }
-    void* handle = dlopen((g_native_lib_dir + "/libMNN.so").c_str(), RTLD_NOW | RTLD_LOCAL);
-    if (handle == nullptr) {
-        return 0;
-    }
-    dlclose(handle);
-    return 1;
 }
 
 bool prepare_qnn_runtime_libs(char* error_out, int error_out_len) {

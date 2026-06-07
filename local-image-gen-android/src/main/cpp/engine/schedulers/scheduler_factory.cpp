@@ -4,17 +4,17 @@
 
 namespace enclave::diffusion {
 
-Scheduler* createDpmScheduler();
+Scheduler* createDpmScheduler(bool sdxl);
 Scheduler* createLcmScheduler();
 
 Scheduler* createScheduler(const char* name, bool sdxl) {
     if (name == nullptr || std::strlen(name) == 0) {
-        return sdxl ? createLcmScheduler() : createDpmScheduler();
+        return sdxl ? createLcmScheduler() : createDpmScheduler(sdxl);
     }
     if (std::strcmp(name, "lcm") == 0) {
         return createLcmScheduler();
     }
-    return createDpmScheduler();
+    return createDpmScheduler(sdxl);
 }
 
 }  // namespace enclave::diffusion

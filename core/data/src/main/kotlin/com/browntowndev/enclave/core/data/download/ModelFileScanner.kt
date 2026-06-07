@@ -11,6 +11,7 @@ import com.browntowndev.enclave.domain.model.config.requiredArtifacts
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationPaths
 import com.browntowndev.enclave.domain.model.download.ModelConfig
 import com.browntowndev.enclave.domain.model.download.ModelScanResult
+import com.browntowndev.enclave.domain.model.download.JuggernautXlQnnPackCatalog
 import com.browntowndev.enclave.domain.model.download.SdxlQnnPackCatalog
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.download.ModelFileScannerPort
@@ -236,6 +237,8 @@ class ModelFileScanner
                     when (expectedAsset.metadata.utilityType) {
                         UtilityType.SDXL_QNN_PACK -> !LocalImageGenerationPaths.hasSdxlQnnArtifacts(packDir)
                         UtilityType.SD15_QNN_PACK -> !LocalImageGenerationPaths.hasSd15QnnArtifacts(packDir)
+                        UtilityType.JUGGERNAUT_XL_QNN_PACK ->
+                            !LocalImageGenerationPaths.hasJuggernautXlQnnArtifacts(packDir)
                         else -> !LocalImageGenerationPaths.hasSd15QnnArtifacts(packDir)
                     }
                 return AssetScanOutcome(missing = missing, invalid = false, partialBytes = emptyMap())
@@ -245,6 +248,11 @@ class ModelFileScanner
                 val missing = !LocalImageGenerationPaths.hasSdxlQnnArtifacts(packDir)
                 return AssetScanOutcome(missing = missing, invalid = false, partialBytes = emptyMap())
             }
+            if (isJuggernautQnnCatalogAsset(expectedAsset)) {
+                val packDir = File(modelsDir, LocalImageGenerationPaths.JUGGERNAUT_XL_QNN_SUBDIR)
+                val missing = !LocalImageGenerationPaths.hasJuggernautXlQnnArtifacts(packDir)
+                return AssetScanOutcome(missing = missing, invalid = false, partialBytes = emptyMap())
+            }
             return scanAssetArtifacts(modelsDir, expectedAsset)
         }
 
@@ -252,10 +260,15 @@ class ModelFileScanner
             SdxlQnnPackCatalog.findBySha256(asset.metadata.sha256) != null &&
                 asset.metadata.utilityType != UtilityType.SDXL_QNN_PACK
 
+        private fun isJuggernautQnnCatalogAsset(asset: LocalModelAsset): Boolean =
+            JuggernautXlQnnPackCatalog.findBySha256(asset.metadata.sha256) != null &&
+                asset.metadata.utilityType != UtilityType.JUGGERNAUT_XL_QNN_PACK
+
         private fun qnnPackSubdirFor(utilityType: UtilityType?): String? =
             when (utilityType) {
                 UtilityType.SD15_QNN_PACK -> LocalImageGenerationPaths.SD15_QNN_SUBDIR
                 UtilityType.SDXL_QNN_PACK -> LocalImageGenerationPaths.SDXL_QNN_SUBDIR
+                UtilityType.JUGGERNAUT_XL_QNN_PACK -> LocalImageGenerationPaths.JUGGERNAUT_XL_QNN_SUBDIR
                 else -> null
             }
 
