@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Feedback
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Memory
@@ -114,7 +115,14 @@ fun SettingsScreen(
     onShowOssLicensesSheet: (Boolean) -> Unit,
     onShowVisionSettingsSheet: (Boolean) -> Unit,
     onNavigateToModelConfigure: (ModelType) -> Unit,
-    onSetDefaultModel: (ModelType, LocalModelConfigurationId?, ApiModelConfigurationId?, TtsProviderId?, MediaProviderId?) -> Unit,
+    onSetDefaultModel: (
+        ModelType,
+        LocalModelConfigurationId?,
+        ApiModelConfigurationId?,
+        TtsProviderId?,
+        MediaProviderId?,
+        com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId?,
+    ) -> Unit,
     onShowLocalModelsSheet: (Boolean) -> Unit,
     onShowByokSheet: (Boolean) -> Unit,
     onNavigateToByokConfigure: () -> Unit,
@@ -142,6 +150,11 @@ fun SettingsScreen(
     onStartCreateTtsProviderAsset: () -> Unit,
     onSelectTtsProviderAsset: (TtsProviderAssetUi?) -> Unit,
     onDeleteTtsProviderAsset: (TtsProviderId) -> Unit,
+    onShowLiveVoiceProvidersSheet: (Boolean) -> Unit = {},
+    onNavigateToLiveVoiceConfigure: () -> Unit = {},
+    onStartCreateLiveVoiceProviderAsset: () -> Unit = {},
+    onSelectLiveVoiceProviderAsset: (LiveVoiceProviderAssetUi?) -> Unit = {},
+    onDeleteLiveVoiceProviderAsset: (com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId) -> Unit = {},
     onShowMediaProvidersSheet: (Boolean) -> Unit,
     onNavigateToMediaConfigure: () -> Unit,
     onStartCreateMediaProviderAsset: () -> Unit,
@@ -252,6 +265,12 @@ fun SettingsScreen(
                         subtitle = "Manage TTS voices and API keys",
                         icon = Icons.Default.Vibration,
                         onClick = { onShowTtsProvidersSheet(true) },
+                    )
+                    NeoNavRow(
+                        title = "Live Voice",
+                        subtitle = "Manage realtime speech-to-speech providers",
+                        icon = Icons.Default.GraphicEq,
+                        onClick = { onShowLiveVoiceProvidersSheet(true) },
                     )
                     NeoNavRow(
                         title = "Media Generation Models",
@@ -371,6 +390,17 @@ fun SettingsScreen(
                 onStartCreateTtsProviderAsset = onStartCreateTtsProviderAsset,
                 onSelectTtsProviderAsset = onSelectTtsProviderAsset,
                 onDeleteTtsProviderAsset = onDeleteTtsProviderAsset,
+            )
+        }
+
+        if (uiState.home.isLiveVoiceProvidersSheetOpen) {
+            LiveVoiceProvidersBottomSheet(
+                uiState = uiState,
+                onDismiss = { onShowLiveVoiceProvidersSheet(false) },
+                onNavigateToLiveVoiceConfigure = onNavigateToLiveVoiceConfigure,
+                onStartCreateLiveVoiceProviderAsset = onStartCreateLiveVoiceProviderAsset,
+                onSelectLiveVoiceProviderAsset = onSelectLiveVoiceProviderAsset,
+                onDeleteLiveVoiceProviderAsset = onDeleteLiveVoiceProviderAsset,
             )
         }
 
@@ -741,7 +771,7 @@ fun PreviewSettingsScreen() {
             onShowOssLicensesSheet = {},
             onShowVisionSettingsSheet = {},
             onNavigateToModelConfigure = {},
-            onSetDefaultModel = { _, _, _, _, _ -> },
+            onSetDefaultModel = { _, _, _, _, _, _ -> },
             onShowLocalModelsSheet = {},
             onShowByokSheet = {},
             onNavigateToByokConfigure = {},
@@ -769,6 +799,11 @@ fun PreviewSettingsScreen() {
             onStartCreateTtsProviderAsset = {},
             onSelectTtsProviderAsset = {},
             onDeleteTtsProviderAsset = {},
+            onShowLiveVoiceProvidersSheet = {},
+            onNavigateToLiveVoiceConfigure = {},
+            onStartCreateLiveVoiceProviderAsset = {},
+            onSelectLiveVoiceProviderAsset = {},
+            onDeleteLiveVoiceProviderAsset = {},
             onShowMediaProvidersSheet = {},
             onNavigateToMediaConfigure = {},
             onStartCreateMediaProviderAsset = {},

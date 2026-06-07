@@ -231,6 +231,11 @@ class InferenceOrchestrator
          * Does not write [SavedStateHandle] — Navigation owns `chatId` there; [createNewChat] clears it.
          * Intentional no-op for null so [ChatRoute] cannot wipe nav args before they are applied.
          */
+        fun adoptChatId(chatId: ChatId) {
+            _currentChatId.value = chatId
+            savedStateHandle["chatId"] = chatId.value
+        }
+
         fun syncActiveChatFromNavigation(navChatId: ChatId?) {
             if (navChatId == null) return
             if (_currentChatId.value == navChatId) return

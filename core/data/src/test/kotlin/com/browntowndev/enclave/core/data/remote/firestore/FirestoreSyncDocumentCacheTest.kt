@@ -102,6 +102,7 @@ class FirestoreSyncDocumentCacheTest {
                     ConfigSyncDaos(
                         memoriesDao = mockk(relaxed = true),
                         ttsProviderDao = mockk(relaxed = true),
+                        liveVoiceProviderDao = mockk(relaxed = true),
                         mediaProviderDao = mockk(relaxed = true),
                         apiModelConfigurationsDao = mockk(relaxed = true),
                         localModelsDao = mockk(relaxed = true),

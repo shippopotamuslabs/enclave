@@ -3,6 +3,7 @@ package com.browntowndev.enclave.feature.settings
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.config.TtsProviderId
 import com.browntowndev.enclave.domain.model.inference.ModelType
@@ -36,6 +37,7 @@ internal class SettingsAssignmentsDelegate
             apiConfigId: ApiModelConfigurationId?,
             ttsProviderId: TtsProviderId? = null,
             mediaProviderId: MediaProviderId? = null,
+            liveVoiceProviderId: LiveVoiceProviderId? = null,
         ) {
             scope.launch(
                 errorHandler.coroutineExceptionHandler(
@@ -50,6 +52,7 @@ internal class SettingsAssignmentsDelegate
                     apiConfigId = apiConfigId,
                     ttsProviderId = ttsProviderId,
                     mediaProviderId = mediaProviderId,
+                    liveVoiceProviderId = liveVoiceProviderId,
                 )
                 onShowAssignmentDialog(assignmentState, false, null)
             }

@@ -24,6 +24,7 @@ data class ResolvedAssignedModelSelection(
     val apiAsset: ApiModelAsset? = null,
     val apiConfig: ApiModelConfiguration? = null,
     val ttsAsset: com.browntowndev.enclave.domain.model.config.TtsProviderAsset? = null,
+    val liveVoiceAsset: com.browntowndev.enclave.domain.model.config.LiveVoiceProviderAsset? = null,
 )
 
 data class LocalModelPresetDraft(
@@ -164,6 +165,20 @@ data class ApiModelMetadataDefaults(
 data class SearchSkillSettingsDraft(
     val enabled: Boolean = false,
     val tavilyKeyPresent: Boolean = false,
+)
+
+data class LiveVoiceProviderDraft(
+    val id: com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId =
+        com.browntowndev.enclave.domain.model.config
+            .LiveVoiceProviderId(""),
+    val displayName: String,
+    val provider: ApiProvider,
+    val voiceName: String,
+    val modelName: String? = null,
+    val baseUrl: String? = null,
+    val credentialAlias: String,
+    val apiKey: String,
+    val sourceCredentialAlias: String? = null,
 )
 
 data class TtsProviderDraft(

@@ -64,7 +64,7 @@ class SettingsScreenTest {
                     onShowOssLicensesSheet = {},
                     onShowVisionSettingsSheet = {},
                     onNavigateToModelConfigure = {},
-                    onSetDefaultModel = { _, _, _, _, _ -> },
+                    onSetDefaultModel = { _, _, _, _, _, _ -> },
                     onShowLocalModelsSheet = {},
                     onShowByokSheet = {},
                     onNavigateToByokConfigure = {},

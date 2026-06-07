@@ -18,6 +18,8 @@ import com.browntowndev.enclave.domain.usecase.settings.SettingsMemoriesUseCases
 import com.browntowndev.enclave.domain.usecase.settings.SettingsMemoriesUseCasesImpl
 import com.browntowndev.enclave.domain.usecase.settings.SettingsPreferencesUseCases
 import com.browntowndev.enclave.domain.usecase.settings.SettingsPreferencesUseCasesImpl
+import com.browntowndev.enclave.domain.usecase.settings.SettingsLiveVoiceUseCases
+import com.browntowndev.enclave.domain.usecase.settings.SettingsLiveVoiceUseCasesImpl
 import com.browntowndev.enclave.domain.usecase.settings.SettingsTtsUseCases
 import com.browntowndev.enclave.domain.usecase.settings.SettingsTtsUseCasesImpl
 import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
@@ -54,6 +56,10 @@ abstract class SettingsUseCasesModule {
     @Binds
     @Singleton
     abstract fun bindSettingsTtsUseCases(impl: SettingsTtsUseCasesImpl): SettingsTtsUseCases
+
+    @Binds
+    @Singleton
+    abstract fun bindSettingsLiveVoiceUseCases(impl: SettingsLiveVoiceUseCasesImpl): SettingsLiveVoiceUseCases
 
     @Binds
     @Singleton

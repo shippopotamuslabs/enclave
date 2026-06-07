@@ -514,7 +514,7 @@ class SettingsMediaTasksRedTest {
                             mediaProvidersSheet = MediaProvidersSheetUiState(assets = mediaAssets),
                         ),
                     onNavigateBack = {},
-                    onSetDefaultModel = { _, _, _, _, _ -> },
+                    onSetDefaultModel = { _, _, _, _, _, _ -> },
                     onShowAssignmentDialog = { _, _ -> },
                 )
             }

@@ -14,6 +14,7 @@ class ResolveAssignedModelSelectionUseCase
         private val getLocalModelAssetsUseCase: GetLocalModelAssetsUseCase,
         private val getApiModelAssetsUseCase: GetApiModelAssetsUseCase,
         private val getTtsProvidersUseCase: GetTtsProvidersUseCase,
+        private val getLiveVoiceProvidersUseCase: GetLiveVoiceProvidersUseCase,
     ) {
         @Suppress("ReturnCount")
         suspend operator fun invoke(modelType: ModelType): ResolvedAssignedModelSelection? {
@@ -55,6 +56,17 @@ class ResolveAssignedModelSelectionUseCase
                         ?: return null
                 return ResolvedAssignedModelSelection(
                     ttsAsset = asset,
+                )
+            }
+
+            assignment.liveVoiceProviderId?.let { liveVoiceProviderId ->
+                val asset =
+                    getLiveVoiceProvidersUseCase()
+                        .first()
+                        .find { it.id == liveVoiceProviderId }
+                        ?: return null
+                return ResolvedAssignedModelSelection(
+                    liveVoiceAsset = asset,
                 )
             }
 

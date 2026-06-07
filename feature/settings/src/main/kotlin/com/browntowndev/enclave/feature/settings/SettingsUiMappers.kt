@@ -278,6 +278,7 @@ internal fun DefaultModelAssignment.toUi(isMultimodal: Boolean = false): Default
                 apiConfigId != null -> ModelSource.API
                 localConfigId != null -> ModelSource.ON_DEVICE
                 ttsProviderId != null -> ModelSource.API // TTS is also API-based for now
+                liveVoiceProviderId != null -> ModelSource.API
                 else -> ModelSource.API
             },
         currentModelName =
@@ -286,7 +287,8 @@ internal fun DefaultModelAssignment.toUi(isMultimodal: Boolean = false): Default
                     localConfigId != null ||
                         apiConfigId != null ||
                         ttsProviderId != null ||
-                        mediaProviderId != null ->
+                        mediaProviderId != null ||
+                        liveVoiceProviderId != null ->
                         ActiveModelConfigurationDecryptException.USER_MESSAGE
                     else -> "None Assigned"
                 },
@@ -297,7 +299,8 @@ internal fun DefaultModelAssignment.toUi(isMultimodal: Boolean = false): Default
                 ?: when {
                     localConfigId != null ||
                         apiConfigId != null ||
-                        ttsProviderId != null ->
+                        ttsProviderId != null ||
+                        liveVoiceProviderId != null ->
                         ActiveModelConfigurationDecryptException.USER_MESSAGE
                     else -> null
                 },

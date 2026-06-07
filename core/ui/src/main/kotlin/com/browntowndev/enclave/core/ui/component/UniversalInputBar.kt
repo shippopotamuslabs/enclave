@@ -37,6 +37,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Icon
@@ -70,7 +71,9 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.browntowndev.enclave.core.ui.component.ShimmerText
 import com.browntowndev.enclave.core.ui.component.neo.NeoCircularProgressIndicator
+import com.browntowndev.enclave.core.ui.component.neo.NeoDisabledActionTooltip
 import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
+import com.browntowndev.enclave.core.ui.component.neo.rememberNeoDisabledClick
 import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
 import com.browntowndev.enclave.core.ui.component.neo.neoSurface
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
@@ -445,6 +448,8 @@ fun UniversalVoiceTrailingAction(
     isGlobalInferenceBlocked: Boolean = false,
     hasSendableContent: Boolean = inputText.isNotBlank(),
     onCollapse: (() -> Unit)? = null,
+    onLiveVoiceClick: (() -> Unit)? = null,
+    isLiveVoiceEnabled: Boolean = true,
 ) {
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -456,67 +461,101 @@ fun UniversalVoiceTrailingAction(
             NeoCircularProgressIndicator(modifier = Modifier.size(24.dp))
         }
     } else {
-        AnimatedContent(
-            targetState = hasSendableContent && !isGenerating && !speechState.isActiveVoiceInput,
-            transitionSpec = { fadeIn() togetherWith fadeOut() },
-            label = "SendMicTransition",
+        val isRecording = speechState is SpeechState.Listening || speechState is SpeechState.ModelLoading
+        val isSending = hasSendableContent && !isGenerating && !speechState.isActiveVoiceInput
+        val showLiveVoiceButton =
+            onLiveVoiceClick != null &&
+                !isSending &&
+                !isGenerating &&
+                !speechState.isActiveVoiceInput
+
+        Row(
             modifier = modifier,
-        ) { isSending ->
-            val isRecording = speechState is SpeechState.Listening || speechState is SpeechState.ModelLoading
-            val icon =
-                when {
-                    isGenerating || isRecording -> Icons.Default.Stop
-                    isSending -> Icons.AutoMirrored.Filled.Send
-                    else -> Icons.Default.Mic
-                }
-
-            val stopEnabled = (isGenerating && canStop) || isRecording
-            val micEnabled = !isGenerating && !isRecording && !isGlobalInferenceBlocked
-            val sendEnabled = isSending && !isGenerating && !isRecording && !isGlobalInferenceBlocked
-
-            val enabled = stopEnabled || micEnabled || sendEnabled
-
-            val containerColor =
-                when {
-                    isRecording || isGenerating -> MaterialTheme.colorScheme.errorContainer
-                    isSending -> MaterialTheme.colorScheme.primary
-                    else -> MaterialTheme.colorScheme.surfaceVariant
-                }
-            val contentColor =
-                when {
-                    isRecording || isGenerating -> MaterialTheme.colorScheme.onErrorContainer
-                    isSending -> MaterialTheme.colorScheme.onPrimary
-                    else -> MaterialTheme.colorScheme.onSurfaceVariant
-                }
-
-            val description =
-                when {
-                    isGenerating || isRecording -> "Stop"
-                    isSending -> "Send"
-                    else -> "Voice input"
-                }
-
-            StandardTrailingAction(
-                onClick = {
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            AnimatedContent(
+                targetState = isSending,
+                transitionSpec = { fadeIn() togetherWith fadeOut() },
+                label = "SendMicTransition",
+            ) { sending ->
+                val icon =
                     when {
-                        isGenerating -> if (canStop) onStop()
-                        isRecording -> onMicClick()
-                        isSending -> {
-                            keyboardController?.hide()
-                            focusManager.clearFocus()
-                            onCollapse?.invoke()
-                            onSend(inputText)
-                        }
-                        else -> onMicClick()
+                        isGenerating || isRecording -> Icons.Default.Stop
+                        sending -> Icons.AutoMirrored.Filled.Send
+                        else -> Icons.Default.Mic
                     }
-                },
-                icon = icon,
-                enabled = enabled,
-                containerColor = containerColor,
-                contentColor = contentColor,
-                withShadow = enabled,
-                description = description,
-            )
+
+                val stopEnabled = (isGenerating && canStop) || isRecording
+                val micEnabled = !isGenerating && !isRecording && !isGlobalInferenceBlocked
+                val sendEnabled = sending && !isGenerating && !isRecording && !isGlobalInferenceBlocked
+
+                val enabled = stopEnabled || micEnabled || sendEnabled
+
+                val containerColor =
+                    when {
+                        isRecording || isGenerating -> MaterialTheme.colorScheme.errorContainer
+                        sending -> MaterialTheme.colorScheme.primary
+                        else -> MaterialTheme.colorScheme.surfaceVariant
+                    }
+                val contentColor =
+                    when {
+                        isRecording || isGenerating -> MaterialTheme.colorScheme.onErrorContainer
+                        sending -> MaterialTheme.colorScheme.onPrimary
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+
+                val description =
+                    when {
+                        isGenerating || isRecording -> "Stop"
+                        sending -> "Send"
+                        else -> "Voice input"
+                    }
+
+                StandardTrailingAction(
+                    onClick = {
+                        when {
+                            isGenerating -> if (canStop) onStop()
+                            isRecording -> onMicClick()
+                            sending -> {
+                                keyboardController?.hide()
+                                focusManager.clearFocus()
+                                onCollapse?.invoke()
+                                onSend(inputText)
+                            }
+                            else -> onMicClick()
+                        }
+                    },
+                    icon = icon,
+                    enabled = enabled,
+                    containerColor = containerColor,
+                    contentColor = contentColor,
+                    withShadow = enabled,
+                    description = description,
+                )
+            }
+
+            if (showLiveVoiceButton) {
+                NeoDisabledActionTooltip(
+                    enabled = isLiveVoiceEnabled,
+                    disabledReason = if (isLiveVoiceEnabled) null else "Assign a Live Voice provider in Settings",
+                ) {
+                    val handleLiveVoiceClick =
+                        rememberNeoDisabledClick(
+                            enabled = isLiveVoiceEnabled,
+                            onEnabledClick = { onLiveVoiceClick?.invoke() },
+                        )
+                    StandardTrailingAction(
+                        onClick = handleLiveVoiceClick,
+                        icon = Icons.Default.GraphicEq,
+                        enabled = isLiveVoiceEnabled,
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        withShadow = isLiveVoiceEnabled,
+                        description = "Live voice",
+                    )
+                }
+            }
         }
     }
 }

@@ -5,6 +5,7 @@ import com.browntowndev.enclave.core.data.local.ApiModelConfigurationsDao
 import com.browntowndev.enclave.core.data.local.DefaultModelAssignmentView
 import com.browntowndev.enclave.core.data.local.DefaultModelEntity
 import com.browntowndev.enclave.core.data.local.DefaultModelsDao
+import com.browntowndev.enclave.core.data.local.LiveVoiceProviderDao
 import com.browntowndev.enclave.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.enclave.core.data.local.LocalModelsDao
 import com.browntowndev.enclave.core.data.local.MediaProviderDao
@@ -36,6 +37,7 @@ class DefaultModelRepositoryImpl
         private val apiCredentialsDao: ApiCredentialsDao,
         private val ttsProviderDao: TtsProviderDao,
         private val mediaProviderDao: MediaProviderDao,
+        private val liveVoiceProviderDao: LiveVoiceProviderDao? = null,
         private val localEncryption: LocalDataEncryptionService,
     ) : DefaultModelRepositoryPort {
         private fun triggerSync() = syncTrigger.trigger()
@@ -58,6 +60,7 @@ class DefaultModelRepositoryImpl
             apiConfigId: ApiModelConfigurationId?,
             ttsProviderId: TtsProviderId?,
             mediaProviderId: MediaProviderId?,
+            liveVoiceProviderId: com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId?,
         ) {
             val entity =
                 DefaultModelEntity(
@@ -66,6 +69,7 @@ class DefaultModelRepositoryImpl
                     apiConfigId = apiConfigId,
                     ttsProviderId = ttsProviderId,
                     mediaProviderId = mediaProviderId,
+                    liveVoiceProviderId = liveVoiceProviderId,
                     pendingSync = 1,
                 )
             defaultModelsDao.upsert(entity)
@@ -162,6 +166,25 @@ class DefaultModelRepositoryImpl
                             )
                         }
                 }
+            } else if (entity.liveVoiceProviderId != null) {
+                val liveVoiceProvider = liveVoiceProviderDao?.getLiveVoiceProvider(entity.liveVoiceProviderId.value)
+                if (liveVoiceProvider != null) {
+                    displayName =
+                        decryptFieldOrNull(
+                            stored = liveVoiceProvider.displayName,
+                            owner = "LiveVoiceProviderEntity",
+                            field = "displayName",
+                            entityId = liveVoiceProvider.id,
+                        )
+                    providerName = liveVoiceProvider.provider.displayName
+                    presetName =
+                        decryptFieldOrNull(
+                            stored = liveVoiceProvider.voiceName,
+                            owner = "LiveVoiceProviderEntity",
+                            field = "voiceName",
+                            entityId = liveVoiceProvider.id,
+                        )
+                }
             }
 
             return DefaultModelAssignment(
@@ -170,6 +193,7 @@ class DefaultModelRepositoryImpl
                 apiConfigId = entity.apiConfigId,
                 ttsProviderId = entity.ttsProviderId,
                 mediaProviderId = entity.mediaProviderId,
+                liveVoiceProviderId = entity.liveVoiceProviderId,
                 displayName = displayName,
                 providerName = providerName,
                 presetName = presetName,
@@ -184,6 +208,7 @@ class DefaultModelRepositoryImpl
                 apiConfigId = apiConfigId,
                 ttsProviderId = ttsProviderId,
                 mediaProviderId = mediaProviderId,
+                liveVoiceProviderId = liveVoiceProviderId,
                 displayName =
                     when {
                         localConfigId != null -> localAssetName
@@ -214,6 +239,15 @@ class DefaultModelRepositoryImpl
                                     owner = "MediaProviderEntity",
                                     field = "displayName",
                                     entityId = mediaProviderId.value,
+                                )
+                            }
+                        liveVoiceProviderId != null ->
+                            liveVoiceAssetName?.let {
+                                decryptFieldOrNull(
+                                    stored = it,
+                                    owner = "LiveVoiceProviderEntity",
+                                    field = "displayName",
+                                    entityId = liveVoiceProviderId.value,
                                 )
                             }
                         else -> null
@@ -256,6 +290,15 @@ class DefaultModelRepositoryImpl
                                     entityId = mediaProviderId.value,
                                 )
                             }
+                        liveVoiceProviderId != null ->
+                            liveVoiceVoiceName?.let {
+                                decryptFieldOrNull(
+                                    stored = it,
+                                    owner = "LiveVoiceProviderEntity",
+                                    field = "voiceName",
+                                    entityId = liveVoiceProviderId.value,
+                                )
+                            }
                         else -> null
                     },
                 modelId = apiModelId?.takeIf { it.isNotBlank() },
@@ -265,6 +308,7 @@ class DefaultModelRepositoryImpl
                         apiConfigId != null -> apiProviderName?.displayName
                         ttsProviderId != null -> ttsProviderName?.displayName
                         mediaProviderId != null -> mediaProviderName?.displayName
+                        liveVoiceProviderId != null -> liveVoiceProviderName?.displayName
                         else -> null
                     },
             )

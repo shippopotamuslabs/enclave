@@ -9,6 +9,7 @@ import com.browntowndev.enclave.domain.model.config.LocalModelConfiguration
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.config.LocalModelMetadata
+import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId
 import com.browntowndev.enclave.domain.model.config.TtsProviderId
 import com.browntowndev.enclave.domain.model.download.ModelPackCompleteness
 import com.browntowndev.enclave.domain.model.download.ModelPackTestFixtures
@@ -112,6 +113,60 @@ class SetDefaultModelUseCaseTest {
 
             val assignment = repository.getDefault(ModelType.TTS)
             assertEquals(ttsId, assignment?.ttsProviderId)
+        }
+
+    @Test
+    @DisplayName("LV-SETDEFAULT-001")
+    fun lvSetDefault001_liveVoiceSlotAcceptsOnlyLiveVoiceProviderId() =
+        runTest {
+            val liveVoiceId = LiveVoiceProviderId("lv-1")
+            useCase(
+                ModelType.LIVE_VOICE,
+                localConfigId = null,
+                apiConfigId = null,
+                ttsProviderId = null,
+                mediaProviderId = null,
+                liveVoiceProviderId = liveVoiceId,
+            )
+
+            val assignment = repository.getDefault(ModelType.LIVE_VOICE)
+            assertEquals(liveVoiceId, assignment?.liveVoiceProviderId)
+            assertNull(assignment?.localConfigId)
+            assertNull(assignment?.apiConfigId)
+            assertNull(assignment?.ttsProviderId)
+            assertNull(assignment?.mediaProviderId)
+
+            val error =
+                assertFailsWith<IllegalArgumentException> {
+                    useCase(
+                        ModelType.LIVE_VOICE,
+                        localConfigId = null,
+                        apiConfigId = ApiModelConfigurationId("api-1"),
+                        ttsProviderId = null,
+                        mediaProviderId = null,
+                        liveVoiceProviderId = liveVoiceId,
+                    )
+                }
+            assertEquals("Live Voice slot is LIVE_VOICE-only.", error.message)
+        }
+
+    @Test
+    @DisplayName("LV-SETDEFAULT-002")
+    fun lvSetDefault002_liveVoiceSlotRejectsMissingProviderId() =
+        runTest {
+            val error =
+                assertFailsWith<IllegalArgumentException> {
+                    useCase(
+                        ModelType.LIVE_VOICE,
+                        localConfigId = null,
+                        apiConfigId = null,
+                        ttsProviderId = null,
+                        mediaProviderId = null,
+                        liveVoiceProviderId = null,
+                    )
+                }
+
+            assertEquals("Live Voice slot requires a Live Voice provider assignment.", error.message)
         }
 
     @Test

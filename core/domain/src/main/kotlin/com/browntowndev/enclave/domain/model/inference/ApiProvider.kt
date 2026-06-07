@@ -37,4 +37,11 @@ enum class ApiProvider(
                 OPENROUTER, XAI -> true
                 ANTHROPIC, OPENAI, GOOGLE, FAL -> false
             }
+
+    val supportsRealtimeVoice: Boolean
+        get() =
+            when (this) {
+                OPENAI, GOOGLE, XAI -> true
+                ANTHROPIC, OPENROUTER, FAL -> false
+            }
 }

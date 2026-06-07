@@ -21,10 +21,9 @@ class FirestoreSyncAdapterRegistryTest {
         val ctx = createMinimalContext()
         val registry = FirestoreSyncAdapterRegistry(ctx)
 
-        // 22 = the production handler list after `SearchToolSettingsSyncHandler` is
-        // registered (21 prior + 1 new). See `FirestoreSyncDependencyGraphTest` for the
-        // matching assertion on the graph side.
-        assertEquals(22, registry.adapters.size)
+        // 23 = production handlers after `LiveVoiceProviderSyncHandler` is registered.
+        assertEquals(23, registry.adapters.size)
+        assertTrue(registry.adapters.any { it.collectionPath == "live_voice_providers" })
         assertTrue(registry.adapters.any { it.collectionPath == "memories" })
         assertTrue(registry.adapters.any { it.collectionPath == "api_keys" })
     }

@@ -8,7 +8,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,8 +21,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.InsertPhoto
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -40,13 +37,9 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.PopupProperties
 import androidx.core.content.ContextCompat
-import com.browntowndev.enclave.core.ui.component.StandardTrailingAction
 import com.browntowndev.enclave.core.ui.component.UniversalImageAttachment
 import com.browntowndev.enclave.core.ui.component.UniversalInputBar
 import com.browntowndev.enclave.core.ui.component.UniversalPromptTextField
@@ -57,8 +50,6 @@ import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
 import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
 import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
 import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
-import com.browntowndev.enclave.core.ui.component.neo.neoButtonShadowOffset
-import com.browntowndev.enclave.core.ui.component.neo.neoShadowColor
 import com.browntowndev.enclave.core.ui.component.neo.neoSurface
 import com.browntowndev.enclave.core.ui.component.neo.rememberNeoDisabledClick
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
@@ -67,7 +58,7 @@ import com.browntowndev.enclave.domain.port.media.isActiveVoiceInput
 import com.browntowndev.enclave.feature.chat.ChatModeUi
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Suppress("LongParameterList")
+@Suppress("LongParameterList", "UnusedParameter")
 @Composable
 fun InputBar(
     inputText: String,
@@ -77,12 +68,13 @@ fun InputBar(
     isPhotoAttachmentEnabled: Boolean,
     photoAttachmentMaxItems: Int,
     photoAttachmentDisabledReason: String?,
-    selectedMode: ChatModeUi,
+    selectedMode: ChatModeUi = ChatModeUi.FAST,
     isGenerating: Boolean,
     canStop: Boolean,
     isGlobalInferenceBlocked: Boolean = false,
+    isLiveVoiceEnabled: Boolean = false,
     onInputChange: (String) -> Unit,
-    onModeChange: (ChatModeUi) -> Unit,
+    onModeChange: (ChatModeUi) -> Unit = {},
     onSend: (String) -> Unit,
     onStopGenerating: () -> Unit,
     onImageAttach: () -> Unit,
@@ -90,9 +82,9 @@ fun InputBar(
     onClearImage: (String) -> Unit,
     onClearFile: () -> Unit,
     onMicClick: () -> Unit,
+    onLiveVoiceClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    var modeExpanded by remember { mutableStateOf(false) }
     var isExpanded by remember { mutableStateOf(false) }
     var showAttachmentSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
@@ -107,6 +99,17 @@ fun InputBar(
                 onMicClick()
             } else {
                 Toast.makeText(context, "Microphone permission is required for speech-to-text", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+    val liveVoicePermissionLauncher =
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.RequestPermission(),
+        ) { isGranted ->
+            if (isGranted) {
+                onLiveVoiceClick()
+            } else {
+                Toast.makeText(context, "Microphone permission is required for Live Voice", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -237,58 +240,6 @@ fun InputBar(
                 }
             },
         trailingAction = {
-            if (!speechState.isActiveVoiceInput) {
-                Box {
-                    StandardTrailingAction(
-                        painter = painterResource(selectedMode.iconRes),
-                        onClick = { modeExpanded = true },
-                        modifier = Modifier.focusProperties { canFocus = false },
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        description = selectedMode.getDisplayName(context),
-                    )
-                    DropdownMenu(
-                        expanded = modeExpanded,
-                        onDismissRequest = { modeExpanded = false },
-                        properties = PopupProperties(focusable = false),
-                        modifier =
-                            Modifier
-                                .width(200.dp)
-                                .neoSurface(
-                                    backgroundColor = MaterialTheme.colorScheme.surface,
-                                    borderColor = neoBorderColor(),
-                                    withShadow = true,
-                                    shadowColor = neoShadowColor(),
-                                    shadowOffset = neoButtonShadowOffset(),
-                                    shape = EnclaveNeoTokens.shape,
-                                ),
-                    ) {
-                        ChatModeUi.entries.forEach { mode ->
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        mode.getDisplayName(context),
-                                        fontWeight = FontWeight.Bold,
-                                    )
-                                },
-                                onClick = {
-                                    onModeChange(mode)
-                                    modeExpanded = false
-                                },
-                                leadingIcon = {
-                                    Icon(
-                                        painter = painterResource(mode.iconRes),
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                    )
-                                },
-                            )
-                        }
-                    }
-                }
-                Spacer(Modifier.width(8.dp))
-            }
-
             UniversalVoiceTrailingAction(
                 inputText = inputText,
                 speechState = speechState,
@@ -305,6 +256,14 @@ fun InputBar(
                 },
                 isGlobalInferenceBlocked = isGlobalInferenceBlocked,
                 onCollapse = { isExpanded = false },
+                onLiveVoiceClick = {
+                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                        onLiveVoiceClick()
+                    } else {
+                        liveVoicePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                    }
+                },
+                isLiveVoiceEnabled = isLiveVoiceEnabled,
             )
         },
     )

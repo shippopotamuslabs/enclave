@@ -5,6 +5,7 @@ object SettingsDestination {
     const val MAIN = "settings_main"
     const val BYOK_CONFIGURE = "byok_configure"
     const val TTS_CONFIGURE = "tts_configure"
+    const val LIVE_VOICE_CONFIGURE = "live_voice_configure"
     const val MEDIA_CONFIGURE = "media_configure"
     const val LOCAL_MODEL_CONFIGURE = "local_model_configure"
     const val BYOK_CUSTOM_HEADERS = "byok_custom_headers"

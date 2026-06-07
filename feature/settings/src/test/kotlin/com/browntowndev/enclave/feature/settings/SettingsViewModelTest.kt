@@ -297,6 +297,7 @@ class SettingsViewModelTest {
             createSettingsApiProvidersDelegate(
                 apiProviderUseCases = settingsUseCases.apiProviders,
                 ttsUseCases = settingsUseCases.tts,
+                liveVoiceUseCases = settingsUseCases.liveVoice,
                 mediaUseCases = settingsUseCases.media,
                 deletionHelper = deletionHelper,
                 apiModelAssetUiMapper = apiModelAssetUiMapper,

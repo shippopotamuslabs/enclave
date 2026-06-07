@@ -129,6 +129,9 @@ fun ChatRoute(
                 }
             },
             onMicClick = viewModel::onMicClick,
+            onStartLiveVoice = viewModel::onStartLiveVoice,
+            onEndLiveVoice = viewModel::onEndLiveVoice,
+            onToggleLiveVoiceMute = viewModel::onToggleMute,
             onArtifactCardClick = viewModel::onArtifactCardClick,
             onNavigateToStudio = onNavigateToStudio,
             onShareClick = viewModel::onShareClick,

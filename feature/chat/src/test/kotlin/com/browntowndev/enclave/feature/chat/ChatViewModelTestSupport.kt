@@ -11,6 +11,8 @@ import com.browntowndev.enclave.domain.port.media.TtsPlaybackControllerPort
 import com.browntowndev.enclave.domain.port.repository.ChatRepository
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.domain.usecase.artifact.ExportArtifactDocumentsUseCase
+import com.browntowndev.enclave.domain.port.media.RealtimeAudioCapturePort
+import com.browntowndev.enclave.domain.port.media.StreamingAudioPlayerPort
 import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
 import com.browntowndev.enclave.domain.usecase.chat.GetModelDisplayNameUseCase
 import com.browntowndev.enclave.domain.usecase.chat.StageImageAttachmentUseCase
@@ -29,6 +31,7 @@ import com.browntowndev.enclave.feature.chat.delegates.ChatShareCoordinator
 import com.browntowndev.enclave.feature.chat.delegates.ChatTelemetryCoordinator
 import com.browntowndev.enclave.feature.chat.delegates.ChatUiStateReducer
 import com.browntowndev.enclave.feature.chat.delegates.InferenceOrchestrator
+import com.browntowndev.enclave.feature.chat.delegates.LiveVoiceCoordinator
 import com.browntowndev.enclave.feature.chat.delegates.SpeechInputCoordinator
 import com.browntowndev.enclave.feature.chat.delegates.ToolExecutionBannerCoordinator
 import com.browntowndev.enclave.feature.chat.delegates.TtsController
@@ -177,6 +180,15 @@ object ChatViewModelTestSupport {
         val chatUiStateReducer = ChatUiStateReducer(chatMessageUiMapper = chatMessageUiMapper)
         val photoAttachmentPolicyResolver =
             PhotoAttachmentPolicyResolver(activeModelProvider = activeModelProvider)
+        val liveVoiceCoordinator =
+            LiveVoiceCoordinator(
+                liveVoiceSessionUseCase = mockk(relaxed = true),
+                persistVoiceTurnUseCase = mockk(relaxed = true),
+                realtimeAudioCapture = mockk<RealtimeAudioCapturePort>(relaxed = true),
+                streamingAudioPlayer = mockk<StreamingAudioPlayerPort>(relaxed = true),
+                errorHandler = errorHandler,
+                loggingPort = loggingPort,
+            )
 
         return Harness(
             inferenceOrchestrator = inferenceOrchestrator,
@@ -204,6 +216,7 @@ object ChatViewModelTestSupport {
                     chatUiStateReducer = chatUiStateReducer,
                     chatMessageUiMapper = chatMessageUiMapper,
                     photoAttachmentPolicyResolver = photoAttachmentPolicyResolver,
+                    liveVoiceCoordinator = liveVoiceCoordinator,
                 ),
         )
     }
