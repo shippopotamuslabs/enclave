@@ -7,6 +7,7 @@ import com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.model.inference.ToolDisclosureMode
 import com.browntowndev.enclave.domain.model.inference.WebSearchParams
+import com.browntowndev.enclave.domain.usecase.chat.SearchToolPromptComposer
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -50,7 +51,7 @@ class ContextWindowPlannerTest {
                     GenerationOptions(
                         reasoningBudget = 0,
                         toolCatalog = listOf(catalogEntry("append_blocks")),
-                        activeTools = listOf(ToolDefinition.DISCLOSE_TOOL_SCHEMAS, ToolDefinition.WEB_SEARCH),
+                        activeTools = listOf(ToolDefinition.SEARCH_TOOLS, ToolDefinition.WEB_SEARCH),
                     ),
                 tokenCounter = LazyDisclosureTokenCounter(deferredSchemaTokens = 300),
             )
@@ -68,7 +69,7 @@ class ContextWindowPlannerTest {
                     GenerationOptions(
                         reasoningBudget = 0,
                         toolCatalog = listOf(catalogEntry("append_blocks")),
-                        activeTools = listOf(ToolDefinition.DISCLOSE_TOOL_SCHEMAS, ToolDefinition.WEB_SEARCH),
+                        activeTools = listOf(ToolDefinition.SEARCH_TOOLS, ToolDefinition.WEB_SEARCH),
                     ),
                 tokenCounter = LazyDisclosureTokenCounter(deferredSchemaTokens = 300),
             )
@@ -79,7 +80,7 @@ class ContextWindowPlannerTest {
                     GenerationOptions(
                         reasoningBudget = 0,
                         toolCatalog = listOf(catalogEntry("append_blocks")),
-                        activeTools = listOf(ToolDefinition.DISCLOSE_TOOL_SCHEMAS, ToolDefinition.WEB_SEARCH),
+                        activeTools = listOf(ToolDefinition.SEARCH_TOOLS, ToolDefinition.WEB_SEARCH),
                     ),
                 tokenCounter = LazyDisclosureTokenCounter(deferredSchemaTokens = 900),
             )
@@ -96,7 +97,7 @@ class ContextWindowPlannerTest {
             modelName: String?,
         ): Int =
             when {
-                text.contains("TOOL CATALOG") -> 12
+                text == SearchToolPromptComposer.TOOL_DISCOVERY_INSTRUCTION_TEXT -> 12
                 text.contains("append_blocks") -> deferredSchemaTokens
                 else -> 40
             }

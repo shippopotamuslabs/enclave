@@ -19,6 +19,8 @@ import com.browntowndev.enclave.domain.port.inference.NoopCommittedInferenceProm
 import com.browntowndev.enclave.domain.port.inference.PromptComposerPort
 import com.browntowndev.enclave.domain.port.inference.SearchIntentClassifierPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
+import com.browntowndev.enclave.domain.port.inference.NoopToolSearchEmbeddingCachePort
+import com.browntowndev.enclave.domain.port.inference.ToolSearchEmbeddingCachePort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.MemoriesRepository
 import com.browntowndev.enclave.domain.port.repository.MessageRepository
@@ -55,6 +57,7 @@ class DirectChatInferenceExecutor
         private val searchIntentClassifier: SearchIntentClassifierPort,
         private val toolExecutor: ToolExecutorPort,
         private val monotonicToolActivation: MonotonicToolActivationPort = InMemoryMonotonicToolActivationStore(),
+        private val toolSearchEmbeddingCache: ToolSearchEmbeddingCachePort = NoopToolSearchEmbeddingCachePort,
         private val committedInferencePrompts: CommittedInferencePromptPort = NoopCommittedInferencePromptPort,
     ) : ChatInferenceExecutorPort {
         private val historyRehydrator =
@@ -79,6 +82,7 @@ class DirectChatInferenceExecutor
                 searchIntentClassifier = searchIntentClassifier,
                 toolExecutor = toolExecutor,
                 monotonicToolActivation = monotonicToolActivation,
+                toolSearchEmbeddingCache = toolSearchEmbeddingCache,
             )
 
         override fun execute(

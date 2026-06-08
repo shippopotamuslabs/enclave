@@ -2,6 +2,7 @@ package com.browntowndev.enclave.domain.util
 
 import com.browntowndev.enclave.domain.model.chat.ChatMessage
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
+import com.browntowndev.enclave.domain.usecase.chat.SearchToolPromptComposer
 
 /**
  * Centralized context-window budgeting for preflight history trimming and tool loops.
@@ -47,18 +48,9 @@ object ContextWindowPlanner {
     ): Budget {
         val outputReserve = outputReserveFor(contextWindowTokens, options.maxTokens)
         val reasoningReserve = options.reasoningBudget.coerceAtLeast(0)
-        val catalogTokens =
+        val discoveryInstructionTokens =
             if (options.toolCatalog.isNotEmpty()) {
-                val compactCatalogPayload =
-                    options.toolCatalog.joinToString(separator = "\n") { entry ->
-                        val args =
-                            (
-                                entry.requiredArguments.map { it.name to "required" } +
-                                    entry.optionalArguments.map { it.name to "optional" }
-                            ).joinToString(", ") { (n, k) -> "$n:$k" }
-                        "TOOL CATALOG ${entry.name} ${entry.description} $args"
-                    }
-                tokenCounter.countTokens(compactCatalogPayload, modelId)
+                tokenCounter.countTokens(SearchToolPromptComposer.TOOL_DISCOVERY_INSTRUCTION_TEXT, modelId)
             } else {
                 0
             }
@@ -72,7 +64,7 @@ object ContextWindowPlanner {
             } else {
                 0
             }
-        val toolSchemaTokens = catalogTokens + activeSchemaTokens
+        val toolSchemaTokens = discoveryInstructionTokens + activeSchemaTokens
         val mediaReserve = options.imageUris.size * DEFAULT_IMAGE_RESERVE_TOKENS
 
         return Budget(
