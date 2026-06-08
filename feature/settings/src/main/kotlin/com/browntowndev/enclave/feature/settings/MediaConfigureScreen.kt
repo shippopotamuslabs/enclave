@@ -120,7 +120,7 @@ fun MediaConfigureScreen(
             tasks = draft.tasks,
             apiKeyPresent = apiKey.isNotBlank() || isKeySaved,
         )
-    val locksTaskToggles = draft.provider.locksMediaTaskToggles()
+    val locksTaskToggles = draft.provider.locksMediaTaskToggles(draft.tasks)
 
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
