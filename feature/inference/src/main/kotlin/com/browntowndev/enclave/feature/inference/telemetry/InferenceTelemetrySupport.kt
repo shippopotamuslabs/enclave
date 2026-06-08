@@ -41,16 +41,13 @@ class InferenceTelemetrySupport
             val clientBuild: TelemetryClientBuild,
         )
 
-        fun captureContext(
-            options: GenerationOptions,
-            sequenceIndex: Int = 0,
-        ): CaptureContext? {
+        fun captureContext(options: GenerationOptions): CaptureContext? {
             val messageId = options.assistantMessageId ?: return null
             val chatId = options.chatId ?: return null
             return CaptureContext(
                 messageId = messageId,
                 chatId = chatId,
-                sequenceIndex = sequenceIndex,
+                sequenceIndex = options.telemetrySequenceIndex,
                 clientBuild = clientBuildProvider.current(),
             )
         }
@@ -141,6 +138,8 @@ class InferenceTelemetrySupport
             modelLabel: String,
             timing: InferenceTurnTiming,
             outputTokens: Int?,
+            inputTokens: Int? = null,
+            cacheReadInputTokens: Int? = null,
         ): TurnTelemetry =
             normalizer.normalizeLocalGeneration(
                 rowId = newRowId(),
@@ -155,6 +154,9 @@ class InferenceTelemetrySupport
                 appVersionName = context.clientBuild.appVersionName,
                 appVersionCode = context.clientBuild.appVersionCode,
                 telemetrySchemaVersion = context.clientBuild.telemetrySchemaVersion,
+                sequenceIndex = context.sequenceIndex,
+                inputTokens = inputTokens,
+                cacheReadInputTokens = cacheReadInputTokens,
             )
 
         fun providerLabel(provider: String): String =

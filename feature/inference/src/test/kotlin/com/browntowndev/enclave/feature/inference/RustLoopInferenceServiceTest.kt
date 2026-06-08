@@ -1179,6 +1179,7 @@ class RustLoopInferenceServiceTest {
                         onTextToken: suspend (String) -> Unit,
                         onThinkingToken: suspend (String) -> Unit,
                         options: GenerationOptions,
+                        onLifecycleEvent: suspend (InferenceEvent) -> Unit,
                     ): AgentModelTurnResult {
                         sidecarsList.add(contextSidecars)
                         return AgentModelTurnResult(
@@ -1344,6 +1345,7 @@ class RustLoopInferenceServiceTest {
             onTextToken: suspend (String) -> Unit,
             onThinkingToken: suspend (String) -> Unit,
             options: GenerationOptions,
+            onLifecycleEvent: suspend (InferenceEvent) -> Unit,
         ): AgentModelTurnResult {
             completeSingleTurnCallCount += 1
             sessionMessagesByCall.add(sessionMessages)

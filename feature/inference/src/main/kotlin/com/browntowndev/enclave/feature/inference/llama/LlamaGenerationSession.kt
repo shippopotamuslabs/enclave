@@ -63,6 +63,7 @@ internal object LlamaGenerationSession {
             override fun onComplete(
                 promptTokens: Int,
                 generatedTokens: Int,
+                prefixReusedTokens: Int,
             ) {
                 if (isClosed) return
                 isClosed = true
@@ -73,6 +74,7 @@ internal object LlamaGenerationSession {
                         fullText = fullText,
                         promptTokens = promptTokens,
                         generatedTokens = generatedTokens,
+                        prefixReusedTokens = prefixReusedTokens,
                     ),
                 )
                 onGenerationComplete(promptTokens, generatedTokens, fullText)

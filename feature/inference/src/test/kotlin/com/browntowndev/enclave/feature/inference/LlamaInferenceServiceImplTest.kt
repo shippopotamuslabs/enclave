@@ -225,6 +225,37 @@ class LlamaInferenceServiceImplTest {
         }
 
     @Test
+    fun `completeSingleTurn emits engine loading before processing on cold load`() =
+        runTest {
+            every { sessionManager.streamAssistantResponseWithOptions(any()) } returns
+                flowOf(
+                    GenerationEvent.Completed("Assistant text"),
+                )
+            val lifecycleEvents = mutableListOf<InferenceEvent>()
+            val service = createService(ModelType.FAST)
+
+            service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        AgentLoopMessage(id = "u1", role = Role.USER, content = "Hi!", metadataJson = "null"),
+                    ),
+                systemPrompt = "System",
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 2048, modelType = ModelType.FAST),
+                onLifecycleEvent = { lifecycleEvents += it },
+            )
+
+            val loadingIndex = lifecycleEvents.indexOfFirst { it is InferenceEvent.EngineLoading }
+            val processingIndex = lifecycleEvents.indexOfFirst { it is InferenceEvent.Processing }
+            assertTrue(loadingIndex >= 0)
+            assertTrue(processingIndex >= 0)
+            assertTrue(loadingIndex < processingIndex)
+        }
+
+    @Test
     fun `completeSingleTurn rebuilds session history from Rust messages`() =
         runTest {
             every { sessionManager.streamAssistantResponseWithOptions(any()) } returns

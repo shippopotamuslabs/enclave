@@ -18,16 +18,9 @@
 
 #include "token_processor.hpp"
 #include "llama.h"
-#include "ggml-backend.h"
 #include "ggml.h"
 #include "mtmd.h"
 #include "mtmd-helper.h"
-
-// prctl-based SVE detection - more reliable than /proc filesystem
-// Returns vector length in bits, or 0 if SVE not available
-#ifndef PR_SVE_GET_VL
-#define PR_SVE_GET_VL 51
-#endif
 
 // ============================================================
 // Native CPU detection and thread affinity
@@ -39,69 +32,125 @@ struct CoreInfo {
     long maxFreqKHz;
 };
 
-// Detect performance cores by reading cpuinfo_max_freq
-// Returns vector of core IDs sorted by frequency (highest first)
-static std::vector<CoreInfo> detectPerformanceCores() {
+static constexpr int kMaxHeterogeneousThreads = 4;
+static constexpr int kMaxHomogeneousThreads = 8;
+static constexpr float kHomogeneousFreqFraction = 0.05f;
+static constexpr float kPerformanceCoreFreqFraction = 0.80f;
+
+struct CpuTopologyInfo {
+    std::vector<int> affinity_core_ids;
+    bool homogeneous = false;
+    bool detected = false;
+};
+
+// Probe all online CPUs via cpuinfo_max_freq; sorted highest frequency first.
+static std::vector<CoreInfo> detectAllCores() {
     std::vector<CoreInfo> cores;
 
-    // Check up to 8 cores (typical for mobile)
-    for (int i = 0; i < 8; i++) {
+    int cpu_count = (int) sysconf(_SC_NPROCESSORS_ONLN);
+    if (cpu_count <= 0) {
+        cpu_count = 8;
+    }
+
+    for (int i = 0; i < cpu_count; i++) {
         std::string path = "/sys/devices/system/cpu/cpu" + std::to_string(i) + "/cpufreq/cpuinfo_max_freq";
         std::ifstream f(path);
-        if (!f.is_open()) continue;
+        if (!f.is_open()) {
+            continue;
+        }
 
         long freq = 0;
         f >> freq;
         if (freq > 0) {
-            cores.push_back({i, freq});
+            cores.push_back({ i, freq });
             __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Core %d: max freq = %ld kHz", i, freq);
         }
     }
 
-    // Sort descending by frequency
     std::sort(cores.begin(), cores.end(),
-        [](const CoreInfo& a, const CoreInfo& b) {
+        [](const CoreInfo & a, const CoreInfo & b) {
             return a.maxFreqKHz > b.maxFreqKHz;
         });
 
     return cores;
 }
 
-// Determine which cores are "performance" cores (within 80% of max freq)
-// This captures big cores on big.LITTLE but excludes efficiency cores
-static std::vector<int> getPerformanceCoreIds() {
-    auto cores = detectPerformanceCores();
-
+static CpuTopologyInfo detectCpuTopology() {
+    CpuTopologyInfo topo;
+    const auto cores = detectAllCores();
     if (cores.empty()) {
         __android_log_print(ANDROID_LOG_WARN, "llama-jni", "CPU detection: no cores found, using defaults");
-        return {};
+        return topo;
     }
 
-    long topFreq = cores[0].maxFreqKHz;
-    std::vector<int> perfCoreIds;
+    const long top_freq = cores.front().maxFreqKHz;
+    const long min_freq = cores.back().maxFreqKHz;
+    topo.homogeneous = top_freq > 0 &&
+        (top_freq - min_freq) <= (long) (top_freq * kHomogeneousFreqFraction);
+    topo.detected = true;
 
-    for (const auto& c : cores) {
-        // Include cores within 80% of top frequency (captures big.LITTLE big cores)
-        if ((float)c.maxFreqKHz >= topFreq * 0.80f) {
-            perfCoreIds.push_back(c.id);
+    if (topo.homogeneous) {
+        topo.affinity_core_ids.reserve(cores.size());
+        for (const auto & core : cores) {
+            topo.affinity_core_ids.push_back(core.id);
+        }
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni",
+            "CPU topology: homogeneous (%zu cores, freq spread <= %.0f%%)",
+            topo.affinity_core_ids.size(), kHomogeneousFreqFraction * 100.0f);
+    } else {
+        for (const auto & core : cores) {
+            if ((float) core.maxFreqKHz >= top_freq * kPerformanceCoreFreqFraction) {
+                topo.affinity_core_ids.push_back(core.id);
+            }
+        }
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni",
+            "CPU topology: heterogeneous (%zu performance cores of %zu)",
+            topo.affinity_core_ids.size(), cores.size());
+    }
+
+    for (size_t i = 0; i < topo.affinity_core_ids.size(); i++) {
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "  affinity core[%zu] = CPU%d",
+            i, topo.affinity_core_ids[i]);
+    }
+
+    return topo;
+}
+
+static int resolveInferenceThreadCount(const CpuTopologyInfo & topo) {
+    if (topo.detected && !topo.affinity_core_ids.empty()) {
+        const int max_threads = topo.homogeneous ? kMaxHomogeneousThreads : kMaxHeterogeneousThreads;
+        return std::max(1, std::min((int) topo.affinity_core_ids.size(), max_threads));
+    }
+
+    int cpu_count = (int) sysconf(_SC_NPROCESSORS_ONLN);
+    if (cpu_count <= 0) {
+        cpu_count = 4;
+    }
+    return std::max(1, std::min(cpu_count, kMaxHeterogeneousThreads));
+}
+
+static void applyCoreMask(
+        struct ggml_threadpool_params & tpp,
+        const CpuTopologyInfo & topo) {
+    if (!topo.detected || topo.affinity_core_ids.empty()) {
+        return;
+    }
+
+    memset(tpp.cpumask, 0, sizeof(tpp.cpumask));
+    for (const int core_id : topo.affinity_core_ids) {
+        if (core_id >= 0 && core_id < GGML_MAX_N_THREADS) {
+            tpp.cpumask[core_id] = true;
         }
     }
-
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "CPU detection: %zu performance cores identified", perfCoreIds.size());
-    for (size_t i = 0; i < perfCoreIds.size(); i++) {
-        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "  Performance core[%zu] = CPU%d", i, perfCoreIds[i]);
-    }
-
-    return perfCoreIds;
+    // Pin one thread per core on big.LITTLE; let the scheduler balance on uniform clusters.
+    tpp.strict_cpu = !topo.homogeneous;
 }
 
 // Global threadpool for llama.cpp
 static ggml_threadpool_t g_threadpool = nullptr;
 static ggml_threadpool_t g_threadpool_batch = nullptr;
 
-// Initialize threadpool
-static void initThreadpool(int n_threads) {
-    // Clean up existing threadpools
+static void initThreadpool(int n_threads, const CpuTopologyInfo & topo) {
     if (g_threadpool) {
         ggml_threadpool_free(g_threadpool);
         g_threadpool = nullptr;
@@ -111,15 +160,14 @@ static void initThreadpool(int n_threads) {
         g_threadpool_batch = nullptr;
     }
 
-    auto perfCores = getPerformanceCoreIds();
-
     int actualThreads = n_threads;
-    if (!perfCores.empty()) {
-        actualThreads = (int)std::min((size_t)n_threads, perfCores.size());
+    if (topo.detected && !topo.affinity_core_ids.empty()) {
+        actualThreads = (int) std::min((size_t) n_threads, topo.affinity_core_ids.size());
     }
     actualThreads = std::max(actualThreads, 1);
 
     struct ggml_threadpool_params tpp = ggml_threadpool_params_default(actualThreads);
+    applyCoreMask(tpp, topo);
 
     g_threadpool = ggml_threadpool_new(&tpp);
     g_threadpool_batch = ggml_threadpool_new(&tpp);
@@ -136,17 +184,6 @@ static void cleanupThreadpool() {
         g_threadpool_batch = nullptr;
     }
 }
-
-// Backend type enumeration - must match Kotlin enum
-enum LlamaBackend {
-    BACKEND_CPU = 0,
-    BACKEND_OPENCL = 1,
-    BACKEND_VULKAN = 2
-};
-
-// Current backend selection
-static LlamaBackend g_selectedBackend = BACKEND_CPU;
-static bool g_supportsGpu = false;  // Set during initialization based on llama_supports_gpu_offload()
 
 // Forward declarations of common helper functions (from common.h)
 static inline void llama_batch_clear(struct llama_batch & batch) {
@@ -187,6 +224,7 @@ static std::vector<llama_pos> g_history_positions; // Actual KV positions for ea
 static llama_pos g_last_eval_pos = 0; // Next writable KV position for sequence 0
 static int g_think_token_count = 0;
 static bool g_last_prompt_was_multimodal = false;
+static int g_last_prefix_reused_tokens = 0;
 
 // Helper to get vocab from model (must be after g_model declaration)
 static inline const llama_vocab* get_model_vocab() {
@@ -232,13 +270,69 @@ static inline size_t first_history_index_for_pos(llama_pos pos) {
     return g_history_positions.size();
 }
 
+static inline llama_pos compute_prompt_eval_start_pos(
+        size_t rebuild_from,
+        const std::vector<llama_pos> & positions,
+        bool reeval_at_same_pos) {
+    if (rebuild_from == 0 || positions.empty()) {
+        return 0;
+    }
+
+    if (reeval_at_same_pos && rebuild_from < positions.size()) {
+        return positions[rebuild_from];
+    }
+
+    return positions[rebuild_from - 1] + 1;
+}
+
+static inline bool reconcile_kv_suffix(llama_pos expected_next_pos) {
+    if (!g_ctx) {
+        return false;
+    }
+
+    sync_last_eval_pos_from_memory();
+    if (g_last_eval_pos == expected_next_pos) {
+        return true;
+    }
+
+    if (g_last_eval_pos > expected_next_pos) {
+        __android_log_print(
+            ANDROID_LOG_WARN,
+            "llama-jni",
+            "KV suffix stale after trim: memory=%d expected=%d — trimming suffix",
+            (int) g_last_eval_pos,
+            (int) expected_next_pos);
+        llama_memory_seq_rm(llama_get_memory(g_ctx), 0, expected_next_pos, -1);
+        sync_last_eval_pos_from_memory();
+    }
+
+    if (g_last_eval_pos == expected_next_pos) {
+        return true;
+    }
+
+    __android_log_print(
+        ANDROID_LOG_WARN,
+        "llama-jni",
+        "KV position mismatch after trim: memory=%d expected=%d",
+        (int) g_last_eval_pos,
+        (int) expected_next_pos);
+    return false;
+}
+
 static inline size_t trim_history_from_pos(llama_pos trim_pos) {
     if (!g_ctx) {
         clear_history_tracking();
         return 0;
     }
 
-    llama_memory_seq_rm(llama_get_memory(g_ctx), 0, trim_pos, -1);
+    const bool removed = llama_memory_seq_rm(llama_get_memory(g_ctx), 0, trim_pos, -1);
+    if (!removed) {
+        __android_log_print(
+            ANDROID_LOG_WARN,
+            "llama-jni",
+            "KV trim from pos %d failed — suffix may be inconsistent",
+            (int) trim_pos);
+    }
 
     const size_t trim_index = first_history_index_for_pos(trim_pos);
     if (trim_index < g_history_tokens.size()) {
@@ -252,7 +346,49 @@ static inline size_t trim_history_from_pos(llama_pos trim_pos) {
 
 // Callback interface
 static jobject g_callback = nullptr;
-static JNIEnv* g_callbackEnv = nullptr;
+
+struct JniCallbackScope {
+    JNIEnv * env;
+    bool active = true;
+
+    explicit JniCallbackScope(JNIEnv * e) : env(e) {}
+
+    ~JniCallbackScope() {
+        if (active && g_callback) {
+            env->DeleteGlobalRef(g_callback);
+            g_callback = nullptr;
+        }
+    }
+
+    void release() {
+        active = false;
+    }
+};
+
+static bool tokenizePrompt(
+        const char * prompt,
+        size_t prompt_len,
+        std::vector<llama_token> & tokens) {
+    const llama_vocab * vocab = get_model_vocab();
+    int32_t required = llama_tokenize(vocab, prompt, (int32_t) prompt_len, nullptr, 0, false, true);
+    if (required == 0) {
+        return false;
+    }
+    if (required < 0) {
+        required = -required;
+    }
+
+    tokens.resize(required);
+    const int32_t tokenized = llama_tokenize(
+        vocab,
+        prompt,
+        (int32_t) prompt_len,
+        tokens.data(),
+        required,
+        false,
+        true);
+    return tokenized > 0;
+}
 
 extern "C" {
 
@@ -291,84 +427,12 @@ Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeLoadM
     jstring modelPath,
     jstring mmprojPath,
     jint contextSize,
-    jint batchSize,
-    jint gpuLayers,
-    jint backendType
+    jint batchSize
 ) {
-    // Store the backend selection (convert from jint to enum)
-    g_selectedBackend = static_cast<LlamaBackend>(backendType);
-
-    // Initialize backend if not already done
     if (!g_initialized) {
-        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Initializing llama backend");
-
-        // Set LD_LIBRARY_PATH for OpenCL to find vendor libraries
-        // This is needed on Android to locate the Mali/OpenCL driver
-        const char* vendor_lib_path = "/vendor/lib64:/vendor/lib";
-        const char* existing_path = getenv("LD_LIBRARY_PATH");
-        if (existing_path) {
-            char new_path[1024];
-            snprintf(new_path, sizeof(new_path), "%s:%s", vendor_lib_path, existing_path);
-            setenv("LD_LIBRARY_PATH", new_path, 1);
-            __android_log_print(ANDROID_LOG_INFO, "llama-jni", "LD_LIBRARY_PATH set to: %s", new_path);
-        } else {
-            setenv("LD_LIBRARY_PATH", vendor_lib_path, 1);
-            __android_log_print(ANDROID_LOG_INFO, "llama-jni", "LD_LIBRARY_PATH set to: %s", vendor_lib_path);
-        }
-
-        // Set backend priority based on detected hardware
-        // This controls which GPU backend llama.cpp uses when multiple are available
-        const char* backendPriority = "CPU";  // Default
-        switch (g_selectedBackend) {
-            case BACKEND_CPU:
-                backendPriority = "CPU";
-                break;
-            case BACKEND_OPENCL:
-                // For OpenCL, prioritize OpenCL (AMD GPUs on Android use OpenCL)
-                backendPriority = "OpenCL,CPU";
-                break;
-            case BACKEND_VULKAN:
-                backendPriority = "Vulkan,CPU";  // Prioritize Vulkan
-                break;
-        }
-        setenv("GGML_BACKEND_PRIORITY", backendPriority, 1);
-        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "GGML_BACKEND_PRIORITY set to: %s", backendPriority);
-
-        // For OpenCL backend, we need to disable Vulkan at runtime
-        // This is done by setting an environment variable that ggml-vulkan checks
-        if (g_selectedBackend == BACKEND_OPENCL) {
-            setenv("GGML_VULKAN_DISABLED", "1", 1);
-            // Also set OpenCL specific debug if needed
-            setenv("CL_LOG_ERRORS", "stdout", 1);
-            __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Vulkan disabled for OpenCL backend");
-            __android_log_print(ANDROID_LOG_INFO, "llama-jni", "OpenCL debug logging enabled");
-        } else {
-            unsetenv("GGML_VULKAN_DISABLED");
-        }
-
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Initializing llama CPU backend");
         llama_backend_init();
         g_initialized = true;
-
-        // Check GPU offload support
-        g_supportsGpu = llama_supports_gpu_offload();
-        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "llama_supports_gpu_offload() = %s", g_supportsGpu ? "YES" : "NO");
-
-        // Log backend selection
-        const char* backendName = "UNKNOWN";
-        switch (g_selectedBackend) {
-            case BACKEND_CPU: backendName = "CPU"; break;
-            case BACKEND_OPENCL: backendName = "OPENCL"; break;
-            case BACKEND_VULKAN: backendName = "VULKAN"; break;
-        }
-
-        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Backend: %s, GPU support: %s", backendName, g_supportsGpu ? "YES" : "NO");
-
-        // Note: SVE and other CPU feature detection has been moved to ggml.h
-        if (gpuLayers > 0) {
-            __android_log_print(ANDROID_LOG_INFO, "llama-jni", "GPU mode requested with %d layers using %s", gpuLayers, backendName);
-        } else {
-            __android_log_print(ANDROID_LOG_INFO, "llama-jni", "CPU-only mode requested (gpuLayers=0)");
-        }
     }
 
     std::lock_guard<std::mutex> lock(g_mutex);
@@ -397,26 +461,9 @@ Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeLoadM
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Model path: %s", path.c_str());
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Requested contextSize: %d", contextSize);
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Requested batchSize: %d", batchSize);
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Requested GPU layers: %d", gpuLayers);
 
-    // Model params
     llama_model_params mparams = llama_model_default_params();
-
-    // Use GPU if GPU layers are requested AND GPU is actually supported
-    // Note: llama.cpp will automatically detect and use available GPU backends
-    // Force gpuLayers to 0 if backend is CPU OR if llama.cpp reports no GPU support
-    // This handles the case where GPU backend is selected but fails at runtime
-    int actualGpuLayers = gpuLayers;
-    if (g_selectedBackend == BACKEND_CPU || !g_supportsGpu) {
-        actualGpuLayers = 0;
-        if (g_selectedBackend == BACKEND_CPU) {
-            __android_log_print(ANDROID_LOG_INFO, "llama-jni", "CPU backend selected - forcing GPU layers to 0");
-        } else {
-            __android_log_print(ANDROID_LOG_INFO, "llama-jni", "GPU not supported by llama.cpp - forcing GPU layers to 0");
-        }
-    }
-
-    mparams.n_gpu_layers = actualGpuLayers;
+    mparams.n_gpu_layers = 0;
     mparams.use_mmap = false;  // Disable mmap for mobile
 
     auto load_start = std::chrono::high_resolution_clock::now();
@@ -432,48 +479,30 @@ Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeLoadM
 
     const int32_t n_vocab = llama_vocab_n_tokens(get_model_vocab());
 
-    if (actualGpuLayers > 0 && g_supportsGpu) {
-        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "GPU ACCELERATED: %d layers, Load: %.2f ms", actualGpuLayers, load_ms);
-    } else {
-        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "CPU ONLY: Load: %.2f ms, Vocab: %d", load_ms, n_vocab);
-    }
+    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "CPU load: %.2f ms, Vocab: %d", load_ms, n_vocab);
 
-    // Context params
     llama_context_params cparams = llama_context_default_params();
-
     cparams.n_ctx = contextSize;
 
-    // Auto-detect optimal thread count based on available CPUs
-    // Use performance cores when available (big.LITTLE architecture)
-    int cpuCount = (int)sysconf(_SC_NPROCESSORS_ONLN);
-    if (cpuCount <= 0) {
-        cpuCount = 4;  // Fallback default
-    }
-
-    // Use all available cores, but cap at 8 for mobile thermal constraints
-    int actualThreads = std::min(cpuCount, 8);
-    int actualNThreadsBatch = actualThreads;
+    const auto cpu_topo = detectCpuTopology();
+    const int actualThreads = resolveInferenceThreadCount(cpu_topo);
     cparams.n_threads = actualThreads;
-    cparams.n_threads_batch = actualNThreadsBatch;
+    cparams.n_threads_batch = actualThreads;
 
     // Use batch size from config parameter
     int actualBatchSize = (batchSize > 0) ? batchSize : 512;
     cparams.n_batch = actualBatchSize;
     cparams.n_ubatch = actualBatchSize;
 
-    // Only offload to GPU if both layers > 0 AND llama.cpp reports GPU support
-    // g_supportsGpu is checked because llama_supports_gpu_offload() may return true
-    // even when the actual GPU backend (Vulkan/OpenCL) fails to initialize
-    cparams.offload_kqv = (actualGpuLayers > 0 && g_supportsGpu);
-    cparams.flash_attn_type = LLAMA_FLASH_ATTN_TYPE_DISABLED;  // Disable for CPU mode stability
-    cparams.kv_unified = true;  // Enable unified KV cache (saves memory, can improve performance)
+    cparams.offload_kqv = false;
+    cparams.flash_attn_type = LLAMA_FLASH_ATTN_TYPE_DISABLED;
+    cparams.kv_unified = true;
 
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "FINAL params: n_ctx=%d, n_batch=%d, n_ubatch=%d, n_threads=%d, n_threads_batch=%d, offload_kqv=%d",
-        cparams.n_ctx, cparams.n_batch, cparams.n_ubatch, cparams.n_threads, cparams.n_threads_batch, cparams.offload_kqv);
-    // Initialize threadpool for CPU inference
-    if (actualGpuLayers == 0 || !g_supportsGpu) {
-        initThreadpool(actualThreads);
-    }
+    __android_log_print(ANDROID_LOG_INFO, "llama-jni",
+        "FINAL params: n_ctx=%d, n_batch=%d, n_ubatch=%d, n_threads=%d, homogeneous=%d",
+        cparams.n_ctx, cparams.n_batch, cparams.n_ubatch, cparams.n_threads, cpu_topo.homogeneous ? 1 : 0);
+
+    initThreadpool(actualThreads, cpu_topo);
 
     // Create context
     g_ctx = llama_init_from_model(g_model, cparams);
@@ -492,7 +521,7 @@ Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeLoadM
 
     if (!mmproj_path.empty()) {
         mtmd_context_params mparams = mtmd_context_params_default();
-        mparams.use_gpu = actualGpuLayers > 0 && g_supportsGpu;
+        mparams.use_gpu = false;
         mparams.n_threads = actualThreads;
         mparams.flash_attn_type = LLAMA_FLASH_ATTN_TYPE_DISABLED;
 
@@ -556,7 +585,6 @@ Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeUnloa
     if (g_callback) {
         env->DeleteGlobalRef(g_callback);
         g_callback = nullptr;
-        g_callbackEnv = nullptr;
         __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Cleaned up callback reference");
     }
 
@@ -642,16 +670,14 @@ Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeStart
     jint reasoningBudget,
     jobject callback
 ) {
-    // Store callback globally
-    g_callback = env->NewGlobalRef(callback);
-    g_callbackEnv = env;
-
-    // Check if model is loaded
     if (!g_model) {
         g_generating = false;
         env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Model not loaded");
         return;
     }
+
+    g_callback = env->NewGlobalRef(callback);
+    JniCallbackScope callback_scope(env);
 
     std::vector<std::string> image_paths;
     if (imagePaths) {
@@ -790,7 +816,10 @@ Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeStart
         delete[] msg.content;
     }
 
-    // Initialize full sampler chain with all sampling parameters
+    if (g_sampler) {
+        llama_sampler_free(g_sampler);
+        g_sampler = nullptr;
+    }
     g_sampler = llama_sampler_chain_init(llama_sampler_chain_default_params());
 
     // Temperature
@@ -862,6 +891,7 @@ Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeStart
 
     int n_prompt_tokens = 0;
     std::vector<llama_token> tokens;
+    g_last_prefix_reused_tokens = 0;
 
     // ============================================================
     // Prefix Caching Logic
@@ -871,24 +901,17 @@ Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeStart
 
     // Callback methods
     jmethodID onTokenMethod = getCallbackMethod(env, g_callback, "onToken", "(Ljava/lang/String;)V");
-    jmethodID onCompleteMethod = getCallbackMethod(env, g_callback, "onComplete", "(II)V");
+    jmethodID onCompleteMethod = getCallbackMethod(env, g_callback, "onComplete", "(III)V");
     jmethodID onErrorMethod = getCallbackMethod(env, g_callback, "onError", "(Ljava/lang/String;)V");
 
     if (image_paths.empty()) {
-        // Tokenize prompt - first call to get required buffer size
-        // FIXED: For chat-templated prompts, the template already added special tokens (including BOS if needed)
-        // So we set add_bos=false to avoid double-adding BOS
-        // Use 8192 token buffer to handle large synthesis prompts
-        tokens.resize(8192);
-        const int required_tokens = llama_tokenize(get_model_vocab(), promptStr.c_str(), promptStr.size(), tokens.data(), 8192, false, true);
-        if (required_tokens <= 0) {
+        if (!tokenizePrompt(promptStr.c_str(), promptStr.size(), tokens)) {
             g_generating = false;
-            std::string errorMsg = "Failed to tokenize prompt: required_tokens=" + std::to_string(required_tokens);
-            env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), errorMsg.c_str());
+            env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Failed to tokenize prompt");
             return;
         }
 
-        n_prompt_tokens = required_tokens;
+        n_prompt_tokens = (int) tokens.size();
 
         if (g_history_tokens.empty() && sync_last_eval_pos_from_memory() > 0) {
             // We have KV state but no trusted token metadata (for example after state restore).
@@ -903,15 +926,20 @@ Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeStart
             n_past++;
         }
 
+        bool refresh_last_token = false;
         // If the prompt perfectly matches the prefix, force one token eval to refresh logits.
         if (n_past == (size_t) n_prompt_tokens && n_past > 0) {
             n_past--;
+            refresh_last_token = true;
         }
 
+        const bool cache_diverged = n_past < g_history_tokens.size();
+        g_last_prefix_reused_tokens = (int) n_past;
         rebuild_from = n_past;
-        if (n_past < g_history_tokens.size()) {
+        if (cache_diverged) {
             const llama_pos trim_pos = old_history_positions[n_past];
-            rebuild_from = trim_history_from_pos(trim_pos);
+            const size_t trim_index = trim_history_from_pos(trim_pos);
+            rebuild_from = std::max(n_past, trim_index);
             __android_log_print(ANDROID_LOG_INFO, "llama-jni", "KV cache diverged at token %zu, trimmed from pos %d, rebuilding from token %zu",
                 n_past, (int) trim_pos, rebuild_from);
         } else if (n_past > 0) {
@@ -923,7 +951,21 @@ Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeStart
             __android_log_print(ANDROID_LOG_INFO, "llama-jni", "KV cache initialization: full evaluation (no match)");
         }
 
-        const llama_pos prompt_eval_start_pos = g_last_eval_pos;
+        llama_pos prompt_eval_start_pos =
+            compute_prompt_eval_start_pos(rebuild_from, old_history_positions, refresh_last_token);
+        if (cache_diverged && !reconcile_kv_suffix(prompt_eval_start_pos)) {
+            __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Falling back to full KV rebuild after divergence");
+            clear_kv_cache_and_tracking();
+            rebuild_from = 0;
+            prompt_eval_start_pos = 0;
+            refresh_last_token = false;
+        } else if (!cache_diverged && n_past > 0) {
+            sync_last_eval_pos_from_memory();
+            if (!refresh_last_token) {
+                prompt_eval_start_pos = g_last_eval_pos;
+            }
+        }
+
         std::vector<llama_pos> prompt_positions(n_prompt_tokens, 0);
         for (size_t i = 0; i < std::min(rebuild_from, old_history_positions.size()) && i < prompt_positions.size(); ++i) {
             prompt_positions[i] = old_history_positions[i];
@@ -954,6 +996,7 @@ Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeStart
         }
 
         const int n_batch = llama_n_batch(g_ctx);
+        bool retried_full_prompt_rebuild = false;
         int processed_tokens = (int) rebuild_from;
         while (processed_tokens < n_prompt_tokens) {
             llama_batch_clear(*g_batch);
@@ -971,6 +1014,22 @@ Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeStart
 
             const int decode_result = llama_decode(g_ctx, *g_batch);
             if (decode_result != 0) {
+                if (!retried_full_prompt_rebuild) {
+                    __android_log_print(
+                        ANDROID_LOG_WARN,
+                        "llama-jni",
+                        "Prompt decode failed at token %d (result=%d) — retrying with full KV rebuild",
+                        processed_tokens,
+                        decode_result);
+                    clear_kv_cache_and_tracking();
+                    rebuild_from = 0;
+                    prompt_eval_start_pos = 0;
+                    processed_tokens = 0;
+                    std::fill(prompt_positions.begin(), prompt_positions.end(), 0);
+                    retried_full_prompt_rebuild = true;
+                    continue;
+                }
+
                 __android_log_print(ANDROID_LOG_ERROR, "llama-jni", "ERROR: llama_decode failed at token %d, result=%d", processed_tokens, decode_result);
                 g_generating = false;
                 env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Failed to decode prompt chunk");
@@ -1308,15 +1367,12 @@ Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeStart
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Estimated speed: %.1f tokens/second", 1000.0 / ms_per_token);
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "==========================");
 
-    // Signal completion
-    env->CallVoidMethod(g_callback, onCompleteMethod, n_prompt_tokens, n_generated_tokens);
-
-    // Cleanup callback
-    if (g_callback) {
-        env->DeleteGlobalRef(g_callback);
-        g_callback = nullptr;
-        g_callbackEnv = nullptr;
-    }
+    env->CallVoidMethod(
+        g_callback,
+        onCompleteMethod,
+        n_prompt_tokens,
+        n_generated_tokens,
+        g_last_prefix_reused_tokens);
 
     g_generating = false;
 }

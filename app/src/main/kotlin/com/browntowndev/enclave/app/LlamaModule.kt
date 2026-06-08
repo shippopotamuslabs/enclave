@@ -1,7 +1,6 @@
 package com.browntowndev.enclave.app
 
 import com.browntowndev.enclave.domain.port.inference.LlamaEnginePort
-import com.browntowndev.enclave.feature.inference.llama.GpuProfiler
 import com.browntowndev.enclave.feature.inference.llama.JniLlamaEngine
 import com.browntowndev.enclave.feature.inference.llama.LlamaChatSessionManager
 import dagger.Module
@@ -34,9 +33,8 @@ object LlamaDispatchersModule {
 object LlamaEngineModule {
     @Provides
     fun provideLlamaEngine(
-        gpuProfiler: GpuProfiler,
         ioDispatcher: CoroutineDispatcher,
-    ): LlamaEnginePort = JniLlamaEngine(gpuProfiler, ioDispatcher)
+    ): LlamaEnginePort = JniLlamaEngine(ioDispatcher)
 
     @Provides
     fun provideLlamaChatSessionManager(engine: LlamaEnginePort): LlamaChatSessionManager = LlamaChatSessionManager(engine)

@@ -179,6 +179,7 @@ class RustLoopInferenceService(
                                     onTextToken = onTextToken,
                                     onThinkingToken = onThinkingToken,
                                     options = turnOptions,
+                                    onLifecycleEvent = { event -> send(event) },
                                 )
                             latestProviderTranscript = buildProviderTranscript(sessionMessages, result)
                             result.telemetry?.let { telemetry ->
@@ -381,6 +382,7 @@ class RustLoopInferenceService(
         onTextToken: suspend (String) -> Unit,
         onThinkingToken: suspend (String) -> Unit,
         options: GenerationOptions,
+        onLifecycleEvent: suspend (InferenceEvent) -> Unit,
     ): AgentModelTurnResult =
         inner.completeSingleTurn(
             sessionMessages = sessionMessages,
@@ -391,6 +393,7 @@ class RustLoopInferenceService(
             onTextToken = onTextToken,
             onThinkingToken = onThinkingToken,
             options = options,
+            onLifecycleEvent = onLifecycleEvent,
         )
 
     override suspend fun setHistory(messages: List<ChatMessage>) {
