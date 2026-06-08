@@ -527,6 +527,8 @@ class SettingsMediaTasksRedTest {
         return MediaProvidersCoordinator(
             apiProviderUseCases = mockk<SettingsApiProviderUseCases>(relaxed = true),
             mediaUseCases = mediaUseCases,
+            fetchApiProviderModelDetailUseCase =
+                mockk<com.browntowndev.enclave.domain.usecase.byok.FetchApiProviderModelDetailUseCase>(relaxed = true),
             errorHandler = errorHandler,
         )
     }

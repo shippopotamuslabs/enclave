@@ -25,6 +25,8 @@ import org.junit.jupiter.api.extension.ExtendWith
 class MediaProvidersCoordinatorTest {
     private val apiProviderUseCases = mockk<SettingsApiProviderUseCases>(relaxed = true)
     private val mediaUseCases = mockk<SettingsMediaUseCases>(relaxed = true)
+    private val fetchApiProviderModelDetailUseCase =
+        mockk<com.browntowndev.enclave.domain.usecase.byok.FetchApiProviderModelDetailUseCase>(relaxed = true)
     private val errorHandler = mockk<ViewModelErrorHandler>()
 
     private lateinit var coordinator: MediaProvidersCoordinator
@@ -39,6 +41,7 @@ class MediaProvidersCoordinatorTest {
             MediaProvidersCoordinator(
                 apiProviderUseCases = apiProviderUseCases,
                 mediaUseCases = mediaUseCases,
+                fetchApiProviderModelDetailUseCase = fetchApiProviderModelDetailUseCase,
                 errorHandler = errorHandler,
             )
     }
@@ -184,6 +187,65 @@ class MediaProvidersCoordinatorTest {
             assertEquals(2, resultModels.size)
             assertTrue(resultModels.any { it.id == "fal-ai/stable-audio" })
             assertTrue(resultModels.any { it.id == "fal-ai/ace-step" })
+        }
+
+    @Test
+    fun `onFetchMediaModels keeps full image catalog when draft already has saved tasks`() =
+        runTest {
+            val mediaState =
+                MutableStateFlow(
+                    MediaProvidersTransientState(
+                        assetDraft =
+                            MediaProviderAssetUi(
+                                provider = ApiProvider.FAL,
+                                capability = MediaCapability.IMAGE,
+                                modelName = "fal-ai/recraft/v3",
+                                tasks = setOf(com.browntowndev.enclave.domain.model.config.MediaTask.TEXT_TO_IMAGE),
+                                credentialAlias = "alias",
+                            ),
+                    ),
+                )
+            val currentApiKey = MutableStateFlow("api-key")
+            val discoveredModels =
+                listOf(
+                    com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel(
+                        id = "fal-ai/recraft/v3",
+                        isImageGenerationCapable = true,
+                        tasks = setOf(com.browntowndev.enclave.domain.model.config.MediaTask.TEXT_TO_IMAGE),
+                    ),
+                    com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel(
+                        id = "fal-ai/flux-pro/kontext",
+                        isImageGenerationCapable = true,
+                        tasks =
+                            setOf(
+                                com.browntowndev.enclave.domain.model.config.MediaTask.TEXT_TO_IMAGE,
+                                com.browntowndev.enclave.domain.model.config.MediaTask.EDIT_IMAGE,
+                            ),
+                    ),
+                )
+
+            io.mockk.coEvery {
+                apiProviderUseCases.discoverApiModels(any())
+            } returns
+                com.browntowndev.enclave.domain.usecase.settings.ApiModelDiscoveryResult(
+                    models = discoveredModels,
+                    scope =
+                        com.browntowndev.enclave.domain.usecase.settings.ApiModelDiscoveryScope(
+                            provider = ApiProvider.FAL,
+                            baseUrl = "",
+                            credentialAlias = "alias",
+                        ),
+                )
+
+            coordinator.onFetchMediaModels(
+                scope = this,
+                tag = "tag",
+                mediaState = mediaState,
+                currentApiKey = currentApiKey,
+            )
+            advanceUntilIdle()
+
+            assertEquals(2, mediaState.value.discoveredApiModels.size)
         }
 
     @Test

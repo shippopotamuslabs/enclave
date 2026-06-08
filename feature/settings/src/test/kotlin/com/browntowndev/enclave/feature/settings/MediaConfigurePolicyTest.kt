@@ -17,12 +17,17 @@ class MediaConfigurePolicyTest {
     }
 
     @Test
-    fun `locksMediaTaskToggles is only true for fal ai and non-empty tasks`() {
+    fun `locksMediaTaskToggles is only true for fal ai and non-empty discovered tasks`() {
         assertTrue(ApiProvider.FAL.locksMediaTaskToggles(setOf(MediaTask.TEXT_TO_IMAGE)))
         assertFalse(ApiProvider.FAL.locksMediaTaskToggles(emptySet()))
         assertFalse(ApiProvider.OPENAI.locksMediaTaskToggles(setOf(MediaTask.TEXT_TO_IMAGE)))
         assertFalse(ApiProvider.XAI.locksMediaTaskToggles(setOf(MediaTask.TEXT_TO_IMAGE)))
         assertFalse(ApiProvider.GOOGLE.locksMediaTaskToggles(setOf(MediaTask.TEXT_TO_IMAGE)))
+    }
+
+    @Test
+    fun `locksMediaTaskToggles ignores manually selected draft tasks without discovery`() {
+        assertFalse(ApiProvider.FAL.locksMediaTaskToggles(emptySet()))
     }
 
     @Test

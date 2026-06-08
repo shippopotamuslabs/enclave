@@ -5,6 +5,7 @@ import com.browntowndev.enclave.domain.usecase.settings.SettingsApiProviderUseCa
 import com.browntowndev.enclave.domain.usecase.settings.SettingsMediaUseCases
 import com.browntowndev.enclave.domain.usecase.settings.SettingsLiveVoiceUseCases
 import com.browntowndev.enclave.domain.usecase.settings.SettingsTtsUseCases
+import io.mockk.mockk
 
 internal fun createSettingsApiProvidersDelegate(
     apiProviderUseCases: SettingsApiProviderUseCases,
@@ -39,6 +40,8 @@ internal fun createSettingsApiProvidersDelegate(
             MediaProvidersCoordinator(
                 apiProviderUseCases = apiProviderUseCases,
                 mediaUseCases = mediaUseCases,
+                fetchApiProviderModelDetailUseCase =
+                    mockk<com.browntowndev.enclave.domain.usecase.byok.FetchApiProviderModelDetailUseCase>(relaxed = true),
                 errorHandler = errorHandler,
             ),
     )
