@@ -17,11 +17,12 @@ class MediaConfigurePolicyTest {
     }
 
     @Test
-    fun `locksMediaTaskToggles is only true for fal ai`() {
-        assertTrue(ApiProvider.FAL.locksMediaTaskToggles())
-        assertFalse(ApiProvider.OPENAI.locksMediaTaskToggles())
-        assertFalse(ApiProvider.XAI.locksMediaTaskToggles())
-        assertFalse(ApiProvider.GOOGLE.locksMediaTaskToggles())
+    fun `locksMediaTaskToggles is only true for fal ai and non-empty tasks`() {
+        assertTrue(ApiProvider.FAL.locksMediaTaskToggles(setOf(MediaTask.TEXT_TO_IMAGE)))
+        assertFalse(ApiProvider.FAL.locksMediaTaskToggles(emptySet()))
+        assertFalse(ApiProvider.OPENAI.locksMediaTaskToggles(setOf(MediaTask.TEXT_TO_IMAGE)))
+        assertFalse(ApiProvider.XAI.locksMediaTaskToggles(setOf(MediaTask.TEXT_TO_IMAGE)))
+        assertFalse(ApiProvider.GOOGLE.locksMediaTaskToggles(setOf(MediaTask.TEXT_TO_IMAGE)))
     }
 
     @Test

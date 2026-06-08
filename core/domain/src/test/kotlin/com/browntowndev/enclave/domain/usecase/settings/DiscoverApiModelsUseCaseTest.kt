@@ -5,6 +5,7 @@ import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.enclave.domain.port.repository.ApiModelCatalogResult
 import com.browntowndev.enclave.domain.usecase.byok.FetchApiProviderModelDetailUseCase
 import com.browntowndev.enclave.domain.usecase.byok.FetchApiProviderModelsUseCase
+import com.browntowndev.enclave.domain.model.config.MediaTask
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
@@ -80,6 +81,34 @@ class DiscoverApiModelsUseCaseTest {
 
             assertEquals(1, result.models.size)
             assertEquals(128000, result.models[0].contextWindowTokens)
+        }
+
+    @Test
+    fun `invoke fetches model detail for FAL if selected model missing tasks`() =
+        runTest {
+            val request =
+                ApiModelDiscoveryRequest(
+                    provider = ApiProvider.FAL,
+                    currentApiKey = "key",
+                    credentialAlias = null,
+                    baseUrl = null,
+                    selectedModelId = "fal-ai/flux/dev",
+                )
+            val models = listOf(DiscoveredApiModel(id = "fal-ai/flux/dev", tasks = emptySet()))
+            val detailedModel = DiscoveredApiModel(id = "fal-ai/flux/dev", tasks = setOf(MediaTask.TEXT_TO_IMAGE))
+
+            coEvery {
+                fetchApiProviderModelsUseCase(ApiProvider.FAL, "key", null, null)
+            } returns ApiModelCatalogResult(models)
+
+            coEvery {
+                fetchApiProviderModelDetailUseCase(ApiProvider.FAL, "fal-ai/flux/dev", "key", null, null)
+            } returns detailedModel
+
+            val result = useCase(request)
+
+            assertEquals(1, result.models.size)
+            assertEquals(setOf(MediaTask.TEXT_TO_IMAGE), result.models[0].tasks)
         }
 
     @Test
