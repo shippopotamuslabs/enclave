@@ -8,11 +8,18 @@
 
 namespace enclave::diffusion {
 
+class EnclaveQnnSharedRuntime;
+
 /** Vector-friendly facade over EnclaveQnnModel for graph runners. */
 class EnclaveQnnApp {
  public:
     EnclaveQnnApp() = default;
     ~EnclaveQnnApp() = default;
+
+    bool initializeFromBinary(
+        const std::string& bin_path,
+        EnclaveQnnSharedRuntime& runtime,
+        std::string& error);
 
     bool initializeFromBinary(
         const std::string& bin_path,

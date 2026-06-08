@@ -5,6 +5,7 @@
 
 namespace enclave::diffusion {
 class EnclaveQnnApp;
+class EnclaveQnnSharedRuntime;
 }
 
 #include <memory>
@@ -67,6 +68,8 @@ class QnnGraphRunner {
         std::string& error);
 
  private:
+    bool ensureSharedRuntime(const QnnRuntimePaths& paths, std::string& error);
+
     bool loadGraph(
         const std::string& path,
         const QnnRuntimePaths& paths,
@@ -76,9 +79,12 @@ class QnnGraphRunner {
     bool sdxl_ = false;
     int output_width_ = 512;
     int output_height_ = 512;
+    std::unique_ptr<EnclaveQnnSharedRuntime> shared_runtime_;
     std::unique_ptr<EnclaveQnnApp> unet_;
     std::unique_ptr<EnclaveQnnApp> vae_encoder_;
     std::unique_ptr<EnclaveQnnApp> vae_decoder_;
+    std::vector<float> unet_cond_scratch_;
+    std::vector<float> unet_uncond_scratch_;
 };
 
 }  // namespace enclave::diffusion

@@ -101,6 +101,7 @@ if(ENCLAVE_DIFFUSION_HAS_QNN)
         ${ENGINE_DIR}/qnn/qnn_runtime.cpp
         ${ENGINE_DIR}/qnn/qnn_graph_info.cpp
         ${ENGINE_DIR}/qnn/qnn_tensor_io.cpp
+        ${ENGINE_DIR}/qnn/enclave_qnn_shared_runtime.cpp
         ${ENGINE_DIR}/qnn/enclave_qnn_model.cpp
         ${ENGINE_DIR}/qnn/enclave_qnn_app.cpp
     )

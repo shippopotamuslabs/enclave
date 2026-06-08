@@ -7,6 +7,8 @@
 
 namespace enclave::diffusion {
 
+class EnclaveQnnSharedRuntime;
+
 /** One serialized QNN context (UNet or VAE) using raw QNN C APIs only. */
 class EnclaveQnnModel {
  public:
@@ -90,7 +92,19 @@ class EnclaveQnnModel {
         const char* htp_stub_library,
         std::unique_ptr<EnclaveQnnModel>& out,
         std::string& error);
+
+    friend bool createQnnModelWithSharedRuntime(
+        const std::string& bin_path,
+        EnclaveQnnSharedRuntime& runtime,
+        std::unique_ptr<EnclaveQnnModel>& out,
+        std::string& error);
 };
+
+bool createQnnModelWithSharedRuntime(
+    const std::string& bin_path,
+    EnclaveQnnSharedRuntime& runtime,
+    std::unique_ptr<EnclaveQnnModel>& out,
+    std::string& error);
 
 bool createQnnModelFromBinary(
     const std::string& bin_path,

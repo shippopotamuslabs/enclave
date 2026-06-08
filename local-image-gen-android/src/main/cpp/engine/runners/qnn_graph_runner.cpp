@@ -4,6 +4,7 @@
 
 #ifdef ENCLAVE_DIFFUSION_HAS_QNN
 #include "engine/qnn/enclave_qnn_app.h"
+#include "engine/qnn/enclave_qnn_shared_runtime.h"
 #else
 #include "engine/qnn/enclave_qnn_app_stub.h"
 #endif
@@ -49,6 +50,24 @@ QnnGraphRunner::QnnGraphRunner() = default;
 
 QnnGraphRunner::~QnnGraphRunner() { unloadAll(); }
 
+bool QnnGraphRunner::ensureSharedRuntime(const QnnRuntimePaths& paths, std::string& error) {
+#ifndef ENCLAVE_DIFFUSION_HAS_QNN
+    (void)paths;
+    error = "QNN graph execution is not linked into this build.";
+    return false;
+#else
+    if (shared_runtime_ == nullptr) {
+        shared_runtime_ = std::make_unique<EnclaveQnnSharedRuntime>();
+    }
+    return shared_runtime_->ensureInitialized(
+        paths.backend_path,
+        paths.system_path,
+        paths.dsp_library_path,
+        paths.htp_stub_library.c_str(),
+        error);
+#endif
+}
+
 bool QnnGraphRunner::loadGraph(
     const std::string& path,
     const QnnRuntimePaths& paths,
@@ -65,14 +84,11 @@ bool QnnGraphRunner::loadGraph(
         error = "Missing QNN graph binary: " + path;
         return false;
     }
+    if (!ensureSharedRuntime(paths, error)) {
+        return false;
+    }
     auto app = std::make_unique<EnclaveQnnApp>();
-    if (!app->initializeFromBinary(
-            path,
-            paths.backend_path,
-            paths.system_path,
-            paths.dsp_library_path,
-            paths.htp_stub_library,
-            error)) {
+    if (!app->initializeFromBinary(path, *shared_runtime_, error)) {
         return false;
     }
     target = std::move(app);
@@ -142,6 +158,14 @@ void QnnGraphRunner::unloadAll() {
     unloadUnet();
     unloadVaeEncoder();
     unloadVaeDecoder();
+#ifdef ENCLAVE_DIFFUSION_HAS_QNN
+    if (shared_runtime_ != nullptr) {
+        shared_runtime_->shutdown();
+        shared_runtime_.reset();
+    }
+#endif
+    unet_cond_scratch_.clear();
+    unet_uncond_scratch_.clear();
 }
 
 bool QnnGraphRunner::isUnetLoaded() const { return unet_ != nullptr; }
@@ -179,7 +203,6 @@ bool QnnGraphRunner::runUnet(
         return false;
     }
 
-    std::vector<float> cond;
     if (sdxl_) {
         const std::vector<float> cond_pool = slice(conditioning.pooled, 1280, 1280);
         if (cond_pool.empty()) {
@@ -192,20 +215,24 @@ bool QnnGraphRunner::runUnet(
                 timestep,
                 conditioning.time_ids,
                 cond_pool,
-                cond,
+                unet_cond_scratch_,
                 error)) {
             return false;
         }
-    } else if (!unet_->executeSd15Unet(latents, timestep, cond_hidden, cond, error)) {
+    } else if (!unet_->executeSd15Unet(
+                   latents,
+                   timestep,
+                   cond_hidden,
+                   unet_cond_scratch_,
+                   error)) {
         return false;
     }
 
     if (std::fabs(cfg_scale - 1.0f) < 0.0001f || uncond_hidden.empty()) {
-        noise_pred = std::move(cond);
+        noise_pred = unet_cond_scratch_;
         return true;
     }
 
-    std::vector<float> uncond;
     if (sdxl_) {
         const std::vector<float> uncond_pool = slice(conditioning.pooled, 0, 1280);
         if (uncond_pool.empty()) {
@@ -218,14 +245,19 @@ bool QnnGraphRunner::runUnet(
                 timestep,
                 conditioning.time_ids,
                 uncond_pool,
-                uncond,
+                unet_uncond_scratch_,
                 error)) {
             return false;
         }
-    } else if (!unet_->executeSd15Unet(latents, timestep, uncond_hidden, uncond, error)) {
+    } else if (!unet_->executeSd15Unet(
+                   latents,
+                   timestep,
+                   uncond_hidden,
+                   unet_uncond_scratch_,
+                   error)) {
         return false;
     }
-    applyCfg(uncond, cond, cfg_scale, noise_pred);
+    applyCfg(unet_uncond_scratch_, unet_cond_scratch_, cfg_scale, noise_pred);
     return true;
 #endif
 }

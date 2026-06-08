@@ -41,6 +41,12 @@ void ufixed16ToFloat(
 
 bool convertTensorOutputToFloat(const Qnn_Tensor_t& tensor, float** out, std::string& error);
 
+bool convertTensorOutputToFloatBuffer(
+    const Qnn_Tensor_t& tensor,
+    float* out,
+    size_t out_capacity,
+    std::string& error);
+
 bool writeFloatValuesToTensor(
     Qnn_Tensor_t& tensor,
     const float* values,

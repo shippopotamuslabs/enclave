@@ -1,8 +1,17 @@
 #include "enclave_qnn_app.h"
 
+#include "enclave_qnn_shared_runtime.h"
+
 #include <algorithm>
 
 namespace enclave::diffusion {
+
+bool EnclaveQnnApp::initializeFromBinary(
+    const std::string& bin_path,
+    EnclaveQnnSharedRuntime& runtime,
+    std::string& error) {
+    return createQnnModelWithSharedRuntime(bin_path, runtime, model_, error);
+}
 
 bool EnclaveQnnApp::initializeFromBinary(
     const std::string& bin_path,

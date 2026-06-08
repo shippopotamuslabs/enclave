@@ -1,5 +1,6 @@
 #include "enclave_qnn_model.h"
 
+#include "enclave_qnn_shared_runtime.h"
 #include "HTP/QnnHtpDevice.h"
 #include "qnn_graph_info.h"
 #include "qnn_log.h"
@@ -8,6 +9,10 @@
 #include "qnn_tensor_io.h"
 
 #include <dlfcn.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include <cstring>
 #include <fstream>
@@ -23,25 +28,56 @@ void* inputClientData(Qnn_Tensor_t* inputs, uint32_t index) {
     return qnn_tensor_access::clientData(inputs[index]);
 }
 
-bool readBinaryFile(const std::string& path, std::vector<uint8_t>& buffer, std::string& error) {
-    std::ifstream input(path, std::ios::binary | std::ios::ate);
-    if (!input) {
-        error = "Failed to open QNN binary: " + path;
-        return false;
+class MappedBinaryFile {
+ public:
+    ~MappedBinaryFile() { release(); }
+
+    bool open(const std::string& path, std::string& error) {
+        release();
+        fd_ = ::open(path.c_str(), O_RDONLY);
+        if (fd_ < 0) {
+            error = "Failed to open QNN binary: " + path;
+            return false;
+        }
+        struct stat st {};
+        if (fstat(fd_, &st) != 0 || st.st_size <= 0) {
+            error = "QNN binary is empty: " + path;
+            return false;
+        }
+        size_ = static_cast<size_t>(st.st_size);
+        data_ = mmap(nullptr, size_, PROT_READ, MAP_PRIVATE, fd_, 0);
+        if (data_ == MAP_FAILED) {
+            error = "Failed to mmap QNN binary: " + path;
+            data_ = nullptr;
+            size_ = 0;
+            return false;
+        }
+        return true;
     }
-    const auto size = input.tellg();
-    if (size <= 0) {
-        error = "QNN binary is empty: " + path;
-        return false;
+
+    void release() {
+        if (data_ != nullptr && size_ > 0) {
+            munmap(data_, size_);
+            data_ = nullptr;
+            size_ = 0;
+        }
+        if (fd_ >= 0) {
+            close(fd_);
+            fd_ = -1;
+        }
     }
-    buffer.resize(static_cast<size_t>(size));
-    input.seekg(0, std::ios::beg);
-    if (!input.read(reinterpret_cast<char*>(buffer.data()), size)) {
-        error = "Failed to read QNN binary: " + path;
-        return false;
+
+    void* data() const {
+        return data_;
     }
-    return true;
-}
+
+    size_t size() const { return size_; }
+
+ private:
+    void* data_ = nullptr;
+    size_t size_ = 0;
+    int fd_ = -1;
+};
 
 bool devicePropertySupported(const EnclaveQnnApis& apis) {
     if (apis.core.propertyHasCapability == nullptr) {
@@ -145,6 +181,8 @@ struct EnclaveQnnModel::Impl {
     Qnn_Tensor_t* inputs = nullptr;
     Qnn_Tensor_t* outputs = nullptr;
     bool initialized = false;
+    bool owns_backend = true;
+    EnclaveQnnSharedRuntime* shared_runtime = nullptr;
     std::string binary_path;
     QnnHtpDevice_Arch_t htp_arch = QNN_HTP_DEVICE_ARCH_NONE;
 };
@@ -171,25 +209,34 @@ void EnclaveQnnModel::shutdown() {
         impl_->apis.core.contextFree(impl_->context, nullptr);
         impl_->context = nullptr;
     }
-    if (impl_->device != nullptr && impl_->apis.core.deviceFree != nullptr) {
-        impl_->apis.core.deviceFree(impl_->device);
-        impl_->device = nullptr;
-    }
-    if (impl_->backend != nullptr && impl_->apis.core.backendFree != nullptr) {
-        impl_->apis.core.backendFree(impl_->backend);
-        impl_->backend = nullptr;
-    }
     if (impl_->graphs_info != nullptr) {
         freeEnclaveGraphsInfo(&impl_->graphs_info, impl_->graphs_count);
         impl_->graphs_count = 0;
     }
-    if (impl_->backend_handle != nullptr) {
-        dlclose(impl_->backend_handle);
-        impl_->backend_handle = nullptr;
-    }
-    if (impl_->system_handle != nullptr) {
-        releaseEnclaveQnnSystem(impl_->system_handle);
-        impl_->system_handle = nullptr;
+    if (impl_->shared_runtime != nullptr) {
+        EnclaveQnnSharedRuntime::dspCooldown();
+        impl_->shared_runtime = nullptr;
+        impl_->backend = nullptr;
+        impl_->device = nullptr;
+        impl_->apis = {};
+    } else if (impl_->owns_backend) {
+        if (impl_->device != nullptr && impl_->apis.core.deviceFree != nullptr) {
+            impl_->apis.core.deviceFree(impl_->device);
+            impl_->device = nullptr;
+        }
+        if (impl_->backend != nullptr && impl_->apis.core.backendFree != nullptr) {
+            impl_->apis.core.backendFree(impl_->backend);
+            impl_->backend = nullptr;
+        }
+        if (impl_->backend_handle != nullptr) {
+            dlclose(impl_->backend_handle);
+            impl_->backend_handle = nullptr;
+        }
+        if (impl_->system_handle != nullptr) {
+            releaseEnclaveQnnSystem(impl_->system_handle);
+            impl_->system_handle = nullptr;
+        }
+        impl_->apis = {};
     }
     impl_->initialized = false;
 }
@@ -206,8 +253,8 @@ bool EnclaveQnnModel::loadContextFromBinary(const std::string& binary_path, std:
         return false;
     }
 
-    std::vector<uint8_t> buffer;
-    if (!readBinaryFile(binary_path, buffer, error)) {
+    MappedBinaryFile mapped;
+    if (!mapped.open(binary_path, error)) {
         return false;
     }
 
@@ -221,8 +268,8 @@ bool EnclaveQnnModel::loadContextFromBinary(const std::string& binary_path, std:
     Qnn_ContextBinarySize_t binary_info_size = 0;
     if (impl_->apis.system.systemContextGetBinaryInfo(
             system_context,
-            buffer.data(),
-            buffer.size(),
+            mapped.data(),
+            mapped.size(),
             &binary_info,
             &binary_info_size) != QNN_SUCCESS) {
         impl_->apis.system.systemContextFree(system_context);
@@ -237,36 +284,43 @@ bool EnclaveQnnModel::loadContextFromBinary(const std::string& binary_path, std:
     }
     impl_->apis.system.systemContextFree(system_context);
 
-    if (impl_->apis.core.backendCreate == nullptr) {
-        error = "backendCreate is unavailable.";
-        return false;
-    }
-    if (impl_->apis.core.backendCreate(nullptr, nullptr, &impl_->backend) != QNN_BACKEND_NO_ERROR) {
-        error = "backendCreate failed.";
-        return false;
-    }
+    if (impl_->owns_backend) {
+        if (impl_->apis.core.backendCreate == nullptr) {
+            error = "backendCreate is unavailable.";
+            return false;
+        }
+        if (impl_->apis.core.backendCreate(nullptr, nullptr, &impl_->backend) != QNN_BACKEND_NO_ERROR) {
+            error = "backendCreate failed.";
+            return false;
+        }
 
-    if (!createHtpDevice(impl_->apis, impl_->htp_arch, impl_->device)) {
-        error = "deviceCreate failed.";
-        return false;
+        if (!createHtpDevice(impl_->apis, impl_->htp_arch, impl_->device)) {
+            error = "deviceCreate failed.";
+            return false;
+        }
     }
 
     if (impl_->apis.core.contextCreateFromBinary == nullptr) {
         error = "contextCreateFromBinary is unavailable.";
         return false;
     }
-    ENCLAVE_QNN_LOGI("Loading QNN context from %s (%zu bytes).", binary_path.c_str(), buffer.size());
+    ENCLAVE_QNN_LOGI(
+        "Loading QNN context from %s (%zu bytes)%s.",
+        binary_path.c_str(),
+        mapped.size(),
+        impl_->shared_runtime != nullptr ? " [shared runtime]" : "");
     if (impl_->apis.core.contextCreateFromBinary(
             impl_->backend,
             impl_->device,
             nullptr,
-            buffer.data(),
-            buffer.size(),
+            mapped.data(),
+            mapped.size(),
             &impl_->context,
             nullptr) != QNN_CONTEXT_NO_ERROR) {
         error = "contextCreateFromBinary failed.";
         return false;
     }
+    mapped.release();
 
     for (uint32_t graph_idx = 0; graph_idx < impl_->graphs_count; ++graph_idx) {
         if (impl_->apis.core.graphRetrieve == nullptr) {
@@ -379,13 +433,11 @@ bool EnclaveQnnModel::executeSd15Unet(
     if (!runGraph(error)) {
         return false;
     }
-    float* tmp = nullptr;
-    if (!convertTensorOutputToFloat(impl_->outputs[0], &tmp, error)) {
-        return false;
-    }
-    std::memcpy(noise_pred, tmp, static_cast<size_t>(latent_count) * sizeof(float));
-    std::free(tmp);
-    return true;
+    return convertTensorOutputToFloatBuffer(
+        impl_->outputs[0],
+        noise_pred,
+        static_cast<size_t>(latent_count),
+        error);
 }
 
 bool EnclaveQnnModel::executeSdxlUnet(
@@ -426,13 +478,11 @@ bool EnclaveQnnModel::executeSdxlUnet(
     if (!runGraph(error)) {
         return false;
     }
-    float* tmp = nullptr;
-    if (!convertTensorOutputToFloat(impl_->outputs[0], &tmp, error)) {
-        return false;
-    }
-    std::memcpy(noise_pred, tmp, static_cast<size_t>(latent_count) * sizeof(float));
-    std::free(tmp);
-    return true;
+    return convertTensorOutputToFloatBuffer(
+        impl_->outputs[0],
+        noise_pred,
+        static_cast<size_t>(latent_count),
+        error);
 }
 
 bool EnclaveQnnModel::executeSd15VaeEncoder(
@@ -464,19 +514,9 @@ bool EnclaveQnnModel::executeSd15VaeEncoder(
         return false;
     }
     const int latent_count = 4 * (width / 8) * (height / 8);
-    float* tmp_mean = nullptr;
-    float* tmp_std = nullptr;
-    if (!convertTensorOutputToFloat(impl_->outputs[0], &tmp_mean, error) ||
-        !convertTensorOutputToFloat(impl_->outputs[1], &tmp_std, error)) {
-        std::free(tmp_mean);
-        std::free(tmp_std);
-        return false;
-    }
-    std::memcpy(mean, tmp_mean, static_cast<size_t>(latent_count) * sizeof(float));
-    std::memcpy(std_dev, tmp_std, static_cast<size_t>(latent_count) * sizeof(float));
-    std::free(tmp_mean);
-    std::free(tmp_std);
-    return true;
+    const size_t latent_elements = static_cast<size_t>(latent_count);
+    return convertTensorOutputToFloatBuffer(impl_->outputs[0], mean, latent_elements, error) &&
+           convertTensorOutputToFloatBuffer(impl_->outputs[1], std_dev, latent_elements, error);
 }
 
 bool EnclaveQnnModel::executeSd15VaeDecoder(
@@ -505,14 +545,12 @@ bool EnclaveQnnModel::executeSd15VaeDecoder(
     if (!runGraph(error)) {
         return false;
     }
-    float* tmp = nullptr;
-    if (!convertTensorOutputToFloat(impl_->outputs[0], &tmp, error)) {
-        return false;
-    }
     const int pixel_count = 3 * output_width * output_height;
-    std::memcpy(pixel_values, tmp, static_cast<size_t>(pixel_count) * sizeof(float));
-    std::free(tmp);
-    return true;
+    return convertTensorOutputToFloatBuffer(
+        impl_->outputs[0],
+        pixel_values,
+        static_cast<size_t>(pixel_count),
+        error);
 }
 
 bool EnclaveQnnModel::executeSdxlVaeEncoder(
@@ -543,6 +581,31 @@ bool EnclaveQnnModel::executeSdxlVaeDecoder(
         error);
 }
 
+bool createQnnModelWithSharedRuntime(
+    const std::string& bin_path,
+    EnclaveQnnSharedRuntime& runtime,
+    std::unique_ptr<EnclaveQnnModel>& out,
+    std::string& error) {
+    if (!runtime.isInitialized()) {
+        error = "Shared QNN runtime is not initialized.";
+        return false;
+    }
+    auto model = std::make_unique<EnclaveQnnModel>();
+    model->impl_ = std::make_unique<EnclaveQnnModel::Impl>();
+    model->impl_->binary_path = bin_path;
+    model->impl_->shared_runtime = &runtime;
+    model->impl_->owns_backend = false;
+    model->impl_->apis = runtime.apis();
+    model->impl_->backend = runtime.backend();
+    model->impl_->device = runtime.device();
+    if (!model->initializeGraph(error)) {
+        model.reset();
+        return false;
+    }
+    out = std::move(model);
+    return true;
+}
+
 bool createQnnModelFromBinary(
     const std::string& bin_path,
     const std::string& backend_path,
@@ -559,6 +622,7 @@ bool createQnnModelFromBinary(
     model->impl_ = std::make_unique<EnclaveQnnModel::Impl>();
     model->impl_->binary_path = bin_path;
     model->impl_->htp_arch = htpArchFromStubLibrary(htp_stub_library);
+    model->impl_->owns_backend = true;
 
     if (!acquireEnclaveQnnSystem(
             system_path,
