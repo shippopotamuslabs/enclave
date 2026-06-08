@@ -7,6 +7,7 @@ import com.browntowndev.enclave.domain.model.media.StudioTemplate
 import com.browntowndev.enclave.domain.port.media.SpeechState
 import com.browntowndev.enclave.feature.studio.GalleryAlbumUi
 import com.browntowndev.enclave.feature.studio.StudioGalleryGroup
+import com.browntowndev.enclave.feature.studio.computeStudioActiveGenerationRemainingPlaceholders
 import com.browntowndev.enclave.feature.studio.StudioMediaUi
 import com.browntowndev.enclave.feature.studio.StudioUiState
 import com.browntowndev.enclave.feature.studio.VideoGenerationState
@@ -34,6 +35,8 @@ class StudioUiStateReducer
             val error: String?,
             val generationProgressLabel: String?,
             val lastSubmittedPrompt: String?,
+            val activeGenerationExpectedCount: Int,
+            val activeGenerationBaselineMediaCount: Int,
             val videoGenerationState: VideoGenerationState,
             val speechState: SpeechState,
             val isPlayingTts: Boolean,
@@ -56,6 +59,14 @@ class StudioUiStateReducer
                     }.sortedBy { group -> group.mediaItems.maxOf { item -> item.createdAt } }
 
             val templates = if (params.mediaType == MediaCapability.MUSIC) MUSIC_TEMPLATES else IMAGE_TEMPLATES
+            val activeGenerationRemainingPlaceholderCount =
+                computeStudioActiveGenerationRemainingPlaceholders(
+                    isGenerating = params.isGenerating,
+                    lastSubmittedPrompt = params.lastSubmittedPrompt,
+                    groupedGallery = groupedGallery,
+                    expectedCount = params.activeGenerationExpectedCount,
+                    baselineMediaCount = params.activeGenerationBaselineMediaCount,
+                )
 
             return StudioUiState(
                 prompt = params.prompt,
@@ -65,6 +76,7 @@ class StudioUiStateReducer
                 mediaType = params.mediaType,
                 gallery = gallery,
                 groupedGallery = groupedGallery,
+                activeGenerationRemainingPlaceholderCount = activeGenerationRemainingPlaceholderCount,
                 selectedMediaItemIds = params.selectedMediaItemIds,
                 albums = params.albums,
                 settings = params.settings,

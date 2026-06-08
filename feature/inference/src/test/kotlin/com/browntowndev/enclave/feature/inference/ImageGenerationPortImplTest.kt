@@ -228,6 +228,58 @@ class ImageGenerationPortImplTest {
         )
 
     @Test
+    fun generateImage_localTarget_generationCount3_generatesSequentially() =
+        runTest {
+            val target = localTarget()
+            val settings = ImageGenerationSettings(generationCount = 3)
+            coEvery {
+                localStableDiffusionImageGenerator.generate(any(), eq(target), any(), any())
+            } returnsMany
+                listOf(
+                    Result.success(
+                        LocalStableDiffusionGenerationResult(
+                            outputFileReferences = listOf("/cache/bonsai-0.png"),
+                            width = 512,
+                            height = 512,
+                            backend = com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind.QNN_NPU,
+                        ),
+                    ),
+                    Result.success(
+                        LocalStableDiffusionGenerationResult(
+                            outputFileReferences = listOf("/cache/bonsai-1.png"),
+                            width = 512,
+                            height = 512,
+                            backend = com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind.QNN_NPU,
+                        ),
+                    ),
+                    Result.success(
+                        LocalStableDiffusionGenerationResult(
+                            outputFileReferences = listOf("/cache/bonsai-2.png"),
+                            width = 512,
+                            height = 512,
+                            backend = com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind.QNN_NPU,
+                        ),
+                    ),
+                )
+            coEvery { studioRepository.readMediaBytes("/cache/bonsai-0.png") } returns "img-0".toByteArray()
+            coEvery { studioRepository.readMediaBytes("/cache/bonsai-1.png") } returns "img-1".toByteArray()
+            coEvery { studioRepository.readMediaBytes("/cache/bonsai-2.png") } returns "img-2".toByteArray()
+
+            val result = port.generateImage("bonsai", target, settings)
+
+            assertTrue(result.isSuccess)
+            assertEquals(3, result.getOrThrow().size)
+            coVerify(exactly = 3) {
+                localStableDiffusionImageGenerator.generate(
+                    prompt = "bonsai",
+                    target = target,
+                    settings = match { it.generationCount == 1 },
+                    onProgress = any(),
+                )
+            }
+        }
+
+    @Test
     fun `generateImage SD15 local target propagates correct parameters`() =
         runTest {
             val target = localTarget()

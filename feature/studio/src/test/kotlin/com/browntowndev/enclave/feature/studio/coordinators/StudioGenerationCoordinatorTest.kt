@@ -61,18 +61,23 @@ class StudioGenerationCoordinatorTest {
     }
 
     @Test
-    fun beginGenerationAttempt_startsDispatcherAndMarksGenerating() {
-        coordinator.beginGenerationAttempt(
-            submittedPrompt = "prompt",
-            mediaType = MediaCapability.IMAGE,
-            continualMode = false,
-            settings = ImageGenerationSettings(),
-        )
+    fun beginGenerationAttempt_startsDispatcherAndMarksGenerating() =
+        runTest {
+            coordinator.startObservers(this)
+            coordinator.beginGenerationAttempt(
+                submittedPrompt = "prompt",
+                mediaType = MediaCapability.IMAGE,
+                continualMode = false,
+                settings = ImageGenerationSettings(),
+            )
+            advanceUntilIdle()
 
-        assertTrue(coordinator.isGenerating.value)
-        assertEquals("prompt", activeGenerationFlow.value?.prompt)
-        verify { dispatcher.startGeneration("prompt", MediaCapability.IMAGE, ImageGenerationSettings()) }
-    }
+            assertTrue(coordinator.isGenerating.value)
+            assertEquals("prompt", activeGenerationFlow.value?.prompt)
+            verify { dispatcher.startGeneration("prompt", MediaCapability.IMAGE, ImageGenerationSettings()) }
+
+            coroutineContext[Job]?.cancelChildren(CancellationException("test complete"))
+        }
 
     @Test
     fun startObservers_activeGeneration_rehydratesGeneratingState() =
@@ -160,20 +165,11 @@ class StudioGenerationCoordinatorTest {
                 continualMode = true,
                 settings = ImageGenerationSettings(),
             )
+            advanceUntilIdle()
             assertTrue(coordinator.isContinualGenerationActive.value)
             assertTrue(coordinator.isGenerating.value)
             verify(exactly = 1) { dispatcher.startGeneration(any(), any(), any()) }
 
-            ephemeralMediaFlow.value =
-                listOf(
-                    StudioMediaAsset(
-                        id = "1",
-                        localUri = "cache://1.jpg",
-                        prompt = "continual prompt",
-                        mediaType = MediaCapability.IMAGE.name,
-                        createdAt = 1L,
-                    ),
-                )
             activeGenerationFlow.value = null
             advanceUntilIdle()
             assertFalse(coordinator.isGenerating.value)
@@ -181,17 +177,9 @@ class StudioGenerationCoordinatorTest {
 
             coordinator.onGenerativeScrollThresholdVisible("anchor-1", MediaCapability.IMAGE)
             verify(exactly = 2) { dispatcher.startGeneration(any(), any(), any()) }
+            advanceUntilIdle()
             assertTrue(coordinator.isGenerating.value)
 
-            ephemeralMediaFlow.value =
-                ephemeralMediaFlow.value +
-                StudioMediaAsset(
-                    id = "2",
-                    localUri = "cache://2.jpg",
-                    prompt = "continual prompt",
-                    mediaType = MediaCapability.IMAGE.name,
-                    createdAt = 2L,
-                )
             activeGenerationFlow.value = null
             advanceUntilIdle()
             assertFalse(coordinator.isGenerating.value)
