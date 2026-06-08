@@ -2,7 +2,7 @@ package com.browntowndev.enclave.feature.inference.openai
 
 import com.openai.models.responses.ResponseStreamEvent
 
-internal fun OpenAiStreamHandlerContext.handleCompleted(
+internal suspend fun OpenAiStreamHandlerContext.handleCompleted(
     event: ResponseStreamEvent,
     state: StreamState,
 ): StreamState {
@@ -13,6 +13,13 @@ internal fun OpenAiStreamHandlerContext.handleCompleted(
             .response()
     state.responseId = response.id()
     state.applyResponseUsage(response)
+    response.output().forEach { item ->
+        reconcileAssistantMessageOutputItem(
+            item = item,
+            state = state,
+            source = "response.completed",
+        )
+    }
     loggingPort.debug(
         tag,
         "Responses stream completed model=$modelId " +
