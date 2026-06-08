@@ -26,7 +26,9 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.util.ArrayDeque
 import javax.inject.Inject
+import kotlin.math.min
 import kotlin.math.sqrt
 
 class LiveVoiceCoordinator
@@ -107,6 +109,8 @@ class LiveVoiceCoordinator
                     assistantTranscriptFinalized = false
                     responseCompleteAwaitingTranscript = false
                     assistantResponseCancelled = false
+                    latestMicLevel = 0f
+                    resetAssistantAudioVisualization()
                     _state.value = LiveVoiceUiState.Connecting
 
                     startJob =
@@ -249,8 +253,12 @@ class LiveVoiceCoordinator
         }
 
         private suspend fun processCaptureFrame(frame: ByteArray) {
-            val micLevel = computeMicLevel(frame)
+            val micLevel = computePcmLevel(frame)
             latestMicLevel = micLevel
+
+            if (_state.value is LiveVoiceUiState.AssistantSpeaking) {
+                advanceAssistantAudioLevel()
+            }
 
             if (isInterruptibleAssistantOutput() && !isMuted) {
                 updateAssistantPlaybackBaseline(micLevel)
@@ -289,6 +297,7 @@ class LiveVoiceCoordinator
             bargeInHighEnergyFrameCount = 0
             assistantPlaybackBaselineRms = 0f
             assistantCaption = ""
+            resetAssistantAudioVisualization()
         }
 
         private fun updateAssistantPlaybackBaseline(micLevel: Float) {
@@ -380,23 +389,36 @@ class LiveVoiceCoordinator
         }
 
         private var latestMicLevel: Float = 0f
+        private var latestAssistantAudioLevel: Float = 0f
+        private val assistantAudioLevelSamples = ArrayDeque<Float>()
 
-        private fun computeMicLevel(frame: ByteArray): Float {
-            if (frame.size < 2) return 0f
-            var sum = 0.0
-            var index = 0
-            while (index < frame.size - 1) {
-                val low = frame[index].toInt() and 0xFF
-                val high = frame[index + 1].toInt() and 0xFF
-                val sample = (high shl 8) or low
-                val signed = if (sample > PCM16_SAMPLE_MAX) sample - PCM16_UNSIGNED_RANGE else sample
-                sum += signed.toDouble() * signed.toDouble()
-                index += 2
+        private fun enqueueAssistantAudioLevelSamples(pcm16: ByteArray) {
+            var offset = 0
+            while (offset < pcm16.size) {
+                val endByte = min(offset + ASSISTANT_LEVEL_WINDOW_BYTES, pcm16.size)
+                if (endByte - offset >= 2) {
+                    assistantAudioLevelSamples.addLast(computePcmLevelRange(pcm16, offset, endByte))
+                }
+                offset += ASSISTANT_LEVEL_WINDOW_BYTES
             }
-            val sampleCount = frame.size / 2
-            if (sampleCount == 0) return 0f
-            val rms = sqrt(sum / sampleCount).toFloat() / PCM16_NORMALIZATION_SCALE
-            return rms.coerceIn(0f, 1f)
+            while (assistantAudioLevelSamples.size > ASSISTANT_LEVEL_SAMPLE_QUEUE_MAX) {
+                assistantAudioLevelSamples.removeFirst()
+            }
+        }
+
+        private fun advanceAssistantAudioLevel() {
+            val nextSample = assistantAudioLevelSamples.pollFirst()
+            latestAssistantAudioLevel =
+                if (nextSample != null) {
+                    nextSample
+                } else {
+                    latestAssistantAudioLevel * ASSISTANT_AUDIO_LEVEL_DECAY
+                }
+        }
+
+        private fun resetAssistantAudioVisualization() {
+            assistantAudioLevelSamples.clear()
+            latestAssistantAudioLevel = 0f
         }
 
         private fun updateActiveUiState() {
@@ -415,6 +437,7 @@ class LiveVoiceCoordinator
                             userCaption = userCaption,
                             assistantCaption = assistantCaption,
                             isMuted = isMuted,
+                            audioLevel = latestAssistantAudioLevel,
                         )
                     else -> current
                 }
@@ -441,6 +464,8 @@ class LiveVoiceCoordinator
             assistantTranscriptFinalized = false
             responseCompleteAwaitingTranscript = false
             assistantResponseCancelled = false
+            latestMicLevel = 0f
+            resetAssistantAudioVisualization()
         }
 
         private suspend fun persistCurrentTurnOnce(
@@ -565,11 +590,14 @@ class LiveVoiceCoordinator
                     playbackStarted = true
                 }
                 streamingAudioPlayer.enqueueChunk(event.pcm16)
+                enqueueAssistantAudioLevelSamples(event.pcm16)
+                advanceAssistantAudioLevel()
                 _state.value =
                     LiveVoiceUiState.AssistantSpeaking(
                         userCaption = userCaption,
                         assistantCaption = assistantCaption,
                         isMuted = isMuted,
+                        audioLevel = latestAssistantAudioLevel,
                     )
             }
 
@@ -637,6 +665,33 @@ class LiveVoiceCoordinator
             private const val BARGE_IN_CONSECUTIVE_FRAMES = 1
             private const val BASELINE_EMA_RETAIN = 0.95f
             private const val BASELINE_EMA_ADOPT = 0.05f
+            private const val ASSISTANT_LEVEL_WINDOW_BYTES = 960
+            private const val ASSISTANT_LEVEL_SAMPLE_QUEUE_MAX = 96
+            private const val ASSISTANT_AUDIO_LEVEL_DECAY = 0.82f
+
+            private fun computePcmLevel(frame: ByteArray): Float = computePcmLevelRange(frame, 0, frame.size)
+
+            private fun computePcmLevelRange(
+                frame: ByteArray,
+                startByte: Int,
+                endByte: Int,
+            ): Float {
+                if (endByte - startByte < 2) return 0f
+                var sum = 0.0
+                var index = startByte
+                while (index < endByte - 1) {
+                    val low = frame[index].toInt() and 0xFF
+                    val high = frame[index + 1].toInt() and 0xFF
+                    val sample = (high shl 8) or low
+                    val signed = if (sample > PCM16_SAMPLE_MAX) sample - PCM16_UNSIGNED_RANGE else sample
+                    sum += signed.toDouble() * signed.toDouble()
+                    index += 2
+                }
+                val sampleCount = (endByte - startByte) / 2
+                if (sampleCount == 0) return 0f
+                val rms = sqrt(sum / sampleCount).toFloat() / PCM16_NORMALIZATION_SCALE
+                return rms.coerceIn(0f, 1f)
+            }
 
             private fun captureRateForProvider(provider: ApiProvider): Int =
                 when (provider) {

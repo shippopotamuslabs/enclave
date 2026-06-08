@@ -742,6 +742,31 @@ class LiveVoiceCoordinatorTest {
         }
 
     @Test
+    @DisplayName("LV-COORD-027: assistant audio levels vary as chunk windows are drained")
+    fun lvCoord027_assistantAudioLevelsVaryAcrossChunkWindows() =
+        runTest {
+            stubOpenSession()
+            val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
+
+            coordinator.start(scope, chatId = null)
+            fakeSession.emit(LiveVoiceEvent.Connected)
+            fakeCapture.emitSession(echoCancellationActive = true)
+            advanceUntilIdle()
+
+            fakeSession.emit(LiveVoiceEvent.AssistantAudioChunk(mixedAssistantAudioChunk()))
+            advanceUntilIdle()
+
+            val initialLevel = (coordinator.state.value as LiveVoiceUiState.AssistantSpeaking).audioLevel
+            assertTrue(initialLevel > 0.1f)
+
+            fakeCapture.emit(quietPcm16Frame())
+            advanceUntilIdle()
+
+            val drainedLevel = (coordinator.state.value as LiveVoiceUiState.AssistantSpeaking).audioLevel
+            assertTrue(drainedLevel < initialLevel)
+        }
+
+    @Test
     @DisplayName("LV-COORD-025: response complete waits for final assistant transcript before persisting")
     fun lvCoord025_responseCompleteWaitsForFinalTranscript() =
         runTest {
@@ -905,6 +930,16 @@ class LiveVoiceCoordinatorTest {
     private companion object {
         private const val LOUD_SAMPLE = 12_000
         private const val QUIET_SAMPLE = 100
+
+        fun mixedAssistantAudioChunk(): ByteArray {
+            val loud = loudPcm16Frame()
+            val quiet = quietPcm16Frame()
+            val chunk = ByteArray(1920)
+            for (index in chunk.indices) {
+                chunk[index] = if (index < 960) loud[index % loud.size] else quiet[index % quiet.size]
+            }
+            return chunk
+        }
 
         fun loudPcm16Frame(): ByteArray {
             val low = (LOUD_SAMPLE and 0xFF).toByte()
