@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,18 +50,17 @@ fun AssistantResponse(
     var showSources by remember { mutableStateOf(false) }
     val detailSheetController = rememberDetailBottomSheetController(usePreviewStub = isPreview)
 
-    LaunchedEffect(showStepDetails, selectedStepName, contentText, isStreaming) {
-        if (showStepDetails) {
-            detailSheetController.show(
-                DetailBottomSheetConfig.StepCompletion(
-                    isVisible = true,
-                    content = contentText,
-                    stepName = selectedStepName,
-                    isStreaming = isStreaming,
-                    onDismiss = { showStepDetails = false },
-                ),
-            )
-        }
+    SideEffect {
+        if (!showStepDetails) return@SideEffect
+        detailSheetController.update(
+            DetailBottomSheetConfig.StepCompletion(
+                isVisible = true,
+                content = contentText,
+                stepName = selectedStepName,
+                isStreaming = isStreaming,
+                onDismiss = { showStepDetails = false },
+            ),
+        )
     }
 
     LaunchedEffect(showSources, message.webSearchSources) {

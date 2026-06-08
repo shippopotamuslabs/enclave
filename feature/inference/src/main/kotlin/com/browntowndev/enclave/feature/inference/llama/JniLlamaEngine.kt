@@ -7,9 +7,11 @@ import com.browntowndev.enclave.domain.model.inference.LlamaModelConfig
 import com.browntowndev.enclave.domain.port.inference.LlamaEnginePort
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
@@ -160,7 +162,13 @@ class JniLlamaEngine
 
                 val callback =
                     LlamaGenerationSession.createTokenCallback(
-                        emit = ::trySend,
+                        emit = { event ->
+                            trySend(event).also { result ->
+                                if (result.isFailure) {
+                                    Log.w(TAG, "Dropped generation event (${event::class.simpleName}): $result")
+                                }
+                            }
+                        },
                         onGenerationComplete = { promptTokens, generatedTokens, fullText ->
                             modelLifecycle.recordGenerationComplete(promptTokens, generatedTokens)
                             modelLifecycle.checkAndCompressContext()
@@ -204,7 +212,7 @@ class JniLlamaEngine
                     llamaExecutor.submit { nativeStopCompletion() }
                     generating.set(false)
                 }
-            }.flowOn(Dispatchers.IO)
+            }.buffer(Channel.UNLIMITED).flowOn(Dispatchers.IO)
 
         override fun generateWithOptions(options: GenerationOptions): Flow<GenerationEvent> =
             callbackFlow {
@@ -229,7 +237,13 @@ class JniLlamaEngine
 
                 val callback =
                     LlamaGenerationSession.createTokenCallback(
-                        emit = ::trySend,
+                        emit = { event ->
+                            trySend(event).also { result ->
+                                if (result.isFailure) {
+                                    Log.w(TAG, "Dropped generation event (${event::class.simpleName}): $result")
+                                }
+                            }
+                        },
                         onGenerationComplete = { promptTokens, generatedTokens, fullText ->
                             modelLifecycle.recordGenerationComplete(promptTokens, generatedTokens)
                             modelLifecycle.checkAndCompressContext()
@@ -273,7 +287,7 @@ class JniLlamaEngine
                     llamaExecutor.submit { nativeStopCompletion() }
                     generating.set(false)
                 }
-            }.flowOn(Dispatchers.IO)
+            }.buffer(Channel.UNLIMITED).flowOn(Dispatchers.IO)
 
         override suspend fun stopGeneration() =
             withContext(ioDispatcher) {

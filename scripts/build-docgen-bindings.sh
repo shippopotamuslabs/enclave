@@ -14,7 +14,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # RUST_ROOT is now the submodule path inside pocket-crew
 RUST_ROOT="$PROJECT_ROOT/third_party/docgen_core"
 
-ANDROID_HOME="${ANDROID_HOME:-$(grep "sdk.dir" "$PROJECT_ROOT/local.properties" | cut -d'=' -f2 | tr -d ' ')}"
+ANDROID_HOME="${ANDROID_HOME:-$(grep '^sdk.dir=' "$PROJECT_ROOT/local.properties" | cut -d'=' -f2 | tr -d ' ')}"
 
 if [ -z "$ANDROID_HOME" ]; then
     echo "ERROR: Cannot find ANDROID_HOME. Ensure local.properties exists in $PROJECT_ROOT"

@@ -11,6 +11,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
@@ -137,22 +138,21 @@ fun ThinkingDetailsBottomSheet(
 ) {
     val controller = rememberDetailBottomSheetController(usePreviewStub = isPreview)
 
-    LaunchedEffect(isVisible, thinkingRaw, thinkingDurationSeconds, isStreaming) {
-        if (isVisible) {
-            controller.show(
-                DetailBottomSheetConfig.Thinking(
-                    isVisible = true,
-                    content = thinkingRaw,
-                    durationSeconds = thinkingDurationSeconds,
-                    onDismiss = onDismiss,
-                    isStreaming = isStreaming,
-                ),
-                elapsedSeconds = elapsedSeconds,
-            )
-        }
+    SideEffect {
+        if (!isVisible) return@SideEffect
+        controller.update(
+            DetailBottomSheetConfig.Thinking(
+                isVisible = true,
+                content = thinkingRaw,
+                durationSeconds = thinkingDurationSeconds,
+                onDismiss = onDismiss,
+                isStreaming = isStreaming,
+            ),
+            elapsedSeconds = elapsedSeconds,
+        )
     }
 
-    LaunchedEffect(elapsedSeconds) {
+    LaunchedEffect(elapsedSeconds, isVisible) {
         if (isVisible) {
             controller.updateElapsed(elapsedSeconds)
         }
