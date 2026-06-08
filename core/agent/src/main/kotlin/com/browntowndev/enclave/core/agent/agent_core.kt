@@ -4373,7 +4373,8 @@ enum class FfiCompactionTier {
     ARTIFACT_SQUASH,
     SUMMARY,
     TOOL_SPILL,
-    HISTORY_SNAPSHOT;
+    HISTORY_SNAPSHOT,
+    TEXT_TRUNCATE;
     companion object
 }
 

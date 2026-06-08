@@ -10,7 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 RUST_ROOT="$PROJECT_ROOT/third_party/agent_core"
 
-ANDROID_HOME="${ANDROID_HOME:-$(grep "sdk.dir" "$PROJECT_ROOT/local.properties" 2>/dev/null | cut -d'=' -f2 | tr -d ' ')}"
+ANDROID_HOME="${ANDROID_HOME:-$(grep '^sdk.dir=' "$PROJECT_ROOT/local.properties" 2>/dev/null | cut -d'=' -f2 | tr -d ' ')}"
 
 if [ -z "$ANDROID_HOME" ]; then
     echo "ERROR: Cannot find ANDROID_HOME. Set ANDROID_HOME or add sdk.dir to local.properties"

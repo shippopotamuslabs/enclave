@@ -9,6 +9,26 @@ import kotlin.test.assertIs
 
 class AgentEventMapperTest {
     @Test
+    fun toDomain_compactionApplied_mapsTextTruncateTier() {
+        val event =
+            FfiAgentEvent.CompactionApplied(
+                FfiCompactionEvent(
+                    tier = FfiCompactionTier.TEXT_TRUNCATE,
+                    tokensBefore = 4200u,
+                    tokensAfter = 2800u,
+                    trigger = FfiCompactionTrigger.PREFLIGHT,
+                ),
+            )
+
+        val mapped = assertIs<AgentLoopEvent.CompactionApplied>(AgentEventMapper.toDomain(event))
+
+        assertEquals("TEXT_TRUNCATE", mapped.tier)
+        assertEquals(4200, mapped.tokensBefore)
+        assertEquals(2800, mapped.tokensAfter)
+        assertEquals("PREFLIGHT", mapped.trigger)
+    }
+
+    @Test
     fun toDomain_compactionApplied_mapsMetadataOnly() {
         val event =
             FfiAgentEvent.CompactionApplied(

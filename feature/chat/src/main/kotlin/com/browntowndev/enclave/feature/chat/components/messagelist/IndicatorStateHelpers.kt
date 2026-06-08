@@ -1,6 +1,7 @@
 package com.browntowndev.enclave.feature.chat.components.messagelist
 
 import com.browntowndev.enclave.feature.chat.IndicatorState
+import com.browntowndev.enclave.feature.chat.TranscriptSegmentUi
 
 internal fun indicatorThinkingStartTime(indicatorState: IndicatorState): Long =
     when (indicatorState) {
@@ -34,6 +35,20 @@ internal fun indicatorThinkingRawForSheet(indicatorState: IndicatorState): Strin
         is IndicatorState.Complete -> indicatorState.thinkingData?.thinkingRaw ?: ""
         else -> ""
     }
+
+internal fun liveThinkingTextForSheet(
+    transcriptSegments: List<TranscriptSegmentUi>,
+    indicatorState: IndicatorState?,
+): String {
+    val streamingSegment =
+        transcriptSegments
+            .filterIsInstance<TranscriptSegmentUi.ThinkingBlock>()
+            .lastOrNull { it.isStreaming }
+    if (streamingSegment != null) {
+        return streamingSegment.text
+    }
+    return indicatorState?.let(::indicatorThinkingRawForSheet).orEmpty()
+}
 
 internal fun indicatorThinkingDurationForSheet(indicatorState: IndicatorState): Long =
     when (indicatorState) {

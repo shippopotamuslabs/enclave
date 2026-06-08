@@ -1357,6 +1357,22 @@ Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeStart
             __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Generated %d tokens so far...", n_generated_tokens);
         }
     }
+    // Flush any UTF-8 bytes still held for incomplete sequences or tag lookahead.
+    if (onTokenMethod && g_callback) {
+        const std::string trailing = processor.extract_utf8("");
+        if (!trailing.empty()) {
+            jstring tokenStr = env->NewStringUTF(trailing.c_str());
+            if (tokenStr) {
+                env->CallVoidMethod(g_callback, onTokenMethod, tokenStr);
+                if (env->ExceptionCheck()) {
+                    env->ExceptionClear();
+                    __android_log_print(ANDROID_LOG_ERROR, "llama-jni", "JNI exception flushing trailing tokens");
+                }
+                env->DeleteLocalRef(tokenStr);
+            }
+        }
+    }
+
     auto gen_end = std::chrono::high_resolution_clock::now();
     double gen_ms = std::chrono::duration<double, std::milli>(gen_end - gen_start).count();
     double ms_per_token = n_generated_tokens > 0 ? gen_ms / n_generated_tokens : 0;
