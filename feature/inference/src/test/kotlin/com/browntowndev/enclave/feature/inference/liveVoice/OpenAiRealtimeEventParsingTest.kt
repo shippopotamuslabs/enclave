@@ -102,8 +102,8 @@ class OpenAiRealtimeEventParsingTest {
     }
 
     @Test
-    @DisplayName("LV-PARSE-OAI-007: response.output_audio.done maps to AssistantResponseComplete")
-    fun lvParseOai007_outputAudioDone() {
+    @DisplayName("LV-PARSE-OAI-007: response.output_audio.done is ignored until response.done")
+    fun lvParseOai007_outputAudioDoneIgnored() {
         val json =
             """
             {"type":"response.output_audio.done"}
@@ -111,7 +111,20 @@ class OpenAiRealtimeEventParsingTest {
 
         val result = parseOpenAiRealtimeEvent(json)
 
-        assertEquals(LiveVoiceEvent.AssistantResponseComplete, result)
+        assertEquals(null, result)
+    }
+
+    @Test
+    @DisplayName("LV-PARSE-OAI-008: response.audio.done is ignored until response.done")
+    fun lvParseOai008_audioDoneIgnored() {
+        val json =
+            """
+            {"type":"response.audio.done"}
+            """.trimIndent()
+
+        val result = parseOpenAiRealtimeEvent(json)
+
+        assertEquals(null, result)
     }
 
     @Test

@@ -44,10 +44,9 @@ fun parseOpenAiRealtimeEvent(json: String): LiveVoiceEvent? {
         ->
             root["delta"]?.jsonPrimitive?.contentOrNull?.decodeBase64Pcm16()?.let(LiveVoiceEvent::AssistantAudioChunk)
 
+        // Only terminal response events — audio.done fires before the transcript is final.
         "response.done",
         "response.completed",
-        "response.audio.done",
-        "response.output_audio.done",
         -> LiveVoiceEvent.AssistantResponseComplete
 
         "input_audio_buffer.speech_started" -> LiveVoiceEvent.SpeechStarted
