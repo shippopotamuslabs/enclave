@@ -78,6 +78,46 @@ class StudioScreenScrollThresholdTest {
     }
 
     @Test
+    fun remainingPlaceholders_whenOneOfThreeImagesCompleted_returnsTwo() {
+        val remaining =
+            computeStudioActiveGenerationRemainingPlaceholders(
+                isGenerating = true,
+                lastSubmittedPrompt = "prompt",
+                groupedGallery =
+                    listOf(
+                        StudioGalleryGroup(
+                            prompt = "prompt",
+                            mediaItems = listOf(studioMedia("asset-1")),
+                        ),
+                    ),
+                expectedCount = 3,
+                baselineMediaCount = 0,
+            )
+
+        assertEquals(2, remaining)
+    }
+
+    @Test
+    fun remainingPlaceholders_whenGenerationInactive_returnsZero() {
+        val remaining =
+            computeStudioActiveGenerationRemainingPlaceholders(
+                isGenerating = false,
+                lastSubmittedPrompt = "prompt",
+                groupedGallery =
+                    listOf(
+                        StudioGalleryGroup(
+                            prompt = "prompt",
+                            mediaItems = listOf(studioMedia("asset-1")),
+                        ),
+                    ),
+                expectedCount = 3,
+                baselineMediaCount = 0,
+            )
+
+        assertEquals(0, remaining)
+    }
+
+    @Test
     fun galleryRows_whenLastMediaRowHasEmptySlot_addsPlaceholderToSameRow() {
         val group =
             StudioGalleryGroup(

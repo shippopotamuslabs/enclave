@@ -54,6 +54,8 @@ class StudioUiStateReducerTest {
                     error = null,
                     generationProgressLabel = null,
                     lastSubmittedPrompt = null,
+                    activeGenerationExpectedCount = 1,
+                    activeGenerationBaselineMediaCount = 0,
                     videoGenerationState = VideoGenerationState.Idle,
                     speechState = SpeechState.Idle,
                     isPlayingTts = false,
@@ -66,6 +68,34 @@ class StudioUiStateReducerTest {
         assertEquals(2, state.gallery.size)
         assertEquals(1, state.groupedGallery.size)
         assertEquals("sunset", state.groupedGallery.first().prompt)
+    }
+
+    @Test
+    fun reduce_exposesRemainingPlaceholdersWhileGenerating() {
+        val sessionMedia =
+            listOf(
+                StudioMediaUi(
+                    id = "1",
+                    localUri = "file://a.jpg",
+                    prompt = "sunset",
+                    mediaType = MediaCapability.IMAGE,
+                    createdAt = 1L,
+                ),
+            )
+
+        val state =
+            reducer.reduce(
+                baseParams(
+                    isGenerating = true,
+                    lastSubmittedPrompt = "sunset",
+                    sessionMedia = sessionMedia,
+                ).copy(
+                    activeGenerationExpectedCount = 3,
+                    activeGenerationBaselineMediaCount = 0,
+                ),
+            )
+
+        assertEquals(2, state.activeGenerationRemainingPlaceholderCount)
     }
 
     @Test
@@ -190,6 +220,8 @@ class StudioUiStateReducerTest {
             error = null,
             generationProgressLabel = generationProgressLabel,
             lastSubmittedPrompt = lastSubmittedPrompt,
+            activeGenerationExpectedCount = 1,
+            activeGenerationBaselineMediaCount = 0,
             videoGenerationState = VideoGenerationState.Idle,
             speechState = SpeechState.Idle,
             isPlayingTts = false,

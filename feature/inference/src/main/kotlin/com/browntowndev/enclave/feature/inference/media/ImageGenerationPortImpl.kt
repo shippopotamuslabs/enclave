@@ -8,6 +8,7 @@ import com.browntowndev.enclave.domain.model.media.ImageGenerationProgress
 import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
 import com.browntowndev.enclave.domain.model.media.ImageGenerationTarget
 import com.browntowndev.enclave.domain.model.media.VisualGenerationSettings
+import com.browntowndev.enclave.domain.model.media.withClampedGenerationCount
 import com.browntowndev.enclave.domain.port.media.GpuCapabilityPort
 import com.browntowndev.enclave.domain.port.media.ImageGenerationPort
 import com.browntowndev.enclave.domain.port.media.LOCAL_IMAGE_GENERATION_UNSUPPORTED_MESSAGE
@@ -57,20 +58,48 @@ class ImageGenerationPortImpl
                         IllegalArgumentException("Local image generation requires image settings."),
                     )
 
-            return localStableDiffusionImageGenerator
-                .generate(prompt = prompt, target = target, settings = imageSettings, onProgress = onProgress)
-                .mapCatching { result ->
-                    try {
-                        result.outputFileReferences.map { outputFileReference ->
-                            studioRepository.readMediaBytes(outputFileReference)
-                                ?: throw IllegalStateException("Local image generation failed.")
+            val generationCount = imageSettings.withClampedGenerationCount().generationCount
+            val generatedImages = mutableListOf<ByteArray>()
+
+            repeat(generationCount) { index ->
+                val iterationSettings = imageSettingsForGenerationIteration(imageSettings, index)
+                val iterationResult =
+                    localStableDiffusionImageGenerator
+                        .generate(
+                            prompt = prompt,
+                            target = target,
+                            settings = iterationSettings,
+                            onProgress = onProgress,
+                        ).mapCatching { result ->
+                            try {
+                                result.outputFileReferences.map { outputFileReference ->
+                                    studioRepository.readMediaBytes(outputFileReference)
+                                        ?: throw IllegalStateException("Local image generation failed.")
+                                }
+                            } finally {
+                                result.outputFileReferences.forEach { outputFileReference ->
+                                    java.io.File(outputFileReference).delete()
+                                }
+                            }
                         }
-                    } finally {
-                        result.outputFileReferences.forEach { outputFileReference ->
-                            java.io.File(outputFileReference).delete()
-                        }
-                    }
-                }
+
+                iterationResult
+                    .onSuccess { generatedImages += it }
+                    .onFailure { return Result.failure(it) }
+            }
+
+            return Result.success(generatedImages)
+        }
+
+        private fun imageSettingsForGenerationIteration(
+            settings: ImageGenerationSettings,
+            index: Int,
+        ): ImageGenerationSettings {
+            val explicitSeed = settings.seed.toLongOrNull()
+            return settings.copy(
+                generationCount = 1,
+                seed = if (explicitSeed != null) (explicitSeed + index).toString() else settings.seed,
+            )
         }
 
         private suspend fun generateRemote(

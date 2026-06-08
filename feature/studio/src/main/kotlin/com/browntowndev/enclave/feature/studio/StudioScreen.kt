@@ -29,7 +29,6 @@ import com.browntowndev.enclave.core.ui.component.neo.NeoAppBarChrome
 import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
 import com.browntowndev.enclave.core.ui.component.sheet.MoveToAlbumBottomSheet
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
-import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
 import com.browntowndev.enclave.domain.model.media.VisualGenerationSettings
 import com.browntowndev.enclave.feature.studio.components.StudioOptionsBottomSheet
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -56,11 +55,7 @@ fun StudioScreen(
                 group.mediaItems.chunked(GRID_COLUMNS).map(::studioGalleryRowKey)
             }
         }
-    val generationPlaceholderCount =
-        (uiState.settings as? ImageGenerationSettings)
-            ?.generationCount
-            ?.coerceAtLeast(1)
-            ?: 1
+    val generationPlaceholderCount = uiState.activeGenerationRemainingPlaceholderCount
     var scrollOnGenerationStart by remember { mutableStateOf(false) }
     val imagePickerLauncher =
         rememberLauncherForActivityResult(

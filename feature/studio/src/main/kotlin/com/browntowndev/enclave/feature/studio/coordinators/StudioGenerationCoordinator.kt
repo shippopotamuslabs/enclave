@@ -5,7 +5,9 @@ import com.browntowndev.enclave.domain.model.media.AspectRatio
 import com.browntowndev.enclave.domain.model.media.GenerationQuality
 import com.browntowndev.enclave.domain.model.media.GenerationSettings
 import com.browntowndev.enclave.domain.model.media.ImageGenerationProgress
+import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
 import com.browntowndev.enclave.domain.model.media.VideoGenerationSettings
+import com.browntowndev.enclave.domain.model.media.withClampedGenerationCount
 import com.browntowndev.enclave.domain.port.media.StudioGenerationDispatcherPort
 import com.browntowndev.enclave.domain.port.repository.ActiveStudioGeneration
 import com.browntowndev.enclave.domain.port.repository.StudioMediaAsset
@@ -46,11 +48,16 @@ class StudioGenerationCoordinator
         private val _generationProgressLabel = MutableStateFlow<String?>(null)
         val generationProgressLabel: StateFlow<String?> = _generationProgressLabel.asStateFlow()
 
+        private val _activeGenerationExpectedCount = MutableStateFlow(1)
+        val activeGenerationExpectedCount: StateFlow<Int> = _activeGenerationExpectedCount.asStateFlow()
+
+        private val _activeGenerationBaselineMediaCount = MutableStateFlow(0)
+        val activeGenerationBaselineMediaCount: StateFlow<Int> = _activeGenerationBaselineMediaCount.asStateFlow()
+
         private val _videoGenerationState = MutableStateFlow<VideoGenerationState>(VideoGenerationState.Idle)
         val videoGenerationState: StateFlow<VideoGenerationState> = _videoGenerationState.asStateFlow()
 
         private val consumedScrollAnchors = mutableSetOf<String>()
-        private var observedEphemeralMediaIds: Set<String>? = null
 
         var lastProcessedEditAssetId: String? = null
         var lastProcessedAnimateAssetId: String? = null
@@ -65,12 +72,6 @@ class StudioGenerationCoordinator
             studioRepository
                 .observeEphemeralMedia()
                 .onEach { media ->
-                    val mediaIds = media.map { it.id }.toSet()
-                    if (observedEphemeralMediaIds?.let { previousIds -> mediaIds.any { it !in previousIds } } == true) {
-                        _isGenerating.value = false
-                        _generationProgressLabel.value = null
-                    }
-                    observedEphemeralMediaIds = mediaIds
                     resolveDetailVideoGeneration(media)
                 }.launchIn(scope)
 
@@ -80,6 +81,7 @@ class StudioGenerationCoordinator
                     _isGenerating.value = activeGeneration != null
                     if (activeGeneration == null) {
                         _generationProgressLabel.value = null
+                        clearActiveGenerationTracking()
                     } else {
                         _lastSubmittedPrompt.value = activeGeneration.prompt
                         onActiveGeneration(activeGeneration)
@@ -117,6 +119,7 @@ class StudioGenerationCoordinator
             _isContinualGenerationActive.value = false
             _isGenerating.value = false
             _generationProgressLabel.value = null
+            clearActiveGenerationTracking()
             studioRepository.clearGenerationProgress()
             studioRepository.clearActiveGeneration()
             dispatcher.stopGeneration()
@@ -142,7 +145,6 @@ class StudioGenerationCoordinator
                 return
             }
             dispatcher.startGeneration(prompt, mediaType, settings)
-            _isGenerating.value = true
         }
 
         suspend fun isGenerationActive(): Boolean = studioRepository.observeActiveGeneration().first() != null
@@ -190,11 +192,18 @@ class StudioGenerationCoordinator
             mediaType: MediaCapability,
             continualMode: Boolean,
             settings: GenerationSettings,
+            baselineMediaCountForPrompt: Int = 0,
         ) {
             lastProcessedEditAssetId = null
             lastProcessedAnimateAssetId = null
             _lastSubmittedPrompt.value = submittedPrompt
             _lastSubmittedSettings.value = settings
+            _activeGenerationExpectedCount.value =
+                (settings as? ImageGenerationSettings)
+                    ?.withClampedGenerationCount()
+                    ?.generationCount
+                    ?: 1
+            _activeGenerationBaselineMediaCount.value = baselineMediaCountForPrompt
             if (continualMode && mediaType == MediaCapability.IMAGE) {
                 _isContinualGenerationActive.value = true
             }
@@ -237,6 +246,11 @@ class StudioGenerationCoordinator
         private fun clearPendingDetailVideoGeneration() {
             pendingDetailVideoSourceAssetId = null
             pendingDetailVideoSourceCreatedAt = null
+        }
+
+        private fun clearActiveGenerationTracking() {
+            _activeGenerationExpectedCount.value = 1
+            _activeGenerationBaselineMediaCount.value = 0
         }
 
         fun onGenerativeScrollThresholdVisible(

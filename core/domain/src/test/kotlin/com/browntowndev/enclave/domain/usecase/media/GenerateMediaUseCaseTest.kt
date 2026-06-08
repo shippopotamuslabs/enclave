@@ -1,8 +1,10 @@
 package com.browntowndev.enclave.domain.usecase.media
 
 import com.browntowndev.enclave.domain.model.config.MediaCapability
+import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.media.ImageGenerationProgress
 import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
+import com.browntowndev.enclave.domain.model.media.ImageGenerationTarget
 import com.browntowndev.enclave.domain.model.media.MediaGenerationOrigin
 import com.browntowndev.enclave.domain.model.media.MediaGenerationRequest
 import com.browntowndev.enclave.domain.model.media.MusicGenerationSettings
@@ -11,6 +13,7 @@ import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.domain.util.Clock
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.test.runTest
@@ -25,6 +28,8 @@ class GenerateMediaUseCaseTest {
     private val generateImageUseCase = mockk<GenerateImageUseCase>()
     private val generateVideoUseCase = mockk<GenerateVideoUseCase>()
     private val generateMusicUseCase = mockk<GenerateMusicUseCase>()
+    private val resolveMediaModelTypeUseCase = mockk<ResolveMediaModelTypeUseCase>()
+    private val resolveAssignedImageGenerationTargetUseCase = mockk<ResolveAssignedImageGenerationTargetUseCase>()
     private val studioRepository = mockk<StudioRepositoryPort>(relaxed = true)
     private val clock = FakeClock()
 
@@ -33,11 +38,21 @@ class GenerateMediaUseCaseTest {
     @BeforeEach
     fun setUp() {
         clock.now = 0L
+        every { resolveMediaModelTypeUseCase(any(), any()) } returns ModelType.IMAGE_GENERATION
+        coEvery { resolveAssignedImageGenerationTargetUseCase(any()) } returns
+            Result.success(
+                ImageGenerationTarget.Remote(
+                    providerAssetId = com.browntowndev.enclave.domain.model.config.MediaProviderId("remote"),
+                    providerDisplayName = "Remote",
+                ),
+            )
         useCase =
             GenerateMediaUseCase(
                 generateImageUseCase = generateImageUseCase,
                 generateVideoUseCase = generateVideoUseCase,
                 generateMusicUseCase = generateMusicUseCase,
+                resolveMediaModelTypeUseCase = resolveMediaModelTypeUseCase,
+                resolveAssignedImageGenerationTargetUseCase = resolveAssignedImageGenerationTargetUseCase,
                 studioRepository = studioRepository,
                 clock = clock,
             )
@@ -258,6 +273,48 @@ class GenerateMediaUseCaseTest {
             )
 
             coVerify(exactly = 1) { generateImageUseCase("p1", settings, any()) }
+        }
+
+    @Test
+    fun `S-GM-09 STUDIO_FOREGROUND local generationCount 3 generates sequentially and adds incrementally`() =
+        runTest {
+            clock.now = 1000L
+            val settings = ImageGenerationSettings(generationCount = 3)
+            val localTarget = mockk<ImageGenerationTarget.LocalStableDiffusion>()
+            coEvery { resolveAssignedImageGenerationTargetUseCase(ModelType.IMAGE_GENERATION) } returns
+                Result.success(localTarget)
+            coEvery { generateImageUseCase(any(), any(), any()) } returnsMany
+                listOf(
+                    Result.success(listOf(byteArrayOf(1))),
+                    Result.success(listOf(byteArrayOf(2))),
+                    Result.success(listOf(byteArrayOf(3))),
+                )
+            coEvery { studioRepository.cacheEphemeralMedia(any(), any()) } returnsMany
+                listOf("file:///cache/a", "file:///cache/b", "file:///cache/c")
+
+            val result =
+                useCase(
+                    MediaGenerationRequest(
+                        prompt = "p",
+                        capability = MediaCapability.IMAGE,
+                        settings = settings,
+                        origin = MediaGenerationOrigin.STUDIO_FOREGROUND,
+                    ),
+                )
+
+            assertTrue(result.isSuccess)
+            assertEquals(3, result.getOrThrow().size)
+            coVerify(exactly = 3) {
+                generateImageUseCase(
+                    "p",
+                    match { settings ->
+                        settings is ImageGenerationSettings && settings.generationCount == 1
+                    },
+                    any(),
+                )
+            }
+            coVerify(exactly = 3) { studioRepository.addEphemeralMedia(any()) }
+            coVerify(exactly = 0) { generateImageUseCase("p", settings, any()) }
         }
 
     @Test

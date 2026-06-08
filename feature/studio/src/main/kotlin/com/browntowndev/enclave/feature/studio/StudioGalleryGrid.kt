@@ -318,6 +318,29 @@ internal fun studioPromptHeaderKey(
     prompt: String,
 ): String = "$GALLERY_HEADER_KEY_PREFIX${groupIndex}_$prompt"
 
+internal fun computeStudioActiveGenerationRemainingPlaceholders(
+    isGenerating: Boolean,
+    lastSubmittedPrompt: String?,
+    groupedGallery: List<StudioGalleryGroup>,
+    expectedCount: Int,
+    baselineMediaCount: Int,
+): Int {
+    if (!isGenerating || lastSubmittedPrompt.isNullOrBlank()) {
+        return 0
+    }
+
+    val completedInBatch =
+        groupedGallery
+            .find { group -> group.prompt == lastSubmittedPrompt }
+            ?.mediaItems
+            ?.size
+            ?.minus(baselineMediaCount)
+            ?.coerceAtLeast(0)
+            ?: 0
+
+    return (expectedCount - completedInBatch).coerceAtLeast(0)
+}
+
 internal fun buildStudioGalleryRows(
     group: StudioGalleryGroup,
     placeholderCount: Int,

@@ -37,6 +37,8 @@ internal data class GenerationInputs(
     val isContinualGenerationActive: Boolean,
     val error: String?,
     val generationProgressLabel: String?,
+    val activeGenerationExpectedCount: Int,
+    val activeGenerationBaselineMediaCount: Int,
     val videoGenerationState: VideoGenerationState,
 )
 

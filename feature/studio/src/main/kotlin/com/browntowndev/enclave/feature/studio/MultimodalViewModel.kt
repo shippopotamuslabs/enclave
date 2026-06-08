@@ -190,19 +190,34 @@ class MultimodalViewModel
 
         private val generationInputsFlow =
             combine(
-                generationCoordinator.isGenerating,
-                generationCoordinator.lastSubmittedPrompt,
-                generationCoordinator.isContinualGenerationActive,
-                generationCoordinator.error,
-                generationCoordinator.generationProgressLabel,
-            ) { isGenerating, lastSubmittedPrompt, isContinualGenerationActive, error, generationProgressLabel ->
-                GenerationInputs(
-                    isGenerating = isGenerating,
-                    lastSubmittedPrompt = lastSubmittedPrompt,
-                    isContinualGenerationActive = isContinualGenerationActive,
-                    error = error,
-                    generationProgressLabel = generationProgressLabel,
-                    videoGenerationState = VideoGenerationState.Idle,
+                combine(
+                    generationCoordinator.isGenerating,
+                    generationCoordinator.lastSubmittedPrompt,
+                    generationCoordinator.isContinualGenerationActive,
+                    generationCoordinator.error,
+                    generationCoordinator.generationProgressLabel,
+                ) { isGenerating, lastSubmittedPrompt, isContinualGenerationActive, error, generationProgressLabel ->
+                    GenerationInputs(
+                        isGenerating = isGenerating,
+                        lastSubmittedPrompt = lastSubmittedPrompt,
+                        isContinualGenerationActive = isContinualGenerationActive,
+                        error = error,
+                        generationProgressLabel = generationProgressLabel,
+                        activeGenerationExpectedCount = 1,
+                        activeGenerationBaselineMediaCount = 0,
+                        videoGenerationState = VideoGenerationState.Idle,
+                    )
+                },
+                combine(
+                    generationCoordinator.activeGenerationExpectedCount,
+                    generationCoordinator.activeGenerationBaselineMediaCount,
+                ) { activeGenerationExpectedCount, activeGenerationBaselineMediaCount ->
+                    activeGenerationExpectedCount to activeGenerationBaselineMediaCount
+                },
+            ) { generationInputs, generationTracking ->
+                generationInputs.copy(
+                    activeGenerationExpectedCount = generationTracking.first,
+                    activeGenerationBaselineMediaCount = generationTracking.second,
                 )
             }.combine(generationCoordinator.videoGenerationState) { generationInputs, videoGenerationState ->
                 generationInputs.copy(videoGenerationState = videoGenerationState)
@@ -336,6 +351,8 @@ class MultimodalViewModel
                         error = generationInputs.error,
                         generationProgressLabel = generationInputs.generationProgressLabel,
                         lastSubmittedPrompt = generationInputs.lastSubmittedPrompt,
+                        activeGenerationExpectedCount = generationInputs.activeGenerationExpectedCount,
+                        activeGenerationBaselineMediaCount = generationInputs.activeGenerationBaselineMediaCount,
                         videoGenerationState = generationInputs.videoGenerationState,
                         speechState = playbackInputs.speechState,
                         isPlayingTts = playbackInputs.isPlayingTts,
@@ -409,11 +426,18 @@ class MultimodalViewModel
                     return@launch
                 }
 
+                val baselineMediaCountForPrompt =
+                    uiState.value.groupedGallery
+                        .find { group -> group.prompt == submittedPrompt }
+                        ?.mediaItems
+                        ?.size
+                        ?: 0
                 generationCoordinator.beginGenerationAttempt(
                     submittedPrompt = submittedPrompt,
                     mediaType = promptCoordinator.mediaType.value,
                     continualMode = promptCoordinator.continualMode.value,
                     settings = promptCoordinator.settings.value,
+                    baselineMediaCountForPrompt = baselineMediaCountForPrompt,
                 )
                 promptCoordinator.prompt.update { "" }
             }
