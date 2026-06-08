@@ -69,6 +69,11 @@ class LiveVoiceCoordinator
         private var bargeInHighEnergyFrameCount: Int = 0
         private var assistantPlaybackBaselineRms: Float = 0f
         private var isAssistantResponseActive: Boolean = false
+        private var turnPersisted: Boolean = false
+        private var assistantTranscriptFinalized: Boolean = false
+        private var responseCompleteAwaitingTranscript: Boolean = false
+        private var assistantResponseCancelled: Boolean = false
+        private val sessionEventRouter = SessionEventRouter()
 
         fun start(
             scope: CoroutineScope,
@@ -98,6 +103,10 @@ class LiveVoiceCoordinator
                     bargeInHighEnergyFrameCount = 0
                     assistantPlaybackBaselineRms = 0f
                     isAssistantResponseActive = false
+                    turnPersisted = false
+                    assistantTranscriptFinalized = false
+                    responseCompleteAwaitingTranscript = false
+                    assistantResponseCancelled = false
                     _state.value = LiveVoiceUiState.Connecting
 
                     startJob =
@@ -127,7 +136,6 @@ class LiveVoiceCoordinator
         fun end(scope: CoroutineScope) {
             val finalUser = userCaption
             val finalAssistant = assistantCaption
-            val persistedChatId = chatId
             val generation = sessionGeneration
 
             endJob =
@@ -137,13 +145,10 @@ class LiveVoiceCoordinator
                     lifecycleMutex.withLock {
                         if (generation != sessionGeneration) return@withLock
                         try {
-                            val resolvedChatId =
-                                persistVoiceTurnUseCase(persistedChatId, finalUser, finalAssistant)
-                            resolvedChatId?.let { chatId ->
-                                if (persistedChatId == null) {
-                                    onChatIdPersisted?.invoke(chatId)
-                                }
-                            }
+                            persistCurrentTurnOnce(
+                                userText = finalUser,
+                                assistantText = finalAssistant,
+                            )
                         } finally {
                             if (generation == sessionGeneration) {
                                 teardown(resetToIdle = true)
@@ -183,91 +188,8 @@ class LiveVoiceCoordinator
                         // event lets audio chunks interleave and re-enter ensurePlayerInitialized(),
                         // which releases the AudioTrack mid-playback (no audio) and races caption
                         // state. Awaiting handleEvent here serializes the session event stream.
-                        handleEvent(event)
+                        sessionEventRouter.handle(event)
                     }.launchIn(scope)
-        }
-
-        private suspend fun handleEvent(event: LiveVoiceEvent) {
-            if (isTearingDown) return
-            loggingPort.debug(TAG, "Live Voice event: ${event::class.simpleName}")
-            when (event) {
-                LiveVoiceEvent.Connected -> {
-                    _state.value =
-                        LiveVoiceUiState.Listening(
-                            userCaption = userCaption,
-                            assistantCaption = assistantCaption,
-                            isMuted = isMuted,
-                            micLevel = 0f,
-                        )
-                    startCapturePump()
-                }
-                is LiveVoiceEvent.UserTranscriptDelta -> {
-                    userCaption += event.text
-                    updateActiveUiState()
-                }
-                is LiveVoiceEvent.UserTranscriptDone -> {
-                    userCaption = event.text
-                    updateActiveUiState()
-                }
-                is LiveVoiceEvent.AssistantTranscriptDelta -> {
-                    if (_state.value is LiveVoiceUiState.Listening) {
-                        beginAssistantTurn()
-                    }
-                    assistantCaption += event.text
-                    updateActiveUiState()
-                }
-                is LiveVoiceEvent.AssistantTranscriptDone -> {
-                    assistantCaption = event.text
-                    updateActiveUiState()
-                }
-                is LiveVoiceEvent.AssistantAudioChunk -> {
-                    if (isTearingDown || suppressAssistantOutput) return
-                    if (_state.value !is LiveVoiceUiState.AssistantSpeaking) {
-                        beginAssistantTurn()
-                    }
-                    ensurePlayerInitialized()
-                    if (!playbackStarted) {
-                        streamingAudioPlayer.startPlayback()
-                        playbackStarted = true
-                    }
-                    streamingAudioPlayer.enqueueChunk(event.pcm16)
-                    _state.value =
-                        LiveVoiceUiState.AssistantSpeaking(
-                            userCaption = userCaption,
-                            assistantCaption = assistantCaption,
-                            isMuted = isMuted,
-                        )
-                }
-                LiveVoiceEvent.SpeechStarted -> {
-                    if (isInterruptibleAssistantOutput()) {
-                        loggingPort.debug(TAG, "Server detected user speech during assistant playback")
-                        triggerBargeIn()
-                    }
-                }
-                is LiveVoiceEvent.Error -> {
-                    if (isBenignLiveVoiceError(event.message)) {
-                        loggingPort.debug(TAG, "Ignoring benign live voice error: ${event.message}")
-                        return
-                    }
-                    _state.value = LiveVoiceUiState.Error(event.message)
-                    teardown(resetToIdle = false)
-                }
-                LiveVoiceEvent.Closed -> {
-                    teardown(resetToIdle = true)
-                }
-                LiveVoiceEvent.AssistantResponseComplete -> {
-                    isAssistantResponseActive = false
-                    persistCompletedTurnIfAny()
-                    transitionToListeningAfterAssistant()
-                }
-                LiveVoiceEvent.SpeechStopped -> {
-                    userBargeInActive = false
-                    suppressAssistantOutput = false
-                    bargeInHighEnergyFrameCount = 0
-                    assistantPlaybackBaselineRms = 0f
-                    transitionToListeningAfterAssistant()
-                }
-            }
         }
 
         private suspend fun ensurePlayerInitialized() {
@@ -337,7 +259,7 @@ class LiveVoiceCoordinator
                         TAG,
                         "Local barge-in detected at mic level ${"%.3f".format(micLevel)}",
                     )
-                    triggerBargeIn()
+                    interruptAssistantOutput(persistPartialTurn = true)
                 }
             }
 
@@ -358,7 +280,10 @@ class LiveVoiceCoordinator
         }
 
         private fun beginAssistantTurn() {
+            if (turnPersisted) return
             isAssistantResponseActive = true
+            assistantTranscriptFinalized = false
+            responseCompleteAwaitingTranscript = false
             userBargeInActive = false
             suppressAssistantOutput = false
             bargeInHighEnergyFrameCount = 0
@@ -390,17 +315,27 @@ class LiveVoiceCoordinator
             )
         }
 
-        private suspend fun triggerBargeIn() {
+        private suspend fun interruptAssistantOutput(persistPartialTurn: Boolean) {
             if (userBargeInActive && suppressAssistantOutput) return
-            if (userCaption.isNotBlank()) {
-                persistCompletedTurnIfAny()
+            if (persistPartialTurn && userCaption.isNotBlank()) {
+                persistCurrentTurnOnce()
             }
             userBargeInActive = true
             suppressAssistantOutput = true
             if (isAssistantResponseActive) {
+                assistantResponseCancelled = true
                 session?.cancelAssistantResponse()
             }
             activateListeningAfterBargeIn()
+        }
+
+        private suspend fun finalizeAssistantTurnPersistence() {
+            if (turnPersisted) return
+            if (assistantTranscriptFinalized) {
+                persistCurrentTurnOnce()
+                return
+            }
+            responseCompleteAwaitingTranscript = true
         }
 
         private fun shouldUseFullDuplexCapture(): Boolean =
@@ -502,13 +437,21 @@ class LiveVoiceCoordinator
             bargeInHighEnergyFrameCount = 0
             assistantPlaybackBaselineRms = 0f
             isAssistantResponseActive = false
+            turnPersisted = false
+            assistantTranscriptFinalized = false
+            responseCompleteAwaitingTranscript = false
+            assistantResponseCancelled = false
         }
 
-        private suspend fun persistCompletedTurnIfAny(
+        private suspend fun persistCurrentTurnOnce(
             userText: String = userCaption,
             assistantText: String = assistantCaption,
         ) {
+            if (turnPersisted) return
             if (userText.isBlank() && assistantText.isBlank()) return
+            turnPersisted = true
+            assistantTranscriptFinalized = false
+            responseCompleteAwaitingTranscript = false
             val resolvedChatId = persistVoiceTurnUseCase(chatId, userText, assistantText)
             resolvedChatId?.let { resolved ->
                 if (chatId == null) {
@@ -542,6 +485,141 @@ class LiveVoiceCoordinator
             if (resetToIdle) {
                 _state.value = LiveVoiceUiState.Idle
             }
+        }
+
+        private inner class SessionEventRouter {
+            suspend fun handle(event: LiveVoiceEvent) {
+                if (isTearingDown) return
+                loggingPort.debug(TAG, "Live Voice event: ${event::class.simpleName}")
+                when (event) {
+                    LiveVoiceEvent.Connected -> handleConnected()
+                    is LiveVoiceEvent.UserTranscriptDelta -> handleUserTranscriptDelta(event)
+                    is LiveVoiceEvent.UserTranscriptDone -> handleUserTranscriptDone(event)
+                    is LiveVoiceEvent.AssistantTranscriptDelta -> handleAssistantTranscriptDelta(event)
+                    is LiveVoiceEvent.AssistantTranscriptDone -> handleAssistantTranscriptDone(event)
+                    is LiveVoiceEvent.AssistantAudioChunk -> handleAssistantAudioChunk(event)
+                    LiveVoiceEvent.SpeechStarted -> handleSpeechStarted()
+                    is LiveVoiceEvent.Error -> handleError(event)
+                    LiveVoiceEvent.Closed -> handleClosed()
+                    LiveVoiceEvent.AssistantResponseComplete -> handleAssistantResponseComplete()
+                    LiveVoiceEvent.SpeechStopped -> handleSpeechStopped()
+                }
+            }
+
+            private fun handleConnected() {
+                _state.value =
+                    LiveVoiceUiState.Listening(
+                        userCaption = userCaption,
+                        assistantCaption = assistantCaption,
+                        isMuted = isMuted,
+                        micLevel = 0f,
+                    )
+                startCapturePump()
+            }
+
+            private fun handleUserTranscriptDelta(event: LiveVoiceEvent.UserTranscriptDelta) {
+                userCaption += event.text
+                updateActiveUiState()
+            }
+
+            private fun handleUserTranscriptDone(event: LiveVoiceEvent.UserTranscriptDone) {
+                if (turnPersisted) {
+                    turnPersisted = false
+                    assistantTranscriptFinalized = false
+                    responseCompleteAwaitingTranscript = false
+                }
+                userCaption = event.text
+                updateActiveUiState()
+            }
+
+            private fun handleAssistantTranscriptDelta(event: LiveVoiceEvent.AssistantTranscriptDelta) {
+                if (shouldIgnoreAssistantTranscriptEvents() || turnPersisted) return
+                if (_state.value is LiveVoiceUiState.Listening) {
+                    beginAssistantTurn()
+                }
+                assistantCaption += event.text
+                updateActiveUiState()
+            }
+
+            private suspend fun handleAssistantTranscriptDone(event: LiveVoiceEvent.AssistantTranscriptDone) {
+                if (shouldIgnoreAssistantTranscriptEvents() || turnPersisted) return
+                assistantCaption = event.text
+                assistantTranscriptFinalized = true
+                if (responseCompleteAwaitingTranscript) {
+                    persistCurrentTurnOnce()
+                    responseCompleteAwaitingTranscript = false
+                    turnPersisted = false
+                    assistantTranscriptFinalized = false
+                }
+                updateActiveUiState()
+            }
+
+            private suspend fun handleAssistantAudioChunk(event: LiveVoiceEvent.AssistantAudioChunk) {
+                if (shouldIgnoreAssistantAudioChunk()) return
+                if (_state.value !is LiveVoiceUiState.AssistantSpeaking) {
+                    beginAssistantTurn()
+                }
+                ensurePlayerInitialized()
+                if (!playbackStarted) {
+                    streamingAudioPlayer.startPlayback()
+                    playbackStarted = true
+                }
+                streamingAudioPlayer.enqueueChunk(event.pcm16)
+                _state.value =
+                    LiveVoiceUiState.AssistantSpeaking(
+                        userCaption = userCaption,
+                        assistantCaption = assistantCaption,
+                        isMuted = isMuted,
+                    )
+            }
+
+            private suspend fun handleSpeechStarted() {
+                if (!isInterruptibleAssistantOutput()) return
+                loggingPort.debug(TAG, "Server detected user speech during assistant playback")
+                interruptAssistantOutput(persistPartialTurn = false)
+            }
+
+            private fun handleError(event: LiveVoiceEvent.Error) {
+                if (isBenignLiveVoiceError(event.message)) {
+                    loggingPort.debug(TAG, "Ignoring benign live voice error: ${event.message}")
+                    return
+                }
+                _state.value = LiveVoiceUiState.Error(event.message)
+                teardown(resetToIdle = false)
+            }
+
+            private fun handleClosed() {
+                teardown(resetToIdle = true)
+            }
+
+            private suspend fun handleAssistantResponseComplete() {
+                isAssistantResponseActive = false
+                val wasAlreadyPersisted = turnPersisted
+                finalizeAssistantTurnPersistence()
+                transitionToListeningAfterAssistant()
+                if (turnPersisted) {
+                    turnPersisted = false
+                    assistantTranscriptFinalized = false
+                }
+                if (!wasAlreadyPersisted) {
+                    assistantResponseCancelled = false
+                }
+            }
+
+            private fun handleSpeechStopped() {
+                userBargeInActive = false
+                suppressAssistantOutput = false
+                assistantResponseCancelled = false
+                bargeInHighEnergyFrameCount = 0
+                assistantPlaybackBaselineRms = 0f
+                transitionToListeningAfterAssistant()
+            }
+
+            private fun shouldIgnoreAssistantTranscriptEvents(): Boolean =
+                assistantResponseCancelled || userBargeInActive || suppressAssistantOutput
+
+            private fun shouldIgnoreAssistantAudioChunk(): Boolean =
+                isTearingDown || assistantResponseCancelled || suppressAssistantOutput || turnPersisted
         }
 
         private companion object {

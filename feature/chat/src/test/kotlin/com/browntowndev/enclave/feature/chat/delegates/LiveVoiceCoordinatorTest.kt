@@ -638,8 +638,8 @@ class LiveVoiceCoordinatorTest {
         }
 
     @Test
-    @DisplayName("LV-COORD-021: barge-in persists user turn and partial assistant transcript")
-    fun lvCoord021_bargeInPersistsPartialAssistantTurn() =
+    @DisplayName("LV-COORD-021: local barge-in persists user turn and partial assistant transcript")
+    fun lvCoord021_localBargeInPersistsPartialAssistantTurn() =
         runTest {
             stubOpenSession()
             coEvery {
@@ -655,13 +655,118 @@ class LiveVoiceCoordinatorTest {
             fakeSession.emit(LiveVoiceEvent.AssistantTranscriptDelta("How to clean a fish"))
             advanceUntilIdle()
 
-            fakeSession.emit(LiveVoiceEvent.SpeechStarted)
+            fakeCapture.emit(loudPcm16Frame())
             advanceUntilIdle()
 
             coVerify(exactly = 1) {
                 persistVoiceTurnUseCase(ChatId("c1"), "clean the fish", "How to clean a fish")
             }
             assertTrue(coordinator.state.value is LiveVoiceUiState.Listening)
+        }
+
+    @Test
+    @DisplayName("LV-COORD-023: server SpeechStarted alone does not persist a partial assistant turn")
+    fun lvCoord023_serverSpeechStartedDoesNotPersistPartialTurn() =
+        runTest {
+            stubOpenSession()
+            val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
+
+            coordinator.start(scope, chatId = ChatId("c1"))
+            fakeSession.emit(LiveVoiceEvent.Connected)
+            fakeCapture.emitSession(echoCancellationActive = false)
+            fakeSession.emit(LiveVoiceEvent.UserTranscriptDone("tell me a story"))
+            fakeSession.emit(LiveVoiceEvent.AssistantAudioChunk(byteArrayOf(1)))
+            fakeSession.emit(LiveVoiceEvent.AssistantTranscriptDelta("Once upon a time"))
+            advanceUntilIdle()
+
+            fakeSession.emit(LiveVoiceEvent.SpeechStarted)
+            advanceUntilIdle()
+
+            coVerify(exactly = 0) { persistVoiceTurnUseCase(any(), any(), any()) }
+            assertTrue(fakePlayer.stopped)
+        }
+
+    @Test
+    @DisplayName("LV-COORD-024: duplicate AssistantResponseComplete persists exactly one turn")
+    fun lvCoord024_duplicateAssistantResponseCompletePersistsOnce() =
+        runTest {
+            stubOpenSession()
+            coEvery {
+                persistVoiceTurnUseCase(ChatId("c1"), "hello", "full assistant reply")
+            } returns ChatId("c1")
+            val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
+
+            coordinator.start(scope, chatId = ChatId("c1"))
+            fakeSession.emit(LiveVoiceEvent.Connected)
+            fakeCapture.emitSession(echoCancellationActive = true)
+            fakeSession.emit(LiveVoiceEvent.UserTranscriptDone("hello"))
+            fakeSession.emit(LiveVoiceEvent.AssistantTranscriptDone("full assistant reply"))
+            fakeSession.emit(LiveVoiceEvent.AssistantResponseComplete)
+            fakeSession.emit(LiveVoiceEvent.AssistantResponseComplete)
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) {
+                persistVoiceTurnUseCase(ChatId("c1"), "hello", "full assistant reply")
+            }
+        }
+
+    @Test
+    @DisplayName("LV-COORD-026: late assistant events after barge-in persist do not create a second message")
+    fun lvCoord026_lateEventsAfterBargeInPersistDoNotSplitTurn() =
+        runTest {
+            stubOpenSession()
+            coEvery {
+                persistVoiceTurnUseCase(ChatId("c1"), "clean the fish", "How to clean a fish")
+            } returns ChatId("c1")
+            val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
+
+            coordinator.start(scope, chatId = ChatId("c1"))
+            fakeSession.emit(LiveVoiceEvent.Connected)
+            fakeCapture.emitSession(echoCancellationActive = false)
+            fakeSession.emit(LiveVoiceEvent.UserTranscriptDone("clean the fish"))
+            fakeSession.emit(LiveVoiceEvent.AssistantAudioChunk(byteArrayOf(1)))
+            fakeSession.emit(LiveVoiceEvent.AssistantTranscriptDelta("How to clean a fish"))
+            advanceUntilIdle()
+
+            fakeCapture.emit(loudPcm16Frame())
+            advanceUntilIdle()
+
+            fakeSession.emit(LiveVoiceEvent.AssistantAudioChunk(byteArrayOf(2)))
+            fakeSession.emit(LiveVoiceEvent.AssistantTranscriptDone("How to clean a fish completely"))
+            fakeSession.emit(LiveVoiceEvent.AssistantResponseComplete)
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) {
+                persistVoiceTurnUseCase(ChatId("c1"), "clean the fish", "How to clean a fish")
+            }
+        }
+
+    @Test
+    @DisplayName("LV-COORD-025: response complete waits for final assistant transcript before persisting")
+    fun lvCoord025_responseCompleteWaitsForFinalTranscript() =
+        runTest {
+            stubOpenSession()
+            coEvery {
+                persistVoiceTurnUseCase(ChatId("c1"), "hello", "final transcript")
+            } returns ChatId("c1")
+            val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
+
+            coordinator.start(scope, chatId = ChatId("c1"))
+            fakeSession.emit(LiveVoiceEvent.Connected)
+            fakeCapture.emitSession(echoCancellationActive = true)
+            fakeSession.emit(LiveVoiceEvent.UserTranscriptDone("hello"))
+            fakeSession.emit(LiveVoiceEvent.AssistantTranscriptDelta("final"))
+            fakeSession.emit(LiveVoiceEvent.AssistantResponseComplete)
+            advanceUntilIdle()
+
+            coVerify(exactly = 0) { persistVoiceTurnUseCase(any(), any(), any()) }
+
+            fakeSession.emit(LiveVoiceEvent.AssistantTranscriptDone("final transcript"))
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) {
+                persistVoiceTurnUseCase(ChatId("c1"), "hello", "final transcript")
+            }
         }
 
     @Test
