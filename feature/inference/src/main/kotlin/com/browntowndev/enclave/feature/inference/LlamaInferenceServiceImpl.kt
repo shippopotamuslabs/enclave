@@ -24,6 +24,8 @@ import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.enclave.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.browntowndev.enclave.domain.usecase.chat.ProcessThinkingTokensUseCase.SegmentKind
 import com.browntowndev.enclave.feature.inference.llama.LlamaChatSessionManager
+import com.browntowndev.enclave.feature.inference.telemetry.InferenceTelemetrySupport
+import com.browntowndev.enclave.feature.inference.telemetry.InferenceTurnTiming
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -62,7 +64,7 @@ class LlamaInferenceServiceImpl
         private val toolEnvelopeParserPort: ToolEnvelopeParserPort,
         @Suppress("UnusedPrivateProperty") // Injected for mutation tests; streaming holdback lives in core/agent.
         private val toolStreamGatePort: ToolStreamGatePort,
-        private val telemetrySupport: com.browntowndev.enclave.feature.inference.telemetry.InferenceTelemetrySupport? = null,
+        private val telemetrySupport: InferenceTelemetrySupport? = null,
     ) : RustCompatibleInferenceService {
         companion object {
             private const val TAG = "LlamaInferenceService"
@@ -82,14 +84,15 @@ class LlamaInferenceServiceImpl
 
         private data class BufferedGeneration(
             val fullText: String,
+            val promptTokens: Int? = null,
+            val generatedTokens: Int? = null,
+            val prefixReusedTokens: Int? = null,
         )
 
         private val mutex = Mutex()
         private var currentSignature: SessionSignature? = null
         private var history: List<DomainChatMessage> = emptyList()
         private var isInitialized = false
-        private var hasTriedCpuFallback = false
-
         private fun getModelPath(filename: String): String {
             // Use getExternalFilesDir to match ModelFileScanner's directory choice
             val modelsDir = File(context.getExternalFilesDir(null), "models")
@@ -150,8 +153,6 @@ class LlamaInferenceServiceImpl
                 onLoading()
                 sessionManager.shutdown()
                 isInitialized = false
-                hasTriedCpuFallback = false
-
                 val modelPath = getModelPath(asset.metadata.localFileName)
                 val mmprojPath = asset.metadata.mmprojLocalFileName?.let(::getModelPath)
                 val requiresMmproj =
@@ -171,55 +172,25 @@ class LlamaInferenceServiceImpl
                         maxTokens = targetMaxTokens,
                         contextWindow = activeConfig.contextWindow ?: 4096,
                         batchSize = 256,
-                        gpuLayers = 32, // Will be adjusted by GpuConfig.forDevice
+                        gpuLayers = 0,
                         thinkingEnabled = targetReasoningBudget > 0,
                         repeatPenalty = activeConfig.repetitionPenalty?.toFloat() ?: 1.1f,
                     )
 
-                try {
-                    sessionManager.initializeEngine(
-                        LlamaModelConfig(
-                            modelPath = modelPath,
-                            mmprojPath = mmprojPath,
-                            systemPrompt = systemPrompt,
-                            sampling = samplingConfig,
-                        ),
-                    )
+                sessionManager.initializeEngine(
+                    LlamaModelConfig(
+                        modelPath = modelPath,
+                        mmprojPath = mmprojPath,
+                        systemPrompt = systemPrompt,
+                        sampling = samplingConfig,
+                    ),
+                )
 
-                    // History arrives pre-compacted from ChatHistoryRehydrator; no FIFO trimming needed.
-                    sessionManager.setHistory(history)
-                    sessionManager.startNewConversation()
-                    isInitialized = true
-                    currentSignature = newSignature
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: JavaCancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    // GPU initialization failed, try falling back to CPU
-                    if (!hasTriedCpuFallback && samplingConfig.gpuLayers > 0) {
-                        Log.w(TAG, "GPU initialization failed, falling back to CPU: ${e.message}")
-                        hasTriedCpuFallback = true
-                        val cpuConfig = samplingConfig.copy(gpuLayers = 0)
-                        sessionManager.initializeEngine(
-                            LlamaModelConfig(
-                                modelPath = modelPath,
-                                mmprojPath = mmprojPath,
-                                systemPrompt = systemPrompt,
-                                sampling = cpuConfig,
-                            ),
-                        )
-
-                        // History arrives pre-compacted from ChatHistoryRehydrator; no FIFO trimming needed.
-                        sessionManager.setHistory(history)
-                        sessionManager.startNewConversation()
-                        isInitialized = true
-                        currentSignature = newSignature
-                        Log.i(TAG, "Successfully initialized with CPU fallback")
-                    } else {
-                        throw e
-                    }
-                }
+                // History arrives pre-compacted from ChatHistoryRehydrator; no FIFO trimming needed.
+                sessionManager.setHistory(history)
+                sessionManager.startNewConversation()
+                isInitialized = true
+                currentSignature = newSignature
             }
         }
 
@@ -274,6 +245,7 @@ class LlamaInferenceServiceImpl
             onTextToken: suspend (String) -> Unit,
             onThinkingToken: suspend (String) -> Unit,
             options: GenerationOptions,
+            onLifecycleEvent: suspend (InferenceEvent) -> Unit,
         ): AgentModelTurnResult {
             val targetModelType = options.modelType ?: modelType
             if (options.imageUris.isNotEmpty()) {
@@ -296,36 +268,42 @@ class LlamaInferenceServiceImpl
             mutex.withLock {
                 history = domainHistory
             }
-            ensureModelLoaded(targetModelType, turnOptions)
+            ensureModelLoaded(targetModelType, turnOptions) {
+                onLifecycleEvent(InferenceEvent.EngineLoading(targetModelType))
+            }
+            onLifecycleEvent(InferenceEvent.Processing(targetModelType))
             sessionManager.setHistory(domainHistory)
 
+            val timing = telemetrySupport?.let { InferenceTurnTiming() }
+            val captureContext = telemetrySupport?.captureContext(turnOptions)
             val buffered =
                 streamBufferedGeneration(
                     events = sessionManager.streamAssistantResponseWithOptions(turnOptions),
                     targetModelType = targetModelType,
                     emitVisible = false,
+                    timing = timing,
                     emitEvent = { event ->
                         if (event is InferenceEvent.Thinking) {
                             onThinkingToken(event.chunk)
                         }
                     },
                 )
-            emitProcessedText(buffered.fullText, targetModelType) { event ->
-                when (event) {
-                    is InferenceEvent.Thinking -> onThinkingToken(event.chunk)
-                    is InferenceEvent.PartialResponse -> onTextToken(event.chunk)
-                    else -> Unit
-                }
-            }
+            emitProcessedText(
+                rawText = buffered.fullText,
+                targetModelType = targetModelType,
+                emitEvent = { event ->
+                    when (event) {
+                        is InferenceEvent.Thinking -> onThinkingToken(event.chunk)
+                        is InferenceEvent.PartialResponse -> onTextToken(event.chunk)
+                        else -> Unit
+                    }
+                },
+                timing = timing,
+            )
             val rawText = buffered.fullText
-            val timing =
-                telemetrySupport?.let {
-                    com.browntowndev.enclave.feature.inference.telemetry
-                        .InferenceTurnTiming()
-                }
-            val captureContext = telemetrySupport?.captureContext(turnOptions)
-            val outputTokenEstimate =
-                rawText.takeIf { it.isNotBlank() }?.let { text -> (text.length / 4).coerceAtLeast(1) }
+            val outputTokens =
+                buffered.generatedTokens
+                    ?: rawText.takeIf { it.isNotBlank() }?.let { text -> (text.length / 4).coerceAtLeast(1) }
             val telemetry =
                 if (telemetrySupport != null && timing != null && captureContext != null) {
                     telemetrySupport.localTurnTelemetry(
@@ -333,7 +311,9 @@ class LlamaInferenceServiceImpl
                         providerLabel = "LiteRT",
                         modelLabel = turnOptions.modelId ?: "local",
                         timing = timing,
-                        outputTokens = outputTokenEstimate,
+                        outputTokens = outputTokens,
+                        inputTokens = buffered.promptTokens,
+                        cacheReadInputTokens = buffered.prefixReusedTokens,
                     )
                 } else {
                     null
@@ -479,8 +459,12 @@ class LlamaInferenceServiceImpl
             targetModelType: ModelType,
             emitVisible: Boolean,
             emitEvent: suspend (InferenceEvent) -> Unit,
+            timing: InferenceTurnTiming? = null,
         ): BufferedGeneration {
             var completedText: String? = null
+            var promptTokens: Int? = null
+            var generatedTokens: Int? = null
+            var prefixReusedTokens: Int? = null
             var isThinking = false
             var buffer = ""
             var sawToken = false
@@ -501,26 +485,35 @@ class LlamaInferenceServiceImpl
                         state.emittedSegments.forEach { segment ->
                             when (segment.kind) {
                                 SegmentKind.THINKING -> emitEvent(InferenceEvent.Thinking(segment.text, targetModelType))
-                                SegmentKind.VISIBLE ->
+                                SegmentKind.VISIBLE -> {
+                                    timing?.markFirstOutput()
                                     if (emitVisible) {
                                         emitEvent(InferenceEvent.PartialResponse(segment.text, targetModelType))
                                     }
+                                }
                             }
                         }
                     }
                     is GenerationEvent.Completed -> {
+                        promptTokens = event.promptTokens
+                        generatedTokens = event.generatedTokens
+                        prefixReusedTokens = event.prefixReusedTokens
                         if (sawToken) {
                             if (buffer.isNotEmpty()) {
                                 if (isThinking) {
                                     emitEvent(InferenceEvent.Thinking(buffer, targetModelType))
-                                } else if (emitVisible) {
-                                    emitEvent(InferenceEvent.PartialResponse(buffer, targetModelType))
+                                } else {
+                                    timing?.markFirstOutput()
+                                    if (emitVisible) {
+                                        emitEvent(InferenceEvent.PartialResponse(buffer, targetModelType))
+                                    }
                                 }
                             }
                         } else if (event.fullText.isNotBlank()) {
                             emitProcessedText(
                                 rawText = event.fullText,
                                 targetModelType = targetModelType,
+                                timing = timing,
                                 emitEvent = { streamedEvent ->
                                     when (streamedEvent) {
                                         is InferenceEvent.Thinking -> emitEvent(streamedEvent)
@@ -540,6 +533,9 @@ class LlamaInferenceServiceImpl
 
             return BufferedGeneration(
                 fullText = completedText.orEmpty(),
+                promptTokens = promptTokens,
+                generatedTokens = generatedTokens,
+                prefixReusedTokens = prefixReusedTokens,
             )
         }
 
@@ -565,6 +561,7 @@ class LlamaInferenceServiceImpl
             rawText: String,
             targetModelType: ModelType,
             emitEvent: suspend (InferenceEvent) -> Unit,
+            timing: InferenceTurnTiming? = null,
         ) {
             var isThinking = false
             var buffer = ""
@@ -580,7 +577,10 @@ class LlamaInferenceServiceImpl
             state.emittedSegments.forEach { segment ->
                 when (segment.kind) {
                     SegmentKind.THINKING -> emitEvent(InferenceEvent.Thinking(segment.text, targetModelType))
-                    SegmentKind.VISIBLE -> emitEvent(InferenceEvent.PartialResponse(segment.text, targetModelType))
+                    SegmentKind.VISIBLE -> {
+                        timing?.markFirstOutput()
+                        emitEvent(InferenceEvent.PartialResponse(segment.text, targetModelType))
+                    }
                 }
             }
 
@@ -588,6 +588,7 @@ class LlamaInferenceServiceImpl
                 if (isThinking) {
                     emitEvent(InferenceEvent.Thinking(buffer, targetModelType))
                 } else {
+                    timing?.markFirstOutput()
                     emitEvent(InferenceEvent.PartialResponse(buffer, targetModelType))
                 }
             }

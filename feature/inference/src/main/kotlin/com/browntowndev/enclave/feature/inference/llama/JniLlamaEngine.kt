@@ -31,7 +31,6 @@ import com.browntowndev.enclave.domain.model.chat.ChatMessage as DomainChatMessa
 class JniLlamaEngine
     @Inject
     constructor(
-        private val gpuProfiler: GpuProfiler,
         private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     ) : LlamaEnginePort {
         companion object {
@@ -69,7 +68,7 @@ class JniLlamaEngine
                 @Suppress("MaxLineLength")
                 Log.i(
                     TAG,
-                    "  contextWindow=${config.sampling.contextWindow}, maxTokens=${config.sampling.maxTokens}, batchSize=${config.sampling.batchSize}, gpuLayers=${config.sampling.gpuLayers}",
+                    "  contextWindow=${config.sampling.contextWindow}, maxTokens=${config.sampling.maxTokens}, batchSize=${config.sampling.batchSize}",
                 )
 
                 if (modelLifecycle.loaded.get()) {
@@ -78,19 +77,6 @@ class JniLlamaEngine
                 }
 
                 val startTime = System.currentTimeMillis()
-                val detectedBackend = gpuProfiler.detectOptimalBackend()
-                val backendDescription = gpuProfiler.getBackendDescription()
-                val gpuName = gpuProfiler.detectGpuName()
-                Log.i(TAG, "GPU Backend: $backendDescription")
-                Log.i(TAG, "GPU detected: $gpuName")
-
-                if (detectedBackend == LlamaBackend.CPU) {
-                    Log.w(TAG, "=== WARNING: Running on CPU only! GPU acceleration is DISABLED ===")
-                    Log.w(TAG, "=== To enable GPU: change GpuProfiler to return Vulkan backend ===")
-                } else {
-                    Log.i(TAG, "=== GPU acceleration ENABLED ===")
-                }
-
                 val future =
                     llamaExecutor.submit<Boolean> {
                         nativeLoadModel(
@@ -98,8 +84,6 @@ class JniLlamaEngine
                             mmprojPath = config.mmprojPath,
                             contextSize = config.sampling.contextWindow,
                             batchSize = config.sampling.batchSize,
-                            gpuLayers = config.sampling.gpuLayers,
-                            backendType = detectedBackend.value,
                         )
                     }
                 val ok: Boolean = future.get()
@@ -149,6 +133,11 @@ class JniLlamaEngine
                             content = domainMsg.content,
                         )
                 }
+                // Rehydrated or replaced history invalidates prefix-cache metadata in native.
+                llamaExecutor
+                    .submit<Unit> {
+                        nativeClearKvCache()
+                    }.get(10, TimeUnit.SECONDS)
             }
 
         override fun generate(): Flow<GenerationEvent> =
@@ -350,8 +339,6 @@ class JniLlamaEngine
             mmprojPath: String?,
             contextSize: Int,
             batchSize: Int,
-            gpuLayers: Int,
-            backendType: Int,
         ): Boolean
 
         private external fun nativeUnloadModel()
@@ -434,6 +421,7 @@ interface NativeTokenCallback {
     fun onComplete(
         promptTokens: Int,
         generatedTokens: Int,
+        prefixReusedTokens: Int,
     )
 
     fun onError(message: String)

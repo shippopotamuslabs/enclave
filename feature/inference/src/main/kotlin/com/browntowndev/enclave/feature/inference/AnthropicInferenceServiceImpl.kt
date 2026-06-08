@@ -211,6 +211,7 @@ class AnthropicInferenceServiceImpl(
         onTextToken: suspend (String) -> Unit,
         onThinkingToken: suspend (String) -> Unit,
         options: GenerationOptions,
+        onLifecycleEvent: suspend (InferenceEvent) -> Unit,
     ): AgentModelTurnResult {
         val startedAtMs = System.currentTimeMillis()
         val resolvedModelId = options.modelId ?: modelId

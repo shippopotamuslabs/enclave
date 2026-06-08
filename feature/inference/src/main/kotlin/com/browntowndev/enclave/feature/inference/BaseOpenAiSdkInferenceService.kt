@@ -157,16 +157,13 @@ abstract class BaseOpenAiSdkInferenceService(
         onTextToken: suspend (String) -> Unit,
         onThinkingToken: suspend (String) -> Unit,
         options: GenerationOptions,
+        onLifecycleEvent: suspend (InferenceEvent) -> Unit,
     ): AgentModelTurnResult {
         val startedAtMs = System.currentTimeMillis()
         val resolvedModelId = options.modelId ?: modelId
         try {
             val timing = telemetrySupport?.let { InferenceTurnTiming() }
-            val captureContext =
-                telemetrySupport?.captureContext(
-                    options = options,
-                    sequenceIndex = options.telemetrySequenceIndex,
-                )
+            val captureContext = telemetrySupport?.captureContext(options)
             val lastUserIndex =
                 sessionMessages.indexOfLast { msg ->
                     msg.role == Role.USER &&

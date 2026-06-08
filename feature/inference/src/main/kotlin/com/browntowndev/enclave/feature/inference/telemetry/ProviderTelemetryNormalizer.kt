@@ -98,6 +98,7 @@ class ProviderTelemetryNormalizer
             )
         }
 
+        @Suppress("LongParameterList")
         fun normalizeLocalGeneration(
             rowId: String,
             messageId: String,
@@ -111,12 +112,15 @@ class ProviderTelemetryNormalizer
             appVersionName: String,
             appVersionCode: Long,
             telemetrySchemaVersion: Int,
+            sequenceIndex: Int = 0,
+            inputTokens: Int? = null,
+            cacheReadInputTokens: Int? = null,
         ): TurnTelemetry =
             TurnTelemetry(
                 id = TurnTelemetryId(rowId),
                 messageId = MessageId(messageId),
                 chatId = ChatId(chatId),
-                sequenceIndex = 0,
+                sequenceIndex = sequenceIndex,
                 providerKey = providerKeyForLabel(providerLabel),
                 providerLabel = providerLabel,
                 modelId = modelLabel,
@@ -125,11 +129,11 @@ class ProviderTelemetryNormalizer
                 requestStartedAtMs = requestStartedAtMs,
                 firstOutputTokenAtMs = firstOutputTokenAtMs,
                 completedAtMs = completedAtMs,
-                inputTokens = null,
+                inputTokens = inputTokens,
                 outputTokens = outputTokens,
                 reasoningTokens = null,
                 cachedInputTokens = null,
-                cacheReadInputTokens = null,
+                cacheReadInputTokens = cacheReadInputTokens,
                 cacheWriteInputTokens = null,
                 cacheCreationInputTokens = null,
                 costUsd = null,
