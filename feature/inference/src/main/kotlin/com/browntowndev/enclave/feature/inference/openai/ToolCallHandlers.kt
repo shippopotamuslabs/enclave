@@ -49,7 +49,7 @@ internal fun OpenAiStreamHandlerContext.handleFunctionCallArgumentsDone(
     return state
 }
 
-internal fun OpenAiStreamHandlerContext.handleOutputItemAdded(
+internal suspend fun OpenAiStreamHandlerContext.handleOutputItemAdded(
     event: ResponseStreamEvent,
     state: StreamState,
 ): StreamState {
@@ -57,11 +57,17 @@ internal fun OpenAiStreamHandlerContext.handleOutputItemAdded(
     return state
 }
 
-internal fun OpenAiStreamHandlerContext.handleOutputItemDone(
+internal suspend fun OpenAiStreamHandlerContext.handleOutputItemDone(
     event: ResponseStreamEvent,
     state: StreamState,
 ): StreamState {
-    captureFunctionCallMetadata(event.outputItemDone().get().item(), state.capturedFunctionCallByKey)
+    val item = event.outputItemDone().get().item()
+    captureFunctionCallMetadata(item, state.capturedFunctionCallByKey)
+    reconcileAssistantMessageOutputItem(
+        item = item,
+        state = state,
+        source = "output_item.done",
+    )
     return state
 }
 
