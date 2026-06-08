@@ -12,6 +12,7 @@ import com.browntowndev.enclave.domain.model.inference.SearchChatParams
 import com.browntowndev.enclave.domain.model.inference.StartArtifactParams
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
+import com.browntowndev.enclave.domain.model.inference.ToolSearchThresholds
 import com.browntowndev.enclave.domain.model.inference.WebExtractParams
 import com.browntowndev.enclave.domain.model.inference.WebSearchParams
 import com.browntowndev.enclave.domain.util.NativeToolResultFormatter
@@ -20,10 +21,18 @@ import com.google.ai.edge.litertlm.ToolSet
 import com.google.ai.edge.litertlm.tool
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.put
 import java.util.concurrent.CancellationException as JavaCancellationException
 import kotlinx.serialization.json.Json as KJson
 
+/**
+ * Native LiteRT [ToolSet] providers for high-frequency and artifact tools.
+ *
+ * Tools discovered via `search_tools` that are not listed here (X APIs, media generation, etc.)
+ * remain callable through the envelope [ToolExecutorPort] path when the model uses text/JSON tools.
+ */
 internal object LiteRtNativeToolsets {
     private const val TAG = "ConversationManager"
 
@@ -35,7 +44,7 @@ internal object LiteRtNativeToolsets {
             activeToolNames.forEach { name ->
                 val set: ToolSet? =
                     when (name) {
-                        "disclose_tool_schemas" -> LocalDiscloseToolset(context)
+                        "search_tools" -> LocalSearchToolsToolset(context)
                         "web_search" -> LocalSearchToolset(context)
                         "web_extract" -> LocalExtractToolset(context)
                         "attached_image_inspect" -> LocalImageInspectToolset(context)
@@ -63,23 +72,27 @@ internal object LiteRtNativeToolsets {
     ): List<com.google.ai.edge.litertlm.ToolProvider> = buildToolList(activeToolNames, context).map { tool(it) }
 
     @Suppress("FunctionNaming")
-    internal class LocalDiscloseToolset(
+    internal class LocalSearchToolsToolset(
         private val context: LiteRtToolContext,
     ) : ToolSet {
         @com.google.ai.edge.litertlm.Tool(
-            description = "Disclose full schemas for deferred tools so the model may call them next turn.",
+            description =
+                "Search available tools by natural-language query and activate matching tools for this conversation.",
         )
-        fun disclose_tool_schemas(
-            @ToolParam(description = "JSON array of deferred tool names to activate.") tool_names: String,
+        fun search_tools(
+            @ToolParam(description = "Natural-language query describing the capability to find.") query: String,
+            @ToolParam(description = "Maximum number of matches to return.") limit: String? = null,
         ): String =
             runBlocking(Dispatchers.IO) {
-                context.toolLoop.handleDisclosure(
-                    runCatching {
-                        KJson
-                            .parseToJsonElement(tool_names)
-                            .jsonArray
-                            .mapNotNull { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
-                    }.getOrDefault(emptyList()),
+                val parsedLimit = limit?.toIntOrNull() ?: ToolSearchThresholds.DEFAULT_SEARCH_LIMIT
+                val argumentsJson =
+                    buildJsonObject {
+                        put("query", query)
+                        put("limit", parsedLimit.toString())
+                    }.toString()
+                context.toolLoop.handleToolSearch(
+                    argumentsJson = argumentsJson,
+                    chatId = context.chatId,
                 )
             }
     }

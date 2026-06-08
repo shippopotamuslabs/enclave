@@ -62,6 +62,7 @@ class ConversationManagerImplPolicyBridgeTest {
             activeModelProvider = activeModelProvider,
             loggingPort = loggingPort,
             toolExecutor = toolExecutor,
+            embeddingEnginePort = mockk(relaxed = true),
             agentPolicyPort = policy,
         )
 

@@ -14,6 +14,9 @@ import com.browntowndev.enclave.domain.model.error.InferenceIOException
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.AgentLoopPort
+import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
+import com.browntowndev.enclave.domain.port.inference.NoopToolSearchEmbeddingCachePort
+import com.browntowndev.enclave.domain.usecase.chat.InMemoryMonotonicToolActivationStore
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
@@ -36,6 +39,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotSame
+import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -62,6 +66,7 @@ class InferenceFactoryImplTest {
     private val openAiClient = mockk<OpenAIClient>(relaxed = true)
     private val anthropicClient = mockk<AnthropicClient>(relaxed = true)
     private val googleClient = mockk<Client>(relaxed = true)
+    private val embeddingEnginePort = mockk<EmbeddingEnginePort>(relaxed = true)
 
     private lateinit var factory: InferenceFactoryImpl
 
@@ -103,6 +108,9 @@ class InferenceFactoryImplTest {
                 toolStreamGatePort = FakeToolStreamGatePort(),
                 telemetrySupport = testInferenceTelemetrySupport(),
                 telemetryEventPort = mockk(relaxed = true),
+                embeddingEnginePort = embeddingEnginePort,
+                monotonicToolActivation = InMemoryMonotonicToolActivationStore(),
+                toolSearchEmbeddingCache = NoopToolSearchEmbeddingCachePort,
             )
     }
 
@@ -404,6 +412,31 @@ class InferenceFactoryImplTest {
             val thinkingService = factory.withInferenceService(ModelType.THINKING) { it }
 
             assertNotSame(fastService, thinkingService)
+        }
+
+    @Test
+    fun `withInferenceService injects EmbeddingEnginePort into RustLoopInferenceService`() =
+        runTest {
+            val assignment = DefaultModelAssignment(modelType = ModelType.THINKING, apiConfigId = ApiModelConfigurationId("9"))
+            val config =
+                apiModelConfiguration(
+                    id = ApiModelConfigurationId("9"),
+                    modelId = "openai/gpt-5.2:nitro",
+                    displayName = "Router preset",
+                )
+            val credentials = apiCredentials(provider = ApiProvider.OPENROUTER)
+
+            coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns assignment
+            coEvery { apiModelRepository.getConfigurationById(ApiModelConfigurationId("9")) } returns config
+            coEvery { apiModelRepository.getCredentialsById(ApiCredentialsId("11")) } returns credentials
+            coEvery { apiKeyProvider.getApiKey("alias") } returns "secret"
+
+            val service = factory.withInferenceService(ModelType.THINKING) { it }
+
+            assertTrue(service is RustLoopInferenceService)
+            val field = RustLoopInferenceService::class.java.getDeclaredField("embeddingEnginePort")
+            field.isAccessible = true
+            assertSame(embeddingEnginePort, field.get(service))
         }
 
     @Test

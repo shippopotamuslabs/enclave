@@ -109,7 +109,7 @@ class AnthropicRequestMapperTest {
                                 catalogEntry("web_search", ToolDisclosureMode.PRELOADED),
                                 catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND),
                             ),
-                        activeTools = listOf(ToolDefinition.DISCLOSE_TOOL_SCHEMAS, ToolDefinition.WEB_SEARCH),
+                        activeTools = listOf(ToolDefinition.SEARCH_TOOLS, ToolDefinition.WEB_SEARCH),
                     ),
             )
 
@@ -119,7 +119,7 @@ class AnthropicRequestMapperTest {
                 .orElse(emptyList())
                 .mapNotNull { union -> union.tool().orElse(null)?.name() }
 
-        assertEquals(listOf("disclose_tool_schemas", "web_search"), registeredToolNames)
+        assertEquals(listOf("search_tools", "web_search"), registeredToolNames)
         assertEquals(2, registeredToolNames.size)
     }
 

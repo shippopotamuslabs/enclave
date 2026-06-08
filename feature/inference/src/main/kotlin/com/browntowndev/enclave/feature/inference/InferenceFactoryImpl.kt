@@ -11,6 +11,9 @@ import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.AgentLoopPort
 import com.browntowndev.enclave.domain.port.inference.CommittedInferencePromptPort
+import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
+import com.browntowndev.enclave.domain.port.inference.MonotonicToolActivationPort
+import com.browntowndev.enclave.domain.port.inference.ToolSearchEmbeddingCachePort
 import com.browntowndev.enclave.domain.port.inference.CommittedInferenceTranscriptPort
 import com.browntowndev.enclave.domain.port.inference.InferenceBusyException
 import com.browntowndev.enclave.domain.port.inference.InferenceFactoryPort
@@ -82,6 +85,9 @@ class InferenceFactoryImpl
         private val committedInferencePrompts: CommittedInferencePromptPort = NoopCommittedInferencePromptPort,
         private val committedInferenceTranscripts: CommittedInferenceTranscriptPort = NoopCommittedInferenceTranscriptPort,
         private val deviceEnvironmentRepository: DeviceEnvironmentRepositoryPort = NoopDeviceEnvironmentRepository,
+        private val embeddingEnginePort: EmbeddingEnginePort,
+        private val monotonicToolActivation: MonotonicToolActivationPort,
+        private val toolSearchEmbeddingCache: ToolSearchEmbeddingCachePort,
     ) : InferenceFactoryPort {
         companion object {
             private const val TAG = "InferenceFactory"
@@ -675,6 +681,9 @@ class InferenceFactoryImpl
                     committedInferenceTranscripts = committedInferenceTranscripts,
                     telemetryEventPort = telemetryEventPort,
                     deviceEnvironmentRepository = deviceEnvironmentRepository,
+                    embeddingEnginePort = embeddingEnginePort,
+                    monotonicToolActivation = monotonicToolActivation,
+                    toolSearchEmbeddingCache = toolSearchEmbeddingCache,
                 )
             } else {
                 service

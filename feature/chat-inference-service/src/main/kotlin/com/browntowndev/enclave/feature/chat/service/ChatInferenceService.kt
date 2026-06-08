@@ -31,6 +31,7 @@ import com.browntowndev.enclave.domain.port.inference.MonotonicToolActivationPor
 import com.browntowndev.enclave.domain.port.inference.PromptComposerPort
 import com.browntowndev.enclave.domain.port.inference.SearchIntentClassifierPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
+import com.browntowndev.enclave.domain.port.inference.ToolSearchEmbeddingCachePort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.MemoriesRepository
 import com.browntowndev.enclave.domain.port.repository.MessageRepository
@@ -124,6 +125,9 @@ class ChatInferenceService : Service() {
     lateinit var monotonicToolActivation: MonotonicToolActivationPort
 
     @Inject
+    lateinit var toolSearchEmbeddingCache: ToolSearchEmbeddingCachePort
+
+    @Inject
     lateinit var committedInferencePrompts: CommittedInferencePromptPort
 
     private lateinit var historyRehydrator: ChatHistoryRehydrator
@@ -164,6 +168,7 @@ class ChatInferenceService : Service() {
                 searchIntentClassifier = searchIntentClassifier,
                 toolExecutor = toolExecutor,
                 monotonicToolActivation = monotonicToolActivation,
+                toolSearchEmbeddingCache = toolSearchEmbeddingCache,
             )
     }
 

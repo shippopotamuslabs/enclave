@@ -10,11 +10,14 @@ import com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.model.inference.ToolDisclosureMode
 import com.browntowndev.enclave.domain.model.inference.ToolExecutionResult
+import com.browntowndev.enclave.domain.port.inference.Bm25OnlyEmbeddingEnginePort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
+import com.browntowndev.enclave.domain.usecase.chat.SearchToolsHostCoordinator
 import com.browntowndev.enclave.domain.usecase.chat.ToolCallStrategy
+import com.browntowndev.enclave.domain.usecase.chat.ToolSessionActivationRegistry
 import com.browntowndev.enclave.feature.inference.conversation.ConversationCancellationGate
 import com.browntowndev.enclave.feature.inference.conversation.ConversationSignatureCache
 import com.browntowndev.enclave.feature.inference.conversation.LiteRtNativeToolsets
@@ -64,9 +67,14 @@ class ConversationManagerImplToolsTest {
                 activeModelProvider = activeModelProvider,
                 loggingPort = loggingPort,
                 toolExecutor = toolExecutor,
+                embeddingEnginePort = Bm25OnlyEmbeddingEnginePort,
             )
 
         signatureCache = ConversationSignatureCache()
+        signatureCache.toolActivationRegistry =
+            ToolSessionActivationRegistry(
+                onActiveNamesUpdated = { names -> signatureCache.activeToolNames = names },
+            )
         toolLoop =
             LiteRtToolCallLoop(
                 cache = signatureCache,
@@ -74,6 +82,10 @@ class ConversationManagerImplToolsTest {
                 loggingPort = loggingPort,
                 agentPolicyPort = NoopAgentPolicyPort,
                 cancellationGate = ConversationCancellationGate(),
+                searchToolsHostCoordinator =
+                    SearchToolsHostCoordinator(
+                        embeddingEngine = Bm25OnlyEmbeddingEnginePort,
+                    ),
             )
     }
 
@@ -83,18 +95,23 @@ class ConversationManagerImplToolsTest {
     }
 
     @Test
-    fun `LTD-12 LiteRT native toolset list expands after disclosure`() =
+    fun `LTD-12 LiteRT native toolset list expands after search_tools`() =
         runTest {
-            signatureCache.activeToolNames = listOf("disclose_tool_schemas", "web_search", "web_extract")
+            signatureCache.toolActivationRegistry.seedTurn(
+                listOf("search_tools", "web_search", "web_extract"),
+            )
             signatureCache.toolCatalog =
                 listOf(
-                    catalogEntry("disclose_tool_schemas", ToolDisclosureMode.PRELOADED),
+                    catalogEntry("search_tools", ToolDisclosureMode.PRELOADED),
                     catalogEntry("web_search", ToolDisclosureMode.PRELOADED),
                     catalogEntry("web_extract", ToolDisclosureMode.PRELOADED),
                     catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND),
                 )
             signatureCache.toolCallStrategy = ToolCallStrategy.LITE_RT_NATIVE
-            val disclosureResult = toolLoop.handleDisclosure(listOf("append_blocks"))
+            val searchResult =
+                toolLoop.handleToolSearch(
+                    argumentsJson = """{"query":"append_blocks","limit":"5"}""",
+                )
             val toolsets =
                 LiteRtNativeToolsets.buildToolList(
                     activeToolNames = signatureCache.activeToolNames,
@@ -102,18 +119,18 @@ class ConversationManagerImplToolsTest {
                 )
             val callableNames = toolsets.flatMap { toolset -> toolset.javaClass.methods.map { it.name } }
 
-            assertTrue(disclosureResult.contains("\"activated_tools\":[\"append_blocks\"]"))
+            assertTrue(searchResult.contains("\"activated_tools\":[\"append_blocks\"]"))
             assertEquals(
-                listOf("disclose_tool_schemas", "web_search", "web_extract", "append_blocks"),
+                listOf("search_tools", "web_search", "web_extract", "append_blocks"),
                 signatureCache.activeToolNames,
             )
             assertEquals(
-                listOf("disclose_tool_schemas", "tavily_web_search", "tavily_extract", "append_blocks"),
+                listOf("search_tools", "tavily_web_search", "tavily_extract", "append_blocks"),
                 callableNames
                     .filter {
                         it in
                             listOf(
-                                "disclose_tool_schemas",
+                                "search_tools",
                                 "tavily_web_search",
                                 "tavily_extract",
                                 ToolDefinition.APPEND_BLOCKS.name,
@@ -190,23 +207,28 @@ class ConversationManagerImplToolsTest {
         }
 
     @Test
-    fun `disclosure rejects tools absent from turn catalog`() =
+    fun `search_tools returns no activation for tools absent from turn catalog`() =
         runTest {
-            signatureCache.activeToolNames = listOf("disclose_tool_schemas", "web_search", "web_extract")
+            signatureCache.toolActivationRegistry.seedTurn(
+                listOf("search_tools", "web_search", "web_extract"),
+            )
             signatureCache.toolCatalog =
                 listOf(
-                    catalogEntry("disclose_tool_schemas", ToolDisclosureMode.PRELOADED),
+                    catalogEntry("search_tools", ToolDisclosureMode.PRELOADED),
                     catalogEntry("web_search", ToolDisclosureMode.PRELOADED),
                     catalogEntry("web_extract", ToolDisclosureMode.PRELOADED),
                     catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND),
                 )
 
-            val disclosureResult = toolLoop.handleDisclosure(listOf("search_chat_history"))
+            val searchResult =
+                toolLoop.handleToolSearch(
+                    argumentsJson = """{"query":"xyzzy_nonexistent_capability_token","limit":"5"}""",
+                )
 
-            assertTrue(disclosureResult.contains("\"status\":\"error\""))
-            assertTrue(disclosureResult.contains("\"unknown_tools\":[\"search_chat_history\"]"))
+            assertTrue(searchResult.contains("\"status\":\"ok\""))
+            assertTrue(searchResult.contains("\"activated_tools\":[]"))
             assertEquals(
-                listOf("disclose_tool_schemas", "web_search", "web_extract"),
+                listOf("search_tools", "web_search", "web_extract"),
                 signatureCache.activeToolNames,
             )
         }

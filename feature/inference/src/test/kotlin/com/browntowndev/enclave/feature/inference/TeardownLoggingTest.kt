@@ -14,6 +14,7 @@ import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.google.ai.edge.litertlm.Conversation
 import com.google.ai.edge.litertlm.Engine
+import io.mockk.mockk
 import io.mockk.*
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.runBlocking
@@ -49,6 +50,7 @@ class TeardownLoggingTest {
                     activeModelProvider = activeModelProvider,
                     loggingPort = loggingPort,
                     toolExecutor = toolExecutor,
+                embeddingEnginePort = mockk(relaxed = true),
                 ),
             )
 

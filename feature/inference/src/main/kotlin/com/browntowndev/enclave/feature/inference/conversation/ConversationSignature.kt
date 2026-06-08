@@ -20,6 +20,8 @@ internal data class ConversationSignature(
     val hasMemoryTools: Boolean,
     val hasGetMessageContextTool: Boolean,
     val hasArtifactTools: Boolean,
+    /** Sorted active-tool names (options ∪ session cache); drives LiteRT tool-provider rebuild. */
+    val activeToolNamesKey: String,
 )
 
 internal fun buildConversationSignature(
@@ -29,8 +31,14 @@ internal fun buildConversationSignature(
     systemPrompt: String,
     samplerConfig: SamplerConfig,
     options: GenerationOptions?,
+    cachedActiveToolNames: List<String> = emptyList(),
 ): ConversationSignature {
-    val activeTools = options?.activeTools.orEmpty()
+    val activeToolNames =
+        buildSet {
+            options?.activeTools?.forEach { tool -> add(tool.name) }
+            cachedActiveToolNames.forEach { name -> add(name) }
+        }
+    val activeTools = activeToolNames.mapNotNull(ToolDefinition::fromName)
     return ConversationSignature(
         modelType = modelType,
         configId = configId,
@@ -47,5 +55,6 @@ internal fun buildConversationSignature(
                 ToolDefinition.SEARCH_CHAT in activeTools,
         hasGetMessageContextTool = ToolDefinition.GET_MESSAGE_CONTEXT in activeTools,
         hasArtifactTools = ToolDefinition.START_ARTIFACT in activeTools,
+        activeToolNamesKey = activeToolNames.sorted().joinToString(","),
     )
 }

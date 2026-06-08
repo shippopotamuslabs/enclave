@@ -40,6 +40,26 @@ class ConversationSignatureTest {
     }
 
     @Test
+    fun buildConversationSignature_activeToolNamesKey_includesCachedDiscoveryActivations() {
+        val signature =
+            buildConversationSignature(
+                modelType = ModelType.FAST,
+                configId = LocalModelConfigurationId("cfg-1"),
+                thinkingEnabled = false,
+                systemPrompt = "prompt",
+                samplerConfig = SamplerConfig(temperature = 0.5, topP = 0.9, topK = 20),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        activeTools = listOf(ToolDefinition.SEARCH_TOOLS, ToolDefinition.WEB_SEARCH),
+                    ),
+                cachedActiveToolNames = listOf("append_blocks"),
+            )
+
+        assertEquals("append_blocks,search_tools,web_search", signature.activeToolNamesKey)
+    }
+
+    @Test
     fun buildConversationSignature_usesActiveToolsForArtifactFlags() {
         val signature =
             buildConversationSignature(
@@ -53,7 +73,7 @@ class ConversationSignatureTest {
                         reasoningBudget = 0,
                         activeTools =
                             listOf(
-                                ToolDefinition.DISCLOSE_TOOL_SCHEMAS,
+                                ToolDefinition.SEARCH_TOOLS,
                                 ToolDefinition.WEB_SEARCH,
                             ),
                     ),

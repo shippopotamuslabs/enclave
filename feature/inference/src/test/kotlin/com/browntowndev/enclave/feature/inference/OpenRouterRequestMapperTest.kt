@@ -12,7 +12,9 @@ import com.browntowndev.enclave.domain.model.config.OpenRouterRoutingConfigurati
 import com.browntowndev.enclave.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.ModelType
+import com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
+import com.browntowndev.enclave.domain.model.inference.ToolDisclosureMode
 import com.browntowndev.enclave.domain.port.repository.SettingsData
 import com.browntowndev.enclave.domain.usecase.chat.ChatInferenceRequestPreparer
 import com.browntowndev.enclave.domain.usecase.chat.SearchToolPromptComposer
@@ -28,6 +30,60 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertAll
 
 class OpenRouterRequestMapperTest {
+    @Test
+    fun `LTD-04 OpenRouter mapper uses activeTools only`() {
+        val params =
+            OpenRouterRequestMapper.mapToChatCompletionParams(
+                modelId = "openai/gpt-5.2",
+                prompt = "Search and write",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        toolingEnabled = true,
+                        toolCatalog =
+                            listOf(
+                                catalogEntry("web_search", ToolDisclosureMode.PRELOADED),
+                                catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND),
+                            ),
+                        activeTools = listOf(ToolDefinition.SEARCH_TOOLS, ToolDefinition.WEB_SEARCH),
+                    ),
+            )
+
+        val registeredToolNames = params.tools().orElseThrow().map { it.asFunction().function().name() }
+
+        assertEquals(listOf("search_tools", "web_search"), registeredToolNames)
+        assertEquals(2, registeredToolNames.size)
+    }
+
+    @Test
+    fun `MUT-01 OpenRouter deferred schema never leaks before search`() {
+        val params =
+            OpenRouterRequestMapper.mapToChatCompletionParams(
+                modelId = "openai/gpt-5.2",
+                prompt = "Search and write",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        toolingEnabled = true,
+                        toolCatalog = listOf(catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND)),
+                        activeTools = listOf(ToolDefinition.SEARCH_TOOLS, ToolDefinition.WEB_SEARCH),
+                    ),
+            )
+
+        val registeredToolNames = params.tools().orElseThrow().map { it.asFunction().function().name() }
+
+        assertEquals(listOf("search_tools", "web_search"), registeredToolNames)
+        assertFalse(
+            params
+                .tools()
+                .orElseThrow()
+                .toString()
+                .contains("\"append_blocks\""),
+        )
+    }
+
     @Test
     fun `IGTA-09 OpenRouter mapper registers search_x_recent when preparer intent-activates X`() =
         runTest {
@@ -358,4 +414,14 @@ class OpenRouterRequestMapperTest {
 
         assertTrue(params.toString().contains("web_search"))
     }
+
+    private fun catalogEntry(
+        name: String,
+        disclosureMode: ToolDisclosureMode,
+    ): ToolCatalogEntry =
+        ToolCatalogEntry(
+            name = name,
+            description = "$name description",
+            disclosureMode = disclosureMode,
+        )
 }

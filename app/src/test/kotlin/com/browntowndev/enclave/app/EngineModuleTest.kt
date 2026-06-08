@@ -35,7 +35,7 @@ class EngineModuleTest {
 
             coEvery { activeModelProvider.getActiveConfiguration(ModelType.MAIN) } returns null
 
-            val manager = ConversationManagerImpl(context, localModelRepository, activeModelProvider, loggingPort, toolExecutor)
+            val manager = ConversationManagerImpl(context, localModelRepository, activeModelProvider, loggingPort, toolExecutor, mockk(relaxed = true))
 
             assertThrows<IllegalStateException> {
                 manager.getConversation(ModelType.MAIN, null)

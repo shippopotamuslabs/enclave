@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.feature.inference.conversation
 
+import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.inference.AgentLoopToolCatalogJson
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
@@ -7,12 +8,10 @@ import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.port.inference.AgentPolicyPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
-import com.browntowndev.enclave.domain.usecase.chat.ToolSchemaDisclosureResolver
+import com.browntowndev.enclave.domain.usecase.chat.SearchToolsHostCoordinator
 import com.browntowndev.enclave.domain.util.JTokkitTokenCounter
 import com.browntowndev.enclave.feature.inference.LocalToolResultPolicy
 import kotlinx.coroutines.CancellationException
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
 
 internal class LiteRtToolCallLoop(
     private val cache: ConversationSignatureCache,
@@ -20,6 +19,7 @@ internal class LiteRtToolCallLoop(
     val loggingPort: LoggingPort,
     private val agentPolicyPort: AgentPolicyPort,
     private val cancellationGate: ConversationCancellationGate,
+    private val searchToolsHostCoordinator: SearchToolsHostCoordinator,
 ) {
     @Volatile
     private var consecutiveSoftFailures: Int = 0
@@ -32,17 +32,8 @@ internal class LiteRtToolCallLoop(
             throw CancellationException("Generation was cancelled")
         }
 
-        if (request.toolName == ToolDefinition.DISCLOSE_TOOL_SCHEMAS.name) {
-            val parsedNames =
-                runCatching {
-                    kotlinx.serialization.json.Json
-                        .parseToJsonElement(request.argumentsJson)
-                        .jsonObject["tool_names"]
-                        ?.jsonArray
-                        ?.mapNotNull { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
-                        ?: emptyList()
-                }.getOrDefault(emptyList())
-            return handleDisclosure(parsedNames)
+        if (request.toolName == ToolDefinition.SEARCH_TOOLS.name) {
+            return handleToolSearch(argumentsJson = request.argumentsJson, chatId = request.chatId)
         }
 
         val effectiveRequest =
@@ -133,36 +124,35 @@ internal class LiteRtToolCallLoop(
     }
 
     /**
-     * Intercepts a `disclose_tool_schemas` request locally without invoking [ToolExecutorPort].
-     * Updates [ConversationSignatureCache.activeToolNames] in first-seen order and returns
-     * the canonical resolver JSON payload.
+     * Intercepts `search_tools` locally without invoking [ToolExecutorPort].
+     * Updates [ConversationSignatureCache.toolActivationRegistry] (single activation source).
      */
-    fun handleDisclosure(toolNames: List<String>): String {
-        val activeNames = cache.activeToolNames
-        val activeNameSet = activeNames.toSet()
-        val deferredCatalog =
-            cache.toolCatalog.filter { entry ->
-                entry.name !in activeNameSet
-            }
-        val activeDefinitions = activeNames.mapNotNull(ToolDefinition::fromName)
-        val resolution =
-            disclosureResolver.resolve(
-                toolNames = toolNames,
-                toolCatalog = deferredCatalog,
-                activeTools = activeDefinitions,
-                strategy = cache.toolCallStrategy,
+    suspend fun handleToolSearch(
+        argumentsJson: String,
+        chatId: ChatId? = null,
+    ): String =
+        try {
+            val input =
+                SearchToolsHostCoordinator.inputFrom(
+                    argumentsJson = argumentsJson,
+                    toolCatalog = cache.toolCatalog,
+                    activationRegistry = cache.toolActivationRegistry,
+                    providedIndex = cache.toolSearchIndex,
+                    strategy = cache.toolCallStrategy,
+                    chatId = chatId,
+                )
+            searchToolsHostCoordinator.execute(input).resultJson
+        } catch (e: CancellationException) {
+            throw e
+        } catch (t: Throwable) {
+            val rootCause = ConversationErrorMapper.rootCause(t)
+            loggingPort.error(
+                TAG,
+                "search_tools host failed cause=${rootCause::class.java.simpleName}: ${rootCause.message}",
+                rootCause,
             )
-        if (resolution.activatedToolNames.isNotEmpty()) {
-            val seen = activeNames.toMutableList()
-            resolution.activatedToolNames.forEach { newName ->
-                if (newName !in seen) seen += newName
-            }
-            cache.activeToolNames = seen
+            ConversationErrorMapper.executionFailed(ToolDefinition.SEARCH_TOOLS.name, rootCause)
         }
-        return resolution.resultJson
-    }
-
-    private val disclosureResolver = ToolSchemaDisclosureResolver()
 
     private fun repairLiteRtToolRequest(request: ToolCallRequest): ToolCallRequest =
         try {

@@ -650,6 +650,7 @@ class RustLoopVolatileTurnContextCommitTest {
             rollingSummarizer = RollingSummarizer(logger, JTokkitTokenCounter),
             resolveCompactionSummaryModel = resolveCompactionSummaryModel,
             committedInferencePrompts = committedInferencePrompts,
+            embeddingEnginePort = com.browntowndev.enclave.domain.port.inference.Bm25OnlyEmbeddingEnginePort,
         )
     }
 

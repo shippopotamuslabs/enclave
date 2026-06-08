@@ -40,6 +40,7 @@ internal class ConversationSessionCoordinator(
                 systemPrompt = resolvedSystemPrompt,
                 samplerConfig = targetSamplerConfig,
                 options = options,
+                cachedActiveToolNames = cache.activeToolNames,
             )
 
         val engineChanged = cache.currentModelPath != modelPath || cache.engine == null
@@ -177,15 +178,12 @@ internal class ConversationSessionCoordinator(
                 toolLoop = toolLoop,
             )
         // Seed the LiteRT-local active-tool set from GenerationOptions on a fresh build, and
-        // preserve any disclosure-driven additions accumulated against the prior conversation
+        // preserve any search_tools activations accumulated against the prior conversation
         // when rebuilding within the same engine session (e.g., signature change after
-        // disclosure widens the callable set).
-        val seededActive: List<String> =
-            buildList {
-                options?.activeTools?.forEach { def -> if (def.name !in this) add(def.name) }
-                cache.activeToolNames.forEach { name -> if (name !in this) add(name) }
-            }
-        cache.activeToolNames = seededActive
+        // discovery widens the callable set).
+        val preloadNames = options?.activeTools?.map { it.name }.orEmpty()
+        cache.toolActivationRegistry.seedTurnPreservingDiscovered(preloadNames)
+        val seededActive = cache.toolActivationRegistry.orderedActiveNames()
         val conversationConfig =
             buildConversationConfig(
                 signature = desiredSignature,
@@ -244,6 +242,7 @@ internal class ConversationSessionCoordinator(
         cache.currentModelPath = modelPath
         cache.latestAssistantMessageId = options?.assistantMessageId
         cache.toolCatalog = options?.toolCatalog.orEmpty()
+        cache.toolSearchIndex = options?.toolSearchIndex
         cache.toolCallStrategy = options?.toolCallStrategy ?: cache.toolCallStrategy
 
         Log.d(

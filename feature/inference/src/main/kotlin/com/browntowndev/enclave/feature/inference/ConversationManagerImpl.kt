@@ -9,8 +9,15 @@ import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
 import com.browntowndev.enclave.domain.port.inference.AgentPolicyPort
+import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.domain.port.inference.MonotonicToolActivationPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
+import com.browntowndev.enclave.domain.port.inference.NoopToolSearchEmbeddingCachePort
+import com.browntowndev.enclave.domain.port.inference.ToolSearchEmbeddingCachePort
+import com.browntowndev.enclave.domain.usecase.chat.InMemoryMonotonicToolActivationStore
+import com.browntowndev.enclave.domain.usecase.chat.SearchToolsHostCoordinator
+import com.browntowndev.enclave.domain.usecase.chat.ToolSessionActivationRegistry
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.enclave.feature.inference.conversation.ConversationCancellationGate
@@ -43,10 +50,22 @@ class ConversationManagerImpl
         private val activeModelProvider: ActiveModelProviderPort,
         private val loggingPort: LoggingPort,
         private val toolExecutor: ToolExecutorPort,
+        private val embeddingEnginePort: EmbeddingEnginePort,
+        private val monotonicToolActivation: MonotonicToolActivationPort = InMemoryMonotonicToolActivationStore(),
+        private val toolSearchEmbeddingCache: ToolSearchEmbeddingCachePort = NoopToolSearchEmbeddingCachePort,
         private val agentPolicyPort: AgentPolicyPort = NoopAgentPolicyPort,
     ) : ConversationManager {
         private val cache = ConversationSignatureCache()
         private val cancellationGate = ConversationCancellationGate()
+
+        init {
+            cache.toolActivationRegistry =
+                ToolSessionActivationRegistry(
+                    monotonicToolActivation = monotonicToolActivation,
+                    onActiveNamesUpdated = { names -> cache.activeToolNames = names },
+                    onSearchDiscoveredNewTools = { invalidateLiteRtConversationForToolChange() },
+                )
+        }
 
         @VisibleForTesting
         internal val engineCreatorHolder = ConversationEngineCreatorHolder()
@@ -63,6 +82,11 @@ class ConversationManagerImpl
                 )
             }
         }
+        private val searchToolsHostCoordinator =
+            SearchToolsHostCoordinator(
+                embeddingEngine = embeddingEnginePort,
+                embeddingCache = toolSearchEmbeddingCache,
+            )
         private val toolLoop =
             LiteRtToolCallLoop(
                 cache = cache,
@@ -70,6 +94,7 @@ class ConversationManagerImpl
                 loggingPort = loggingPort,
                 agentPolicyPort = agentPolicyPort,
                 cancellationGate = cancellationGate,
+                searchToolsHostCoordinator = searchToolsHostCoordinator,
             )
         private val sessionCoordinator: ConversationSessionCoordinator by lazy {
             ConversationSessionCoordinator(
@@ -134,6 +159,12 @@ class ConversationManagerImpl
             mutex.withLock {
                 factory.closeConversation()
             }
+        }
+
+        private fun invalidateLiteRtConversationForToolChange() {
+            // Keep the active conversation alive while search_tools is executing; rebuild on the
+            // next getConversation when the signature no longer matches activeToolNames.
+            cache.currentSignature = null
         }
 
         override suspend fun setHistory(messages: List<ChatMessage>) {
