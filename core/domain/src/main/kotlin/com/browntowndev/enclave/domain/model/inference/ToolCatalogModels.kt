@@ -6,6 +6,7 @@ data class ToolCatalogEntry(
     val disclosureMode: ToolDisclosureMode,
     val requiredArguments: List<ToolArgumentHint> = emptyList(),
     val optionalArguments: List<ToolArgumentHint> = emptyList(),
+    val categoryTags: List<String> = emptyList(),
 )
 
 data class ToolArgumentHint(

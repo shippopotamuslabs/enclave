@@ -17,6 +17,10 @@
 package com.browntowndev.enclave.domain.usecase.chat
 
 import com.browntowndev.enclave.domain.model.chat.ChatId
+import com.browntowndev.enclave.domain.port.inference.CommittedInferenceTranscriptPort
+import com.browntowndev.enclave.domain.port.inference.MonotonicToolActivationPort
+import com.browntowndev.enclave.domain.port.inference.NoopCommittedInferenceTranscriptPort
+import com.browntowndev.enclave.domain.port.inference.NoopMonotonicToolActivationPort
 import com.browntowndev.enclave.domain.port.repository.ChatRepository
 import javax.inject.Inject
 
@@ -28,6 +32,8 @@ class DeleteChatUseCase
     @Inject
     constructor(
         private val chatRepository: ChatRepository,
+        private val monotonicToolActivation: MonotonicToolActivationPort = NoopMonotonicToolActivationPort,
+        private val committedInferenceTranscripts: CommittedInferenceTranscriptPort = NoopCommittedInferenceTranscriptPort,
     ) {
         /**
          * Deletes a chat by its ID.
@@ -35,6 +41,8 @@ class DeleteChatUseCase
          * @param chatId The ID of the chat to delete
          */
         suspend operator fun invoke(chatId: ChatId) {
+            monotonicToolActivation.clearSession(chatId)
+            committedInferenceTranscripts.clear(chatId)
             chatRepository.deleteChat(chatId)
         }
     }

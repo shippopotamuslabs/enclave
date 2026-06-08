@@ -170,12 +170,12 @@ class ChatInferenceRequestPreparerCacheStabilityTest {
             val systemPrompt2 = result2.options.systemPrompt
 
             assertTrue(
-                systemPrompt1?.contains("- search_chat_history [deferred]:") == true,
-                "Turn 1 system prompt should contain '- search_chat_history [deferred]:'",
+                systemPrompt1?.contains("# TOOL DISCOVERY:") == true,
+                "Turn 1 system prompt should contain discovery instructions",
             )
             assertTrue(
-                systemPrompt2?.contains("- search_chat_history [deferred]:") == true,
-                "Turn 2 system prompt should contain '- search_chat_history [deferred]:'",
+                systemPrompt2?.contains("# TOOL DISCOVERY:") == true,
+                "Turn 2 system prompt should contain discovery instructions",
             )
             assertEquals(
                 systemPrompt1,
@@ -260,12 +260,12 @@ class ChatInferenceRequestPreparerCacheStabilityTest {
         }
 
     // ---------------------------------------------------------------------------
-    // CSPC-04c — runtime disclose_tool_schemas does NOT affect the preparer's catalog
+    // CSPC-04c — runtime search_tools does NOT affect the preparer's catalog
     //             on the following turn
     // ---------------------------------------------------------------------------
 
     @Test
-    fun CSPC_04c_runtime_disclose_tool_schemas_does_not_mutate_preparer_catalog_next_turn() =
+    fun CSPC_04c_runtime_search_tools_does_not_mutate_preparer_catalog_next_turn() =
         runTest {
             val store = InMemoryMonotonicToolActivationStore()
             val preparer =
@@ -280,20 +280,19 @@ class ChatInferenceRequestPreparerCacheStabilityTest {
             val systemPromptTurn1 = result1.options.systemPrompt
 
             assertTrue(
-                systemPromptTurn1?.contains("- start_artifact [deferred]:") == true,
-                "CSPC-04c turn 1: system prompt should contain '- start_artifact [deferred]:'",
+                systemPromptTurn1?.contains("# TOOL DISCOVERY:") == true,
+                "CSPC-04c turn 1: system prompt should contain discovery instructions",
             )
 
-            // The InMemoryMonotonicToolActivationStore is NOT updated by disclose_tool_schemas
-            // at runtime — only ChatInferenceRequestPreparer.invoke updates it via the intent
-            // classifier. So turn 2 should see the same catalog as turn 1.
+            // Without a runtime search_tools call, monotonic state is unchanged between turns.
+            // Turn 2 should see the same discovery prompt as turn 1.
 
             val result2 = invoke(preparer, "tell me more", chatId = "chat-2")
             val systemPromptTurn2 = result2.options.systemPrompt
 
             assertTrue(
-                systemPromptTurn2?.contains("- start_artifact [deferred]:") == true,
-                "CSPC-04c turn 2: system prompt should still contain '- start_artifact [deferred]:'",
+                systemPromptTurn2?.contains("# TOOL DISCOVERY:") == true,
+                "CSPC-04c turn 2: system prompt should still contain discovery instructions",
             )
             assertEquals(
                 systemPromptTurn1,
@@ -385,11 +384,19 @@ class ChatInferenceRequestPreparerCacheStabilityTest {
      * Used by CSPC-MUTDEF-01 to prove the real store is required.
      */
     private object IdentityMonotonicToolActivationPort : MonotonicToolActivationPort {
-        override fun union(
+        private var lastNames = emptySet<String>()
+
+        override fun activatedNames(chatId: ChatId): Set<String> = lastNames
+
+        override fun recordActivation(
             chatId: ChatId,
             newNames: Set<String>,
-        ): Set<String> = newNames
+        ) {
+            lastNames = newNames
+        }
 
-        override fun clearSession(chatId: ChatId) = Unit
+        override fun clearSession(chatId: ChatId) {
+            lastNames = emptySet()
+        }
     }
 }

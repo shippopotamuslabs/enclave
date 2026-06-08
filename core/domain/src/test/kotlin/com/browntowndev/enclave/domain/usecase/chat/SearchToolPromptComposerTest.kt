@@ -24,17 +24,18 @@ class SearchToolPromptComposerTest {
                     ),
                 activeTools =
                     listOf(
-                        ToolDefinition.DISCLOSE_TOOL_SCHEMAS,
+                        ToolDefinition.SEARCH_TOOLS,
                         ToolDefinition.WEB_SEARCH,
                         ToolDefinition.WEB_EXTRACT,
                     ),
                 strategy = ToolCallStrategy.JSON_XML_ENVELOPE,
             )
 
-        assertTrue(prompt.contains("# TOOL CATALOG:"))
-        assertTrue(prompt.contains("# SCHEMA DISCLOSURE:"))
+        assertTrue(prompt.contains("# TOOL DISCOVERY:"))
+        assertFalse(prompt.contains("# TOOL CATALOG:"))
+        assertFalse(prompt.contains("# SCHEMA DISCLOSURE:"))
         assertTrue(prompt.contains("ActionResult{\"name\":\"web_search\""))
-        assertTrue(prompt.contains("ActionResult{\"name\":\"disclose_tool_schemas\""))
+        assertTrue(prompt.contains("ActionResult{\"name\":\"search_tools\""))
         assertFalse(prompt.contains("ActionResult{\"name\":\"append_blocks\""))
         assertFalse(prompt.contains("ActionResult{\"name\":\"search_current_artifact\""))
     }
@@ -51,7 +52,7 @@ class SearchToolPromptComposerTest {
                     ),
                 activeTools =
                     listOf(
-                        ToolDefinition.DISCLOSE_TOOL_SCHEMAS,
+                        ToolDefinition.SEARCH_TOOLS,
                         ToolDefinition.WEB_SEARCH,
                         ToolDefinition.WEB_EXTRACT,
                     ),
@@ -59,7 +60,7 @@ class SearchToolPromptComposerTest {
             )
 
         assertTrue(prompt.contains("call:web_search{query: <|\"|>...<|\"|>}"))
-        assertTrue(prompt.contains("call:disclose_tool_schemas{tool_names: <|\"|>[\"append_blocks\"]<|\"|>}"))
+        assertTrue(prompt.contains("call:search_tools{query: <|\"|>describe the capability you need<|\"|>}"))
         assertFalse(prompt.contains("call:append_blocks{"))
         assertFalse(prompt.contains("call:search_current_artifact{"))
     }
@@ -72,7 +73,7 @@ class SearchToolPromptComposerTest {
                 toolCatalog = listOf(catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND)),
                 activeTools =
                     listOf(
-                        ToolDefinition.DISCLOSE_TOOL_SCHEMAS,
+                        ToolDefinition.SEARCH_TOOLS,
                         ToolDefinition.WEB_SEARCH,
                         ToolDefinition.WEB_EXTRACT,
                     ),
@@ -149,7 +150,7 @@ class SearchToolPromptComposerTest {
                     ),
                 activeTools =
                     listOf(
-                        ToolDefinition.DISCLOSE_TOOL_SCHEMAS,
+                        ToolDefinition.SEARCH_TOOLS,
                         ToolDefinition.WEB_SEARCH,
                         ToolDefinition.WEB_EXTRACT,
                         ToolDefinition.X_SEARCH,
@@ -158,7 +159,7 @@ class SearchToolPromptComposerTest {
             )
 
         assertTrue(prompt.contains("ActionResult{\"name\":\"search_x_recent\""))
-        assertTrue(prompt.contains("[intent-activated]"))
+        assertFalse(prompt.contains("# TOOL CATALOG:"))
     }
 
     @Test
@@ -173,7 +174,7 @@ class SearchToolPromptComposerTest {
                     ),
                 activeTools =
                     listOf(
-                        ToolDefinition.DISCLOSE_TOOL_SCHEMAS,
+                        ToolDefinition.SEARCH_TOOLS,
                         ToolDefinition.START_ARTIFACT,
                     ),
                 strategy = ToolCallStrategy.JSON_XML_ENVELOPE,

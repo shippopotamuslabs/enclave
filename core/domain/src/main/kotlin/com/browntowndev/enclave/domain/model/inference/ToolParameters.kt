@@ -27,7 +27,7 @@ interface ToolParameters {
         /**
          * Extracts top-level argument hints from a [ToolSchema]. Nested object schemas,
          * `oneOf`, `anyOf`, and `definitions` are intentionally excluded — the catalog
-         * stays compact while full schemas live behind the disclosure tool.
+         * stays compact while full schemas are returned by [search_tools] on activation.
          */
         fun extractArgumentHints(schema: ToolSchema): Pair<List<ToolArgumentHint>, List<ToolArgumentHint>> {
             val required = mutableListOf<ToolArgumentHint>()
@@ -59,9 +59,11 @@ interface ToolParameters {
 }
 
 @kotlinx.serialization.Serializable
-data class DiscloseToolSchemasParams(
-    @ToolParam(description = "Deferred tool names whose full schemas should be disclosed.")
-    val tool_names: List<String>,
+data class SearchToolsParams(
+    @ToolParam(description = "Natural-language query describing the capability to find.")
+    val query: String,
+    @ToolParam(description = "Maximum number of matches to return.")
+    val limit: Int? = null,
 ) : ToolParameters
 
 @kotlinx.serialization.Serializable

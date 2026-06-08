@@ -73,6 +73,15 @@ class ToolDefinitionTest {
     }
 
     @Test
+    fun `READ_CONTEXT_REFERENCE is deferred and discoverable via search_tools`() {
+        val tool = ToolDefinition.READ_CONTEXT_REFERENCE
+
+        assertEquals(ToolDisclosureMode.DISCLOSE_ON_DEMAND, tool.disclosureMode)
+        assertTrue(tool.supportsLazyDisclosure)
+        assertEquals(ToolDisclosureMode.DISCLOSE_ON_DEMAND, tool.catalogEntry().disclosureMode)
+    }
+
+    @Test
     fun `catalogEntry marks deferred tools as disclose on demand`() {
         val entry = ToolDefinition.APPEND_BLOCKS.catalogEntry()
 
@@ -86,16 +95,17 @@ class ToolDefinitionTest {
     }
 
     @Test
-    fun `DISCLOSE_TOOL_SCHEMAS is preloaded and not lazily disclosable`() {
-        val tool = ToolDefinition.DISCLOSE_TOOL_SCHEMAS
+    fun `SEARCH_TOOLS is preloaded and not lazily disclosable`() {
+        val tool = ToolDefinition.SEARCH_TOOLS
 
-        assertEquals("disclose_tool_schemas", tool.name)
+        assertEquals("search_tools", tool.name)
         assertEquals(ToolDisclosureMode.PRELOADED, tool.disclosureMode)
         assertEquals(false, tool.supportsLazyDisclosure)
 
         val entry = tool.catalogEntry()
         assertEquals(ToolDisclosureMode.PRELOADED, entry.disclosureMode)
-        assertTrue(entry.requiredArguments.any { it.name == "tool_names" })
+        assertTrue(entry.requiredArguments.any { it.name == "query" })
+        assertEquals(listOf("discovery"), entry.categoryTags)
     }
 
     @Test

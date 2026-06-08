@@ -45,6 +45,7 @@ data class GenerationOptions(
     val toolingEnabled: Boolean = false,
     val toolCatalog: List<ToolCatalogEntry> = emptyList(),
     val activeTools: List<ToolDefinition> = emptyList(),
+    val toolSearchIndex: ToolSearchIndexSnapshot? = null,
     val toolCallStrategy: ToolCallStrategy = ToolCallStrategy.JSON_XML_ENVELOPE,
     val maxToolCalls: Int = 10,
     val chatId: ChatId? = null,

@@ -56,6 +56,7 @@ data class ToolDefinition(
             disclosureMode = disclosureMode,
             requiredArguments = required,
             optionalArguments = optional,
+            categoryTags = ToolCategoryTags.forTool(name),
         )
     }
 
@@ -204,11 +205,12 @@ data class ToolDefinition(
                 disclosureMode = ToolDisclosureMode.PRELOADED,
             )
 
-        val DISCLOSE_TOOL_SCHEMAS =
+        val SEARCH_TOOLS =
             ToolDefinition(
-                name = "disclose_tool_schemas",
-                description = "Disclose full schemas for deferred tools before calling them.",
-                parametersClass = DiscloseToolSchemasParams::class,
+                name = "search_tools",
+                description =
+                    "Search available tools by natural-language query and activate matching tools for this conversation.",
+                parametersClass = SearchToolsParams::class,
                 disclosureMode = ToolDisclosureMode.PRELOADED,
                 supportsLazyDisclosure = false,
             )
@@ -220,8 +222,8 @@ data class ToolDefinition(
                     "Retrieve the full content of a context reference by its ID. " +
                         "Use when context sidecars list references with truncated previews that you need to read in full.",
                 parametersClass = ReadContextReferenceParams::class,
-                disclosureMode = ToolDisclosureMode.PRELOADED,
-                supportsLazyDisclosure = false,
+                disclosureMode = ToolDisclosureMode.DISCLOSE_ON_DEMAND,
+                supportsLazyDisclosure = true,
             )
 
         @Suppress("MaxLineLength")
@@ -383,7 +385,7 @@ data class ToolDefinition(
 
         val ALL_TOOLS =
             listOf(
-                DISCLOSE_TOOL_SCHEMAS,
+                SEARCH_TOOLS,
                 READ_CONTEXT_REFERENCE,
                 WEB_SEARCH,
                 WEB_EXTRACT,

@@ -72,7 +72,7 @@ class ChatInferenceRequestPreparerTest {
                 {
                     assertEquals(
                         listOf(
-                            "disclose_tool_schemas",
+                            "search_tools",
                             "read_context_reference",
                             "web_search",
                             "web_extract",
@@ -89,7 +89,7 @@ class ChatInferenceRequestPreparerTest {
                 },
                 {
                     assertEquals(
-                        listOf("disclose_tool_schemas", "read_context_reference", "web_search", "web_extract"),
+                        listOf("search_tools", "web_search", "web_extract"),
                         request.options.activeTools.map { it.name },
                     )
                 },
@@ -414,7 +414,7 @@ class ChatInferenceRequestPreparerTest {
             assertTrue(catalogNames.contains(ToolDefinition.GET_MESSAGE_CONTEXT.name))
             assertTrue(request.options.toolingEnabled)
             assertFalse(request.options.systemPrompt?.contains("web_search") == true)
-            assertTrue(request.options.systemPrompt?.contains("search_chat_history") == true)
+            assertTrue(request.options.systemPrompt?.contains("# CONVERSATION MEMORY TOOLS") == true)
         }
 
     @Test
