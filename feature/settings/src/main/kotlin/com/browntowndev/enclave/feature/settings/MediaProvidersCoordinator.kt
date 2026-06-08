@@ -4,7 +4,9 @@ import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.config.toModelType
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
+import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.enclave.domain.model.inference.ModelType
+import com.browntowndev.enclave.domain.usecase.byok.FetchApiProviderModelDetailUseCase
 import com.browntowndev.enclave.domain.usecase.settings.ApiModelDiscoveryRequest
 import com.browntowndev.enclave.domain.usecase.settings.SettingsApiProviderUseCases
 import com.browntowndev.enclave.domain.usecase.settings.SettingsAssignmentUseCases
@@ -20,6 +22,7 @@ internal class MediaProvidersCoordinator
     constructor(
         private val apiProviderUseCases: SettingsApiProviderUseCases,
         private val mediaUseCases: SettingsMediaUseCases,
+        private val fetchApiProviderModelDetailUseCase: FetchApiProviderModelDetailUseCase,
         private val errorHandler: ViewModelErrorHandler,
     ) {
         fun onShowMediaProvidersSheet(
@@ -120,6 +123,12 @@ internal class MediaProvidersCoordinator
             if (discoveryScopeChanged) {
                 apiState.update { it.copy(discoveredApiModels = emptyList(), discoveredApiModelScope = null) }
                 onFetchMediaModels(scope, tag, mediaState, currentApiKey)
+            } else if (
+                previousDraft?.modelName != asset.modelName &&
+                asset.provider == ApiProvider.FAL &&
+                asset.modelName.isNotBlank()
+            ) {
+                enrichFalModelTasksIfNeeded(scope, tag, mediaState, currentApiKey, asset)
             }
         }
 
@@ -158,7 +167,6 @@ internal class MediaProvidersCoordinator
                                 result.models.filterMediaModels(
                                     capability = draft.capability,
                                     provider = draft.provider,
-                                    requiredTasks = draft.tasks,
                                 ),
                             discoveredApiModelScope = result.scope,
                             isDiscoveryTruncated = result.isTruncated,
@@ -248,6 +256,59 @@ internal class MediaProvidersCoordinator
                 onSuccess()
             }
         }
+
+        private fun enrichFalModelTasksIfNeeded(
+            scope: CoroutineScope,
+            tag: String,
+            mediaState: MutableStateFlow<MediaProvidersTransientState>,
+            currentApiKey: MutableStateFlow<String>,
+            draft: MediaProviderAssetUi,
+        ) {
+            val catalogModel = mediaState.value.discoveredApiModels.find { it.id == draft.modelName }
+            if (catalogModel?.tasks?.isNotEmpty() == true) return
+
+            val credentialAlias = resolveMediaCredentialAlias(mediaState.value, draft)
+            if (currentApiKey.value.isBlank() && credentialAlias == null) return
+
+            scope.launch(
+                errorHandler.coroutineExceptionHandler(
+                    tag,
+                    "Failed to fetch fal.ai model details",
+                    "Failed to fetch model details",
+                ),
+            ) {
+                val detail =
+                    fetchApiProviderModelDetailUseCase(
+                        provider = ApiProvider.FAL,
+                        modelId = draft.modelName,
+                        currentApiKey = currentApiKey.value,
+                        credentialAlias = credentialAlias,
+                        baseUrl = draft.baseUrl,
+                    ) ?: return@launch
+                if (detail.tasks.isEmpty()) return@launch
+
+                mediaState.update { state ->
+                    val updatedCatalog = mergeDiscoveredModel(state.discoveredApiModels, detail)
+                    val updatedDraft =
+                        state.assetDraft?.takeIf { it.modelName == draft.modelName }?.copy(tasks = detail.tasks)
+                            ?: state.assetDraft
+                    state.copy(
+                        discoveredApiModels = updatedCatalog,
+                        assetDraft = updatedDraft,
+                    )
+                }
+            }
+        }
+
+        private fun mergeDiscoveredModel(
+            models: List<DiscoveredApiModel>,
+            detail: DiscoveredApiModel,
+        ): List<DiscoveredApiModel> =
+            if (models.any { it.id == detail.id }) {
+                models.map { if (it.id == detail.id) detail else it }
+            } else {
+                models + detail
+            }
 
         fun onDeleteMediaProviderAsset(
             scope: CoroutineScope,
