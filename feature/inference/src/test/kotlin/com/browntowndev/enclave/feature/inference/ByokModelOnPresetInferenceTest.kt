@@ -63,6 +63,11 @@ class ByokModelOnPresetInferenceTest {
                         .FakeToolStreamGatePort(),
                 telemetrySupport = testInferenceTelemetrySupport(),
                 telemetryEventPort = mockk(relaxed = true),
+                embeddingEnginePort = mockk(relaxed = true),
+                monotonicToolActivation =
+                    com.browntowndev.enclave.domain.usecase.chat.InMemoryMonotonicToolActivationStore(),
+                toolSearchEmbeddingCache =
+                    com.browntowndev.enclave.domain.port.inference.NoopToolSearchEmbeddingCachePort,
             )
     }
 

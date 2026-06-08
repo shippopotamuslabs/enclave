@@ -320,6 +320,24 @@ private fun deriveFalTasks(
     return emptySet()
 }
 
+private val falTaskCategories =
+    setOf(
+        "text-to-image",
+        "image-to-image",
+        "text-to-video",
+        "image-to-video",
+    )
+
+private fun String?.normalizedFalTaskCategory(): String? {
+    val normalized = this?.trim()?.lowercase() ?: return null
+    return normalized.takeIf { it in falTaskCategories }
+}
+
+private fun FalModel.resolvedTaskCategory(): String? =
+    category.normalizedFalTaskCategory()
+        ?: metadata?.category.normalizedFalTaskCategory()
+        ?: categories.firstNotNullOfOrNull { it.normalizedFalTaskCategory() }
+
 private fun FalModel.toDiscoveredApiModel(): DiscoveredApiModel? {
     val modelId = resolvedId() ?: return null
     val hints = capabilityHints()
@@ -342,7 +360,7 @@ private fun FalModel.toDiscoveredApiModel(): DiscoveredApiModel? {
     val derivedTasks =
         deriveFalTasks(
             modelId = modelId,
-            category = category,
+            category = resolvedTaskCategory(),
             isImageGen = isImageGen || isUnclassified,
             isVideoGen = isVideoGen,
             imageInput = inputSchema?.imageInput,

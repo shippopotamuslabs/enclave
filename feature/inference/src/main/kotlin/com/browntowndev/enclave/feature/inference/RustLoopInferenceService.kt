@@ -10,6 +10,7 @@ import com.browntowndev.enclave.domain.model.inference.AgentLoopConfig
 import com.browntowndev.enclave.domain.model.inference.AgentLoopContextPolicyTier
 import com.browntowndev.enclave.domain.model.inference.AgentLoopHostCallbacks
 import com.browntowndev.enclave.domain.model.inference.AgentLoopMessage
+import com.browntowndev.enclave.domain.model.inference.AgentLoopWireKeys
 import com.browntowndev.enclave.domain.model.inference.AgentLoopSessionCapabilities
 import com.browntowndev.enclave.domain.model.inference.AgentLoopSessionIoParams
 import com.browntowndev.enclave.domain.model.inference.AgentModelTurnResult
@@ -38,7 +39,14 @@ import com.browntowndev.enclave.domain.port.repository.NoopDeviceEnvironmentRepo
 import com.browntowndev.enclave.domain.port.telemetry.TelemetryEventPort
 import com.browntowndev.enclave.domain.usecase.chat.InferencePromptContentBuilder
 import com.browntowndev.enclave.domain.usecase.chat.RollingSummarizer
-import com.browntowndev.enclave.domain.usecase.chat.ToolSchemaDisclosureResolver
+import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
+import com.browntowndev.enclave.domain.port.inference.MonotonicToolActivationPort
+import com.browntowndev.enclave.domain.port.inference.NoopToolSearchEmbeddingCachePort
+import com.browntowndev.enclave.domain.port.inference.ToolSearchEmbeddingCachePort
+import com.browntowndev.enclave.domain.port.inference.NoopMonotonicToolActivationPort
+import com.browntowndev.enclave.domain.usecase.chat.RetrievalHintActivation
+import com.browntowndev.enclave.domain.usecase.chat.SearchToolsHostCoordinator
+import com.browntowndev.enclave.domain.usecase.chat.ToolSessionActivationRegistry
 import com.browntowndev.enclave.domain.usecase.inference.ResolveCompactionSummaryModelUseCase
 import com.browntowndev.enclave.domain.util.AppendBlocksToolResultParser
 import com.browntowndev.enclave.domain.util.MediaResultParser
@@ -101,12 +109,20 @@ class RustLoopInferenceService(
     private val committedInferenceTranscripts: CommittedInferenceTranscriptPort = NoopCommittedInferenceTranscriptPort,
     private val telemetryEventPort: TelemetryEventPort? = null,
     private val deviceEnvironmentRepository: DeviceEnvironmentRepositoryPort = NoopDeviceEnvironmentRepository,
+    private val embeddingEnginePort: EmbeddingEnginePort,
+    private val monotonicToolActivation: MonotonicToolActivationPort = NoopMonotonicToolActivationPort,
+    private val toolSearchEmbeddingCache: ToolSearchEmbeddingCachePort = NoopToolSearchEmbeddingCachePort,
 ) : RustCompatibleInferenceService {
     override val baseUrl: String?
         get() = inner.baseUrl
 
     private val conversationHistory = mutableListOf<ChatMessage>()
-    private val disclosureResolver = ToolSchemaDisclosureResolver()
+    private val toolActivationRegistry = ToolSessionActivationRegistry(monotonicToolActivation)
+    private val searchToolsHostCoordinator =
+        SearchToolsHostCoordinator(
+            embeddingEngine = embeddingEnginePort,
+            embeddingCache = toolSearchEmbeddingCache,
+        )
     private var lastSeenRevision = 0L
     private var latestProviderTranscript: List<ChatMessage> = emptyList()
     private var hasBeenOfflineInSession = false
@@ -125,6 +141,7 @@ class RustLoopInferenceService(
             val startedAtMs = System.currentTimeMillis()
             try {
                 inner.resetAppendOnlyForNewPrompt()
+                toolActivationRegistry.seedTurn(options.activeTools.map { it.name })
                 val history = buildHistory(options.chatId)
                 val userContent = buildUserContent(prompt, options)
                 val initialMessages = history + listOf(ChatMessage(Role.USER, userContent))
@@ -148,6 +165,10 @@ class RustLoopInferenceService(
                             onTextToken: suspend (String) -> Unit,
                             onThinkingToken: suspend (String) -> Unit,
                         ): AgentModelTurnResult {
+                            toolActivationRegistry.applySearchActivations(
+                                activatedNames = RetrievalHintActivation.toolsFromContextReferences(contextReferences),
+                                chatId = options.chatId,
+                            )
                             val turnOptions =
                                 options.copy(
                                     assistantMessageId = options.assistantMessageId,
@@ -167,9 +188,6 @@ class RustLoopInferenceService(
                                             fileContextIndexJson = fileContextIndexJson,
                                             cacheHints = cacheHints,
                                         ),
-                                    // Full eligible tool pool on the wire for prefix-cache stability;
-                                    // Rust active subset is conveyed via sidecar tool context index.
-                                    // Outer allowToolCall still drives provider toolChoice NONE.
                                     availableTools =
                                         wireToolsForRequest(
                                             options = options,
@@ -191,10 +209,13 @@ class RustLoopInferenceService(
 
                         override suspend fun executeTools(calls: List<AgentToolCall>): List<AgentToolResult> =
                             coroutineScope {
-                                calls
-                                    .map { call ->
-                                        async(Dispatchers.IO) { executeOneTool(call, options) }
-                                    }.awaitAll()
+                                val results =
+                                    calls
+                                        .map { call ->
+                                            async(Dispatchers.IO) { executeOneTool(call, options) }
+                                        }.awaitAll()
+                                applyHintActivationsFromToolResults(results, options)
+                                results
                             }
 
                         override suspend fun onToolResult(
@@ -455,7 +476,7 @@ class RustLoopInferenceService(
             runCatching {
                 Json.parseToJsonElement(content).jsonObject
             }.getOrNull()
-        if (contentObj != null && contentObj.size == 1 && contentObj.containsKey("_agent")) {
+        if (contentObj != null && contentObj.size == 1 && contentObj.containsKey(AgentLoopWireKeys.ENGINE_PAYLOAD_JSON_KEY)) {
             return true
         }
 
@@ -608,7 +629,7 @@ class RustLoopInferenceService(
     }
 
     /** Full eligible tool set for mapping Rust-emitted active names back to [ToolDefinition]. */
-    private fun eligibleToolPool(options: GenerationOptions): List<ToolDefinition> {
+    private fun toolDefinitionLookupPool(options: GenerationOptions): List<ToolDefinition> {
         val byName = LinkedHashMap<String, ToolDefinition>()
         options.toolCatalog.forEach { entry ->
             ToolDefinition.fromName(entry.name)?.let { byName[it.name] = it }
@@ -618,9 +639,7 @@ class RustLoopInferenceService(
     }
 
     /**
-     * Stable superset of tools for the provider wire payload. Rust may shrink the active
-     * schema in [toolsSchemaJson]; deferral and activation are conveyed via sidecars instead
-     * of mutating the tools array (prompt-cache prefix stability).
+     * Session append-only wire registry: preload ∪ tools activated via [search_tools] this prompt.
      */
     private fun wireToolsForRequest(
         options: GenerationOptions,
@@ -629,7 +648,8 @@ class RustLoopInferenceService(
         if (toolContextIndexJson != null && toolNamesFromContextIndex(toolContextIndexJson) == null) {
             return emptyList()
         }
-        return eligibleToolPool(options)
+        val poolByName = toolDefinitionLookupPool(options).associateBy { it.name }
+        return toolActivationRegistry.orderedActiveNames().mapNotNull { poolByName[it] }
     }
 
     private fun toolNamesFromContextIndex(toolContextIndexJson: String): List<String>? =
@@ -645,10 +665,14 @@ class RustLoopInferenceService(
         call: AgentToolCall,
         options: GenerationOptions,
     ): AgentToolResult {
-        if (call.name == ToolDefinition.DISCLOSE_TOOL_SCHEMAS.name) {
-            return handleDisclosureCall(call, options)
+        if (call.name == ToolDefinition.SEARCH_TOOLS.name) {
+            return handleToolSearchCall(call, options)
         }
         if (call.name == ToolDefinition.READ_CONTEXT_REFERENCE.name) {
+            toolActivationRegistry.applySearchActivations(
+                activatedNames = listOf(ToolDefinition.READ_CONTEXT_REFERENCE.name),
+                chatId = options.chatId,
+            )
             return handleReadContextReference(call)
         }
         if (call.name in INTERNET_DEPENDENT_TOOL_NAMES && !deviceEnvironmentRepository.isNetworkAvailable()) {
@@ -681,6 +705,7 @@ class RustLoopInferenceService(
                 resultJson = result.resultJson,
                 truncated = false,
                 softFailure = false,
+                activatedToolNames = artifactCompanionActivations(call.name, result.resultJson),
             )
         } catch (e: CancellationException) {
             throw e
@@ -695,27 +720,56 @@ class RustLoopInferenceService(
         }
     }
 
-    private fun handleDisclosureCall(
+    /**
+     * Successful [ToolDefinition.START_ARTIFACT] must unlock the append/search trio so the next
+     * provider turn registers [ToolDefinition.APPEND_BLOCKS] on the wire (Rust merges
+     * [AgentToolResult.activatedToolNames] into its active set as well).
+     */
+    private fun artifactCompanionActivations(
+        toolName: String,
+        resultJson: String,
+    ): List<String> {
+        if (toolName != ToolDefinition.START_ARTIFACT.name) return emptyList()
+        val status =
+            runCatching {
+                Json.parseToJsonElement(resultJson).jsonObject["status"]?.jsonPrimitive?.content
+            }.getOrNull()
+        if (status != "success") return emptyList()
+        return listOf(
+            ToolDefinition.APPEND_BLOCKS.name,
+            ToolDefinition.SEARCH_CURRENT_ARTIFACT.name,
+        )
+    }
+
+    private fun applyHintActivationsFromToolResults(
+        results: List<AgentToolResult>,
+        options: GenerationOptions,
+    ) {
+        val hinted =
+            RetrievalHintActivation.toolsFromToolResults(results) +
+                results.flatMap { it.activatedToolNames }
+        toolActivationRegistry.applySearchActivations(
+            activatedNames = hinted,
+            chatId = options.chatId,
+        )
+    }
+
+    private suspend fun handleToolSearchCall(
         call: AgentToolCall,
         options: GenerationOptions,
     ): AgentToolResult {
-        val requestedNames =
-            runCatching {
-                val args = Json.parseToJsonElement(call.argumentsJson).jsonObject
-                args["tool_names"]?.jsonArray?.mapNotNull { it.jsonPrimitive.content } ?: emptyList()
-            }.getOrDefault(emptyList())
-        val effectiveActive = options.activeTools
-        val activeNames = effectiveActive.map { it.name }.toSet()
-        val deferredCatalog =
-            options.toolCatalog.filter { entry ->
-                entry.name !in activeNames
+        val searchCatalog =
+            options.toolCatalog.ifEmpty {
+                toolDefinitionLookupPool(options).map { it.catalogEntry() }
             }
         val resolution =
-            disclosureResolver.resolve(
-                toolNames = requestedNames,
-                toolCatalog = deferredCatalog,
-                activeTools = effectiveActive,
+            searchToolsHostCoordinator.executeFromArguments(
+                argumentsJson = call.argumentsJson,
+                toolCatalog = searchCatalog,
+                activationRegistry = toolActivationRegistry,
+                providedIndex = options.toolSearchIndex,
                 strategy = options.toolCallStrategy,
+                chatId = options.chatId,
             )
         return AgentToolResult(
             callId = call.callId,

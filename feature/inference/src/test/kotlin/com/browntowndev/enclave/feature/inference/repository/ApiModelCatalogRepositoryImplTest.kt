@@ -518,8 +518,10 @@ class ApiModelCatalogRepositoryImplTest {
         assertEquals("FLUX.1 [dev]", flux.name)
         assertEquals(true, flux.isImageGenerationCapable)
         assertEquals(false, flux.isChatCapable)
+        assertEquals(setOf(com.browntowndev.enclave.domain.model.config.MediaTask.TEXT_TO_IMAGE), flux.tasks)
         assertEquals("Kling Video 2.1", kling.name)
         assertEquals(true, kling.isVideoGenerationCapable)
+        assertEquals(setOf(com.browntowndev.enclave.domain.model.config.MediaTask.IMAGE_TO_VIDEO), kling.tasks)
     }
 
     @Test

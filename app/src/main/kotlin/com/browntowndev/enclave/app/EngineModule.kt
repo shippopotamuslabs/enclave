@@ -2,10 +2,13 @@ package com.browntowndev.enclave.app
 
 import android.content.Context
 import com.browntowndev.enclave.domain.port.inference.ChatTitleGeneratorPort
+import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.enclave.domain.port.inference.CriminalIntentModerationPort
 import com.browntowndev.enclave.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.PromptModerationPort
+import com.browntowndev.enclave.domain.port.inference.MonotonicToolActivationPort
+import com.browntowndev.enclave.domain.port.inference.ToolSearchEmbeddingCachePort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
 import com.browntowndev.enclave.domain.port.profile.ProfileAnalysisInferencePort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
@@ -63,6 +66,9 @@ abstract class EngineModule {
             activeModelProvider: ActiveModelProviderPort,
             loggingPort: LoggingPort,
             toolExecutor: ToolExecutorPort,
+            embeddingEnginePort: EmbeddingEnginePort,
+            monotonicToolActivation: MonotonicToolActivationPort,
+            toolSearchEmbeddingCache: ToolSearchEmbeddingCachePort,
         ): ConversationManager =
             ConversationManagerImpl(
                 context = context,
@@ -70,6 +76,9 @@ abstract class EngineModule {
                 activeModelProvider = activeModelProvider,
                 loggingPort = loggingPort,
                 toolExecutor = toolExecutor,
+                embeddingEnginePort = embeddingEnginePort,
+                monotonicToolActivation = monotonicToolActivation,
+                toolSearchEmbeddingCache = toolSearchEmbeddingCache,
             )
     }
 }

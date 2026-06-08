@@ -392,13 +392,13 @@ class XaiRequestMapperTest {
                                 catalogEntry("web_search", ToolDisclosureMode.PRELOADED),
                                 catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND),
                             ),
-                        activeTools = listOf(ToolDefinition.DISCLOSE_TOOL_SCHEMAS, ToolDefinition.WEB_SEARCH),
+                        activeTools = listOf(ToolDefinition.SEARCH_TOOLS, ToolDefinition.WEB_SEARCH),
                     ),
             )
 
         val toolsPayload = params._additionalBodyProperties()["tools"].toString()
 
-        assertTrue(toolsPayload.contains("disclose_tool_schemas"))
+        assertTrue(toolsPayload.contains("search_tools"))
         assertTrue(toolsPayload.contains("web_search"))
         assertFalse(toolsPayload.contains("\"append_blocks\""))
     }

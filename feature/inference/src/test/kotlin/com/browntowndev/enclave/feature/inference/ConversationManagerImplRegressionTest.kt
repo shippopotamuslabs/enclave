@@ -38,6 +38,7 @@ class ConversationManagerImplRegressionTest {
                     activeModelProvider = activeModelProvider,
                     loggingPort = loggingPort,
                     toolExecutor = toolExecutor,
+                    embeddingEnginePort = mockk(relaxed = true),
                     agentPolicyPort = policy,
                 )
 
@@ -66,6 +67,7 @@ class ConversationManagerImplRegressionTest {
                     activeModelProvider = activeModelProvider,
                     loggingPort = loggingPort,
                     toolExecutor = toolExecutor,
+                    embeddingEnginePort = mockk(relaxed = true),
                     agentPolicyPort = policy,
                 )
             coEvery { toolExecutor.execute(any()) } returns
@@ -106,6 +108,7 @@ class ConversationManagerImplRegressionTest {
                     activeModelProvider = activeModelProvider,
                     loggingPort = loggingPort,
                     toolExecutor = toolExecutor,
+                embeddingEnginePort = mockk(relaxed = true),
                 )
 
             val result =
@@ -138,6 +141,7 @@ class ConversationManagerImplRegressionTest {
                 activeModelProvider = activeModelProvider,
                 loggingPort = loggingPort,
                 toolExecutor = toolExecutor,
+            embeddingEnginePort = mockk(relaxed = true),
             )
 
         manager.conversationPort = activeConversationPort
@@ -160,6 +164,7 @@ class ConversationManagerImplRegressionTest {
                     activeModelProvider = activeModelProvider,
                     loggingPort = loggingPort,
                     toolExecutor = toolExecutor,
+                embeddingEnginePort = mockk(relaxed = true),
                 )
 
             manager.conversation = liteRtConversation

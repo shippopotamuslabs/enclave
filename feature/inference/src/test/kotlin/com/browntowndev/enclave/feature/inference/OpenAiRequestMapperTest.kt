@@ -31,13 +31,13 @@ class OpenAiRequestMapperTest {
                                 catalogEntry("web_search", ToolDisclosureMode.PRELOADED),
                                 catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND),
                             ),
-                        activeTools = listOf(ToolDefinition.DISCLOSE_TOOL_SCHEMAS, ToolDefinition.WEB_SEARCH),
+                        activeTools = listOf(ToolDefinition.SEARCH_TOOLS, ToolDefinition.WEB_SEARCH),
                     ),
             )
 
         val registeredToolNames = params.tools().orElseThrow().map { it.asFunction().function().name() }
 
-        assertEquals(listOf("disclose_tool_schemas", "web_search"), registeredToolNames)
+        assertEquals(listOf("search_tools", "web_search"), registeredToolNames)
         assertEquals(2, registeredToolNames.size)
     }
 
@@ -53,13 +53,13 @@ class OpenAiRequestMapperTest {
                         reasoningBudget = 0,
                         toolingEnabled = true,
                         toolCatalog = listOf(catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND)),
-                        activeTools = listOf(ToolDefinition.DISCLOSE_TOOL_SCHEMAS, ToolDefinition.WEB_SEARCH),
+                        activeTools = listOf(ToolDefinition.SEARCH_TOOLS, ToolDefinition.WEB_SEARCH),
                     ),
             )
 
         val registeredToolNames = params.tools().orElseThrow().map { it.asFunction().function().name() }
 
-        assertEquals(listOf("disclose_tool_schemas", "web_search"), registeredToolNames)
+        assertEquals(listOf("search_tools", "web_search"), registeredToolNames)
         assertFalse(
             params
                 .tools()

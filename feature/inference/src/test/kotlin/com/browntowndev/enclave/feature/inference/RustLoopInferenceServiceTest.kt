@@ -89,8 +89,8 @@ class RustLoopInferenceServiceTest {
                                 listOf(
                                     AgentToolCall(
                                         callId = "call-1",
-                                        name = "disclose_tool_schemas",
-                                        argumentsJson = """{"tool_names":["append_blocks"]}""",
+                                        name = "search_tools",
+                                        argumentsJson = """{"query":"append_blocks"}""",
                                     ),
                                 ),
                             ).single()
@@ -100,7 +100,7 @@ class RustLoopInferenceServiceTest {
                         toolsSchemaJson =
                             serializeToolNames(
                                 listOf(
-                                    "disclose_tool_schemas",
+                                    "search_tools",
                                     "web_search",
                                     "web_extract",
                                     "append_blocks",
@@ -119,10 +119,10 @@ class RustLoopInferenceServiceTest {
                     options =
                         GenerationOptions(
                             reasoningBudget = 0,
-                            toolCatalog = listOf(catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND)),
+                            toolCatalog = lazyDisclosureCatalog(),
                             activeTools =
                                 listOf(
-                                    ToolDefinition.DISCLOSE_TOOL_SCHEMAS,
+                                    ToolDefinition.SEARCH_TOOLS,
                                     ToolDefinition.WEB_SEARCH,
                                     ToolDefinition.WEB_EXTRACT,
                                 ),
@@ -141,7 +141,7 @@ class RustLoopInferenceServiceTest {
                     assertEquals(
                         listOf(
                             "append_blocks",
-                            "disclose_tool_schemas",
+                            "search_tools",
                             "web_extract",
                             "web_search",
                         ),
@@ -171,8 +171,8 @@ class RustLoopInferenceServiceTest {
                                 listOf(
                                     AgentToolCall(
                                         callId = "call-1",
-                                        name = "disclose_tool_schemas",
-                                        argumentsJson = """{"tool_names":["append_blocks"]}""",
+                                        name = "search_tools",
+                                        argumentsJson = """{"query":"append_blocks"}""",
                                     ),
                                 ),
                             ).single()
@@ -187,16 +187,26 @@ class RustLoopInferenceServiceTest {
                     loggingPort = logger,
                     agentPolicyPort = NoopAgentPolicyPort,
                     cancellationGate = ConversationCancellationGate(),
+                    searchToolsHostCoordinator =
+                        com.browntowndev.enclave.domain.usecase.chat.SearchToolsHostCoordinator(
+                            embeddingEngine = com.browntowndev.enclave.domain.port.inference.Bm25OnlyEmbeddingEnginePort,
+                        ),
                 )
 
             val disclosureCatalog =
                 listOf(
-                    catalogEntry("disclose_tool_schemas", ToolDisclosureMode.PRELOADED),
+                    catalogEntry("search_tools", ToolDisclosureMode.PRELOADED),
                     catalogEntry("web_search", ToolDisclosureMode.PRELOADED),
                     catalogEntry("web_extract", ToolDisclosureMode.PRELOADED),
                     catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND),
                 )
             cache.toolCatalog = disclosureCatalog
+            cache.toolActivationRegistry =
+                com.browntowndev.enclave.domain.usecase.chat.ToolSessionActivationRegistry(
+                    onActiveNamesUpdated = { names -> cache.activeToolNames = names },
+                )
+            cache.toolActivationRegistry.seedTurn(listOf("search_tools", "web_search", "web_extract"))
+            cache.toolCallStrategy = com.browntowndev.enclave.domain.usecase.chat.ToolCallStrategy.LITE_RT_NATIVE
             service
                 .sendPrompt(
                     prompt = "disclose",
@@ -206,7 +216,7 @@ class RustLoopInferenceServiceTest {
                             toolCatalog = disclosureCatalog,
                             activeTools =
                                 listOf(
-                                    ToolDefinition.DISCLOSE_TOOL_SCHEMAS,
+                                    ToolDefinition.SEARCH_TOOLS,
                                     ToolDefinition.WEB_SEARCH,
                                     ToolDefinition.WEB_EXTRACT,
                                 ),
@@ -215,8 +225,8 @@ class RustLoopInferenceServiceTest {
             val liteRtResult =
                 liteRtLoop.executeToolSafely(
                     ToolCallRequest(
-                        toolName = "disclose_tool_schemas",
-                        argumentsJson = """{"tool_names":["append_blocks"]}""",
+                        toolName = "search_tools",
+                        argumentsJson = """{"query":"append_blocks"}""",
                         provider = "LITERT",
                         modelType = ModelType.FAST,
                     ),
@@ -229,6 +239,124 @@ class RustLoopInferenceServiceTest {
                 { assertEquals(0, callCount.get()) },
             )
         }
+
+    @Test
+    fun `start_artifact success activates append_blocks for next model turn`() =
+        runTest {
+            lateinit var result: AgentToolResult
+            val nextTurnCompleted = CompletableDeferred<Unit>()
+            val innerService = RecordingRustCompatibleService()
+            val artifactId = "hbWxQYaTV7WyJ39rLRiq9to9LCu2"
+            val port =
+                CapturingAgentLoopPort { host ->
+                    result =
+                        host
+                            .executeTools(
+                                listOf(
+                                    AgentToolCall(
+                                        callId = "call-artifact-1",
+                                        name = "start_artifact",
+                                        argumentsJson =
+                                            """{"author":"aether_oracle xAI","title":"MiniMax M3 - Complete Technical Overview"}""",
+                                    ),
+                                ),
+                            ).single()
+                    host.completeModelTurn(
+                        sessionMessages = emptyList(),
+                        systemPrompt = "",
+                        toolsSchemaJson =
+                            serializeToolNames(
+                                listOf(
+                                    "search_tools",
+                                    "web_search",
+                                    "web_extract",
+                                    "start_artifact",
+                                    "append_blocks",
+                                    "search_current_artifact",
+                                ),
+                            ),
+                        allowToolCall = true,
+                    )
+                    nextTurnCompleted.complete(Unit)
+                    send(AgentLoopEvent.Finished)
+                }
+            val executor =
+                object : ToolExecutorPort {
+                    override suspend fun execute(request: ToolCallRequest): ToolExecutionResult =
+                        ToolExecutionResult(
+                            toolName = request.toolName,
+                            resultJson =
+                                """{"status":"success","artifactId":"$artifactId","message":"Artifact initialized."}""",
+                        )
+                }
+            val service =
+                createService(
+                    agentLoopPort = port,
+                    inner = innerService,
+                    toolExecutor = executor,
+                )
+
+            service
+                .sendPrompt(
+                    prompt = "write overview",
+                    options =
+                        GenerationOptions(
+                            reasoningBudget = 0,
+                            toolCatalog =
+                                listOf(
+                                    catalogEntry("search_tools", ToolDisclosureMode.PRELOADED),
+                                    catalogEntry("web_search", ToolDisclosureMode.PRELOADED),
+                                    catalogEntry("web_extract", ToolDisclosureMode.PRELOADED),
+                                    catalogEntry("start_artifact", ToolDisclosureMode.DISCLOSE_ON_DEMAND),
+                                    catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND),
+                                    catalogEntry("search_current_artifact", ToolDisclosureMode.DISCLOSE_ON_DEMAND),
+                                ),
+                            activeTools =
+                                listOf(
+                                    ToolDefinition.SEARCH_TOOLS,
+                                    ToolDefinition.WEB_SEARCH,
+                                    ToolDefinition.WEB_EXTRACT,
+                                    ToolDefinition.START_ARTIFACT,
+                                ),
+                        ),
+                ).toList()
+            withTimeout(1_000) { nextTurnCompleted.await() }
+
+            val nextTurnToolNames = innerService.lastAvailableTools.map { it.name }.sorted()
+
+            assertAll(
+                {
+                    assertEquals(
+                        listOf(
+                            ToolDefinition.APPEND_BLOCKS.name,
+                            ToolDefinition.SEARCH_CURRENT_ARTIFACT.name,
+                        ),
+                        result.activatedToolNames.sorted(),
+                    )
+                },
+                {
+                    assertEquals(
+                        listOf(
+                            "append_blocks",
+                            "search_current_artifact",
+                            "search_tools",
+                            "start_artifact",
+                            "web_extract",
+                            "web_search",
+                        ),
+                        nextTurnToolNames,
+                    )
+                },
+            )
+        }
+
+    private fun lazyDisclosureCatalog(): List<ToolCatalogEntry> =
+        listOf(
+            catalogEntry("search_tools", ToolDisclosureMode.PRELOADED),
+            catalogEntry("web_search", ToolDisclosureMode.PRELOADED),
+            catalogEntry("web_extract", ToolDisclosureMode.PRELOADED),
+            catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND),
+        )
 
     private fun catalogEntry(
         name: String,
@@ -1264,6 +1392,7 @@ class RustLoopInferenceServiceTest {
             resolveCompactionSummaryModel = resolveCompactionSummaryModel,
             committedInferenceTranscripts = committedInferenceTranscripts,
             deviceEnvironmentRepository = deviceEnvironmentRepository,
+            embeddingEnginePort = com.browntowndev.enclave.domain.port.inference.Bm25OnlyEmbeddingEnginePort,
         )
 
     private fun resolveCompactionSummaryModel(fastConfig: ActiveModelConfiguration?): ResolveCompactionSummaryModelUseCase {

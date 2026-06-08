@@ -531,6 +531,7 @@ class Telemetry001InferenceTddRedTest {
             rollingSummarizer = RollingSummarizer(loggingPort, JTokkitTokenCounter),
             resolveCompactionSummaryModel = mockk(relaxed = true),
             telemetryEventPort = telemetryPort,
+            embeddingEnginePort = com.browntowndev.enclave.domain.port.inference.Bm25OnlyEmbeddingEnginePort,
         )
     }
 

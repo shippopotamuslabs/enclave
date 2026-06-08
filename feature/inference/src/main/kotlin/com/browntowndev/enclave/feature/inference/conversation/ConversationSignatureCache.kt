@@ -6,7 +6,9 @@ import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.SamplerConfig
 import com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry
+import com.browntowndev.enclave.domain.model.inference.ToolSearchIndexSnapshot
 import com.browntowndev.enclave.domain.usecase.chat.ToolCallStrategy
+import com.browntowndev.enclave.domain.usecase.chat.ToolSessionActivationRegistry
 import com.browntowndev.enclave.feature.inference.ConversationImpl
 import com.browntowndev.enclave.feature.inference.LiteRtConversation
 import com.google.ai.edge.litertlm.Conversation
@@ -50,8 +52,13 @@ internal class ConversationSignatureCache {
     @Volatile
     var activeToolNames: List<String> = emptyList()
 
+    lateinit var toolActivationRegistry: ToolSessionActivationRegistry
+
     @Volatile
     var toolCatalog: List<ToolCatalogEntry> = emptyList()
+
+    @Volatile
+    var toolSearchIndex: ToolSearchIndexSnapshot? = null
 
     @Volatile
     var toolCallStrategy: ToolCallStrategy = ToolCallStrategy.LITE_RT_NATIVE
@@ -71,7 +78,11 @@ internal class ConversationSignatureCache {
         currentSignature = null
         activeBackendIsNpu = false
         activeToolNames = emptyList()
+        if (::toolActivationRegistry.isInitialized) {
+            toolActivationRegistry.seedTurn(emptyList())
+        }
         toolCatalog = emptyList()
+        toolSearchIndex = null
         toolCallStrategy = ToolCallStrategy.LITE_RT_NATIVE
     }
 
