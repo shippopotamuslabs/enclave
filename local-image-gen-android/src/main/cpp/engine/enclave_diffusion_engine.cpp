@@ -340,13 +340,15 @@ bool runPipeline(
                 }
                 {
                     const int total_steps = scheduler->numTimesteps() - img2img_start_step;
+                    std::vector<float> noise_pred;
+                    std::vector<float> scaled_latents;
+                    noise_pred.resize(latents.size());
+                    scaled_latents.resize(latents.size());
                     for (int i = img2img_start_step; i < scheduler->numTimesteps(); ++i) {
                         if (!ensureNotCancelled(handle, error)) {
                             return false;
                         }
-                        std::vector<float> noise_pred;
-                        const std::vector<float> scaled_latents =
-                            scheduler->scale_model_input(latents, scheduler->timestepAt(i));
+                        scaled_latents = scheduler->scale_model_input(latents, scheduler->timestepAt(i));
                         const bool ran_unet = use_qnn
                             ? handle->qnn.runUnet(
                                   scaled_latents,

@@ -367,4 +367,59 @@ bool convertTensorOutputToFloat(const Qnn_Tensor_t& tensor, float** out, std::st
     return true;
 }
 
+bool convertTensorOutputToFloatBuffer(
+    const Qnn_Tensor_t& tensor,
+    float* out,
+    size_t out_capacity,
+    std::string& error) {
+    if (out == nullptr) {
+        error = "Output buffer is null.";
+        return false;
+    }
+    const void* buffer = clientData(tensor);
+    if (buffer == nullptr) {
+        error = "Tensor output buffer is missing.";
+        return false;
+    }
+    const size_t element_count = tensorElementCount(tensor);
+    if (element_count == 0) {
+        error = "Tensor output has zero elements.";
+        return false;
+    }
+    if (out_capacity < element_count) {
+        error = "Output float buffer is too small.";
+        return false;
+    }
+
+    const Qnn_DataType_t dtype = dataType(tensor);
+    const auto& quant = quantParams(tensor);
+    switch (dtype) {
+        case QNN_DATATYPE_FLOAT_32:
+            std::memcpy(out, buffer, element_count * sizeof(float));
+            break;
+        case QNN_DATATYPE_UFIXED_POINT_16:
+            ufixed16ToFloat(
+                out,
+                reinterpret_cast<const uint16_t*>(buffer),
+                quant.scaleOffsetEncoding.offset,
+                quant.scaleOffsetEncoding.scale,
+                element_count);
+            break;
+        case QNN_DATATYPE_UFIXED_POINT_8: {
+            const double offset_double = quant.scaleOffsetEncoding.offset;
+            const double scale_double = quant.scaleOffsetEncoding.scale;
+            const auto* bytes = reinterpret_cast<const uint8_t*>(buffer);
+            for (size_t i = 0; i < element_count; ++i) {
+                out[i] = static_cast<float>(
+                    (static_cast<double>(bytes[i]) + offset_double) * scale_double);
+            }
+            break;
+        }
+        default:
+            error = "Unsupported tensor output data type.";
+            return false;
+    }
+    return true;
+}
+
 }  // namespace enclave::diffusion
