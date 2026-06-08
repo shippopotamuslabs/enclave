@@ -23,6 +23,7 @@ sealed interface LiveVoiceUiState {
         val userCaption: String,
         val assistantCaption: String,
         val isMuted: Boolean,
+        val audioLevel: Float,
     ) : LiveVoiceUiState
 
     @Immutable

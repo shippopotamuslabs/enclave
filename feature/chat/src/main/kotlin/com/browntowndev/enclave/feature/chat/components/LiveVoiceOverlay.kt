@@ -1,6 +1,11 @@
 package com.browntowndev.enclave.feature.chat.components
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -22,15 +27,20 @@ import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -42,6 +52,8 @@ import com.browntowndev.enclave.core.ui.component.neo.neoSurface
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.feature.chat.LiveVoiceUiState
+import kotlin.math.sin
+import kotlinx.coroutines.delay
 
 @Composable
 fun LiveVoiceOverlay(
@@ -55,9 +67,22 @@ fun LiveVoiceOverlay(
     val userCaption = listeningState?.userCaption ?: speakingState?.userCaption.orEmpty()
     val assistantCaption = listeningState?.assistantCaption ?: speakingState?.assistantCaption.orEmpty()
     val isMuted = listeningState?.isMuted ?: speakingState?.isMuted ?: false
-    val micLevel = listeningState?.micLevel ?: 0f
+    val rawAudioLevel = listeningState?.micLevel ?: speakingState?.audioLevel ?: 0f
     val isConnecting = state is LiveVoiceUiState.Connecting
-    val isError = state is LiveVoiceUiState.Error
+    val errorState = state as? LiveVoiceUiState.Error
+    val isAssistantSpeaking = speakingState != null
+    val isAudioMotionActive =
+        when {
+            isConnecting || errorState != null -> false
+            isAssistantSpeaking -> true
+            listeningState != null -> !isMuted
+            else -> false
+        }
+    val audioMotion =
+        rememberLiveVoiceAudioMotion(
+            audioLevel = rawAudioLevel,
+            isActive = isAudioMotionActive,
+        )
 
     Box(
         modifier =
@@ -83,13 +108,15 @@ fun LiveVoiceOverlay(
             ) {
                 LiveVoiceOrb(
                     isConnecting = isConnecting,
-                    isSpeaking = speakingState != null,
-                    micLevel = micLevel,
+                    isSpeaking = isAssistantSpeaking,
+                    pulseLevel = audioMotion.displayLevel,
                 )
 
-                BlockyLiveVoiceWaveform(
-                    micLevel = micLevel,
-                    isActive = listeningState != null && !isMuted,
+                LiveVoiceWaveform(
+                    volumes = audioMotion.waveVolumes,
+                    wavePhase = audioMotion.wavePhase,
+                    isActive = isAudioMotionActive,
+                    isAssistantSpeaking = isAssistantSpeaking,
                     modifier =
                         Modifier
                             .fillMaxWidth()
@@ -101,8 +128,8 @@ fun LiveVoiceOverlay(
                     text =
                         when {
                             isConnecting -> "Connecting..."
-                            isError -> (state as LiveVoiceUiState.Error).message
-                            speakingState != null -> "Assistant speaking"
+                            errorState != null -> errorState.message
+                            isAssistantSpeaking -> "Assistant speaking"
                             isMuted -> "Muted"
                             else -> "Listening"
                         },
@@ -150,15 +177,79 @@ fun LiveVoiceOverlay(
     }
 }
 
+private data class LiveVoiceAudioMotion(
+    val displayLevel: Float,
+    val waveVolumes: List<Float>,
+    val wavePhase: Int,
+)
+
+@Composable
+private fun rememberLiveVoiceAudioMotion(
+    audioLevel: Float,
+    isActive: Boolean,
+): LiveVoiceAudioMotion {
+    val latestLevel = rememberUpdatedState(audioLevel)
+    var displayLevel by remember { mutableFloatStateOf(0f) }
+    var waveVolumes by remember { mutableStateOf(emptyList<Float>()) }
+    var wavePhase by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(isActive) {
+        if (!isActive) {
+            displayLevel = 0f
+            waveVolumes = emptyList()
+            wavePhase = 0
+            return@LaunchedEffect
+        }
+        var smoothedLevel = 0f
+        while (isActive) {
+            val target = (latestLevel.value * LIVE_VOICE_LEVEL_GAIN).coerceIn(0f, 1f)
+            smoothedLevel += (target - smoothedLevel) * LEVEL_SMOOTHING_ALPHA
+            displayLevel = smoothedLevel
+            waveVolumes = (waveVolumes + smoothedLevel).takeLast(WAVE_HISTORY_SIZE)
+            wavePhase += 1
+            delay(WAVE_SAMPLE_INTERVAL_MS)
+        }
+    }
+
+    return LiveVoiceAudioMotion(
+        displayLevel = displayLevel,
+        waveVolumes = waveVolumes,
+        wavePhase = wavePhase,
+    )
+}
+
 @Composable
 private fun LiveVoiceOrb(
     isConnecting: Boolean,
     isSpeaking: Boolean,
-    micLevel: Float,
+    pulseLevel: Float,
     modifier: Modifier = Modifier,
 ) {
+    val connectingPulse =
+        if (isConnecting) {
+            val infiniteTransition = rememberInfiniteTransition(label = "liveVoiceConnectingPulse")
+            infiniteTransition.animateFloat(
+                initialValue = 0.25f,
+                targetValue = 0.85f,
+                animationSpec =
+                    infiniteRepeatable(
+                        animation = tween(durationMillis = 900),
+                        repeatMode = RepeatMode.Reverse,
+                    ),
+                label = "liveVoiceConnectingPulseValue",
+            ).value
+        } else {
+            null
+        }
+    val targetPulse =
+        when {
+            connectingPulse != null -> connectingPulse
+            isSpeaking -> pulseLevel.coerceIn(SILENCE_ORB_PULSE, 1f)
+            else -> pulseLevel.coerceIn(MIN_LISTENING_ORB_PULSE, 1f)
+        }
     val pulse by animateFloatAsState(
-        targetValue = if (isConnecting) 0.4f else micLevel.coerceIn(0.15f, 1f),
+        targetValue = targetPulse,
+        animationSpec = tween(durationMillis = if (isSpeaking) ORB_SPEAKING_ANIMATION_MS else ORB_PULSE_ANIMATION_MS),
         label = "liveVoiceOrbPulse",
     )
     val orbColor =
@@ -170,10 +261,10 @@ private fun LiveVoiceOrb(
     Box(
         modifier =
             modifier
-                .size(120.dp)
+                .size(ORB_OUTER_SIZE_DP.dp)
                 .clip(CircleShape)
                 .neoSurface(
-                    backgroundColor = orbColor.copy(alpha = 0.2f + pulse * 0.35f),
+                    backgroundColor = orbColor.copy(alpha = ORB_RING_ALPHA),
                     borderColor = neoBorderColor(),
                     withShadow = true,
                     shape = CircleShape,
@@ -183,46 +274,72 @@ private fun LiveVoiceOrb(
         Box(
             modifier =
                 Modifier
-                    .size((56 + pulse * 24).dp)
+                    .size((ORB_INNER_MIN_DP + pulse * ORB_INNER_RANGE_DP).dp)
                     .clip(CircleShape)
-                    .background(orbColor.copy(alpha = 0.85f)),
+                    .background(orbColor.copy(alpha = ORB_INNER_ALPHA)),
         )
     }
 }
 
 @Composable
-private fun BlockyLiveVoiceWaveform(
-    micLevel: Float,
+private fun LiveVoiceWaveform(
+    volumes: List<Float>,
+    wavePhase: Int,
     isActive: Boolean,
+    isAssistantSpeaking: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val barHeights =
-        remember(micLevel, isActive) {
-            List(BLOCKY_BAR_COUNT) { index ->
-                val phase = (index.toFloat() / BLOCKY_BAR_COUNT)
-                val base = if (isActive) micLevel.coerceIn(0.08f, 1f) else 0.08f
-                (base * (0.45f + phase * 0.55f)).coerceIn(0.08f, 1f)
-            }
+    val activeColor =
+        if (isAssistantSpeaking) {
+            MaterialTheme.colorScheme.secondary
+        } else {
+            MaterialTheme.colorScheme.primary
         }
-    val primaryColor = MaterialTheme.colorScheme.primary
     val silenceColor = MaterialTheme.colorScheme.surfaceVariant
+    val connectingPulse =
+        if (!isActive) {
+            val infiniteTransition = rememberInfiniteTransition(label = "liveVoiceIdleWavePulse")
+            infiniteTransition.animateFloat(
+                initialValue = 0.04f,
+                targetValue = 0.14f,
+                animationSpec =
+                    infiniteRepeatable(
+                        animation = tween(durationMillis = 700),
+                        repeatMode = RepeatMode.Reverse,
+                    ),
+                label = "liveVoiceIdleWavePulseValue",
+            ).value
+        } else {
+            null
+        }
 
-    Canvas(modifier = modifier) {
-        val barWidth = 6.dp.toPx()
-        val spacing = 4.dp.toPx()
-        val totalWidth = BLOCKY_BAR_COUNT * barWidth + (BLOCKY_BAR_COUNT - 1) * spacing
-        var x = (size.width - totalWidth) / 2f
+    Canvas(modifier = modifier.fillMaxSize()) {
+        val barWidth = 4.dp.toPx()
+        val spacing = 3.dp.toPx()
+        val maxBars = (size.width / (barWidth + spacing)).toInt().coerceAtLeast(1)
+        val displayVolumes =
+            if (isActive) {
+                volumes.takeLast(maxBars)
+            } else {
+                List(maxBars) { index ->
+                    val phase = index.toFloat() / maxBars
+                    (connectingPulse ?: IDLE_WAVE_LEVEL) * (0.6f + phase * 0.4f)
+                }
+            }
+        val startX = size.width - displayVolumes.size * (barWidth + spacing)
 
-        barHeights.forEach { heightFraction ->
-            val barHeight = (size.height * heightFraction).coerceAtLeast(6.dp.toPx())
-            val y = (size.height - barHeight) / 2f
+        displayVolumes.forEachIndexed { index, volume ->
+            val modulatedVolume = modulateBarVolume(volume, index, wavePhase)
+            val h = (modulatedVolume * size.height).coerceIn(4.dp.toPx(), size.height)
+            val x = startX + index * (barWidth + spacing)
+            val y = (size.height - h) / 2f
+
             drawRoundRect(
-                color = if (isActive && heightFraction > 0.1f) primaryColor else silenceColor,
+                color = if (modulatedVolume > SILENCE_THRESHOLD) activeColor else silenceColor,
                 topLeft = Offset(x, y),
-                size = Size(barWidth, barHeight),
-                cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx()),
+                size = Size(barWidth, h),
+                cornerRadius = CornerRadius(barWidth / 2, barWidth / 2),
             )
-            x += barWidth + spacing
         }
     }
 }
@@ -260,7 +377,31 @@ private fun LiveVoiceCaptionCard(
     }
 }
 
-private const val BLOCKY_BAR_COUNT = 16
+private fun modulateBarVolume(
+    volume: Float,
+    barIndex: Int,
+    wavePhase: Int,
+): Float {
+    val wobble = sin(barIndex * 0.9f + wavePhase * 0.32f)
+    val multiplier = 0.55f + ((wobble + 1f) * 0.225f)
+    return (volume * multiplier).coerceIn(0f, 1f)
+}
+
+private const val LIVE_VOICE_LEVEL_GAIN = 8f
+private const val WAVE_SAMPLE_INTERVAL_MS = 50L
+private const val WAVE_HISTORY_SIZE = 100
+private const val LEVEL_SMOOTHING_ALPHA = 0.55f
+private const val ORB_PULSE_ANIMATION_MS = 80
+private const val ORB_SPEAKING_ANIMATION_MS = 45
+private const val ORB_OUTER_SIZE_DP = 120
+private const val ORB_INNER_MIN_DP = 40
+private const val ORB_INNER_RANGE_DP = 48
+private const val ORB_RING_ALPHA = 0.22f
+private const val ORB_INNER_ALPHA = 0.9f
+private const val SILENCE_ORB_PULSE = 0.04f
+private const val MIN_LISTENING_ORB_PULSE = 0.1f
+private const val SILENCE_THRESHOLD = 0.01f
+private const val IDLE_WAVE_LEVEL = 0.04f
 
 @Preview(showBackground = true, name = "Live Voice Overlay Listening")
 @Composable
@@ -274,6 +415,25 @@ private fun LiveVoiceOverlayListeningPreview() {
                     assistantCaption = "",
                     isMuted = false,
                     micLevel = 0.6f,
+                ),
+            onEnd = {},
+            onToggleMute = {},
+        )
+    }
+}
+
+@Preview(showBackground = true, name = "Live Voice Overlay Assistant Speaking")
+@Composable
+@Suppress("UnusedPrivateMember")
+private fun LiveVoiceOverlayAssistantSpeakingPreview() {
+    EnclaveTheme {
+        LiveVoiceOverlay(
+            state =
+                LiveVoiceUiState.AssistantSpeaking(
+                    userCaption = "Tell me a joke",
+                    assistantCaption = "Why did the developer go broke?",
+                    isMuted = false,
+                    audioLevel = 0.45f,
                 ),
             onEnd = {},
             onToggleMute = {},
