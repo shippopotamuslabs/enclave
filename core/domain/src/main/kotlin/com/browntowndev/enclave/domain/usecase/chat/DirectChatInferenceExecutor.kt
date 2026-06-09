@@ -195,6 +195,10 @@ class DirectChatInferenceExecutor
                                 emit(MessageGenerationState.GeneratingText(event.chunk, event.modelType))
                             }
 
+                            is InferenceEvent.AnswerStreamBoundary -> {
+                                emit(MessageGenerationState.AnswerStreamBoundary(event.modelType))
+                            }
+
                             is InferenceEvent.WebSearchResults -> {
                                 emit(MessageGenerationState.WebSearchSourcesAttached(event.sources, event.modelType))
                             }

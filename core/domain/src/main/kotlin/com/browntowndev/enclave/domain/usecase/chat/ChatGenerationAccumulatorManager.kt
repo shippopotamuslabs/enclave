@@ -57,6 +57,10 @@ internal class ChatGenerationAccumulatorManager(
                 }
             }
 
+            is MessageGenerationState.AnswerStreamBoundary -> {
+                getOrCreateAccumulator(state.modelType).markAnswerStreamBoundaryIfNeeded()
+            }
+
             is MessageGenerationState.GeneratingText -> {
                 getOrCreateAccumulator(state.modelType).apply {
                     appendContent(state.textDelta)
@@ -301,6 +305,7 @@ internal class MessageAccumulator(
     private var telemetryRowsVersion = 0
     private var cachedSnapshotVersion = -1L
     private var cachedSnapshot: MessageSnapshot? = null
+    private var pendingAnswerStreamBoundary = false
 
     val webSearchSources: MutableList<WebSearchSource> = webSearchSourcesList
     val artifacts: MutableList<ArtifactGenerationRequest> = artifactsList
@@ -386,12 +391,26 @@ internal class MessageAccumulator(
         markTranscriptSegmentsDirty()
     }
 
+    fun markAnswerStreamBoundaryIfNeeded() {
+        if (hasNonEmptyAssistantText()) {
+            pendingAnswerStreamBoundary = true
+        }
+    }
+
     fun appendThinking(chunk: String) {
         if (thinkingEndTime != null) {
             thinkingEndTime = null
             thinkingStartTime = System.currentTimeMillis()
         } else if (thinkingStartTime == null) {
             thinkingStartTime = System.currentTimeMillis()
+        }
+
+        val startsNewThinkingWaveAfterAnswer =
+            transcriptSegmentsMutable.isNotEmpty() &&
+                transcriptSegmentsMutable.last().kind == TranscriptSegmentKind.ASSISTANT_TEXT
+        if (startsNewThinkingWaveAfterAnswer) {
+            pendingAnswerStreamBoundary = false
+            thinkingRaw.appendSegmentSeparatorIfNeeded()
         }
         thinkingRaw.append(chunk)
 
@@ -406,7 +425,7 @@ internal class MessageAccumulator(
                     ),
                 )
             }
-            transcriptSegmentsMutable.last().kind == TranscriptSegmentKind.ASSISTANT_TEXT -> {
+            startsNewThinkingWaveAfterAnswer -> {
                 transcriptSegmentsMutable.add(
                     MutableTranscriptSegment(
                         kind = TranscriptSegmentKind.THINKING,
@@ -422,6 +441,12 @@ internal class MessageAccumulator(
     }
 
     fun appendContent(chunk: String) {
+        if (chunk.isEmpty()) return
+
+        val shouldStartNewAnswerSegment = consumeAnswerStreamBoundary()
+        if (shouldStartNewAnswerSegment) {
+            content.appendSegmentSeparatorIfNeeded()
+        }
         content.append(chunk)
         if (thinkingStartTime != null && thinkingEndTime == null) {
             thinkingEndTime = System.currentTimeMillis()
@@ -438,6 +463,14 @@ internal class MessageAccumulator(
             }
             transcriptSegmentsMutable.last().kind == TranscriptSegmentKind.THINKING -> {
                 finalizeOpenThinkingSegment()
+                transcriptSegmentsMutable.add(
+                    MutableTranscriptSegment(
+                        kind = TranscriptSegmentKind.ASSISTANT_TEXT,
+                        text = StringBuilder(chunk),
+                    ),
+                )
+            }
+            shouldStartNewAnswerSegment -> {
                 transcriptSegmentsMutable.add(
                     MutableTranscriptSegment(
                         kind = TranscriptSegmentKind.ASSISTANT_TEXT,
@@ -463,9 +496,22 @@ internal class MessageAccumulator(
         thinkingStartTime = null
         thinkingEndTime = null
         transcriptSegmentsMutable.clear()
+        pendingAnswerStreamBoundary = false
         currentState = MessageState.PROCESSING
         markTranscriptSegmentsDirty()
         markScalarDirty()
+    }
+
+    private fun hasNonEmptyAssistantText(): Boolean {
+        if (content.isNotBlank()) return true
+        val last = transcriptSegmentsMutable.lastOrNull() ?: return false
+        return last.kind == TranscriptSegmentKind.ASSISTANT_TEXT && last.text.isNotBlank()
+    }
+
+    private fun consumeAnswerStreamBoundary(): Boolean {
+        if (!pendingAnswerStreamBoundary) return false
+        pendingAnswerStreamBoundary = false
+        return true
     }
 
     fun addTelemetry(row: TurnTelemetry) {

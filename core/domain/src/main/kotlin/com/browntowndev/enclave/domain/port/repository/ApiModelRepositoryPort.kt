@@ -14,6 +14,8 @@ interface ApiModelRepositoryPort {
 
     suspend fun getAllCredentials(): List<ApiCredentials>
 
+    suspend fun getAllCredentialAliases(): Set<String>
+
     suspend fun getCredentialsById(id: ApiCredentialsId): ApiCredentials?
 
     suspend fun saveCredentials(

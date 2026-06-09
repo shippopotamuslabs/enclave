@@ -45,6 +45,14 @@ sealed interface MessageGenerationState {
         val modelType: ModelType,
     ) : MessageGenerationState
 
+    /**
+     * Marks that the next answer tokens belong to a fresh model response and should not be
+     * concatenated directly against prior assistant text unless thinking separates them.
+     */
+    data class AnswerStreamBoundary(
+        val modelType: ModelType,
+    ) : MessageGenerationState
+
     data class Finished(
         val modelType: ModelType,
     ) : MessageGenerationState

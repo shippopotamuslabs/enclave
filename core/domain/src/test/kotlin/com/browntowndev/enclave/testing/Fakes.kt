@@ -315,6 +315,8 @@ class FakeApiModelRepository : ApiModelRepositoryPort {
 
     override suspend fun getAllCredentials(): List<ApiCredentials> = _credentials.value
 
+    override suspend fun getAllCredentialAliases(): Set<String> = _credentials.value.map { it.credentialAlias }.toSet()
+
     override suspend fun getCredentialsById(id: ApiCredentialsId): ApiCredentials? = _credentials.value.find { it.id == id }
 
     override suspend fun findMatchingCredentials(

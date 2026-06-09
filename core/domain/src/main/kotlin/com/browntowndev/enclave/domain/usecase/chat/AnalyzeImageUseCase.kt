@@ -69,6 +69,7 @@ class AnalyzeImageUseCase
                                     is InferenceEvent.EngineLoading -> Unit
                                     is InferenceEvent.Processing -> Unit
                                     is InferenceEvent.PartialResponse -> description.append(event.chunk)
+                                    is InferenceEvent.AnswerStreamBoundary -> Unit
                                     is InferenceEvent.Thinking -> Unit
                                     is InferenceEvent.WebSearchResults -> Unit
                                     is InferenceEvent.Artifacts -> Unit
@@ -77,7 +78,8 @@ class AnalyzeImageUseCase
                                     is InferenceEvent.PreCompact -> Unit
                                     is InferenceEvent.PostCompact -> Unit
                                     is InferenceEvent.ToolRepaired -> Unit
-                                    is InferenceEvent.ModelApiRetryScheduled -> Unit // vision turns are single-shot; buffer reset not surfaced
+                                    // Vision turns are single-shot; retry buffer reset is not surfaced.
+                                    is InferenceEvent.ModelApiRetryScheduled -> Unit
                                     is InferenceEvent.TelemetryCaptured -> Unit
                                     is InferenceEvent.Finished -> {
                                         loggingPort.info(

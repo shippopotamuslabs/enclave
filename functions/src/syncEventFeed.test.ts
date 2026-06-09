@@ -11,6 +11,10 @@ describe('sync event feed (pure handlers)', () => {
         expect(SYNC_FEED_ALLOWLIST).to.include('message_inference_telemetry');
     });
 
+    it('SCN-FUNC-001c allowlist contains live_voice_providers', () => {
+        expect(SYNC_FEED_ALLOWLIST).to.include('live_voice_providers');
+    });
+
     it('upsert trigger writes a monotonic sync event', async () => {
         const store = new InMemorySyncFeedFirestore();
         store.syncMeta.nextSequence = 0;

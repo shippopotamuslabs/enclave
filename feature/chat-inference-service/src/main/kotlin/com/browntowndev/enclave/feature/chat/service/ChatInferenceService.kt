@@ -402,6 +402,8 @@ class ChatInferenceService : Service() {
                         is InferenceEvent.Processing -> MessageGenerationState.Processing(event.modelType)
                         is InferenceEvent.Thinking -> MessageGenerationState.ThinkingLive(event.chunk, modelType)
                         is InferenceEvent.PartialResponse -> MessageGenerationState.GeneratingText(event.chunk, event.modelType)
+                        is InferenceEvent.AnswerStreamBoundary ->
+                            MessageGenerationState.AnswerStreamBoundary(event.modelType)
                         is InferenceEvent.WebSearchResults ->
                             MessageGenerationState.WebSearchSourcesAttached(
                                 event.sources,
