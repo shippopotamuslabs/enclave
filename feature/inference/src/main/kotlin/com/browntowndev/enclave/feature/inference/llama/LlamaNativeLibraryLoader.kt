@@ -8,10 +8,11 @@ import android.util.Log
  */
 internal object LlamaNativeLibraryLoader {
     private const val TAG = "LlamaNativeLibraryLoader"
+    private const val MIN_SVE_BITS = 256
 
-    private const val LIBRARY_CPUDETECT = "cpudetect"
-    private const val LIBRARY_SVE = "llama-jni-sve"
-    private const val LIBRARY_NEON = "llama-jni-neon"
+    const val LIBRARY_CPUDETECT = "cpudetect"
+    const val LIBRARY_SVE = "llama-jni-sve"
+    const val LIBRARY_NEON = "llama-jni-neon"
 
     /**
      * Load the optimal native library based on hardware SVE support.
@@ -35,34 +36,76 @@ internal object LlamaNativeLibraryLoader {
                 0
             }
 
-        val isBlacklisted = isKnownSveBlacklisted()
-        val libraryToLoad =
-            when {
-                isBlacklisted.first -> {
-                    Log.w(TAG, "Blacklisted device: ${isBlacklisted.second}. Using NEON.")
-                    LIBRARY_NEON
-                }
-                sveBits >= 256 -> {
-                    Log.i(TAG, "SVE $sveBits-bit confirmed. Loading SVE library.")
-                    LIBRARY_SVE
-                }
-                sveBits > 0 -> {
-                    Log.i(TAG, "SVE present but narrow ($sveBits-bit < 256). Using NEON.")
-                    LIBRARY_NEON
-                }
-                else -> {
-                    Log.i(TAG, "No SVE support detected. Using NEON.")
-                    LIBRARY_NEON
-                }
-            }
-
-        try {
-            Log.i(TAG, "Loading llama library: $libraryToLoad")
-            System.loadLibrary(libraryToLoad)
-            Log.i(TAG, "Library loaded successfully")
-        } catch (e: Throwable) {
-            Log.e(TAG, "Critical: Failed to load $libraryToLoad", e)
+        val blacklist = isKnownSveBlacklisted()
+        val preferred = resolvePreferredLibrary(sveBits = sveBits, isBlacklisted = blacklist.first)
+        if (blacklist.first) {
+            Log.w(TAG, "Blacklisted device: ${blacklist.second}. Using NEON.")
+        } else if (preferred == LIBRARY_SVE) {
+            Log.i(TAG, "SVE $sveBits-bit confirmed. Loading SVE library.")
+        } else if (sveBits > 0) {
+            Log.i(TAG, "SVE present but narrow ($sveBits-bit < $MIN_SVE_BITS). Using NEON.")
+        } else {
+            Log.i(TAG, "No SVE support detected. Using NEON.")
         }
+
+        val loaded =
+            loadLibraryWithFallback(
+                preferred = preferred,
+                fallback = LIBRARY_NEON,
+            )
+        if (loaded == null) {
+            Log.e(TAG, "Critical: Failed to load llama native library (preferred=$preferred)")
+        } else {
+            Log.i(TAG, "Library loaded successfully: $loaded")
+        }
+    }
+
+    /**
+     * Picks the llama-jni variant for this device. SVE is only selected when hardware reports
+     * at least [MIN_SVE_BITS] and the device is not on the known-bad list.
+     */
+    fun resolvePreferredLibrary(
+        sveBits: Int,
+        isBlacklisted: Boolean,
+    ): String =
+        when {
+            isBlacklisted -> LIBRARY_NEON
+            sveBits >= MIN_SVE_BITS -> LIBRARY_SVE
+            else -> LIBRARY_NEON
+        }
+
+    /**
+     * Attempts [preferred] first, then [fallback] when the preferred build is missing from the APK.
+     */
+    fun loadLibraryWithFallback(
+        preferred: String,
+        fallback: String,
+    ): String? {
+        if (preferred == fallback) {
+            return runCatching {
+                Log.i(TAG, "Loading llama library: $preferred")
+                System.loadLibrary(preferred)
+                preferred
+            }.onFailure { error ->
+                Log.e(TAG, "Critical: Failed to load $preferred", error)
+            }.getOrNull()
+        }
+
+        runCatching {
+            Log.i(TAG, "Loading llama library: $preferred")
+            System.loadLibrary(preferred)
+            return preferred
+        }.onFailure { error ->
+            Log.w(TAG, "Preferred library $preferred unavailable, falling back to $fallback", error)
+        }
+
+        return runCatching {
+            Log.i(TAG, "Loading llama library: $fallback")
+            System.loadLibrary(fallback)
+            fallback
+        }.onFailure { error ->
+            Log.e(TAG, "Critical: Failed to load fallback $fallback", error)
+        }.getOrNull()
     }
 
     /** Devices with broken 128-bit SVE should use the NEON build. */
