@@ -92,12 +92,39 @@ class OpenAiResponseStreamHandlerTest {
     // ── handleStreamTermination ──────────────────────────────────────────────
 
     @Test
-    fun `handleStreamTermination returns state when recovery is possible`() {
+    fun `handleStreamTermination returns state when substantial text was streamed`() {
         val handler = createHandler()
         val state = StreamState(emittedAny = true)
+        state.streamedAssistantMessage.append("x".repeat(MIN_SALVAGEABLE_STREAM_CHARS))
         val result = handler.handleStreamTermination(state, "stream ended unexpectedly", "checking next event")
         assertNotNull(result)
         assertEquals(state, result)
+    }
+
+    @Test
+    fun `handleStreamTermination returns state when complete tool calls were buffered`() {
+        val handler = createHandler()
+        val state = StreamState(emittedAny = true)
+        state.toolCallRequests +=
+            ToolCallRequest(
+                toolName = "search",
+                argumentsJson = """{"q":"test"}""",
+                provider = "TEST",
+                modelType = ModelType.THINKING,
+                chatId = null,
+                userMessageId = null,
+            )
+        val result = handler.handleStreamTermination(state, "stream ended unexpectedly", "checking next event")
+        assertNotNull(result)
+    }
+
+    @Test
+    fun `handleStreamTermination returns null for short partial so retry path can replay`() {
+        val handler = createHandler()
+        val state = StreamState(emittedAny = true)
+        state.streamedAssistantMessage.append("only a few words")
+        val result = handler.handleStreamTermination(state, "stream ended unexpectedly", "checking next event")
+        assertNull(result)
     }
 
     @Test
@@ -112,7 +139,9 @@ class OpenAiResponseStreamHandlerTest {
     fun `handleStreamTermination returns null for non-recoverable error`() {
         val handler = createHandler()
         val state = StreamState(emittedAny = true)
-        val result = handler.handleStreamTermination(state, "connection refused", "reading next event")
+        // "connection refused" became a transient transport message with the model
+        // API retry feature; a permanent auth failure is the non-recoverable sample.
+        val result = handler.handleStreamTermination(state, "401 unauthorized: invalid api key", "reading next event")
         assertNull(result)
     }
 
@@ -476,6 +505,7 @@ class OpenAiResponseStreamHandlerTest {
         runTest {
             val handler = createHandler()
             val state = StreamState(emittedAny = true)
+            state.streamedAssistantMessage.append("p".repeat(MIN_SALVAGEABLE_STREAM_CHARS))
             val event = mockk<ResponseStreamEvent>(relaxed = true)
             val failed = mockk<ResponseFailedEvent>()
             val response = mockk<com.openai.models.responses.Response>()
