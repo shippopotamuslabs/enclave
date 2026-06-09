@@ -105,8 +105,76 @@ class ChatGenerationAccumulatorManagerTest {
 
             assertNull(acc.thinkingEndTime, "New CoT wave must reset end time so duration/timer are not stale")
             assertEquals(MessageState.THINKING, acc.currentState)
-            assertEquals("cot1cot2", acc.thinkingRaw.toString())
+            assertEquals("cot1\n\ncot2", acc.thinkingRaw.toString())
             assertEquals("answer1", acc.content.toString())
+        }
+
+    @Test
+    fun `answer stream boundary starts new assistant segment after prior answer text`() =
+        runTest {
+            val manager =
+                ChatGenerationAccumulatorManager(
+                    mode = Mode.FAST,
+                    chatId = ChatId("chat"),
+                    userMessageId = MessageId("user"),
+                    defaultAssistantMessageId = MessageId("assistant"),
+                    chatRepository = mockk(relaxed = true),
+                )
+
+            manager.reduce(MessageGenerationState.GeneratingText("Before tools.", ModelType.FAST))
+            manager.reduce(MessageGenerationState.AnswerStreamBoundary(ModelType.FAST))
+            manager.reduce(MessageGenerationState.GeneratingText("After tools.", ModelType.FAST))
+
+            val snapshot = manager.toMessagesState().messages.getValue(MessageId("assistant"))
+            assertEquals("Before tools.\n\nAfter tools.", snapshot.content)
+            val segs = snapshot.transcriptSegments
+            assertEquals(2, segs.size)
+            val first = segs[0] as MessageTranscriptSegment.AssistantText
+            val second = segs[1] as MessageTranscriptSegment.AssistantText
+            assertEquals("Before tools.", first.text)
+            assertEquals("After tools.", second.text)
+        }
+
+    @Test
+    fun `answer stream boundary is ignored before any assistant text exists`() =
+        runTest {
+            val manager =
+                ChatGenerationAccumulatorManager(
+                    mode = Mode.FAST,
+                    chatId = ChatId("chat"),
+                    userMessageId = MessageId("user"),
+                    defaultAssistantMessageId = MessageId("assistant"),
+                    chatRepository = mockk(relaxed = true),
+                )
+
+            manager.reduce(MessageGenerationState.AnswerStreamBoundary(ModelType.FAST))
+            manager.reduce(MessageGenerationState.GeneratingText("Hello", ModelType.FAST))
+
+            val snapshot = manager.toMessagesState().messages.getValue(MessageId("assistant"))
+            assertEquals("Hello", snapshot.content)
+            assertEquals(1, snapshot.transcriptSegments.size)
+        }
+
+    @Test
+    fun `thinking after answer clears pending answer stream boundary`() =
+        runTest {
+            val manager =
+                ChatGenerationAccumulatorManager(
+                    mode = Mode.FAST,
+                    chatId = ChatId("chat"),
+                    userMessageId = MessageId("user"),
+                    defaultAssistantMessageId = MessageId("assistant"),
+                    chatRepository = mockk(relaxed = true),
+                )
+
+            manager.reduce(MessageGenerationState.GeneratingText("First", ModelType.FAST))
+            manager.reduce(MessageGenerationState.AnswerStreamBoundary(ModelType.FAST))
+            manager.reduce(MessageGenerationState.ThinkingLive("more thought", ModelType.FAST))
+            manager.reduce(MessageGenerationState.GeneratingText("Second", ModelType.FAST))
+
+            val snapshot = manager.toMessagesState().messages.getValue(MessageId("assistant"))
+            assertEquals("FirstSecond", snapshot.content)
+            assertEquals(3, snapshot.transcriptSegments.size)
         }
 
     @Test

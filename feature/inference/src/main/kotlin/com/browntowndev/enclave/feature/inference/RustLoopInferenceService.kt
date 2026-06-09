@@ -296,7 +296,7 @@ class RustLoopInferenceService(
                             }
                             is AgentLoopEvent.ThinkingToken -> send(InferenceEvent.Thinking(event.text, modelType))
                             is AgentLoopEvent.ToolCallExecuted -> {}
-                            is AgentLoopEvent.TurnStarted -> {}
+                            is AgentLoopEvent.TurnStarted -> send(InferenceEvent.AnswerStreamBoundary(modelType))
                             is AgentLoopEvent.TurnCompleted -> {}
                             is AgentLoopEvent.CompactionApplied ->
                                 send(

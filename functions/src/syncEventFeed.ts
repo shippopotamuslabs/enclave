@@ -62,6 +62,7 @@ export const SYNC_FEED_ALLOWLIST: ReadonlyArray<string> = Object.freeze([
     'local_model_configs',
     'default_models',
     'tts_providers',
+    'live_voice_providers',
     'media_providers',
     'studio_albums',
     'studio_gallery',

@@ -42,7 +42,7 @@ class SaveApiProviderDraftUseCase
                     if (isNewAsset && linkedExistingAsset == null) {
                         generateUniqueAlias(
                             provider = draft.provider.name,
-                            existingAliases = existingAssets.map { it.credentials.credentialAlias }.toSet(),
+                            existingAliases = apiModelRepository.getAllCredentialAliases(),
                         )
                     } else {
                         draft.credentialAlias

@@ -6,6 +6,11 @@ import com.browntowndev.enclave.domain.model.inference.ModelApiTransportHeuristi
  * Maps host model-transport failures into Rust [`submit_model_turn_failure`] reports.
  */
 internal object ModelTurnFailureClassifier {
+    private const val HTTP_STATUS_MIN = 100
+    private const val HTTP_STATUS_MAX = 599
+    private const val HTTP_CLIENT_ERROR_MIN = 400
+    private const val HTTP_CLIENT_ERROR_MAX = 499
+
     fun classify(
         error: Throwable,
         partialOutputChars: Int,
@@ -47,14 +52,15 @@ internal object ModelTurnFailureClassifier {
                 Regex("""\bHTTP\s+(\d{3})\b""", RegexOption.IGNORE_CASE),
                 Regex("""\b(\d{3}):\s"""),
             )
-        for (pattern in patterns) {
-            val match = pattern.find(message) ?: continue
-            val code = match.groupValues[1].toIntOrNull() ?: continue
-            if (code in 100..599) {
-                return code.toUShort()
-            }
+        return patterns.firstNotNullOfOrNull { pattern ->
+            pattern
+                .find(message)
+                ?.groupValues
+                ?.getOrNull(1)
+                ?.toIntOrNull()
+                ?.takeIf { it in HTTP_STATUS_MIN..HTTP_STATUS_MAX }
+                ?.toUShort()
         }
-        return null
     }
 
     private fun extractProviderCode(message: String): String? {
@@ -77,25 +83,15 @@ internal object ModelTurnFailureClassifier {
         httpStatus: UShort?,
     ): Boolean {
         val status = httpStatus?.toInt()
-        if (ModelApiTransportHeuristics.isTransientHttpStatus(status)) {
-            return false
-        }
-        if (ModelApiTransportHeuristics.isPermanentHttpStatus(status)) {
-            return true
-        }
         val normalized = message.lowercase()
-        if (
+        return when {
+            ModelApiTransportHeuristics.isTransientHttpStatus(status) -> false
+            ModelApiTransportHeuristics.isPermanentHttpStatus(status) -> true
             ModelApiTransportHeuristics.isTransientTransportMessage(normalized) ||
-            ModelApiTransportHeuristics.isTransientTransportErrorType(error)
-        ) {
-            return false
+                ModelApiTransportHeuristics.isTransientTransportErrorType(error) -> false
+            ModelApiTransportHeuristics.isPermanentTransportMessage(normalized) -> true
+            status != null && status in HTTP_CLIENT_ERROR_MIN..HTTP_CLIENT_ERROR_MAX -> true
+            else -> true
         }
-        if (ModelApiTransportHeuristics.isPermanentTransportMessage(normalized)) {
-            return true
-        }
-        if (status != null && status in 400..499) {
-            return true
-        }
-        return true
     }
 }

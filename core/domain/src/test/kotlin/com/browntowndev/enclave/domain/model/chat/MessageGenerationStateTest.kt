@@ -38,6 +38,11 @@ class MessageGenerationStateTest {
     }
 
     @Test
+    fun `isTerminal returns false for AnswerStreamBoundary`() {
+        assertFalse(MessageGenerationState.AnswerStreamBoundary(ModelType.MAIN).isTerminal)
+    }
+
+    @Test
     fun `isTerminal returns false for EngineLoading`() {
         assertFalse(MessageGenerationState.EngineLoading(ModelType.MAIN).isTerminal)
     }

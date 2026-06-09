@@ -25,6 +25,26 @@ interface ApiCredentialsDao {
     @Query("SELECT * FROM api_credentials WHERE api_key_signature = :signature AND deleted = 0 LIMIT 1")
     suspend fun getByApiKeySignature(signature: String): ApiCredentialsEntity?
 
+    @Query("SELECT credential_alias FROM api_credentials")
+    suspend fun getAllCredentialAliases(): List<String>
+
+    @Query(
+        """
+        UPDATE api_credentials
+        SET credential_alias = 'deleted-' || id || '-' || credential_alias,
+            api_key_signature = NULL
+        WHERE deleted = 1
+          AND (
+            credential_alias = :credentialAlias
+            OR (:apiKeySignature IS NOT NULL AND api_key_signature = :apiKeySignature)
+          )
+        """,
+    )
+    suspend fun releaseDeletedIdentityLocks(
+        credentialAlias: String,
+        apiKeySignature: String?,
+    )
+
     @Insert
     suspend fun insert(entity: ApiCredentialsEntity): Long
 
@@ -34,7 +54,17 @@ interface ApiCredentialsDao {
     @Upsert
     suspend fun upsert(entity: ApiCredentialsEntity): Long
 
-    @Query("UPDATE api_credentials SET deleted = 1, pending_sync = 1, updated_at = :timestamp WHERE id = :id")
+    @Query(
+        """
+        UPDATE api_credentials
+        SET deleted = 1,
+            pending_sync = 1,
+            updated_at = :timestamp,
+            credential_alias = 'deleted-' || id || '-' || credential_alias,
+            api_key_signature = NULL
+        WHERE id = :id
+        """,
+    )
     suspend fun softDeleteById(
         id: ApiCredentialsId,
         timestamp: Long = System.currentTimeMillis(),

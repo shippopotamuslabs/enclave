@@ -32,6 +32,7 @@ service cloud.firestore {
         || collection == 'local_model_configs'
         || collection == 'default_models'
         || collection == 'tts_providers'
+        || collection == 'live_voice_providers'
         || collection == 'media_providers'
         || collection == 'studio_albums'
         || collection == 'studio_gallery';

@@ -56,6 +56,46 @@ class LiveThinkingTextForSheetTest {
                     ),
             )
 
-        assertEquals("completed aggregate", text)
+        assertEquals("completed trace", text)
+    }
+
+    @Test
+    fun `joins completed thinking transcript segments for detail sheet`() {
+        val text =
+            liveThinkingTextForSheet(
+                transcriptSegments =
+                    listOf(
+                        TranscriptSegmentUi.ThinkingBlock(
+                            ordinal = 0,
+                            text = "wave one",
+                            durationSeconds = 2L,
+                            thinkingStartTimeMs = 1L,
+                            isStreaming = false,
+                        ),
+                        TranscriptSegmentUi.AnswerBlock(
+                            ordinal = 1,
+                            text = "answer",
+                            isStreaming = false,
+                        ),
+                        TranscriptSegmentUi.ThinkingBlock(
+                            ordinal = 2,
+                            text = "wave two",
+                            durationSeconds = 3L,
+                            thinkingStartTimeMs = 4L,
+                            isStreaming = false,
+                        ),
+                    ),
+                indicatorState =
+                    IndicatorState.Complete(
+                        thinkingData =
+                            com.browntowndev.enclave.feature.chat.ThinkingDataUi(
+                                thinkingDurationSeconds = 5L,
+                                thinkingRaw = "wave onewave two",
+                                thinkingStartTime = 1L,
+                            ),
+                    ),
+            )
+
+        assertEquals("wave one\n\nwave two", text)
     }
 }

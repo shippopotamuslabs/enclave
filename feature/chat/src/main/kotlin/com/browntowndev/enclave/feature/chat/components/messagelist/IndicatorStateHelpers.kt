@@ -40,12 +40,13 @@ internal fun liveThinkingTextForSheet(
     transcriptSegments: List<TranscriptSegmentUi>,
     indicatorState: IndicatorState?,
 ): String {
-    val streamingSegment =
-        transcriptSegments
-            .filterIsInstance<TranscriptSegmentUi.ThinkingBlock>()
-            .lastOrNull { it.isStreaming }
+    val thinkingSegments = transcriptSegments.filterIsInstance<TranscriptSegmentUi.ThinkingBlock>()
+    val streamingSegment = thinkingSegments.lastOrNull { it.isStreaming }
     if (streamingSegment != null) {
         return streamingSegment.text
+    }
+    if (thinkingSegments.isNotEmpty()) {
+        return thinkingSegments.joinToString("\n\n") { it.text }
     }
     return indicatorState?.let(::indicatorThinkingRawForSheet).orEmpty()
 }

@@ -249,6 +249,8 @@ class UnlockVaultUseCaseTest {
             return credentials
         }
 
+        override suspend fun getAllCredentialAliases(): Set<String> = credentials.map { it.credentialAlias }.toSet()
+
         override fun observeAllCredentials(): Flow<List<ApiCredentials>> = emptyFlow()
 
         override fun observeAllConfigurations() = emptyFlow<List<com.browntowndev.enclave.domain.model.config.ApiModelConfiguration>>()

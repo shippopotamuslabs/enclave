@@ -224,7 +224,7 @@ internal class ByokProvidersCoordinator
                                 apiKey = currentApiKey.value,
                                 sourceCredentialAlias = sourceCredentialAlias,
                             ),
-                        ).getOrNull() ?: throw IllegalStateException("Operation failed")
+                        ).getOrElse { throw it }
 
                 val updatedAsset = apiModelAssetUiMapper.map(result.persistedAsset)
                 val createdPreset = result.createdPreset?.let(apiModelAssetUiMapper::mapConfig)

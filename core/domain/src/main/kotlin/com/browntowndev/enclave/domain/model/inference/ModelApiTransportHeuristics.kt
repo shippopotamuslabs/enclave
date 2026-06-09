@@ -4,6 +4,16 @@ package com.browntowndev.enclave.domain.model.inference
  * Shared transport-failure heuristics for model API streaming and retry classification.
  */
 object ModelApiTransportHeuristics {
+    private const val HTTP_REQUEST_TIMEOUT = 408
+    private const val HTTP_TOO_MANY_REQUESTS = 429
+    private const val HTTP_BAD_GATEWAY = 502
+    private const val HTTP_SERVICE_UNAVAILABLE = 503
+    private const val HTTP_GATEWAY_TIMEOUT = 504
+
+    private const val HTTP_UNAUTHORIZED = 401
+    private const val HTTP_FORBIDDEN = 403
+    private const val HTTP_NOT_FOUND = 404
+
     fun isRecoverableStreamTermination(message: String?): Boolean {
         val normalized = message?.lowercase() ?: return false
         return isTransientTransportMessage(normalized)
@@ -11,13 +21,21 @@ object ModelApiTransportHeuristics {
 
     fun isTransientHttpStatus(httpStatus: Int?): Boolean =
         when (httpStatus) {
-            408, 429, 502, 503, 504 -> true
+            HTTP_REQUEST_TIMEOUT,
+            HTTP_TOO_MANY_REQUESTS,
+            HTTP_BAD_GATEWAY,
+            HTTP_SERVICE_UNAVAILABLE,
+            HTTP_GATEWAY_TIMEOUT,
+            -> true
             else -> false
         }
 
     fun isPermanentHttpStatus(httpStatus: Int?): Boolean =
         when (httpStatus) {
-            401, 403, 404 -> true
+            HTTP_UNAUTHORIZED,
+            HTTP_FORBIDDEN,
+            HTTP_NOT_FOUND,
+            -> true
             else -> false
         }
 

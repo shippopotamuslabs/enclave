@@ -122,6 +122,42 @@ class ApiCredentialsDaoTest {
         }
 
     @Test
+    fun `soft delete tombstones alias and clears signature so identity can be reused`() =
+        runTest {
+            val entityId = nextId()
+            val signature = "openai-signature"
+            val entity =
+                ApiCredentialsEntity(
+                    id = entityId,
+                    provider = ApiProvider.OPENAI,
+                    credentialAlias = "openai",
+                    displayName = "PCENC:v1:…",
+                    apiKeySignature = signature,
+                )
+            dao.upsert(entity)
+            dao.softDeleteById(entityId)
+
+            assertEquals(null, dao.getById(entityId))
+            assertEquals(0, dao.getAll().size)
+            assertEquals(listOf("deleted-${entityId.value}-openai"), dao.getAllCredentialAliases())
+
+            val replacement =
+                ApiCredentialsEntity(
+                    id = nextId(),
+                    provider = ApiProvider.OPENAI,
+                    credentialAlias = "openai",
+                    displayName = "PCENC:v1:new",
+                    apiKeySignature = signature,
+                )
+            dao.insert(replacement)
+
+            val active = dao.getAll()
+            assertEquals(1, active.size)
+            assertEquals("openai", active.single().credentialAlias)
+            assertEquals(signature, active.single().apiKeySignature)
+        }
+
+    @Test
     fun `duplicate API key signature is rejected`() =
         runTest {
             val signature = "duplicate-signature"
