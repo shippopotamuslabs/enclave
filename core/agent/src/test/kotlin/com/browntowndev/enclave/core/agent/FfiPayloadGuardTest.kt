@@ -114,6 +114,18 @@ class FfiPayloadGuardTest {
     }
 
     @Test
+    fun `capAssistantText does not split a surrogate pair at the cut point`() {
+        // Place an emoji (surrogate pair) so its high surrogate sits exactly at
+        // index MAX-1: substring(0, MAX) would otherwise end with an unpaired
+        // high surrogate that becomes U+FFFD during UTF-8 encoding at the FFI.
+        val text = "a".repeat(FfiPayloadGuard.MAX_ASSISTANT_TEXT_CHARS - 1) + "🚀" + "tail"
+        val result = FfiPayloadGuard.capAssistantText(text)!!
+        val kept = result.removeSuffix(FfiPayloadGuard.ASSISTANT_TEXT_TRUNCATION_MARKER)
+        assertFalse(kept.last().isHighSurrogate(), "cut must not strand a high surrogate")
+        assertEquals(FfiPayloadGuard.MAX_ASSISTANT_TEXT_CHARS - 1, kept.length)
+    }
+
+    @Test
     fun `assistant text marker text references truncation`() {
         assertTrue(
             FfiPayloadGuard.ASSISTANT_TEXT_TRUNCATION_MARKER.contains("truncated", ignoreCase = true),
