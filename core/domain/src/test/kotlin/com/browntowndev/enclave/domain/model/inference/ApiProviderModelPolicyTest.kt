@@ -122,6 +122,21 @@ class ApiProviderModelPolicyTest {
     }
 
     @Test
+    fun `openai nano models are treated as reasoning models for sampling restrictions`() {
+        assertTrue(ApiProviderModelPolicy.isOpenAiReasoningModel("gpt-5.4-nano"))
+        assertTrue(ApiProviderModelPolicy.isOpenAiReasoningModel("openai/gpt-5.4-nano"))
+
+        val support =
+            ApiProviderModelPolicy.parameterSupport(
+                provider = ApiProvider.OPENAI,
+                modelId = "gpt-5.4-nano",
+            )
+
+        assertFalse(support.supportsTemperature)
+        assertFalse(support.supportsTopP)
+    }
+
+    @Test
     fun `standard policy exposes low through xhigh reasoning`() {
         val policy =
             ApiProviderModelPolicy.reasoningPolicy(

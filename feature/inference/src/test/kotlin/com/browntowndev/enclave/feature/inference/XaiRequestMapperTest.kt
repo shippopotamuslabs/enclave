@@ -8,6 +8,7 @@ import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.model.inference.ToolDisclosureMode
+import com.openai.models.responses.EasyInputMessage
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -94,6 +95,35 @@ class XaiRequestMapperTest {
                 .toString()
                 .contains("You are direct."),
         )
+    }
+
+    @Test
+    fun `mapToResponseParams uses easy assistant message for assistant history`() {
+        val params =
+            XaiRequestMapper.mapToResponseParams(
+                modelId = "grok-4.3",
+                prompt = "How are you?",
+                history =
+                    listOf(
+                        ChatMessage(Role.USER, "Hello"),
+                        ChatMessage(Role.ASSISTANT, "Hi there!"),
+                    ),
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+
+        val assistantItem =
+            params
+                .input()
+                .orElseThrow()
+                .asResponse()
+                .firstOrNull { item ->
+                    item.isEasyInputMessage() &&
+                        item.asEasyInputMessage().role() == EasyInputMessage.Role.ASSISTANT
+                }
+
+        assertTrue(assistantItem != null)
+        assertTrue(assistantItem!!.asEasyInputMessage().content().toString().contains("Hi there!"))
+        assertFalse(assistantItem.toString().contains("input_text"))
     }
 
     @Test
