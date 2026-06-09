@@ -149,7 +149,7 @@ class RustAgentEngineAdapter
                                     } catch (e: CancellationException) {
                                         throw e
                                     } catch (e: Throwable) {
-                                        val partialChars = textGate.bufferedText().length
+                                        val partialChars = safeBufferedTextLength(textGate)
                                         val report =
                                             ModelTurnFailureClassifier.classify(
                                                 error = e,
@@ -335,6 +335,9 @@ class RustAgentEngineAdapter
             return obj.toString()
         }
     }
+
+internal fun safeBufferedTextLength(textGate: ModelTurnStreamGate): Int =
+    runCatching { textGate.bufferedText().length }.getOrElse { 0 }
 
 private fun Role.toFfi(): FfiAgentRole =
     when (this) {
