@@ -27,6 +27,9 @@ import com.browntowndev.enclave.feature.inference.conversation.ConversationSessi
 import com.browntowndev.enclave.feature.inference.conversation.ConversationSignatureCache
 import com.browntowndev.enclave.feature.inference.conversation.LiteRtConversationFactory
 import com.browntowndev.enclave.feature.inference.conversation.LiteRtToolCallLoop
+import com.browntowndev.enclave.feature.inference.conversation.LiteRtToolContext
+import com.browntowndev.enclave.feature.inference.conversation.LiteRtTurnSnapshot
+
 import com.browntowndev.enclave.feature.inference.conversation.NoopAgentPolicyPort
 import com.browntowndev.enclave.feature.inference.conversation.resolveModelPath
 import com.google.ai.edge.litertlm.Backend
@@ -106,6 +109,16 @@ class ConversationManagerImpl
         }
         private val mutex = Mutex()
 
+        override fun beginGenerationRequest(): Int {
+            val requestId = cancellationGate.beginRequest()
+            toolLoop.resetForNewTurn()
+            return requestId
+        }
+
+        override fun endGenerationRequest(requestId: Int) {
+            cancellationGate.cancelCurrentGenerationIfOwner(requestId)
+        }
+
         override fun cancelCurrentGeneration() {
             Log.d(TAG, "cancelCurrentGeneration called")
             cancellationGate.cancelCurrentGeneration()
@@ -126,7 +139,7 @@ class ConversationManagerImpl
             onLoadingStarted: suspend () -> Unit,
         ): LiteRtConversation =
             withContext(Dispatchers.IO) {
-                cancellationGate.resetForNewRequest()
+                cancellationGate.prepareForGetConversation()
                 mutex.withLock {
                     val activeConfig =
                         activeModelProvider.getActiveConfiguration(modelType)
@@ -205,7 +218,37 @@ class ConversationManagerImpl
             )
 
         @VisibleForTesting
-        internal suspend fun executeToolSafelyForTest(request: ToolCallRequest): String = toolLoop.executeToolSafely(request)
+        internal suspend fun executeToolSafelyForTest(request: ToolCallRequest): String {
+            val requestId = beginGenerationRequest()
+            return toolLoop.executeToolSafely(request, defaultTurnContextForTest(requestId))
+        }
+
+        internal suspend fun executeToolSafelyForTest(
+            request: ToolCallRequest,
+            turnContext: LiteRtToolContext,
+        ): String = toolLoop.executeToolSafely(request, turnContext)
+
+        @VisibleForTesting
+        internal fun defaultTurnContextForTest(requestId: Int = cancellationGate.currentRequestId()): LiteRtToolContext =
+            LiteRtToolContext(
+                modelType = ModelType.FAST,
+                chatId = null,
+                userMessageId = null,
+                toolLoop = toolLoop,
+                turn =
+                    LiteRtTurnSnapshot(
+                        requestId = requestId,
+                        systemPrompt = cache.currentSystemPrompt,
+                        contextWindow = cache.currentContextWindow,
+                        history = cache.history,
+                        modelPath = cache.currentModelPath,
+                        latestAssistantMessageId = cache.latestAssistantMessageId,
+                        toolCatalog = cache.toolCatalog,
+                        toolSearchIndex = cache.toolSearchIndex,
+                        toolCallStrategy = cache.toolCallStrategy,
+                        transientToolResultTokens = cache.transientToolResultTokens.get(),
+                    ),
+            )
 
         @VisibleForTesting
         internal var conversation
@@ -235,6 +278,14 @@ class ConversationManagerImpl
         @VisibleForTesting
         internal val cancellationEpoch
             get() = cancellationGate.cancellationEpoch
+
+        @VisibleForTesting
+        internal val currentRequestId
+            get() = cancellationGate.currentRequestId()
+
+        @VisibleForTesting
+        internal val hasTransientToolResults
+            get() = cache.hasTransientToolResults
 
         private fun validateModelType(
             modelType: ModelType,

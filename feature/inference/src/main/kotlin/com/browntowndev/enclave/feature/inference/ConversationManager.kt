@@ -44,6 +44,19 @@ interface ConversationManager {
     suspend fun closeEngine()
 
     /**
+     * Begins a new generation request and returns an ownership token. Each [sendPrompt] flow
+     * must call this once; [endGenerationRequest] in `finally` only affects state when the
+     * token still matches the active request.
+     */
+    fun beginGenerationRequest(): Int
+
+    /**
+     * Ends a generation request started by [beginGenerationRequest]. Cancellation is applied
+     * only when [requestId] still owns the active request.
+     */
+    fun endGenerationRequest(requestId: Int)
+
+    /**
      * Cancels the current ongoing generation.
      * This signals the underlying tool executor to abort any ongoing or pending tool calls
      * to safely interrupt the native C++ engine.

@@ -22,7 +22,9 @@ import com.browntowndev.enclave.feature.inference.conversation.ConversationCance
 import com.browntowndev.enclave.feature.inference.conversation.ConversationSignatureCache
 import com.browntowndev.enclave.feature.inference.conversation.LiteRtNativeToolsets
 import com.browntowndev.enclave.feature.inference.conversation.LiteRtToolCallLoop
+import com.browntowndev.enclave.feature.inference.conversation.LiteRtTurnSnapshot
 import com.browntowndev.enclave.feature.inference.conversation.LiteRtToolContext
+import com.browntowndev.enclave.feature.inference.conversation.SystemPromptTemplates
 import com.browntowndev.enclave.feature.inference.conversation.NoopAgentPolicyPort
 import io.mockk.MockKAnnotations
 import io.mockk.coEvery
@@ -50,6 +52,7 @@ class ConversationManagerImplToolsTest {
     private lateinit var manager: ConversationManagerImpl
     private lateinit var toolLoop: LiteRtToolCallLoop
     private lateinit var signatureCache: ConversationSignatureCache
+    private lateinit var cancellationGate: ConversationCancellationGate
 
     @BeforeEach
     fun setUp() {
@@ -71,6 +74,8 @@ class ConversationManagerImplToolsTest {
             )
 
         signatureCache = ConversationSignatureCache()
+        cancellationGate = ConversationCancellationGate()
+        cancellationGate.beginRequest()
         signatureCache.toolActivationRegistry =
             ToolSessionActivationRegistry(
                 onActiveNamesUpdated = { names -> signatureCache.activeToolNames = names },
@@ -81,7 +86,7 @@ class ConversationManagerImplToolsTest {
                 toolExecutor = toolExecutor,
                 loggingPort = loggingPort,
                 agentPolicyPort = NoopAgentPolicyPort,
-                cancellationGate = ConversationCancellationGate(),
+                cancellationGate = cancellationGate,
                 searchToolsHostCoordinator =
                     SearchToolsHostCoordinator(
                         embeddingEngine = Bm25OnlyEmbeddingEnginePort,
@@ -111,6 +116,7 @@ class ConversationManagerImplToolsTest {
             val searchResult =
                 toolLoop.handleToolSearch(
                     argumentsJson = """{"query":"append_blocks","limit":"5"}""",
+                    turnContext = createToolContext(),
                 )
             val toolsets =
                 LiteRtNativeToolsets.buildToolList(
@@ -223,6 +229,7 @@ class ConversationManagerImplToolsTest {
             val searchResult =
                 toolLoop.handleToolSearch(
                     argumentsJson = """{"query":"xyzzy_nonexistent_capability_token","limit":"5"}""",
+                    turnContext = createToolContext(),
                 )
 
             assertTrue(searchResult.contains("\"status\":\"ok\""))
@@ -243,12 +250,25 @@ class ConversationManagerImplToolsTest {
             disclosureMode = disclosureMode,
         )
 
-    private fun createToolContext(): LiteRtToolContext =
+    private fun createToolContext(requestId: Int = cancellationGate.currentRequestId()): LiteRtToolContext =
         LiteRtToolContext(
             modelType = ModelType.FAST,
             chatId = ChatId("chat-1"),
             userMessageId = MessageId("msg-1"),
             toolLoop = toolLoop,
+            turn =
+                LiteRtTurnSnapshot(
+                    requestId = requestId,
+                    systemPrompt = SystemPromptTemplates.DEFAULT,
+                    contextWindow = ConversationSignatureCache.DEFAULT_CONTEXT_WINDOW,
+                    history = signatureCache.history,
+                    modelPath = signatureCache.currentModelPath,
+                    latestAssistantMessageId = null,
+                    toolCatalog = signatureCache.toolCatalog,
+                    toolSearchIndex = signatureCache.toolSearchIndex,
+                    toolCallStrategy = signatureCache.toolCallStrategy,
+                    transientToolResultTokens = signatureCache.transientToolResultTokens.get(),
+                ),
         )
 
     private fun createSearchChatHistoryToolset(): LiteRtNativeToolsets.LocalSearchChatHistoryToolset =

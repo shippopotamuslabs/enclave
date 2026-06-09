@@ -15,6 +15,9 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
+import io.mockk.just
+import io.mockk.Runs
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.filterIsInstance
@@ -55,6 +58,8 @@ class LiteRtInferenceServiceImplTest {
         service = LiteRtInferenceServiceImpl(mockConversationManager, processThinkingTokens, toolExecutionEventPort, ModelType.FAST)
 
         coEvery { mockConversationManager.getConversation(any(), any(), any()) } returns mockConversation
+        every { mockConversationManager.beginGenerationRequest() } returns 1
+        every { mockConversationManager.endGenerationRequest(any()) } just Runs
     }
 
     @AfterEach
@@ -255,17 +260,24 @@ class LiteRtInferenceServiceImplTest {
     fun `sendPrompt should emit Finished when LiteRT throws CancellationException`() =
         runTest {
             // Given - simulate LiteRT throwing CancellationException (user pressed stop)
-            val cancelException = java.util.concurrent.CancellationException("Generation cancelled")
+            val cancelException = CancellationException("Generation cancelled")
             every { mockConversation.sendMessageAsync(any(), any()) } returns
                 kotlinx.coroutines.flow.flow {
                     throw cancelException
                 }
 
             // When
-            val events = service.sendPrompt("Hello", closeConversation = false).toList()
+            val events = mutableListOf<InferenceEvent>()
+            try {
+                service.sendPrompt("Hello", closeConversation = false).collect { events.add(it) }
+            } catch (_: CancellationException) {
+                // Structured concurrency rethrow is expected after Finished is emitted.
+            }
 
             // Then - should emit Finished instead of Error
             assertTrue(events.any { it is InferenceEvent.Finished })
             assertTrue(events.none { it is InferenceEvent.Error })
+            io.mockk.verify { mockConversationManager.endGenerationRequest(1) }
+            io.mockk.verify(exactly = 0) { mockConversationManager.cancelProcess() }
         }
 }

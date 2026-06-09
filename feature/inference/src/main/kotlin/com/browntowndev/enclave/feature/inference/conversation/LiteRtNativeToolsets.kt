@@ -93,6 +93,7 @@ internal object LiteRtNativeToolsets {
                 context.toolLoop.handleToolSearch(
                     argumentsJson = argumentsJson,
                     chatId = context.chatId,
+                    turnContext = context,
                 )
             }
     }
@@ -272,7 +273,7 @@ internal object LiteRtNativeToolsets {
                     modelType = context.modelType,
                     chatId = context.chatId,
                     userMessageId = context.userMessageId,
-                    assistantMessageId = context.toolLoop.latestAssistantMessageId(),
+                    assistantMessageId = context.turn.latestAssistantMessageId,
                 )
             }
     }
@@ -308,7 +309,7 @@ internal object LiteRtNativeToolsets {
                     modelType = context.modelType,
                     chatId = context.chatId,
                     userMessageId = context.userMessageId,
-                    assistantMessageId = context.toolLoop.latestAssistantMessageId(),
+                    assistantMessageId = context.turn.latestAssistantMessageId,
                 )
             }
     }
@@ -338,7 +339,7 @@ internal object LiteRtNativeToolsets {
                     modelType = context.modelType,
                     chatId = context.chatId,
                     userMessageId = context.userMessageId,
-                    assistantMessageId = context.toolLoop.latestAssistantMessageId(),
+                    assistantMessageId = context.turn.latestAssistantMessageId,
                 )
             }
     }
@@ -361,7 +362,7 @@ internal object LiteRtNativeToolsets {
                     TAG,
                     "Dispatching native tool call tool=${request.toolName} provider=${request.provider} modelType=${request.modelType}",
                 )
-                context.toolLoop.executeToolSafely(request)
+                context.toolLoop.executeToolSafely(request, context)
             }
         } catch (e: JavaCancellationException) {
             throw e

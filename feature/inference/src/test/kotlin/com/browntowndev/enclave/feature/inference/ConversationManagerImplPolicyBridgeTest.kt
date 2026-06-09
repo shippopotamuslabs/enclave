@@ -30,7 +30,12 @@ class ConversationManagerImplPolicyBridgeTest {
         runTest {
             val manager = createManager(policy = FakeAgentPolicyPort(allowTools = false))
 
-            val result = manager.executeToolSafelyForTest(liteRtSearchRequest())
+            manager.beginGenerationRequest()
+            val result =
+                manager.executeToolSafelyForTest(
+                    liteRtSearchRequest(),
+                    manager.defaultTurnContextForTest(),
+                )
 
             assertTrue(result.contains("Context window exceeded"))
             coVerify(exactly = 0) { toolExecutor.execute(any()) }
@@ -47,8 +52,10 @@ class ConversationManagerImplPolicyBridgeTest {
                     resultJson = """{"status":"error","message":"provider failed"}""",
                 )
 
-            val firstResult = manager.executeToolSafelyForTest(liteRtSearchRequest())
-            val secondResult = manager.executeToolSafelyForTest(liteRtSearchRequest())
+            manager.beginGenerationRequest()
+            val turn = manager.defaultTurnContextForTest()
+            val firstResult = manager.executeToolSafelyForTest(liteRtSearchRequest(), turn)
+            val secondResult = manager.executeToolSafelyForTest(liteRtSearchRequest(), turn)
 
             assertEquals("""{"status":"error","message":"provider failed"}""", firstResult)
             assertTrue(secondResult.contains("Context window exceeded"))

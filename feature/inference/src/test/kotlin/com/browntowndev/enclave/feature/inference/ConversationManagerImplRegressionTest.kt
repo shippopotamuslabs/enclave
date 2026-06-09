@@ -42,6 +42,7 @@ class ConversationManagerImplRegressionTest {
                     agentPolicyPort = policy,
                 )
 
+            manager.beginGenerationRequest()
             val result =
                 manager.executeToolSafelyForTest(
                     ToolCallRequest(
@@ -50,6 +51,7 @@ class ConversationManagerImplRegressionTest {
                         provider = "LITERT",
                         modelType = ModelType.FAST,
                     ),
+                    manager.defaultTurnContextForTest(),
                 )
 
             assertTrue(result.contains("Context window exceeded"))
@@ -84,8 +86,10 @@ class ConversationManagerImplRegressionTest {
                     modelType = ModelType.FAST,
                 )
 
-            val firstResult = manager.executeToolSafelyForTest(request)
-            val secondResult = manager.executeToolSafelyForTest(request)
+            manager.beginGenerationRequest()
+            val turn = manager.defaultTurnContextForTest()
+            val firstResult = manager.executeToolSafelyForTest(request, turn)
+            val secondResult = manager.executeToolSafelyForTest(request, turn)
 
             assertEquals("""{"status":"error","message":"provider failed"}""", firstResult)
             assertTrue(secondResult.contains("Context window exceeded"))

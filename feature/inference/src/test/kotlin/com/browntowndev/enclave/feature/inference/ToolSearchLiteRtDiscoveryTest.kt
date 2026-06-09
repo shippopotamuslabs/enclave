@@ -17,7 +17,10 @@ import com.browntowndev.enclave.domain.usecase.chat.ToolSessionActivationRegistr
 import com.browntowndev.enclave.feature.inference.conversation.ConversationCancellationGate
 import com.browntowndev.enclave.feature.inference.conversation.ConversationSignatureCache
 import com.browntowndev.enclave.feature.inference.conversation.LiteRtToolCallLoop
+import com.browntowndev.enclave.feature.inference.conversation.LiteRtTurnSnapshot
+import com.browntowndev.enclave.feature.inference.conversation.LiteRtToolContext
 import com.browntowndev.enclave.feature.inference.conversation.NoopAgentPolicyPort
+import com.browntowndev.enclave.feature.inference.conversation.SystemPromptTemplates
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
@@ -35,6 +38,7 @@ class ToolSearchLiteRtDiscoveryTest {
     private val executorCalls = AtomicInteger(0)
     private lateinit var signatureCache: ConversationSignatureCache
     private lateinit var toolLoop: LiteRtToolCallLoop
+    private lateinit var cancellationGate: ConversationCancellationGate
 
     @BeforeEach
     fun setUp() {
@@ -59,6 +63,8 @@ class ToolSearchLiteRtDiscoveryTest {
             }
 
         signatureCache = ConversationSignatureCache()
+        cancellationGate = ConversationCancellationGate()
+        cancellationGate.beginRequest()
         signatureCache.toolActivationRegistry =
             ToolSessionActivationRegistry(
                 onActiveNamesUpdated = { names -> signatureCache.activeToolNames = names },
@@ -69,7 +75,7 @@ class ToolSearchLiteRtDiscoveryTest {
                 toolExecutor = countingExecutor,
                 loggingPort = loggingPort,
                 agentPolicyPort = NoopAgentPolicyPort,
-                cancellationGate = ConversationCancellationGate(),
+                cancellationGate = cancellationGate,
                 searchToolsHostCoordinator =
                     SearchToolsHostCoordinator(
                         embeddingEngine = Bm25OnlyEmbeddingEnginePort,
@@ -108,6 +114,7 @@ class ToolSearchLiteRtDiscoveryTest {
                         userMessageId = MessageId("user"),
                         assistantMessageId = MessageId("assistant"),
                     ),
+                    turnContext = createToolContext(),
                 )
 
             assertEquals(0, executorCalls.get())
@@ -151,12 +158,36 @@ class ToolSearchLiteRtDiscoveryTest {
                     catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND),
                 )
 
-            toolLoop.handleToolSearch(argumentsJson = """{"query":"append_blocks"}""")
+            toolLoop.handleToolSearch(
+                argumentsJson = """{"query":"append_blocks"}""",
+                turnContext = createToolContext(),
+            )
 
             assertEquals(conversation, signatureCache.conversation)
             io.mockk.verify(exactly = 0) { conversation.close() }
             org.junit.jupiter.api.Assertions.assertNull(signatureCache.currentSignature)
         }
+
+    private fun createToolContext(): LiteRtToolContext =
+        LiteRtToolContext(
+            modelType = ModelType.FAST,
+            chatId = null,
+            userMessageId = null,
+            toolLoop = toolLoop,
+            turn =
+                LiteRtTurnSnapshot(
+                    requestId = cancellationGate.currentRequestId(),
+                    systemPrompt = SystemPromptTemplates.DEFAULT,
+                    contextWindow = ConversationSignatureCache.DEFAULT_CONTEXT_WINDOW,
+                    history = signatureCache.history,
+                    modelPath = signatureCache.currentModelPath,
+                    latestAssistantMessageId = null,
+                    toolCatalog = signatureCache.toolCatalog,
+                    toolSearchIndex = signatureCache.toolSearchIndex,
+                    toolCallStrategy = signatureCache.toolCallStrategy,
+                    transientToolResultTokens = signatureCache.transientToolResultTokens.get(),
+                ),
+        )
 
     private fun catalogEntry(
         name: String,
