@@ -146,6 +146,39 @@ class FirestoreSyncEventApplierTest {
         }
 
     @Test
+    fun `default_models event resolves live voice provider parent before child upsert`() =
+        runTest {
+            val harness = ApplierHarness(lastAppliedSequence = 0)
+            harness.sourceDocuments.put(
+                "users/alice/default_models/LIVE_VOICE",
+                mapOf("live_voice_provider_id" to "live-voice-1", "updated_at" to 1L),
+            )
+            harness.sourceDocuments.put(
+                "users/alice/live_voice_providers/live-voice-1",
+                mapOf(
+                    "display_name" to "Realtime",
+                    "provider" to "OPENAI",
+                    "voice_name" to "alloy",
+                    "credential_alias" to "lv-live-voice-1",
+                    "updated_at" to 1L,
+                ),
+            )
+
+            harness.applier.apply(
+                userId = "alice",
+                event = syncEvent(sequence = 1, collectionPath = "default_models", entityId = "LIVE_VOICE"),
+            )
+
+            assertEquals(
+                listOf(
+                    "live_voice_providers/live-voice-1",
+                    "default_models/LIVE_VOICE",
+                ),
+                harness.localStore.upsertOrder,
+            )
+        }
+
+    @Test
     fun `default_models event resolves local and api config parents before child upsert`() =
         runTest {
             val harness = ApplierHarness(lastAppliedSequence = 0)

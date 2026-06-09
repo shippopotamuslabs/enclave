@@ -75,6 +75,7 @@ internal class FirestoreSyncPendingSyncLookup(
                 database.localModelConfigurationsDao().getById(LocalModelConfigurationId(entityId))?.pendingSync
             "default_models" -> defaultModelPending(entityId)
             "tts_providers" -> database.ttsProviderDao().getTtsProvider(entityId)?.pendingSync
+            "live_voice_providers" -> database.liveVoiceProviderDao().getLiveVoiceProvider(entityId)?.pendingSync
             "media_providers" -> database.mediaProviderDao().getMediaProvider(entityId)?.pendingSync
             else -> null
         }
