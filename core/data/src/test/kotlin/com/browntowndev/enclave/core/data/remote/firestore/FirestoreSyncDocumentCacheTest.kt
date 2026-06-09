@@ -139,6 +139,14 @@ class FirestoreSyncDocumentCacheTest {
                             ) { java.io.File.createTempFile("search-settings-", ".preferences_pb") },
                     ),
                 settingsRepository = mockk<SettingsRepositoryImpl>(relaxed = true),
+                feedIntegrityRecovery =
+                    FirestoreSyncFeedIntegrityRecovery(
+                        metaClient = mockk(relaxed = true),
+                        callableClient = mockk(relaxed = true),
+                        entityReconciler = mockk(relaxed = true),
+                        syncStateStore = syncStateStore,
+                        loggingPort = mockk(relaxed = true),
+                    ),
             )
         return FirestoreDataSource(facade, externalScope, mockk(relaxed = true))
     }

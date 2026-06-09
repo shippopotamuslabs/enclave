@@ -47,8 +47,9 @@ internal class FirestoreSyncEventApplier(
         }
         val expectedSequence = currentSequence + 1
         if (event.sequence != expectedSequence) {
-            throw IllegalStateException(
-                "sync event sequence gap: expected $expectedSequence but received ${event.sequence}",
+            throw SyncFeedSequenceGapException(
+                expectedSequence = expectedSequence,
+                receivedSequence = event.sequence,
             )
         }
 

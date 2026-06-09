@@ -25,9 +25,13 @@ import com.browntowndev.enclave.core.data.remote.firestore.ChatSyncDaos
 import com.browntowndev.enclave.core.data.remote.firestore.ConfigSyncDaos
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncDaos
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncDocumentCache
+import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncEntityReconciler
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncEventApplier
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncEventDispatcher
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncEventFeedClient
+import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncFeedCallableClient
+import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncFeedIntegrityRecovery
+import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncFeedMetaClient
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncStateStore
 import com.browntowndev.enclave.core.data.remote.firestore.StudioSyncDaos
 import com.browntowndev.enclave.core.data.repository.SettingsRepositoryImpl
@@ -91,8 +95,18 @@ internal fun createTestFirestoreDataSource(
         ),
     settingsRepository: SettingsRepositoryImpl = mockk(relaxed = true),
     syncTrigger: CloudSyncTrigger = mockk(relaxed = true),
+    feedIntegrityRecovery: FirestoreSyncFeedIntegrityRecovery? = null,
 ): FirestoreDataSource {
     val healer = sensitiveSelfHealer ?: SensitivePersistenceSelfHealer(localEncryption, loggingPort)
+    val resolvedFeedIntegrityRecovery =
+        feedIntegrityRecovery
+            ?: FirestoreSyncFeedIntegrityRecovery(
+                metaClient = FirestoreSyncFeedMetaClient(firestore),
+                callableClient = mockk<FirestoreSyncFeedCallableClient>(relaxed = true),
+                entityReconciler = mockk<FirestoreSyncEntityReconciler>(relaxed = true),
+                syncStateStore = syncStateStore,
+                loggingPort = loggingPort,
+            )
     val facade =
         FirestoreSyncDependenciesFacade.forTests(
             firestore = firestore,
@@ -142,6 +156,7 @@ internal fun createTestFirestoreDataSource(
             documentCache = documentCache,
             searchToolSettingsSyncQueue = searchToolSettingsSyncQueue,
             settingsRepository = settingsRepository,
+            feedIntegrityRecovery = resolvedFeedIntegrityRecovery,
         )
     return FirestoreDataSource(facade, externalScope, syncTrigger)
 }
