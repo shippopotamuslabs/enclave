@@ -40,7 +40,7 @@ class GenerateChatTitleUseCase
                     null
                 }
             loggingPort.debug(TAG, "Generator returned raw title: '$raw'")
-            val title = sanitize(raw)
+            val title = ChatTitleSanitizer.sanitize(raw)
             if (title == null) {
                 loggingPort.debug(TAG, "Title generation produced no usable title; keeping fallback")
                 return
@@ -50,31 +50,7 @@ class GenerateChatTitleUseCase
             loggingPort.debug(TAG, "Chat title upgraded in ${System.currentTimeMillis() - start}ms (len=${title.length})")
         }
 
-        /**
-         * Cleans raw model output into a presentable title, or returns `null` if the output
-         * is unusable (blank, only special-token artifacts, or implausibly long).
-         */
-        private fun sanitize(raw: String?): String? {
-            if (raw == null) return null
-            val cleaned =
-                raw
-                    .replace(SPECIAL_TOKEN_REGEX, " ")
-                    .replace(WHITESPACE_REGEX, " ")
-                    .trim()
-                    .trim('"', '\'', '“', '”', '‘', '’')
-                    .trim()
-            if (cleaned.isBlank()) return null
-            return if (cleaned.length > MAX_TITLE_LENGTH) {
-                cleaned.take(MAX_TITLE_LENGTH).trimEnd() + "…"
-            } else {
-                cleaned
-            }
-        }
-
         private companion object {
             private const val TAG = "GenerateChatTitle"
-            private const val MAX_TITLE_LENGTH = 60
-            private val SPECIAL_TOKEN_REGEX = Regex("<[^>]*>")
-            private val WHITESPACE_REGEX = Regex("\\s+")
         }
     }

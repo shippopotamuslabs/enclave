@@ -54,7 +54,7 @@ enum class UtilityType(
             ONNX_VOCAB -> "Embedding Vocabulary"
             ONNX -> "Utility Model"
             TITLE_GENERATOR_ENCODER -> "Chat Title Model"
-            TITLE_GENERATOR_DECODER -> "Chat Title Decoder"
+            TITLE_GENERATOR_DECODER -> "Chat Title Model (legacy)"
             TITLE_GENERATOR_TOKENIZER -> "Chat Title Tokenizer"
             FLUX2_VAE -> "Flux.2 VAE"
             QWEN3_TEXT_ENCODER -> "Qwen3 Text Encoder"

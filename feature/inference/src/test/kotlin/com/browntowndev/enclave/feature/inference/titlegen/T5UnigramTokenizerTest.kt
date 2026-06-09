@@ -63,18 +63,21 @@ class T5UnigramTokenizerTest {
 
     @Test
     fun `test real tokenizer serialization and encoding`() {
-        val realJsonFile = java.io.File("/home/sean/Code/pocket-crew/build/chat_title_generator_dist/tokenizer.json")
-        if (realJsonFile.exists()) {
-            val realTokenizer = T5UnigramTokenizer.fromTokenizerJson(realJsonFile.readText())
-            val ids =
-                realTokenizer.encode(
-                    "short title: What's the average person's maximum recoverable back volume per week",
-                    eosTokenId = 1,
-                    maxLength = 384,
-                )
-            val expected =
-                listOf(710L, 2233L, 10L, 363L, 31L, 7L, 8L, 1348L, 568L, 31L, 7L, 2411L, 8303L, 179L, 223L, 2908L, 399L, 471L, 1L)
-            assertEquals(expected, ids.toList())
-        }
+        val realJsonFile =
+            listOf(
+                java.io.File("build/chat_title_generator_dist/tokenizer.json"),
+                java.io.File("../build/chat_title_generator_dist/tokenizer.json"),
+            ).firstOrNull { it.exists() } ?: return
+        val realTokenizer = T5UnigramTokenizer.fromTokenizerJson(realJsonFile.readText())
+        val ids =
+            realTokenizer.encode(
+                "short title: What's the average person's maximum recoverable back volume per week",
+                eosTokenId = 1,
+                maxLength = 384,
+            )
+        val expected =
+            listOf(710L, 2233L, 10L, 363L, 31L, 7L, 8L, 1348L, 568L, 31L, 7L, 2411L, 8303L, 179L, 223L, 2908L, 399L, 471L, 1L)
+        assertEquals(expected, ids.toList())
     }
 }
+
