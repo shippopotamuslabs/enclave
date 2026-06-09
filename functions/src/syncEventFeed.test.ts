@@ -1,6 +1,15 @@
 import { expect } from 'chai';
 import 'mocha';
-import { handleSyncEntityWrite, InMemorySyncFeedFirestore, SYNC_FEED_ALLOWLIST } from './syncEventFeed';
+import {
+    BACKFILL_COLLECTION_ORDER,
+    buildSyncFeedStatus,
+    handleBackfillSyncFeed,
+    handleSyncEntityWrite,
+    InMemorySyncFeedDocumentReader,
+    InMemorySyncFeedFirestore,
+    normalizeSyncFeedState,
+    SYNC_FEED_ALLOWLIST,
+} from './syncEventFeed';
 
 describe('sync event feed (pure handlers)', () => {
     it('SCN-FUNC-001 allowlist contains utility_models', () => {
@@ -133,6 +142,71 @@ describe('sync event feed (pure handlers)', () => {
         expect(store.syncEvents[0].operation).to.equal('delete');
         expect(store.syncEvents[0].collectionPath).to.equal('chats');
         expect(store.syncEvents[0].entityId).to.equal('chat-1');
+    });
+
+    it('SCN-BACKFILL-001 backfill emits dependency-ordered baseline events', async () => {
+        const store = new InMemorySyncFeedFirestore();
+        store.syncMeta = normalizeSyncFeedState({ feedInitialized: false, nextSequence: 0 });
+        store.documents.set('users/alice/chats/chat-1', { updated_at: 1700000001000 });
+        store.documents.set('users/alice/messages/message-1', {
+            updated_at: 1700000001000,
+            chat_id: 'chat-1',
+        });
+        store.documents.set('users/alice/message_files/file-1', {
+            updated_at: 1700000001000,
+            message_id: 'message-1',
+            chat_id: 'chat-1',
+        });
+
+        const result = await handleBackfillSyncFeed(
+            store,
+            new InMemorySyncFeedDocumentReader(store),
+            'alice',
+            1700000002000,
+        );
+
+        expect(result.status).to.equal('initialized');
+        expect(result.eventsWritten).to.equal(3);
+        expect(store.syncEvents[0].collectionPath).to.equal('chats');
+        expect(store.syncEvents[1].collectionPath).to.equal('messages');
+        expect(store.syncEvents[2].collectionPath).to.equal('message_files');
+        expect(store.syncMeta.feedInitialized).to.equal(true);
+        expect(store.syncMeta.backfilledAtMillis).to.equal(1700000002000);
+    });
+
+    it('SCN-BACKFILL-002 backfill is idempotent after feedInitialized is true', async () => {
+        const store = new InMemorySyncFeedFirestore();
+        store.syncMeta = normalizeSyncFeedState({
+            feedInitialized: true,
+            nextSequence: 8,
+        });
+        store.documents.set('users/alice/chats/chat-1', { updated_at: 1700000001000 });
+
+        const result = await handleBackfillSyncFeed(
+            store,
+            new InMemorySyncFeedDocumentReader(store),
+            'alice',
+        );
+
+        expect(result.status).to.equal('already_initialized');
+        expect(result.eventsWritten).to.equal(0);
+        expect(result.nextSequence).to.equal(8);
+        expect(store.syncEvents).to.have.length(0);
+    });
+
+    it('buildSyncFeedStatus normalizes feed metadata defaults', () => {
+        const status = buildSyncFeedStatus(normalizeSyncFeedState({ nextSequence: 12 }));
+        expect(status.nextSequence).to.equal(12);
+        expect(status.feedInitialized).to.equal(false);
+        expect(status.feedEpoch).to.equal(1);
+        expect(status.oldestRetainedSequence).to.equal(1);
+        expect(status.schemaVersion).to.equal(1);
+    });
+
+    it('BACKFILL_COLLECTION_ORDER only contains allowlisted collections', () => {
+        for (const collectionPath of BACKFILL_COLLECTION_ORDER) {
+            expect(SYNC_FEED_ALLOWLIST).to.include(collectionPath);
+        }
     });
 
     it('SCN-MUT-001 function without idempotency creates duplicate sequences and fails', async () => {
