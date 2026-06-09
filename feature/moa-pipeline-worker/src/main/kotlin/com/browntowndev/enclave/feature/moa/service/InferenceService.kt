@@ -450,6 +450,16 @@ class InferenceService : Service() {
             is InferenceEvent.PreCompact -> Unit
             is InferenceEvent.PostCompact -> Unit
             is InferenceEvent.ToolRepaired -> Unit
+            is InferenceEvent.ModelApiRetryScheduled ->
+                inferenceEventBus.tryEmitPipelineState(
+                    chatId,
+                    MessageGenerationState.ModelApiRetryScheduled(
+                        attempt = event.attempt,
+                        maxAttempts = event.maxAttempts,
+                        delayMs = event.delayMs,
+                        modelType = getModelTypeForStep(step),
+                    ),
+                )
             is InferenceEvent.TelemetryCaptured -> Unit
             is InferenceEvent.Finished -> {
                 // Ignore. StepCompleted signifies completion for pipeline steps & is detected by flow finishing

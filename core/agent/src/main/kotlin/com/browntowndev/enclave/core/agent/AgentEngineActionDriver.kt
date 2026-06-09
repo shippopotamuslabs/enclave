@@ -111,4 +111,5 @@ private fun AgentException.toDomainMessage(): String =
         is AgentException.CompactionFailed -> "Compaction failed (tier=$tier): $reason"
         is AgentException.InvalidTransition -> "Invalid state transition from '$from' to '$to'"
         is AgentException.ContextReferenceNotFound -> "Context reference not found: $referenceId"
+        is AgentException.ModelApiUnavailable -> "Model API unavailable: $detail (attempts=$attempts)"
     }

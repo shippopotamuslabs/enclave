@@ -107,6 +107,8 @@ internal fun shouldRecoverFromStreamTermination(
 
 internal fun isRecoverableStreamTermination(message: String?): Boolean {
     val normalized = message?.lowercase() ?: return false
-    return normalized.contains("internal stream ended unexpectedly") ||
-        normalized.contains("stream ended unexpectedly")
+    return normalized.contains("stream ended unexpectedly") ||
+        normalized.contains("internal stream ended unexpectedly") ||
+        com.browntowndev.enclave.domain.model.inference.ModelApiTransportHeuristics
+            .isTransientTransportMessage(normalized)
 }

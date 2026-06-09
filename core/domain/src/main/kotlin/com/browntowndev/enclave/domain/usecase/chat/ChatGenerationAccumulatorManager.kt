@@ -95,6 +95,10 @@ internal class ChatGenerationAccumulatorManager(
                 getOrCreateAccumulator(state.modelType).addTelemetry(state.telemetry)
             }
 
+            is MessageGenerationState.ModelApiRetryScheduled -> {
+                getOrCreateAccumulator(state.modelType).clearStreamingContent()
+            }
+
             is MessageGenerationState.StepCompleted,
             is MessageGenerationState.Finished,
             -> {
@@ -450,6 +454,17 @@ internal class MessageAccumulator(
     fun replaceContent(value: String) {
         content.clear()
         content.append(value)
+        markScalarDirty()
+    }
+
+    fun clearStreamingContent() {
+        content.clear()
+        thinkingRaw.clear()
+        thinkingStartTime = null
+        thinkingEndTime = null
+        transcriptSegmentsMutable.clear()
+        currentState = MessageState.PROCESSING
+        markTranscriptSegmentsDirty()
         markScalarDirty()
     }
 

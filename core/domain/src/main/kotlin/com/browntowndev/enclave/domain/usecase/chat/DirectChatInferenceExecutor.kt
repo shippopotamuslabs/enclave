@@ -223,6 +223,16 @@ class DirectChatInferenceExecutor
 
                             is InferenceEvent.ToolRepaired -> Unit
 
+                            is InferenceEvent.ModelApiRetryScheduled ->
+                                emit(
+                                    MessageGenerationState.ModelApiRetryScheduled(
+                                        attempt = event.attempt,
+                                        maxAttempts = event.maxAttempts,
+                                        delayMs = event.delayMs,
+                                        modelType = event.modelType,
+                                    ),
+                                )
+
                             is InferenceEvent.TelemetryCaptured -> {
                                 emit(
                                     MessageGenerationState.TelemetryCaptured(

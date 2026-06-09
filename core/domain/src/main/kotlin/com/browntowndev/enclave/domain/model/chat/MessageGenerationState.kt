@@ -88,6 +88,14 @@ sealed interface MessageGenerationState {
         val telemetry: TurnTelemetry,
         val modelType: ModelType,
     ) : MessageGenerationState
+
+    /** Provider transport failed transiently; partial streamed text was discarded and a retry is pending. */
+    data class ModelApiRetryScheduled(
+        val attempt: Int,
+        val maxAttempts: Int,
+        val delayMs: Long,
+        val modelType: ModelType,
+    ) : MessageGenerationState
 }
 
 /**

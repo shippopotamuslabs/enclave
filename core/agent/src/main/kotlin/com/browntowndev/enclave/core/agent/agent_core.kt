@@ -829,6 +829,8 @@ internal open class UniffiVTableCallbackInterfaceAgentTransportCallback(
 
 
 
+
+
 // For large crates we prevent `MethodTooLargeException` (see #2340)
 // N.B. the name of the extension is very misleading, since it is 
 // rather `InterfaceTooLargeException`, caused by too many methods 
@@ -879,6 +881,8 @@ fun uniffi_agent_core_checksum_method_ffiagentengine_request_manual_compact(
 fun uniffi_agent_core_checksum_method_ffiagentengine_search_context_references(
 ): Short
 fun uniffi_agent_core_checksum_method_ffiagentengine_submit_model_response(
+): Short
+fun uniffi_agent_core_checksum_method_ffiagentengine_submit_model_turn_failure(
 ): Short
 fun uniffi_agent_core_checksum_method_ffiagentengine_submit_summary(
 ): Short
@@ -971,6 +975,8 @@ fun uniffi_agent_core_fn_method_ffiagentengine_request_manual_compact(`ptr`: Poi
 fun uniffi_agent_core_fn_method_ffiagentengine_search_context_references(`ptr`: Pointer,`session`: Pointer,`query`: RustBuffer.ByValue,`limit`: Int,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_agent_core_fn_method_ffiagentengine_submit_model_response(`ptr`: Pointer,`session`: Pointer,`response`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): Unit
+fun uniffi_agent_core_fn_method_ffiagentengine_submit_model_turn_failure(`ptr`: Pointer,`session`: Pointer,`report`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
 fun uniffi_agent_core_fn_method_ffiagentengine_submit_summary(`ptr`: Pointer,`session`: Pointer,`summary`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Unit
@@ -1196,6 +1202,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_agent_core_checksum_method_ffiagentengine_submit_model_response() != 16488.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_agent_core_checksum_method_ffiagentengine_submit_model_turn_failure() != 20769.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_agent_core_checksum_method_ffiagentengine_submit_summary() != 17750.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1395,6 +1404,29 @@ private class JavaLangRefCleanable(
     val cleanable: java.lang.ref.Cleaner.Cleanable
 ) : UniffiCleaner.Cleanable {
     override fun clean() = cleanable.clean()
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterUShort: FfiConverter<UShort, Short> {
+    override fun lift(value: Short): UShort {
+        return value.toUShort()
+    }
+
+    override fun read(buf: ByteBuffer): UShort {
+        return lift(buf.getShort())
+    }
+
+    override fun lower(value: UShort): Short {
+        return value.toShort()
+    }
+
+    override fun allocationSize(value: UShort) = 2UL
+
+    override fun write(value: UShort, buf: ByteBuffer) {
+        buf.putShort(value.toShort())
+    }
 }
 
 /**
@@ -1665,6 +1697,8 @@ public interface FfiAgentEngineInterface {
     
     fun `submitModelResponse`(`session`: FfiSession, `response`: FfiModelResponse)
     
+    fun `submitModelTurnFailure`(`session`: FfiSession, `report`: FfiModelTurnFailureReport)
+    
     fun `submitSummary`(`session`: FfiSession, `summary`: FfiSummaryResult)
     
     fun `submitToolResults`(`session`: FfiSession, `results`: List<FfiToolResultRecord>)
@@ -1856,6 +1890,17 @@ open class FfiAgentEngine: Disposable, AutoCloseable, FfiAgentEngineInterface
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffiagentengine_submit_model_response(
         it, FfiConverterTypeFfiSession.lower(`session`),FfiConverterTypeFfiModelResponse.lower(`response`),_status)
+}
+    }
+    
+    
+
+    override fun `submitModelTurnFailure`(`session`: FfiSession, `report`: FfiModelTurnFailureReport)
+        = 
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffiagentengine_submit_model_turn_failure(
+        it, FfiConverterTypeFfiSession.lower(`session`),FfiConverterTypeFfiModelTurnFailureReport.lower(`report`),_status)
 }
     }
     
@@ -2425,6 +2470,8 @@ data class FfiAgentConfig (
     var `thresholdRatio`: kotlin.Float, 
     var `microKeepRecent`: kotlin.UInt, 
     var `toolRetryLimit`: kotlin.UInt, 
+    var `modelApiRetryLimit`: kotlin.UInt, 
+    var `modelApiRetryBaseDelayMs`: kotlin.ULong, 
     /**
      * JSON-serialized [`crate::tool_semantics::ToolSemanticsConfig`]; catalog tools may be empty and merged from session IO.
      */
@@ -2476,6 +2523,8 @@ public object FfiConverterTypeFfiAgentConfig: FfiConverterRustBuffer<FfiAgentCon
             FfiConverterFloat.read(buf),
             FfiConverterUInt.read(buf),
             FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterULong.read(buf),
             FfiConverterString.read(buf),
             FfiConverterULong.read(buf),
             FfiConverterULong.read(buf),
@@ -2517,6 +2566,8 @@ public object FfiConverterTypeFfiAgentConfig: FfiConverterRustBuffer<FfiAgentCon
             FfiConverterFloat.allocationSize(value.`thresholdRatio`) +
             FfiConverterUInt.allocationSize(value.`microKeepRecent`) +
             FfiConverterUInt.allocationSize(value.`toolRetryLimit`) +
+            FfiConverterUInt.allocationSize(value.`modelApiRetryLimit`) +
+            FfiConverterULong.allocationSize(value.`modelApiRetryBaseDelayMs`) +
             FfiConverterString.allocationSize(value.`toolSemanticsJson`) +
             FfiConverterULong.allocationSize(value.`toolResultBudgetCloudBytes`) +
             FfiConverterULong.allocationSize(value.`toolResultBudgetRelaxedBytes`) +
@@ -2557,6 +2608,8 @@ public object FfiConverterTypeFfiAgentConfig: FfiConverterRustBuffer<FfiAgentCon
             FfiConverterFloat.write(value.`thresholdRatio`, buf)
             FfiConverterUInt.write(value.`microKeepRecent`, buf)
             FfiConverterUInt.write(value.`toolRetryLimit`, buf)
+            FfiConverterUInt.write(value.`modelApiRetryLimit`, buf)
+            FfiConverterULong.write(value.`modelApiRetryBaseDelayMs`, buf)
             FfiConverterString.write(value.`toolSemanticsJson`, buf)
             FfiConverterULong.write(value.`toolResultBudgetCloudBytes`, buf)
             FfiConverterULong.write(value.`toolResultBudgetRelaxedBytes`, buf)
@@ -2918,7 +2971,9 @@ data class FfiModelRequest (
     var `providerContext`: FfiProviderContextSnapshot, 
     var `stateLedgerDeltaJson`: kotlin.String?, 
     var `toolContextIndexDeltaJson`: kotlin.String?, 
-    var `fileContextIndexDeltaJson`: kotlin.String?
+    var `fileContextIndexDeltaJson`: kotlin.String?, 
+    var `retryAfterMs`: kotlin.ULong?, 
+    var `modelRetryAttempt`: kotlin.UInt?
 ) {
     
     companion object
@@ -2943,6 +2998,8 @@ public object FfiConverterTypeFfiModelRequest: FfiConverterRustBuffer<FfiModelRe
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalULong.read(buf),
+            FfiConverterOptionalUInt.read(buf),
         )
     }
 
@@ -2959,7 +3016,9 @@ public object FfiConverterTypeFfiModelRequest: FfiConverterRustBuffer<FfiModelRe
             FfiConverterTypeFfiProviderContextSnapshot.allocationSize(value.`providerContext`) +
             FfiConverterOptionalString.allocationSize(value.`stateLedgerDeltaJson`) +
             FfiConverterOptionalString.allocationSize(value.`toolContextIndexDeltaJson`) +
-            FfiConverterOptionalString.allocationSize(value.`fileContextIndexDeltaJson`)
+            FfiConverterOptionalString.allocationSize(value.`fileContextIndexDeltaJson`) +
+            FfiConverterOptionalULong.allocationSize(value.`retryAfterMs`) +
+            FfiConverterOptionalUInt.allocationSize(value.`modelRetryAttempt`)
     )
 
     override fun write(value: FfiModelRequest, buf: ByteBuffer) {
@@ -2976,6 +3035,8 @@ public object FfiConverterTypeFfiModelRequest: FfiConverterRustBuffer<FfiModelRe
             FfiConverterOptionalString.write(value.`stateLedgerDeltaJson`, buf)
             FfiConverterOptionalString.write(value.`toolContextIndexDeltaJson`, buf)
             FfiConverterOptionalString.write(value.`fileContextIndexDeltaJson`, buf)
+            FfiConverterOptionalULong.write(value.`retryAfterMs`, buf)
+            FfiConverterOptionalUInt.write(value.`modelRetryAttempt`, buf)
     }
 }
 
@@ -3016,6 +3077,58 @@ public object FfiConverterTypeFfiModelResponse: FfiConverterRustBuffer<FfiModelR
             FfiConverterSequenceTypeFfiRawToolCall.write(value.`toolCalls`, buf)
             FfiConverterTypeFfiFinishReason.write(value.`finishReason`, buf)
             FfiConverterOptionalString.write(value.`providerReasoningContent`, buf)
+    }
+}
+
+
+
+data class FfiModelTurnFailureReport (
+    var `errorClass`: FfiModelApiErrorClass, 
+    var `httpStatus`: kotlin.UShort?, 
+    var `providerCode`: kotlin.String?, 
+    var `message`: kotlin.String, 
+    var `hadPartialOutput`: kotlin.Boolean, 
+    var `partialOutputChars`: kotlin.UInt, 
+    var `retryAfterMs`: kotlin.ULong?
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFfiModelTurnFailureReport: FfiConverterRustBuffer<FfiModelTurnFailureReport> {
+    override fun read(buf: ByteBuffer): FfiModelTurnFailureReport {
+        return FfiModelTurnFailureReport(
+            FfiConverterTypeFfiModelApiErrorClass.read(buf),
+            FfiConverterOptionalUShort.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterOptionalULong.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: FfiModelTurnFailureReport) = (
+            FfiConverterTypeFfiModelApiErrorClass.allocationSize(value.`errorClass`) +
+            FfiConverterOptionalUShort.allocationSize(value.`httpStatus`) +
+            FfiConverterOptionalString.allocationSize(value.`providerCode`) +
+            FfiConverterString.allocationSize(value.`message`) +
+            FfiConverterBoolean.allocationSize(value.`hadPartialOutput`) +
+            FfiConverterUInt.allocationSize(value.`partialOutputChars`) +
+            FfiConverterOptionalULong.allocationSize(value.`retryAfterMs`)
+    )
+
+    override fun write(value: FfiModelTurnFailureReport, buf: ByteBuffer) {
+            FfiConverterTypeFfiModelApiErrorClass.write(value.`errorClass`, buf)
+            FfiConverterOptionalUShort.write(value.`httpStatus`, buf)
+            FfiConverterOptionalString.write(value.`providerCode`, buf)
+            FfiConverterString.write(value.`message`, buf)
+            FfiConverterBoolean.write(value.`hadPartialOutput`, buf)
+            FfiConverterUInt.write(value.`partialOutputChars`, buf)
+            FfiConverterOptionalULong.write(value.`retryAfterMs`, buf)
     }
 }
 
@@ -3704,6 +3817,16 @@ sealed class AgentException: kotlin.Exception() {
             get() = "referenceId=${ `referenceId` }"
     }
     
+    class ModelApiUnavailable(
+        
+        val `detail`: kotlin.String, 
+        
+        val `attempts`: kotlin.UInt
+        ) : AgentException() {
+        override val message
+            get() = "detail=${ `detail` }, attempts=${ `attempts` }"
+    }
+    
 
     companion object ErrorHandler : UniffiRustCallStatusErrorHandler<AgentException> {
         override fun lift(error_buf: RustBuffer.ByValue): AgentException = FfiConverterTypeAgentException.lift(error_buf)
@@ -3743,6 +3866,10 @@ public object FfiConverterTypeAgentException : FfiConverterRustBuffer<AgentExcep
                 )
             7 -> AgentException.ContextReferenceNotFound(
                 FfiConverterString.read(buf),
+                )
+            8 -> AgentException.ModelApiUnavailable(
+                FfiConverterString.read(buf),
+                FfiConverterUInt.read(buf),
                 )
             else -> throw RuntimeException("invalid error enum value, something is very wrong!!")
         }
@@ -3788,6 +3915,12 @@ public object FfiConverterTypeAgentException : FfiConverterRustBuffer<AgentExcep
                 4UL
                 + FfiConverterString.allocationSize(value.`referenceId`)
             )
+            is AgentException.ModelApiUnavailable -> (
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                4UL
+                + FfiConverterString.allocationSize(value.`detail`)
+                + FfiConverterUInt.allocationSize(value.`attempts`)
+            )
         }
     }
 
@@ -3829,6 +3962,12 @@ public object FfiConverterTypeAgentException : FfiConverterRustBuffer<AgentExcep
             is AgentException.ContextReferenceNotFound -> {
                 buf.putInt(7)
                 FfiConverterString.write(value.`referenceId`, buf)
+                Unit
+            }
+            is AgentException.ModelApiUnavailable -> {
+                buf.putInt(8)
+                FfiConverterString.write(value.`detail`, buf)
+                FfiConverterUInt.write(value.`attempts`, buf)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
@@ -4064,6 +4203,14 @@ sealed class FfiAgentEvent {
         companion object
     }
     
+    data class ModelApiRetryScheduled(
+        val `attempt`: kotlin.UInt, 
+        val `maxAttempts`: kotlin.UInt, 
+        val `delayMs`: kotlin.ULong, 
+        val `reason`: kotlin.String) : FfiAgentEvent() {
+        companion object
+    }
+    
 
     
     companion object
@@ -4125,6 +4272,12 @@ public object FfiConverterTypeFfiAgentEvent : FfiConverterRustBuffer<FfiAgentEve
                 FfiConverterULong.read(buf),
                 )
             14 -> FfiAgentEvent.VisibleAssistantText(
+                FfiConverterString.read(buf),
+                )
+            15 -> FfiAgentEvent.ModelApiRetryScheduled(
+                FfiConverterUInt.read(buf),
+                FfiConverterUInt.read(buf),
+                FfiConverterULong.read(buf),
                 FfiConverterString.read(buf),
                 )
             else -> throw RuntimeException("invalid enum value, something is very wrong!!")
@@ -4240,6 +4393,16 @@ public object FfiConverterTypeFfiAgentEvent : FfiConverterRustBuffer<FfiAgentEve
                 + FfiConverterString.allocationSize(value.`text`)
             )
         }
+        is FfiAgentEvent.ModelApiRetryScheduled -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterUInt.allocationSize(value.`attempt`)
+                + FfiConverterUInt.allocationSize(value.`maxAttempts`)
+                + FfiConverterULong.allocationSize(value.`delayMs`)
+                + FfiConverterString.allocationSize(value.`reason`)
+            )
+        }
     }
 
     override fun write(value: FfiAgentEvent, buf: ByteBuffer) {
@@ -4322,6 +4485,14 @@ public object FfiConverterTypeFfiAgentEvent : FfiConverterRustBuffer<FfiAgentEve
             is FfiAgentEvent.VisibleAssistantText -> {
                 buf.putInt(14)
                 FfiConverterString.write(value.`text`, buf)
+                Unit
+            }
+            is FfiAgentEvent.ModelApiRetryScheduled -> {
+                buf.putInt(15)
+                FfiConverterUInt.write(value.`attempt`, buf)
+                FfiConverterUInt.write(value.`maxAttempts`, buf)
+                FfiConverterULong.write(value.`delayMs`, buf)
+                FfiConverterString.write(value.`reason`, buf)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
@@ -4587,6 +4758,36 @@ public object FfiConverterTypeFfiFinishReason : FfiConverterRustBuffer<FfiFinish
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
+    }
+}
+
+
+
+
+
+
+enum class FfiModelApiErrorClass {
+    
+    TRANSIENT,
+    PERMANENT;
+    companion object
+}
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFfiModelApiErrorClass: FfiConverterRustBuffer<FfiModelApiErrorClass> {
+    override fun read(buf: ByteBuffer) = try {
+        FfiModelApiErrorClass.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: FfiModelApiErrorClass) = 4UL
+
+    override fun write(value: FfiModelApiErrorClass, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
     }
 }
 
@@ -4944,6 +5145,38 @@ public object FfiConverterTypeAgentTransportCallback: FfiConverterCallbackInterf
 /**
  * @suppress
  */
+public object FfiConverterOptionalUShort: FfiConverterRustBuffer<kotlin.UShort?> {
+    override fun read(buf: ByteBuffer): kotlin.UShort? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterUShort.read(buf)
+    }
+
+    override fun allocationSize(value: kotlin.UShort?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterUShort.allocationSize(value)
+        }
+    }
+
+    override fun write(value: kotlin.UShort?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterUShort.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterOptionalUInt: FfiConverterRustBuffer<kotlin.UInt?> {
     override fun read(buf: ByteBuffer): kotlin.UInt? {
         if (buf.get().toInt() == 0) {
@@ -4966,6 +5199,38 @@ public object FfiConverterOptionalUInt: FfiConverterRustBuffer<kotlin.UInt?> {
         } else {
             buf.put(1)
             FfiConverterUInt.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalULong: FfiConverterRustBuffer<kotlin.ULong?> {
+    override fun read(buf: ByteBuffer): kotlin.ULong? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterULong.read(buf)
+    }
+
+    override fun allocationSize(value: kotlin.ULong?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterULong.allocationSize(value)
+        }
+    }
+
+    override fun write(value: kotlin.ULong?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterULong.write(value, buf)
         }
     }
 }

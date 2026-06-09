@@ -371,6 +371,18 @@ class RustLoopInferenceService(
                                 if (closeConversation) closeSession()
                                 send(InferenceEvent.Finished(modelType))
                             }
+                            is AgentLoopEvent.ModelApiRetryScheduled -> {
+                                assistantText.clear()
+                                send(
+                                    InferenceEvent.ModelApiRetryScheduled(
+                                        attempt = event.attempt,
+                                        maxAttempts = event.maxAttempts,
+                                        delayMs = event.delayMs,
+                                        reason = event.reason,
+                                        modelType = modelType,
+                                    ),
+                                )
+                            }
                             is AgentLoopEvent.Failed -> {
                                 telemetryEventPort.emitInferenceExecutionOutcome(
                                     startedAtMs = startedAtMs,

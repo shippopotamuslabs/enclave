@@ -114,6 +114,26 @@ class AgentEventMapperTest {
     }
 
     @Test
+    fun toDomain_modelApiRetryScheduled_mapsAttemptAndDelay() {
+        val mapped =
+            assertIs<AgentLoopEvent.ModelApiRetryScheduled>(
+                AgentEventMapper.toDomain(
+                    FfiAgentEvent.ModelApiRetryScheduled(
+                        attempt = 2u,
+                        maxAttempts = 3u,
+                        delayMs = 2000uL,
+                        reason = "Upstream idle timeout exceeded",
+                    ),
+                ),
+            )
+
+        assertEquals(2, mapped.attempt)
+        assertEquals(3, mapped.maxAttempts)
+        assertEquals(2000L, mapped.delayMs)
+        assertEquals("Upstream idle timeout exceeded", mapped.reason)
+    }
+
+    @Test
     fun log_toolRepaired_omitsArguments() {
         val logger = RecordingLogger()
 

@@ -420,6 +420,13 @@ class ChatInferenceService : Service() {
                         is InferenceEvent.PreCompact -> null
                         is InferenceEvent.PostCompact -> null
                         is InferenceEvent.ToolRepaired -> null
+                        is InferenceEvent.ModelApiRetryScheduled ->
+                            MessageGenerationState.ModelApiRetryScheduled(
+                                attempt = event.attempt,
+                                maxAttempts = event.maxAttempts,
+                                delayMs = event.delayMs,
+                                modelType = event.modelType,
+                            )
                         is InferenceEvent.TelemetryCaptured ->
                             MessageGenerationState.TelemetryCaptured(
                                 telemetry = event.telemetry,
