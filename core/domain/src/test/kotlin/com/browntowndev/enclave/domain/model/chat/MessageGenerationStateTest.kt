@@ -125,4 +125,17 @@ class MessageGenerationStateTest {
     fun `isPipelineTerminal returns false for GeneratingText`() {
         assertFalse(MessageGenerationState.GeneratingText("delta", ModelType.MAIN).isPipelineTerminal)
     }
+
+    @Test
+    fun `isTerminal returns false for ModelApiRetryScheduled`() {
+        assertFalse(
+            MessageGenerationState
+                .ModelApiRetryScheduled(
+                    attempt = 1,
+                    maxAttempts = 3,
+                    delayMs = 1_000L,
+                    modelType = ModelType.MAIN,
+                ).isTerminal,
+        )
+    }
 }

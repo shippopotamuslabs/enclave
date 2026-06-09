@@ -104,4 +104,12 @@ sealed interface AgentLoopEvent {
     data class Failed(
         val message: String,
     ) : AgentLoopEvent
+
+    /** Rust scheduled a transient model API retry for the in-flight model turn. */
+    data class ModelApiRetryScheduled(
+        val attempt: Int,
+        val maxAttempts: Int,
+        val delayMs: Long,
+        val reason: String,
+    ) : AgentLoopEvent
 }

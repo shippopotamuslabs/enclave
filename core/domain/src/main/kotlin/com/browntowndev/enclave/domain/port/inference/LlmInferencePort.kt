@@ -143,6 +143,15 @@ sealed interface InferenceEvent {
         val modelType: ModelType,
     ) : InferenceEvent
 
+    /** Provider transport failed transiently; Rust scheduled another model attempt. */
+    data class ModelApiRetryScheduled(
+        val attempt: Int,
+        val maxAttempts: Int,
+        val delayMs: Long,
+        val reason: String,
+        val modelType: ModelType,
+    ) : InferenceEvent
+
     /**
      * Emitted when normalized per-request telemetry is available for persistence and UI.
      */

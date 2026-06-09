@@ -17,6 +17,8 @@ data class AgentLoopAgentConfig(
     val thresholdRatio: Float = 0.80f,
     val microKeepRecent: UInt = 4u,
     val toolRetryLimit: UInt = 3u,
+    val modelApiRetryLimit: UInt = 3u,
+    val modelApiRetryBaseDelayMs: ULong = 1_000uL,
     val toolResultBudgetCloudBytes: ULong = 16384uL,
     val toolResultBudgetRelaxedBytes: ULong = 131072uL,
     val toolResultTruncationPressureRatio: Float = 0.85f,

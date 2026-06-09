@@ -52,6 +52,36 @@ class ChatGenerationAccumulatorManagerTest {
         }
 
     @Test
+    fun `model api retry clears partial streamed content`() =
+        runTest {
+            val manager =
+                ChatGenerationAccumulatorManager(
+                    mode = Mode.FAST,
+                    chatId = ChatId("chat"),
+                    userMessageId = MessageId("user"),
+                    defaultAssistantMessageId = MessageId("assistant"),
+                    chatRepository = mockk(relaxed = true),
+                )
+
+            manager.reduce(MessageGenerationState.GeneratingText("partial doc", ModelType.FAST))
+            val cleared =
+                manager.reduce(
+                    MessageGenerationState.ModelApiRetryScheduled(
+                        attempt = 1,
+                        maxAttempts = 3,
+                        delayMs = 1_000L,
+                        modelType = ModelType.FAST,
+                    ),
+                )
+
+            val snapshot = cleared.messages.getValue(MessageId("assistant"))
+            assertEquals("", snapshot.content)
+            assertEquals("", snapshot.thinkingRaw)
+            assertEquals(MessageState.PROCESSING, snapshot.messageState)
+            assertTrue(snapshot.transcriptSegments.isEmpty())
+        }
+
+    @Test
     fun `second thinking wave clears thinkingEndTime after interleaved answer tokens`() =
         runTest {
             val manager =

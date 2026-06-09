@@ -77,6 +77,7 @@ class AnalyzeImageUseCase
                                     is InferenceEvent.PreCompact -> Unit
                                     is InferenceEvent.PostCompact -> Unit
                                     is InferenceEvent.ToolRepaired -> Unit
+                                    is InferenceEvent.ModelApiRetryScheduled -> Unit // vision turns are single-shot; buffer reset not surfaced
                                     is InferenceEvent.TelemetryCaptured -> Unit
                                     is InferenceEvent.Finished -> {
                                         loggingPort.info(

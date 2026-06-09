@@ -26,6 +26,7 @@ import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.ToolStreamGatePort
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.withContext
@@ -105,6 +106,14 @@ class RustAgentEngineAdapter
                         }
                         when (val action = engine.nextAction(session)) {
                             is FfiAgentAction.CallModel -> {
+                                action.request.retryAfterMs?.takeIf { it > 0uL }?.let { backoffMs ->
+                                    loggingPort.info(
+                                        TAG,
+                                        "model api retry backoff ${backoffMs}ms " +
+                                            "(attempt ${action.request.modelRetryAttempt ?: 0})",
+                                    )
+                                    delay(backoffMs.toLong())
+                                }
                                 val textGate =
                                     ModelTurnStreamGate(
                                         toolStreamGatePort,
@@ -140,9 +149,19 @@ class RustAgentEngineAdapter
                                     } catch (e: CancellationException) {
                                         throw e
                                     } catch (e: Throwable) {
-                                        loggingPort.error(TAG, "model turn failed: ${e.message}", e)
-                                        send(AgentLoopEvent.Failed("model turn failed: ${e.message}"))
-                                        return@channelFlow
+                                        val partialChars = textGate.bufferedText().length
+                                        val report =
+                                            ModelTurnFailureClassifier.classify(
+                                                error = e,
+                                                partialOutputChars = partialChars,
+                                            )
+                                        loggingPort.error(
+                                            TAG,
+                                            "model turn failed (${report.errorClass}): ${report.message}",
+                                            e,
+                                        )
+                                        engine.submitModelTurnFailure(session, report)
+                                        continue
                                     }
                                 val bufferedText =
                                     textGate.finish(resp.toolCalls.isNotEmpty()) { trailing ->
@@ -376,6 +395,8 @@ internal fun com.browntowndev.enclave.domain.model.inference.AgentLoopAgentConfi
         thresholdRatio = thresholdRatio,
         microKeepRecent = microKeepRecent,
         toolRetryLimit = toolRetryLimit,
+        modelApiRetryLimit = modelApiRetryLimit,
+        modelApiRetryBaseDelayMs = modelApiRetryBaseDelayMs,
         toolSemanticsJson = toolSemanticsJson,
         toolResultBudgetCloudBytes = toolResultBudgetCloudBytes,
         toolResultBudgetRelaxedBytes = toolResultBudgetRelaxedBytes,
