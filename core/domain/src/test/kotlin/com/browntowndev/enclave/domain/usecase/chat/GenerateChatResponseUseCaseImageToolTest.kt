@@ -23,6 +23,7 @@ import com.browntowndev.enclave.domain.port.repository.MessageRepository
 import com.browntowndev.enclave.domain.port.repository.SettingsData
 import com.browntowndev.enclave.domain.port.repository.SettingsRepository
 import com.browntowndev.enclave.domain.usecase.FakeInferenceFactory
+import com.browntowndev.enclave.domain.usecase.FakeInferenceLockManager
 import com.browntowndev.enclave.domain.usecase.FakeInferenceService
 import io.mockk.coEvery
 import io.mockk.every
@@ -485,6 +486,7 @@ class GenerateChatResponseUseCaseImageToolTest {
                 },
             chatInferenceExecutor = directExecutor,
             embeddingEngine = mockk(relaxed = true),
+            inferenceLockManager = FakeInferenceLockManager(),
         )
     }
 

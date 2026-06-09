@@ -18,6 +18,7 @@ import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.ChatRepository
 import com.browntowndev.enclave.domain.port.repository.ExtractedUrlTrackerPort
 import com.browntowndev.enclave.domain.port.repository.MessageRepository
+import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
@@ -51,6 +52,7 @@ class GenerateChatResponseUseCase
         private val chatInferenceExecutor: ChatInferenceExecutorPort,
         private val embeddingEngine: EmbeddingEnginePort,
         private val activeChatTurnSnapshotPort: ActiveChatTurnSnapshotPort = NoOpActiveChatTurnSnapshotPort,
+        private val inferenceLockManager: InferenceLockManager,
     ) {
         private val persistAccumulatedMessages =
             PersistAccumulatedChatMessagesUseCase(
@@ -198,6 +200,9 @@ class GenerateChatResponseUseCase
                         }
                     } catch (e: Throwable) {
                         loggingPort.error(TAG, "Failed to persist messages", e)
+                    }
+                    if (!backgroundInferenceEnabled) {
+                        inferenceLockManager.forceReleaseOnDeviceLock()
                     }
                 }
             }.buffer(FLOW_BUFFER_SIZE).flowOn(Dispatchers.Default)

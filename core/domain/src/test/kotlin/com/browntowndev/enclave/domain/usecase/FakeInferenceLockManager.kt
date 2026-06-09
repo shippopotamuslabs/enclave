@@ -33,6 +33,11 @@ class FakeInferenceLockManager : InferenceLockManager {
         _isInferenceBlocked.value = false
     }
 
+    override fun forceReleaseOnDeviceLock() {
+        isLocked = false
+        _isInferenceBlocked.value = false
+    }
+
     fun getLockCount(): Int = lockCount
 
     fun getReleaseCount(): Int = releaseCount

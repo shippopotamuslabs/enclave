@@ -147,7 +147,7 @@ class InferenceOrchestratorStopTest {
             )
             advanceUntilIdle()
 
-            verify(exactly = 1) { cancelInferenceUseCase() }
+            verify(exactly = 2) { cancelInferenceUseCase() }
             coVerify {
                 chatRepository.updateMessageContent(
                     turnKey.assistantMessageId,

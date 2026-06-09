@@ -19,6 +19,7 @@ import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.ChatRepository
 import com.browntowndev.enclave.domain.port.repository.ExtractedUrlTrackerPort
 import com.browntowndev.enclave.domain.port.repository.MessageRepository
+import com.browntowndev.enclave.domain.usecase.FakeInferenceLockManager
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -252,6 +253,7 @@ class GenerateChatResponseUseCaseBackgroundServicePersistenceTest {
                     extractedUrlTracker = noOpExtractedUrlTracker(),
                     chatInferenceExecutor = chatInferenceExecutor,
                     embeddingEngine = mockk(relaxed = true),
+                    inferenceLockManager = FakeInferenceLockManager(),
                 )
 
             useCase(
@@ -312,6 +314,7 @@ class GenerateChatResponseUseCaseBackgroundServicePersistenceTest {
             chatInferenceExecutor = chatInferenceExecutor,
             embeddingEngine = mockk(relaxed = true),
             activeChatTurnSnapshotPort = activeChatTurnSnapshotPort,
+            inferenceLockManager = FakeInferenceLockManager(),
         )
     }
 

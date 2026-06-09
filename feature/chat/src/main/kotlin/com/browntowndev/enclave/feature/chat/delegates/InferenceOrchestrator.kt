@@ -79,7 +79,8 @@ class InferenceOrchestrator
             onInputCleared: () -> Unit,
             onModerationBlocked: (promptText: String) -> Unit,
         ) {
-            inferenceJob?.cancel()
+            cancelActiveInferenceJob()
+            cancelInferenceUseCase()
 
             scope.launch(
                 errorHandler.coroutineExceptionHandler(
@@ -197,7 +198,7 @@ class InferenceOrchestrator
             activeTurnKey: ActiveChatTurnKey? = null,
             finalContent: String? = null,
         ) {
-            inferenceJob?.cancel()
+            cancelActiveInferenceJob()
             cancelInferenceUseCase()
             val key = _requestedTurnKey.value ?: activeTurnKey
             key?.let {
@@ -257,7 +258,8 @@ class InferenceOrchestrator
         }
 
         fun createNewChat() {
-            inferenceJob?.cancel()
+            cancelActiveInferenceJob()
+            cancelInferenceUseCase()
             _requestedTurnKey.value?.let { key ->
                 _acknowledgedTurnKeys.updateAcknowledgedTurnKeys("createNewChat") { keys -> keys + key }
             }
@@ -267,7 +269,13 @@ class InferenceOrchestrator
         }
 
         fun cancelInference() {
+            cancelActiveInferenceJob()
+            cancelInferenceUseCase()
+        }
+
+        private fun cancelActiveInferenceJob() {
             inferenceJob?.cancel()
+            inferenceJob = null
         }
 
         private inline fun MutableStateFlow<Set<ActiveChatTurnKey>>.updateAcknowledgedTurnKeys(

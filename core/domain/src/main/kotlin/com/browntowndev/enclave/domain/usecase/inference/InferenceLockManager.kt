@@ -36,6 +36,12 @@ interface InferenceLockManager {
      * @param inferenceType Must match the type passed to the corresponding acquireLock().
      */
     fun releaseLock(inferenceType: InferenceType)
+
+    /**
+     * Clears a stuck on-device lock after cancellation or a native-engine interrupt.
+     * Safe to call when no on-device inference is active.
+     */
+    fun forceReleaseOnDeviceLock()
 }
 
 /**

@@ -64,4 +64,10 @@ class InferenceLockManagerImpl
                 }
             }
         }
+
+        @Synchronized
+        override fun forceReleaseOnDeviceLock() {
+            onDeviceCount = 0
+            _isInferenceBlocked.value = false
+        }
     }

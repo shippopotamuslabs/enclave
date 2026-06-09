@@ -6,6 +6,7 @@ import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.enclave.domain.port.inference.CriminalIntentModerationPort
 import com.browntowndev.enclave.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.domain.port.inference.OnDeviceInferenceCancellationPort
 import com.browntowndev.enclave.domain.port.inference.PromptModerationPort
 import com.browntowndev.enclave.domain.port.inference.MonotonicToolActivationPort
 import com.browntowndev.enclave.domain.port.inference.ToolSearchEmbeddingCachePort
@@ -16,6 +17,7 @@ import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.enclave.feature.inference.ConversationManager
 import com.browntowndev.enclave.feature.inference.ConversationManagerImpl
 import com.browntowndev.enclave.feature.inference.InferenceFactoryImpl
+import com.browntowndev.enclave.feature.inference.OnDeviceInferenceCancellationImpl
 import com.browntowndev.enclave.feature.inference.ProfileAnalysisInferenceAdapter
 import com.browntowndev.enclave.feature.inference.moderation.OnnxCriminalIntentClassifier
 import com.browntowndev.enclave.feature.inference.moderation.OnnxPromptModerationClassifier
@@ -55,6 +57,12 @@ abstract class EngineModule {
     @Binds
     @Singleton
     abstract fun bindChatTitleGeneratorPort(impl: OnnxChatTitleGenerator): ChatTitleGeneratorPort
+
+    @Binds
+    @Singleton
+    abstract fun bindOnDeviceInferenceCancellationPort(
+        impl: OnDeviceInferenceCancellationImpl,
+    ): OnDeviceInferenceCancellationPort
 
     companion object {
         // Consolidated ConversationManager provider - resolve models lazily via ModelRegistry
