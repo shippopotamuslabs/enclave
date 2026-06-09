@@ -56,74 +56,66 @@ class TitleGenOnnxIntegrationTest {
             }
         encoderSession.use { encSession ->
             decoderSession.use { decSession ->
-                val encoderHiddenStates = runEncoder(environment, encSession, inputIds)
-                assertTrue(encoderHiddenStates != null)
-                encoderHiddenStates!!.use { hidden ->
-                    val seqLen = inputIds.size
-                    val attentionMask = LongArray(seqLen) { 1L }
-                    val encoderAttention =
-                        OnnxTensor.createTensor(
-                            environment,
-                            LongBuffer.wrap(attentionMask),
-                            longArrayOf(1, seqLen.toLong()),
-                        )
-                    try {
-                        val generated =
-                            TitleGenBeamDecoder.decode(config) { decoderIds ->
-                                val decoderTensor =
-                                    OnnxTensor.createTensor(
-                                        environment,
-                                        LongBuffer.wrap(decoderIds),
-                                        longArrayOf(1, decoderIds.size.toLong()),
-                                    )
-                                decoderTensor.use { tensor ->
-                                    val decoderInputs =
-                                        mapOf(
-                                            "input_ids" to tensor,
-                                            "encoder_attention_mask" to encoderAttention,
-                                            "encoder_hidden_states" to hidden,
+                val seqLen = inputIds.size
+                val attentionMask = LongArray(seqLen) { 1L }
+                val encoderInputs =
+                    mapOf(
+                        "input_ids" to
+                            OnnxTensor.createTensor(
+                                environment,
+                                LongBuffer.wrap(inputIds),
+                                longArrayOf(1, seqLen.toLong()),
+                            ),
+                        "attention_mask" to
+                            OnnxTensor.createTensor(
+                                environment,
+                                LongBuffer.wrap(attentionMask),
+                                longArrayOf(1, seqLen.toLong()),
+                            ),
+                    )
+                try {
+                    // The encoder Result must stay open for the whole decode loop:
+                    // closing it releases the hidden-states tensor's native buffer
+                    // (ORT then fails with "Unexpected input data type ... (((null)))").
+                    encSession.run(encoderInputs).use { encoderResult ->
+                        val hidden = encoderResult[0] as OnnxTensor
+                        val encoderAttention =
+                            OnnxTensor.createTensor(
+                                environment,
+                                LongBuffer.wrap(attentionMask),
+                                longArrayOf(1, seqLen.toLong()),
+                            )
+                        try {
+                            val generated =
+                                TitleGenBeamDecoder.decode(config) { decoderIds ->
+                                    val decoderTensor =
+                                        OnnxTensor.createTensor(
+                                            environment,
+                                            LongBuffer.wrap(decoderIds),
+                                            longArrayOf(1, decoderIds.size.toLong()),
                                         )
-                                    decSession.run(decoderInputs).use { result ->
-                                        lastStepLogits(result[0].value)
+                                    decoderTensor.use { tensor ->
+                                        val decoderInputs =
+                                            mapOf(
+                                                "input_ids" to tensor,
+                                                "encoder_attention_mask" to encoderAttention,
+                                                "encoder_hidden_states" to hidden,
+                                            )
+                                        decSession.run(decoderInputs).use { result ->
+                                            lastStepLogits(result[0].value)
+                                        }
                                     }
                                 }
-                            }
-                        val decoded = tokenizer.decode(generated).trim()
-                        assertFalse(decoded.isBlank())
-                    } finally {
-                        encoderAttention.close()
+                            val decoded = tokenizer.decode(generated).trim()
+                            assertFalse(decoded.isBlank())
+                        } finally {
+                            encoderAttention.close()
+                        }
                     }
+                } finally {
+                    encoderInputs.values.forEach(OnnxTensor::close)
                 }
             }
-        }
-    }
-
-    private fun runEncoder(
-        environment: OrtEnvironment,
-        session: OrtSession,
-        inputIds: LongArray,
-    ): OnnxTensor? {
-        val seqLen = inputIds.size
-        val attentionMask = LongArray(seqLen) { 1L }
-        val inputs =
-            mapOf(
-                "input_ids" to
-                    OnnxTensor.createTensor(
-                        environment,
-                        LongBuffer.wrap(inputIds),
-                        longArrayOf(1, seqLen.toLong()),
-                    ),
-                "attention_mask" to
-                    OnnxTensor.createTensor(
-                        environment,
-                        LongBuffer.wrap(attentionMask),
-                        longArrayOf(1, seqLen.toLong()),
-                    ),
-            )
-        return try {
-            session.run(inputs).use { result -> result[0] as? OnnxTensor }
-        } finally {
-            inputs.values.forEach(OnnxTensor::close)
         }
     }
 
