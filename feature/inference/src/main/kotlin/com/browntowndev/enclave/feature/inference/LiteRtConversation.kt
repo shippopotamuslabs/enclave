@@ -28,7 +28,24 @@ interface LiteRtConversation {
      * its MessageCallback.onError callback, which the caller should handle gracefully.
      */
     fun cancelProcess()
+
+    /**
+     * Returns benchmark metrics from the most recent completed turn, if available.
+     */
+    fun benchmarkInfo(): LiteRtBenchmarkSnapshot?
 }
+
+/**
+ * Snapshot of LiteRT [com.google.ai.edge.litertlm.BenchmarkInfo] for telemetry.
+ */
+data class LiteRtBenchmarkSnapshot(
+    val initTimeInSecond: Double,
+    val timeToFirstTokenInSecond: Double,
+    val lastPrefillTokenCount: Int,
+    val lastDecodeTokenCount: Int,
+    val lastPrefillTokensPerSecond: Double,
+    val lastDecodeTokensPerSecond: Double,
+)
 
 /**
  * Represents a streaming response segment, which can contain user-facing text,

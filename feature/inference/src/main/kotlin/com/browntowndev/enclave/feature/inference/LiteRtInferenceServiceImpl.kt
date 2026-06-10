@@ -12,6 +12,9 @@ import com.browntowndev.enclave.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.browntowndev.enclave.domain.util.WebSearchResultParser
 import com.browntowndev.enclave.feature.inference.telemetry.InferenceTelemetrySupport
 import com.browntowndev.enclave.feature.inference.telemetry.InferenceTurnTiming
+import com.browntowndev.enclave.feature.inference.telemetry.estimateLiteRtPromptTokens
+import com.browntowndev.enclave.feature.inference.telemetry.estimateTokenCount
+import com.browntowndev.enclave.feature.inference.telemetry.resolveLiteRtInputTelemetry
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -101,7 +104,6 @@ class LiteRtInferenceServiceImpl
                     }
 
                 suspend fun attemptInference(retryOnFail: Boolean) {
-                    val timing = telemetrySupport?.let { InferenceTurnTiming() }
                     val captureContext = telemetrySupport?.captureContext(options)
                     try {
                         val conversation =
@@ -112,8 +114,11 @@ class LiteRtInferenceServiceImpl
 
                         Log.d(TAG, "Sending prompt with options: $prompt")
 
+                        val timing = telemetrySupport?.let { InferenceTurnTiming() }
                         conversation.sendMessageAsync(prompt, options).collect { response ->
                             if (response.thought.isNotEmpty()) {
+                                timing?.markFirstOutput()
+                                accumulatedThought.append(response.thought)
                                 send(InferenceEvent.Thinking(response.thought, targetModelType))
                             }
 
@@ -125,6 +130,7 @@ class LiteRtInferenceServiceImpl
                                 state.emittedSegments.forEach { segment ->
                                     when (segment.kind) {
                                         SegmentKind.THINKING -> {
+                                            timing?.markFirstOutput()
                                             accumulatedThought.append(segment.text)
                                             send(InferenceEvent.Thinking(segment.text, targetModelType))
                                         }
@@ -148,10 +154,23 @@ class LiteRtInferenceServiceImpl
                             }
                         }
 
-                        val outputTokenEstimate =
-                            accumulatedText
-                                .takeIf { it.isNotEmpty() }
-                                ?.let { text -> (text.length / 4).coerceAtLeast(1) }
+                        val benchmark = conversation.benchmarkInfo()
+                        val outputTokens =
+                            benchmark?.lastDecodeTokenCount?.takeIf { it > 0 }
+                                ?: estimateTokenCount(accumulatedText)
+                        val reasoningTokens = estimateTokenCount(accumulatedThought)
+                        val telemetryContext = conversationManager.telemetryContext()
+                        val estimatedPromptTokens =
+                            estimateLiteRtPromptTokens(
+                                history = telemetryContext.history,
+                                currentPrompt = prompt,
+                                systemPrompt = telemetryContext.systemPrompt,
+                            )
+                        val inputTelemetry =
+                            resolveLiteRtInputTelemetry(
+                                benchmarkPrefillTokens = benchmark?.lastPrefillTokenCount,
+                                estimatedTotalPromptTokens = estimatedPromptTokens,
+                            )
                         val telemetry =
                             if (telemetrySupport != null && timing != null && captureContext != null) {
                                 telemetrySupport.localTurnTelemetry(
@@ -159,7 +178,10 @@ class LiteRtInferenceServiceImpl
                                     providerLabel = "LiteRT",
                                     modelLabel = options.modelId ?: "local",
                                     timing = timing,
-                                    outputTokens = outputTokenEstimate,
+                                    outputTokens = outputTokens,
+                                    inputTokens = inputTelemetry.inputTokens,
+                                    cacheReadInputTokens = inputTelemetry.cacheReadInputTokens,
+                                    reasoningTokens = reasoningTokens,
                                 )
                             } else {
                                 null

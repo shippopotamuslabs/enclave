@@ -71,6 +71,7 @@ class ConversationManagerImplSpeculativeDecodingTest {
     @AfterEach
     fun tearDown() {
         ExperimentalFlags.enableSpeculativeDecoding = false
+        ExperimentalFlags.enableBenchmark = false
         unmockkStatic(Log::class)
     }
 
@@ -94,6 +95,7 @@ class ConversationManagerImplSpeculativeDecodingTest {
             manager.getConversation(ModelType.FAST, null, onLoadingStarted = {})
 
             assertFalse(ExperimentalFlags.enableSpeculativeDecoding ?: false)
+            assertFalse(ExperimentalFlags.enableBenchmark)
             verify(exactly = 1) { mockEngine.initialize() }
         }
 }

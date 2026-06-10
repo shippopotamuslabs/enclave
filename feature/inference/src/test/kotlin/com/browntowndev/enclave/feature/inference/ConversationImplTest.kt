@@ -3,9 +3,11 @@ package com.browntowndev.enclave.feature.inference
 import android.content.Context
 import android.util.Log
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
+import com.google.ai.edge.litertlm.BenchmarkInfo
 import com.google.ai.edge.litertlm.Content
 import com.google.ai.edge.litertlm.Contents
 import com.google.ai.edge.litertlm.Conversation
+import com.google.ai.edge.litertlm.ExperimentalApi
 import com.google.ai.edge.litertlm.Message
 import io.mockk.MockKAnnotations
 import io.mockk.every
@@ -154,5 +156,38 @@ class ConversationImplTest {
 
         // Then
         verify { mockLiteRtConversation.cancelProcess() }
+    }
+
+    @OptIn(ExperimentalApi::class)
+    @Test
+    fun `benchmarkInfo returns null when LiteRT benchmark is disabled`() {
+        every { mockLiteRtConversation.getBenchmarkInfo() } throws
+            IllegalStateException("Benchmark is not enabled")
+
+        val snapshot = conversationImpl.benchmarkInfo()
+
+        org.junit.jupiter.api.Assertions.assertNull(snapshot)
+    }
+
+    @OptIn(ExperimentalApi::class)
+    @Test
+    fun `benchmarkInfo maps LiteRT benchmark fields`() {
+        val benchmark =
+            BenchmarkInfo(
+                initTimeInSecond = 1.5,
+                timeToFirstTokenInSecond = 0.25,
+                lastPrefillTokenCount = 128,
+                lastDecodeTokenCount = 64,
+                lastPrefillTokensPerSecond = 900.0,
+                lastDecodeTokensPerSecond = 45.0,
+            )
+        every { mockLiteRtConversation.getBenchmarkInfo() } returns benchmark
+
+        val snapshot = conversationImpl.benchmarkInfo()
+
+        org.junit.jupiter.api.Assertions.assertNotNull(snapshot)
+        assertEquals(128, snapshot!!.lastPrefillTokenCount)
+        assertEquals(64, snapshot.lastDecodeTokenCount)
+        assertEquals(0.25, snapshot.timeToFirstTokenInSecond)
     }
 }

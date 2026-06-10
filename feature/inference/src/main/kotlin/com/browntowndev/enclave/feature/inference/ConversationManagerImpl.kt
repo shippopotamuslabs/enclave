@@ -190,6 +190,12 @@ class ConversationManagerImpl
             }
         }
 
+        override fun telemetryContext(): LiteRtTelemetryContext =
+            LiteRtTelemetryContext(
+                history = cache.history,
+                systemPrompt = cache.currentSystemPrompt,
+            )
+
         override suspend fun closeEngine() {
             mutex.withLock {
                 factory.closeEngine()

@@ -14,6 +14,7 @@ import com.browntowndev.enclave.domain.model.inference.GenerationEvent
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
+import com.browntowndev.enclave.domain.model.telemetry.TelemetryProviderKey
 import com.browntowndev.enclave.domain.model.telemetry.TelemetrySummaryBuilder
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
@@ -159,6 +160,8 @@ class LlamaInferenceServiceImplTelemetryTest {
             assertEquals(42, telemetry!!.outputTokens)
             assertEquals(100, telemetry.inputTokens)
             assertEquals(80, telemetry.cacheReadInputTokens)
+            assertEquals("llama.cpp", telemetry.providerLabel)
+            assertEquals(TelemetryProviderKey.LLAMA, telemetry.providerKey)
             assertNotNull(telemetry.firstOutputTokenAtMs)
 
             val summary =
