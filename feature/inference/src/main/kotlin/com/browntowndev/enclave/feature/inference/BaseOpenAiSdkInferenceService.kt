@@ -192,6 +192,15 @@ abstract class BaseOpenAiSdkInferenceService(
                     imageTargetIndex = lastUserIndex,
                     cacheControlIndex = cacheControlIndex,
                 )
+            val mappedResponseSession =
+                AgentLoopOpenAiResponseMapper.mapSession(
+                    sessionMessages = sessionMessages,
+                    imageUris = imageUris,
+                    imageTargetIndex = lastUserIndex,
+                    loggingPort = loggingPort,
+                    tag = tag,
+                    modelId = requestModelId,
+                )
             val mappedBody = mappedSession.params
 
             val appendOnly = ensureAppendOnlyContext(options.chatId)
@@ -220,10 +229,20 @@ abstract class BaseOpenAiSdkInferenceService(
                     sessionMessages = sessionMessages,
                     sessionIndexToMappedIndex = mappedSession.sessionIndexToMappedIndex,
                 )
+            val responseTailInsertIndex =
+                resolveTailMappedInsertIndex(
+                    sessionMessages = sessionMessages,
+                    sessionIndexToMappedIndex = mappedResponseSession.sessionIndexToMappedIndex,
+                )
             val preRetrievalInsertIndex =
                 resolvePreRetrievalMappedInsertIndex(
                     sessionMessages = sessionMessages,
                     sessionIndexToMappedIndex = mappedSession.sessionIndexToMappedIndex,
+                )
+            val responsePreRetrievalInsertIndex =
+                resolvePreRetrievalMappedInsertIndex(
+                    sessionMessages = sessionMessages,
+                    sessionIndexToMappedIndex = mappedResponseSession.sessionIndexToMappedIndex,
                 )
             val preRetrievalSidecarText =
                 options.volatileTurnContext
@@ -260,6 +279,21 @@ abstract class BaseOpenAiSdkInferenceService(
                         ),
                     )
                 }
+            val responseWireSegments =
+                OpenAiCompatibleResponseSidecarPlacement.buildSegmentsWithSidecars(
+                    mappedSegments = mappedResponseSession.segments,
+                    frozenSidecars =
+                        OpenAiCompatibleResponseSidecarPlacement.remapFrozenSidecarsForResponses(
+                            frozenSidecars = appendOnly.frozenSidecarsForWireReplay(),
+                            chatSessionIndexToMappedIndex = mappedSession.sessionIndexToMappedIndex,
+                            responseSessionIndexToMappedIndex = mappedResponseSession.sessionIndexToMappedIndex,
+                        ),
+                    preRetrievalSidecarText = livePreRetrievalSidecarText,
+                    preRetrievalInsertIndex = responsePreRetrievalInsertIndex,
+                    currentSidecarText = contextSidecars,
+                    tailInsertIndex = responseTailInsertIndex,
+                    prependedSystemPrompt = systemPrompt.takeIf { systemPromptPrepended },
+                )
             if (!contextSidecars.isNullOrBlank()) {
                 appendOnly.endTurnFreezeSidecar(
                     sidecarText = contextSidecars,
@@ -322,7 +356,7 @@ abstract class BaseOpenAiSdkInferenceService(
             val chatParams = builder.build()
             val response =
                 streamResponsesFirst(
-                    messages = messages,
+                    responseWireSegments = responseWireSegments,
                     requestProvider = requestProvider,
                     requestModelId = requestModelId,
                     availableTools = availableTools,
@@ -476,7 +510,7 @@ abstract class BaseOpenAiSdkInferenceService(
     }
 
     private suspend fun streamResponsesFirst(
-        messages: List<ChatCompletionMessageParam>,
+        responseWireSegments: List<ResponseWireSegment>,
         requestProvider: ApiProvider?,
         requestModelId: String,
         availableTools: List<ToolDefinition>,
@@ -486,7 +520,7 @@ abstract class BaseOpenAiSdkInferenceService(
     ): StreamedOpenAiResponse {
         val responseParams =
             buildResponseParams(
-                messages = messages,
+                responseWireSegments = responseWireSegments,
                 requestProvider = requestProvider,
                 requestModelId = requestModelId,
                 availableTools = availableTools,
@@ -517,7 +551,7 @@ abstract class BaseOpenAiSdkInferenceService(
     }
 
     private fun buildResponseParams(
-        messages: List<ChatCompletionMessageParam>,
+        responseWireSegments: List<ResponseWireSegment>,
         requestProvider: ApiProvider?,
         requestModelId: String,
         availableTools: List<ToolDefinition>,
@@ -526,27 +560,29 @@ abstract class BaseOpenAiSdkInferenceService(
         if (requestProvider != ApiProvider.XAI && requestProvider != ApiProvider.OPENAI) {
             return null
         }
-        val mapperInput = messages.toResponseMapperInput()
         val responseOptions =
             options.copy(
                 apiProvider = requestProvider,
                 modelId = requestModelId,
-                toolingEnabled = availableTools.isNotEmpty(),
-                activeTools = availableTools,
             )
+        val wire =
+            when (requestProvider) {
+                ApiProvider.XAI -> ResponseWireSegmentSupport.resolveForXai(responseWireSegments)
+                ApiProvider.OPENAI -> ResponseWireSegmentSupport.resolveForOpenAi(responseWireSegments)
+            }
         return if (requestProvider == ApiProvider.XAI) {
-            XaiRequestMapper.mapToResponseParams(
+            XaiRequestMapper.mapSessionToResponseParams(
                 modelId = requestModelId,
-                prompt = mapperInput.prompt,
-                history = mapperInput.history,
+                wire = wire,
                 options = responseOptions,
+                availableTools = availableTools,
             )
         } else {
-            OpenAiRequestMapper.mapToResponseParams(
+            OpenAiRequestMapper.mapSessionToResponseParams(
                 modelId = requestModelId,
-                prompt = mapperInput.prompt,
-                history = mapperInput.history,
+                wire = wire,
                 options = responseOptions,
+                availableTools = availableTools,
             )
         }
     }
@@ -560,57 +596,6 @@ abstract class BaseOpenAiSdkInferenceService(
             ApiProvider.OPENAI -> true
             else -> true
         }
-
-    private data class ResponseMapperInput(
-        val history: List<ChatMessage>,
-        val prompt: String,
-    )
-
-    private fun List<ChatCompletionMessageParam>.toResponseMapperInput(): ResponseMapperInput {
-        val mapped = mapNotNull { it.toChatMessageOrNull() }
-        val latestUserIndex = mapped.indexOfLast { it.role == Role.USER }
-        if (latestUserIndex < 0) {
-            return ResponseMapperInput(history = mapped, prompt = "")
-        }
-        val latestUser = mapped[latestUserIndex]
-        return ResponseMapperInput(
-            history = mapped.take(latestUserIndex) + mapped.drop(latestUserIndex + 1),
-            prompt = latestUser.content,
-        )
-    }
-
-    private fun ChatCompletionMessageParam.toChatMessageOrNull(): ChatMessage? =
-        when {
-            isSystem() -> ChatMessage(Role.SYSTEM, asSystem().content().asText())
-            isUser() -> ChatMessage(Role.USER, asUser().content().asPlainText())
-            isAssistant() -> ChatMessage(Role.ASSISTANT, asAssistant().content().asPlainTextOrEmpty())
-            isTool() -> ChatMessage(Role.USER, asTool().content().asText())
-            else -> null
-        }
-
-    private fun ChatCompletionUserMessageParam.Content.asPlainText(): String =
-        when {
-            isText() -> asText()
-            isArrayOfContentParts() ->
-                asArrayOfContentParts()
-                    .mapNotNull { part ->
-                        if (part.isText()) {
-                            part.asText().text()
-                        } else {
-                            null
-                        }
-                    }.joinToString(separator = "\n\n")
-            else -> toString()
-        }
-
-    private fun Optional<ChatCompletionAssistantMessageParam.Content>.asPlainTextOrEmpty(): String {
-        if (!isPresent) return ""
-        val content = get()
-        return when {
-            content.isText() -> content.asText()
-            else -> content.toString()
-        }
-    }
 
     private fun buildSystemPromptMessage(
         content: String,

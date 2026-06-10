@@ -20,11 +20,47 @@ object XaiRequestMapper {
         val maxTokens: Int?,
     )
 
+    internal fun mapSessionToResponseParams(
+        modelId: String,
+        wire: ResponseWireSegmentSupport.ResolvedResponseWire,
+        options: GenerationOptions,
+        availableTools: List<ToolDefinition>,
+    ): ResponseCreateParams =
+        buildResponseParams(
+            modelId = modelId,
+            input = wire.input,
+            options = options,
+            availableTools = availableTools,
+        )
+
     fun mapToResponseParams(
         modelId: String,
         prompt: String,
         history: List<ChatMessage>,
         options: GenerationOptions,
+    ): ResponseCreateParams {
+        val messages = mutableListOf<ResponseInputItem>()
+
+        history.filterNot(::isSyntheticAssistantError).forEach { msg ->
+            val sanitizedContent = ImagePayloads.stripBase64DataUris(msg.content)
+            messages.add(ResponsesInputMessageSupport.textInputItem(msg.role, sanitizedContent))
+        }
+
+        messages.add(ResponseInputItem.ofMessage(buildResponseUserMessage(prompt, options.imageUris)))
+
+        return buildResponseParams(
+            modelId = modelId,
+            input = messages,
+            options = options,
+            availableTools = if (options.toolingEnabled) options.activeTools else emptyList(),
+        )
+    }
+
+    private fun buildResponseParams(
+        modelId: String,
+        input: List<ResponseInputItem>,
+        options: GenerationOptions,
+        availableTools: List<ToolDefinition>,
     ): ResponseCreateParams {
         val sanitizedOptions = sanitizeResponseOptions(modelId, options)
         val builder =
@@ -32,6 +68,7 @@ object XaiRequestMapper {
                 .builder()
                 .model(modelId)
                 .store(false)
+                .inputOfResponse(input)
 
         val provider = options.apiProvider
         val optModelId = options.modelId
@@ -42,16 +79,6 @@ object XaiRequestMapper {
                 null
             }
 
-        val messages = mutableListOf<ResponseInputItem>()
-
-        history.filterNot(::isSyntheticAssistantError).forEach { msg ->
-            val sanitizedContent = ImagePayloads.stripBase64DataUris(msg.content)
-            messages.add(ResponsesInputMessageSupport.textInputItem(msg.role, sanitizedContent))
-        }
-
-        messages.add(ResponseInputItem.ofMessage(buildResponseUserMessage(prompt, options.imageUris)))
-
-        builder.inputOfResponse(messages)
         sanitizedOptions.reasoningEffort?.let { builder.reasoning(ReasoningMapper.toSdkReasoning(it)) }
         if (!options.temperatureDisabled && parameterSupport?.supportsTemperature != false) {
             options.temperature?.let { builder.temperature(it.toDouble()) }
@@ -71,11 +98,8 @@ object XaiRequestMapper {
             toolsPayload.add(mapOf("type" to "code_execution"))
         }
 
-        val xaiToolsToRegister = options.activeTools
-        if (options.toolingEnabled && xaiToolsToRegister.isNotEmpty()) {
-            if (!isMultiAgentModel(modelId)) {
-                toolsPayload.addAll(xaiToolsToRegister.map { it.toResponseToolPayloadMap() })
-            }
+        if (availableTools.isNotEmpty() && !isMultiAgentModel(modelId)) {
+            toolsPayload.addAll(availableTools.map { it.toResponseToolPayloadMap() })
         }
 
         if (toolsPayload.isNotEmpty()) {
