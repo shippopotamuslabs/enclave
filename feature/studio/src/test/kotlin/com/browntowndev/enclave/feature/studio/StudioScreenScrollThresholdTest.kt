@@ -216,6 +216,85 @@ class StudioScreenScrollThresholdTest {
     }
 
     @Test
+    fun promptHeaders_whenRegeneratingExistingPrompt_reusesExistingGroupHeader() {
+        val headers =
+            buildStudioPromptHeaderInfo(
+                groupedGallery =
+                    listOf(
+                        StudioGalleryGroup(
+                            prompt = "Turtles",
+                            mediaItems = listOf(studioMedia("asset-1")),
+                        ),
+                        StudioGalleryGroup(
+                            prompt = "Squirrels",
+                            mediaItems = listOf(studioMedia("asset-2")),
+                        ),
+                    ),
+                isGenerating = true,
+                activeGenerationPrompt = "Turtles",
+                generationPlaceholderCount = 1,
+            )
+
+        assertEquals(
+            listOf(
+                StudioPromptHeaderInfo(
+                    key = "studio_header_0_Turtles",
+                    prompt = "Turtles",
+                    itemIndex = 0,
+                ),
+                StudioPromptHeaderInfo(
+                    key = "studio_header_1_Squirrels",
+                    prompt = "Squirrels",
+                    itemIndex = 2,
+                ),
+            ),
+            headers,
+        )
+    }
+
+    @Test
+    fun placeholderScrollIndex_whenRegeneratingExistingPrompt_pointsToExistingGroupPlaceholder() {
+        val scrollIndex =
+            computeStudioGenerationPlaceholderScrollIndex(
+                groupedGallery =
+                    listOf(
+                        StudioGalleryGroup(
+                            prompt = "Turtles",
+                            mediaItems = listOf(studioMedia("asset-1")),
+                        ),
+                        StudioGalleryGroup(
+                            prompt = "Squirrels",
+                            mediaItems = listOf(studioMedia("asset-2")),
+                        ),
+                    ),
+                isGenerating = true,
+                activeGenerationPrompt = "Turtles",
+                generationPlaceholderCount = 1,
+            )
+
+        assertEquals(1, scrollIndex)
+    }
+
+    @Test
+    fun placeholderScrollIndex_whenGeneratingNewPrompt_pointsToTrailingPlaceholderRow() {
+        val scrollIndex =
+            computeStudioGenerationPlaceholderScrollIndex(
+                groupedGallery =
+                    listOf(
+                        StudioGalleryGroup(
+                            prompt = "first",
+                            mediaItems = listOf(studioMedia("asset-1")),
+                        ),
+                    ),
+                isGenerating = true,
+                activeGenerationPrompt = "second",
+                generationPlaceholderCount = 2,
+            )
+
+        assertEquals(3, scrollIndex)
+    }
+
+    @Test
     fun promptHeaders_whenGeneratingNewPrompt_addsPlaceholderHeaderAfterExistingRows() {
         val headers =
             buildStudioPromptHeaderInfo(
