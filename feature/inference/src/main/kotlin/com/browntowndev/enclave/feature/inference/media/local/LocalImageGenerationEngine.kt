@@ -2,6 +2,7 @@ package com.browntowndev.enclave.feature.inference.media.local
 
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationError
+import com.browntowndev.enclave.localimagegen.NativeLocalImageGenRuntime
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -11,20 +12,15 @@ class LocalImageGenerationEngine
     constructor(
         private val qnnBackend: QnnStableDiffusionBackend,
         private val mnnBackend: MnnCpuStableDiffusionBackend,
+        private val nativeRuntime: NativeLocalImageGenRuntime,
     ) {
-        @Volatile
-        private var cancelled: Boolean = false
-
         fun cancel() {
-            cancelled = true
+            nativeRuntime.cancel()
             qnnBackend.cancel()
+            mnnBackend.cancel()
         }
 
         suspend fun generate(request: LocalImageGenerationNativeRequest): Result<LocalImageGenerationNativeResult> {
-            cancelled = false
-            if (cancelled) {
-                return Result.failure(LocalImageGenerationError.Cancelled())
-            }
             val backend =
                 when (request.backend) {
                     LocalImageGenerationBackendKind.QNN_NPU -> qnnBackend

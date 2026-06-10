@@ -13,10 +13,13 @@ import com.browntowndev.enclave.domain.port.download.QnnPackInstallProgressListe
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
+import java.security.MessageDigest
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 import java.util.zip.ZipInputStream
@@ -76,7 +79,7 @@ class Sd15QnnPackInstaller
         private suspend fun installQnnPack(
             metadata: LocalModelMetadata,
             packSubdir: String,
-            variantLookup: (String) -> Any?,
+            @Suppress("UNUSED_PARAMETER") variantLookup: (String) -> Any?,
             label: String,
             progressListener: QnnPackInstallProgressListener?,
             artifactsPresent: (File) -> Boolean,
@@ -94,8 +97,9 @@ class Sd15QnnPackInstaller
                 logger.warning(TAG, "$label QNN pack zip missing: ${zipFile.absolutePath}")
                 return false
             }
-            if (variantLookup(metadata.sha256) == null) {
-                logger.warning(TAG, "Unknown $label QNN pack SHA: ${metadata.sha256}")
+            val zipSha256 = sha256Hex(zipFile)
+            if (!zipSha256.equals(metadata.sha256, ignoreCase = true)) {
+                logger.warning(TAG, "$label QNN pack zip hash mismatch: expected=${metadata.sha256} actual=$zipSha256")
                 return false
             }
             val totalBytes = estimateUncompressedZipBytes(zipFile).coerceAtLeast(zipFile.length())
@@ -211,6 +215,7 @@ class Sd15QnnPackInstaller
             // reports incremental progress instead of jumping at entry boundaries.
             val buffer = ByteArray(COPY_BUFFER_BYTES)
             while (true) {
+                currentCoroutineContext().ensureActive()
                 val read = zip.read(buffer)
                 if (read < 0) break
                 out.write(buffer, 0, read)
@@ -263,5 +268,18 @@ class Sd15QnnPackInstaller
             if (zip.isFile) {
                 zip.delete()
             }
+        }
+
+        private fun sha256Hex(file: File): String {
+            val digest = MessageDigest.getInstance("SHA-256")
+            file.inputStream().buffered().use { input ->
+                val buffer = ByteArray(COPY_BUFFER_BYTES)
+                while (true) {
+                    val read = input.read(buffer)
+                    if (read < 0) break
+                    digest.update(buffer, 0, read)
+                }
+            }
+            return digest.digest().joinToString("") { byte -> "%02x".format(byte) }
         }
     }

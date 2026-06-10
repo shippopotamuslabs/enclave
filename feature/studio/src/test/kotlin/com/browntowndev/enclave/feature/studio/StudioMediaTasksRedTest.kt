@@ -139,7 +139,7 @@ class StudioMediaTasksRedTest {
 
             viewModel.uiState.test {
                 awaitItem()
-                viewModel.promptCoordinator.onUpdateReferenceImage("file://reference.png")
+                viewModel.onUpdateReferenceImage("file://reference.png")
                 advanceUntilIdle()
 
                 assertEquals("image-edit", seenCapabilityProviderIds.last())
@@ -207,8 +207,7 @@ class StudioMediaTasksRedTest {
                 val initialState = awaitItem()
                 assertEquals(VideoGenerationState.Idle, initialState.videoGenerationState)
 
-                viewModel.mediaActionsCoordinator.onAnimateMedia(
-                    prompt = viewModel.promptCoordinator,
+                viewModel.onAnimateMedia(
                     assetId = "asset-1",
                     autoAnimate = true,
                 )
@@ -225,14 +224,14 @@ class StudioMediaTasksRedTest {
                 cancelAndIgnoreRemainingEvents()
             }
 
-            verify(exactly = 0) { dispatcher.startGeneration(any(), any(), any()) }
+            verify(exactly = 0) { dispatcher.startGeneration(any(), any(), any(), any()) }
         }
 
     @Test
     fun `COORD-01 coordinator blocks detail video generation without image-to-video default`() {
         generationCoordinator.startDetailVideoGeneration(referenceAsset(), hasImageToVideoModel = false)
 
-        verify(exactly = 0) { dispatcher.startGeneration(any(), any(), any()) }
+        verify(exactly = 0) { dispatcher.startGeneration(any(), any(), any(), any()) }
         assertEquals(
             VideoGenerationState.Error(
                 sourceAssetId = "asset-1",

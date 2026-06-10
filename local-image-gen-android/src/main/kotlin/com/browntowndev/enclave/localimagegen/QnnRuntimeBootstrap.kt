@@ -36,6 +36,9 @@ internal object QnnRuntimeBootstrap {
         libraryNames: List<String>,
     ) {
         runtimeDir.mkdirs()
+        // Hexagon DSP loads QNN shared objects via dlopen from this tree. Android's private
+        // app-cache default mode blocks other UIDs (including the DSP loader) from traversing
+        // the directory, so mark it world-readable/executable for the duration of inference.
         runtimeDir.setReadable(true, /* ownerOnly */ false)
         runtimeDir.setExecutable(true, /* ownerOnly */ false)
         libraryNames.forEach { name ->
@@ -61,9 +64,16 @@ internal object QnnRuntimeBootstrap {
             android.os.Build.BOARD,
             android.os.Build.SOC_MODEL,
             android.os.Build.SOC_MANUFACTURER,
-            System.getProperty("ro.board.platform"),
-            System.getProperty("ro.soc.model"),
         ).joinToString(" ")
+
+    private fun runtimeLibraryMatchesAsset(
+        dest: File,
+        assetBytes: ByteArray,
+    ): Boolean =
+        dest.exists() &&
+            dest.length() == assetBytes.size.toLong() &&
+            assetBytes.isNotEmpty() &&
+            dest.readBytes().contentEquals(assetBytes)
 
     private fun copyAssetIfNeeded(
         context: Context,
@@ -77,7 +87,7 @@ internal object QnnRuntimeBootstrap {
                 context.assets.open(assetPath).use { input ->
                     input.readBytes()
                 }
-            if (dest.exists() && dest.length() == assetBytes.size.toLong() && assetBytes.isNotEmpty()) {
+            if (runtimeLibraryMatchesAsset(dest, assetBytes)) {
                 return
             }
             dest.writeBytes(assetBytes)

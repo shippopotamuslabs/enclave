@@ -83,6 +83,7 @@ class StudioMediaUiTest {
                 prompt = "Prompt",
                 mediaType = MediaCapability.IMAGE,
                 createdAt = 1L,
+                hasLocalFile = true,
             )
 
         assertFalse(asset.isAwaitingDownload)

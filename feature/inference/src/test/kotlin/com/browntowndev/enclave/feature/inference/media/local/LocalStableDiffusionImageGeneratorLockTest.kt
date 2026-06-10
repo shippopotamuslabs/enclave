@@ -18,6 +18,7 @@ import com.browntowndev.enclave.domain.usecase.inference.InferenceType
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -39,8 +40,10 @@ class LocalStableDiffusionImageGeneratorLockTest {
                 LocalStableDiffusionImageGenerator(
                     context = context,
                     engine = engine,
+                    nativeRuntime = mockk(relaxed = true),
                     inferenceLockManager = lockManager,
                     studioRepository = mockk<StudioRepositoryPort>(relaxed = true),
+                    dispatcher = Dispatchers.Unconfined,
                 )
 
             val result =

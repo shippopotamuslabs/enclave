@@ -66,5 +66,7 @@ internal object LocalImageGenNative {
 
     external fun nativeCancel()
 
+    external fun nativeGetGenerationProgress(): IntArray?
+
     external fun nativeOnTrimMemory(level: Int)
 }

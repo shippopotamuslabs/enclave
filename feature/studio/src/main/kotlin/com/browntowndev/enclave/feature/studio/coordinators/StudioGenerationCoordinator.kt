@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import java.util.UUID
 import javax.inject.Inject
 
 class StudioGenerationCoordinator
@@ -131,9 +132,11 @@ class StudioGenerationCoordinator
             settings: GenerationSettings,
         ) {
             _generationProgressLabel.value = null
+            val generationId = UUID.randomUUID().toString()
             val claimedGeneration =
                 studioRepository.reportActiveGeneration(
                     ActiveStudioGeneration(
+                        id = generationId,
                         prompt = prompt,
                         mediaType = mediaType,
                         settings = settings,
@@ -144,7 +147,14 @@ class StudioGenerationCoordinator
                 _isContinualGenerationActive.value = false
                 return
             }
-            dispatcher.startGeneration(prompt, mediaType, settings)
+            try {
+                dispatcher.startGeneration(prompt, mediaType, settings, generationId)
+            } catch (error: IllegalStateException) {
+                studioRepository.clearActiveGenerationIfOwned(generationId)
+                _error.value = error.message ?: GENERATION_ALREADY_ACTIVE_MESSAGE
+                _isContinualGenerationActive.value = false
+                _isGenerating.value = false
+            }
         }
 
         suspend fun isGenerationActive(): Boolean = studioRepository.observeActiveGeneration().first() != null

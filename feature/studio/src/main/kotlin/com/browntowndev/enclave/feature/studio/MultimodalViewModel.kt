@@ -5,7 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.inference.ModelType
+import com.browntowndev.enclave.domain.model.media.GenerationSettings
 import com.browntowndev.enclave.domain.model.media.ProviderCapabilities
+import com.browntowndev.enclave.domain.model.media.StudioTemplate
 import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
 import com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase
@@ -45,6 +47,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 
 @HiltViewModel
@@ -65,9 +68,10 @@ class MultimodalViewModel
         private val studioUiStateReducer: StudioUiStateReducer,
         private val capabilitiesCoordinator: StudioCapabilitiesCoordinator,
         private val remoteCapabilitiesCoordinator: StudioRemoteCapabilitiesCoordinator,
-        val promptCoordinator: StudioPromptCoordinator,
-        val mediaActionsCoordinator: StudioMediaActionsCoordinator,
+        private val promptCoordinator: StudioPromptCoordinator,
+        private val mediaActionsCoordinator: StudioMediaActionsCoordinator,
     ) : ViewModel() {
+        private val generationAttemptInFlight = AtomicBoolean(false)
         private val sessionMedia = albumSelectionCoordinator.sessionMediaFlow(viewModelScope)
 
         private val activeModelFlow =
@@ -294,13 +298,14 @@ class MultimodalViewModel
             )
             // The remote coordinator only resolves provider-backed schemas; feed the on-device
             // stable-diffusion capabilities directly when the active image slot is local.
-            localImageCapabilitiesFlow
-                .onEach { localCapabilities ->
-                    if (localCapabilities != null && promptCoordinator.mediaType.value == MediaCapability.IMAGE) {
-                        _isCapabilitiesLoading.value = false
-                        _capabilities.value = localCapabilities
-                    }
-                }.launchIn(viewModelScope)
+            combine(localImageCapabilitiesFlow, promptCoordinator.mediaType) { localCapabilities, mediaType ->
+                localCapabilities to mediaType
+            }.onEach { (localCapabilities, mediaType) ->
+                if (localCapabilities != null && mediaType == MediaCapability.IMAGE) {
+                    _isCapabilitiesLoading.value = false
+                    _capabilities.value = localCapabilities
+                }
+            }.launchIn(viewModelScope)
             mediaActionsCoordinator.attach(
                 scope = viewModelScope,
                 sessionMedia = sessionMedia,
@@ -322,6 +327,78 @@ class MultimodalViewModel
 
         fun onStopTts() {
             playbackCoordinator.onStopTts()
+        }
+
+        fun onPromptChange(newPrompt: String) {
+            promptCoordinator.onPromptChange(newPrompt)
+        }
+
+        fun onUpdateReferenceImage(uri: String?) {
+            promptCoordinator.onUpdateReferenceImage(uri)
+        }
+
+        fun onSettingsToggle() {
+            promptCoordinator.onSettingsToggle()
+        }
+
+        fun onUpdateSettings(newSettings: GenerationSettings) {
+            promptCoordinator.onUpdateSettings(newSettings)
+        }
+
+        fun onContinualModeToggle(enabled: Boolean) {
+            promptCoordinator.onContinualModeToggle(enabled)
+        }
+
+        fun onMediaTypeChange(type: MediaCapability) {
+            promptCoordinator.onMediaTypeChange(type)
+        }
+
+        fun onTemplateSelected(template: StudioTemplate) {
+            promptCoordinator.onTemplateSelected(template)
+        }
+
+        fun shareMedia(assetIds: Set<String>) {
+            mediaActionsCoordinator.shareMedia(assetIds)
+        }
+
+        fun shareSingleMedia(assetId: String) {
+            mediaActionsCoordinator.shareSingleMedia(assetId)
+        }
+
+        fun onEditMedia(
+            assetId: String?,
+            rehydrateIds: List<String> = emptyList(),
+            rehydrateUris: List<String> = emptyList(),
+            rehydrateTypes: List<String> = emptyList(),
+            rehydratePrompts: List<String> = emptyList(),
+            fromUserAction: Boolean = false,
+        ) {
+            mediaActionsCoordinator.onEditMedia(
+                prompt = promptCoordinator,
+                assetId = assetId,
+                rehydrateIds = rehydrateIds,
+                rehydrateUris = rehydrateUris,
+                rehydrateTypes = rehydrateTypes,
+                rehydratePrompts = rehydratePrompts,
+                fromUserAction = fromUserAction,
+            )
+        }
+
+        fun onAnimateMedia(
+            assetId: String,
+            autoAnimate: Boolean = false,
+            customPrompt: String? = null,
+        ) {
+            mediaActionsCoordinator.onAnimateMedia(
+                prompt = promptCoordinator,
+                assetId = assetId,
+                autoAnimate = autoAnimate,
+                customPrompt = customPrompt,
+            )
+        }
+
+        fun deleteMedia(id: String) {
+            mediaActionsCoordinator.deleteMedia(id)
         }
 
         val uiState: StateFlow<StudioUiState> =
@@ -403,12 +480,22 @@ class MultimodalViewModel
 
         fun generate() {
             if (generationCoordinator.isGenerating.value || generationCoordinator.isContinualGenerationActive.value) {
+                generationAttemptInFlight.set(false)
                 generationCoordinator.stopGeneration()
+                return
+            }
+
+            if (generationAttemptInFlight.get()) {
+                generationAttemptInFlight.set(false)
                 return
             }
 
             val submittedPrompt = promptCoordinator.prompt.value
             if (submittedPrompt.isBlank()) return
+
+            if (!generationAttemptInFlight.compareAndSet(false, true)) {
+                return
+            }
 
             viewModelScope.launch {
                 try {
@@ -420,26 +507,27 @@ class MultimodalViewModel
                             return@launch
                         }
                     }
+
+                    val baselineMediaCountForPrompt =
+                        uiState.value.groupedGallery
+                            .find { group -> group.prompt == submittedPrompt }
+                            ?.mediaItems
+                            ?.size
+                            ?: 0
+                    generationCoordinator.beginGenerationAttempt(
+                        submittedPrompt = submittedPrompt,
+                        mediaType = promptCoordinator.mediaType.value,
+                        continualMode = promptCoordinator.continualMode.value,
+                        settings = promptCoordinator.settings.value,
+                        baselineMediaCountForPrompt = baselineMediaCountForPrompt,
+                    )
+                    promptCoordinator.prompt.update { "" }
                 } catch (e: Exception) {
                     android.util.Log.e("MultimodalViewModel", "Prompt moderation failed", e)
                     generationCoordinator.rejectPrompt("Failed to verify prompt safety. Please try again.")
-                    return@launch
+                } finally {
+                    generationAttemptInFlight.set(false)
                 }
-
-                val baselineMediaCountForPrompt =
-                    uiState.value.groupedGallery
-                        .find { group -> group.prompt == submittedPrompt }
-                        ?.mediaItems
-                        ?.size
-                        ?: 0
-                generationCoordinator.beginGenerationAttempt(
-                    submittedPrompt = submittedPrompt,
-                    mediaType = promptCoordinator.mediaType.value,
-                    continualMode = promptCoordinator.continualMode.value,
-                    settings = promptCoordinator.settings.value,
-                    baselineMediaCountForPrompt = baselineMediaCountForPrompt,
-                )
-                promptCoordinator.prompt.update { "" }
             }
         }
 

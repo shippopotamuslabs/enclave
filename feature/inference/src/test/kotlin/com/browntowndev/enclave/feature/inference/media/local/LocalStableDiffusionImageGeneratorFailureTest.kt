@@ -21,6 +21,7 @@ import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
 import io.mockk.runs
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -69,7 +70,14 @@ class LocalStableDiffusionImageGeneratorFailureTest {
     ): LocalStableDiffusionImageGenerator {
         val activityManager = mockk<ActivityManager> { every { memoryClass } returns 512 }
         every { context.getSystemService(Context.ACTIVITY_SERVICE) } returns activityManager
-        return LocalStableDiffusionImageGenerator(context, engine, lockManager, studioRepository)
+        return LocalStableDiffusionImageGenerator(
+            context = context,
+            engine = engine,
+            nativeRuntime = mockk(relaxed = true),
+            inferenceLockManager = lockManager,
+            studioRepository = studioRepository,
+            dispatcher = Dispatchers.Unconfined,
+        )
     }
 
     private fun localTarget(): ImageGenerationTarget.LocalStableDiffusion =
@@ -282,6 +290,44 @@ class LocalStableDiffusionImageGeneratorFailureTest {
             assertTrue(result.isSuccess)
             // A lazy forwarder would emit 13 unchanged; the unsupported step must clamp to 16.
             assertEquals(16, capturedRequest.captured.steps)
+        }
+
+    @Test
+    fun `img2img failure deletes init image from cache`() =
+        runTest {
+            val cacheRoot = java.nio.file.Files.createTempDirectory("local-image-gen-cache").toFile()
+            val outputDir = cacheRoot.resolve("local-image-gen").apply { mkdirs() }
+            val modelDir = java.io.File.createTempFile("model", "").parentFile!!.resolve("img2img-model")
+            modelDir.mkdirs()
+            java.io.File(modelDir, "vae_encoder.bin").writeBytes(byteArrayOf(1))
+            val engine =
+                mockk<LocalImageGenerationEngine> {
+                    coEvery { generate(any()) } returns
+                        Result.failure(
+                            LocalImageGenerationError.GenerationFailed(
+                                LocalImageGenerationBackendKind.QNN_NPU,
+                                "Generation failed",
+                            ),
+                        )
+                }
+            val context = mockk<Context>(relaxed = true)
+            every { context.cacheDir } returns cacheRoot
+            coEvery { studioRepository.readMediaBytes("cache://reference.png") } returns byteArrayOf(1, 2, 3)
+            val generator = createGenerator(context, engine)
+
+            val result =
+                generator.generate(
+                    prompt = "sunset",
+                    target = localTarget().copy(modelDir = modelDir.absolutePath),
+                    settings =
+                        ImageGenerationSettings(
+                            imageResolution = "512x512",
+                            referenceImageUri = "cache://reference.png",
+                        ),
+                )
+
+            assertTrue(result.isFailure)
+            assertTrue(outputDir.listFiles { file -> file.name.startsWith("init-") }.isNullOrEmpty())
         }
 
     @Test

@@ -74,7 +74,7 @@ class StudioGenerationCoordinatorTest {
 
             assertTrue(coordinator.isGenerating.value)
             assertEquals("prompt", activeGenerationFlow.value?.prompt)
-            verify { dispatcher.startGeneration("prompt", MediaCapability.IMAGE, ImageGenerationSettings()) }
+            verify { dispatcher.startGeneration("prompt", MediaCapability.IMAGE, ImageGenerationSettings(), any()) }
 
             coroutineContext[Job]?.cancelChildren(CancellationException("test complete"))
         }
@@ -84,6 +84,7 @@ class StudioGenerationCoordinatorTest {
         runTest {
             val activeGeneration =
                 ActiveStudioGeneration(
+                    id = "gen-1",
                     prompt = "in progress",
                     mediaType = MediaCapability.VIDEO,
                     settings = VideoGenerationSettings(),
@@ -105,6 +106,7 @@ class StudioGenerationCoordinatorTest {
     fun beginGenerationAttempt_activeGeneration_rejectsDuplicateBeforeDispatch() {
         activeGenerationFlow.value =
             ActiveStudioGeneration(
+                id = "existing-gen",
                 prompt = "first",
                 mediaType = MediaCapability.IMAGE,
                 settings = ImageGenerationSettings(),
@@ -118,7 +120,7 @@ class StudioGenerationCoordinatorTest {
         )
 
         assertEquals("Another media generation is already in progress.", coordinator.error.value)
-        verify(exactly = 0) { dispatcher.startGeneration(any(), any(), any()) }
+        verify(exactly = 0) { dispatcher.startGeneration(any(), any(), any(), any()) }
     }
 
     @Test
@@ -148,6 +150,7 @@ class StudioGenerationCoordinatorTest {
                 "Animate this",
                 MediaCapability.VIDEO,
                 capture(settingsSlot),
+                any(),
             )
         }
         val settings = settingsSlot.captured as VideoGenerationSettings
@@ -168,7 +171,7 @@ class StudioGenerationCoordinatorTest {
             advanceUntilIdle()
             assertTrue(coordinator.isContinualGenerationActive.value)
             assertTrue(coordinator.isGenerating.value)
-            verify(exactly = 1) { dispatcher.startGeneration(any(), any(), any()) }
+            verify(exactly = 1) { dispatcher.startGeneration(any(), any(), any(), any()) }
 
             activeGenerationFlow.value = null
             advanceUntilIdle()
@@ -176,7 +179,7 @@ class StudioGenerationCoordinatorTest {
             assertTrue(coordinator.isContinualGenerationActive.value)
 
             coordinator.onGenerativeScrollThresholdVisible("anchor-1", MediaCapability.IMAGE)
-            verify(exactly = 2) { dispatcher.startGeneration(any(), any(), any()) }
+            verify(exactly = 2) { dispatcher.startGeneration(any(), any(), any(), any()) }
             advanceUntilIdle()
             assertTrue(coordinator.isGenerating.value)
 
@@ -185,14 +188,14 @@ class StudioGenerationCoordinatorTest {
             assertFalse(coordinator.isGenerating.value)
 
             coordinator.onGenerativeScrollThresholdVisible("anchor-2", MediaCapability.IMAGE)
-            verify(exactly = 3) { dispatcher.startGeneration(any(), any(), any()) }
+            verify(exactly = 3) { dispatcher.startGeneration(any(), any(), any(), any()) }
 
             coordinator.stopGeneration()
             assertFalse(coordinator.isContinualGenerationActive.value)
             assertFalse(coordinator.isGenerating.value)
 
             coordinator.onGenerativeScrollThresholdVisible("anchor-3", MediaCapability.IMAGE)
-            verify(exactly = 3) { dispatcher.startGeneration(any(), any(), any()) }
+            verify(exactly = 3) { dispatcher.startGeneration(any(), any(), any(), any()) }
 
             coroutineContext[Job]?.cancelChildren(CancellationException("test complete"))
         }

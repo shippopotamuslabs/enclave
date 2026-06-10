@@ -19,11 +19,17 @@ import com.browntowndev.enclave.domain.port.repository.StudioMediaAsset
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.TransactionProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -39,19 +45,39 @@ class StudioRepositoryImpl
         private val syncTrigger: CloudSyncTrigger,
         private val healer: SensitivePersistenceSelfHealer,
         private val readRepairApplier: SensitiveRoomReadRepairApplier,
+        private val activeGenerationPersistence: ActiveStudioGenerationPersistence,
         @param:ApplicationContext private val context: Context,
     ) : StudioRepositoryPort {
         private fun triggerSync() = syncTrigger.trigger()
 
+        private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         private val ephemeralMedia = MutableStateFlow<List<StudioMediaAsset>>(emptyList())
         private val generationError = MutableStateFlow<String?>(null)
         private val generationProgress = MutableStateFlow<ImageGenerationProgress?>(null)
         private val activeGeneration = MutableStateFlow<ActiveStudioGeneration?>(null)
+        private val decryptedMediaCache = mutableMapOf<String, Pair<Long, StudioMediaAsset>>()
+
+        init {
+            repositoryScope.launch {
+                reconcilePersistedActiveGeneration()
+            }
+        }
 
         override fun observeAllMedia(): Flow<List<StudioMediaAsset>> =
             studioMediaDao.getAllMedia().mapLatest { entities ->
                 val repairs = mutableListOf<SensitiveRoomReadRepair>()
-                val out = entities.map { it.toDomain(repairs) }
+                val out =
+                    entities.map { entity ->
+                        val cacheKey = entity.id
+                        val cached = decryptedMediaCache[cacheKey]
+                        if (cached != null && cached.first == entity.updatedAt) {
+                            cached.second
+                        } else {
+                            entity.toDomain(repairs).also { domain ->
+                                decryptedMediaCache[cacheKey] = entity.updatedAt to domain
+                            }
+                        }
+                    }
                 readRepairApplier.apply(repairs)
                 out
             }
@@ -94,12 +120,47 @@ class StudioRepositoryImpl
                 return false
             }
             activeGeneration.update { generation }
+            repositoryScope.launch {
+                activeGenerationPersistence.persist(generation)
+            }
             return true
         }
 
         @Synchronized
+        override fun hasActiveGeneration(): Boolean = activeGeneration.value != null
+
+        @Synchronized
         override fun clearActiveGeneration() {
             activeGeneration.update { null }
+            repositoryScope.launch {
+                activeGenerationPersistence.clear()
+            }
+        }
+
+        @Synchronized
+        override fun clearActiveGenerationIfOwned(generationId: String): Boolean {
+            if (activeGeneration.value?.id != generationId) {
+                return false
+            }
+            clearActiveGeneration()
+            return true
+        }
+
+        @Synchronized
+        override fun clearGenerationProgressIfOwned(generationId: String): Boolean {
+            if (activeGeneration.value?.id != generationId) {
+                return false
+            }
+            clearGenerationProgress()
+            return true
+        }
+
+        override suspend fun reconcilePersistedActiveGeneration() {
+            if (activeGenerationPersistence.load() == null || activeGeneration.value != null) {
+                return
+            }
+            generationError.value = GENERATION_INTERRUPTED_MESSAGE
+            activeGenerationPersistence.clear()
         }
 
         override suspend fun addEphemeralMedia(asset: StudioMediaAsset) {
@@ -121,7 +182,8 @@ class StudioRepositoryImpl
             mediaType: String,
             albumId: String?,
             createdAt: Long?,
-        ): StudioMediaAsset {
+        ): StudioMediaAsset =
+            withContext(Dispatchers.IO) {
             var finalUri = localUri
             if (localUri.startsWith("file://")) {
                 val file = File(localUri.replace("file://", ""))
@@ -149,7 +211,7 @@ class StudioRepositoryImpl
                 )
             studioMediaDao.insertMedia(SensitiveEntityFieldEncryptors.encrypt(plain, healer))
             triggerSync()
-            return getMediaById(newId)!!
+            getMediaById(newId)!!
         }
 
         override suspend fun saveMedia(
@@ -158,13 +220,15 @@ class StudioRepositoryImpl
             mediaType: String,
             albumId: String?,
             createdAt: Long?,
-        ): StudioMediaAsset {
-            val fileName = "studio_${System.currentTimeMillis()}.${if (mediaType == "IMAGE") "jpg" else "mp4"}"
+        ): StudioMediaAsset =
+            withContext(Dispatchers.IO) {
+            val extension = StudioMediaExtensionResolver.extensionFor(mediaType)
+            val fileName = "studio_${UUID.randomUUID()}.$extension"
             val file = File(context.filesDir, fileName)
             file.writeBytes(bytes)
 
             val persistedUri = "file://${file.absolutePath}"
-            return saveMedia(persistedUri, prompt, mediaType, albumId, createdAt)
+            saveMedia(persistedUri, prompt, mediaType, albumId, createdAt)
         }
 
         override suspend fun updateMedia(asset: StudioMediaAsset) {
@@ -212,27 +276,33 @@ class StudioRepositoryImpl
         override suspend fun cacheEphemeralMedia(
             bytes: ByteArray,
             mediaType: String,
-        ): String {
+        ): String =
+            withContext(Dispatchers.IO) {
             val ephemeralDir = File(context.cacheDir, "studio_ephemeral")
             if (!ephemeralDir.exists()) {
                 ephemeralDir.mkdirs()
             }
 
-            val fileName = "ephemeral_${java.util.UUID.randomUUID()}.${if (mediaType == "IMAGE") "jpg" else "mp4"}"
+            val extension = StudioMediaExtensionResolver.extensionFor(mediaType)
+            val fileName = "ephemeral_${UUID.randomUUID()}.$extension"
             val file = File(ephemeralDir, fileName)
             file.writeBytes(bytes)
-            return "file://${file.absolutePath}"
+            "file://${file.absolutePath}"
         }
 
         override suspend fun clearEphemeralCache() {
-            val ephemeralDir = File(context.cacheDir, "studio_ephemeral")
-            if (ephemeralDir.exists()) {
-                ephemeralDir.deleteRecursively()
+            if (hasActiveGeneration()) {
+                throw IllegalStateException("Cannot clear ephemeral cache while generation is active")
+            }
+            withContext(Dispatchers.IO) {
+                val ephemeralDir = File(context.cacheDir, "studio_ephemeral")
+                if (ephemeralDir.exists()) {
+                    ephemeralDir.deleteRecursively()
+                }
             }
             ephemeralMedia.value = emptyList()
             generationError.value = null
             generationProgress.update { null }
-            activeGeneration.update { null }
         }
 
         override suspend fun deleteMedia(id: String) {
@@ -270,19 +340,16 @@ class StudioRepositoryImpl
             id: String,
             bytes: ByteArray,
         ) {
-            val raw = studioMediaDao.getMediaById(id) ?: return
+            withContext(Dispatchers.IO) {
+            val raw = studioMediaDao.getMediaById(id) ?: return@withContext
             val plain = SensitiveEntityFieldEncryptors.decrypt(raw, healer, null)
-            val extension =
-                when (plain.mediaType) {
-                    "VIDEO" -> "mp4"
-                    "MUSIC" -> "mp3"
-                    else -> "jpg"
-                }
+            val extension = StudioMediaExtensionResolver.extensionFor(plain.mediaType)
             val file = File(context.filesDir, "studio_synced_$id.$extension")
             file.writeBytes(bytes)
 
             val updated = plain.copy(mediaUri = "file://${file.absolutePath}")
             studioMediaDao.insertMedia(SensitiveEntityFieldEncryptors.encrypt(updated, healer))
+            }
         }
 
         private fun localFileExists(localUri: String): Boolean {
@@ -339,14 +406,15 @@ class StudioRepositoryImpl
             triggerSync()
         }
 
-        override suspend fun readMediaBytes(localUri: String): ByteArray? {
+        override suspend fun readMediaBytes(localUri: String): ByteArray? =
+            withContext(Dispatchers.IO) {
             if (localUri.startsWith("content://")) {
-                return context.contentResolver.openInputStream(android.net.Uri.parse(localUri))?.use { it.readBytes() }
+                return@withContext context.contentResolver.openInputStream(android.net.Uri.parse(localUri))?.use { it.readBytes() }
             }
 
             val path = localUri.replace("file://", "")
             val file = File(path)
-            return if (file.exists()) {
+            if (file.exists()) {
                 file.readBytes()
             } else {
                 null
@@ -375,4 +443,8 @@ class StudioRepositoryImpl
         }
 
         private fun String?.toPersistentAlbumId(): String? = if (this == DEFAULT_GALLERY_ALBUM_ID) null else this
+
+        private companion object {
+            const val GENERATION_INTERRUPTED_MESSAGE = "Generation was interrupted. Please try again."
+        }
     }

@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
+import java.security.MessageDigest
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
@@ -49,7 +50,7 @@ class Sd15QnnPackInstallerTest {
                     huggingFaceModelName = Sd15QnnPackCatalog.HF_REPO,
                     remoteFileName = variant.zipFileName,
                     localFileName = variant.localZipFileName,
-                    sha256 = variant.sha256,
+                    sha256 = sha256Hex(zipFile),
                     sizeInBytes = zipFile.length(),
                     modelFileFormat = ModelFileFormat.BIN,
                     utilityType = UtilityType.SD15_QNN_PACK,
@@ -84,7 +85,7 @@ class Sd15QnnPackInstallerTest {
                     huggingFaceModelName = Sd15QnnPackCatalog.HF_REPO,
                     remoteFileName = variant.zipFileName,
                     localFileName = variant.localZipFileName,
-                    sha256 = variant.sha256,
+                    sha256 = sha256Hex(zipFile),
                     sizeInBytes = zipFile.length(),
                     modelFileFormat = ModelFileFormat.BIN,
                     utilityType = UtilityType.SD15_QNN_PACK,
@@ -116,7 +117,7 @@ class Sd15QnnPackInstallerTest {
                     huggingFaceModelName = "xororz/sdxl-qnn",
                     remoteFileName = "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip",
                     localFileName = "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip",
-                    sha256 = "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83",
+                    sha256 = sha256Hex(zipFile),
                     sizeInBytes = zipFile.length(),
                     modelFileFormat = ModelFileFormat.BIN,
                     utilityType = UtilityType.SDXL_QNN_PACK,
@@ -149,7 +150,7 @@ class Sd15QnnPackInstallerTest {
                     huggingFaceModelName = "xororz/sdxl-qnn",
                     remoteFileName = "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip",
                     localFileName = "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip",
-                    sha256 = "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83",
+                    sha256 = sha256Hex(zipFile),
                     sizeInBytes = zipFile.length(),
                     modelFileFormat = ModelFileFormat.BIN,
                     utilityType = UtilityType.SDXL_QNN_PACK,
@@ -182,7 +183,7 @@ class Sd15QnnPackInstallerTest {
                     huggingFaceModelName = "xororz/sdxl-qnn",
                     remoteFileName = "juggernaut_qnn2.28_8gen3.zip",
                     localFileName = "juggernaut_qnn2.28_8gen3.zip",
-                    sha256 = "b27231823434c4e4184a61f77401227264a5308c6846c6fc628c37583e76413c",
+                    sha256 = sha256Hex(zipFile),
                     sizeInBytes = zipFile.length(),
                     modelFileFormat = ModelFileFormat.BIN,
                     utilityType = UtilityType.JUGGERNAUT_XL_QNN_PACK,
@@ -216,7 +217,7 @@ class Sd15QnnPackInstallerTest {
                     huggingFaceModelName = "xororz/sdxl-qnn",
                     remoteFileName = "juggernaut_qnn2.28_8gen3.zip",
                     localFileName = "juggernaut_qnn2.28_8gen3.zip",
-                    sha256 = "b27231823434c4e4184a61f77401227264a5308c6846c6fc628c37583e76413c",
+                    sha256 = sha256Hex(zipFile),
                     sizeInBytes = zipFile.length(),
                     modelFileFormat = ModelFileFormat.BIN,
                     utilityType = UtilityType.JUGGERNAUT_XL_QNN_PACK,
@@ -252,7 +253,7 @@ class Sd15QnnPackInstallerTest {
                     huggingFaceModelName = "xororz/sdxl-qnn",
                     remoteFileName = "juggernaut_qnn2.28_8gen3.zip",
                     localFileName = "juggernaut_qnn2.28_8gen3.zip",
-                    sha256 = "b27231823434c4e4184a61f77401227264a5308c6846c6fc628c37583e76413c",
+                    sha256 = sha256Hex(zipFile),
                     sizeInBytes = zipFile.length(),
                     modelFileFormat = ModelFileFormat.BIN,
                     utilityType = UtilityType.JUGGERNAUT_XL_QNN_PACK,
@@ -285,7 +286,7 @@ class Sd15QnnPackInstallerTest {
                     huggingFaceModelName = "xororz/sdxl-qnn",
                     remoteFileName = "juggernaut_qnn2.28_8gen3.zip",
                     localFileName = "juggernaut_qnn2.28_8gen3.zip",
-                    sha256 = "b27231823434c4e4184a61f77401227264a5308c6846c6fc628c37583e76413c",
+                    sha256 = sha256Hex(zipFile),
                     sizeInBytes = zipFile.length(),
                     modelFileFormat = ModelFileFormat.BIN,
                     utilityType = UtilityType.JUGGERNAUT_XL_QNN_PACK,
@@ -325,7 +326,7 @@ class Sd15QnnPackInstallerTest {
                     huggingFaceModelName = Sd15QnnPackCatalog.HF_REPO,
                     remoteFileName = variant.zipFileName,
                     localFileName = variant.localZipFileName,
-                    sha256 = variant.sha256,
+                    sha256 = sha256Hex(zipFile),
                     sizeInBytes = zipFile.length(),
                     modelFileFormat = ModelFileFormat.BIN,
                     utilityType = UtilityType.SD15_QNN_PACK,
@@ -387,5 +388,18 @@ class Sd15QnnPackInstallerTest {
             zip.write(byteArrayOf(1, 2, 3))
             zip.closeEntry()
         }
+    }
+
+    private fun sha256Hex(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().buffered().use { input ->
+            val buffer = ByteArray(8 * 1024)
+            while (true) {
+                val read = input.read(buffer)
+                if (read < 0) break
+                digest.update(buffer, 0, read)
+            }
+        }
+        return digest.digest().joinToString("") { byte -> "%02x".format(byte) }
     }
 }

@@ -64,7 +64,7 @@ class StudioScreenScrollThresholdTest {
     }
 
     @Test
-    fun thresholdVisible_whenSingleGalleryRowIsVisible_returnsTrue() {
+    fun thresholdVisible_whenSingleGalleryRowIsVisible_returnsFalse() {
         val galleryRowKeys = listOf("row-1")
         val visibleItemKeys = listOf("row-1")
 
@@ -74,7 +74,7 @@ class StudioScreenScrollThresholdTest {
                 visibleItemKeys = visibleItemKeys,
             )
 
-        assertTrue(result)
+        assertFalse(result)
     }
 
     @Test

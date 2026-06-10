@@ -78,6 +78,14 @@ class NativeLocalImageGenRuntime
             LocalImageGenNative.nativeCancel()
         }
 
+        fun currentGenerationProgress(): Pair<Int, Int>? {
+            val values = LocalImageGenNative.nativeGetGenerationProgress() ?: return null
+            if (values.size < 2) return null
+            val total = values[1]
+            if (total <= 0) return null
+            return values[0] to total
+        }
+
         fun generate(params: NativeImageGenGenerateParams): Int =
             when (params.backend) {
                 LocalImageGenerationBackendKind.QNN_NPU ->

@@ -362,6 +362,42 @@ class ImageGenerationPortImplTest {
         }
 
     @Test
+    fun generateImage_localTarget_multiCountFailure_returnsPartialResults() =
+        runTest {
+            val target = localTarget()
+            val settings = ImageGenerationSettings(generationCount = 3)
+            coEvery {
+                localStableDiffusionImageGenerator.generate(any(), eq(target), any(), any())
+            } returnsMany
+                listOf(
+                    Result.success(
+                        LocalStableDiffusionGenerationResult(
+                            outputFileReferences = listOf("/cache/bonsai-0.png"),
+                            width = 512,
+                            height = 512,
+                            backend = com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind.QNN_NPU,
+                        ),
+                    ),
+                    Result.failure(IllegalStateException("Local image generation failed on image 2")),
+                )
+            coEvery { studioRepository.readMediaBytes("/cache/bonsai-0.png") } returns "img-0".toByteArray()
+
+            val result = port.generateImage("bonsai", target, settings)
+
+            assertTrue(result.isSuccess)
+            assertEquals(1, result.getOrThrow().size)
+            assertArrayEquals("img-0".toByteArray(), result.getOrThrow().single())
+            coVerify(exactly = 2) {
+                localStableDiffusionImageGenerator.generate(
+                    prompt = "bonsai",
+                    target = target,
+                    settings = match { it.generationCount == 1 },
+                    onProgress = any(),
+                )
+            }
+        }
+
+    @Test
     fun `generateImage Juggernaut IMAGE_EDIT local target propagates correct parameters`() =
         runTest {
             val target =

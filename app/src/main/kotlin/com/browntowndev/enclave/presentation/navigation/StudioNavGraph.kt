@@ -187,8 +187,7 @@ private fun StudioRoute(
             val types = rehydrateTypes?.let { json.decodeFromString<List<String>>(it) } ?: emptyList()
             val prompts = rehydratePrompts?.let { json.decodeFromString<List<String>>(it) } ?: emptyList()
 
-            studioViewModel.mediaActionsCoordinator.onEditMedia(
-                prompt = studioViewModel.promptCoordinator,
+            studioViewModel.onEditMedia(
                 assetId = editAssetId,
                 rehydrateIds = ids,
                 rehydrateUris = uris,
@@ -197,8 +196,7 @@ private fun StudioRoute(
             )
             isStudioInitialized = true
         } else if (animateAssetId != null) {
-            studioViewModel.mediaActionsCoordinator.onAnimateMedia(
-                prompt = studioViewModel.promptCoordinator,
+            studioViewModel.onAnimateMedia(
                 assetId = animateAssetId,
                 autoAnimate = autoAnimate,
                 customPrompt = animatePrompt,
@@ -265,8 +263,7 @@ private fun StudioDetailRoute(
 
     LaunchedEffect(assetId, animatePrompt, autoAnimate) {
         if (autoAnimate) {
-            studioViewModel.mediaActionsCoordinator.onAnimateMedia(
-                prompt = studioViewModel.promptCoordinator,
+            studioViewModel.onAnimateMedia(
                 assetId = assetId,
                 autoAnimate = true,
                 customPrompt = animatePrompt,
@@ -279,22 +276,20 @@ private fun StudioDetailRoute(
         assets = studioUiState.gallery,
         onNavigateBack = onNavigateBack,
         onEditMedia = { id ->
-            studioViewModel.mediaActionsCoordinator.onEditMedia(
-                prompt = studioViewModel.promptCoordinator,
+            studioViewModel.onEditMedia(
                 assetId = id,
                 fromUserAction = true,
             )
         },
         onAnimateMedia = { assetId, autoAnimate, customPrompt ->
-            studioViewModel.mediaActionsCoordinator.onAnimateMedia(
-                prompt = studioViewModel.promptCoordinator,
+            studioViewModel.onAnimateMedia(
                 assetId = assetId,
                 autoAnimate = autoAnimate,
                 customPrompt = customPrompt,
             )
         },
-        onShareMedia = studioViewModel.mediaActionsCoordinator::shareSingleMedia,
-        onDeleteMedia = studioViewModel.mediaActionsCoordinator::deleteMedia,
+        onShareMedia = studioViewModel::shareSingleMedia,
+        onDeleteMedia = studioViewModel::deleteMedia,
         onShowSnackbar = { msg, act -> actions.onShowSnackbar(msg, act, null) },
         videoGenerationState = studioUiState.videoGenerationState,
         hasImageToVideoModel = studioUiState.hasImageToVideoModel,

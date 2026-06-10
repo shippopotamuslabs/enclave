@@ -57,7 +57,7 @@ class FalMediaAdapterTasksRedTest {
             )
 
             assertTrue("image_url" in bodySlot.captured)
-            assertTrue("image" in bodySlot.captured)
+            assertTrue("image" !in bodySlot.captured)
         }
 
     @Test

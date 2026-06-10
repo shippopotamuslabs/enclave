@@ -153,6 +153,7 @@ import com.browntowndev.enclave.domain.qualifier.ApplicationScope
 import com.browntowndev.enclave.domain.qualifier.DownloadHttpClient
 import com.browntowndev.enclave.domain.qualifier.InternalTelemetryLogging
 import com.browntowndev.enclave.domain.qualifier.PipelineDataStore
+import com.browntowndev.enclave.domain.qualifier.StudioActiveGenerationDataStore
 import com.browntowndev.enclave.domain.util.Clock
 import com.browntowndev.enclave.domain.util.SystemClock
 import com.google.firebase.auth.FirebaseAuth
@@ -171,6 +172,7 @@ import javax.inject.Singleton
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 private val Context.pipelineDataStore: DataStore<Preferences> by preferencesDataStore(name = "pipeline_state")
+private val Context.studioActiveGenerationDataStore: DataStore<Preferences> by preferencesDataStore(name = "studio_active_generation")
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -332,6 +334,13 @@ object DataModule {
     fun providePipelineDataStore(
         @ApplicationContext context: Context,
     ): DataStore<Preferences> = context.pipelineDataStore
+
+    @Provides
+    @Singleton
+    @StudioActiveGenerationDataStore
+    fun provideStudioActiveGenerationDataStore(
+        @ApplicationContext context: Context,
+    ): DataStore<Preferences> = context.studioActiveGenerationDataStore
 
     @Provides
     @Singleton

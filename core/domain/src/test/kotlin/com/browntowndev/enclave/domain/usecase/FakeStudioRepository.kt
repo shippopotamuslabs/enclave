@@ -56,7 +56,15 @@ class FakeStudioRepository : StudioRepositoryPort {
 
     override fun reportActiveGeneration(generation: ActiveStudioGeneration): Boolean = unsupported()
 
+    override fun hasActiveGeneration(): Boolean = false
+
     override fun clearActiveGeneration() = unsupported()
+
+    override fun clearActiveGenerationIfOwned(generationId: String): Boolean = unsupported()
+
+    override fun clearGenerationProgressIfOwned(generationId: String): Boolean = unsupported()
+
+    override suspend fun reconcilePersistedActiveGeneration() = unsupported()
 
     override suspend fun addEphemeralMedia(asset: StudioMediaAsset) = unsupported()
 

@@ -27,6 +27,7 @@ data class StudioAlbumAsset(
 )
 
 data class ActiveStudioGeneration(
+    val id: String,
     val prompt: String,
     val mediaType: MediaCapability,
     val settings: GenerationSettings,
@@ -56,7 +57,15 @@ interface StudioRepositoryPort {
 
     fun reportActiveGeneration(generation: ActiveStudioGeneration): Boolean
 
+    fun hasActiveGeneration(): Boolean
+
     fun clearActiveGeneration()
+
+    fun clearActiveGenerationIfOwned(generationId: String): Boolean
+
+    fun clearGenerationProgressIfOwned(generationId: String): Boolean
+
+    suspend fun reconcilePersistedActiveGeneration()
 
     suspend fun addEphemeralMedia(asset: StudioMediaAsset)
 
