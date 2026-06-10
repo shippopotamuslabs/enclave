@@ -20,6 +20,7 @@ interface PipelineExecutorPort {
         userMessage: String,
         userMessageId: MessageId? = null,
         assistantMessageId: MessageId? = null,
+        toolingEnabled: Boolean = false,
     ): Flow<MessageGenerationState>
 
     /**

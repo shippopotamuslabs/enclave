@@ -88,5 +88,6 @@ internal class OpenAiResponseStreamHandler(
             reasoningTokens = state.reasoningTokens,
             cacheReadInputTokens = state.cacheReadInputTokens,
             cacheWriteInputTokens = state.cacheWriteInputTokens,
+            costUsd = state.costUsd,
         )
 }

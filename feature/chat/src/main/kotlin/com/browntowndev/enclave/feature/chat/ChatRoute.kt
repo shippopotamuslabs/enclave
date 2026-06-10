@@ -10,6 +10,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
@@ -46,7 +47,9 @@ fun ChatRoute(
                             type = "text/plain"
                             putExtra(Intent.EXTRA_TEXT, event.shareUrl)
                         }
-                    context.startActivity(Intent.createChooser(intent, "Share Chat"))
+                    context.startActivity(
+                        Intent.createChooser(intent, context.getString(R.string.chat_share_chooser_title)),
+                    )
                 }
                 is ShareUiEvent.ImportedChat -> onNavigateToImportedChat(event.chatId)
             }
@@ -60,9 +63,15 @@ fun ChatRoute(
     }
 
     LaunchedEffect(Unit) {
-        viewModel.moderationMessages.collect { message ->
-            val isPromptRejected = message == "Prompt rejected due to moderation"
-            val actionLabel = if (isPromptRejected) "Got it wrong?" else null
+        viewModel.moderationMessages.collect { messageRes ->
+            val message = context.getString(messageRes)
+            val isPromptRejected = messageRes == R.string.chat_moderation_prompt_rejected
+            val actionLabel =
+                if (isPromptRejected) {
+                    context.getString(R.string.chat_moderation_report_action)
+                } else {
+                    null
+                }
             onShowSnackbar(message, actionLabel) {
                 if (isPromptRejected) {
                     viewModel.reportBlockedPrompt(uiState.inputText)

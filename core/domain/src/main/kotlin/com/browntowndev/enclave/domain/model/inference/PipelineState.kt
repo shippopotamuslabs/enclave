@@ -71,6 +71,7 @@ data class PipelineState(
     val stepOutputs: Map<PipelineStep, String> = emptyMap(),
     val thinkingSteps: List<String> = emptyList(),
     val startTimeMs: Long = System.currentTimeMillis(),
+    val toolingEnabled: Boolean = false,
 ) {
     /**
      * Creates a copy with a new step output added.
@@ -133,11 +134,13 @@ data class PipelineState(
         fun createInitial(
             chatId: String,
             userMessage: String,
+            toolingEnabled: Boolean = false,
         ): PipelineState =
             PipelineState(
                 chatId = chatId,
                 currentStep = PipelineStep.DRAFT_ONE,
                 userMessage = userMessage,
+                toolingEnabled = toolingEnabled,
             )
 
         /**

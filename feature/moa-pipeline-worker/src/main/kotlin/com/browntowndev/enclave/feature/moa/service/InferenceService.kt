@@ -301,7 +301,14 @@ class InferenceService : Service() {
 
             val maxTokensOverride =
                 CouncilPipelinePromptBuilder.calculateMaxTokensForStep(currentStep, activeModelProvider)
-            val result = executeStepForPipeline(chatId, prompt, currentStep, maxTokensOverride)
+            val result =
+                executeStepForPipeline(
+                    chatId = chatId,
+                    prompt = prompt,
+                    step = currentStep,
+                    toolingEnabled = currentState.toolingEnabled,
+                    maxTokensOverride = maxTokensOverride,
+                )
 
             logger.debug(TAG, "${currentStep.name} completed (${result.output.length} chars)")
 
@@ -355,6 +362,7 @@ class InferenceService : Service() {
         chatId: String,
         prompt: String,
         step: PipelineStep,
+        toolingEnabled: Boolean,
         maxTokensOverride: Int? = null,
     ): StepResult {
         val output = StringBuilder()
@@ -371,15 +379,14 @@ class InferenceService : Service() {
                     currentMaxTokens
                 }
 
-            val hasImageTool = prompt.contains(ToolDefinition.ATTACHED_IMAGE_INSPECT.name)
             val options =
                 GenerationOptions(
                     reasoningBudget = if (config?.thinkingEnabled == true) 1024 else 0,
                     modelType = modelType,
                     maxTokens = finalMaxTokens,
-                    toolingEnabled = hasImageTool,
+                    toolingEnabled = toolingEnabled,
                     activeTools =
-                        if (hasImageTool) {
+                        if (toolingEnabled) {
                             listOf(ToolDefinition.ATTACHED_IMAGE_INSPECT)
                         } else {
                             emptyList()

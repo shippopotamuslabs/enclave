@@ -1,8 +1,12 @@
 package com.browntowndev.enclave.feature.inference.openai
 
+import com.openai.core.JsonValue
 import com.openai.models.chat.completions.ChatCompletionChunk
+import com.openai.models.completions.CompletionUsage
 import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseUsage
+import java.math.BigDecimal
+import java.math.RoundingMode
 
 /**
  * Mutable usage fields collected from OpenAI-compatible streaming chunks (xAI, OpenRouter, OpenAI).
@@ -16,6 +20,7 @@ internal data class OpenAiStreamUsageAccumulator(
     var reasoningTokens: Int? = null,
     var cacheReadInputTokens: Int? = null,
     var cacheWriteInputTokens: Int? = null,
+    var costUsd: BigDecimal? = null,
 )
 
 internal fun accumulateOpenAiStreamUsage(
@@ -38,6 +43,7 @@ internal fun accumulateOpenAiStreamUsage(
             state.cacheReadInputTokens = details.cachedTokens().get().toInt()
         }
     }
+    parseOpenRouterUsageCost(usage)?.let { state.costUsd = it }
 }
 
 internal fun accumulateResponseStreamUsage(
@@ -59,4 +65,18 @@ internal fun accumulateResponseStreamUsage(
         state.reasoningTokens = reasoning.toInt()
     }
     state.cacheReadInputTokens = usage.inputTokensDetails().cachedTokens().toInt()
+    parseOpenRouterUsageCost(usage)?.let { state.costUsd = it }
+}
+
+private fun parseOpenRouterUsageCost(usage: CompletionUsage): BigDecimal? = parseUsageCostJsonValue(usage._additionalProperties()["cost"])
+
+private fun parseOpenRouterUsageCost(usage: ResponseUsage): BigDecimal? = parseUsageCostJsonValue(usage._additionalProperties()["cost"])
+
+private fun parseUsageCostJsonValue(value: JsonValue?): BigDecimal? {
+    if (value == null) return null
+    val raw =
+        runCatching { value.convert(Double::class.javaObjectType) }.getOrNull()
+            ?: runCatching { value.convert(String::class.javaObjectType) }.getOrNull()?.toDoubleOrNull()
+            ?: return null
+    return BigDecimal.valueOf(raw).setScale(6, RoundingMode.HALF_UP)
 }

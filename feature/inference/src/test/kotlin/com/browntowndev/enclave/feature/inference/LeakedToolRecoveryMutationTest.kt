@@ -118,14 +118,14 @@ class LeakedToolRecoveryMutationTest {
     }
 
     private fun anthropicMessageStopEvent(): RawMessageStreamEvent {
-        val event = mockk<RawMessageStreamEvent>()
-        every { event.messageStart() } returns Optional.empty()
-        every { event.contentBlockStart() } returns Optional.empty()
-        every { event.contentBlockDelta() } returns Optional.empty()
-        every { event.contentBlockStop() } returns Optional.empty()
-        every { event.messageDelta() } returns Optional.empty()
-        every { event.messageStop() } returns Optional.of(mockk())
-        return event
+        val stopEvent = mockk<RawMessageStreamEvent>()
+        every { stopEvent.messageStart() } returns Optional.empty()
+        every { stopEvent.contentBlockStart() } returns Optional.empty()
+        every { stopEvent.contentBlockDelta() } returns Optional.empty()
+        every { stopEvent.contentBlockStop() } returns Optional.empty()
+        every { stopEvent.messageDelta() } returns Optional.empty()
+        every { stopEvent.messageStop() } returns Optional.of(mockk())
+        return stopEvent
     }
 
     private class RecordingToolStreamGatePort : ToolStreamGatePort {

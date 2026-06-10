@@ -12,6 +12,7 @@ internal suspend fun OpenAiStreamHandlerContext.handleCompleted(
             .get()
             .response()
     state.responseId = response.id()
+    state.receivedTerminalEvent = true
     state.applyResponseUsage(response)
     response.output().forEach { item ->
         reconcileAssistantMessageOutputItem(
@@ -38,6 +39,7 @@ internal fun OpenAiStreamHandlerContext.handleIncomplete(
     val incompleteEvent = event.incomplete().get()
     val response = incompleteEvent.response()
     state.responseId = response.id()
+    state.receivedTerminalEvent = true
     state.applyResponseUsage(response)
     val details = response.incompleteDetails().map { it.toString() }.orElse("none")
     loggingPort.debug(
@@ -65,6 +67,7 @@ internal suspend fun OpenAiStreamHandlerContext.handleFailed(
             "Responses stream reported recoverable API failure after partial output " +
                 "provider=$provider model=$modelId error=$errorMsg",
         )
+        state.receivedTerminalEvent = true
         return state
     }
     throw RuntimeException("API Error: $errorMsg")
@@ -82,6 +85,7 @@ internal suspend fun OpenAiStreamHandlerContext.handleError(
             "Responses stream reported recoverable stream error after partial output " +
                 "provider=$provider model=$modelId error=$errorMsg",
         )
+        state.receivedTerminalEvent = true
         return state
     }
     throw RuntimeException("Stream Error: $errorMsg")

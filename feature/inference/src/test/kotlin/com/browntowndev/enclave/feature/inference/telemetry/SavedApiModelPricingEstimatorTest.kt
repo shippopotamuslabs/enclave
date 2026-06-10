@@ -45,6 +45,47 @@ class SavedApiModelPricingEstimatorTest {
     }
 
     @Test
+    fun `does not double bill reasoning tokens already included in output`() {
+        val cost =
+            estimator.estimateCostUsd(
+                pricing =
+                    ApiModelSavedPricing(
+                        promptUsdPerMillion = 1.0,
+                        completionUsdPerMillion = 2.0,
+                    ),
+                inputTokens = 100,
+                outputTokens = 150,
+                reasoningTokens = 50,
+                cacheReadInputTokens = null,
+            )
+
+        assertNotNull(cost)
+        // output_tokens already includes reasoning; bill 150 output tokens only.
+        assertEquals(BigDecimal("0.000400"), cost)
+    }
+
+    @Test
+    fun `Anthropic cache writes use 1_25x input rate`() {
+        val cost =
+            estimator.estimateCostUsd(
+                pricing =
+                    ApiModelSavedPricing(
+                        promptUsdPerMillion = 3.0,
+                        completionUsdPerMillion = 15.0,
+                    ),
+                inputTokens = 0,
+                outputTokens = 0,
+                reasoningTokens = 0,
+                cacheReadInputTokens = 0,
+                cacheCreationInputTokens = 1_000_000,
+                inputTokensExcludeCacheReads = true,
+            )
+
+        assertNotNull(cost)
+        assertEquals(BigDecimal("3.750000"), cost)
+    }
+
+    @Test
     fun `Anthropic style input tokens are not reduced by cache read`() {
         val cost =
             estimator.estimateCostUsd(

@@ -56,7 +56,10 @@ class OpenAiInferenceClientProvider
                     oldValue: OpenAIClient,
                     newValue: OpenAIClient?,
                 ) {
-                    oldValue.close()
+                    // Do not close evicted clients: in-flight inference may still hold a reference.
+                    if (!evicted && newValue == null) {
+                        oldValue.close()
+                    }
                 }
             }
 
@@ -114,7 +117,9 @@ class AnthropicInferenceClientProvider
                     oldValue: AnthropicClient,
                     newValue: AnthropicClient?,
                 ) {
-                    oldValue.close()
+                    if (!evicted && newValue == null) {
+                        oldValue.close()
+                    }
                 }
             }
 
@@ -163,7 +168,9 @@ class GoogleGenAiInferenceClientProvider
                     oldValue: Client,
                     newValue: Client?,
                 ) {
-                    oldValue.close()
+                    if (!evicted && newValue == null) {
+                        oldValue.close()
+                    }
                 }
             }
 

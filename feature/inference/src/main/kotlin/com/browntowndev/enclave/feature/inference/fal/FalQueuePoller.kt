@@ -18,7 +18,14 @@ class FalQueuePoller(
         request: FalRequest,
     ): JsonObject {
         try {
-            val streamStatus = runCatching { falService.awaitStatusStream(apiKey = apiKey, statusUrl = request.statusUrl) }.getOrNull()
+            val streamStatus =
+                try {
+                    falService.awaitStatusStream(apiKey = apiKey, statusUrl = request.statusUrl)
+                } catch (cancellation: CancellationException) {
+                    throw cancellation
+                } catch (_: Exception) {
+                    null
+                }
             if (streamStatus != null) {
                 when (falService.statusValue(streamStatus)?.lowercase()) {
                     "failed", "error", "cancelled" -> failGeneration(streamStatus)
@@ -101,7 +108,14 @@ class FalQueuePoller(
         request: FalRequest,
         status: JsonObject,
     ): JsonObject? {
-        val resultOutcome = runCatching { falService.result(apiKey = apiKey, responseUrl = fetchUrl) }
+        val resultOutcome =
+            try {
+                Result.success(falService.result(apiKey = apiKey, responseUrl = fetchUrl))
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (error: Exception) {
+                Result.failure(error)
+            }
         resultOutcome.exceptionOrNull()?.let { error ->
             FalMediaResponseDiagnostics.logResultFetchFailure(
                 modelId = request.requestId ?: "unknown",

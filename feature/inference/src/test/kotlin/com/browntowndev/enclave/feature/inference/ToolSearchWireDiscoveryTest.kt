@@ -352,7 +352,7 @@ class ToolSearchWireDiscoveryTest {
                 ).toList()
 
             val params =
-                OpenAiRequestMapper.mapToChatCompletionParams(
+                OpenAiRequestMapper.mapToResponseParams(
                     modelId = "gpt-4o",
                     prompt = "hello",
                     history = emptyList(),
@@ -364,10 +364,10 @@ class ToolSearchWireDiscoveryTest {
                         ),
                 )
             val payload = params.tools().orElseThrow().toString()
-            val registered = params.tools().orElseThrow().map { it.asFunction().function().name() }
 
             assertAll(
-                { assertEquals(listOf("search_tools", "web_search"), registered.sorted()) },
+                { assertTrue(payload.contains("search_tools")) },
+                { assertTrue(payload.contains("web_search")) },
                 { assertFalse(payload.contains("\"append_blocks\"")) },
             )
         }

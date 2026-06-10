@@ -23,6 +23,7 @@ import com.browntowndev.enclave.domain.usecase.chat.MergeMessagesUseCase
 import com.browntowndev.enclave.domain.usecase.chat.ProcessFileAttachmentUseCase
 import com.browntowndev.enclave.domain.usecase.chat.StageImageAttachmentUseCase
 import com.browntowndev.enclave.domain.usecase.inference.CancelInferenceUseCase
+import com.browntowndev.enclave.feature.chat.R
 import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.enclave.domain.usecase.inference.SubmitModerationReportUseCase
 import com.browntowndev.enclave.domain.usecase.settings.SettingsAssignmentUseCases
@@ -564,7 +565,7 @@ class ChatViewModelActionsTest {
 
             customViewModel.moderationMessages.test {
                 customViewModel.reportBlockedPrompt("Test blocked prompt")
-                assertEquals("Got it. Feedback submitted!", awaitItem())
+                assertEquals(R.string.chat_moderation_feedback_submitted, awaitItem())
             }
 
             coVerify { submitModerationReportUseCase("Test blocked prompt", "blocked") }
@@ -598,7 +599,7 @@ class ChatViewModelActionsTest {
 
             customViewModel.moderationMessages.test {
                 customViewModel.reportUnblockedPrompt("Test unblocked prompt")
-                assertEquals("Got it. Feedback submitted!", awaitItem())
+                assertEquals(R.string.chat_moderation_feedback_submitted, awaitItem())
             }
 
             coVerify { submitModerationReportUseCase("Test unblocked prompt", "allowed") }

@@ -515,4 +515,78 @@ class InferenceOrchestratorSendTest {
         assertEquals(650L, ChatTurnTiming.ASSISTANT_PLACEHOLDER_DELAY_MS)
         assertNotEquals(0L, ChatTurnTiming.ASSISTANT_PLACEHOLDER_DELAY_MS)
     }
+
+    @Test
+    @DisplayName("DOPG-O-07 — rapid double-send only launches one inference")
+    fun dopgO07_rapidDoubleSendLaunchesSingleInference() =
+        runTest(testDispatcher) {
+            val gateStarted = CompletableDeferred<Unit>()
+            coEvery { chatUseCases.processPromptWithSafetyGate(any()) } coAnswers {
+                gateStarted.await()
+                val request = firstArg<PromptSafetyGateRequest>()
+                PromptSafetyGateResult.Allowed(
+                    userResult =
+                        UserPromptResult(
+                            userMessageId = MessageId("user-double"),
+                            chatId = ChatId("chat-double"),
+                            userMessageCreatedAtMillis = 100L,
+                        ),
+                    assistantMessageId = request.assistantMessageId,
+                    wasNewChat = false,
+                )
+            }
+            coEvery {
+                chatUseCases.generateChatResponse(
+                    prompt = any(),
+                    userMessageId = any(),
+                    assistantMessageId = any(),
+                    chatId = any(),
+                    mode = any(),
+                    backgroundInferenceEnabled = any(),
+                )
+            } returns flowOf()
+
+            launch {
+                orchestrator.sendMessage(
+                    scope = this,
+                    input = "first",
+                    selectedMode = ChatModeUi.FAST,
+                    selectedImageUris = emptyList(),
+                    fileAttachments = emptyList(),
+                    initialChatId = null,
+                    shouldModerate = true,
+                    onInputCleared = {},
+                    onModerationBlocked = {},
+                )
+            }
+            runCurrent()
+
+            launch {
+                orchestrator.sendMessage(
+                    scope = this,
+                    input = "second",
+                    selectedMode = ChatModeUi.FAST,
+                    selectedImageUris = emptyList(),
+                    fileAttachments = emptyList(),
+                    initialChatId = null,
+                    shouldModerate = true,
+                    onInputCleared = {},
+                    onModerationBlocked = {},
+                )
+            }
+            gateStarted.complete(Unit)
+            advanceTimeBy(ChatTurnTiming.ASSISTANT_PLACEHOLDER_DELAY_MS)
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) {
+                chatUseCases.generateChatResponse(
+                    prompt = "second",
+                    userMessageId = any(),
+                    assistantMessageId = any(),
+                    chatId = any(),
+                    mode = any(),
+                    backgroundInferenceEnabled = any(),
+                )
+            }
+        }
 }

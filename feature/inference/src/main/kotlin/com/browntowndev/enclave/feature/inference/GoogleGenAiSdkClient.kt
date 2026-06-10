@@ -116,6 +116,7 @@ internal class GoogleGenAiSdkClientImpl(
         logRequestDetails(modelId, contents)
 
         var emittedAny = false
+        var outputTextDeltaCount = 0
         var lastFunctionCall: FunctionCall? = null
         var assistantContent: Content? = null
         var finishReason: String? = null
@@ -140,6 +141,7 @@ internal class GoogleGenAiSdkClientImpl(
                                     if (part.thought().orElse(false)) {
                                         emitEvent(InferenceEvent.Thinking(text, modelType))
                                     } else {
+                                        outputTextDeltaCount++
                                         emitEvent(InferenceEvent.PartialResponse(text, modelType))
                                     }
                                 }
@@ -150,10 +152,16 @@ internal class GoogleGenAiSdkClientImpl(
 
                     val responseText = response.text().orEmpty()
                     if (responseText.isNotBlank() && !emittedAny) {
+                        outputTextDeltaCount++
                         emitEvent(InferenceEvent.PartialResponse(responseText, modelType))
                         emittedAny = true
                     }
                 }
+            }
+            if (outputTextDeltaCount > 0 && finishReason == null && lastFunctionCall == null) {
+                throw RuntimeException(
+                    "Stream ended mid-response without finish signal (provider=Google model=$modelId)",
+                )
             }
         } catch (e: Exception) {
             loggingPort.error(TAG, "SDK request failed: ${e.message}", e)

@@ -27,6 +27,7 @@ class FakePipelineExecutor : PipelineExecutorPort {
         userMessage: String,
         userMessageId: MessageId?,
         assistantMessageId: MessageId?,
+        toolingEnabled: Boolean,
     ): Flow<MessageGenerationState> =
         flow {
             executePipelineCalled = true

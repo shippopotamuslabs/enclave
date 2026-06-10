@@ -4,6 +4,7 @@ import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.ChatMessage
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.Role
+import com.browntowndev.enclave.domain.model.config.OpenRouterRoutingConfiguration
 import com.browntowndev.enclave.domain.model.inference.AgentFinishReason
 import com.browntowndev.enclave.domain.model.inference.AgentLoopMessage
 import com.browntowndev.enclave.domain.model.inference.AgentModelTurnResult
@@ -72,6 +73,7 @@ abstract class BaseOpenAiSdkInferenceService(
     protected val modelId: String,
     protected val provider: String,
     protected val modelType: ModelType,
+    protected val openRouterRouting: OpenRouterRoutingConfiguration? = null,
     override val baseUrl: String? = null,
     protected val loggingPort: LoggingPort,
     @Suppress("UnusedPrivateProperty") // Injected for mutation tests; streaming holdback lives in core/agent.
@@ -81,7 +83,7 @@ abstract class BaseOpenAiSdkInferenceService(
 ) : RustCompatibleInferenceService {
     companion object {
         private const val MAX_LOG_BODY_CHARS = 4_000
-        private const val XAI_CONVERSATION_ID_HEADER = "x-grok-conv-id"
+
         private const val XAI_WIRE_LOG_HEAD_MESSAGE_COUNT = 3
         private const val XAI_WIRE_LOG_SYSTEM_PREVIEW_CHARS = 48
         private const val XAI_WIRE_LOG_USER_PREVIEW_CHARS = 24
@@ -92,8 +94,6 @@ abstract class BaseOpenAiSdkInferenceService(
     protected open val maxImages: Int = 20
 
     protected open val useStrictToolSchemas: Boolean = false
-
-    private val conversationHistory = CopyOnWriteArrayList<ChatMessage>()
 
     private val appendOnlyContexts = mutableMapOf<String, ProviderAppendOnlyContext>()
     private var activeAppendOnlyKey: String? = null
@@ -112,8 +112,6 @@ abstract class BaseOpenAiSdkInferenceService(
     ): Flow<InferenceEvent> = error("sendPrompt not supported; all OpenAI-SDK services are wrapped by RustLoopInferenceService")
 
     override suspend fun setHistory(messages: List<ChatMessage>) {
-        conversationHistory.clear()
-        conversationHistory.addAll(messages)
         resetAppendOnlyForNewPrompt()
     }
 
@@ -124,7 +122,6 @@ abstract class BaseOpenAiSdkInferenceService(
     internal fun resetAppendOnlyForNewPrompt() = Unit
 
     override suspend fun closeSession() {
-        conversationHistory.clear()
         appendOnlyContexts.values.forEach { it.invalidate() }
         appendOnlyContexts.clear()
         activeAppendOnlyKey = null
@@ -304,6 +301,9 @@ abstract class BaseOpenAiSdkInferenceService(
                 options.safeMaxCompletionTokens()?.let { builder.maxCompletionTokens(it.toLong()) }
             }
             applyPromptCacheRouting(builder = builder, options = options)
+            if (requestProvider == ApiProvider.OPENROUTER && openRouterRouting != null) {
+                OpenRouterRoutingSupport.applyToChatCompletionBuilder(builder, openRouterRouting)
+            }
 
             builder.streamOptions(
                 ChatCompletionStreamOptions.builder().includeUsage(true).build(),
@@ -347,8 +347,8 @@ abstract class BaseOpenAiSdkInferenceService(
                         .openAiTurnTelemetry(
                             context = captureContext,
                             providerLabel = telemetrySupport.providerLabel(provider),
-                            modelId = modelId,
-                            modelLabel = modelId,
+                            modelId = resolvedModelId,
+                            modelLabel = resolvedModelId,
                             timing = timing,
                             inputTokens = response.inputTokens,
                             outputTokens = response.outputTokens,
@@ -425,7 +425,7 @@ abstract class BaseOpenAiSdkInferenceService(
             telemetryEventPort.emitInferenceExecutionOutcome(
                 startedAtMs = startedAtMs,
                 provider = provider,
-                modelId = modelId,
+                modelId = resolvedModelId,
                 success = false,
                 errorMessage = e.message,
                 baseUrl = baseUrl,
@@ -448,6 +448,14 @@ abstract class BaseOpenAiSdkInferenceService(
             )
         } catch (e: Exception) {
             loggingPort.error(tag, "completeSingleTurn failed: ${e.message}", e)
+            telemetryEventPort.emitInferenceExecutionOutcome(
+                startedAtMs = startedAtMs,
+                provider = provider,
+                modelId = resolvedModelId,
+                success = false,
+                errorMessage = e.message,
+                baseUrl = baseUrl,
+            )
             throw e
         }
     }
@@ -624,7 +632,8 @@ abstract class BaseOpenAiSdkInferenceService(
     ) {
         val conversationId = options.chatId?.value?.takeIf { it.isNotBlank() } ?: return
         when (provider.toApiProviderOrNull()) {
-            ApiProvider.XAI -> builder.putAdditionalHeader(XAI_CONVERSATION_ID_HEADER, conversationId)
+            ApiProvider.XAI ->
+                builder.putAdditionalHeader(ProviderInferenceConstants.XAI_CONVERSATION_ID_HEADER, conversationId)
             ApiProvider.OPENAI -> builder.promptCacheKey(conversationId)
             else -> Unit
         }
@@ -1047,6 +1056,15 @@ abstract class BaseOpenAiSdkInferenceService(
                     val event = runInterruptible { iterator.next() }
                     state = handler.handleEvent(event, state)
                 }
+                if (
+                    state.outputTextDeltaCount > 0 &&
+                    state.toolCallRequests.isEmpty() &&
+                    !state.receivedTerminalEvent
+                ) {
+                    throw RuntimeException(
+                        "Stream ended mid-response without finish signal (provider=$provider model=$modelId)",
+                    )
+                }
             }
         } catch (e: OpenAIServiceException) {
             val detail = describeException(e)
@@ -1182,13 +1200,13 @@ abstract class BaseOpenAiSdkInferenceService(
         val accumulatedReasoning: StringBuilder = StringBuilder(),
         val trackedToolCalls: MutableMap<Long, TrackedToolCall> = mutableMapOf(),
         val usageAccumulator: OpenAiStreamUsageAccumulator = OpenAiStreamUsageAccumulator(),
-        var costUsd: BigDecimal? = null,
     ) {
         val inputTokens: Int? get() = usageAccumulator.inputTokens
         val outputTokens: Int? get() = usageAccumulator.outputTokens
         val reasoningTokens: Int? get() = usageAccumulator.reasoningTokens
         val cacheReadInputTokens: Int? get() = usageAccumulator.cacheReadInputTokens
         val cacheWriteInputTokens: Int? get() = usageAccumulator.cacheWriteInputTokens
+        val costUsd: BigDecimal? get() = usageAccumulator.costUsd
     }
 
     private data class TrackedToolCall(
