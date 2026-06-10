@@ -19,7 +19,9 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
@@ -49,9 +51,11 @@ class InferenceOrchestratorStopTest {
     private lateinit var chatRepository: com.browntowndev.enclave.domain.port.repository.ChatRepository
     private lateinit var turnStore: ActiveChatTurnStore
     private lateinit var orchestrator: InferenceOrchestrator
+    private lateinit var applicationScope: CoroutineScope
 
     @BeforeEach
     fun setUp() {
+        applicationScope = CoroutineScope(SupervisorJob() + testDispatcher)
         chatUseCases = mockk(relaxed = true)
         settingsUseCases = mockk()
         cancelInferenceUseCase = mockk(relaxed = true)
@@ -73,6 +77,7 @@ class InferenceOrchestratorStopTest {
                 errorHandler = errorHandler,
                 savedStateHandle = SavedStateHandle(),
                 pipelineExecutor = mockk(relaxed = true),
+                applicationScope = applicationScope,
             )
 
         mockAllowedSafetyGate(

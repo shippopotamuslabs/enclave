@@ -19,6 +19,7 @@ import com.browntowndev.enclave.domain.usecase.chat.ChatTurnTiming
 import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
 import com.browntowndev.enclave.domain.usecase.chat.PromptSafetyGateRequest
 import com.browntowndev.enclave.domain.usecase.chat.PromptSafetyGateResult
+import com.browntowndev.enclave.domain.qualifier.ApplicationScope
 import com.browntowndev.enclave.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.enclave.feature.chat.BuildConfig
@@ -33,8 +34,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -52,6 +51,7 @@ class InferenceOrchestrator
         private val errorHandler: ViewModelErrorHandler,
         private val savedStateHandle: SavedStateHandle,
         private val pipelineExecutor: PipelineExecutorPort,
+        @param:ApplicationScope private val applicationScope: CoroutineScope,
     ) {
         private val _currentChatId = MutableStateFlow<ChatId?>(null)
         val currentChatId: StateFlow<ChatId?> = _currentChatId.asStateFlow()
@@ -174,25 +174,34 @@ class InferenceOrchestrator
                             _requestedTurnKey.value = turnKey
 
                             inferenceJob =
-                                chatUseCases
-                                    .generateChatResponse(
-                                        prompt = input,
-                                        userMessageId = userResult.userMessageId,
-                                        assistantMessageId = assistantMessageId,
-                                        chatId = userResult.chatId,
-                                        mode = selectedMode.toDomain(),
-                                        backgroundInferenceEnabled = settings.backgroundInferenceEnabled,
-                                    ).onEach {
-                                        // Snapshot publication is owned by the generation pipeline
-                                    }.catch { cause ->
-                                        val userMessage =
-                                            if (cause is ActiveModelConfigurationDecryptException) {
-                                                cause.message ?: ActiveModelConfigurationDecryptException.USER_MESSAGE
-                                            } else {
-                                                "Failed to generate response. Please try again."
-                                            }
-                                        errorHandler.handleError(TAG, "Inference failed", cause, userMessage)
-                                    }.launchIn(this)
+                                applicationScope.launch(
+                                    errorHandler.coroutineExceptionHandler(
+                                        TAG,
+                                        "Inference failed",
+                                        "Failed to generate response. Please try again.",
+                                    ),
+                                ) {
+                                    chatUseCases
+                                        .generateChatResponse(
+                                            prompt = input,
+                                            userMessageId = userResult.userMessageId,
+                                            assistantMessageId = assistantMessageId,
+                                            chatId = userResult.chatId,
+                                            mode = selectedMode.toDomain(),
+                                            backgroundInferenceEnabled = settings.backgroundInferenceEnabled,
+                                        ).catch { cause ->
+                                            val userMessage =
+                                                if (cause is ActiveModelConfigurationDecryptException) {
+                                                    cause.message
+                                                        ?: ActiveModelConfigurationDecryptException.USER_MESSAGE
+                                                } else {
+                                                    "Failed to generate response. Please try again."
+                                                }
+                                            errorHandler.handleError(TAG, "Inference failed", cause, userMessage)
+                                        }.collect {
+                                            // Snapshot publication is owned by the generation pipeline
+                                        }
+                                }
                         }
                     }
                 }
@@ -282,6 +291,16 @@ class InferenceOrchestrator
                     pipelineExecutor.stopPipeline(chatId.value)
                 }
             }
+        }
+
+        /**
+         * Detach UI/session wiring when [ChatViewModel] is cleared (e.g. navigation away).
+         * In-flight generation continues on [applicationScope]; [ActiveChatTurnSnapshotPort]
+         * holds live state for reattachment when the user returns.
+         */
+        fun detachOnViewModelCleared() {
+            sendJob?.cancel()
+            sendJob = null
         }
 
         private fun cancelActiveInferenceJob() {

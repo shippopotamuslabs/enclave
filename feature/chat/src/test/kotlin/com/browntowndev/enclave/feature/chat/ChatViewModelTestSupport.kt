@@ -42,6 +42,9 @@ import com.browntowndev.enclave.feature.chat.stats.ChatTelemetryUiMapper
 import io.mockk.coEvery
 import io.mockk.mockk
 import io.mockk.spyk
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.flowOf
 
 object ChatViewModelTestSupport {
@@ -135,6 +138,7 @@ object ChatViewModelTestSupport {
                     errorHandler = errorHandler,
                     savedStateHandle = savedStateHandle,
                     pipelineExecutor = mockk(relaxed = true),
+                    applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
                 ),
             )
         val chatInputCoordinator =
