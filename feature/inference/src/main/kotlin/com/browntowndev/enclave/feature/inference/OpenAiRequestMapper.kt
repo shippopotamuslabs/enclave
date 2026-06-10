@@ -18,6 +18,23 @@ import kotlinx.serialization.json.JsonObject
 
 object OpenAiRequestMapper {
 
+    internal fun mapSessionToResponseParams(
+        modelId: String,
+        wire: ResponseWireSegmentSupport.ResolvedResponseWire,
+        options: GenerationOptions,
+        availableTools: List<ToolDefinition>,
+    ): ResponseCreateParams =
+        buildResponseParams(
+            modelId = modelId,
+            input = wire.input,
+            instructions = wire.instructions,
+            options = options,
+            availableTools = availableTools,
+            store = null,
+            additionalHeaders = emptyMap(),
+            additionalBodyProperties = emptyMap(),
+        )
+
     fun mapToResponseParams(
         modelId: String,
         prompt: String,
@@ -32,11 +49,6 @@ object OpenAiRequestMapper {
             } else {
                 null
             }
-
-        val builder =
-            ResponseCreateParams
-                .builder()
-                .model(modelId)
 
         val messages = mutableListOf<ResponseInputItem>()
         val systemMessages = mutableListOf<String>()
@@ -53,11 +65,54 @@ object OpenAiRequestMapper {
 
         messages.add(ResponseInputItem.ofMessage(buildResponseUserMessage(prompt, options.imageUris)))
 
-        builder.inputOfResponse(messages)
-        systemMessages
-            .joinToString(separator = "\n\n")
-            .takeIf { it.isNotBlank() }
-            ?.let { builder.instructions(it) }
+        return buildResponseParams(
+            modelId = modelId,
+            input = messages,
+            instructions =
+                systemMessages
+                    .joinToString(separator = "\n\n")
+                    .takeIf { it.isNotBlank() },
+            options = options,
+            availableTools = if (options.toolingEnabled) options.activeTools else emptyList(),
+            store = null,
+            additionalHeaders = emptyMap(),
+            additionalBodyProperties = emptyMap(),
+            parameterSupport = parameterSupport,
+        )
+    }
+
+    private fun buildResponseParams(
+        modelId: String,
+        input: List<ResponseInputItem>,
+        instructions: String?,
+        options: GenerationOptions,
+        availableTools: List<ToolDefinition>,
+        store: Boolean?,
+        additionalHeaders: Map<String, String>,
+        additionalBodyProperties: Map<String, Any>,
+        parameterSupport: com.browntowndev.enclave.domain.model.inference.ApiModelParameterSupport? =
+            run {
+                val provider = options.apiProvider
+                val optModelId = options.modelId
+                if (provider != null && optModelId != null) {
+                    ApiProviderModelPolicy.parameterSupport(provider, optModelId)
+                } else {
+                    null
+                }
+            },
+    ): ResponseCreateParams {
+        val builder =
+            ResponseCreateParams
+                .builder()
+                .model(modelId)
+                .inputOfResponse(input)
+
+        instructions?.let(builder::instructions)
+        store?.let(builder::store)
+        additionalHeaders.forEach { (key, value) -> builder.putAdditionalHeader(key, value) }
+        additionalBodyProperties.forEach { (key, value) ->
+            builder.putAdditionalBodyProperty(key, JsonValue.from(value))
+        }
 
         options.reasoningEffort?.let { builder.reasoning(ReasoningMapper.toSdkReasoning(it)) }
         if (!options.temperatureDisabled && parameterSupport?.supportsTemperature != false) {
@@ -69,8 +124,8 @@ object OpenAiRequestMapper {
         if (!options.maxTokensDisabled && parameterSupport?.supportsMaxTokens != false) {
             options.maxTokens?.let { builder.maxOutputTokens(it.toLong()) }
         }
-        if (options.toolingEnabled) {
-            options.activeTools.forEach { builder.addTool(it.toResponsesTool()) }
+        if (availableTools.isNotEmpty()) {
+            availableTools.forEach { builder.addTool(it.toResponsesTool()) }
         }
 
         options.chatId
