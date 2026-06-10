@@ -98,8 +98,10 @@ class InitializeModelsUseCase
             val remoteAssets = catalog.assets
             logPort.debug(TAG, "Fetched ${remoteAssets.size} remote assets")
 
-            ensureInstalledQnnPackUtilities(remoteAssets)
-
+            // QNN pack zips are NOT hashed/extracted here. This use case runs inside the vault
+            // unlock coroutine, so it must stay cheap (stat-level checks only). A pack whose zip
+            // is on disk but not yet extracted scans as missing, flows into modelsToDownload, and
+            // DownloadFinalizeWorker performs the hash + extraction with visible progress.
             val suppressImageGenerationSlot =
                 activeModelProvider.getActiveConfiguration(ModelType.IMAGE_GENERATION)?.isLocal == false ||
                     !localImageGenerationSupported
@@ -285,28 +287,6 @@ class InitializeModelsUseCase
                 else -> Unit
             }
             syncUtilityModelRegistryUseCase(asset)
-        }
-
-        private suspend fun ensureInstalledQnnPackUtilities(assets: List<LocalModelAsset>) {
-            val eligibleUtilities =
-                LocalImagePackDownloadPolicy.eligibleQnnUtilityTypes(capabilityPort.getCapabilities())
-            assets
-                .filter { asset -> asset.metadata.utilityType in eligibleUtilities }
-                .forEach { asset ->
-                    runCatching {
-                        if (qnnPackInstaller.installIfNeeded(asset.metadata)) {
-                            logPort.debug(
-                                TAG,
-                                "Ensured QNN pack extracted for ${asset.metadata.utilityType}",
-                            )
-                        }
-                    }.onFailure { error ->
-                        logPort.warning(
-                            TAG,
-                            "QNN pack install attempt failed for ${asset.metadata.utilityType}: ${error.message}",
-                        )
-                    }
-                }
         }
 
         private suspend fun handleCatalogFetchFailure(
