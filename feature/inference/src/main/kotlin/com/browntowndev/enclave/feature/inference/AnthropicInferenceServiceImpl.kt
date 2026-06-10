@@ -183,7 +183,10 @@ class AnthropicInferenceServiceImpl(
             val thinkingBudget = resolveThinkingBudget(options)
             if (thinkingBudget != null) {
                 if (maxTokens <= thinkingBudget) {
-                    maxTokens = thinkingBudget + 1
+                    // Thinking tokens count against max_tokens; +1 would leave a single
+                    // token for the visible answer and the turn would end mid-thought
+                    // with stop_reason=max_tokens.
+                    maxTokens = thinkingBudget + DEFAULT_MAX_TOKENS
                 }
                 val clampedBudget = thinkingBudget.coerceAtMost(maxTokens - 1)
                 builder.thinking(
