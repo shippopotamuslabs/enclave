@@ -17,6 +17,8 @@ import com.browntowndev.enclave.domain.model.telemetry.TurnTelemetry
 import com.browntowndev.enclave.domain.port.inference.InferenceBusyException
 import com.browntowndev.enclave.domain.port.repository.ChatRepository
 
+private const val MAX_ERROR_DETAIL_CHARS = 500
+
 internal class ChatGenerationAccumulatorManager(
     private val mode: Mode,
     private val chatId: ChatId,
@@ -127,12 +129,19 @@ internal class ChatGenerationAccumulatorManager(
 
             is MessageGenerationState.Failed -> {
                 getOrCreateAccumulator(state.modelType).apply {
+                    val errorDetail =
+                        state.error.message
+                            ?.trim()
+                            ?.takeIf { it.isNotBlank() }
+                            ?.take(MAX_ERROR_DETAIL_CHARS)
                     replaceContent(
-                        if (state.error is InferenceBusyException) {
-                            state.error.message
-                                ?: "Another message is in progress. Please wait until it completes."
-                        } else {
-                            "Sorry, something went wrong. Please try again."
+                        when {
+                            state.error is InferenceBusyException ->
+                                state.error.message
+                                    ?: "Another message is in progress. Please wait until it completes."
+                            errorDetail != null ->
+                                "Sorry, something went wrong. Please try again.\n\nError: $errorDetail"
+                            else -> "Sorry, something went wrong. Please try again."
                         },
                     )
                     isComplete = true
