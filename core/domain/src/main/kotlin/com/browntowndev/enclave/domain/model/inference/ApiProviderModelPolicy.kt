@@ -85,7 +85,12 @@ object ApiProviderModelPolicy {
 
     fun isXaiChatReasoningContentModel(modelId: String): Boolean = modelId.matchesXaiChatReasoningContentModel()
 
-    fun isOpenAiReasoningModel(modelId: String): Boolean = modelId.startsWith("o1") || modelId.startsWith("o3")
+    fun isOpenAiReasoningModel(modelId: String): Boolean {
+        val normalized = modelId.substringAfterLast('/')
+        return normalized.startsWith("o1") ||
+            normalized.startsWith("o3") ||
+            normalized.endsWith("-nano")
+    }
 
     /**
      * Anthropic ephemeral prompt-cache breakpoints are only valid on documented Claude 3.5+ / 3.7 / 4 families.

@@ -118,6 +118,15 @@ object OpenAiRequestMapper {
         history: List<ChatMessage>,
         options: GenerationOptions,
     ): ResponseCreateParams {
+        val provider = options.apiProvider
+        val optModelId = options.modelId
+        val parameterSupport =
+            if (provider != null && optModelId != null) {
+                ApiProviderModelPolicy.parameterSupport(provider, optModelId)
+            } else {
+                null
+            }
+
         val builder =
             ResponseCreateParams
                 .builder()
@@ -133,21 +142,7 @@ object OpenAiRequestMapper {
             }
 
             val sanitizedContent = ImagePayloads.stripBase64DataUris(msg.content)
-            val role =
-                when (msg.role) {
-                    Role.USER -> ResponseInputItem.Message.Role.of("user")
-                    Role.ASSISTANT -> ResponseInputItem.Message.Role.of("assistant")
-                    Role.SYSTEM -> ResponseInputItem.Message.Role.of("system")
-                }
-            messages.add(
-                ResponseInputItem.ofMessage(
-                    ResponseInputItem.Message
-                        .builder()
-                        .role(role)
-                        .addInputTextContent(sanitizedContent)
-                        .build(),
-                ),
-            )
+            messages.add(ResponsesInputMessageSupport.textInputItem(msg.role, sanitizedContent))
         }
 
         messages.add(ResponseInputItem.ofMessage(buildResponseUserMessage(prompt, options.imageUris)))
@@ -159,9 +154,15 @@ object OpenAiRequestMapper {
             ?.let { builder.instructions(it) }
 
         options.reasoningEffort?.let { builder.reasoning(ReasoningMapper.toSdkReasoning(it)) }
-        options.temperature?.let { builder.temperature(it.toDouble()) }
-        options.topP?.let { builder.topP(it.toDouble()) }
-        options.maxTokens?.let { builder.maxOutputTokens(it.toLong()) }
+        if (!options.temperatureDisabled && parameterSupport?.supportsTemperature != false) {
+            options.temperature?.let { builder.temperature(it.toDouble()) }
+        }
+        if (!options.topPDisabled && parameterSupport?.supportsTopP != false) {
+            options.topP?.let { builder.topP(it.toDouble()) }
+        }
+        if (!options.maxTokensDisabled && parameterSupport?.supportsMaxTokens != false) {
+            options.maxTokens?.let { builder.maxOutputTokens(it.toLong()) }
+        }
         if (options.toolingEnabled) {
             options.activeTools.forEach { builder.addTool(it.toResponsesTool()) }
         }
@@ -218,14 +219,7 @@ object OpenAiRequestMapper {
         initialResponse.assistantMessageText
             .takeIf { it.isNotBlank() }
             ?.let { assistantText ->
-                inputItems +=
-                    ResponseInputItem.ofMessage(
-                        ResponseInputItem.Message
-                            .builder()
-                            .role(ResponseInputItem.Message.Role.of("assistant"))
-                            .addInputTextContent(assistantText)
-                            .build(),
-                    )
+                inputItems += ResponsesInputMessageSupport.textInputItem(Role.ASSISTANT, assistantText)
             }
 
         // Map results back to their corresponding function calls in the initial response

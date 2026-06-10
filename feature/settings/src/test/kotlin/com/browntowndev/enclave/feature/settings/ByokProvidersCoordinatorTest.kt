@@ -5,10 +5,13 @@ import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.config.ApiCredentials
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.config.ApiModelAsset
+import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
+import com.browntowndev.enclave.domain.usecase.settings.ApiPresetDraft
 import com.browntowndev.enclave.domain.usecase.settings.ApiProviderDraft
 import com.browntowndev.enclave.domain.usecase.settings.ApiProviderDraftSaveResult
 import com.browntowndev.enclave.domain.usecase.settings.ApplyApiModelMetadataDefaultsUseCase
+import com.browntowndev.enclave.domain.usecase.settings.SaveApiPresetUseCase
 import com.browntowndev.enclave.domain.usecase.settings.SaveApiProviderDraftUseCase
 import com.browntowndev.enclave.domain.usecase.settings.SettingsApiProviderUseCases
 import io.mockk.coEvery
@@ -175,5 +178,67 @@ class ByokProvidersCoordinatorTest {
             assertNull(apiState.value.selectedAsset)
             assertEquals(ApiProvider.OPENAI, apiState.value.assetDraft?.provider)
             assertFalse(apiState.value.isDiscoveringApiModels)
+        }
+
+    @Test
+    fun `onSaveApiModelConfig forwards parameter exclusions to saveApiPreset`() =
+        runTest {
+            val saveApiPreset = mockk<SaveApiPresetUseCase>()
+            every { apiProviderUseCases.saveApiPreset } returns saveApiPreset
+            val draftSlot = slot<ApiPresetDraft>()
+            coEvery {
+                saveApiPreset(
+                    provider = any(),
+                    parentCredentialsId = any(),
+                    defaultReasoningEffort = any(),
+                    draft = capture(draftSlot),
+                )
+            } returns Result.success(ApiModelConfigurationId("preset-1"))
+
+            val credentialsId = ApiCredentialsId("cred-1")
+            val apiState =
+                MutableStateFlow(
+                    ApiProvidersTransientState(
+                        assetDraft =
+                            ApiModelAssetUi(
+                                credentialsId = credentialsId,
+                                displayName = "OpenAI",
+                                provider = ApiProvider.OPENAI,
+                                baseUrl = null,
+                                credentialAlias = "openai",
+                                configurations = emptyList(),
+                            ),
+                        presetDraft =
+                            ApiModelConfigUi(
+                                credentialsId = credentialsId,
+                                modelId = "o3-mini",
+                                displayName = "Reasoning",
+                                maxTokensDisabled = true,
+                                temperatureDisabled = true,
+                                topPDisabled = true,
+                                topKDisabled = false,
+                                minPDisabled = false,
+                                frequencyPenaltyDisabled = true,
+                                presencePenaltyDisabled = false,
+                            ),
+                    ),
+                )
+
+            coordinator.onSaveApiModelConfig(
+                scope = this,
+                tag = "Settings",
+                apiState = apiState,
+                onSuccess = {},
+            )
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { saveApiPreset(any(), any(), any(), any()) }
+            assertEquals(true, draftSlot.captured.maxTokensDisabled)
+            assertEquals(true, draftSlot.captured.temperatureDisabled)
+            assertEquals(true, draftSlot.captured.topPDisabled)
+            assertEquals(false, draftSlot.captured.topKDisabled)
+            assertEquals(false, draftSlot.captured.minPDisabled)
+            assertEquals(true, draftSlot.captured.frequencyPenaltyDisabled)
+            assertEquals(false, draftSlot.captured.presencePenaltyDisabled)
         }
 }

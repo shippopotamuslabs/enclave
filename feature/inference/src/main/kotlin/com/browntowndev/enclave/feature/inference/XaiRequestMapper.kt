@@ -136,22 +136,7 @@ object XaiRequestMapper {
 
         history.filterNot(::isSyntheticAssistantError).forEach { msg ->
             val sanitizedContent = ImagePayloads.stripBase64DataUris(msg.content)
-            val role =
-                when (msg.role) {
-                    Role.USER -> ResponseInputItem.Message.Role.of("user")
-                    Role.ASSISTANT -> ResponseInputItem.Message.Role.of("assistant")
-                    Role.SYSTEM -> ResponseInputItem.Message.Role.of("system")
-                }
-
-            messages.add(
-                ResponseInputItem.ofMessage(
-                    ResponseInputItem.Message
-                        .builder()
-                        .role(role)
-                        .addInputTextContent(sanitizedContent)
-                        .build(),
-                ),
-            )
+            messages.add(ResponsesInputMessageSupport.textInputItem(msg.role, sanitizedContent))
         }
 
         messages.add(ResponseInputItem.ofMessage(buildResponseUserMessage(prompt, options.imageUris)))

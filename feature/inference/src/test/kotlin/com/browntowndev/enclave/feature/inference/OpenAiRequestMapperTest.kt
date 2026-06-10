@@ -3,6 +3,7 @@ package com.browntowndev.enclave.feature.inference
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.ChatMessage
 import com.browntowndev.enclave.domain.model.chat.Role
+import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry
@@ -218,6 +219,47 @@ class OpenAiRequestMapperTest {
                 .toString()
                 .contains("concise"),
         )
+    }
+
+    @Test
+    fun `mapToResponseParams omits temperature when excluded for openai reasoning models`() {
+        val params =
+            OpenAiRequestMapper.mapToResponseParams(
+                modelId = "gpt-5.4-nano",
+                prompt = "How are you?",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        apiProvider = ApiProvider.OPENAI,
+                        modelId = "gpt-5.4-nano",
+                        temperature = 0.7f,
+                        temperatureDisabled = true,
+                    ),
+            )
+
+        assertFalse(params.temperature().isPresent)
+    }
+
+    @Test
+    fun `mapToResponseParams omits unsupported sampling parameters for openai nano models`() {
+        val params =
+            OpenAiRequestMapper.mapToResponseParams(
+                modelId = "gpt-5.4-nano",
+                prompt = "How are you?",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        apiProvider = ApiProvider.OPENAI,
+                        modelId = "gpt-5.4-nano",
+                        temperature = 0.7f,
+                        topP = 0.9f,
+                    ),
+            )
+
+        assertFalse(params.temperature().isPresent)
+        assertFalse(params.topP().isPresent)
     }
 
     @Test

@@ -123,6 +123,15 @@ object OpenRouterRequestMapper {
         options: GenerationOptions,
         routing: OpenRouterRoutingConfiguration = OpenRouterRoutingConfiguration(),
     ): ResponseCreateParams {
+        val provider = options.apiProvider
+        val optModelId = options.modelId
+        val parameterSupport =
+            if (provider != null && optModelId != null) {
+                ApiProviderModelPolicy.parameterSupport(provider, optModelId)
+            } else {
+                null
+            }
+
         val builder =
             ResponseCreateParams
                 .builder()
@@ -184,9 +193,15 @@ object OpenRouterRequestMapper {
             }
 
         options.reasoningEffort?.let { builder.reasoning(ReasoningMapper.toSdkReasoning(it)) }
-        options.temperature?.let { builder.temperature(it.toDouble()) }
-        options.topP?.let { builder.topP(it.toDouble()) }
-        options.safeOpenRouterMaxTokens()?.let { builder.maxOutputTokens(it.toLong()) }
+        if (!options.temperatureDisabled && parameterSupport?.supportsTemperature != false) {
+            options.temperature?.let { builder.temperature(it.toDouble()) }
+        }
+        if (!options.topPDisabled && parameterSupport?.supportsTopP != false) {
+            options.topP?.let { builder.topP(it.toDouble()) }
+        }
+        if (!options.maxTokensDisabled && parameterSupport?.supportsMaxTokens != false) {
+            options.safeOpenRouterMaxTokens()?.let { builder.maxOutputTokens(it.toLong()) }
+        }
         val responseToolsToRegister = options.activeTools
         if (options.toolingEnabled && responseToolsToRegister.isNotEmpty()) {
             responseToolsToRegister.forEach { builder.addTool(it.toResponsesTool()) }
