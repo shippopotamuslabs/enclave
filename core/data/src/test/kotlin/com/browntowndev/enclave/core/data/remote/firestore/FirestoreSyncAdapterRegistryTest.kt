@@ -39,6 +39,31 @@ class FirestoreSyncAdapterRegistryTest {
     }
 
     @Test
+    fun registry_uploadsDefaultModelParentsBeforeDefaultModels() {
+        val ctx = createMinimalContext()
+        val registry = FirestoreSyncAdapterRegistry(ctx)
+        val paths = registry.adapters.map(EntitySyncAdapter<*>::collectionPath)
+        val defaultModelsIndex = paths.indexOf("default_models")
+        val parentPaths =
+            listOf(
+                "api_credentials",
+                "local_models",
+                "tts_providers",
+                "live_voice_providers",
+                "media_providers",
+                "api_model_configs",
+                "local_model_configs",
+            )
+
+        for (parentPath in parentPaths) {
+            assertTrue(
+                paths.indexOf(parentPath) in 0 until defaultModelsIndex,
+                "$parentPath must upload before default_models but was at ${paths.indexOf(parentPath)}",
+            )
+        }
+    }
+
+    @Test
     @DisplayName("S-HANDLER-001 registry registers the search_tool_settings handler")
     fun `S-HANDLER-001 registry registers a handler for the search_tool_settings collection`() {
         val ctx = createMinimalContext()

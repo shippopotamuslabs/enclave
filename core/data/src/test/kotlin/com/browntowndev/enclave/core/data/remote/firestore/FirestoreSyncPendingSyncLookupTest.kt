@@ -3,7 +3,9 @@ package com.browntowndev.enclave.core.data.remote.firestore
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.browntowndev.enclave.core.data.local.EnclaveDatabase
+import com.browntowndev.enclave.core.data.local.LiveVoiceProviderEntity
 import com.browntowndev.enclave.core.data.local.UtilityModelEntity
+import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.config.UtilityModelId
 import com.browntowndev.enclave.domain.model.config.UtilityType
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
@@ -59,6 +61,27 @@ class FirestoreSyncPendingSyncLookupTest {
             )
 
             val result = lookup.pendingSync("utility_models", "sync-id")
+
+            assertEquals(2, result)
+        }
+
+    @Test
+    fun pendingSyncLookupReturnsPendingSyncForLiveVoiceProviders() =
+        runTest {
+            database.liveVoiceProviderDao().upsertLiveVoiceProvider(
+                LiveVoiceProviderEntity(
+                    id = "live-voice-sync-id",
+                    displayName = "Realtime",
+                    provider = ApiProvider.OPENAI,
+                    voiceName = "alloy",
+                    modelName = null,
+                    baseUrl = null,
+                    credentialAlias = "lv-live-voice-sync-id",
+                    pendingSync = 2,
+                ),
+            )
+
+            val result = lookup.pendingSync("live_voice_providers", "live-voice-sync-id")
 
             assertEquals(2, result)
         }
