@@ -180,13 +180,15 @@ class RustLoopInferenceServiceTest {
                 }
             val service = createService(agentLoopPort = port, toolExecutor = executor)
             val cache = ConversationSignatureCache()
+            val cancellationGate = ConversationCancellationGate()
+            cancellationGate.beginRequest()
             val liteRtLoop =
                 LiteRtToolCallLoop(
                     cache = cache,
                     toolExecutor = executor,
                     loggingPort = logger,
                     agentPolicyPort = NoopAgentPolicyPort,
-                    cancellationGate = ConversationCancellationGate(),
+                    cancellationGate = cancellationGate,
                     searchToolsHostCoordinator =
                         com.browntowndev.enclave.domain.usecase.chat.SearchToolsHostCoordinator(
                             embeddingEngine = com.browntowndev.enclave.domain.port.inference.Bm25OnlyEmbeddingEnginePort,
@@ -222,6 +224,26 @@ class RustLoopInferenceServiceTest {
                                 ),
                         ),
                 ).toList()
+            val liteRtTurnContext =
+                com.browntowndev.enclave.feature.inference.conversation.LiteRtToolContext(
+                    modelType = ModelType.FAST,
+                    chatId = null,
+                    userMessageId = null,
+                    toolLoop = liteRtLoop,
+                    turn =
+                        com.browntowndev.enclave.feature.inference.conversation.LiteRtTurnSnapshot(
+                            requestId = cancellationGate.currentRequestId(),
+                            systemPrompt = cache.currentSystemPrompt,
+                            contextWindow = cache.currentContextWindow,
+                            history = cache.history,
+                            modelPath = cache.currentModelPath,
+                            latestAssistantMessageId = cache.latestAssistantMessageId,
+                            toolCatalog = cache.toolCatalog,
+                            toolSearchIndex = cache.toolSearchIndex,
+                            toolCallStrategy = cache.toolCallStrategy,
+                            transientToolResultTokens = cache.transientToolResultTokens.get(),
+                        ),
+                )
             val liteRtResult =
                 liteRtLoop.executeToolSafely(
                     ToolCallRequest(
@@ -230,6 +252,7 @@ class RustLoopInferenceServiceTest {
                         provider = "LITERT",
                         modelType = ModelType.FAST,
                     ),
+                    turnContext = liteRtTurnContext,
                 )
 
             assertAll(

@@ -21,7 +21,6 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import com.browntowndev.enclave.domain.model.chat.ChatMessage as DomainChatMessage
-import java.util.concurrent.CancellationException as JavaCancellationException
 
 class LiteRtInferenceServiceImpl
     @Inject
@@ -57,6 +56,7 @@ class LiteRtInferenceServiceImpl
             closeConversation: Boolean,
         ): Flow<InferenceEvent> =
             channelFlow {
+                val requestId = conversationManager.beginGenerationRequest()
                 val targetModelType = options.modelType ?: ModelType.FAST
                 var isThinking = false
                 val accumulatedThought = StringBuilder()
@@ -166,19 +166,12 @@ class LiteRtInferenceServiceImpl
                             }
                         telemetrySupport?.emitCaptured(telemetry, targetModelType) { send(it) }
                         send(InferenceEvent.Finished(targetModelType))
-                    } catch (e: JavaCancellationException) {
-                        // LiteRT cancelProcess() signals cancellation through this exception type.
-                        // Emit Finished so the UI transitions out of generating state cleanly.
-                        // Note: JavaCancellationException is NOT a Kotlin CancellationException,
-                        // so we do not re-throw it — the native layer already handled cancellation.
-                        Log.i(TAG, "LiteRT native inference cancelled by user for modelType=$targetModelType", e)
-                        conversationManager.cancelProcess()
-                        send(InferenceEvent.Finished(targetModelType))
                     } catch (e: CancellationException) {
-                        // Coroutine cancellation (e.g. inferenceJob.cancel()) — propagate normally
-                        // but emit Finished first so UI transitions out of generating state cleanly.
-                        Log.i(TAG, "LiteRT inference job cancelled for modelType=$targetModelType")
-                        conversationManager.cancelProcess()
+                        // Native cancelProcess() and coroutine cancellation both surface as
+                        // CancellationException on JVM. Emit Finished for UI cleanup; rethrow
+                        // for structured concurrency. Do not call cancelProcess() here — that
+                        // would bump the epoch and break a newer in-flight request.
+                        Log.i(TAG, "LiteRT inference cancelled for modelType=$targetModelType", e)
                         send(InferenceEvent.Finished(targetModelType))
                         throw e
                     } catch (e: Exception) {
@@ -208,7 +201,7 @@ class LiteRtInferenceServiceImpl
                     attemptInference(retryOnFail = true)
                 } finally {
                     eventJob.cancel()
-                    conversationManager.cancelCurrentGeneration()
+                    conversationManager.endGenerationRequest(requestId)
                     if (closeConversation) {
                         conversationManager.closeConversation()
                     }
