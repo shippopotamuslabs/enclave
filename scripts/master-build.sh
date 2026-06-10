@@ -147,13 +147,14 @@ build_kleidiai_llama_jni_libs() {
   echo "Copied libc++_shared.so"
 
   rm -rf "$llama_dir/.cxx" "$llama_dir/build"
-  ./gradlew :llama-android:assembleRelease \
+  # CMake-only pass: SVE variant cannot share a configure pass with NEON (global ggml flags).
+  ./gradlew ':llama-android:buildCMakeRelWithDebInfo[arm64-v8a]' \
     -PCMAKE_ARGS="-DGGML_CPU_ARM_ENABLE_SVE=ON;-DFETCHCONTENT_SOURCE_DIR_KLEIDIAI_DOWNLOAD=$kleidiai_dir" \
     --no-daemon
 
   local sve_lib
   sve_lib="$(find "$llama_dir/build" -name "libllama-jni-sve.so" -type f 2>/dev/null | head -1 || true)"
-  [[ -n "$sve_lib" ]] || die "SVE llama library not found after :llama-android:assembleRelease"
+  [[ -n "$sve_lib" ]] || die "SVE llama library not found after :llama-android:buildCMakeRelWithDebInfo"
   cp "$sve_lib" "$jni_libs_dir/libllama-jni-sve.so"
   echo "Copied libllama-jni-sve.so"
 

@@ -47,7 +47,7 @@ echo "[2/3] Building SVE variant..."
 rm -rf "$LLAMA_ANDROID_DIR/.cxx"
 rm -rf "$LLAMA_ANDROID_DIR/build"
 
-./gradlew :llama-android:assembleDebug \
+./gradlew ':llama-android:buildCMakeDebug[arm64-v8a]' \
     -PCMAKE_ARGS="-DGGML_CPU_ARM_ENABLE_SVE=ON;-DFETCHCONTENT_SOURCE_DIR_KLEIDIAI_DOWNLOAD=$KLEIDIAI_DIR" \
     --no-daemon -q
 

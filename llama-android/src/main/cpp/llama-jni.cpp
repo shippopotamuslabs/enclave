@@ -116,7 +116,12 @@ static CpuTopologyInfo detectCpuTopology() {
     return topo;
 }
 
-static int resolveInferenceThreadCount(const CpuTopologyInfo & topo) {
+struct InferenceThreadConfig {
+    int batch_threads = 1;
+    int decode_threads = 1;
+};
+
+static int resolveBatchThreadCount(const CpuTopologyInfo & topo) {
     if (topo.detected && !topo.affinity_core_ids.empty()) {
         const int max_threads = topo.homogeneous ? kMaxHomogeneousThreads : kMaxHeterogeneousThreads;
         return std::max(1, std::min((int) topo.affinity_core_ids.size(), max_threads));
@@ -127,6 +132,21 @@ static int resolveInferenceThreadCount(const CpuTopologyInfo & topo) {
         cpu_count = 4;
     }
     return std::max(1, std::min(cpu_count, kMaxHeterogeneousThreads));
+}
+
+// Prefill benefits from all performance cores; decode stays lighter to reduce contention.
+static InferenceThreadConfig resolveInferenceThreadConfig(const CpuTopologyInfo & topo) {
+    const int batch_threads = resolveBatchThreadCount(topo);
+    int decode_threads = batch_threads;
+
+    if (topo.homogeneous) {
+        decode_threads = std::max(2, batch_threads / 2);
+    } else if (batch_threads > 2) {
+        decode_threads = batch_threads - 1;
+    }
+
+    decode_threads = std::max(1, std::min(decode_threads, batch_threads));
+    return { batch_threads, decode_threads };
 }
 
 static void applyCoreMask(
@@ -150,7 +170,7 @@ static void applyCoreMask(
 static ggml_threadpool_t g_threadpool = nullptr;
 static ggml_threadpool_t g_threadpool_batch = nullptr;
 
-static void initThreadpool(int n_threads, const CpuTopologyInfo & topo) {
+static void initThreadpool(int decode_threads, int batch_threads, const CpuTopologyInfo & topo) {
     if (g_threadpool) {
         ggml_threadpool_free(g_threadpool);
         g_threadpool = nullptr;
@@ -160,17 +180,24 @@ static void initThreadpool(int n_threads, const CpuTopologyInfo & topo) {
         g_threadpool_batch = nullptr;
     }
 
-    int actualThreads = n_threads;
+    int actual_decode_threads = decode_threads;
+    int actual_batch_threads = batch_threads;
     if (topo.detected && !topo.affinity_core_ids.empty()) {
-        actualThreads = (int) std::min((size_t) n_threads, topo.affinity_core_ids.size());
+        const int core_limit = (int) topo.affinity_core_ids.size();
+        actual_decode_threads = std::min(actual_decode_threads, core_limit);
+        actual_batch_threads = std::min(actual_batch_threads, core_limit);
     }
-    actualThreads = std::max(actualThreads, 1);
+    actual_decode_threads = std::max(actual_decode_threads, 1);
+    actual_batch_threads = std::max(actual_batch_threads, 1);
 
-    struct ggml_threadpool_params tpp = ggml_threadpool_params_default(actualThreads);
-    applyCoreMask(tpp, topo);
+    struct ggml_threadpool_params decode_tpp = ggml_threadpool_params_default(actual_decode_threads);
+    applyCoreMask(decode_tpp, topo);
 
-    g_threadpool = ggml_threadpool_new(&tpp);
-    g_threadpool_batch = ggml_threadpool_new(&tpp);
+    struct ggml_threadpool_params batch_tpp = ggml_threadpool_params_default(actual_batch_threads);
+    applyCoreMask(batch_tpp, topo);
+
+    g_threadpool = ggml_threadpool_new(&decode_tpp);
+    g_threadpool_batch = ggml_threadpool_new(&batch_tpp);
 }
 
 // Clean up threadpools
@@ -485,9 +512,9 @@ Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeLoadM
     cparams.n_ctx = contextSize;
 
     const auto cpu_topo = detectCpuTopology();
-    const int actualThreads = resolveInferenceThreadCount(cpu_topo);
-    cparams.n_threads = actualThreads;
-    cparams.n_threads_batch = actualThreads;
+    const auto thread_config = resolveInferenceThreadConfig(cpu_topo);
+    cparams.n_threads = thread_config.decode_threads;
+    cparams.n_threads_batch = thread_config.batch_threads;
 
     // Use batch size from config parameter
     int actualBatchSize = (batchSize > 0) ? batchSize : 512;
@@ -499,10 +526,11 @@ Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeLoadM
     cparams.kv_unified = true;
 
     __android_log_print(ANDROID_LOG_INFO, "llama-jni",
-        "FINAL params: n_ctx=%d, n_batch=%d, n_ubatch=%d, n_threads=%d, homogeneous=%d",
-        cparams.n_ctx, cparams.n_batch, cparams.n_ubatch, cparams.n_threads, cpu_topo.homogeneous ? 1 : 0);
+        "FINAL params: n_ctx=%d, n_batch=%d, n_ubatch=%d, n_threads=%d, n_threads_batch=%d, homogeneous=%d",
+        cparams.n_ctx, cparams.n_batch, cparams.n_ubatch, cparams.n_threads, cparams.n_threads_batch,
+        cpu_topo.homogeneous ? 1 : 0);
 
-    initThreadpool(actualThreads, cpu_topo);
+    initThreadpool(thread_config.decode_threads, thread_config.batch_threads, cpu_topo);
 
     // Create context
     g_ctx = llama_init_from_model(g_model, cparams);
@@ -522,7 +550,7 @@ Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeLoadM
     if (!mmproj_path.empty()) {
         mtmd_context_params mparams = mtmd_context_params_default();
         mparams.use_gpu = false;
-        mparams.n_threads = actualThreads;
+        mparams.n_threads = thread_config.batch_threads;
         mparams.flash_attn_type = LLAMA_FLASH_ATTN_TYPE_DISABLED;
 
         g_mtmd = mtmd_init_from_file(mmproj_path.c_str(), g_model, mparams);
