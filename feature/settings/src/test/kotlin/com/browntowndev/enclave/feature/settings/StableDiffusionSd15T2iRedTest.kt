@@ -99,6 +99,32 @@ class StableDiffusionSd15T2iRedTest {
     }
 
     @Test
+    fun textModelSlotsExcludeLocalDiffusionAssets() {
+        val mapper = LocalModelAssetUiMapper()
+        val juggernaut =
+            mapper.map(localAsset("juggernaut", LocalImageGenerationModelRegistry.JUGGERNAUT_XL_QNN_SHA256, assignments = emptyList()))
+        val bonsai = mapper.map(localAsset("bonsai", LocalImageGenerationModelRegistry.SD15_QNN_SHA256, assignments = emptyList()))
+        val chatModel = mapper.map(localAsset("chat", "ordinary-chat-model-sha"))
+        val assets = listOf(juggernaut, bonsai, chatModel)
+
+        listOf(
+            ModelType.FAST,
+            ModelType.THINKING,
+            ModelType.MAIN,
+            ModelType.DRAFT_ONE,
+            ModelType.DRAFT_TWO,
+            ModelType.FINAL_SYNTHESIS,
+        ).forEach { modelType ->
+                val selectable = selectableLocalAssetsForSlot(modelType = modelType, assets = assets)
+                assertEquals(
+                    listOf(chatModel),
+                    selectable,
+                    "Diffusion assets should be hidden from $modelType assignment options",
+                )
+            }
+    }
+
+    @Test
     fun applyLocalImageAssignmentEligibility_hidesBlockedSd15AndSdxlFromAssignmentOptions() {
         val mapper = LocalModelAssetUiMapper()
         val sd15 = mapper.map(ModelPackTestFixtures.diffusionAsset())
