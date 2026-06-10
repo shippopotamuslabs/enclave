@@ -107,6 +107,8 @@ class StudioPromptCoordinator
             generationCoordinator.resetGeneratingFlags()
             generationCoordinator.clearLocalError()
             scope.launch {
+                studioRepository.clearActiveGeneration()
+                studioRepository.clearGenerationError()
                 studioRepository.clearEphemeralCache()
             }
         }
