@@ -15,6 +15,7 @@ import kotlinx.serialization.json.jsonPrimitive
 internal data class TitleGenAssetConfig(
     val maxInputLength: Int,
     val maxOutputTokens: Int,
+    val beamWidth: Int,
     val decoderStartTokenId: Int,
     val eosTokenId: Int,
     val padTokenId: Int,
@@ -23,7 +24,6 @@ internal data class TitleGenAssetConfig(
     companion object {
         fun parse(configJson: String): TitleGenAssetConfig {
             val root = Json.parseToJsonElement(configJson).jsonObject
-
             fun int(
                 key: String,
                 default: Int,
@@ -31,6 +31,7 @@ internal data class TitleGenAssetConfig(
             return TitleGenAssetConfig(
                 maxInputLength = int("max_input_length", DEFAULT_MAX_INPUT_LENGTH),
                 maxOutputTokens = int("max_output_tokens", DEFAULT_MAX_OUTPUT_TOKENS),
+                beamWidth = int("beam_width", DEFAULT_BEAM_WIDTH),
                 decoderStartTokenId = int("decoder_start_token_id", 0),
                 eosTokenId = int("eos_token_id", 1),
                 padTokenId = int("pad_token_id", 0),
@@ -40,5 +41,6 @@ internal data class TitleGenAssetConfig(
 
         private const val DEFAULT_MAX_INPUT_LENGTH = 384
         private const val DEFAULT_MAX_OUTPUT_TOKENS = 24
+        private const val DEFAULT_BEAM_WIDTH = 4
     }
 }

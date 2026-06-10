@@ -214,22 +214,24 @@
       "configurations": []
     },
     {
+      "displayName": "Chat Title Encoder",
       "huggingFaceModelName": null,
       "huggingFacePath": "chat_title_generator",
-      "fileName": "encoder_model.onnx",
-      "sha256": "cfabb870393155293c7f1774f783c8e3ebc2076ee3667c7bf3959ae58a4e61be",
-      "sizeInBytes": 141460468,
+      "fileName": "encoder_model_fp16.onnx",
+      "sha256": "379dfb6f072c46b1da665dfa86bd2e602d4670294c917eb812a345f88167c2d3",
+      "sizeInBytes": 70832572,
       "source": "R2",
       "utilityType": "title_generator_encoder",
       "isMultimodal": false,
       "configurations": []
     },
     {
+      "displayName": "Chat Title Decoder",
       "huggingFaceModelName": null,
       "huggingFacePath": "chat_title_generator",
-      "fileName": "decoder_model.onnx",
-      "sha256": "dc74eeebb3d9815eb43eb3a8224b9fd98024aff422eace93585de671f95573b0",
-      "sizeInBytes": 232568968,
+      "fileName": "decoder_model_fp16.onnx",
+      "sha256": "554406a805e34164284ab2cedda85a020e72f236c9208c75a6680f58b24a039a",
+      "sizeInBytes": 116487988,
       "source": "R2",
       "utilityType": "title_generator_decoder",
       "isMultimodal": false,
@@ -298,6 +300,7 @@
       "configurations": []
     },
     {
+      "displayName": "Chat Title Tokenizer",
       "huggingFaceModelName": null,
       "huggingFacePath": "chat_title_generator",
       "fileName": "tokenizer.json",

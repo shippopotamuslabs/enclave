@@ -43,7 +43,8 @@ DECODER_OUT = "decoder_model_fp16.onnx"
 TOKENIZER_OUT = "tokenizer.json"
 
 MAX_INPUT_LENGTH = 384
-MAX_OUTPUT_TOKENS = 24
+MAX_OUTPUT_TOKENS = 16
+BEAM_WIDTH = 4
 TASK_PREFIX = "short title: "  # per the model card usage example
 
 
@@ -85,6 +86,7 @@ def write_bundled_gen_params(config: AutoConfig) -> None:
     gen_params = {
         "max_input_length": MAX_INPUT_LENGTH,
         "max_output_tokens": MAX_OUTPUT_TOKENS,
+        "beam_width": BEAM_WIDTH,
         "decoder_start_token_id": int(getattr(config, "decoder_start_token_id", 0) or 0),
         "eos_token_id": int(getattr(config, "eos_token_id", 1) or 1),
         "pad_token_id": int(getattr(config, "pad_token_id", 0) or 0),

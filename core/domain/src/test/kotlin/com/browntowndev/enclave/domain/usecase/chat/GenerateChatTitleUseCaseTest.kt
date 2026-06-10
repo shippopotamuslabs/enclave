@@ -127,6 +127,21 @@ class GenerateChatTitleUseCaseTest {
         }
 
     @Test
+    fun `keeps fallback when generator returns path-like degenerate title`() =
+        runTest {
+            useCaseReturning("er/State/State/State/State/State/State/State/")(chatId, "path prompt")
+
+            assertEquals(
+                "Fallback truncated title",
+                chatRepository
+                    .getAllChats()
+                    .first()
+                    .single()
+                    .name,
+            )
+        }
+
+    @Test
     fun `keeps fallback on exception`() =
         runTest {
             val useCase =
