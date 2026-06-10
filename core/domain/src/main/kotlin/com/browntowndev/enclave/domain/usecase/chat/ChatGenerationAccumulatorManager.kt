@@ -134,7 +134,7 @@ internal class ChatGenerationAccumulatorManager(
                             ?.trim()
                             ?.takeIf { it.isNotBlank() }
                             ?.take(MAX_ERROR_DETAIL_CHARS)
-                    replaceContent(
+                    val errorText =
                         when {
                             state.error is InferenceBusyException ->
                                 state.error.message
@@ -142,8 +142,15 @@ internal class ChatGenerationAccumulatorManager(
                             errorDetail != null ->
                                 "Sorry, something went wrong. Please try again.\n\nError: $errorDetail"
                             else -> "Sorry, something went wrong. Please try again."
-                        },
-                    )
+                        }
+                    // Append as a transcript segment so the error is visible in the
+                    // rendered message, not just in the copied content. Partial streamed
+                    // text stays in place above it.
+                    if (content.isBlank()) {
+                        appendContent(errorText)
+                    } else {
+                        appendContent("\n\n$errorText")
+                    }
                     isComplete = true
                     currentState = MessageState.COMPLETE
                 }
