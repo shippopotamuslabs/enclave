@@ -171,7 +171,7 @@ class LlamaInferenceServiceImpl
                         minP = activeConfig.minP?.toFloat() ?: 0.0f,
                         maxTokens = targetMaxTokens,
                         contextWindow = activeConfig.contextWindow ?: 4096,
-                        batchSize = 256,
+                        batchSize = 512,
                         gpuLayers = 0,
                         thinkingEnabled = targetReasoningBudget > 0,
                         repeatPenalty = activeConfig.repetitionPenalty?.toFloat() ?: 1.1f,
@@ -280,26 +280,16 @@ class LlamaInferenceServiceImpl
                 streamBufferedGeneration(
                     events = sessionManager.streamAssistantResponseWithOptions(turnOptions),
                     targetModelType = targetModelType,
-                    emitVisible = false,
+                    emitVisible = true,
                     timing = timing,
                     emitEvent = { event ->
-                        if (event is InferenceEvent.Thinking) {
-                            onThinkingToken(event.chunk)
+                        when (event) {
+                            is InferenceEvent.Thinking -> onThinkingToken(event.chunk)
+                            is InferenceEvent.PartialResponse -> onTextToken(event.chunk)
+                            else -> Unit
                         }
                     },
                 )
-            emitProcessedText(
-                rawText = buffered.fullText,
-                targetModelType = targetModelType,
-                emitEvent = { event ->
-                    when (event) {
-                        is InferenceEvent.Thinking -> onThinkingToken(event.chunk)
-                        is InferenceEvent.PartialResponse -> onTextToken(event.chunk)
-                        else -> Unit
-                    }
-                },
-                timing = timing,
-            )
             val rawText = buffered.fullText
             val outputTokens =
                 buffered.generatedTokens

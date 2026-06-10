@@ -31,6 +31,7 @@ import io.mockk.mockkStatic
 import io.mockk.slot
 import io.mockk.unmockkStatic
 import io.mockk.verify
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
@@ -253,6 +254,44 @@ class LlamaInferenceServiceImplTest {
             assertTrue(loadingIndex >= 0)
             assertTrue(processingIndex >= 0)
             assertTrue(loadingIndex < processingIndex)
+        }
+
+    @Test
+    fun `completeSingleTurn streams visible response tokens incrementally`() =
+        runTest {
+            every { sessionManager.streamAssistantResponseWithOptions(any()) } returns
+                flow {
+                    emit(GenerationEvent.Token("<think>reasoning</think>"))
+                    emit(GenerationEvent.Token("Hello"))
+                    emit(GenerationEvent.Token(" world"))
+                    emit(
+                        GenerationEvent.Completed(
+                            fullText = "<think>reasoning</think>Hello world",
+                            promptTokens = 4,
+                            generatedTokens = 6,
+                            prefixReusedTokens = 0,
+                        ),
+                    )
+                }
+            val thinkingTokens = mutableListOf<String>()
+            val textTokens = mutableListOf<String>()
+            val service = createService(ModelType.FAST)
+
+            service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        AgentLoopMessage(id = "u1", role = Role.USER, content = "Hi!", metadataJson = "null"),
+                    ),
+                systemPrompt = "System",
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = { textTokens += it },
+                onThinkingToken = { thinkingTokens += it },
+                options = GenerationOptions(reasoningBudget = 2048, modelType = ModelType.FAST),
+            )
+
+            assertEquals(listOf("reasoning"), thinkingTokens)
+            assertEquals(listOf("Hello", " world"), textTokens)
         }
 
     @Test
