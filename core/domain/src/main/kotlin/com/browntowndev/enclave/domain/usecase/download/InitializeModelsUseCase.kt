@@ -203,10 +203,21 @@ class InitializeModelsUseCase
                     utilityAssets = filteredUtilityAssets,
                 )
 
+            // Non-utility pack members that lost the single-asset-per-slot competition
+            // (e.g. the SD 1.5 diffusion GGUF when SDXL occupies IMAGE_GENERATION) must
+            // still be scanned and downloaded, or their pack stays permanently incomplete.
+            val blockedPackMemberShas =
+                LocalImagePackDownloadPolicy.blockedPackMemberSha256s(catalog, capabilities)
+            val tierAwarePackMemberAssets =
+                downloadSlice.packMemberAssets.filter { asset ->
+                    asset.metadata.sha256 !in softDeletedShaSet &&
+                        asset.metadata.sha256 !in blockedPackMemberShas
+                }
+
             val modelsResult =
                 checkModelsUseCase(
                     expectedModels = tierAwareSlotAssignments,
-                    utilityAssets = tierAwareUtilityAssets,
+                    utilityAssets = tierAwareUtilityAssets + tierAwarePackMemberAssets,
                 )
 
             val remoteShaMap = remoteAssets.associateBy { it.metadata.sha256 }
@@ -248,6 +259,26 @@ class InitializeModelsUseCase
                     logPort.debug(
                         TAG,
                         "Deferring utility ${utilityAsset.metadata.utilityType} until download success",
+                    )
+                }
+            }
+
+            tierAwarePackMemberAssets.forEach { packMemberAsset ->
+                if (packMemberAsset.metadata.sha256 !in modelsToDownloadShaSet) {
+                    packMemberAsset.configurations
+                        .flatMap { it.defaultAssignments }
+                        .distinct()
+                        .forEach { modelType ->
+                            syncLocalModelRegistryUseCase(modelType, packMemberAsset, assignAsDefault = false)
+                        }
+                    logPort.debug(
+                        TAG,
+                        "Registered pack member ${packMemberAsset.metadata.localFileName} without slot default",
+                    )
+                } else {
+                    logPort.debug(
+                        TAG,
+                        "Deferring pack member ${packMemberAsset.metadata.localFileName} until download success",
                     )
                 }
             }

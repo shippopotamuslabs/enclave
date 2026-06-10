@@ -26,6 +26,13 @@ data class DownloadCatalogSlice(
     val slotAssignments: Map<ModelType, LocalModelAsset>,
     val utilityAssets: List<LocalModelAsset>,
     val suppressedPackIds: Set<String>,
+    /**
+     * Non-utility pack members (e.g. diffusion weights) that lost the single-asset-per-slot
+     * competition in [slotAssignments]. They still belong to an unsuppressed pack and must be
+     * scanned/downloaded, otherwise a pack like SD 1.5 stays permanently incomplete whenever
+     * another pack (SDXL) occupies the same slot.
+     */
+    val packMemberAssets: List<LocalModelAsset> = emptyList(),
 )
 
 fun filterForDownload(
@@ -83,9 +90,22 @@ fun filterForDownload(
         }
     }
 
+    val selectedSlotShas = slotAssignments.values.mapTo(mutableSetOf()) { it.metadata.sha256 }
+    val packMemberAssets =
+        catalog.assets.filter { asset ->
+            val sha = asset.metadata.sha256
+            asset.metadata.utilityType == null &&
+                sha !in selectedSlotShas &&
+                (
+                    (sha in imageGenPackMemberShas && !suppressImageGenerationSlot) ||
+                        (sha in imageEditPackMemberShas && !suppressImageEditSlot)
+                )
+        }
+
     return DownloadCatalogSlice(
         slotAssignments = slotAssignments,
         utilityAssets = utilityAssets,
         suppressedPackIds = suppressedPackIds,
+        packMemberAssets = packMemberAssets,
     )
 }
