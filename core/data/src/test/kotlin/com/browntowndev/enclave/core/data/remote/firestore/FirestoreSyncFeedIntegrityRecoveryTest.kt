@@ -99,6 +99,26 @@ class FirestoreSyncFeedIntegrityRecoveryTest {
         }
 
     @Test
+    fun `ensureFeedBootstrapped marks initialized without full backfill when events already exist`() =
+        runTest {
+            coEvery { metaClient.readFeedStatus(USER_ID) } returns
+                FirestoreSyncFeedStatus(
+                    nextSequence = 79L,
+                    feedInitialized = false,
+                    feedEpoch = 1L,
+                    oldestRetainedSequence = 1L,
+                    schemaVersion = 1L,
+                )
+            coEvery { callableClient.markFeedInitializedIfNeeded(USER_ID) } returns
+                BackfillSyncFeedResult(status = "initialized", eventsWritten = 0, nextSequence = 79L)
+
+            recovery.ensureFeedBootstrapped(USER_ID)
+
+            coVerify(exactly = 1) { callableClient.markFeedInitializedIfNeeded(USER_ID) }
+            coVerify(exactly = 0) { callableClient.backfillIfNeeded(USER_ID) }
+        }
+
+    @Test
     fun `recoverIfFeedEpochChanged reconciles when local epoch differs`() =
         runTest {
             coEvery { metaClient.readFeedStatus(USER_ID) } returns
@@ -116,6 +136,26 @@ class FirestoreSyncFeedIntegrityRecoveryTest {
             coVerify(exactly = 1) { entityReconciler.reconcileFromCloudEntitySources(USER_ID) }
             coVerify { syncStateStore.setLastAppliedSequence(USER_ID, 19L) }
             coVerify { syncStateStore.setFeedSchemaVersion(USER_ID, 3L) }
+        }
+
+    @Test
+    fun `recoverIfFeedEpochChanged adopts server epoch when local epoch is unset`() =
+        runTest {
+            coEvery { metaClient.readFeedStatus(USER_ID) } returns
+                FirestoreSyncFeedStatus(
+                    nextSequence = 79L,
+                    feedInitialized = false,
+                    feedEpoch = 1L,
+                    oldestRetainedSequence = 1L,
+                    schemaVersion = 1L,
+                )
+            coEvery { syncStateStore.feedSchemaVersion(USER_ID) } returns 0L
+
+            recovery.recoverIfFeedEpochChanged(USER_ID)
+
+            coVerify(exactly = 0) { entityReconciler.reconcileFromCloudEntitySources(any()) }
+            coVerify { syncStateStore.setFeedSchemaVersion(USER_ID, 1L) }
+            coVerify(exactly = 0) { syncStateStore.setLastAppliedSequence(any(), any()) }
         }
 
     private companion object {

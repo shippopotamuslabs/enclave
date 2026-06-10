@@ -350,7 +350,7 @@ object DataModule {
     @Singleton
     fun provideFirebaseFunctions(): com.google.firebase.functions.FirebaseFunctions =
         com.google.firebase.functions.FirebaseFunctions
-            .getInstance()
+            .getInstance("us-central1")
 
     @Provides
     @Singleton

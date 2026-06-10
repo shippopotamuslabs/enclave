@@ -10,6 +10,7 @@ import com.browntowndev.enclave.core.data.sync.EmbeddingRegenerationCoordinator
 import com.browntowndev.enclave.domain.model.config.LocalModelAsset
 import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.config.UtilityType
+import com.browntowndev.enclave.domain.model.download.ModelConfig
 import com.browntowndev.enclave.domain.model.download.Sd15QnnPackCatalog
 import com.browntowndev.enclave.domain.model.download.JuggernautXlQnnPackCatalog
 import com.browntowndev.enclave.domain.model.download.SdxlQnnPackCatalog
@@ -29,6 +30,7 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
+import java.io.File
 
 /**
  * Finalizes download work by performing post-download business logic.
@@ -356,6 +358,16 @@ class DownloadFinalizeWorker
                                 progressListener = qnnPackProgressListener(),
                             )
                         if (requiresInstall && !installed) {
+                            val modelsDir = File(applicationContext.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
+                            val zipOnDisk = File(modelsDir, asset.metadata.localFileName).isFile
+                            if (!zipOnDisk) {
+                                logger.warning(
+                                    TAG,
+                                    "QNN pack zip missing for ${asset.metadata.localFileName}; " +
+                                        "skipping registry sync so startup can re-queue download",
+                                )
+                                return
+                            }
                             error("QNN pack install failed for ${asset.metadata.localFileName}")
                         }
                         if (!installed) {

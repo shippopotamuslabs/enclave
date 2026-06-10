@@ -10,7 +10,6 @@ import com.browntowndev.enclave.domain.port.repository.SyncProgress
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -66,7 +65,7 @@ class SyncOrchestratorImpl
                 val failureMessage =
                     finishedWorkInfo?.outputData?.getString(InitialSyncWorker.KEY_PROGRESS_STATUS)
                         ?: "Unknown sync error"
-                Result.failure(IOException(failureMessage))
+                Result.failure(IllegalStateException(failureMessage))
             }
         }
     }

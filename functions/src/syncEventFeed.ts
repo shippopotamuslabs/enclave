@@ -390,6 +390,20 @@ export async function handleBackfillSyncFeed(
         };
     }
 
+    if (meta.nextSequence > 0) {
+        store.syncMeta = {
+            ...meta,
+            feedInitialized: true,
+            backfilledAtMillis: nowMillis,
+            updatedAtMillis: nowMillis,
+        };
+        return {
+            status: 'initialized',
+            eventsWritten: 0,
+            nextSequence: meta.nextSequence,
+        };
+    }
+
     let eventsWritten = 0;
     for (const collectionPath of BACKFILL_COLLECTION_ORDER) {
         if (!SYNC_FEED_ALLOWLIST.includes(collectionPath)) continue;
@@ -498,6 +512,7 @@ async function commitBackfillWrites(
 export async function runProductionBackfillSyncFeed(
     firestore: admin.firestore.Firestore,
     uid: string,
+    options: { migrationOnly?: boolean } = {},
 ): Promise<BackfillSyncFeedResult> {
     const metaRef = firestore.doc(`users/${uid}/sync_meta/state`);
     const metaSnap = await metaRef.get();
@@ -505,6 +520,22 @@ export async function runProductionBackfillSyncFeed(
     if (existingMeta.feedInitialized) {
         return {
             status: 'already_initialized',
+            eventsWritten: 0,
+            nextSequence: existingMeta.nextSequence,
+        };
+    }
+
+    if (options.migrationOnly || existingMeta.nextSequence > 0) {
+        const nowMillis = Date.now();
+        const migratedMeta: SyncFeedState = {
+            ...existingMeta,
+            feedInitialized: true,
+            backfilledAtMillis: nowMillis,
+            updatedAtMillis: nowMillis,
+        };
+        await metaRef.set(migratedMeta, { merge: true });
+        return {
+            status: 'initialized',
             eventsWritten: 0,
             nextSequence: existingMeta.nextSequence,
         };
@@ -520,9 +551,10 @@ export async function runProductionBackfillSyncFeed(
     return persistBackfillResult(firestore, uid, store);
 }
 
-export const backfillSyncFeedCallable = functions.https.onCall(async (_data, context) => {
+export const backfillSyncFeedCallable = functions.https.onCall(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'User must be logged in.');
     }
-    return runProductionBackfillSyncFeed(admin.firestore(), context.auth.uid);
+    const migrationOnly = data?.migrationOnly === true;
+    return runProductionBackfillSyncFeed(admin.firestore(), context.auth.uid, { migrationOnly });
 });

@@ -1091,6 +1091,7 @@ class DownloadFinalizeWorkerTest {
             listOf("clip_v2.mnn", "token_emb.bin", "pos_emb.bin", "unet.bin", "vae_decoder.bin").forEach { name ->
                 File(packDir, name).writeBytes(byteArrayOf(1))
             }
+            File(modelsDir, "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip").writeBytes(byteArrayOf(1, 2, 3))
             val sdxlAsset =
                 createTestAsset("realvis_xl_v5_dmd2_qnn2.28_8gen3.zip", sdxlSha).let { asset ->
                     asset.copy(

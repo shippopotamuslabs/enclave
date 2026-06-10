@@ -343,7 +343,11 @@ class ModelDownloadWorker
                     }
 
                     val tempFile = paths.tempFile
-                    val existingBytes = if (tempFile.exists()) tempFile.length() else 0L
+                    val metaFile = paths.metaFile
+                    val tempLength = if (tempFile.exists()) tempFile.length() else 0L
+                    val committedOffset = DownloadMetaFile.safeResumeOffset(metaFile, tempLength)
+                    DownloadMetaFile.truncateTempToCommittedOffset(tempFile, committedOffset)
+                    val existingBytes = if (tempFile.exists()) committedOffset else 0L
                     val downloadConfig =
                         FileDownloaderPort.FileDownloadConfig(
                             filename = artifact.localFileName,

@@ -12,8 +12,10 @@ import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.media.AspectRatio
 import com.browntowndev.enclave.domain.model.media.GenerationQuality
+import com.browntowndev.enclave.domain.model.media.ImageGenerationProgress
 import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
 import com.browntowndev.enclave.domain.model.media.ProviderCapabilities
+import com.browntowndev.enclave.domain.port.repository.ActiveStudioGeneration
 import com.browntowndev.enclave.domain.port.inference.PromptModerationPort
 import com.browntowndev.enclave.domain.port.inference.PromptModerationScores
 import com.browntowndev.enclave.domain.port.media.ShareMediaPort
@@ -90,6 +92,8 @@ class MultimodalViewModelTest {
     private val ephemeralMediaFlow = MutableStateFlow<List<StudioMediaAsset>>(emptyList())
     private val allAlbumsFlow = MutableStateFlow<List<StudioAlbumAsset>>(emptyList())
     private val generationErrorFlow = MutableStateFlow<String?>(null)
+    private val generationProgressFlow = MutableStateFlow<ImageGenerationProgress?>(null)
+    private val activeGenerationFlow = MutableStateFlow<ActiveStudioGeneration?>(null)
     private val speechEvents = MutableSharedFlow<SpeechState>(extraBufferCapacity = 8)
     private val moderationPort = MutablePromptModerationPort()
 
@@ -142,8 +146,19 @@ class MultimodalViewModelTest {
         every { studioRepository.observeAllMedia() } returns allMediaFlow
         every { studioRepository.observeEphemeralMedia() } returns ephemeralMediaFlow
         every { studioRepository.observeGenerationError() } returns generationErrorFlow
-        every { studioRepository.observeActiveGeneration() } returns flowOf(null)
-        every { studioRepository.reportActiveGeneration(any()) } returns true
+        every { studioRepository.observeGenerationProgress() } returns generationProgressFlow
+        every { studioRepository.observeActiveGeneration() } returns activeGenerationFlow
+        every { studioRepository.reportActiveGeneration(any()) } answers {
+            if (activeGenerationFlow.value != null) {
+                false
+            } else {
+                activeGenerationFlow.value = firstArg()
+                true
+            }
+        }
+        every { studioRepository.clearActiveGeneration() } answers {
+            activeGenerationFlow.value = null
+        }
         every { studioRepository.observeAllAlbums() } returns allAlbumsFlow
         coEvery { studioRepository.updateMedia(any()) } returns Unit
         coEvery { studioRepository.promoteEphemeralMedia(any(), any()) } returns
@@ -254,6 +269,7 @@ class MultimodalViewModelTest {
                         createdAt = 1L,
                     ),
                 )
+            activeGenerationFlow.value = null
             advanceUntilIdle()
 
             val state = viewModel.uiState.value
@@ -561,9 +577,10 @@ class MultimodalViewModelTest {
             verify(exactly = 1) { dispatcher.startGeneration(any(), any(), any()) }
             assertTrue(viewModel.uiState.value.isGenerating)
 
-            // Simulate generation completion to reset _isGenerating
+            // Simulate generation completion to reset active generation tracking
             ephemeralMediaFlow.value =
                 listOf(StudioMediaAsset(id = "1", localUri = "uri", prompt = "p", mediaType = "IMAGE", createdAt = 1L))
+            activeGenerationFlow.value = null
             advanceUntilIdle()
             assertFalse(viewModel.uiState.value.isGenerating)
 
@@ -575,6 +592,7 @@ class MultimodalViewModelTest {
             // Simulate second completion
             ephemeralMediaFlow.value =
                 ephemeralMediaFlow.value + StudioMediaAsset(id = "2", localUri = "uri2", prompt = "p", mediaType = "IMAGE", createdAt = 2L)
+            activeGenerationFlow.value = null
             advanceUntilIdle()
             assertFalse(viewModel.uiState.value.isGenerating)
 

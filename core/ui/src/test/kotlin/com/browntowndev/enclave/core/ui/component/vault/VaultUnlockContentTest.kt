@@ -34,16 +34,14 @@ class VaultUnlockContentTest {
         )
 
     @Test
-    fun unlockingStateStaysVisibleWhenUnlockFlagDropsBeforeDismissal() {
-        var isUnlocking by mutableStateOf(true)
-        composeTestRule.mainClock.autoAdvance = false
-
+    fun unlockingLatchReleasesWhenVaultStaysLockedAfterUnlockWork() {
         composeTestRule.setContent {
             EnclaveTheme {
                 VaultUnlockContent(
                     authState = authenticatedUser,
                     errorMessage = null,
-                    isUnlocking = isUnlocking,
+                    isUnlocking = false,
+                    isVaultLocked = true,
                     showGoogleSignInOnUnauth = false,
                     showBiometricToggle = true,
                     onLoginClick = {},
@@ -52,18 +50,8 @@ class VaultUnlockContentTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Signing In...").assertExists()
-        composeTestRule.onAllNodesWithText("Enclave Password").assertCountEquals(0)
-        composeTestRule.onAllNodesWithText("Biometric Unlock").assertCountEquals(0)
-
-        composeTestRule.runOnIdle {
-            isUnlocking = false
-        }
-        composeTestRule.mainClock.advanceTimeBy(500)
-
-        composeTestRule.onNodeWithText("Signing In...").assertExists()
-        composeTestRule.onAllNodesWithText("Enclave Password").assertCountEquals(0)
-        composeTestRule.onAllNodesWithText("Biometric Unlock").assertCountEquals(0)
+        composeTestRule.onNodeWithText("Signing In...").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Enclave Password").assertExists()
     }
 
     @Test
@@ -132,6 +120,27 @@ class VaultUnlockContentTest {
         composeTestRule.runOnIdle { initial = false }
         composeTestRule.onNodeWithText("Biometric Unlock").assertExists()
         composeTestRule.onNode(isToggleable()).assertIsOff()
+    }
+
+    @Test
+    fun biometricEnrollmentPendingReleasesUnlockingLatchAndShowsPasswordForm() {
+        composeTestRule.setContent {
+            EnclaveTheme {
+                VaultUnlockContent(
+                    authState = authenticatedUser,
+                    errorMessage = null,
+                    isUnlocking = false,
+                    isBiometricEnrollmentPending = true,
+                    showGoogleSignInOnUnauth = false,
+                    showBiometricToggle = true,
+                    onLoginClick = {},
+                    onSubmitVaultPassword = { _, _ -> },
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Signing In...").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Enclave Password").assertExists()
     }
 
     @Test

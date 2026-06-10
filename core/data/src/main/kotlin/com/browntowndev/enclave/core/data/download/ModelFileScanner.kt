@@ -293,7 +293,7 @@ class ModelFileScanner
                     tempExists && tempLength > 0 -> {
                         val isValidPartial = isValidPartialDownload(metaFile, artifact, tempLength)
                         if (isValidPartial) {
-                            partialBytes[filename] = tempLength
+                            partialBytes[filename] = DownloadMetaFile.safeResumeOffset(metaFile, tempLength)
                             Log.d(TAG, "Model artifact $filename has valid partial download")
                         } else {
                             Log.w(TAG, "Model artifact $filename has invalid/stale partial download. Deleting.")
@@ -337,22 +337,10 @@ class ModelFileScanner
             artifact: LocalModelArtifact,
             tempLength: Long,
         ): Boolean {
-            if (!metaFile.exists()) {
-                return false
-            }
-            return try {
-                val metaLines = metaFile.readLines()
-                if (metaLines.size < 2) {
-                    return false
-                }
-                val expectedSize = metaLines[0].toLongOrNull()
-                val expectedSha256 = metaLines[1]
-                expectedSize == artifact.sizeInBytes &&
-                    expectedSha256 == artifact.sha256 &&
-                    tempLength < expectedSize
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to read meta file for ${artifact.localFileName}", e)
-                false
-            }
+            val meta = DownloadMetaFile.readOrNull(metaFile) ?: return false
+            val resumeOffset = DownloadMetaFile.safeResumeOffset(metaFile, tempLength)
+            return meta.expectedSizeBytes == artifact.sizeInBytes &&
+                meta.expectedSha256 == artifact.sha256 &&
+                resumeOffset in 1 until meta.expectedSizeBytes
         }
     }

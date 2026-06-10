@@ -174,6 +174,28 @@ describe('sync event feed (pure handlers)', () => {
         expect(store.syncMeta.backfilledAtMillis).to.equal(1700000002000);
     });
 
+    it('SCN-BACKFILL-003 migration marks feed initialized when events already exist', async () => {
+        const store = new InMemorySyncFeedFirestore();
+        store.syncMeta = normalizeSyncFeedState({
+            feedInitialized: false,
+            nextSequence: 79,
+        });
+        store.syncEvents.push(syncEvent({ sequence: 1, triggerEventId: 'evt-1' }));
+
+        const result = await handleBackfillSyncFeed(
+            store,
+            new InMemorySyncFeedDocumentReader(store),
+            'alice',
+            1700000002000,
+        );
+
+        expect(result.status).to.equal('initialized');
+        expect(result.eventsWritten).to.equal(0);
+        expect(result.nextSequence).to.equal(79);
+        expect(store.syncMeta.feedInitialized).to.equal(true);
+        expect(store.syncEvents).to.have.length(1);
+    });
+
     it('SCN-BACKFILL-002 backfill is idempotent after feedInitialized is true', async () => {
         const store = new InMemorySyncFeedFirestore();
         store.syncMeta = normalizeSyncFeedState({

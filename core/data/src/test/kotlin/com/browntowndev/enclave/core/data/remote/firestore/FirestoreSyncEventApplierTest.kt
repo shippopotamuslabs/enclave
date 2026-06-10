@@ -211,6 +211,40 @@ class FirestoreSyncEventApplierTest {
         }
 
     @Test
+    fun `default_models upsert is skipped when referenced live_voice provider is missing`() =
+        runTest {
+            val harness = ApplierHarness(lastAppliedSequence = 0)
+            harness.sourceDocuments.put(
+                "users/alice/default_models/LIVE_VOICE",
+                mapOf(
+                    "live_voice_provider_id" to "provider-missing",
+                    "updated_at" to 1700000001000L,
+                ),
+            )
+
+            val orphanUpsert =
+                harness.applier.apply(
+                    userId = "alice",
+                    event = syncEvent(sequence = 1, collectionPath = "default_models", entityId = "LIVE_VOICE"),
+                )
+            harness.sourceDocuments.put(
+                "users/alice/chats/chat-1",
+                mapOf("name" to "Recovered Chat"),
+            )
+            val nextEvent =
+                harness.applier.apply(
+                    userId = "alice",
+                    event = syncEvent(sequence = 2, collectionPath = "chats", entityId = "chat-1"),
+                )
+
+            assertEquals(0, orphanUpsert.appliedCount)
+            assertEquals(1, orphanUpsert.lastAppliedSequence)
+            assertFalse(harness.localStore.defaultModelUpserts.containsKey("LIVE_VOICE"))
+            assertEquals(2, nextEvent.lastAppliedSequence)
+            assertEquals("Recovered Chat", harness.localStore.decryptedChatNames["chat-1"])
+        }
+
+    @Test
     fun `SCN-ANDROID-009 missing required parent fails without advancing sequence`() {
         val harness = ApplierHarness(lastAppliedSequence = 3)
         harness.sourceDocuments.put(
@@ -348,6 +382,7 @@ private class FakeSyncLocalStore(
     val decryptedMessageContents = mutableMapOf<String, String>()
     val deletedMessages = mutableMapOf<String, Boolean>()
     val upsertOrder = mutableListOf<String>()
+    val defaultModelUpserts = mutableMapOf<String, Map<String, Any?>>()
     var placeholderInsertCount = 0
 
     override suspend fun upsert(
@@ -360,6 +395,7 @@ private class FakeSyncLocalStore(
         when (collectionPath) {
             "chats" -> decryptedChatNames[entityId] = data["name"].toString()
             "messages" -> decryptedMessageContents[entityId] = data["content"].toString()
+            "default_models" -> defaultModelUpserts[entityId] = data
         }
     }
 

@@ -86,6 +86,8 @@ fun VaultUnlockContent(
     authState: VaultAuthUiState,
     errorMessage: String?,
     isUnlocking: Boolean = false,
+    isVaultLocked: Boolean = true,
+    isBiometricEnrollmentPending: Boolean = false,
     showGoogleSignInOnUnauth: Boolean = true,
     showBiometricToggle: Boolean = true,
     initialBiometricEnabled: Boolean = false,
@@ -102,15 +104,13 @@ fun VaultUnlockContent(
     // toggle state. Plain `remember { mutableStateOf(initial) }` only used the first value and
     // stayed stale after AnimatedContent / unlocking transitions or prop corrections.
     var enableBiometric by remember(initialBiometricEnabled) { mutableStateOf(initialBiometricEnabled) }
-    var unlockUiLatched by remember { mutableStateOf(false) }
-
-    // Synchronous latch: inline assignment runs in the same composition frame so there is no
-    // async gap where isUnlocking can flip back to false before the latch is set (which was
-    // the cause of the brief flicker back to the form after biometric/password unlock).
-    if (isUnlocking && !unlockUiLatched) unlockUiLatched = true
-    if (errorMessage != null && unlockUiLatched) unlockUiLatched = false
-
-    val showUnlockingUi = isUnlocking || unlockUiLatched
+    val showUnlockingUi =
+        rememberUnlockingUiVisible(
+            isUnlocking = isUnlocking,
+            isVaultLocked = isVaultLocked,
+            isBiometricEnrollmentPending = isBiometricEnrollmentPending,
+            errorMessage = errorMessage,
+        )
 
     Column(
         modifier = modifier.padding(24.dp),
@@ -266,6 +266,16 @@ fun VaultUnlockContent(
                         modifier = Modifier.testTag("unlock_sync_status_text"),
                     )
                     Spacer(modifier = Modifier.height(16.dp))
+                    if (errorMessage != null) {
+                        Text(
+                            text = errorMessage,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.testTag("unlock_sync_error_text"),
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
                     if (unlockSyncProgress != null) {
                         val progressValue = unlockSyncProgress
                         LinearProgressIndicator(
@@ -431,3 +441,35 @@ fun VaultUnlockContent(
         }
     }
 }
+
+@Composable
+private fun rememberUnlockingUiVisible(
+    isUnlocking: Boolean,
+    isVaultLocked: Boolean,
+    isBiometricEnrollmentPending: Boolean,
+    errorMessage: String?,
+): Boolean {
+    var unlockUiLatched by remember { mutableStateOf(false) }
+
+    // Synchronous latch: inline assignment runs in the same composition frame so there is no
+    // async gap where isUnlocking can flip back to false before the latch is set (which was
+    // the cause of the brief flicker back to the form after biometric/password unlock).
+    if (isUnlocking && !unlockUiLatched) unlockUiLatched = true
+    when {
+        errorMessage != null && unlockUiLatched -> unlockUiLatched = false
+        !isUnlocking && isBiometricEnrollmentPending && unlockUiLatched -> unlockUiLatched = false
+        shouldReleaseUnlockLatch(isUnlocking, isVaultLocked, isBiometricEnrollmentPending, unlockUiLatched) -> {
+            unlockUiLatched = false
+        }
+    }
+
+    return isUnlocking || unlockUiLatched
+}
+
+private fun shouldReleaseUnlockLatch(
+    isUnlocking: Boolean,
+    isVaultLocked: Boolean,
+    isBiometricEnrollmentPending: Boolean,
+    unlockUiLatched: Boolean,
+): Boolean =
+    !isUnlocking && isVaultLocked && !isBiometricEnrollmentPending && unlockUiLatched

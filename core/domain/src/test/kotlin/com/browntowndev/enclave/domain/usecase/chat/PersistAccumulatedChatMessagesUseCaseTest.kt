@@ -8,6 +8,7 @@ import com.browntowndev.enclave.domain.model.chat.MessageTranscriptSegment
 import com.browntowndev.enclave.domain.model.chat.Mode
 import com.browntowndev.enclave.domain.model.chat.WebSearchSource
 import com.browntowndev.enclave.domain.model.inference.ModelType
+import com.browntowndev.enclave.domain.usecase.chat.TRANSCRIPT_SEGMENT_SEPARATOR
 import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.enclave.domain.port.repository.ChatRepository
 import io.mockk.coEvery
@@ -476,7 +477,7 @@ class PersistAccumulatedChatMessagesUseCaseTest {
             val stitchedThinking =
                 segments
                     .filterIsInstance<MessageTranscriptSegment.Thinking>()
-                    .joinToString("") { it.text }
+                    .joinToString(TRANSCRIPT_SEGMENT_SEPARATOR) { it.text }
             val stitchedAnswer =
                 segments
                     .filterIsInstance<MessageTranscriptSegment.AssistantText>()

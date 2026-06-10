@@ -60,13 +60,9 @@ class InitialSyncWorker
                 } else {
                     val error = syncResult.exceptionOrNull()
                     loggingPort.error(TAG, "Initial sync failed", error)
-                    if (error is IOException || error?.cause is IOException) {
-                        Result.retry()
-                    } else {
-                        Result.failure(
-                            workDataOf(KEY_PROGRESS_STATUS to (error?.message ?: "Unknown sync error")),
-                        )
-                    }
+                    Result.failure(
+                        workDataOf(KEY_PROGRESS_STATUS to (error?.message ?: "Unknown sync error")),
+                    )
                 }
             } catch (e: CancellationException) {
                 loggingPort.info(TAG, "Initial sync worker cancelled")

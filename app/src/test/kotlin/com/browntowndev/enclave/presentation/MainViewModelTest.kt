@@ -334,7 +334,7 @@ class MainViewModelTest {
                 val ready = viewModel.startupState.value as AppStartupState.Ready
                 assertTrue(
                     ready.isVaultLocked,
-                    "cloud reconciliation runs before unlock UI is committed",
+                    "cloud reconciliation runs before vault gate opens",
                 )
                 assertFalse(ready.isBiometricEnrollmentPending)
                 Result.success(VaultReconciliationOutcome.AlreadyMatching)
@@ -735,6 +735,62 @@ class MainViewModelTest {
             assertTrue(state.isVaultLocked)
             assertTrue(state.cloudSyncDeferred)
             assertFalse(state.isBiometricUnlockPossible)
+        }
+
+    @Test
+    fun `loginWithGoogle preserves unlocked vault when sign-in completes after local unlock`() =
+        runTest(testDispatcher) {
+            every { cryptoManager.hasCachedKey() } returns true
+            coEvery { loginWithGoogleUseCase() } returns
+                Result.success(UserProfile("uid", "Name", "email@test.com", null))
+            every { syncOrchestrator.syncProgress } returns kotlinx.coroutines.flow.flowOf(null)
+            coEvery { syncOrchestrator.startInitialSync(any()) } returns Result.success(Unit)
+            every {
+                getAuthStateUseCase()
+            } returns
+                MutableStateFlow(
+                    com.browntowndev.enclave.domain.port.auth.AuthState.Authenticated(
+                        UserProfile("uid", "Name", "email@test.com", null),
+                    ),
+                )
+
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            viewModel.loginWithGoogle()
+            advanceUntilIdle()
+
+            verify(exactly = 0) { cryptoManager.clearKey() }
+            verify(exactly = 0) { cloudSyncPort.stopListening() }
+            val state = viewModel.startupState.value as AppStartupState.Ready
+            assertFalse(state.isVaultLocked)
+            assertFalse(state.cloudSyncDeferred)
+        }
+
+    @Test
+    fun `unlockVault opens app only after model initialization completes`() =
+        runTest(testDispatcher) {
+            stubAuthenticatedExistingVaultUnlock()
+            coEvery { detectVaultReconciliationStateUseCase("password") } returns
+                Result.success(VaultReconciliationOutcome.AlreadyMatching)
+            coEvery { syncOrchestrator.startInitialSync(any()) } returns Result.success(Unit)
+            coEvery { initializeModelsUseCase() } coAnswers {
+                delay(5_000)
+                initializedModelsResult
+            }
+
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            viewModel.unlockVault("password")
+            advanceTimeBy(100)
+
+            val midUnlock = viewModel.startupState.value as AppStartupState.Ready
+            assertTrue(midUnlock.isVaultLocked, "vault gate should stay closed until model scan finishes")
+            assertTrue(midUnlock.isUnlocking, "unlock spinner should remain until model scan finishes")
+
+            advanceUntilIdle()
+            val finalState = viewModel.startupState.value as AppStartupState.Ready
+            assertFalse(finalState.isVaultLocked)
+            assertNotNull(finalState.modelsResult)
         }
 
     @Test

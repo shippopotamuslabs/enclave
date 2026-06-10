@@ -77,6 +77,20 @@ internal class FirestoreSyncEventApplier(
         // when a required parent source document is missing — leaving the local store
         // and the sequence both untouched. A missing root source means this upsert was
         // superseded by a later delete/recreate race; advance past the stale pointer.
+        if (event.collectionPath == "default_models") {
+            val source =
+                sourceDocuments.getDocument("users/$userId/${event.collectionPath}/${event.entityId}")
+            if (source != null &&
+                FirestoreSyncDependencyGraph.defaultModelsMissingReferencedParent(
+                    userId,
+                    source,
+                    sourceDocuments,
+                )
+            ) {
+                return false
+            }
+        }
+
         val resolutionOrder = mutableListOf<ResolvedDocument>()
         val seen = mutableSetOf<String>()
         val rootExists =
