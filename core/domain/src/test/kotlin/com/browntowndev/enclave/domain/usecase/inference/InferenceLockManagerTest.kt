@@ -228,4 +228,25 @@ class InferenceLockManagerTest {
             // And a new ON_DEVICE can now start
             assertTrue(manager.acquireLock(InferenceType.ON_DEVICE))
         }
+
+    @Test
+    fun `forceReleaseOnDeviceLock clears stuck on-device lock`() =
+        runTest {
+            manager.acquireLock(InferenceType.ON_DEVICE)
+            assertTrue(manager.isInferenceBlocked.first())
+
+            manager.forceReleaseOnDeviceLock()
+
+            assertFalse(manager.isInferenceBlocked.first())
+            assertTrue(manager.acquireLock(InferenceType.ON_DEVICE))
+        }
+
+    @Test
+    fun `forceReleaseOnDeviceLock is safe when no on-device lock held`() =
+        runTest {
+            manager.forceReleaseOnDeviceLock()
+
+            assertFalse(manager.isInferenceBlocked.first())
+            assertTrue(manager.acquireLock(InferenceType.ON_DEVICE))
+        }
 }

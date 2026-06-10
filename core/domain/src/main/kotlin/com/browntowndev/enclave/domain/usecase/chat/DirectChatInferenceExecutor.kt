@@ -16,6 +16,8 @@ import com.browntowndev.enclave.domain.port.inference.LlmInferencePort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.MonotonicToolActivationPort
 import com.browntowndev.enclave.domain.port.inference.NoopCommittedInferencePromptPort
+import com.browntowndev.enclave.domain.port.inference.NoopOnDeviceInferenceCancellationPort
+import com.browntowndev.enclave.domain.port.inference.OnDeviceInferenceCancellationPort
 import com.browntowndev.enclave.domain.port.inference.PromptComposerPort
 import com.browntowndev.enclave.domain.port.inference.SearchIntentClassifierPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
@@ -59,6 +61,8 @@ class DirectChatInferenceExecutor
         private val monotonicToolActivation: MonotonicToolActivationPort = InMemoryMonotonicToolActivationStore(),
         private val toolSearchEmbeddingCache: ToolSearchEmbeddingCachePort = NoopToolSearchEmbeddingCachePort,
         private val committedInferencePrompts: CommittedInferencePromptPort = NoopCommittedInferencePromptPort,
+        private val onDeviceInferenceCancellation: OnDeviceInferenceCancellationPort =
+            NoopOnDeviceInferenceCancellationPort,
     ) : ChatInferenceExecutorPort {
         private val historyRehydrator =
             ChatHistoryRehydrator(
@@ -131,7 +135,7 @@ class DirectChatInferenceExecutor
             }.flowOn(Dispatchers.Default)
 
         override fun stop() {
-            // No-op for direct executor, cancellation is handled by the coroutine scope
+            onDeviceInferenceCancellation.cancelActiveGeneration()
         }
 
         private fun generateWithService(

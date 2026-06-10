@@ -28,6 +28,7 @@ import com.browntowndev.enclave.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.enclave.domain.port.inference.LlmInferencePort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.MonotonicToolActivationPort
+import com.browntowndev.enclave.domain.port.inference.OnDeviceInferenceCancellationPort
 import com.browntowndev.enclave.domain.port.inference.PromptComposerPort
 import com.browntowndev.enclave.domain.port.inference.SearchIntentClassifierPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
@@ -40,6 +41,7 @@ import com.browntowndev.enclave.domain.usecase.chat.ChatGenerationProgressPersis
 import com.browntowndev.enclave.domain.usecase.chat.ChatGenerationProgressSession
 import com.browntowndev.enclave.domain.usecase.chat.ChatHistoryRehydrator
 import com.browntowndev.enclave.domain.usecase.chat.ChatInferenceRequestPreparer
+import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -129,6 +131,12 @@ class ChatInferenceService : Service() {
 
     @Inject
     lateinit var committedInferencePrompts: CommittedInferencePromptPort
+
+    @Inject
+    lateinit var onDeviceInferenceCancellation: OnDeviceInferenceCancellationPort
+
+    @Inject
+    lateinit var inferenceLockManager: InferenceLockManager
 
     private lateinit var historyRehydrator: ChatHistoryRehydrator
     private lateinit var inferenceRequestPreparer: ChatInferenceRequestPreparer
@@ -287,6 +295,8 @@ class ChatInferenceService : Service() {
                         TAG,
                         "Inference cancelled in service chat=${chatId.value} assistantMessageId=${assistantMessageId.value}",
                     )
+                    onDeviceInferenceCancellation.cancelActiveGeneration()
+                    inferenceLockManager.forceReleaseOnDeviceLock()
                     withContext(NonCancellable) {
                         persistenceSession.flush(markIncompleteAsCancelled = true)
                         publishCancelledTerminalSnapshot(
@@ -490,6 +500,8 @@ class ChatInferenceService : Service() {
 
     private fun stopInference() {
         loggingPort.info(TAG, "stopInference requested")
+        onDeviceInferenceCancellation.cancelActiveGeneration()
+        inferenceLockManager.forceReleaseOnDeviceLock()
         currentJob?.cancel()
 
         val chatId = currentChatId
