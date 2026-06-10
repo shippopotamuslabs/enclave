@@ -143,11 +143,21 @@ class ChatInferenceService : Service() {
 
     private val job = SupervisorJob()
     private val serviceScope = CoroutineScope(Dispatchers.Default + job)
+    @Volatile
     private var currentJob: Job? = null
+
+    @Volatile
     private var currentChatId: ChatId? = null
+
+    @Volatile
     private var currentAssistantMessageId: MessageId? = null
+
+    @Volatile
     private var currentSession: ChatGenerationProgressSession? = null
+
+    @Volatile
     private var isStopping = false
+
     private var latestStartId: Int = -1
 
     override fun onCreate() {
@@ -206,7 +216,15 @@ class ChatInferenceService : Service() {
                         "modelType=${modelType.name} userHasImage=$userHasImage",
                 )
 
-                startInference(prompt, userMessageId, assistantMessageId, chatId, userHasImage, modelType)
+                startInference(
+                    prompt = prompt,
+                    userMessageId = userMessageId,
+                    assistantMessageId = assistantMessageId,
+                    chatId = chatId,
+                    userHasImage = userHasImage,
+                    modelType = modelType,
+                    serviceStartId = startId,
+                )
             }
             ACTION_STOP -> {
                 loggingPort.info(TAG, "ACTION_STOP received")
@@ -234,10 +252,12 @@ class ChatInferenceService : Service() {
         chatId: ChatId,
         userHasImage: Boolean,
         modelType: ModelType,
+        serviceStartId: Int,
     ) {
         currentJob?.cancel()
         currentChatId = chatId
         currentAssistantMessageId = assistantMessageId
+        isStopping = false
         loggingPort.info(
             TAG,
             "startInference chat=${chatId.value} " +
@@ -247,7 +267,7 @@ class ChatInferenceService : Service() {
         startForeground(ONGOING_NOTIFICATION_ID, createOngoingNotification(chatId))
         loggingPort.debug(TAG, "foreground service started chat=${chatId.value}")
 
-        currentJob =
+        val inferenceJob =
             serviceScope.launch {
                 val persistenceSession =
                     chatGenerationProgressPersister.startSession(
@@ -331,10 +351,15 @@ class ChatInferenceService : Service() {
                         persistenceSession = persistenceSession,
                     )
                 } finally {
-                    stopForeground(ChatInferenceNotificationPolicy.FOREGROUND_STOP_MODE)
-                    stopSelf(latestStartId)
+                    if (currentJob === this@launch) {
+                        currentJob = null
+                        currentSession = null
+                        stopForeground(ChatInferenceNotificationPolicy.FOREGROUND_STOP_MODE)
+                        stopSelf(serviceStartId)
+                    }
                 }
             }
+        currentJob = inferenceJob
     }
 
     private suspend fun generateWithService(

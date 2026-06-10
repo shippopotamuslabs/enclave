@@ -9,6 +9,8 @@ import android.os.IBinder
 import androidx.annotation.VisibleForTesting
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageGenerationState
+import com.browntowndev.enclave.domain.model.chat.MessageId
+import com.browntowndev.enclave.domain.model.chat.Mode
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.PipelineState
@@ -17,15 +19,20 @@ import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
+import com.browntowndev.enclave.domain.port.repository.PipelineStateRepository
+import com.browntowndev.enclave.domain.usecase.chat.ChatGenerationProgressPersister
+import com.browntowndev.enclave.domain.usecase.chat.ChatGenerationProgressSession
 import com.browntowndev.enclave.feature.inference.InferenceEventBus
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 /**
@@ -49,11 +56,13 @@ class InferenceService : Service() {
         const val EXTRA_CHAT_ID = "chat_id"
         const val EXTRA_USER_MESSAGE = "user_message"
         const val EXTRA_STATE_JSON = "state_json"
+        const val EXTRA_USER_MESSAGE_ID = "user_message_id"
+        const val EXTRA_ASSISTANT_MESSAGE_ID = "assistant_message_id"
 
         private const val THERMAL_HEADROOM_FORECAST_SECONDS = 30
         private const val THERMAL_HEADROOM_SAFE_DEFAULT = 1.0f
-        private const val THERMAL_SHUTDOWN_MIN_HEADROOM = 0.01f
-        private const val THERMAL_SHUTDOWN_MAX_HEADROOM = 0.15f
+        private const val THERMAL_SHUTDOWN_HEADROOM_THRESHOLD = 0.95f
+        private const val THERMAL_CHECK_INTERVAL_MS = 1_000L
     }
 
     @Inject
@@ -71,11 +80,25 @@ class InferenceService : Service() {
     @Inject
     lateinit var inferenceEventBus: InferenceEventBus
 
+    @Inject
+    lateinit var chatGenerationProgressPersister: ChatGenerationProgressPersister
+
+    @Inject
+    lateinit var pipelineStateRepository: PipelineStateRepository
+
     @VisibleForTesting
     internal var serviceScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+
+    @Volatile
     private var currentJob: Job? = null
+
+    @Volatile
     private var currentChatId: String? = null
+
+    @Volatile
     private var isRunning = false
+
+    private var lastThermalCheckMs = 0L
 
     override fun onCreate() {
         super.onCreate()
@@ -90,29 +113,26 @@ class InferenceService : Service() {
         startId: Int,
     ): Int {
         when (intent?.action) {
-            ACTION_START -> handleStartCommand(intent)
-            ACTION_RESUME -> handleResumeCommand(intent)
-            ACTION_STOP -> handleStopCommand()
+            ACTION_START -> handleStartCommand(intent, startId)
+            ACTION_RESUME -> handleResumeCommand(intent, startId)
+            ACTION_STOP -> handleStopCommand(startId)
         }
         return START_NOT_STICKY
     }
 
-    private fun handleStartCommand(intent: Intent) {
+    private fun handleStartCommand(
+        intent: Intent,
+        serviceStartId: Int,
+    ) {
         val chatId = intent.getStringExtra(EXTRA_CHAT_ID)
         val userMessage = intent.getStringExtra(EXTRA_USER_MESSAGE)
         val stateJson = intent.getStringExtra(EXTRA_STATE_JSON)
 
         if (chatId == null || userMessage == null) {
             logger.warning(TAG, "Missing required extras: chatId or userMessage")
-            stopSelf()
+            stopSelf(serviceStartId)
             return
         }
-
-        currentJob?.cancel()
-        startPipelineForeground(PipelineStep.DRAFT_ONE, hasMoreSteps = true)
-
-        isRunning = true
-        currentChatId = chatId
 
         val state =
             try {
@@ -123,45 +143,36 @@ class InferenceService : Service() {
                 PipelineState.createInitial(chatId, userMessage)
             }
 
-        currentJob =
-            serviceScope.launch {
-                try {
-                    executePipeline(chatId, state)
-                } catch (e: CancellationException) {
-                    logger.info(TAG, "Pipeline cancelled for chat: $chatId")
-                    throw e
-                } catch (e: Exception) {
-                    logger.error(TAG, "Pipeline error for chat $chatId: ${e.message}", e)
-                    inferenceEventBus.emitPipelineState(
-                        chatId,
-                        MessageGenerationState.Failed(
-                            IllegalStateException(e.message ?: "Unknown error"),
-                            CouncilPipelineStepSupport.getModelTypeForStep(state.currentStep),
-                        ),
-                    )
-                } finally {
-                    inferenceEventBus.clearPipelineRequest(chatId)
-                    isRunning = false
-                    stopForeground(STOP_FOREGROUND_REMOVE)
-                    stopSelf()
-                }
-            }
+        launchPipelineJob(
+            chatId = chatId,
+            serviceStartId = serviceStartId,
+            initialStep = state.currentStep,
+            userMessageId = intent.getStringExtra(EXTRA_USER_MESSAGE_ID),
+            assistantMessageId = intent.getStringExtra(EXTRA_ASSISTANT_MESSAGE_ID),
+        ) { session ->
+            executePipeline(chatId, state, session)
+        }
     }
 
-    private fun handleStopCommand() {
+    private fun handleStopCommand(serviceStartId: Int) {
         logger.info(TAG, "Stop command received")
         currentJob?.cancel()
-        stopForeground(STOP_FOREGROUND_REMOVE)
-        stopSelf()
+        if (currentJob?.isActive != true) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf(serviceStartId)
+        }
     }
 
-    private fun handleResumeCommand(intent: Intent) {
+    private fun handleResumeCommand(
+        intent: Intent,
+        serviceStartId: Int,
+    ) {
         val chatId = intent.getStringExtra(EXTRA_CHAT_ID)
         val stateJson = intent.getStringExtra(EXTRA_STATE_JSON)
 
         if (chatId == null || stateJson == null) {
             logger.warning(TAG, "Missing required extras: chatId or stateJson for resume")
-            stopSelf()
+            stopSelf(serviceStartId)
             return
         }
 
@@ -170,40 +181,76 @@ class InferenceService : Service() {
                 PipelineState.fromJson(stateJson)
             } catch (e: Exception) {
                 logger.error(TAG, "Failed to parse saved state: ${e.message}")
-                stopSelf()
+                stopSelf(serviceStartId)
                 return
             }
 
-        currentJob?.cancel()
-        val currentStep = savedState.currentStep
-        startPipelineForeground(currentStep, hasMoreSteps = currentStep.next() != null)
+        launchPipelineJob(
+            chatId = chatId,
+            serviceStartId = serviceStartId,
+            initialStep = savedState.currentStep,
+            userMessageId = intent.getStringExtra(EXTRA_USER_MESSAGE_ID),
+            assistantMessageId = intent.getStringExtra(EXTRA_ASSISTANT_MESSAGE_ID),
+        ) { session ->
+            executePipeline(chatId, savedState, session)
+        }
+    }
 
+    private fun launchPipelineJob(
+        chatId: String,
+        serviceStartId: Int,
+        initialStep: PipelineStep,
+        userMessageId: String?,
+        assistantMessageId: String?,
+        block: suspend (ChatGenerationProgressSession?) -> Unit,
+    ) {
+        currentJob?.cancel()
+        startPipelineForeground(initialStep, hasMoreSteps = initialStep.next() != null)
         isRunning = true
         currentChatId = chatId
 
-        currentJob =
+        val persistenceSession =
+            if (!userMessageId.isNullOrBlank() && !assistantMessageId.isNullOrBlank()) {
+                chatGenerationProgressPersister.startSession(
+                    mode = Mode.COUNCIL,
+                    chatId = ChatId(chatId),
+                    userMessageId = MessageId(userMessageId),
+                    assistantMessageId = MessageId(assistantMessageId),
+                )
+            } else {
+                null
+            }
+
+        val pipelineJob =
             serviceScope.launch {
                 try {
-                    executePipeline(chatId, savedState)
+                    block(persistenceSession)
                 } catch (e: CancellationException) {
                     logger.info(TAG, "Pipeline cancelled for chat: $chatId")
+                    withContext(NonCancellable) {
+                        persistenceSession?.flush(markIncompleteAsCancelled = true)
+                    }
                     throw e
                 } catch (e: Exception) {
                     logger.error(TAG, "Pipeline error for chat $chatId: ${e.message}", e)
-                    inferenceEventBus.emitPipelineState(
-                        chatId,
+                    val failedState =
                         MessageGenerationState.Failed(
                             IllegalStateException(e.message ?: "Unknown error"),
-                            CouncilPipelineStepSupport.getModelTypeForStep(savedState.currentStep),
-                        ),
-                    )
+                            ModelType.MAIN,
+                        )
+                    inferenceEventBus.emitPipelineState(chatId, failedState)
+                    persistenceSession?.applyState(failedState)
                 } finally {
-                    inferenceEventBus.clearPipelineRequest(chatId)
-                    isRunning = false
-                    stopForeground(STOP_FOREGROUND_REMOVE)
-                    stopSelf()
+                    if (currentJob === this@launch) {
+                        currentJob = null
+                        inferenceEventBus.clearPipelineRequest(chatId)
+                        isRunning = false
+                        stopForeground(STOP_FOREGROUND_REMOVE)
+                        stopSelf(serviceStartId)
+                    }
                 }
             }
+        currentJob = pipelineJob
     }
 
     override fun onDestroy() {
@@ -235,6 +282,7 @@ class InferenceService : Service() {
     private suspend fun executePipeline(
         chatId: String,
         initialState: PipelineState,
+        persistenceSession: ChatGenerationProgressSession?,
     ) {
         var currentState = initialState
         var currentStep = currentState.currentStep
@@ -245,40 +293,46 @@ class InferenceService : Service() {
             val prompt = CouncilPipelinePromptBuilder.buildPromptForStep(currentState, activeModelProvider)
             val modelType = CouncilPipelineStepSupport.getModelTypeForStep(currentStep)
 
-            inferenceEventBus.emitPipelineState(
-                chatId,
-                MessageGenerationState.Processing(modelType),
+            emitPipelineState(
+                chatId = chatId,
+                state = MessageGenerationState.Processing(modelType),
+                persistenceSession = persistenceSession,
             )
 
             val maxTokensOverride =
                 CouncilPipelinePromptBuilder.calculateMaxTokensForStep(currentStep, activeModelProvider)
             val result = executeStepForPipeline(chatId, prompt, currentStep, maxTokensOverride)
 
-            logger.info(TAG, "${currentStep.name} Response: ${result.output}")
+            logger.debug(TAG, "${currentStep.name} completed (${result.output.length} chars)")
 
             currentState = currentState.withStepOutput(currentStep, result.output)
+            pipelineStateRepository.persistPipelineState(chatId, currentState)
 
-            inferenceEventBus.emitPipelineState(
-                chatId,
-                MessageGenerationState.StepCompleted(
-                    stepOutput = "",
-                    modelDisplayName =
-                        CouncilPipelineStepSupport.getModelDisplayNameForStep(
-                            currentStep,
-                            activeModelProvider,
-                        ),
-                    modelType = modelType,
-                    stepType = currentStep,
-                ),
+            emitPipelineState(
+                chatId = chatId,
+                state =
+                    MessageGenerationState.StepCompleted(
+                        stepOutput = result.output,
+                        modelDisplayName =
+                            CouncilPipelineStepSupport.getModelDisplayNameForStep(
+                                currentStep,
+                                activeModelProvider,
+                            ),
+                        modelType = modelType,
+                        stepType = currentStep,
+                    ),
+                persistenceSession = persistenceSession,
             )
 
             if (currentStep == PipelineStep.FINAL) {
                 logger.info(TAG, "Pipeline complete for chat: $chatId")
-                inferenceEventBus.emitPipelineState(
-                    chatId,
-                    MessageGenerationState.Finished(modelType),
+                emitPipelineState(
+                    chatId = chatId,
+                    state = MessageGenerationState.Finished(modelType),
+                    persistenceSession = persistenceSession,
                 )
-                showCompletionNotification(currentState.durationSeconds())
+                pipelineStateRepository.clearPipelineState(chatId)
+                showCompletionNotification(chatId, currentState.durationSeconds())
                 break
             }
 
@@ -288,13 +342,22 @@ class InferenceService : Service() {
         }
     }
 
+    private suspend fun emitPipelineState(
+        chatId: String,
+        state: MessageGenerationState,
+        persistenceSession: ChatGenerationProgressSession?,
+    ) {
+        inferenceEventBus.emitPipelineState(chatId, state)
+        persistenceSession?.applyState(state)
+    }
+
     private suspend fun executeStepForPipeline(
         chatId: String,
         prompt: String,
         step: PipelineStep,
         maxTokensOverride: Int? = null,
     ): StepResult {
-        var output = ""
+        val output = StringBuilder()
         val modelType = CouncilPipelineStepSupport.getModelTypeForStep(step)
 
         inferenceFactoryProvider.get().withInferenceService(modelType) { service ->
@@ -334,13 +397,13 @@ class InferenceService : Service() {
                     step = step,
                     inferenceEventBus = inferenceEventBus,
                     onPartialChunk = { chunk ->
-                        output += chunk
+                        output.append(chunk)
                     },
                 )
             }
         }
 
-        return StepResult(output = output)
+        return StepResult(output = output.toString())
     }
 
     private fun readThermalHeadroom(powerManager: android.os.PowerManager): Float =
@@ -352,8 +415,16 @@ class InferenceService : Service() {
         }
 
     private fun enforceThermalHeadroomOrAbort(powerManager: android.os.PowerManager) {
+        val now = System.currentTimeMillis()
+        if (now - lastThermalCheckMs < THERMAL_CHECK_INTERVAL_MS) {
+            return
+        }
+        lastThermalCheckMs = now
         val headroom = readThermalHeadroom(powerManager)
-        if (headroom in THERMAL_SHUTDOWN_MIN_HEADROOM..THERMAL_SHUTDOWN_MAX_HEADROOM) {
+        if (headroom.isNaN()) {
+            return
+        }
+        if (headroom >= THERMAL_SHUTDOWN_HEADROOM_THRESHOLD) {
             throw IllegalStateException("response was killed by Android due to thermal shutdown")
         }
     }
@@ -370,6 +441,7 @@ class InferenceService : Service() {
     ): Notification =
         CouncilPipelineNotifications.createProgressNotification(
             service = this,
+            chatId = currentChatId.orEmpty(),
             currentStep = currentStep,
             hasMoreSteps = hasMoreSteps,
             cancelPendingIntent = cancelPendingIntent,
@@ -389,10 +461,14 @@ class InferenceService : Service() {
         notificationManager.notify(CouncilPipelineNotifications.NOTIFICATION_ID, notification)
     }
 
-    private fun showCompletionNotification(thinkingDurationSeconds: Int) {
+    private fun showCompletionNotification(
+        chatId: String,
+        thinkingDurationSeconds: Int,
+    ) {
         CouncilPipelineNotifications.showCompletionNotification(
             service = this,
             notificationManager = notificationManager,
+            chatId = chatId,
             thinkingDurationSeconds = thinkingDurationSeconds,
         )
     }

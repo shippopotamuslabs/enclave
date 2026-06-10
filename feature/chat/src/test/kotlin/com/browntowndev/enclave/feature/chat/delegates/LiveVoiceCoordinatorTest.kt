@@ -38,6 +38,7 @@ import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
@@ -69,6 +70,9 @@ class LiveVoiceCoordinatorTest {
 
     @BeforeEach
     fun setUp() {
+        LiveVoiceCoordinator.sessionTeardownScopeOverride =
+            CoroutineScope(UnconfinedTestDispatcher())
+
         every {
             errorHandler.coroutineExceptionHandler(any(), any(), any())
         } returns CoroutineExceptionHandler { _, _ -> }
@@ -86,6 +90,11 @@ class LiveVoiceCoordinatorTest {
                 errorHandler = errorHandler,
                 loggingPort = loggingPort,
             )
+    }
+
+    @AfterEach
+    fun tearDown() {
+        LiveVoiceCoordinator.sessionTeardownScopeOverride = null
     }
 
     private fun stubOpenSession() {

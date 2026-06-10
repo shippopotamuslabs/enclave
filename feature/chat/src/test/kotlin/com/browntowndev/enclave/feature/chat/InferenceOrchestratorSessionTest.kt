@@ -40,6 +40,7 @@ class InferenceOrchestratorSessionTest {
                 chatRepository = mockk(relaxed = true),
                 errorHandler = mockk<ViewModelErrorHandler>(relaxed = true),
                 savedStateHandle = savedStateHandle,
+                pipelineExecutor = mockk(relaxed = true),
             )
     }
 

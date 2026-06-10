@@ -238,7 +238,7 @@ class GenerateChatResponseUseCaseSearchToolTest {
 
     private fun mockPipelineExecutor(): PipelineExecutorPort =
         mockk {
-            every { executePipeline(any(), any()) } returns emptyFlow()
+            every { executePipeline(any(), any(), any(), any()) } returns emptyFlow()
             coEvery { stopPipeline(any()) } returns Unit
             coEvery { resumeFromState(any(), any(), any(), any()) } returns emptyFlow()
         }

@@ -13,6 +13,7 @@ import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.error.ActiveModelConfigurationDecryptException
 import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnKey
 import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnSnapshotPort
+import com.browntowndev.enclave.domain.port.inference.PipelineExecutorPort
 import com.browntowndev.enclave.domain.port.repository.ChatRepository
 import com.browntowndev.enclave.domain.usecase.chat.ChatTurnTiming
 import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
@@ -49,6 +50,7 @@ class InferenceOrchestrator
         private val chatRepository: ChatRepository,
         private val errorHandler: ViewModelErrorHandler,
         private val savedStateHandle: SavedStateHandle,
+        private val pipelineExecutor: PipelineExecutorPort,
     ) {
         private val _currentChatId = MutableStateFlow<ChatId?>(null)
         val currentChatId: StateFlow<ChatId?> = _currentChatId.asStateFlow()
@@ -60,6 +62,7 @@ class InferenceOrchestrator
         val acknowledgedTurnKeys: StateFlow<Set<ActiveChatTurnKey>> = _acknowledgedTurnKeys.asStateFlow()
 
         private var inferenceJob: Job? = null
+        private var sendJob: Job? = null
 
         private val _optimisticUserMessage = MutableStateFlow<Message?>(null)
         val optimisticUserMessage: StateFlow<Message?> = _optimisticUserMessage.asStateFlow()
@@ -82,7 +85,9 @@ class InferenceOrchestrator
             cancelActiveInferenceJob()
             cancelInferenceUseCase()
 
-            scope.launch(
+            sendJob?.cancel()
+            sendJob =
+                scope.launch(
                 errorHandler.coroutineExceptionHandler(
                     TAG,
                     "Failed to send message",
@@ -186,7 +191,7 @@ class InferenceOrchestrator
                                                 "Failed to generate response. Please try again."
                                             }
                                         errorHandler.handleError(TAG, "Inference failed", cause, userMessage)
-                                    }.launchIn(scope)
+                                    }.launchIn(this)
                         }
                     }
                 }
@@ -268,12 +273,19 @@ class InferenceOrchestrator
             savedStateHandle["chatId"] = null
         }
 
-        fun cancelInference() {
+        fun cancelInference(scope: CoroutineScope) {
             cancelActiveInferenceJob()
             cancelInferenceUseCase()
+            _currentChatId.value?.let { chatId ->
+                scope.launch {
+                    pipelineExecutor.stopPipeline(chatId.value)
+                }
+            }
         }
 
         private fun cancelActiveInferenceJob() {
+            sendJob?.cancel()
+            sendJob = null
             inferenceJob?.cancel()
             inferenceJob = null
         }

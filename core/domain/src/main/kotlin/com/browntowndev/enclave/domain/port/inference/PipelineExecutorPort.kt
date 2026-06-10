@@ -1,6 +1,7 @@
 package com.browntowndev.enclave.domain.port.inference
 
 import com.browntowndev.enclave.domain.model.chat.MessageGenerationState
+import com.browntowndev.enclave.domain.model.chat.MessageId
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -17,6 +18,8 @@ interface PipelineExecutorPort {
     fun executePipeline(
         chatId: String,
         userMessage: String,
+        userMessageId: MessageId? = null,
+        assistantMessageId: MessageId? = null,
     ): Flow<MessageGenerationState>
 
     /**

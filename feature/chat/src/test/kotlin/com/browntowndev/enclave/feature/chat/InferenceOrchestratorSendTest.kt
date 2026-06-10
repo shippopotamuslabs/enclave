@@ -73,6 +73,7 @@ class InferenceOrchestratorSendTest {
                 chatRepository = mockk(relaxed = true),
                 errorHandler = errorHandler,
                 savedStateHandle = SavedStateHandle(),
+                pipelineExecutor = mockk(relaxed = true),
             )
     }
 

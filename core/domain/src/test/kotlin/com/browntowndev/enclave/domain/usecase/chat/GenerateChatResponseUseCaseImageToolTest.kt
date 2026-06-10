@@ -154,7 +154,7 @@ class GenerateChatResponseUseCaseImageToolTest {
             val inferenceFactory = FakeInferenceFactory()
             val pipelineExecutor = mockk<PipelineExecutorPort>()
             val promptSlot = slot<String>()
-            every { pipelineExecutor.executePipeline(any(), capture(promptSlot)) } returns emptyFlow()
+            every { pipelineExecutor.executePipeline(any(), capture(promptSlot), any(), any()) } returns emptyFlow()
 
             val messageRepository =
                 mockMessageRepository(
@@ -569,7 +569,7 @@ class GenerateChatResponseUseCaseImageToolTest {
 
     private fun mockPipelineExecutor(): PipelineExecutorPort =
         mockk {
-            every { executePipeline(any(), any()) } returns emptyFlow()
+            every { executePipeline(any(), any(), any(), any()) } returns emptyFlow()
             coEvery { stopPipeline(any()) } returns Unit
             coEvery { resumeFromState(any(), any(), any(), any()) } returns emptyFlow()
         }

@@ -46,6 +46,8 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -400,13 +402,13 @@ class ChatInferenceServiceTest {
             every {
                 llmInferenceService.sendPrompt(any(), any(), any())
             } returns
-                flowOf(
-                    InferenceEvent.PartialResponse("partial", ModelType.FAST),
-                )
+                flow {
+                    emit(InferenceEvent.PartialResponse("partial", ModelType.FAST))
+                    awaitCancellation()
+                }
 
             service.onStartCommand(startIntent(), 0, 1)
             blockStarted.await()
-            advanceUntilIdle()
 
             service.onStartCommand(Intent(ChatInferenceService.ACTION_STOP), 0, 2)
             advanceUntilIdle()

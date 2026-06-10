@@ -244,6 +244,8 @@ class GenerateChatResponseUseCase
                     executeCrewMode(
                         prompt = prompt,
                         chatId = chatId,
+                        userMessageId = userMessageId,
+                        assistantMessageId = assistantMessageId,
                         userHasImage = userHasImage,
                         fileAttachments = fileAttachments,
                     )
@@ -271,6 +273,8 @@ class GenerateChatResponseUseCase
         private fun executeCrewMode(
             prompt: String,
             chatId: ChatId,
+            userMessageId: MessageId,
+            assistantMessageId: MessageId,
             userHasImage: Boolean,
             fileAttachments: List<com.browntowndev.enclave.domain.model.chat.FileAttachment>,
         ): Flow<MessageGenerationState> =
@@ -296,6 +300,8 @@ class GenerateChatResponseUseCase
                         pipelineExecutor.executePipeline(
                             chatId = chatId.value,
                             userMessage = crewPrompt,
+                            userMessageId = userMessageId,
+                            assistantMessageId = assistantMessageId,
                         ),
                     )
                 } catch (e: InferenceBusyException) {
@@ -326,7 +332,8 @@ class GenerateChatResponseUseCase
             mode: Mode,
             backgroundInferenceEnabled: Boolean,
             terminalSeen: Boolean,
-        ): Boolean = backgroundInferenceEnabled && mode != Mode.COUNCIL && !terminalSeen
+        ): Boolean =
+            mode == Mode.COUNCIL || (backgroundInferenceEnabled && !terminalSeen)
 
         private companion object {
             private const val TAG = "GenerateChatResponse"

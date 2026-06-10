@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.net.Uri
 import androidx.core.app.NotificationCompat
 import com.browntowndev.enclave.domain.model.inference.PipelineStep
 import com.browntowndev.enclave.core.ui.R as CoreUiR
@@ -59,6 +60,7 @@ internal object CouncilPipelineNotifications {
 
     fun createProgressNotification(
         service: Service,
+        chatId: String,
         currentStep: PipelineStep,
         hasMoreSteps: Boolean,
         cancelPendingIntent: PendingIntent,
@@ -80,19 +82,7 @@ internal object CouncilPipelineNotifications {
                 "Final step..."
             }
 
-        val intent =
-            service.packageManager.getLaunchIntentForPackage(service.packageName)?.apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-            } ?: Intent(service.packageName).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-            }
-        val pendingIntent =
-            PendingIntent.getActivity(
-                service,
-                0,
-                intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-            )
+        val pendingIntent = chatDeepLinkPendingIntent(service, chatId)
 
         return NotificationCompat
             .Builder(service, PROGRESS_CHANNEL_ID)
@@ -112,21 +102,10 @@ internal object CouncilPipelineNotifications {
     fun showCompletionNotification(
         service: Service,
         notificationManager: NotificationManager,
+        chatId: String,
         thinkingDurationSeconds: Int,
     ) {
-        val intent =
-            service.packageManager.getLaunchIntentForPackage(service.packageName)?.apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-            } ?: Intent(service.packageName).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-            }
-        val pendingIntent =
-            PendingIntent.getActivity(
-                service,
-                0,
-                intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-            )
+        val pendingIntent = chatDeepLinkPendingIntent(service, chatId)
 
         val notification =
             NotificationCompat
@@ -140,5 +119,21 @@ internal object CouncilPipelineNotifications {
                 .build()
 
         notificationManager.notify(NOTIFICATION_ID + 1, notification)
+    }
+
+    private fun chatDeepLinkPendingIntent(
+        service: Service,
+        chatId: String,
+    ): PendingIntent {
+        val intent =
+            Intent(Intent.ACTION_VIEW, Uri.parse("enclave://chat/$chatId")).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            }
+        return PendingIntent.getActivity(
+            service,
+            chatId.hashCode(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
     }
 }
