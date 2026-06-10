@@ -228,6 +228,21 @@ class ModelDownloadOrchestratorImplTest {
         }
 
     @Test
+    @DisplayName("retryFailed preserves wifiOnly preference from initial startDownloads")
+    fun retryFailed_preservesWifiOnlyPreference() =
+        runTest {
+            orchestrator.initializeWithStartupResult(modelsResult)
+            val enqueued = slot<DownloadWorkRequest>()
+            every { workScheduler.enqueue(capture(enqueued)) } returns Unit
+
+            orchestrator.startDownloads(wifiOnly = true)
+            orchestrator.retryFailed()
+
+            verify(exactly = 2) { workScheduler.enqueue(any()) }
+            assertTrue(enqueued.captured.wifiOnly)
+        }
+
+    @Test
     @DisplayName("D4: hasRequiredStorage false sets ERROR and does not enqueue")
     fun startDownloads_insufficientStorage_setsErrorWithoutEnqueue() =
         runTest {

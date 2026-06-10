@@ -198,7 +198,8 @@ class DownloadViewModel
                         currentStatus != null &&
                             currentStatus != DownloadStatus.DOWNLOADING &&
                             currentStatus != DownloadStatus.PAUSED &&
-                            currentStatus != DownloadStatus.WIFI_BLOCKED
+                            currentStatus != DownloadStatus.WIFI_BLOCKED &&
+                            currentStatus != DownloadStatus.ERROR
                     if (downloadsStarted && isStalledStatus) {
                         Log.d(TAG, "checkModels: downloadsStarted=true but status=$currentStatus, resetting guard")
                         downloadsStarted = false

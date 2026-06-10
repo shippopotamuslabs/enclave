@@ -150,6 +150,7 @@ import com.browntowndev.enclave.domain.port.security.ApiKeyProviderPort
 import com.browntowndev.enclave.domain.port.security.VaultMetadataPort
 import com.browntowndev.enclave.domain.port.telemetry.TelemetryEventPort
 import com.browntowndev.enclave.domain.qualifier.ApplicationScope
+import com.browntowndev.enclave.domain.qualifier.DownloadHttpClient
 import com.browntowndev.enclave.domain.qualifier.InternalTelemetryLogging
 import com.browntowndev.enclave.domain.qualifier.PipelineDataStore
 import com.browntowndev.enclave.domain.util.Clock
@@ -413,7 +414,7 @@ object DataModule {
     @Provides
     @Singleton
     fun provideHttpFileDownloader(
-        okHttpClient: OkHttpClient,
+        @DownloadHttpClient okHttpClient: OkHttpClient,
         logger: LoggingPort,
     ): FileDownloaderPort = HttpFileDownloader(okHttpClient, logger)
 

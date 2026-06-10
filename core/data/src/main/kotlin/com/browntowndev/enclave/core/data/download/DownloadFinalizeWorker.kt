@@ -91,11 +91,11 @@ class DownloadFinalizeWorker
                 // ===== Parse Required Input =====
                 val sessionId =
                     inputData.getString(DownloadWorkKeys.KEY_SESSION_ID)
-                        ?: return failWithError("Missing required input: $DownloadWorkKeys.KEY_SESSION_ID")
+                        ?: return failWithError("Missing required input: ${DownloadWorkKeys.KEY_SESSION_ID}")
 
                 val requestKind =
                     inputData.getString(DownloadWorkKeys.KEY_REQUEST_KIND)
-                        ?: return failWithError("Missing required input: $DownloadWorkKeys.KEY_REQUEST_KIND", sessionId, "")
+                        ?: return failWithError("Missing required input: ${DownloadWorkKeys.KEY_REQUEST_KIND}", sessionId, "")
 
                 val downloadedShasJson = inputData.getString(DownloadWorkKeys.KEY_DOWNLOADED_SHAS) ?: "[]"
                 val downloadedShas = parseShas(downloadedShasJson)
@@ -112,9 +112,17 @@ class DownloadFinalizeWorker
                 throw e
             } catch (e: Exception) {
                 logger.error(TAG, "Finalization error: ${e.message}", e)
-                Result.retry()
+                if (runAttemptCount >= ModelConfig.MAX_RETRY_ATTEMPTS) {
+                    failWithError(
+                        "Finalization failed after ${runAttemptCount + 1} attempts: ${e.message}",
+                    )
+                } else {
+                    Result.retry()
+                }
             }
         }
+
+        private fun shouldRetry(): Boolean = runAttemptCount < ModelConfig.MAX_RETRY_ATTEMPTS
 
         /**
          * Handles INITIALIZE_MODELS request:
@@ -132,7 +140,15 @@ class DownloadFinalizeWorker
                 if (remoteConfigResult.isFailure) {
                     val error = remoteConfigResult.exceptionOrNull()?.message ?: "Failed to fetch remote config"
                     logger.warning(TAG, error)
-                    return Result.retry() // Retry on network failure
+                    return if (shouldRetry()) {
+                        Result.retry()
+                    } else {
+                        failWithError(
+                            "Failed to fetch remote config after ${runAttemptCount + 1} attempts: $error",
+                            sessionId,
+                            requestKind,
+                        )
+                    }
                 }
 
                 val remoteConfig = remoteConfigResult.getOrNull() ?: emptyList()
@@ -207,7 +223,15 @@ class DownloadFinalizeWorker
                 if (remoteConfigResult.isFailure) {
                     val error = remoteConfigResult.exceptionOrNull()?.message ?: "Failed to fetch remote config"
                     logger.warning(TAG, error)
-                    return Result.retry() // Retry on network failure
+                    return if (shouldRetry()) {
+                        Result.retry()
+                    } else {
+                        failWithError(
+                            "Failed to fetch remote config after ${runAttemptCount + 1} attempts: $error",
+                            sessionId,
+                            requestKind,
+                        )
+                    }
                 }
 
                 val remoteConfig = remoteConfigResult.getOrNull() ?: emptyList()

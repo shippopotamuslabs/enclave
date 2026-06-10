@@ -75,24 +75,26 @@ class HttpFileDownloader
                             }
                         }.build()
 
-                okHttpClient.newCall(request).execute().use { response ->
+                val initialResponse = okHttpClient.newCall(request).execute()
+                if (initialResponse.code == HTTP_RANGE_NOT_SATISFIABLE) {
+                    initialResponse.close()
+                    logger.warning(
+                        TAG,
+                        "HTTP 416 for $filename: Range not satisfiable. Deleting temp files and restarting.",
+                    )
+                    tempFile.delete()
+                    metaFile.delete()
+                    val retryRequest =
+                        Request
+                            .Builder()
+                            .url(requestUrl)
+                            .build()
+                    return@withContext downloadWithRetry(retryRequest, config, targetDir, progressCallback)
+                }
+
+                initialResponse.use { response ->
                     if (response.priorResponse?.isRedirect == true) {
                         DownloadSecurity.requireTrustedRedirect(requestUrl, response.request.url)
-                    }
-
-                    if (response.code == HTTP_RANGE_NOT_SATISFIABLE) {
-                        logger.warning(
-                            TAG,
-                            "HTTP 416 for $filename: Range not satisfiable. Deleting temp files and restarting.",
-                        )
-                        tempFile.delete()
-                        metaFile.delete()
-                        val retryRequest =
-                            Request
-                                .Builder()
-                                .url(requestUrl)
-                                .build()
-                        return@withContext downloadWithRetry(retryRequest, config, targetDir, progressCallback)
                     }
 
                     if (!response.isSuccessful) {
@@ -148,14 +150,7 @@ class HttpFileDownloader
                         }
                     }
 
-                    // Use FileChannel with force(true) for atomic write+flush to disk
-                    val channel =
-                        FileChannel.open(
-                            tempFile.toPath(),
-                            if (isResuming) StandardOpenOption.CREATE else StandardOpenOption.CREATE_NEW,
-                            StandardOpenOption.WRITE,
-                            StandardOpenOption.APPEND,
-                        )
+                    val channel = openWriteChannel(tempFile, isResuming)
 
                     try {
                         DigestInputStream(body.byteStream(), digest).use { inputStream ->
@@ -282,12 +277,7 @@ class HttpFileDownloader
                     var totalBytesRead = 0L
                     val digest = MessageDigest.getInstance("SHA-256")
 
-                    val channel =
-                        FileChannel.open(
-                            tempFile.toPath(),
-                            StandardOpenOption.CREATE_NEW,
-                            StandardOpenOption.WRITE,
-                        )
+                    val channel = openWriteChannel(tempFile, isResuming = false)
 
                     try {
                         DigestInputStream(body.byteStream(), digest).use { inputStream ->
@@ -334,6 +324,15 @@ class HttpFileDownloader
                     }
                     logger.info(TAG, "SHA-256 verified for ${config.filename}")
 
+                    if (totalBytesRead != config.expectedSizeBytes) {
+                        logger.error(TAG, "[MISMATCHED FILE SIZE] Download retry failed for ${config.filename}")
+                        logger.error(TAG, "[MISMATCHED FILE SIZE] Config Size: ${config.expectedSizeBytes}")
+                        logger.error(TAG, "[MISMATCHED FILE SIZE] Downloaded Size: $totalBytesRead")
+                        throw Exception("Incomplete download")
+                    } else {
+                        logger.info(TAG, "[COMPLETED DOWNLOAD] ${config.filename}. Size: $totalBytesRead")
+                    }
+
                     // Rename temp file to target file
                     if (targetFile.exists()) {
                         targetFile.delete()
@@ -352,10 +351,31 @@ class HttpFileDownloader
                     FileDownloaderPort.DownloadResult(
                         filePath = targetFile.absolutePath,
                         bytesDownloaded = totalBytesRead,
-                        totalBytes = actualTotalSize,
+                        totalBytes = actualTotalSize.coerceAtLeast(config.expectedSizeBytes),
                         isResumed = false,
                     )
                 }
+            }
+
+        private fun openWriteChannel(
+            tempFile: File,
+            isResuming: Boolean,
+        ): FileChannel =
+            if (isResuming) {
+                FileChannel.open(
+                    tempFile.toPath(),
+                    StandardOpenOption.CREATE,
+                    StandardOpenOption.WRITE,
+                    StandardOpenOption.APPEND,
+                )
+            } else {
+                tempFile.delete()
+                FileChannel.open(
+                    tempFile.toPath(),
+                    StandardOpenOption.CREATE,
+                    StandardOpenOption.WRITE,
+                    StandardOpenOption.TRUNCATE_EXISTING,
+                )
             }
 
         override suspend fun getServerFileSize(url: String): Long? =

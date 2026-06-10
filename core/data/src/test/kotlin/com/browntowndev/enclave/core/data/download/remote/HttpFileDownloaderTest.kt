@@ -1,4 +1,5 @@
 package com.browntowndev.enclave.core.data.download.remote
+import com.browntowndev.enclave.core.data.download.DownloadMetaFile
 import com.browntowndev.enclave.domain.port.download.FileDownloaderPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import io.mockk.MockKAnnotations
@@ -111,6 +112,48 @@ class HttpFileDownloaderTest {
         }
 
     // ============ downloadFile Success Tests ============
+
+    @Test
+    fun downloadFile_succeeds_whenLeftoverEmptyTempFileExists() =
+        kotlinx.coroutines.test.runTest {
+            val testContent = "fresh download after failed resume"
+            val contentBytes = testContent.toByteArray(StandardCharsets.UTF_8)
+            val testConfig = createTestConfig(testContent)
+
+            val tempFile = File(tempDir, "test-model.gguf.tmp")
+            val metaFile = File(tempDir, "test-model.gguf.tmp.meta")
+            tempFile.createNewFile()
+            DownloadMetaFile.write(
+                metaFile = metaFile,
+                expectedSizeBytes = testConfig.expectedSizeBytes,
+                expectedSha256 = testConfig.expectedSha256,
+                committedOffset = 0L,
+            )
+
+            val mockCall = mockk<okhttp3.Call>(relaxed = true)
+            val mockResponse = mockk<Response>(relaxed = true)
+            val mockBody = mockk<ResponseBody>(relaxed = true)
+
+            every { mockClient.newCall(any()) } returns mockCall
+            every { mockCall.execute() } returns mockResponse
+            every { mockResponse.isSuccessful } returns true
+            every { mockResponse.code } returns 200
+            every { mockResponse.body } returns mockBody
+            every { mockResponse.header("Content-Length") } returns contentBytes.size.toString()
+            every { mockBody.byteStream() } returns contentBytes.inputStream()
+
+            val result =
+                httpFileDownloader.downloadFile(
+                    config = testConfig,
+                    downloadUrl = "https://example.com/model.gguf",
+                    targetDirPath = tempDir.absolutePath,
+                    existingBytes = 0L,
+                    progressCallback = null,
+                )
+
+            assertTrue(File(result.filePath).exists())
+            assertEquals(testContent, File(result.filePath).readText())
+        }
 
     @Test
     fun downloadFile_succeeds_withNoExistingBytes() =
