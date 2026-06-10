@@ -21,6 +21,7 @@ internal object FirestoreSensitiveFieldRefMapping {
             "api_model_configs" to "ApiModelConfigurationEntity",
             "local_model_configs" to "LocalModelConfigurationEntity",
             "tts_providers" to "TtsProviderEntity",
+            "live_voice_providers" to "LiveVoiceProviderEntity",
             "media_providers" to "MediaProviderEntity",
             "api_credentials" to "ApiCredentialsEntity",
             "studio_albums" to "StudioAlbumEntity",
