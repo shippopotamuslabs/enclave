@@ -61,7 +61,7 @@ fun StudioScreen(
         rememberLauncherForActivityResult(
             contract = ActivityResultContracts.GetContent(),
         ) { uri ->
-            uri?.let { viewModel.promptCoordinator.onUpdateReferenceImage(it.toString()) }
+            uri?.let { viewModel.onUpdateReferenceImage(it.toString()) }
         }
 
     val permissionLauncher =
@@ -126,7 +126,7 @@ fun StudioScreen(
                 selectedCount = uiState.selectedMediaItemIds.size,
                 onClearSelection = viewModel::clearMediaSelection,
                 onSaveClick = viewModel::onToggleSaveBottomSheet,
-                onShareClick = { viewModel.mediaActionsCoordinator.shareMedia(uiState.selectedMediaItemIds) },
+                onShareClick = { viewModel.shareMedia(uiState.selectedMediaItemIds) },
                 onNavigateToHistory = onNavigateToHistory,
                 onNavigateToGallery = onNavigateToGallery,
             )
@@ -175,10 +175,10 @@ fun StudioScreen(
                 isContinualGenerationActive = uiState.isContinualGenerationActive,
                 hasImageEditModel = uiState.hasImageEditModel,
                 hasImageToVideoModel = uiState.hasImageToVideoModel,
-                onPromptChange = viewModel.promptCoordinator::onPromptChange,
+                onPromptChange = viewModel::onPromptChange,
                 onReferenceImageClick = { imagePickerLauncher.launch("image/*") },
-                onClearReferenceImage = { viewModel.promptCoordinator.onUpdateReferenceImage(null) },
-                onSettingsClick = viewModel.promptCoordinator::onSettingsToggle,
+                onClearReferenceImage = { viewModel.onUpdateReferenceImage(null) },
+                onSettingsClick = viewModel::onSettingsToggle,
                 onMicClick = {
                     if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
                         viewModel.onMicClick()
@@ -199,11 +199,11 @@ fun StudioScreen(
     if (uiState.isSettingsOpen) {
         StudioOptionsBottomSheet(
             state = uiState,
-            onDismiss = viewModel.promptCoordinator::onSettingsToggle,
-            onUpdateSettings = viewModel.promptCoordinator::onUpdateSettings,
-            onContinualModeChange = viewModel.promptCoordinator::onContinualModeToggle,
-            onMediaTypeChange = viewModel.promptCoordinator::onMediaTypeChange,
-            onTemplateSelected = viewModel.promptCoordinator::onTemplateSelected,
+            onDismiss = viewModel::onSettingsToggle,
+            onUpdateSettings = viewModel::onUpdateSettings,
+            onContinualModeChange = viewModel::onContinualModeToggle,
+            onMediaTypeChange = viewModel::onMediaTypeChange,
+            onTemplateSelected = viewModel::onTemplateSelected,
         )
     }
 
@@ -279,14 +279,15 @@ internal fun isGenerativeScrollThresholdVisible(
     galleryRowKeys: List<Any>,
     visibleItemKeys: List<Any>,
 ): Boolean {
-    if (galleryRowKeys.isEmpty()) {
+    if (galleryRowKeys.size < 2) {
         return false
     }
 
-    val triggerRowIndex = (galleryRowKeys.lastIndex - 1).coerceAtLeast(0)
+    val rowIndexByKey = galleryRowKeys.withIndex().associate { it.value to it.index }
+    val triggerRowIndex = galleryRowKeys.lastIndex - 1
     val visibleGalleryRowIndexes =
         visibleItemKeys.mapNotNull { visibleKey ->
-            galleryRowKeys.indexOf(visibleKey).takeIf { index -> index >= 0 }
+            rowIndexByKey[visibleKey]
         }
 
     return visibleGalleryRowIndexes.any { index -> index >= triggerRowIndex }

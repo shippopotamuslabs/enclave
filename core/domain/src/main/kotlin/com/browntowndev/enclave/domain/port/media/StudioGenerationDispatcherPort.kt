@@ -8,6 +8,7 @@ interface StudioGenerationDispatcherPort {
         prompt: String,
         mediaType: MediaCapability,
         settings: GenerationSettings,
+        generationId: String,
     )
 
     fun stopGeneration()

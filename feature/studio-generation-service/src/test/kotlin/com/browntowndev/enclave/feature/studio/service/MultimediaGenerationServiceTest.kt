@@ -10,10 +10,12 @@ import com.browntowndev.enclave.domain.model.media.ImageGenerationProgress
 import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
 import com.browntowndev.enclave.domain.model.media.MediaGenerationRequest
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.domain.port.media.LocalImageGenerationCancelPort
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.domain.usecase.media.GenerateMediaUseCase
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
@@ -35,6 +37,7 @@ import java.lang.reflect.Field
 class MultimediaGenerationServiceTest {
     private val generateMediaUseCase = mockk<GenerateMediaUseCase>(relaxed = true)
     private val studioRepository = mockk<StudioRepositoryPort>(relaxed = true)
+    private val localImageGenerationCancelPort = mockk<LocalImageGenerationCancelPort>(relaxed = true)
     private val logger = mockk<LoggingPort>(relaxed = true)
 
     private lateinit var service: MultimediaGenerationService
@@ -46,7 +49,9 @@ class MultimediaGenerationServiceTest {
         invokeCreateNotificationChannel(service)
         inject("generateMediaUseCase", generateMediaUseCase)
         inject("studioRepository", studioRepository)
+        inject("localImageGenerationCancelPort", localImageGenerationCancelPort)
         inject("logger", logger)
+        every { studioRepository.hasActiveGeneration() } returns false
     }
 
     @Test
@@ -149,6 +154,37 @@ class MultimediaGenerationServiceTest {
     }
 
     @Test
+    fun `E-STU-02 ACTION_STOP invokes native cancel port`() {
+        val intent =
+            Intent().apply {
+                action = MultimediaGenerationService.ACTION_STOP
+            }
+
+        service.onStartCommand(intent, 0, 1)
+
+        verify(exactly = 1) { localImageGenerationCancelPort.cancelActiveGeneration() }
+    }
+
+    @Test
+    fun `E-STU-03 stale job finally clears only owned generation`() {
+        every { studioRepository.hasActiveGeneration() } returnsMany listOf(false, true)
+        every { studioRepository.clearGenerationProgressIfOwned("gen-1") } returns true
+        every { studioRepository.clearActiveGenerationIfOwned("gen-1") } returns false
+        coEvery { generateMediaUseCase(any(), any()) } coAnswers {
+            delay(200)
+            Result.success(emptyList())
+        }
+
+        service.onStartCommand(startImageIntent(prompt = "first", generationId = "gen-1"), 0, 1)
+        runBlocking { delay(50) }
+        service.onStartCommand(startImageIntent(prompt = "second", generationId = "gen-2"), 0, 2)
+        awaitServiceWork()
+
+        verify { studioRepository.clearActiveGenerationIfOwned("gen-1") }
+        verify(exactly = 0) { studioRepository.clearActiveGeneration() }
+    }
+
+    @Test
     fun `S-STU-07 foreground notification uses Enclave ic_notification icon`() {
         val notification = invokeCreateNotification(service, "Generating...")
 
@@ -206,14 +242,18 @@ class MultimediaGenerationServiceTest {
         awaitServiceWork()
 
         verify(exactly = 1) { studioRepository.reportGenerationProgress(ImageGenerationProgress.LoadingModel) }
-        verify(exactly = 1) { studioRepository.clearGenerationProgress() }
+        verify(exactly = 1) { studioRepository.clearGenerationProgressIfOwned("test-generation-id") }
     }
 
-    private fun startImageIntent(prompt: String): Intent =
+    private fun startImageIntent(
+        prompt: String,
+        generationId: String = "test-generation-id",
+    ): Intent =
         Intent().apply {
             action = MultimediaGenerationService.ACTION_START
             putExtra(MultimediaGenerationService.EXTRA_PROMPT, prompt)
             putExtra(MultimediaGenerationService.EXTRA_MEDIA_TYPE, MediaCapability.IMAGE.name)
+            putExtra(MultimediaGenerationService.EXTRA_GENERATION_ID, generationId)
         }
 
     private fun inject(

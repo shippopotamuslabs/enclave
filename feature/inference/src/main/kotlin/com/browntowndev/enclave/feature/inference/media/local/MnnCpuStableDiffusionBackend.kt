@@ -17,6 +17,10 @@ class MnnCpuStableDiffusionBackend
     ) : LocalImageGenerationBackend {
         override val kind: LocalImageGenerationBackendKind = LocalImageGenerationBackendKind.CPU_MNN
 
+        override fun cancel() {
+            nativeRuntime.cancel()
+        }
+
         override suspend fun generate(
             request: LocalImageGenerationNativeRequest,
         ): Result<LocalImageGenerationNativeResult> =

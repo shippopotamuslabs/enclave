@@ -192,8 +192,7 @@ class MultimodalViewModelAnimateTest {
                 }
 
             // When
-            viewModel.mediaActionsCoordinator.onAnimateMedia(
-                prompt = viewModel.promptCoordinator,
+            viewModel.onAnimateMedia(
                 assetId = assetId,
                 autoAnimate = true,
             )
@@ -206,6 +205,7 @@ class MultimodalViewModelAnimateTest {
                     "Original Prompt",
                     MediaCapability.VIDEO,
                     capture(settingsSlot),
+                    any(),
                 )
             }
             val settings = settingsSlot.captured as VideoGenerationSettings
@@ -236,8 +236,7 @@ class MultimodalViewModelAnimateTest {
                 }
 
             // When
-            viewModel.mediaActionsCoordinator.onAnimateMedia(
-                prompt = viewModel.promptCoordinator,
+            viewModel.onAnimateMedia(
                 assetId = assetId,
                 autoAnimate = false,
             )
@@ -272,8 +271,7 @@ class MultimodalViewModelAnimateTest {
                 }
 
             // When
-            viewModel.mediaActionsCoordinator.onAnimateMedia(
-                prompt = viewModel.promptCoordinator,
+            viewModel.onAnimateMedia(
                 assetId = assetId,
                 autoAnimate = true,
                 customPrompt = "Custom Prompt",
@@ -281,7 +279,7 @@ class MultimodalViewModelAnimateTest {
             advanceUntilIdle()
 
             // Then
-            verify { dispatcher.startGeneration("Custom Prompt", MediaCapability.VIDEO, any()) }
+            verify { dispatcher.startGeneration("Custom Prompt", MediaCapability.VIDEO, any(), any()) }
             assertEquals("", viewModel.uiState.value.prompt)
             job.cancel()
         }

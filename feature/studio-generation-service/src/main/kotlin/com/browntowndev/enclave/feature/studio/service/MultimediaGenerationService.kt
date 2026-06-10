@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.feature.studio.service
 
+import android.app.ForegroundServiceStartNotAllowedException
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -15,13 +16,13 @@ import com.browntowndev.enclave.domain.model.media.ImageGenerationProgress
 import com.browntowndev.enclave.domain.model.media.MusicGenerationSettings
 import com.browntowndev.enclave.domain.model.media.VideoGenerationSettings
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.repository.ActiveStudioGeneration
+import com.browntowndev.enclave.domain.port.media.LocalImageGenerationCancelPort
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.domain.usecase.media.GenerateMediaUseCase
 import com.browntowndev.enclave.domain.usecase.media.MediaGenerationRequestMapper
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -38,6 +39,7 @@ class MultimediaGenerationService : Service() {
 
         const val EXTRA_PROMPT = "PROMPT"
         const val EXTRA_MEDIA_TYPE = "MEDIA_TYPE"
+        const val EXTRA_GENERATION_ID = "GENERATION_ID"
 
         private const val ONGOING_NOTIFICATION_ID = 1001
         private const val CHANNEL_ID = "generation_channel"
@@ -47,11 +49,15 @@ class MultimediaGenerationService : Service() {
 
     @Inject lateinit var studioRepository: StudioRepositoryPort
 
+    @Inject lateinit var localImageGenerationCancelPort: LocalImageGenerationCancelPort
+
     @Inject lateinit var logger: LoggingPort
 
     private val serviceJob = SupervisorJob()
     private val serviceScope = CoroutineScope(Dispatchers.IO + serviceJob)
     private var generationJob: Job? = null
+    private var activeGenerationId: String? = null
+    private var activeStartId: Int = 0
 
     override fun onCreate() {
         super.onCreate()
@@ -68,17 +74,29 @@ class MultimediaGenerationService : Service() {
 
         when (intent?.action) {
             ACTION_START -> {
-                if (generationJob?.isActive == true) {
+                if (generationJob?.isActive == true || studioRepository.hasActiveGeneration()) {
                     logger.warning(TAG, "Ignoring duplicate generation request while one is active")
+                    stopSelf(startId)
                     return START_NOT_STICKY
                 }
-                startForeground(ONGOING_NOTIFICATION_ID, createNotification("Preparing..."))
+                if (!startForegroundSafely(startId, createNotification("Preparing..."))) {
+                    return START_NOT_STICKY
+                }
                 val prompt = intent.getStringExtra(EXTRA_PROMPT)
                 if (prompt == null) {
                     logger.error(TAG, "No prompt provided, stopping")
-                    stopSelf()
+                    stopForeground(Service.STOP_FOREGROUND_REMOVE)
+                    stopSelf(startId)
                     return START_NOT_STICKY
                 }
+                val generationId =
+                    intent.getStringExtra(EXTRA_GENERATION_ID)
+                        ?: run {
+                            logger.error(TAG, "No generation id provided, stopping")
+                            stopForeground(Service.STOP_FOREGROUND_REMOVE)
+                            stopSelf(startId)
+                            return START_NOT_STICKY
+                        }
                 val mediaType =
                     MediaCapability.valueOf(
                         intent.getStringExtra(EXTRA_MEDIA_TYPE) ?: MediaCapability.IMAGE.name,
@@ -91,13 +109,8 @@ class MultimediaGenerationService : Service() {
                             MediaCapability.MUSIC -> MusicGenerationSettings()
                         }
 
-                studioRepository.reportActiveGeneration(
-                    ActiveStudioGeneration(
-                        prompt = prompt,
-                        mediaType = mediaType,
-                        settings = settings,
-                    ),
-                )
+                activeGenerationId = generationId
+                activeStartId = startId
                 updateNotification("Generating...")
 
                 generationJob = serviceScope.launch {
@@ -119,24 +132,27 @@ class MultimediaGenerationService : Service() {
                             studioRepository.reportGenerationError(error.message ?: "Generation failed")
                         }
                     } catch (e: CancellationException) {
+                        logger.info(TAG, "Generation cancelled")
                         throw e
                     } catch (e: Exception) {
                         logger.error(TAG, "Unexpected error in service", e)
                         studioRepository.reportGenerationError(e.message ?: "Unexpected error during generation")
                     } finally {
-                        studioRepository.clearGenerationProgress()
-                        studioRepository.clearActiveGeneration()
+                        val ownedGenerationId = generationId
+                        studioRepository.clearGenerationProgressIfOwned(ownedGenerationId)
+                        studioRepository.clearActiveGenerationIfOwned(ownedGenerationId)
+                        if (activeGenerationId == ownedGenerationId) {
+                            activeGenerationId = null
+                        }
                         stopForeground(Service.STOP_FOREGROUND_REMOVE)
-                        stopSelf()
+                        stopSelf(activeStartId)
                     }
                 }
             }
             ACTION_STOP -> {
                 logger.info(TAG, "ACTION_STOP received")
+                localImageGenerationCancelPort.cancelActiveGeneration()
                 generationJob?.cancel()
-                studioRepository.clearActiveGeneration()
-                stopForeground(Service.STOP_FOREGROUND_REMOVE)
-                stopSelf()
             }
         }
 
@@ -144,6 +160,29 @@ class MultimediaGenerationService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    private fun startForegroundSafely(
+        startId: Int,
+        notification: Notification,
+    ): Boolean =
+        try {
+            startForeground(ONGOING_NOTIFICATION_ID, notification)
+            true
+        } catch (error: ForegroundServiceStartNotAllowedException) {
+            logger.error(TAG, "Foreground service start not allowed", error)
+            serviceScope.launch {
+                studioRepository.reportGenerationError("Generation could not start in the background.")
+            }
+            stopSelf(startId)
+            false
+        } catch (error: SecurityException) {
+            logger.error(TAG, "Foreground service start denied", error)
+            serviceScope.launch {
+                studioRepository.reportGenerationError("Generation could not start due to system restrictions.")
+            }
+            stopSelf(startId)
+            false
+        }
 
     private fun createNotificationChannel() {
         val channel =

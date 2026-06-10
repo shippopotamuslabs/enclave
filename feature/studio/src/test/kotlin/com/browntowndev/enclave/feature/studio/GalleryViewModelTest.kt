@@ -399,7 +399,15 @@ private class FakeStudioRepository : StudioRepositoryPort {
         generation: com.browntowndev.enclave.domain.port.repository.ActiveStudioGeneration,
     ): Boolean = true
 
+    override fun hasActiveGeneration(): Boolean = false
+
     override fun clearActiveGeneration() {}
+
+    override fun clearActiveGenerationIfOwned(generationId: String): Boolean = true
+
+    override fun clearGenerationProgressIfOwned(generationId: String): Boolean = true
+
+    override suspend fun reconcilePersistedActiveGeneration() = Unit
 
     override suspend fun addEphemeralMedia(asset: StudioMediaAsset) {}
 

@@ -85,7 +85,13 @@ class ImageGenerationPortImpl
 
                 iterationResult
                     .onSuccess { generatedImages += it }
-                    .onFailure { return Result.failure(it) }
+                    .onFailure {
+                        return if (generatedImages.isEmpty()) {
+                            Result.failure(it)
+                        } else {
+                            Result.success(generatedImages)
+                        }
+                    }
             }
 
             return Result.success(generatedImages)

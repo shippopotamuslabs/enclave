@@ -1,11 +1,17 @@
 #include "enclave_diffusion.h"
 #include "local_image_gen_runtime.h"
 
+#include "progress_state.h"
+
 #include <cstring>
 #include <mutex>
 #include <string>
 
 namespace {
+void diffusionProgressCallback(int step, int total_steps, void*) {
+    local_image_gen::reportProgress(step, total_steps);
+}
+
 std::mutex g_engine_mutex;
 EnclaveDiffusionHandle* g_engine = nullptr;
 std::string g_engine_model_dir;
@@ -105,7 +111,9 @@ extern "C" int qnn_generate_image(
         memory_policy == 0 ? ENCLAVE_MEMORY_POLICY_FULL : ENCLAVE_MEMORY_POLICY_LOW_RAM;
     params.output_png_path = output_path != nullptr ? output_path : "";
 
-    const int rc = enclave_diffusion_generate(engine, &params, nullptr, nullptr, error_out, error_out_len);
+    local_image_gen::resetProgress(steps);
+    const int rc =
+        enclave_diffusion_generate(engine, &params, diffusionProgressCallback, nullptr, error_out, error_out_len);
     if (params.memory_policy == ENCLAVE_MEMORY_POLICY_LOW_RAM) {
         std::lock_guard<std::mutex> lock(g_engine_mutex);
         releaseEngine();

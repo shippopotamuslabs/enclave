@@ -42,6 +42,7 @@ class StudioRepositoryImplTest {
     private lateinit var filesDir: File
     private val healer = testSensitiveSelfHealer(FakeLocalDataEncryptionService())
     private val readRepairApplier = mockk<SensitiveRoomReadRepairApplier>(relaxed = true)
+    private val activeGenerationPersistence = mockk<ActiveStudioGenerationPersistence>(relaxed = true)
     private lateinit var repository: StudioRepositoryImpl
 
     @BeforeEach
@@ -53,6 +54,7 @@ class StudioRepositoryImplTest {
 
         every { context.cacheDir } returns cacheDir
         every { context.filesDir } returns filesDir
+        coEvery { activeGenerationPersistence.load() } returns null
 
         repository =
             StudioRepositoryImpl(
@@ -63,6 +65,7 @@ class StudioRepositoryImplTest {
                 syncTrigger = syncTrigger,
                 healer = healer,
                 readRepairApplier = readRepairApplier,
+                activeGenerationPersistence = activeGenerationPersistence,
                 context = context,
             )
     }
@@ -77,7 +80,7 @@ class StudioRepositoryImplTest {
             assertTrue(ephemeralDir.exists())
             val files = ephemeralDir.listFiles()
             assertEquals(1, files?.size)
-            assertTrue(files!![0].name.endsWith(".jpg"))
+            assertTrue(files!![0].name.endsWith(".png"))
             assertEquals("test data", files[0].readText())
             assertTrue(uriString.contains("studio_ephemeral"))
         }
@@ -99,6 +102,7 @@ class StudioRepositoryImplTest {
         runTest {
             val activeGeneration =
                 ActiveStudioGeneration(
+                    id = "gen-1",
                     prompt = "in progress",
                     mediaType = MediaCapability.IMAGE,
                     settings = ImageGenerationSettings(),
@@ -116,6 +120,54 @@ class StudioRepositoryImplTest {
                 repository.clearActiveGeneration()
                 assertNull(awaitItem())
             }
+        }
+
+    @Test
+    fun `clearActiveGenerationIfOwned only clears matching generation`() =
+        runTest {
+            val first =
+                ActiveStudioGeneration(
+                    id = "gen-1",
+                    prompt = "first",
+                    mediaType = MediaCapability.IMAGE,
+                    settings = ImageGenerationSettings(),
+                )
+            val second =
+                ActiveStudioGeneration(
+                    id = "gen-2",
+                    prompt = "second",
+                    mediaType = MediaCapability.IMAGE,
+                    settings = ImageGenerationSettings(),
+                )
+
+            assertTrue(repository.reportActiveGeneration(first))
+            assertFalse(repository.clearActiveGenerationIfOwned("gen-2"))
+            assertTrue(repository.hasActiveGeneration())
+            assertTrue(repository.clearActiveGenerationIfOwned("gen-1"))
+            assertFalse(repository.hasActiveGeneration())
+
+            assertTrue(repository.reportActiveGeneration(second))
+            assertTrue(repository.clearActiveGenerationIfOwned("gen-2"))
+        }
+
+    @Test
+    fun `clearEphemeralCache refuses while generation active`() =
+        runTest {
+            repository.reportActiveGeneration(
+                ActiveStudioGeneration(
+                    id = "gen-1",
+                    prompt = "busy",
+                    mediaType = MediaCapability.IMAGE,
+                    settings = ImageGenerationSettings(),
+                ),
+            )
+
+            val error =
+                runCatching {
+                    repository.clearEphemeralCache()
+                }.exceptionOrNull()
+
+            assertTrue(error is IllegalStateException)
         }
 
     @Test
@@ -207,6 +259,7 @@ class StudioRepositoryImplTest {
                     syncTrigger = syncTrigger,
                     healer = healer,
                     readRepairApplier = readRepairApplier,
+                    activeGenerationPersistence = activeGenerationPersistence,
                     context = context,
                 )
             val sourceFile = File(filesDir, "encrypted-test.jpg")
@@ -296,7 +349,7 @@ class StudioRepositoryImplTest {
 
             repository.materializeDownloadedMedia("media-1", bytes)
 
-            val written = File(filesDir, "studio_synced_media-1.jpg")
+            val written = File(filesDir, "studio_synced_media-1.png")
             assertTrue(written.exists())
             assertEquals("decrypted image", written.readText())
 

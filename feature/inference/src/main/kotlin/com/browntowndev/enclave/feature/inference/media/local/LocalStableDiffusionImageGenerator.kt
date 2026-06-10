@@ -15,9 +15,16 @@ import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.enclave.domain.usecase.inference.InferenceType
 import dagger.hilt.android.qualifiers.ApplicationContext
+import com.browntowndev.enclave.localimagegen.NativeLocalImageGenRuntime
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 import java.io.File
 import java.util.UUID
 import javax.inject.Inject
@@ -40,6 +47,7 @@ class LocalStableDiffusionImageGenerator
     constructor(
         @param:ApplicationContext private val context: Context,
         private val engine: LocalImageGenerationEngine,
+        private val nativeRuntime: NativeLocalImageGenRuntime,
         private val inferenceLockManager: InferenceLockManager,
         private val studioRepository: StudioRepositoryPort,
         private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
@@ -87,66 +95,104 @@ class LocalStableDiffusionImageGenerator
                             "IMG2IMG_ENCODER_MISSING: model pack lacks vae_encoder.bin or vae_encoder.mnn",
                         )
                     }
-                    val initImagePath =
-                        referenceUri?.let { uri ->
-                            val bytes =
-                                studioRepository.readMediaBytes(uri)
-                                    ?: throw LocalImageGenerationError.GenerationFailed(
-                                        target.selectedBackend,
-                                        "Reference image could not be read.",
-                                    )
-                            val initFile = File(outputDir, "init-${UUID.randomUUID()}.png")
-                            initFile.writeBytes(bytes)
-                            initFile.absolutePath
-                        }
-                    val memoryClass =
-                        (context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager)
-                            .memoryClass
-                    val memoryPolicy =
-                        LocalImageGenerationModelPolicy.memoryPolicyFor(target.modelId, memoryClass)
-                    val nativeRequest =
-                        LocalImageGenerationNativeRequest(
-                            backend = target.selectedBackend,
-                            modelId = target.modelId,
-                            modelDir = target.modelDir,
-                            prompt = prompt,
-                            negativePrompt = null,
-                            width = normalized.width,
-                            height = normalized.height,
-                            steps = normalized.diffusionSteps,
-                            cfgScale = normalized.cfgScale,
-                            scheduler = normalized.scheduler,
-                            seed = settings.seed.toLongOrNull() ?: System.nanoTime(),
-                            outputPathPrefix = outputPrefix,
-                            mode = mode,
-                            initImagePath = initImagePath,
-                            denoiseStrength =
-                                LocalImageGenerationModelPolicy.resolveImg2ImgDenoiseStrength(
-                                    target.modelId,
-                                    settings,
-                                ),
-                            memoryPolicy = memoryPolicy,
-                        )
-                    val output =
-                        withContext(dispatcher) {
-                            val result = engine.generate(nativeRequest).getOrThrow()
-                            val elapsed = System.currentTimeMillis() - started
-                            if (elapsed > SLOW_GENERATION_WARNING_MS) {
-                                android.util.Log.w(
-                                    TAG,
-                                    "Local generation exceeded ${SLOW_GENERATION_WARNING_MS}ms (elapsed=$elapsed)",
-                                )
+                    var initImageFile: File? = null
+                    try {
+                        val initImagePath =
+                            referenceUri?.let { uri ->
+                                val bytes =
+                                    studioRepository.readMediaBytes(uri)
+                                        ?: throw LocalImageGenerationError.GenerationFailed(
+                                            target.selectedBackend,
+                                            "Reference image could not be read.",
+                                        )
+                                val initFile = File(outputDir, "init-${UUID.randomUUID()}.png")
+                                initFile.writeBytes(bytes)
+                                initImageFile = initFile
+                                initFile.absolutePath
                             }
-                            result
-                        }
-                    onProgress(ImageGenerationProgress.SavingOutput)
-                    LocalStableDiffusionGenerationResult(
-                        outputFileReferences = output.outputPaths,
-                        width = output.width,
-                        height = output.height,
-                        elapsedMillis = output.elapsedMillis,
-                        backend = target.selectedBackend,
-                    )
+                        val memoryClass =
+                            (context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager)
+                                .memoryClass
+                        val memoryPolicy =
+                            LocalImageGenerationModelPolicy.memoryPolicyFor(target.modelId, memoryClass)
+                        val nativeRequest =
+                            LocalImageGenerationNativeRequest(
+                                backend = target.selectedBackend,
+                                modelId = target.modelId,
+                                modelDir = target.modelDir,
+                                prompt = prompt,
+                                negativePrompt = null,
+                                width = normalized.width,
+                                height = normalized.height,
+                                steps = normalized.diffusionSteps,
+                                cfgScale = normalized.cfgScale,
+                                scheduler = normalized.scheduler,
+                                seed = settings.seed.toLongOrNull() ?: System.nanoTime(),
+                                outputPathPrefix = outputPrefix,
+                                mode = mode,
+                                initImagePath = initImagePath,
+                                denoiseStrength =
+                                    LocalImageGenerationModelPolicy.resolveImg2ImgDenoiseStrength(
+                                        target.modelId,
+                                        settings,
+                                    ),
+                                memoryPolicy = memoryPolicy,
+                            )
+                        val output =
+                            withContext(dispatcher) {
+                                val progressJob =
+                                    coroutineContext[Job]?.let { parentJob ->
+                                        kotlinx.coroutines.CoroutineScope(coroutineContext).launch {
+                                            var lastReportedStep = -1
+                                            while (isActive) {
+                                                ensureActive()
+                                                nativeRuntime.currentGenerationProgress()?.let { (step, total) ->
+                                                    if (step != lastReportedStep) {
+                                                        lastReportedStep = step
+                                                        onProgress(
+                                                            ImageGenerationProgress.Generating(
+                                                                step = step,
+                                                                totalSteps = total,
+                                                            ),
+                                                        )
+                                                    }
+                                                }
+                                                delay(PROGRESS_POLL_INTERVAL_MS)
+                                            }
+                                        }.also { job ->
+                                            parentJob.invokeOnCompletion { cause ->
+                                                if (cause is CancellationException) {
+                                                    engine.cancel()
+                                                }
+                                                job.cancel()
+                                            }
+                                        }
+                                    }
+                                try {
+                                    val result = engine.generate(nativeRequest).getOrThrow()
+                                    val elapsed = System.currentTimeMillis() - started
+                                    if (elapsed > SLOW_GENERATION_WARNING_MS) {
+                                        android.util.Log.w(
+                                            TAG,
+                                            "Local generation exceeded ${SLOW_GENERATION_WARNING_MS}ms (elapsed=$elapsed)",
+                                        )
+                                    }
+                                    result
+                                } finally {
+                                    progressJob?.cancel()
+                                }
+                            }
+                        onProgress(ImageGenerationProgress.SavingOutput)
+                        LocalStableDiffusionGenerationResult(
+                            outputFileReferences = output.outputPaths,
+                            width = output.width,
+                            height = output.height,
+                            elapsedMillis = output.elapsedMillis,
+                            backend = target.selectedBackend,
+                        )
+                    } finally {
+                        initImageFile?.delete()
+                    }
                 } finally {
                     inferenceLockManager.releaseLock(InferenceType.ON_DEVICE)
                 }
@@ -169,6 +215,7 @@ class LocalStableDiffusionImageGenerator
             const val TAG = "LocalImageGeneration"
             const val OUTPUT_SUBDIR = "local-image-gen"
             const val GENERATION_FAILED = "Local image generation failed."
+            const val PROGRESS_POLL_INTERVAL_MS = 500L
             val SLOW_GENERATION_WARNING_MS = 3.minutes.inWholeMilliseconds
         }
     }

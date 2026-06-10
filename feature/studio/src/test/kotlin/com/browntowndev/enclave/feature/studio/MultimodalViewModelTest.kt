@@ -255,7 +255,7 @@ class MultimodalViewModelTest {
                     viewModel.uiState.collect {}
                 }
 
-            viewModel.promptCoordinator.onPromptChange("sunset mountains")
+            viewModel.onPromptChange("sunset mountains")
             viewModel.generate()
             assertTrue(viewModel.uiState.value.isGenerating)
 
@@ -290,7 +290,7 @@ class MultimodalViewModelTest {
                     labelAliases = mapOf("sexual/minors" to listOf("S3")),
                     thresholds = mapOf("sexual/minors" to 0.65),
                 )
-            viewModel.promptCoordinator.onPromptChange("blocked studio prompt")
+            viewModel.onPromptChange("blocked studio prompt")
             val job =
                 backgroundScope.launch(testDispatcher) {
                     viewModel.uiState.collect {}
@@ -301,7 +301,7 @@ class MultimodalViewModelTest {
 
             assertFalse(viewModel.uiState.value.isGenerating)
             assertEquals("Prompt rejected due to moderation", viewModel.uiState.value.error)
-            verify(exactly = 0) { dispatcher.startGeneration(any(), any(), any()) }
+            verify(exactly = 0) { dispatcher.startGeneration(any(), any(), any(), any()) }
             job.cancel()
         }
 
@@ -334,7 +334,7 @@ class MultimodalViewModelTest {
                     labelAliases = mapOf("sexual/minors" to listOf("S3")),
                     thresholds = mapOf("sexual/minors" to 0.65),
                 )
-            viewModel.promptCoordinator.onPromptChange("blocked studio prompt but trusted")
+            viewModel.onPromptChange("blocked studio prompt but trusted")
             val job =
                 backgroundScope.launch(testDispatcher) {
                     viewModel.uiState.collect {}
@@ -344,7 +344,7 @@ class MultimodalViewModelTest {
             advanceUntilIdle()
 
             // Verify that moderation didn't block and generation dispatcher was triggered
-            verify(exactly = 1) { dispatcher.startGeneration(any(), any(), any()) }
+            verify(exactly = 1) { dispatcher.startGeneration(any(), any(), any(), any()) }
             job.cancel()
         }
 
@@ -356,7 +356,7 @@ class MultimodalViewModelTest {
                 assertEquals("", initial.prompt)
                 assertFalse(initial.isGenerating)
 
-                viewModel.promptCoordinator.onPromptChange("studio prompt")
+                viewModel.onPromptChange("studio prompt")
                 val updated = awaitItem()
                 assertEquals("studio prompt", updated.prompt)
 
@@ -486,7 +486,7 @@ class MultimodalViewModelTest {
 
             assertTrue(viewModel.uiState.value.isCapabilitiesLoading)
 
-            viewModel.promptCoordinator.onMediaTypeChange(MediaCapability.VIDEO)
+            viewModel.onMediaTypeChange(MediaCapability.VIDEO)
             assertTrue(
                 viewModel.uiState.value.isCapabilitiesLoading,
                 "Loading must stay active until the superseding fetch completes",
@@ -507,7 +507,7 @@ class MultimodalViewModelTest {
                     viewModel.uiState.collect {}
                 }
 
-            viewModel.promptCoordinator.onPromptChange("rejected prompt")
+            viewModel.onPromptChange("rejected prompt")
             viewModel.generate()
 
             generationErrorFlow.value = "Prompt rejected due to moderation."
@@ -525,7 +525,7 @@ class MultimodalViewModelTest {
                     viewModel.uiState.collect {}
                 }
 
-            viewModel.promptCoordinator.onPromptChange("mock microsoft")
+            viewModel.onPromptChange("mock microsoft")
             viewModel.generate()
 
             generationErrorFlow.value =
@@ -548,12 +548,12 @@ class MultimodalViewModelTest {
                     viewModel.uiState.collect {}
                 }
 
-            viewModel.promptCoordinator.onPromptChange("studio prompt")
+            viewModel.onPromptChange("studio prompt")
             viewModel.generate()
             assertEquals("", viewModel.uiState.value.prompt)
 
             advanceUntilIdle()
-            verify { dispatcher.startGeneration(any(), any(), any()) }
+            verify { dispatcher.startGeneration(any(), any(), any(), any()) }
             job.cancel()
         }
 
@@ -565,16 +565,16 @@ class MultimodalViewModelTest {
                     viewModel.uiState.collect {}
                 }
 
-            viewModel.promptCoordinator.onPromptChange("scroll prompt")
-            viewModel.promptCoordinator.onContinualModeToggle(true)
+            viewModel.onPromptChange("scroll prompt")
+            viewModel.onContinualModeToggle(true)
 
             // Before generate, threshold hit is ignored
             viewModel.onGenerativeScrollThresholdVisible(anchorAssetId = "anchor-0")
-            verify(exactly = 0) { dispatcher.startGeneration(any(), any(), any()) }
+            verify(exactly = 0) { dispatcher.startGeneration(any(), any(), any(), any()) }
 
             // Initial generate
             viewModel.generate()
-            verify(exactly = 1) { dispatcher.startGeneration(any(), any(), any()) }
+            verify(exactly = 1) { dispatcher.startGeneration(any(), any(), any(), any()) }
             assertTrue(viewModel.uiState.value.isGenerating)
 
             // Simulate generation completion to reset active generation tracking
@@ -586,7 +586,7 @@ class MultimodalViewModelTest {
 
             // First threshold hit
             viewModel.onGenerativeScrollThresholdVisible(anchorAssetId = "anchor-1")
-            verify(exactly = 2) { dispatcher.startGeneration(any(), any(), any()) }
+            verify(exactly = 2) { dispatcher.startGeneration(any(), any(), any(), any()) }
             assertTrue(viewModel.uiState.value.isGenerating)
 
             // Simulate second completion
@@ -598,11 +598,11 @@ class MultimodalViewModelTest {
 
             // Second threshold hit with same anchor should be ignored (internal consumedScrollAnchors)
             viewModel.onGenerativeScrollThresholdVisible(anchorAssetId = "anchor-1")
-            verify(exactly = 2) { dispatcher.startGeneration(any(), any(), any()) }
+            verify(exactly = 2) { dispatcher.startGeneration(any(), any(), any(), any()) }
 
             // Third threshold hit with new anchor should work
             viewModel.onGenerativeScrollThresholdVisible(anchorAssetId = "anchor-2")
-            verify(exactly = 3) { dispatcher.startGeneration(any(), any(), any()) }
+            verify(exactly = 3) { dispatcher.startGeneration(any(), any(), any(), any()) }
 
             job.cancel()
         }
@@ -615,8 +615,8 @@ class MultimodalViewModelTest {
                     viewModel.uiState.collect {}
                 }
 
-            viewModel.promptCoordinator.onPromptChange("first prompt")
-            viewModel.promptCoordinator.onContinualModeToggle(true)
+            viewModel.onPromptChange("first prompt")
+            viewModel.onContinualModeToggle(true)
             viewModel.generate()
             assertTrue(viewModel.uiState.value.isContinualGenerationActive)
 
@@ -625,11 +625,11 @@ class MultimodalViewModelTest {
                 listOf(StudioMediaAsset(id = "1", localUri = "uri", prompt = "p", mediaType = "IMAGE", createdAt = 1L))
             advanceUntilIdle()
 
-            viewModel.promptCoordinator.onPromptChange("second prompt")
+            viewModel.onPromptChange("second prompt")
             viewModel.onGenerativeScrollThresholdVisible(anchorAssetId = "anchor-1")
 
             assertFalse(viewModel.uiState.value.isContinualGenerationActive)
-            verify(exactly = 1) { dispatcher.startGeneration(any(), any(), any()) }
+            verify(exactly = 1) { dispatcher.startGeneration(any(), any(), any(), any()) }
             job.cancel()
         }
 
@@ -716,15 +716,14 @@ class MultimodalViewModelTest {
                     viewModel.uiState.collect {}
                 }
 
-            viewModel.mediaActionsCoordinator.onAnimateMedia(
-                prompt = viewModel.promptCoordinator,
+            viewModel.onAnimateMedia(
                 assetId = assetId,
                 autoAnimate = true,
                 customPrompt = "custom prompt",
             )
             advanceUntilIdle()
 
-            verify { dispatcher.startGeneration(any(), any(), any()) }
+            verify { dispatcher.startGeneration(any(), any(), any(), any()) }
             job.cancel()
         }
 
@@ -749,7 +748,7 @@ class MultimodalViewModelTest {
                 )
             advanceUntilIdle()
 
-            viewModel.mediaActionsCoordinator.shareMedia(setOf(assetId))
+            viewModel.shareMedia(setOf(assetId))
             advanceUntilIdle()
             verify { shareMediaPort.shareMedia(listOf("cache://ephemeral.jpg"), "*/*") }
             job.cancel()
@@ -778,7 +777,7 @@ class MultimodalViewModelTest {
             ephemeralMediaFlow.value = emptyList()
             advanceUntilIdle()
 
-            viewModel.mediaActionsCoordinator.shareSingleMedia(assetId)
+            viewModel.shareSingleMedia(assetId)
             advanceUntilIdle()
 
             verify { shareMediaPort.shareMedia(listOf(persistedUri), "image/*") }
@@ -808,7 +807,7 @@ class MultimodalViewModelTest {
             ephemeralMediaFlow.value = emptyList()
             advanceUntilIdle()
 
-            viewModel.mediaActionsCoordinator.shareMedia(setOf(assetId))
+            viewModel.shareMedia(setOf(assetId))
             advanceUntilIdle()
 
             verify { shareMediaPort.shareMedia(listOf(persistedUri), "*/*") }
@@ -850,7 +849,7 @@ class MultimodalViewModelTest {
                 )
             advanceUntilIdle()
 
-            viewModel.mediaActionsCoordinator.shareMedia(setOf(ephemeralId, persistedId))
+            viewModel.shareMedia(setOf(ephemeralId, persistedId))
             advanceUntilIdle()
 
             verify {
@@ -874,7 +873,7 @@ class MultimodalViewModelTest {
             coEvery { studioRepository.getMediaById("missing") } returns null
             advanceUntilIdle()
 
-            viewModel.mediaActionsCoordinator.shareSingleMedia("missing")
+            viewModel.shareSingleMedia("missing")
             advanceUntilIdle()
 
             verify(exactly = 0) { shareMediaPort.shareMedia(any(), any()) }
@@ -904,7 +903,7 @@ class MultimodalViewModelTest {
             ephemeralMediaFlow.value = emptyList()
             advanceUntilIdle()
 
-            viewModel.mediaActionsCoordinator.shareSingleMedia(assetId)
+            viewModel.shareSingleMedia(assetId)
             advanceUntilIdle()
 
             verify { shareMediaPort.shareMedia(listOf(persistedUri), "video/*") }
@@ -934,8 +933,7 @@ class MultimodalViewModelTest {
             ephemeralMediaFlow.value = emptyList()
             advanceUntilIdle()
 
-            viewModel.mediaActionsCoordinator.onEditMedia(
-                prompt = viewModel.promptCoordinator,
+            viewModel.onEditMedia(
                 assetId = assetId,
                 fromUserAction = true,
             )
@@ -970,14 +968,12 @@ class MultimodalViewModelTest {
             ephemeralMediaFlow.value = emptyList()
             advanceUntilIdle()
 
-            viewModel.mediaActionsCoordinator.onEditMedia(
-                prompt = viewModel.promptCoordinator,
+            viewModel.onEditMedia(
                 assetId = assetId,
                 fromUserAction = true,
             )
             advanceUntilIdle()
-            viewModel.mediaActionsCoordinator.onEditMedia(
-                prompt = viewModel.promptCoordinator,
+            viewModel.onEditMedia(
                 assetId = assetId,
                 fromUserAction = true,
             )
@@ -1010,13 +1006,11 @@ class MultimodalViewModelTest {
             ephemeralMediaFlow.value = emptyList()
             advanceUntilIdle()
 
-            viewModel.mediaActionsCoordinator.onEditMedia(
-                prompt = viewModel.promptCoordinator,
+            viewModel.onEditMedia(
                 assetId = assetId,
             )
             advanceUntilIdle()
-            viewModel.mediaActionsCoordinator.onEditMedia(
-                prompt = viewModel.promptCoordinator,
+            viewModel.onEditMedia(
                 assetId = assetId,
             )
             advanceUntilIdle()
@@ -1033,8 +1027,7 @@ class MultimodalViewModelTest {
                     viewModel.uiState.collect {}
                 }
 
-            viewModel.mediaActionsCoordinator.onEditMedia(
-                prompt = viewModel.promptCoordinator,
+            viewModel.onEditMedia(
                 assetId = null,
             )
             advanceUntilIdle()
@@ -1073,8 +1066,7 @@ class MultimodalViewModelTest {
                 }
 
             // When
-            viewModel.mediaActionsCoordinator.onEditMedia(
-                prompt = viewModel.promptCoordinator,
+            viewModel.onEditMedia(
                 assetId = null,
                 rehydrateIds = rehydrateIds,
                 rehydrateUris = rehydrateUris,
@@ -1200,7 +1192,7 @@ class MultimodalViewModelTest {
                 ModelPackTestFixtures.juggernautDiffusionAsset()
 
             viewModel = createViewModel()
-            viewModel.promptCoordinator.onUpdateReferenceImage("file://reference.jpg")
+            viewModel.onUpdateReferenceImage("file://reference.jpg")
             val job =
                 backgroundScope.launch(testDispatcher) {
                     viewModel.uiState.collect {}
@@ -1227,7 +1219,7 @@ class MultimodalViewModelTest {
                 ModelPackTestFixtures.juggernautDiffusionAsset()
 
             viewModel = createViewModel()
-            viewModel.promptCoordinator.onUpdateReferenceImage("file://reference.jpg")
+            viewModel.onUpdateReferenceImage("file://reference.jpg")
             val job =
                 backgroundScope.launch(testDispatcher) {
                     viewModel.uiState.collect {}

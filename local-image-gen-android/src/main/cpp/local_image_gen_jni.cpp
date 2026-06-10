@@ -2,6 +2,7 @@
 #include <android/log.h>
 
 #include "local_image_gen_runtime.h"
+#include "progress_state.h"
 
 #define LOG_TAG "local-image-gen-jni"
 
@@ -226,6 +227,20 @@ extern "C" JNIEXPORT void JNICALL
 Java_com_browntowndev_enclave_localimagegen_LocalImageGenNative_nativeCancel(JNIEnv*, jclass) {
     qnn_cancel_generation();
     mnn_cancel_generation();
+}
+
+extern "C" JNIEXPORT jintArray JNICALL
+Java_com_browntowndev_enclave_localimagegen_LocalImageGenNative_nativeGetGenerationProgress(JNIEnv* env, jclass) {
+    int step = 0;
+    int total = 0;
+    local_image_gen::readProgress(&step, &total);
+    jintArray result = env->NewIntArray(2);
+    if (result == nullptr) {
+        return nullptr;
+    }
+    jint values[2] = {step, total};
+    env->SetIntArrayRegion(result, 0, 2, values);
+    return result;
 }
 
 extern "C" JNIEXPORT void JNICALL

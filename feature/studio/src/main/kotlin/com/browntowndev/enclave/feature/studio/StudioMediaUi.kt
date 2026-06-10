@@ -14,28 +14,29 @@ data class StudioMediaUi(
     val createdAt: Long,
     val albumId: String? = null,
     val aspectRatio: Float? = null,
+    val hasLocalFile: Boolean = false,
 )
 
-fun StudioMediaAsset.toUi(): StudioMediaUi =
-    StudioMediaUi(
+fun StudioMediaAsset.toUi(): StudioMediaUi {
+    val resolvedMediaType =
+        when (mediaType) {
+            MediaCapability.VIDEO.name -> MediaCapability.VIDEO
+            MediaCapability.MUSIC.name -> MediaCapability.MUSIC
+            else -> MediaCapability.IMAGE
+        }
+    return StudioMediaUi(
         id = id,
         localUri = localUri,
         remoteUrl = remoteUrl,
         prompt = prompt,
-        mediaType =
-            when (mediaType) {
-                MediaCapability.VIDEO.name -> MediaCapability.VIDEO
-                MediaCapability.MUSIC.name -> MediaCapability.MUSIC
-                else -> MediaCapability.IMAGE
-            },
+        mediaType = resolvedMediaType,
         createdAt = createdAt,
         albumId = albumId,
+        hasLocalFile = localUri.hasLocalMediaFile(),
     )
-
-val StudioMediaUi.bestUri: Any? get() {
-    val path = localUri.replace("file://", "")
-    return if (java.io.File(path).exists()) localUri else remoteUrl
 }
+
+val StudioMediaUi.bestUri: Any? get() = if (hasLocalFile) localUri else remoteUrl
 
 /**
  * True while the bytes for a cloud-synced item still have to be downloaded + decrypted locally
@@ -48,7 +49,14 @@ val StudioMediaUi.isAwaitingDownload: Boolean get() {
     if (localUri.startsWith("content://")) return false
     val path = localUri.replace("file://", "")
     if (path.isBlank() || path.startsWith("http")) return true
-    return !java.io.File(path).exists()
+    return !hasLocalFile
+}
+
+private fun String.hasLocalMediaFile(): Boolean {
+    if (startsWith("content://")) return true
+    val path = replace("file://", "")
+    if (path.isBlank() || path.startsWith("http")) return false
+    return java.io.File(path).exists()
 }
 
 internal fun StudioMediaUi.effectiveLocalUri(): String {

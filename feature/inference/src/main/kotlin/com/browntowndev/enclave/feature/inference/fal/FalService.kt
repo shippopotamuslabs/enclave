@@ -126,6 +126,11 @@ class FalService
         fun downloadBytes(
             url: String,
             apiKey: String? = null,
+        ): ByteArray = downloadBytesWithRetry(url, apiKey)
+
+        private fun downloadBytesWithRetry(
+            url: String,
+            apiKey: String? = null,
         ): ByteArray {
             val builder = Request.Builder().url(url.normalizeMediaUrl()).get()
             if (!apiKey.isNullOrBlank()) {
@@ -134,6 +139,7 @@ class FalService
             return executeBytes(
                 builder.build(),
                 failurePrefix = "fal media download failed",
+                retryOnTransient = true,
             )
         }
 
@@ -160,7 +166,7 @@ class FalService
                     throw IllegalStateException("Malformed data URI: invalid base64 payload", e)
                 }
             } else {
-                downloadBytes(url, apiKey)
+                downloadBytesWithRetry(url, apiKey)
             }
 
         fun mediaUrls(
@@ -262,14 +268,51 @@ class FalService
         private fun executeBytes(
             request: Request,
             failurePrefix: String,
+            retryOnTransient: Boolean = false,
         ): ByteArray {
+            val maxAttempts = if (retryOnTransient) MAX_RETRY_ATTEMPTS else 1
+            var lastError: IllegalStateException? = null
+            repeat(maxAttempts) { attempt ->
+                if (attempt > 0) Thread.sleep(RETRY_BACKOFF_MILLIS * attempt)
+                when (val result = readBytesResponse(request, failurePrefix, retryOnTransient)) {
+                    is BytesCallResult.Success -> return result.body
+                    is BytesCallResult.Retry -> lastError = result.error
+                    is BytesCallResult.Fatal -> throw result.error
+                }
+            }
+            throw lastError ?: IllegalStateException(failurePrefix)
+        }
+
+        private fun readBytesResponse(
+            request: Request,
+            failurePrefix: String,
+            retryOnTransient: Boolean,
+        ): BytesCallResult =
             okHttpClient.newCall(request).execute().use { response ->
                 val body = response.body.bytes()
-                if (!response.isSuccessful) {
-                    throw IllegalStateException("$failurePrefix: ${response.code}")
+                if (response.isSuccessful) {
+                    return BytesCallResult.Success(body)
                 }
-                return body
+                val error = IllegalStateException("$failurePrefix: ${response.code}")
+                if (retryOnTransient && response.code.isTransientHttpStatus()) {
+                    BytesCallResult.Retry(error)
+                } else {
+                    BytesCallResult.Fatal(error)
+                }
             }
+
+        private sealed interface BytesCallResult {
+            data class Success(
+                val body: ByteArray,
+            ) : BytesCallResult
+
+            data class Retry(
+                val error: IllegalStateException,
+            ) : BytesCallResult
+
+            data class Fatal(
+                val error: IllegalStateException,
+            ) : BytesCallResult
         }
 
         private fun syncBaseUrl(baseUrl: String?): String =
