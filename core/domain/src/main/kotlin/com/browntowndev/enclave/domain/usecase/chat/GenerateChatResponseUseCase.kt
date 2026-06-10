@@ -302,6 +302,7 @@ class GenerateChatResponseUseCase
                             userMessage = crewPrompt,
                             userMessageId = userMessageId,
                             assistantMessageId = assistantMessageId,
+                            toolingEnabled = userHasImage && apiVisionConfigured,
                         ),
                     )
                 } catch (e: InferenceBusyException) {

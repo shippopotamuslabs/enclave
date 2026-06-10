@@ -41,9 +41,10 @@ class InferenceServicePipelineExecutor
             userMessage: String,
             userMessageId: MessageId?,
             assistantMessageId: MessageId?,
+            toolingEnabled: Boolean,
         ): Flow<MessageGenerationState> =
             flow {
-                val initialState = PipelineState.createInitial(chatId, userMessage)
+                val initialState = PipelineState.createInitial(chatId, userMessage, toolingEnabled)
                 val stateJson = initialState.toJson()
                 val stateFlow = inferenceEventBus.openPipelineRequest(chatId)
                 try {

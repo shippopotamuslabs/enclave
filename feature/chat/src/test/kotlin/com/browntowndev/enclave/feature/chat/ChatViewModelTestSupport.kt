@@ -25,6 +25,7 @@ import com.browntowndev.enclave.domain.usecase.share.ImportSharedChatUseCase
 import com.browntowndev.enclave.domain.usecase.share.ShareChatUseCase
 import com.browntowndev.enclave.domain.usecase.telemetry.ObserveChatTelemetryUseCase
 import com.browntowndev.enclave.domain.usecase.telemetry.ObserveMessageTelemetryUseCase
+import com.browntowndev.enclave.domain.util.SystemClock
 import com.browntowndev.enclave.feature.chat.delegates.ArtifactExportCoordinator
 import com.browntowndev.enclave.feature.chat.delegates.ChatInputCoordinator
 import com.browntowndev.enclave.feature.chat.delegates.ChatShareCoordinator
@@ -159,6 +160,7 @@ object ChatViewModelTestSupport {
                 toolExecutionEventPort = toolExecutionEventPort,
                 loggingPort = loggingPort,
                 activeChatTurnSnapshotPort = activeChatTurnSnapshotPort,
+                clock = SystemClock(),
             )
         val artifactExportCoordinator =
             ArtifactExportCoordinator(

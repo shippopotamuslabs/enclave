@@ -47,6 +47,9 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -57,9 +60,11 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.flow.shareIn
@@ -109,11 +114,23 @@ class ChatViewModel
         val speechState: StateFlow<SpeechState> = speechInputCoordinator.speechState
         val artifactExportMessages = artifactExportCoordinator.artifactExportMessages
         val shareUiEvents = chatShareCoordinator.shareUiEvents
-        private val _moderationMessages = Channel<String>(Channel.BUFFERED)
-        val moderationMessages: Flow<String> = _moderationMessages.receiveAsFlow()
+        private val _moderationMessages = Channel<Int>(Channel.BUFFERED)
+        val moderationMessages: Flow<Int> = _moderationMessages.receiveAsFlow()
         private var lastBlockedPrompt: String? = null
 
-        private val _modelDisplayNames = MutableStateFlow<Map<ModelType, String>>(emptyMap())
+        private val modelDisplayNamesFlow =
+            flow {
+                emit(
+                    ModelType.entries.associateWith { type ->
+                        runCatching { modelDisplayNamesUseCase(type) }
+                            .getOrElse { ActiveModelConfigurationDecryptException.USER_MESSAGE }
+                    },
+                )
+            }.stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.Eagerly,
+                initialValue = emptyMap(),
+            )
 
         private val photoAttachmentPolicyFlow =
             combine(
@@ -182,16 +199,14 @@ class ChatViewModel
                 dbMessagesFlow,
                 inferenceOrchestrator.optimisticUserMessage,
             ) { dbMessages, optimisticUserMessage ->
-                if (optimisticUserMessage == null) {
-                    dbMessages
-                } else if (dbMessages.any { it.id == optimisticUserMessage.id }) {
-                    inferenceOrchestrator.clearOptimisticUser()
-                    dbMessages
-                } else {
-                    mergeDbMessagesWithOptimisticUseCase(
-                        dbMessages = dbMessages,
-                        optimisticUserMessage = optimisticUserMessage,
-                    )
+                when {
+                    optimisticUserMessage == null -> dbMessages
+                    dbMessages.any { it.id == optimisticUserMessage.id } -> dbMessages
+                    else ->
+                        mergeDbMessagesWithOptimisticUseCase(
+                            dbMessages = dbMessages,
+                            optimisticUserMessage = optimisticUserMessage,
+                        )
                 }
             }.distinctUntilChangedBy { messages -> messages.dbMessagesFingerprint() }
                 .shareIn(
@@ -364,7 +379,7 @@ class ChatViewModel
                 (ephemeral + persisted).associateBy { it.id }
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIBE_TIMEOUT_MS), emptyMap())
 
-        val uiState: StateFlow<ChatUiState> =
+        private val chatUiCombineInputsFlow =
             combine(
                 uiInputsWithPolicyFlow,
                 inferenceLockManager.isInferenceBlocked,
@@ -376,14 +391,60 @@ class ChatViewModel
                 chatShareCoordinator.isReadOnly,
                 chatShareCoordinator.sharedMessages,
                 artifactExportCoordinator.artifactExportSheet,
-                _modelDisplayNames,
+                modelDisplayNamesFlow,
                 activeChatIdFlow,
                 hasLiveVoiceProviderAssignedFlow,
                 liveVoiceCoordinator.state,
+            ) { args ->
+                ChatUiCombineInputs(
+                    inputsWithPolicy = args[0] as UiInputsWithPolicy,
+                    isBlocked = args[1] as Boolean,
+                    dbMessages = args[2] as List<Message>,
+                    activeTurnSnapshotState = args[3] as ActiveTurnSnapshotState,
+                    ttsPlayback = args[4] as TtsPlaybackState,
+                    studioMediaMap = args[5] as Map<String, com.browntowndev.enclave.domain.port.repository.StudioMediaAsset>,
+                    shareState = args[6] as ShareState,
+                    isReadOnly = args[7] as Boolean,
+                    sharedMessages = args[8] as List<Message>,
+                    artifactExportSheet = args[9] as ArtifactExportSheetState,
+                    modelDisplayNames = args[10] as Map<ModelType, String>,
+                    chatId = args[11] as ChatId?,
+                    hasLiveVoiceProviderAssigned = args[12] as Boolean,
+                    liveVoiceState = args[13] as LiveVoiceUiState,
+                )
+            }
+
+        private val reduceResultFlow =
+            chatUiCombineInputsFlow
+                .scan(ReduceAccumulator()) { accumulator, inputs ->
+                    val reduceResult =
+                        chatUiStateReducer.reduce(
+                            buildReduceParams(
+                                inputs = inputs,
+                                hapticState = accumulator.hapticState,
+                            ),
+                        )
+                    ReduceAccumulator(
+                        hapticState = reduceResult.hapticState,
+                        reduceResult = reduceResult,
+                    )
+                }.mapNotNull { accumulator -> accumulator.reduceResult }
+                .shareIn(
+                    scope = viewModelScope,
+                    started = SharingStarted.WhileSubscribed(SUBSCRIBE_TIMEOUT_MS),
+                    replay = 1,
+                )
+
+        val uiState: StateFlow<ChatUiState> =
+            combine(
+                reduceResultFlow,
                 chatTelemetryCoordinator.responseStatsSheet,
                 chatTelemetryCoordinator.chatStatsSheet,
-            ) { args: Array<Any?> ->
-                reduceChatUiStateFromArgs(args, chatUiStateReducer, inferenceOrchestrator)
+            ) { reduceResult, responseStatsSheet, chatStatsSheet ->
+                reduceResult.uiState.copy(
+                    responseStatsSheet = responseStatsSheet,
+                    chatStatsSheet = chatStatsSheet,
+                )
             }.stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(SUBSCRIBE_TIMEOUT_MS),
@@ -396,12 +457,55 @@ class ChatViewModel
             }
 
             viewModelScope.launch {
+                activeChatIdFlow.collect { chatId ->
+                    chatShareCoordinator.onActiveChatChanged(chatId)
+                }
+            }
+
+            viewModelScope.launch {
+                combine(
+                    dbMessagesFlow,
+                    inferenceOrchestrator.optimisticUserMessage,
+                ) { dbMessages, optimisticUserMessage ->
+                    optimisticUserMessage != null &&
+                        dbMessages.any { message -> message.id == optimisticUserMessage.id }
+                }.distinctUntilChanged()
+                    .collect { optimisticConfirmedInDb ->
+                        if (optimisticConfirmedInDb) {
+                            inferenceOrchestrator.clearOptimisticUser()
+                        }
+                    }
+            }
+
+            viewModelScope.launch {
+                combine(
+                    reduceResultFlow,
+                    mergedDbMessagesFlow,
+                    activeTurnSnapshotStateFlow,
+                ) { reduceResult, dbMessages, snapshotState ->
+                    Triple(reduceResult, dbMessages, snapshotState)
+                }.collect { (reduceResult, dbMessages, snapshotState) ->
+                    reduceResult.acknowledgedTurnKey?.let { key ->
+                        maybeAcknowledgeCompletedTurn(
+                            key = key,
+                            dbMessages = dbMessages,
+                            activeSnapshot = snapshotState.snapshot,
+                            acknowledgedTurnKeys = inferenceOrchestrator.acknowledgedTurnKeys.value,
+                            onAcknowledge = inferenceOrchestrator::acknowledgeTurn,
+                        )
+                    }
+                }
+            }
+
+            viewModelScope.launch {
                 activeTurnSnapshotObserveKeyFlow.collectLatest { key ->
                     if (key == null) {
-                        Log.d(
-                            "ChatVM",
-                            "snapshotFlow key=null snapshot=null",
-                        )
+                        if (BuildConfig.DEBUG) {
+                            Log.d(
+                                "ChatVM",
+                                "snapshotFlow key=null snapshot=null",
+                            )
+                        }
                         _activeTurnSnapshotState.value =
                             ActiveTurnSnapshotState(
                                 key = null,
@@ -418,12 +522,14 @@ class ChatViewModel
                             .throttleLatest(16L)
                             .distinctUntilChanged()
                             .collect { snapshot ->
-                                Log.d(
-                                    "ChatVM",
-                                    "snapshotFlow key=${key.assistantMessageId.value} " +
-                                        "snapshot=${snapshot?.messages?.values?.firstOrNull()?.messageState} " +
-                                        "segs=${snapshot?.messages?.values?.firstOrNull()?.transcriptSegments?.size}",
-                                )
+                                if (BuildConfig.DEBUG) {
+                                    Log.d(
+                                        "ChatVM",
+                                        "snapshotFlow key=${key.assistantMessageId.value} " +
+                                            "snapshot=${snapshot?.messages?.values?.firstOrNull()?.messageState} " +
+                                            "segs=${snapshot?.messages?.values?.firstOrNull()?.transcriptSegments?.size}",
+                                    )
+                                }
                                 _activeTurnSnapshotState.value =
                                     ActiveTurnSnapshotState(
                                         key = key,
@@ -432,15 +538,6 @@ class ChatViewModel
                             }
                     }
                 }
-            }
-
-            viewModelScope.launch {
-                val names =
-                    ModelType.entries.associateWith { type ->
-                        runCatching { modelDisplayNamesUseCase(type) }
-                            .getOrElse { ActiveModelConfigurationDecryptException.USER_MESSAGE }
-                    }
-                _modelDisplayNames.value = names
             }
 
             speechInputCoordinator.observeResults(viewModelScope) { text ->
@@ -491,14 +588,14 @@ class ChatViewModel
             lastBlockedPrompt = null
             viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to submit report")) {
                 submitModerationReportUseCase(reportedPrompt, "blocked")
-                _moderationMessages.send("Got it. Feedback submitted!")
+                _moderationMessages.send(R.string.chat_moderation_feedback_submitted)
             }
         }
 
         fun reportUnblockedPrompt(prompt: String) {
             viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to submit report")) {
                 submitModerationReportUseCase(prompt, "allowed")
-                _moderationMessages.send("Got it. Feedback submitted!")
+                _moderationMessages.send(R.string.chat_moderation_feedback_submitted)
             }
         }
 
@@ -622,12 +719,15 @@ class ChatViewModel
                     when (chatInputCoordinator.selectedMode.value) {
                         ChatModeUi.FAST -> shouldModeratePromptUseCase(ModelType.FAST)
                         ChatModeUi.THINKING -> shouldModeratePromptUseCase(ModelType.THINKING)
-                        ChatModeUi.COUNCIL -> {
-                            shouldModeratePromptUseCase(ModelType.DRAFT_ONE) ||
-                                shouldModeratePromptUseCase(ModelType.DRAFT_TWO) ||
-                                shouldModeratePromptUseCase(ModelType.MAIN) ||
-                                shouldModeratePromptUseCase(ModelType.FINAL_SYNTHESIS)
-                        }
+                        ChatModeUi.COUNCIL ->
+                            coroutineScope {
+                                awaitAll(
+                                    async { shouldModeratePromptUseCase(ModelType.DRAFT_ONE) },
+                                    async { shouldModeratePromptUseCase(ModelType.DRAFT_TWO) },
+                                    async { shouldModeratePromptUseCase(ModelType.MAIN) },
+                                    async { shouldModeratePromptUseCase(ModelType.FINAL_SYNTHESIS) },
+                                ).any { it }
+                            }
                     }
                 val selectedImageUris =
                     if (photoAttachmentPolicyResolver.resolve(chatInputCoordinator.selectedMode.value).isEnabled) {
@@ -655,7 +755,7 @@ class ChatViewModel
                         loggingPort.debug(TAG, "Prompt moderation rejected chat input after persist")
                         chatInputCoordinator.onInputChange(blockedPrompt)
                         viewModelScope.launch {
-                            _moderationMessages.send(PROMPT_REJECTED_MESSAGE)
+                            _moderationMessages.send(R.string.chat_moderation_prompt_rejected)
                         }
                     },
                 )
@@ -742,7 +842,8 @@ class ChatViewModel
             liveVoiceCoordinator.toggleMute()
         }
 
-        internal fun mapToChatMessageForTesting(message: Message): ChatMessage = chatMessageUiMapper.map(message, _modelDisplayNames.value)
+        internal fun mapToChatMessageForTesting(message: Message): ChatMessage =
+            chatMessageUiMapper.map(message, modelDisplayNamesFlow.value)
 
         private fun markWebSearchSourceExtracted(url: String) {
             val key = activeTurnKeyFlow.value ?: return
@@ -766,84 +867,63 @@ class ChatViewModel
             private const val TAG = "ChatViewModel"
             private const val SUBSCRIBE_TIMEOUT_MS = 5000L
             private const val SAVED_STATE_CHAT_ID_KEY = "chatId"
-            private const val PROMPT_REJECTED_MESSAGE = "Prompt rejected due to moderation"
         }
     }
 
-private const val UI_STATE_CHAT_ID_INDEX = 11
-private const val UI_STATE_HAS_LIVE_VOICE_PROVIDER_INDEX = 12
-private const val UI_STATE_LIVE_VOICE_STATE_INDEX = 13
-private const val UI_STATE_RESPONSE_STATS_INDEX = 14
-private const val UI_STATE_CHAT_STATS_INDEX = 15
+private data class ReduceAccumulator(
+    val hapticState: ChatUiStateReducer.HapticReducerState = ChatUiStateReducer.HapticReducerState(),
+    val reduceResult: ChatUiStateReducer.ReduceResult? = null,
+)
 
-@Suppress("LongMethod")
-private fun reduceChatUiStateFromArgs(
-    args: Array<Any?>,
-    chatUiStateReducer: ChatUiStateReducer,
-    inferenceOrchestrator: InferenceOrchestrator,
-): ChatUiState {
-    val inputsWithPolicy = args[0] as UiInputsWithPolicy
-    val isBlocked = args[1] as Boolean
-    val dbMessages = args[2] as List<Message>
-    val activeTurnSnapshotState = args[3] as ActiveTurnSnapshotState
-    val ttsPlayback = args[4] as TtsPlaybackState
-    val studioMediaMap = args[5] as Map<String, com.browntowndev.enclave.domain.port.repository.StudioMediaAsset>
-    val shareState = args[6] as ShareState
-    val isReadOnly = args[7] as Boolean
-    val sharedMessages = args[8] as List<Message>
-    val artifactExportSheet = args[9] as ArtifactExportSheetState
-    val modelDisplayNames = args[10] as Map<ModelType, String>
-    val chatId = args[UI_STATE_CHAT_ID_INDEX] as ChatId?
-    val hasLiveVoiceProviderAssigned = args[UI_STATE_HAS_LIVE_VOICE_PROVIDER_INDEX] as Boolean
-    val liveVoiceState = args[UI_STATE_LIVE_VOICE_STATE_INDEX] as LiveVoiceUiState
-    val responseStatsSheet =
-        args[UI_STATE_RESPONSE_STATS_INDEX] as com.browntowndev.enclave.feature.chat.stats.ResponseStatsSheetUiState
-    val chatStatsSheet =
-        args[UI_STATE_CHAT_STATS_INDEX] as com.browntowndev.enclave.feature.chat.stats.ChatStatsSheetUiState
+private data class ChatUiCombineInputs(
+    val inputsWithPolicy: UiInputsWithPolicy,
+    val isBlocked: Boolean,
+    val dbMessages: List<Message>,
+    val activeTurnSnapshotState: ActiveTurnSnapshotState,
+    val ttsPlayback: TtsPlaybackState,
+    val studioMediaMap: Map<String, com.browntowndev.enclave.domain.port.repository.StudioMediaAsset>,
+    val shareState: ShareState,
+    val isReadOnly: Boolean,
+    val sharedMessages: List<Message>,
+    val artifactExportSheet: ArtifactExportSheetState,
+    val modelDisplayNames: Map<ModelType, String>,
+    val chatId: ChatId?,
+    val hasLiveVoiceProviderAssigned: Boolean,
+    val liveVoiceState: LiveVoiceUiState,
+)
 
-    val inputs = inputsWithPolicy.inputs
-    val reduceResult =
-        chatUiStateReducer.reduce(
-            ChatUiStateReducer.ReduceParams(
-                settings = inputs.settings,
-                inputText = inputs.inputText,
-                selectedMode = inputs.selectedMode,
-                selectedImageUris = inputs.selectedImageUris,
-                selectedFileName = inputs.selectedFileName,
-                speechState = inputs.speechState,
-                attachmentPolicy = inputsWithPolicy.attachmentPolicy,
-                isGlobalInferenceBlocked = isBlocked,
-                dbMessages = dbMessages,
-                activeTurnKey = activeTurnSnapshotState.key,
-                activeTurnSnapshot = activeTurnSnapshotState.snapshot,
-                activeToolCallBanner = ttsPlayback.activeToolCallBanner,
-                hasTtsProviderAssigned = ttsPlayback.hasTtsProviderAssigned,
-                isPlayingTts = ttsPlayback.isPlayingTts,
-                isLoadingTts = ttsPlayback.isLoadingTts,
-                isPausedTts = ttsPlayback.isPausedTts,
-                studioMediaMap = studioMediaMap,
-                shareState = shareState,
-                isReadOnly = isReadOnly,
-                sharedMessages = sharedMessages,
-                artifactExportSheet = artifactExportSheet,
-                chatId = chatId,
-                modelDisplayNames = modelDisplayNames,
-                liveVoiceState = liveVoiceState,
-                hasLiveVoiceProviderAssigned = hasLiveVoiceProviderAssigned,
-            ),
-        )
-    reduceResult.acknowledgedTurnKey?.let { key ->
-        maybeAcknowledgeCompletedTurn(
-            key = key,
-            dbMessages = dbMessages,
-            activeSnapshot = activeTurnSnapshotState.snapshot,
-            acknowledgedTurnKeys = inferenceOrchestrator.acknowledgedTurnKeys.value,
-            onAcknowledge = inferenceOrchestrator::acknowledgeTurn,
-        )
-    }
-    return reduceResult.uiState.copy(
-        responseStatsSheet = responseStatsSheet,
-        chatStatsSheet = chatStatsSheet,
+private fun buildReduceParams(
+    inputs: ChatUiCombineInputs,
+    hapticState: ChatUiStateReducer.HapticReducerState,
+): ChatUiStateReducer.ReduceParams {
+    val uiInputs = inputs.inputsWithPolicy.inputs
+    return ChatUiStateReducer.ReduceParams(
+        settings = uiInputs.settings,
+        inputText = uiInputs.inputText,
+        selectedMode = uiInputs.selectedMode,
+        selectedImageUris = uiInputs.selectedImageUris,
+        selectedFileName = uiInputs.selectedFileName,
+        speechState = uiInputs.speechState,
+        attachmentPolicy = inputs.inputsWithPolicy.attachmentPolicy,
+        isGlobalInferenceBlocked = inputs.isBlocked,
+        dbMessages = inputs.dbMessages,
+        activeTurnKey = inputs.activeTurnSnapshotState.key,
+        activeTurnSnapshot = inputs.activeTurnSnapshotState.snapshot,
+        activeToolCallBanner = inputs.ttsPlayback.activeToolCallBanner,
+        hasTtsProviderAssigned = inputs.ttsPlayback.hasTtsProviderAssigned,
+        isPlayingTts = inputs.ttsPlayback.isPlayingTts,
+        isLoadingTts = inputs.ttsPlayback.isLoadingTts,
+        isPausedTts = inputs.ttsPlayback.isPausedTts,
+        studioMediaMap = inputs.studioMediaMap,
+        shareState = inputs.shareState,
+        isReadOnly = inputs.isReadOnly,
+        sharedMessages = inputs.sharedMessages,
+        artifactExportSheet = inputs.artifactExportSheet,
+        chatId = inputs.chatId,
+        modelDisplayNames = inputs.modelDisplayNames,
+        liveVoiceState = inputs.liveVoiceState,
+        hasLiveVoiceProviderAssigned = inputs.hasLiveVoiceProviderAssigned,
+        hapticState = hapticState,
     )
 }
 

@@ -48,7 +48,8 @@ object ToolCallBannerMapper {
             ToolDefinition.GENERATE_MUSIC.name to "Generating Music",
         )
 
-    fun bannerKind(toolName: String): ToolCallBannerKind = kindByToolName[toolName] ?: ToolCallBannerKind.SEARCH
+    fun bannerKind(toolName: String): ToolCallBannerKind =
+        kindByToolName[toolName] ?: ToolCallBannerKind.GENERIC
 
     fun bannerLabel(toolName: String): String {
         val toolDef = ToolDefinition.fromName(toolName)

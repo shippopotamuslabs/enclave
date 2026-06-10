@@ -84,6 +84,7 @@ internal fun ToolCallBannerContent(
                                     ToolCallBannerKind.ARTIFACT -> R.drawable.document
                                     ToolCallBannerKind.X_SEARCH -> 0 // Handled above
                                     ToolCallBannerKind.MEDIA -> R.drawable.image // Reuse image icon for media
+                                    ToolCallBannerKind.GENERIC -> R.drawable.network_intelligence
                                 },
                         ),
                     contentDescription = null,

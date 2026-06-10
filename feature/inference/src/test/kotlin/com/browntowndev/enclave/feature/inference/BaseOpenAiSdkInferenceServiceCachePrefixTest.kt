@@ -4,6 +4,9 @@ import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.AgentLoopMessage
+import com.browntowndev.enclave.domain.model.config.OpenRouterDataCollectionPolicy
+import com.browntowndev.enclave.domain.model.config.OpenRouterProviderSort
+import com.browntowndev.enclave.domain.model.config.OpenRouterRoutingConfiguration
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.InferenceEvent
@@ -210,16 +213,56 @@ class BaseOpenAiSdkInferenceServiceCachePrefixTest {
             assertTrue(requestBody2.contains("cache_control"), "Turn 2 missing cache_control")
         }
 
+    @Test
+    fun `completeSingleTurn applies OpenRouter routing body on live path`() =
+        runTest {
+            val capturedParams = mutableListOf<ChatCompletionCreateParams>()
+            val service =
+                createTestService(
+                    capturedParams = capturedParams,
+                    modelId = "anthropic/claude-sonnet-4",
+                    provider = "OPENROUTER",
+                    openRouterRouting =
+                        OpenRouterRoutingConfiguration(
+                            providerSort = OpenRouterProviderSort.LATENCY,
+                            allowFallbacks = false,
+                            requireParameters = true,
+                            dataCollectionPolicy = OpenRouterDataCollectionPolicy.DENY,
+                            zeroDataRetention = true,
+                        ),
+                )
+
+            service.completeSingleTurn(
+                sessionMessages = listOf(AgentLoopMessage(id = "u1", role = Role.USER, content = "hello")),
+                systemPrompt = "",
+                contextSidecars = null,
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+
+            val body = capturedParams.single()._additionalBodyProperties()
+            assertTrue(body.containsKey("provider"))
+            val provider = body["provider"]!!.convert(Map::class.javaObjectType) as Map<*, *>
+            assertEquals("latency", provider["sort"])
+            assertEquals(false, provider["allow_fallbacks"])
+            assertEquals(true, provider["zdr"])
+        }
+
     private fun createTestService(
         capturedParams: MutableList<ChatCompletionCreateParams>,
         modelId: String,
         provider: String,
+        openRouterRouting: OpenRouterRoutingConfiguration? = null,
     ): BaseOpenAiSdkInferenceService {
         return object : BaseOpenAiSdkInferenceService(
             client = mockk<OpenAIClient>(),
             modelId = modelId,
             provider = provider,
             modelType = ModelType.FAST,
+            openRouterRouting = openRouterRouting,
             loggingPort = loggingPort,
             toolStreamGatePort = FakeToolStreamGatePort(),
         ) {

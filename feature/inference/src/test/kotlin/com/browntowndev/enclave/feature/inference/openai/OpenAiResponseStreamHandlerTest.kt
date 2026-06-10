@@ -448,6 +448,7 @@ class OpenAiResponseStreamHandlerTest {
             every { usage.outputTokensDetails() } returns outputDetails
             every { inputDetails.cachedTokens() } returns 400L
             every { outputDetails.reasoningTokens() } returns 0L
+            every { usage._additionalProperties() } returns emptyMap()
             every { completed.response() } returns response
             every { event.isCompleted() } returns true
             every { event.completed() } returns Optional.of(completed)

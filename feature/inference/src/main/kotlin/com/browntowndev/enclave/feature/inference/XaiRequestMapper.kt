@@ -7,108 +7,18 @@ import com.browntowndev.enclave.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.openai.core.JsonValue
-import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam
-import com.openai.models.chat.completions.ChatCompletionContentPart
-import com.openai.models.chat.completions.ChatCompletionContentPartImage
-import com.openai.models.chat.completions.ChatCompletionContentPartText
-import com.openai.models.chat.completions.ChatCompletionCreateParams
-import com.openai.models.chat.completions.ChatCompletionMessageParam
-import com.openai.models.chat.completions.ChatCompletionSystemMessageParam
-import com.openai.models.chat.completions.ChatCompletionUserMessageParam
 import com.openai.models.responses.ResponseCreateParams
 import com.openai.models.responses.ResponseInputImage
+import com.browntowndev.enclave.feature.inference.JsonSchemaWireSupport.toWireMap
 import com.openai.models.responses.ResponseInputItem
+import kotlinx.serialization.json.JsonObject
 
 object XaiRequestMapper {
-    private const val SYNTHETIC_API_ERROR_PREFIX = "Error: API Error"
-    private const val XAI_CONVERSATION_ID_HEADER = "x-grok-conv-id"
 
     private data class SanitizedXaiRequestOptions(
         val reasoningEffort: ApiReasoningEffort?,
         val maxTokens: Int?,
     )
-
-    fun mapToChatCompletionParams(
-        modelId: String,
-        prompt: String,
-        history: List<ChatMessage>,
-        options: GenerationOptions,
-    ): ChatCompletionCreateParams {
-        val sanitizedOptions = sanitizeChatOptions(modelId, options)
-        val builder =
-            ChatCompletionCreateParams
-                .builder()
-                .model(modelId)
-                .store(false)
-
-        val messages = mutableListOf<ChatCompletionMessageParam>()
-        history.filterNot(::isSyntheticAssistantError).forEach { msg ->
-            val sanitizedContent = ImagePayloads.stripBase64DataUris(msg.content)
-            when (msg.role) {
-                Role.SYSTEM -> {
-                    @Suppress("MaxLineLength")
-                    messages.add(
-                        ChatCompletionMessageParam.ofSystem(ChatCompletionSystemMessageParam.builder().content(sanitizedContent).build()),
-                    )
-                }
-                Role.USER -> {
-                    @Suppress("MaxLineLength")
-                    messages.add(
-                        ChatCompletionMessageParam.ofUser(ChatCompletionUserMessageParam.builder().content(sanitizedContent).build()),
-                    )
-                }
-                Role.ASSISTANT -> {
-                    @Suppress("MaxLineLength")
-                    messages.add(
-                        ChatCompletionMessageParam.ofAssistant(
-                            ChatCompletionAssistantMessageParam.builder().content(sanitizedContent).build(),
-                        ),
-                    )
-                }
-            }
-        }
-
-        messages.add(
-            ChatCompletionMessageParam.ofUser(
-                buildChatCompletionUserMessage(prompt, options.imageUris),
-            ),
-        )
-        builder.messages(messages)
-
-        sanitizedOptions.reasoningEffort?.let { builder.reasoningEffort(ReasoningMapper.toSdkEffort(it)) }
-        options.temperature?.let { builder.temperature(it.toDouble()) }
-        options.topP?.let { builder.topP(it.toDouble()) }
-        sanitizedOptions.maxTokens?.let { builder.maxCompletionTokens(it.toLong()) }
-
-        val toolsPayload = mutableListOf<Map<String, Any>>()
-
-        // Add native tools for models that support them (e.g., grok-4.20 family)
-        if (modelId.startsWith("grok-4.20")) {
-            toolsPayload.add(mapOf("type" to "web_search"))
-            toolsPayload.add(mapOf("type" to "x_search"))
-            toolsPayload.add(mapOf("type" to "code_execution"))
-        }
-
-        val xaiToolsToRegister = options.activeTools
-        if (options.toolingEnabled && xaiToolsToRegister.isNotEmpty()) {
-            if (isMultiAgentModel(modelId)) {
-                // NOTE: Client-side tools are not currently available for multi-agent models
-                // in the public xAI API without developer beta access. Stripping them out to prevent 400 errors.
-            } else {
-                toolsPayload.addAll(xaiToolsToRegister.map { it.toChatCompletionToolMap() })
-                builder.parallelToolCalls(false)
-            }
-        }
-
-        if (toolsPayload.isNotEmpty()) {
-            builder.putAdditionalBodyProperty("tools", JsonValue.from(toolsPayload))
-        }
-
-        options.chatId?.value?.takeIf { it.isNotBlank() }?.let { conversationId ->
-            builder.putAdditionalHeader(XAI_CONVERSATION_ID_HEADER, conversationId)
-        }
-        return builder.build()
-    }
 
     fun mapToResponseParams(
         modelId: String,
@@ -155,7 +65,6 @@ object XaiRequestMapper {
 
         val toolsPayload = mutableListOf<Map<String, Any>>()
 
-        // Add native tools for models that support them (e.g., grok-4.20 family)
         if (modelId.startsWith("grok-4.20")) {
             toolsPayload.add(mapOf("type" to "web_search"))
             toolsPayload.add(mapOf("type" to "x_search"))
@@ -164,10 +73,7 @@ object XaiRequestMapper {
 
         val xaiToolsToRegister = options.activeTools
         if (options.toolingEnabled && xaiToolsToRegister.isNotEmpty()) {
-            if (isMultiAgentModel(modelId)) {
-                // NOTE: Client-side tools are not currently available for multi-agent models
-                // in the public xAI API without developer beta access. Stripping them out to prevent 400 errors.
-            } else {
+            if (!isMultiAgentModel(modelId)) {
                 toolsPayload.addAll(xaiToolsToRegister.map { it.toResponseToolPayloadMap() })
             }
         }
@@ -180,7 +86,7 @@ object XaiRequestMapper {
             ?.value
             ?.takeIf { it.isNotBlank() }
             ?.let { conversationId ->
-                builder.putAdditionalHeader(XAI_CONVERSATION_ID_HEADER, conversationId)
+                builder.putAdditionalHeader(ProviderInferenceConstants.XAI_CONVERSATION_ID_HEADER, conversationId)
             }
         return builder.build()
     }
@@ -199,15 +105,6 @@ object XaiRequestMapper {
         SanitizedXaiRequestOptions(
             reasoningEffort = sanitizeReasoningEffort(modelId, options.reasoningEffort),
             maxTokens = if (ApiProviderModelPolicy.isXaiMultiAgentModel(modelId)) null else options.maxTokens,
-        )
-
-    private fun sanitizeChatOptions(
-        modelId: String,
-        options: GenerationOptions,
-    ): SanitizedXaiRequestOptions =
-        SanitizedXaiRequestOptions(
-            reasoningEffort = sanitizeReasoningEffort(modelId, options.reasoningEffort),
-            maxTokens = options.maxTokens,
         )
 
     private fun sanitizeReasoningEffort(
@@ -236,47 +133,20 @@ object XaiRequestMapper {
     }
 
     private fun isSyntheticAssistantError(message: ChatMessage): Boolean =
-        message.role == Role.ASSISTANT && message.content.startsWith(SYNTHETIC_API_ERROR_PREFIX)
-
-    private fun ToolDefinition.toChatCompletionToolMap(): Map<String, Any> {
-        val parametersMap =
-            mutableMapOf<String, Any>(
-                "type" to "object",
-                "properties" to schema.properties.toMap(),
-            )
-        schema.fullSchemaOverride?.get("definitions")?.let { defs ->
-            if (defs is kotlinx.serialization.json.JsonObject) parametersMap["definitions"] = defs.toMap()
-        }
-        schema.fullSchemaOverride?.get("\$defs")?.let { defs ->
-            if (defs is kotlinx.serialization.json.JsonObject) parametersMap["\$defs"] = defs.toMap()
-        }
-        if (schema.required.isNotEmpty()) {
-            parametersMap["required"] = schema.required
-        }
-
-        return mapOf(
-            "type" to "function",
-            "function" to
-                mapOf(
-                    "name" to name,
-                    "description" to description,
-                    "parameters" to parametersMap,
-                    "strict" to false,
-                ),
-        )
-    }
+        message.role == Role.ASSISTANT &&
+            message.content.startsWith(ProviderInferenceConstants.SYNTHETIC_API_ERROR_PREFIX)
 
     private fun ToolDefinition.toResponseToolPayloadMap(): Map<String, Any> {
         val parametersMap =
-            mutableMapOf<String, Any>(
+            mutableMapOf<String, Any?>(
                 "type" to "object",
-                "properties" to schema.properties.toMap(),
+                "properties" to schema.properties.toWireMap(),
             )
         schema.fullSchemaOverride?.get("definitions")?.let { defs ->
-            if (defs is kotlinx.serialization.json.JsonObject) parametersMap["definitions"] = defs.toMap()
+            if (defs is JsonObject) parametersMap["definitions"] = defs.toWireMap()
         }
         schema.fullSchemaOverride?.get("\$defs")?.let { defs ->
-            if (defs is kotlinx.serialization.json.JsonObject) parametersMap["\$defs"] = defs.toMap()
+            if (defs is JsonObject) parametersMap["\$defs"] = defs.toWireMap()
         }
         if (schema.required.isNotEmpty()) {
             parametersMap["required"] = schema.required
@@ -289,74 +159,6 @@ object XaiRequestMapper {
             "parameters" to parametersMap,
             "strict" to false,
         )
-    }
-
-    private fun kotlinx.serialization.json.JsonObject.toMap(): Map<String, Any> {
-        val map = mutableMapOf<String, Any>()
-        forEach { (k, v) ->
-            map[k] = v.toPrimitiveOrMap()
-        }
-        return map
-    }
-
-    private fun kotlinx.serialization.json.JsonElement.toPrimitiveOrMap(): Any =
-        when (this) {
-            is kotlinx.serialization.json.JsonPrimitive -> {
-                if (isString) {
-                    content
-                } else {
-                    content.toBooleanStrictOrNull()
-                        ?: content.toLongOrNull()
-                        ?: content.toDoubleOrNull()
-                        ?: content
-                }
-            }
-            is kotlinx.serialization.json.JsonObject -> toMap()
-            is kotlinx.serialization.json.JsonArray -> map { it.toPrimitiveOrMap() }
-        }
-
-    private fun buildChatCompletionUserMessage(
-        prompt: String,
-        imageUris: List<String>,
-    ): ChatCompletionUserMessageParam {
-        if (imageUris.isEmpty()) {
-            return ChatCompletionUserMessageParam
-                .builder()
-                .content(prompt)
-                .build()
-        }
-
-        val parts =
-            buildList {
-                add(
-                    ChatCompletionContentPart.ofText(
-                        ChatCompletionContentPartText
-                            .builder()
-                            .text(prompt)
-                            .build(),
-                    ),
-                )
-                ImagePayloads.fromUris(imageUris).forEach { payload ->
-                    ImagePayloads.validate(payload)
-                    add(
-                        ChatCompletionContentPart.ofImageUrl(
-                            ChatCompletionContentPartImage
-                                .builder()
-                                .imageUrl(
-                                    ChatCompletionContentPartImage.ImageUrl
-                                        .builder()
-                                        .url(payload.dataUrl)
-                                        .build(),
-                                ).build(),
-                        ),
-                    )
-                }
-            }
-
-        return ChatCompletionUserMessageParam
-            .builder()
-            .contentOfArrayOfContentParts(parts)
-            .build()
     }
 
     private fun buildResponseUserMessage(

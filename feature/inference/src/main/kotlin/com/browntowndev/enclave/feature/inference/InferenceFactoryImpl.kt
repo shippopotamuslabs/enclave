@@ -92,6 +92,9 @@ class InferenceFactoryImpl
         companion object {
             private const val TAG = "InferenceFactory"
             private const val GEMINI_API_VERSION = "v1alpha"
+            private const val HTTP_HEADER_ASCII_MIN = 32
+            private const val HTTP_HEADER_ASCII_MAX = 126
+            private const val OPENROUTER_TITLE_MAX_LENGTH = 128
         }
 
         private sealed interface ServiceIdentity {
@@ -228,101 +231,14 @@ class InferenceFactoryImpl
                     removeServiceFor(modelType)
 
                     val newService =
-                        when (apiCreds.provider) {
-                            ApiProvider.ANTHROPIC ->
-                                AnthropicInferenceServiceImpl(
-                                    client =
-                                        anthropicClientProvider.getClient(
-                                            apiKey = apiKey,
-                                            baseUrl = resolvedBaseUrl,
-                                            headers = requestHeaders,
-                                        ),
-                                    modelId = apiConfig.modelId,
-                                    modelType = modelType,
-                                    baseUrl = resolvedBaseUrl,
-                                    loggingPort = loggingPort,
-                                    toolEnvelopeParserPort = toolEnvelopeParserPort,
-                                    toolStreamGatePort = toolStreamGatePort,
-                                    telemetrySupport = telemetrySupport,
-                                    telemetryEventPort = telemetryEventPort,
-                                )
-                            ApiProvider.GOOGLE -> {
-                                val client =
-                                    googleGenAiClientProvider.getClient(
-                                        apiKey = apiKey,
-                                        baseUrl = resolvedBaseUrl,
-                                        headers = requestHeaders,
-                                    )
-                                val sdkClient =
-                                    GoogleGenAiSdkClientImpl(
-                                        clientProvider = { client },
-                                        modelType = modelType,
-                                        loggingPort = loggingPort,
-                                    )
-                                GoogleInferenceServiceImpl(
-                                    sdkClient = sdkClient,
-                                    modelId = apiConfig.modelId,
-                                    modelType = modelType,
-                                    baseUrl = resolvedBaseUrl,
-                                    loggingPort = loggingPort,
-                                    toolEnvelopeParserPort = toolEnvelopeParserPort,
-                                    toolStreamGatePort = toolStreamGatePort,
-                                    telemetrySupport = telemetrySupport,
-                                    telemetryEventPort = telemetryEventPort,
-                                )
-                            }
-                            ApiProvider.OPENROUTER ->
-                                OpenRouterInferenceServiceImpl(
-                                    client =
-                                        openAiClientProvider.getClient(
-                                            apiKey = apiKey,
-                                            baseUrl = resolvedBaseUrl,
-                                            headers = requestHeaders,
-                                        ),
-                                    modelId = apiConfig.modelId,
-                                    modelType = modelType,
-                                    baseUrl = resolvedBaseUrl,
-                                    loggingPort = loggingPort,
-                                    toolStreamGatePort = toolStreamGatePort,
-                                    telemetrySupport = telemetrySupport,
-                                    telemetryEventPort = telemetryEventPort,
-                                )
-                            ApiProvider.XAI ->
-                                XaiInferenceServiceImpl(
-                                    client =
-                                        openAiClientProvider.getClient(
-                                            apiKey = apiKey,
-                                            baseUrl = resolvedBaseUrl,
-                                            headers = requestHeaders,
-                                        ),
-                                    modelId = apiConfig.modelId,
-                                    modelType = modelType,
-                                    baseUrl = resolvedBaseUrl,
-                                    loggingPort = loggingPort,
-                                    toolStreamGatePort = toolStreamGatePort,
-                                    telemetrySupport = telemetrySupport,
-                                    telemetryEventPort = telemetryEventPort,
-                                )
-                            ApiProvider.FAL ->
-                                throw IllegalStateException("fal.ai is media-only and cannot be used for chat inference.")
-                            else ->
-                                ApiInferenceServiceImpl(
-                                    client =
-                                        openAiClientProvider.getClient(
-                                            apiKey = apiKey,
-                                            baseUrl = resolvedBaseUrl,
-                                            headers = requestHeaders,
-                                        ),
-                                    modelId = apiConfig.modelId,
-                                    provider = apiCreds.provider.name,
-                                    modelType = modelType,
-                                    baseUrl = resolvedBaseUrl,
-                                    loggingPort = loggingPort,
-                                    toolStreamGatePort = toolStreamGatePort,
-                                    telemetrySupport = telemetrySupport,
-                                    telemetryEventPort = telemetryEventPort,
-                                )
-                        }
+                        buildUncachedApiService(
+                            apiConfig = apiConfig,
+                            apiCreds = apiCreds,
+                            apiKey = apiKey,
+                            requestHeaders = requestHeaders,
+                            resolvedBaseUrl = resolvedBaseUrl,
+                            modelType = modelType,
+                        )
 
                     val finalService = wrapWithRustLoop(newService, apiCreds.provider.name, modelType)
                     activeServices[modelType] = finalService
@@ -365,101 +281,14 @@ class InferenceFactoryImpl
                         removeServiceFor(modelType)
 
                         val newService =
-                            when (apiCreds.provider) {
-                                ApiProvider.ANTHROPIC ->
-                                    AnthropicInferenceServiceImpl(
-                                        client =
-                                            anthropicClientProvider.getClient(
-                                                apiKey = apiKey,
-                                                baseUrl = resolvedBaseUrl,
-                                                headers = requestHeaders,
-                                            ),
-                                        modelId = apiConfig.modelId,
-                                        modelType = modelType,
-                                        baseUrl = resolvedBaseUrl,
-                                        loggingPort = loggingPort,
-                                        toolEnvelopeParserPort = toolEnvelopeParserPort,
-                                        toolStreamGatePort = toolStreamGatePort,
-                                        telemetrySupport = telemetrySupport,
-                                        telemetryEventPort = telemetryEventPort,
-                                    )
-                                ApiProvider.GOOGLE -> {
-                                    val client =
-                                        googleGenAiClientProvider.getClient(
-                                            apiKey = apiKey,
-                                            baseUrl = resolvedBaseUrl,
-                                            headers = requestHeaders,
-                                        )
-                                    val sdkClient =
-                                        GoogleGenAiSdkClientImpl(
-                                            clientProvider = { client },
-                                            modelType = modelType,
-                                            loggingPort = loggingPort,
-                                        )
-                                    GoogleInferenceServiceImpl(
-                                        sdkClient = sdkClient,
-                                        modelId = apiConfig.modelId,
-                                        modelType = modelType,
-                                        baseUrl = resolvedBaseUrl,
-                                        loggingPort = loggingPort,
-                                        toolEnvelopeParserPort = toolEnvelopeParserPort,
-                                        toolStreamGatePort = toolStreamGatePort,
-                                        telemetrySupport = telemetrySupport,
-                                        telemetryEventPort = telemetryEventPort,
-                                    )
-                                }
-                                ApiProvider.OPENROUTER ->
-                                    OpenRouterInferenceServiceImpl(
-                                        client =
-                                            openAiClientProvider.getClient(
-                                                apiKey = apiKey,
-                                                baseUrl = resolvedBaseUrl,
-                                                headers = requestHeaders,
-                                            ),
-                                        modelId = apiConfig.modelId,
-                                        modelType = modelType,
-                                        baseUrl = resolvedBaseUrl,
-                                        loggingPort = loggingPort,
-                                        toolStreamGatePort = toolStreamGatePort,
-                                        telemetrySupport = telemetrySupport,
-                                        telemetryEventPort = telemetryEventPort,
-                                    )
-                                ApiProvider.XAI ->
-                                    XaiInferenceServiceImpl(
-                                        client =
-                                            openAiClientProvider.getClient(
-                                                apiKey = apiKey,
-                                                baseUrl = resolvedBaseUrl,
-                                                headers = requestHeaders,
-                                            ),
-                                        modelId = apiConfig.modelId,
-                                        modelType = modelType,
-                                        baseUrl = resolvedBaseUrl,
-                                        loggingPort = loggingPort,
-                                        toolStreamGatePort = toolStreamGatePort,
-                                        telemetrySupport = telemetrySupport,
-                                        telemetryEventPort = telemetryEventPort,
-                                    )
-                                ApiProvider.FAL ->
-                                    throw IllegalStateException("fal.ai is media-only and cannot be used for chat inference.")
-                                else ->
-                                    ApiInferenceServiceImpl(
-                                        client =
-                                            openAiClientProvider.getClient(
-                                                apiKey = apiKey,
-                                                baseUrl = resolvedBaseUrl,
-                                                headers = requestHeaders,
-                                            ),
-                                        modelId = apiConfig.modelId,
-                                        provider = apiCreds.provider.name,
-                                        modelType = modelType,
-                                        baseUrl = resolvedBaseUrl,
-                                        loggingPort = loggingPort,
-                                        toolStreamGatePort = toolStreamGatePort,
-                                        telemetrySupport = telemetrySupport,
-                                        telemetryEventPort = telemetryEventPort,
-                                    )
-                            }
+                            buildUncachedApiService(
+                                apiConfig = apiConfig,
+                                apiCreds = apiCreds,
+                                apiKey = apiKey,
+                                requestHeaders = requestHeaders,
+                                resolvedBaseUrl = resolvedBaseUrl,
+                                modelType = modelType,
+                            )
 
                         val finalService = wrapWithRustLoop(newService, apiCreds.provider.name, modelType)
                         activeServices[modelType] = finalService
@@ -575,7 +404,11 @@ class InferenceFactoryImpl
             block: suspend (LlmInferencePort) -> T,
         ): T {
             val service = withContext(Dispatchers.IO) { resolveRawServiceForApiConfig(configId) }
-            return block(service)
+            return try {
+                block(service)
+            } finally {
+                service.closeSession()
+            }
         }
 
         private suspend fun resolveRawServiceForApiConfig(configId: ApiModelConfigurationId): RustCompatibleInferenceService {
@@ -593,72 +426,40 @@ class InferenceFactoryImpl
             val resolvedBaseUrl = apiCreds.baseUrl?.takeIf { it.isNotBlank() } ?: apiCreds.provider.defaultBaseUrl()
             val modelType = ModelType.MAIN
 
-            return when (apiCreds.provider) {
-                ApiProvider.ANTHROPIC ->
-                    AnthropicInferenceServiceImpl(
-                        client = anthropicClientProvider.getClient(apiKey = apiKey, baseUrl = resolvedBaseUrl, headers = requestHeaders),
-                        modelId = apiConfig.modelId,
-                        modelType = modelType,
-                        baseUrl = resolvedBaseUrl,
-                        loggingPort = loggingPort,
-                        toolEnvelopeParserPort = toolEnvelopeParserPort,
-                        toolStreamGatePort = toolStreamGatePort,
-                        telemetrySupport = telemetrySupport,
-                        telemetryEventPort = telemetryEventPort,
-                    )
-                ApiProvider.GOOGLE -> {
-                    val client = googleGenAiClientProvider.getClient(apiKey = apiKey, baseUrl = resolvedBaseUrl, headers = requestHeaders)
-                    val sdkClient = GoogleGenAiSdkClientImpl(clientProvider = { client }, modelType = modelType, loggingPort = loggingPort)
-                    GoogleInferenceServiceImpl(
-                        sdkClient = sdkClient,
-                        modelId = apiConfig.modelId,
-                        modelType = modelType,
-                        baseUrl = resolvedBaseUrl,
-                        loggingPort = loggingPort,
-                        toolEnvelopeParserPort = toolEnvelopeParserPort,
-                        toolStreamGatePort = toolStreamGatePort,
-                        telemetrySupport = telemetrySupport,
-                        telemetryEventPort = telemetryEventPort,
-                    )
-                }
-                ApiProvider.OPENROUTER ->
-                    OpenRouterInferenceServiceImpl(
-                        client = openAiClientProvider.getClient(apiKey = apiKey, baseUrl = resolvedBaseUrl, headers = requestHeaders),
-                        modelId = apiConfig.modelId,
-                        modelType = modelType,
-                        baseUrl = resolvedBaseUrl,
-                        loggingPort = loggingPort,
-                        toolStreamGatePort = toolStreamGatePort,
-                        telemetrySupport = telemetrySupport,
-                        telemetryEventPort = telemetryEventPort,
-                    )
-                ApiProvider.XAI ->
-                    XaiInferenceServiceImpl(
-                        client = openAiClientProvider.getClient(apiKey = apiKey, baseUrl = resolvedBaseUrl, headers = requestHeaders),
-                        modelId = apiConfig.modelId,
-                        modelType = modelType,
-                        baseUrl = resolvedBaseUrl,
-                        loggingPort = loggingPort,
-                        toolStreamGatePort = toolStreamGatePort,
-                        telemetrySupport = telemetrySupport,
-                        telemetryEventPort = telemetryEventPort,
-                    )
-                ApiProvider.FAL ->
-                    throw IllegalStateException("fal.ai is media-only and cannot be used for chat inference.")
-                else ->
-                    ApiInferenceServiceImpl(
-                        client = openAiClientProvider.getClient(apiKey = apiKey, baseUrl = resolvedBaseUrl, headers = requestHeaders),
-                        modelId = apiConfig.modelId,
-                        provider = apiCreds.provider.name,
-                        modelType = modelType,
-                        baseUrl = resolvedBaseUrl,
-                        loggingPort = loggingPort,
-                        toolStreamGatePort = toolStreamGatePort,
-                        telemetrySupport = telemetrySupport,
-                        telemetryEventPort = telemetryEventPort,
-                    )
-            }
+            return buildUncachedApiService(
+                apiConfig = apiConfig,
+                apiCreds = apiCreds,
+                apiKey = apiKey,
+                requestHeaders = requestHeaders,
+                resolvedBaseUrl = resolvedBaseUrl,
+                modelType = modelType,
+            ) as RustCompatibleInferenceService
         }
+
+        private fun buildUncachedApiService(
+            apiConfig: ApiModelConfiguration,
+            apiCreds: ApiCredentials,
+            apiKey: String,
+            requestHeaders: Map<String, String>,
+            resolvedBaseUrl: String?,
+            modelType: ModelType,
+        ): LlmInferencePort =
+            ApiInferenceServiceFactory.buildUncachedService(
+                apiConfig = apiConfig,
+                apiCreds = apiCreds,
+                apiKey = apiKey,
+                requestHeaders = requestHeaders,
+                resolvedBaseUrl = resolvedBaseUrl,
+                modelType = modelType,
+                openAiClientProvider = openAiClientProvider,
+                anthropicClientProvider = anthropicClientProvider,
+                googleGenAiClientProvider = googleGenAiClientProvider,
+                loggingPort = loggingPort,
+                toolEnvelopeParserPort = toolEnvelopeParserPort,
+                toolStreamGatePort = toolStreamGatePort,
+                telemetrySupport = telemetrySupport,
+                telemetryEventPort = telemetryEventPort,
+            )
 
         private fun wrapWithRustLoop(
             service: LlmInferencePort,
@@ -759,8 +560,20 @@ class InferenceFactoryImpl
             val openRouterDefaults =
                 mapOf(
                     "HTTP-Referer" to "android-app://${context.packageName}",
-                    "X-OpenRouter-Title" to context.applicationInfo.loadLabel(context.packageManager).toString(),
+                    "X-OpenRouter-Title" to openRouterAppTitle(),
                 )
             return openRouterDefaults + normalizedCustomHeaders
+        }
+
+        private fun openRouterAppTitle(): String {
+            val raw = context.applicationInfo.loadLabel(context.packageManager).toString()
+            val ascii =
+                raw
+                    .map { character ->
+                        if (character.code in HTTP_HEADER_ASCII_MIN..HTTP_HEADER_ASCII_MAX) character else '?'
+                    }.joinToString("")
+                    .trim()
+                    .take(OPENROUTER_TITLE_MAX_LENGTH)
+            return ascii.ifBlank { "Enclave" }
         }
     }

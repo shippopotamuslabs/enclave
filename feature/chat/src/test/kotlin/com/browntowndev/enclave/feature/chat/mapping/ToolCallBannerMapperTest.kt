@@ -16,8 +16,8 @@ class ToolCallBannerMapperTest {
     }
 
     @Test
-    fun bannerKind_unknownToolDefaultsToSearch() {
-        assertEquals(ToolCallBannerKind.SEARCH, ToolCallBannerMapper.bannerKind("unknown_tool"))
+    fun bannerKind_unknownToolDefaultsToGeneric() {
+        assertEquals(ToolCallBannerKind.GENERIC, ToolCallBannerMapper.bannerKind("unknown_tool"))
     }
 
     @Test

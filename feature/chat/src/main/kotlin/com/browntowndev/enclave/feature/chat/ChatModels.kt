@@ -38,6 +38,7 @@ enum class ToolCallBannerKind {
     ARTIFACT,
     X_SEARCH,
     MEDIA,
+    GENERIC,
 }
 
 enum class ResponseHapticPhase {

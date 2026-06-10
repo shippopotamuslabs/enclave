@@ -45,6 +45,7 @@ internal object ProviderFinishReasonMapper {
         when (lowercase()) {
             "stop" -> AgentFinishReason.Stop
             "length" -> AgentFinishReason.MaxTokens
+            "content_filter" -> AgentFinishReason.Other("content_filter")
             else -> AgentFinishReason.Other(this)
         }
 
@@ -57,9 +58,12 @@ internal object ProviderFinishReasonMapper {
             "incomplete" ->
                 when (incompleteReason?.lowercase()) {
                     "max_output_tokens" -> AgentFinishReason.MaxTokens
+                    "content_filter" -> AgentFinishReason.Other("content_filter")
                     null -> AgentFinishReason.Other("incomplete:$responseId")
                     else -> AgentFinishReason.Other(incompleteReason)
                 }
+            "cancelled", "failed" -> AgentFinishReason.Other(this)
+            "paused", "pause_turn" -> AgentFinishReason.Other("pause_turn")
             else -> AgentFinishReason.Other(this)
         }
 

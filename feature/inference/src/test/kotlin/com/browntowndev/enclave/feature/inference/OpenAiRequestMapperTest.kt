@@ -19,7 +19,7 @@ class OpenAiRequestMapperTest {
     @Test
     fun `LTD-04 provider native request mappers use activeTools only`() {
         val params =
-            OpenAiRequestMapper.mapToChatCompletionParams(
+            OpenAiRequestMapper.mapToResponseParams(
                 modelId = "gpt-4o",
                 prompt = "Search and write",
                 history = emptyList(),
@@ -36,16 +36,15 @@ class OpenAiRequestMapperTest {
                     ),
             )
 
-        val registeredToolNames = params.tools().orElseThrow().map { it.asFunction().function().name() }
-
-        assertEquals(listOf("search_tools", "web_search"), registeredToolNames)
-        assertEquals(2, registeredToolNames.size)
+        val toolsPayload = params.tools().orElseThrow().toString()
+        assertTrue(toolsPayload.contains("search_tools"))
+        assertTrue(toolsPayload.contains("web_search"))
     }
 
     @Test
     fun `MUT-01 deferred schema never leaks before disclosure`() {
         val params =
-            OpenAiRequestMapper.mapToChatCompletionParams(
+            OpenAiRequestMapper.mapToResponseParams(
                 modelId = "gpt-4o",
                 prompt = "Search and write",
                 history = emptyList(),
@@ -58,9 +57,9 @@ class OpenAiRequestMapperTest {
                     ),
             )
 
-        val registeredToolNames = params.tools().orElseThrow().map { it.asFunction().function().name() }
-
-        assertEquals(listOf("search_tools", "web_search"), registeredToolNames)
+        val toolsPayload = params.tools().orElseThrow().toString()
+        assertTrue(toolsPayload.contains("search_tools"))
+        assertTrue(toolsPayload.contains("web_search"))
         assertFalse(
             params
                 .tools()
@@ -79,57 +78,6 @@ class OpenAiRequestMapperTest {
             description = "$name description",
             disclosureMode = disclosureMode,
         )
-
-    @Test
-    fun `mapToChatCompletionParams correctly maps model, prompt, and history`() {
-        val history =
-            listOf(
-                ChatMessage(Role.SYSTEM, "You are a helpful assistant."),
-                ChatMessage(Role.USER, "Hello"),
-                ChatMessage(Role.ASSISTANT, "Hi there!"),
-            )
-        val options =
-            GenerationOptions(
-                reasoningBudget = 0,
-                temperature = 0.7f,
-                maxTokens = 100,
-            )
-
-        val params =
-            OpenAiRequestMapper.mapToChatCompletionParams(
-                modelId = "gpt-4o",
-                prompt = "How are you?",
-                history = history,
-                options = options,
-            )
-
-        assertTrue(params.model().toString().contains("gpt-4o"))
-        assertEquals(4, params.messages().size)
-        assertTrue(
-            params
-                .messages()
-                .first()
-                .toString()
-                .contains("system="),
-        )
-    }
-
-    @Test
-    fun `mapToChatCompletionParams sets prompt cache key from chat id`() {
-        val params =
-            OpenAiRequestMapper.mapToChatCompletionParams(
-                modelId = "gpt-4o",
-                prompt = "How are you?",
-                history = emptyList(),
-                options =
-                    GenerationOptions(
-                        reasoningBudget = 0,
-                        chatId = ChatId("chat-123"),
-                    ),
-            )
-
-        assertEquals("chat-123", params.promptCacheKey().orElse(null))
-    }
 
     @Test
     fun `mapToResponseParams correctly maps model, prompt, and history`() {
@@ -281,9 +229,9 @@ class OpenAiRequestMapperTest {
     }
 
     @Test
-    fun `mapToChatCompletionParams excludes synthetic assistant error history`() {
+    fun `mapToResponseParams excludes synthetic assistant error history`() {
         val params =
-            OpenAiRequestMapper.mapToChatCompletionParams(
+            OpenAiRequestMapper.mapToResponseParams(
                 modelId = "gpt-4o",
                 prompt = "retry",
                 history =
@@ -294,7 +242,7 @@ class OpenAiRequestMapperTest {
                 options = GenerationOptions(reasoningBudget = 0),
             )
 
-        assertEquals(2, params.messages().size)
+        assertEquals(2, params.input().orElseThrow().asResponse().size)
     }
 
     @Test

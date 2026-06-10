@@ -10,6 +10,7 @@ import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.MessageState
 import com.browntowndev.enclave.domain.model.chat.Mode
 import com.browntowndev.enclave.domain.model.chat.Role
+import com.browntowndev.enclave.feature.chat.R
 import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.inference.ModelType
@@ -310,7 +311,7 @@ class ChatViewModelSendHappyPathTest {
             viewModel.onSendMessage()
             advanceUntilIdle()
 
-            assertEquals("Prompt rejected due to moderation", snackbar.await())
+            assertEquals(R.string.chat_moderation_prompt_rejected, snackbar.await())
             assertEquals("blocked input", viewModel.uiState.value.inputText)
             coVerify(exactly = 1) { chatUseCases.processPromptWithSafetyGate(any()) }
             collectJob.cancel()

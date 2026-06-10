@@ -51,6 +51,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -275,6 +276,32 @@ class ChatInferenceServiceTest {
             coVerify {
                 progressSession.applyState(match { it is MessageGenerationState.Processing })
             }
+        }
+
+    @Test
+    @DisplayName("CIS5: ACTION_STOP while job active defers stopSelf to finally block")
+    fun cis5_actionStopWhileJobActiveUsesFinallyStopSelf() =
+        runTest(testDispatcher) {
+            val streamStarted = CompletableDeferred<Unit>()
+            every { llmInferenceService.sendPrompt(any(), any(), any()) } returns
+                flow {
+                    streamStarted.complete(Unit)
+                    awaitCancellation()
+                }
+
+            val spiedService = spyk(service, recordPrivateCalls = false)
+            spiedService.onStartCommand(startIntent(), 0, 1)
+            streamStarted.await()
+            runCurrent()
+
+            spiedService.onStartCommand(
+                Intent(ChatInferenceService.ACTION_STOP),
+                0,
+                2,
+            )
+            advanceUntilIdle()
+
+            verify(atLeast = 1) { spiedService.stopSelf(1) }
         }
 
     @Test

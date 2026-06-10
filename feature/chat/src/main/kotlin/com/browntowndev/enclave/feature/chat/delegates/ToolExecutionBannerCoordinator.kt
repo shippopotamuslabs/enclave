@@ -11,6 +11,7 @@ import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnKey
 import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnSnapshotPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutionEventPort
+import com.browntowndev.enclave.domain.util.Clock
 import com.browntowndev.enclave.domain.util.WebSearchResultParser
 import com.browntowndev.enclave.feature.chat.ToolCallBannerUi
 import com.browntowndev.enclave.feature.chat.mapping.ToolCallBannerMapper
@@ -35,6 +36,7 @@ class ToolExecutionBannerCoordinator
         private val toolExecutionEventPort: ToolExecutionEventPort,
         private val loggingPort: LoggingPort,
         private val activeChatTurnSnapshotPort: ActiveChatTurnSnapshotPort,
+        private val clock: Clock,
     ) {
         private val _activeToolCallBanner = MutableStateFlow<ToolCallBannerUi?>(null)
         val activeToolCallBanner: StateFlow<ToolCallBannerUi?> = _activeToolCallBanner.asStateFlow()
@@ -104,7 +106,7 @@ class ToolExecutionBannerCoordinator
         private fun onToolStarted(event: ToolExecutionEvent.Started) {
             activeToolJobs[event.eventId]?.cancel()
             activeToolIds.add(event.eventId)
-            toolStartTimes[event.eventId] = System.currentTimeMillis()
+            toolStartTimes[event.eventId] = clock.currentTimeMillis()
             val toolName = event.toolName.lowercase()
             activeToolNames[event.eventId] = toolName
             _activeToolCallBanner.value = ToolCallBannerMapper.toStartedBanner(toolName)
@@ -151,7 +153,7 @@ class ToolExecutionBannerCoordinator
             activeTurnKey: () -> ActiveChatTurnKey?,
         ) {
             val startTime = toolStartTimes[event.eventId] ?: return
-            val elapsed = System.currentTimeMillis() - startTime
+            val elapsed = clock.currentTimeMillis() - startTime
             val remaining = (MIN_BANNER_VISIBLE_MS - elapsed).coerceAtLeast(0)
             val capturedKey = activeTurnKey()
             val capturedStart = pendingStartArtifacts[event.eventId]

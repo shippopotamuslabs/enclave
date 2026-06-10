@@ -7,8 +7,10 @@ import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseUsage
 import io.mockk.every
 import io.mockk.mockk
+import com.openai.core.JsonValue
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
+import java.math.BigDecimal
 import java.util.Optional
 
 class OpenAiStreamUsageAccumulatorTest {
@@ -24,6 +26,7 @@ class OpenAiStreamUsageAccumulatorTest {
         every { usage.completionTokens() } returns 50L
         every { usage.completionTokensDetails() } returns Optional.empty()
         every { usage.promptTokensDetails() } returns Optional.of(promptDetails)
+        every { usage._additionalProperties() } returns emptyMap()
         every { promptDetails.cachedTokens() } returns Optional.of(9_500L)
         every { event.choices() } returns emptyList()
 
@@ -47,6 +50,7 @@ class OpenAiStreamUsageAccumulatorTest {
         every { usage.outputTokensDetails() } returns outputDetails
         every { inputDetails.cachedTokens() } returns 9_500L
         every { outputDetails.reasoningTokens() } returns 12L
+        every { usage._additionalProperties() } returns emptyMap()
 
         accumulateResponseStreamUsage(usage, state)
 
@@ -71,6 +75,7 @@ class OpenAiStreamUsageAccumulatorTest {
         every { usage.outputTokensDetails() } returns outputDetails
         every { inputDetails.cachedTokens() } returns 400L
         every { outputDetails.reasoningTokens() } returns 0L
+        every { usage._additionalProperties() } returns emptyMap()
 
         accumulateResponseStreamUsage(response, state)
 
@@ -78,5 +83,24 @@ class OpenAiStreamUsageAccumulatorTest {
         assertEquals(200, state.outputTokens)
         assertEquals(400, state.cacheReadInputTokens)
         assertEquals(null, state.reasoningTokens)
+    }
+
+    @Test
+    fun accumulateOpenAiStreamUsage_parsesOpenRouterExactCost() {
+        val state = OpenAiStreamUsageAccumulator()
+        val event = mockk<ChatCompletionChunk>()
+        val usage = mockk<CompletionUsage>()
+
+        every { event.usage() } returns Optional.of(usage)
+        every { usage.promptTokens() } returns 100L
+        every { usage.completionTokens() } returns 20L
+        every { usage.completionTokensDetails() } returns Optional.empty()
+        every { usage.promptTokensDetails() } returns Optional.empty()
+        every { usage._additionalProperties() } returns mapOf("cost" to JsonValue.from(0.0012))
+        every { event.choices() } returns emptyList()
+
+        accumulateOpenAiStreamUsage(event, state)
+
+        assertEquals(BigDecimal("0.001200"), state.costUsd)
     }
 }

@@ -21,6 +21,7 @@ import com.browntowndev.enclave.domain.usecase.chat.PromptSafetyGateRequest
 import com.browntowndev.enclave.domain.usecase.chat.PromptSafetyGateResult
 import com.browntowndev.enclave.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
+import com.browntowndev.enclave.feature.chat.BuildConfig
 import com.browntowndev.enclave.feature.chat.ChatModeMapper.toDomain
 import com.browntowndev.enclave.feature.chat.ChatModeUi
 import kotlinx.coroutines.CancellationException
@@ -296,11 +297,13 @@ class InferenceOrchestrator
         ) {
             update { keys ->
                 val newKeys = transform(keys)
-                Log.d(
-                    "InfOrch",
-                    "ackUpdate from=${keys.map { it.assistantMessageId.value.take(4) }} " +
-                        "to=${newKeys.map { it.assistantMessageId.value.take(4) }} via=$via",
-                )
+                if (BuildConfig.DEBUG) {
+                    Log.d(
+                        "InfOrch",
+                        "ackUpdate from=${keys.map { it.assistantMessageId.value.take(4) }} " +
+                            "to=${newKeys.map { it.assistantMessageId.value.take(4) }} via=$via",
+                    )
+                }
                 newKeys
             }
         }

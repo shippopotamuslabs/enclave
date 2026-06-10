@@ -23,4 +23,8 @@
     <string name="artifact_export_back">Back</string>
     <string name="artifact_export_close">Close export sheet</string>
     <string name="artifact_export_in_progress">Exporting…</string>
+    <string name="chat_moderation_prompt_rejected">Prompt rejected due to moderation</string>
+    <string name="chat_moderation_feedback_submitted">Got it. Feedback submitted!</string>
+    <string name="chat_moderation_report_action">Got it wrong?</string>
+    <string name="chat_share_chooser_title">Share Chat</string>
 </resources>

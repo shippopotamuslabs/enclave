@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.feature.inference
 
+import com.browntowndev.enclave.domain.model.config.OpenRouterRoutingConfiguration
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.ToolStreamGatePort
@@ -11,6 +12,7 @@ class OpenRouterInferenceServiceImpl(
     client: OpenAIClient,
     modelId: String,
     modelType: ModelType,
+    openRouterRouting: OpenRouterRoutingConfiguration,
     baseUrl: String? = null,
     loggingPort: LoggingPort,
     toolStreamGatePort: ToolStreamGatePort,
@@ -21,6 +23,7 @@ class OpenRouterInferenceServiceImpl(
         modelId = modelId,
         provider = "OPENROUTER",
         modelType = modelType,
+        openRouterRouting = openRouterRouting,
         baseUrl = baseUrl,
         loggingPort = loggingPort,
         toolStreamGatePort = toolStreamGatePort,

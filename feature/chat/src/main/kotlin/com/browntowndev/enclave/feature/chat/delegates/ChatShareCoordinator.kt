@@ -41,7 +41,18 @@ class ChatShareCoordinator
         val sharedMessages: StateFlow<List<Message>> = _sharedMessages.asStateFlow()
 
         private val shareUrlCache = mutableMapOf<ShareOption, String>()
+        private var cachedChatId: ChatId? = null
         private var pendingShareMessageId: MessageId? = null
+
+        fun onActiveChatChanged(chatId: ChatId?) {
+            if (cachedChatId == chatId) return
+            cachedChatId = chatId
+            shareUrlCache.clear()
+            pendingShareMessageId = null
+            if (_shareState.value !is ShareState.Idle) {
+                _shareState.value = ShareState.Idle
+            }
+        }
 
         fun onShareClick(
             messageId: MessageId,
