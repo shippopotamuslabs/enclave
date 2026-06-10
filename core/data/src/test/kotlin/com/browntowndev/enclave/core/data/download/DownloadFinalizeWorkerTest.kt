@@ -192,6 +192,7 @@ class DownloadFinalizeWorkerTest {
                 qnnPackInstaller = mockQnnPackInstaller,
                 resolveSd15QnnPackCatalogAssetUseCase = mockResolveSd15QnnPackCatalogAssetUseCase,
                 embeddingCoordinator = mockEmbeddingCoordinator,
+                notificationManager = mockk(relaxed = true),
                 logger = mockLoggingPort,
             )
     }

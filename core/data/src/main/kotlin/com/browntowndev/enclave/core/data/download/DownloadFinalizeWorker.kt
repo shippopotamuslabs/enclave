@@ -1,12 +1,15 @@
 package com.browntowndev.enclave.core.data.download
 
+import android.app.ForegroundServiceStartNotAllowedException
 import android.content.Context
 import androidx.annotation.Keep
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
+import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.browntowndev.enclave.core.data.sync.EmbeddingRegenerationCoordinator
+import com.browntowndev.enclave.core.data.util.formatBytes
 import com.browntowndev.enclave.domain.model.config.LocalModelAsset
 import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.config.UtilityType
@@ -64,17 +67,46 @@ class DownloadFinalizeWorker
         private val qnnPackInstaller: QnnPackInstallerPort,
         private val resolveSd15QnnPackCatalogAssetUseCase: ResolveSd15QnnPackCatalogAssetUseCase,
         private val embeddingCoordinator: EmbeddingRegenerationCoordinator,
+        private val notificationManager: DownloadNotificationManager,
         private val logger: LoggingPort,
     ) : CoroutineWorker(context, workerParams) {
         companion object {
             private const val TAG = "DownloadFinalizeWorker"
+            private const val NOTIFICATION_TITLE = "Installing Models"
+            private const val NOTIFICATION_UPDATE_INTERVAL_MS = 500L
 
             // Request kinds (matching domain model)
             const val REQUEST_INITIALIZE = "INITIALIZE_MODELS"
             const val REQUEST_RESTORE = "RESTORE_SOFT_DELETED_MODEL"
         }
 
+        private var lastNotificationUpdateMs = 0L
+
         override suspend fun doWork(): Result {
+            // Run as a foreground service so the multi-minute QNN pack extraction
+            // survives OEM background restrictions (e.g. "SmartBackground") that
+            // otherwise kill the process mid-unzip. Mirrors ModelDownloadWorker.
+            try {
+                notificationManager.createNotificationChannel()
+                val cancelIntent =
+                    WorkManager
+                        .getInstance(applicationContext)
+                        .createCancelPendingIntent(id)
+                setForeground(
+                    notificationManager.createForegroundInfo(
+                        cancelPendingIntent = cancelIntent,
+                        title = NOTIFICATION_TITLE,
+                    ),
+                )
+            } catch (e: ForegroundServiceStartNotAllowedException) {
+                logger.warning(TAG, "Foreground not allowed (app not in foreground), returning retry: ${e.message}")
+                return Result.retry()
+            } catch (e: Exception) {
+                // Best-effort: foreground promotion may fail in restricted or test
+                // environments, but finalization must still be attempted.
+                logger.warning(TAG, "Failed to promote finalize worker to foreground: ${e.message}")
+            }
+
             return try {
                 // Emit stage in progress data so the repository can identify
                 // this worker as the finalizer even while RUNNING.
@@ -379,7 +411,7 @@ class DownloadFinalizeWorker
                         val installed =
                             qnnPackInstaller.installIfNeeded(
                                 asset.metadata,
-                                progressListener = qnnPackProgressListener(),
+                                progressListener = qnnPackProgressListener(asset.metadata.displayName),
                             )
                         if (requiresInstall && !installed) {
                             val modelsDir = File(applicationContext.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
@@ -421,7 +453,7 @@ class DownloadFinalizeWorker
             }
         }
 
-        private fun qnnPackProgressListener(): QnnPackInstallProgressListener =
+        private fun qnnPackProgressListener(displayName: String): QnnPackInstallProgressListener =
             QnnPackInstallProgressListener { bytesExtracted, totalBytes ->
                 runCatching {
                     setProgress(
@@ -432,7 +464,45 @@ class DownloadFinalizeWorker
                         ),
                     )
                 }
+                updateExtractionNotification(displayName, bytesExtracted, totalBytes)
             }
+
+        /**
+         * Updates the foreground notification with extraction progress, throttled so
+         * the 8MB-interval installer callbacks don't spam the notification manager.
+         * Best-effort: notification failures must never abort extraction.
+         */
+        private fun updateExtractionNotification(
+            displayName: String,
+            bytesExtracted: Long,
+            totalBytes: Long,
+        ) {
+            val now = System.currentTimeMillis()
+            val isComplete = totalBytes > 0 && bytesExtracted >= totalBytes
+            if (!isComplete && now - lastNotificationUpdateMs < NOTIFICATION_UPDATE_INTERVAL_MS) return
+            lastNotificationUpdateMs = now
+            runCatching {
+                val cancelIntent =
+                    WorkManager
+                        .getInstance(applicationContext)
+                        .createCancelPendingIntent(id)
+                val progress =
+                    if (totalBytes > 0) {
+                        (bytesExtracted.toDouble() / totalBytes).toFloat().coerceIn(0f, 1f)
+                    } else {
+                        0f
+                    }
+                setForegroundAsync(
+                    notificationManager.createForegroundInfoForProgress(
+                        progress = progress,
+                        currentFile = "Unzipping $displayName",
+                        subText = "${formatBytes(bytesExtracted)} / ${formatBytes(totalBytes)}",
+                        cancelPendingIntent = cancelIntent,
+                        title = NOTIFICATION_TITLE,
+                    ),
+                )
+            }
+        }
 
         private suspend fun syncSlotAsset(asset: LocalModelAsset) {
             for (config in asset.configurations) {
