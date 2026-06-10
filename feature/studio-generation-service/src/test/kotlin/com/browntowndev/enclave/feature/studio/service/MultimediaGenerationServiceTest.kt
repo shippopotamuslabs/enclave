@@ -203,6 +203,17 @@ class MultimediaGenerationServiceTest {
     }
 
     @Test
+    fun `E-STU-04 start proceeds when coordinator already claimed active generation`() {
+        every { studioRepository.hasActiveGeneration() } returns true
+        coEvery { generateMediaUseCase(any(), any()) } returns Result.success(emptyList())
+
+        service.onStartCommand(startImageIntent(prompt = "claimed"), 0, 1)
+        awaitServiceWork()
+
+        coVerify(exactly = 1) { generateMediaUseCase(any(), any()) }
+    }
+
+    @Test
     fun `S-STU-10 duplicate start while generation active is ignored`() {
         coEvery { generateMediaUseCase(any(), any()) } coAnswers {
             delay(1_000)

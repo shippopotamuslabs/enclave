@@ -159,7 +159,8 @@ class StudioRepositoryImpl
             if (activeGenerationPersistence.load() == null || activeGeneration.value != null) {
                 return
             }
-            generationError.value = GENERATION_INTERRUPTED_MESSAGE
+            // Stale claims are expected after process death or an intentional session reset.
+            // Clear them quietly; there is no in-process generation to resume.
             activeGenerationPersistence.clear()
         }
 
@@ -443,8 +444,4 @@ class StudioRepositoryImpl
         }
 
         private fun String?.toPersistentAlbumId(): String? = if (this == DEFAULT_GALLERY_ALBUM_ID) null else this
-
-        private companion object {
-            const val GENERATION_INTERRUPTED_MESSAGE = "Generation was interrupted. Please try again."
-        }
     }

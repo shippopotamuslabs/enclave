@@ -151,6 +151,27 @@ class StudioRepositoryImplTest {
         }
 
     @Test
+    fun `reconcilePersistedActiveGeneration clears stale claim without surfacing error`() =
+        runTest {
+            val staleGeneration =
+                ActiveStudioGeneration(
+                    id = "gen-stale",
+                    prompt = "orphaned",
+                    mediaType = MediaCapability.IMAGE,
+                    settings = ImageGenerationSettings(),
+                )
+            coEvery { activeGenerationPersistence.load() } returns staleGeneration
+
+            repository.reconcilePersistedActiveGeneration()
+
+            coVerify { activeGenerationPersistence.clear() }
+            repository.observeGenerationError().test {
+                assertNull(awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
     fun `clearEphemeralCache refuses while generation active`() =
         runTest {
             repository.reportActiveGeneration(

@@ -74,12 +74,16 @@ class MultimediaGenerationService : Service() {
 
         when (intent?.action) {
             ACTION_START -> {
-                if (generationJob?.isActive == true || studioRepository.hasActiveGeneration()) {
-                    logger.warning(TAG, "Ignoring duplicate generation request while one is active")
-                    stopSelf(startId)
+                // Android requires startForeground() for every startForegroundService() call.
+                // The coordinator records active generation before dispatching here, so
+                // hasActiveGeneration() must not gate foreground promotion.
+                if (!startForegroundSafely(startId, createNotification("Preparing..."))) {
                     return START_NOT_STICKY
                 }
-                if (!startForegroundSafely(startId, createNotification("Preparing..."))) {
+                if (generationJob?.isActive == true) {
+                    logger.warning(TAG, "Ignoring duplicate generation request while one is active")
+                    stopForeground(Service.STOP_FOREGROUND_REMOVE)
+                    stopSelf(startId)
                     return START_NOT_STICKY
                 }
                 val prompt = intent.getStringExtra(EXTRA_PROMPT)
