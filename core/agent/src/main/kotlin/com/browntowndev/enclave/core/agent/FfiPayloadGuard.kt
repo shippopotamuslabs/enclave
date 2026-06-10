@@ -26,7 +26,15 @@ internal object FfiPayloadGuard {
             TAG,
             "FFI guard truncating assistantText originalChars=${text.length} max=$MAX_ASSISTANT_TEXT_CHARS",
         )
-        return text.substring(0, MAX_ASSISTANT_TEXT_CHARS) + ASSISTANT_TEXT_TRUNCATION_MARKER
+        // Back off one char if the cut would strand a high surrogate (the lone
+        // surrogate would become U+FFFD during UTF-8 encoding at the FFI).
+        val end =
+            if (text[MAX_ASSISTANT_TEXT_CHARS - 1].isHighSurrogate()) {
+                MAX_ASSISTANT_TEXT_CHARS - 1
+            } else {
+                MAX_ASSISTANT_TEXT_CHARS
+            }
+        return text.substring(0, end) + ASSISTANT_TEXT_TRUNCATION_MARKER
     }
 
     fun capToolArgs(
