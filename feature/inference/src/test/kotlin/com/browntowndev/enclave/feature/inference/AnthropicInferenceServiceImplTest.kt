@@ -105,7 +105,7 @@ class AnthropicInferenceServiceImplTest {
                         options = GenerationOptions(reasoningBudget = 0),
                     )
                 }
-            assertTrue(error.message!!.contains("Stream ended mid-response without finish signal"))
+            assertTrue(error.message!!.contains("stream ended unexpectedly without finish signal"))
         }
 
     @Test
@@ -114,7 +114,7 @@ class AnthropicInferenceServiceImplTest {
             val paramsSlot = slot<MessageCreateParams>()
             every { client.messages() } returns messageService
             every { messageService.createStreaming(capture(paramsSlot)) } returns streamResponse
-            every { streamResponse.stream() } returns Stream.empty()
+            every { streamResponse.stream() } returns Stream.of(anthropicMessageStopEvent())
             every { streamResponse.close() } returns Unit
 
             val service = createService()

@@ -727,9 +727,23 @@ class AnthropicInferenceServiceImpl(
                 }
             }
 
-            if (isAnthropicStreamDisconnect(outputTextDeltaCount, stopReason, receivedMessageStop, pendingToolUses)) {
+            if (
+                isAnthropicStreamDisconnect(stopReason, receivedMessageStop) &&
+                currentCoroutineContext().isActive
+            ) {
+                loggingPort.warning(
+                    TAG,
+                    "Anthropic stream ended without messageStop model=$modelId " +
+                        "outputTextDeltas=$outputTextDeltaCount thinkingTextDeltas=$thinkingTextDeltaCount " +
+                        "pendingToolUses=${pendingToolUses.size}",
+                )
+                // Throw for every truncated stream — including thinking-only (CoT) and
+                // mid-tool-use truncation — so the agent loop retries instead of treating
+                // a dropped connection as a completed turn. The message must contain
+                // "stream ended unexpectedly" so retry classification treats it as transient.
                 throw RuntimeException(
-                    "Stream ended mid-response without finish signal (provider=$PROVIDER model=$modelId)",
+                    "Model stream ended unexpectedly without finish signal " +
+                        "(provider=$PROVIDER model=$modelId)",
                 )
             }
 
@@ -808,12 +822,6 @@ class AnthropicInferenceServiceImpl(
 }
 
 private fun isAnthropicStreamDisconnect(
-    outputTextDeltaCount: Int,
     stopReason: String?,
     receivedMessageStop: Boolean,
-    pendingToolUses: Map<Long, *>,
-): Boolean =
-    outputTextDeltaCount > 0 &&
-        stopReason == null &&
-        !receivedMessageStop &&
-        pendingToolUses.isEmpty()
+): Boolean = stopReason == null && !receivedMessageStop

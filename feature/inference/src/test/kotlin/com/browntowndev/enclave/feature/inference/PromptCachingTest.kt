@@ -176,7 +176,7 @@ class PromptCachingTest {
             every { messageService.createStreaming(capture(capturedParams)) } returns streamResponse
             every { streamResponse.stream() } returns
                 java.util.stream.Stream.of(
-                    mockk<RawMessageStreamEvent>(relaxed = true),
+                    anthropicMessageStopEvent(),
                 )
             every { streamResponse.close() } returns Unit
 
@@ -284,7 +284,7 @@ class PromptCachingTest {
             every { messageService.createStreaming(capture(capturedParams)) } returns streamResponse
             every { streamResponse.stream() } returns
                 java.util.stream.Stream.of(
-                    mockk<RawMessageStreamEvent>(relaxed = true),
+                    anthropicMessageStopEvent(),
                 )
             every { streamResponse.close() } returns Unit
 
