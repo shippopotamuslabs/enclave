@@ -50,6 +50,8 @@ class ModelDownloadOrchestratorImpl
         // Cached startup result from InitializeModelsUseCase
         private var startupModelsResult: DownloadModelsResult? = null
 
+        private var requestedWifiOnly: Boolean = true
+
         /**
          * Initialize the orchestrator with a pre-computed result from startup model check.
          * This avoids duplicate scanning when called from InitializeModelsUseCase.
@@ -141,6 +143,7 @@ class ModelDownloadOrchestratorImpl
                 return false
             }
 
+            requestedWifiOnly = wifiOnly
             logger.info(TAG, "Starting downloads for ${modelsToDownload.size} models (wifiOnly=$wifiOnly)")
             speedTracker.clearAll()
 
@@ -244,9 +247,8 @@ class ModelDownloadOrchestratorImpl
         }
 
         override suspend fun resumeDownloads() {
-            val wifiOnly = _downloadState.value.waitingForUnmeteredNetwork
-            logger.info(TAG, "Resuming downloads (wifiOnly=$wifiOnly)")
-            startDownloads(wifiOnly)
+            logger.info(TAG, "Resuming downloads (wifiOnly=$requestedWifiOnly)")
+            startDownloads(wifiOnly = requestedWifiOnly)
         }
 
         override suspend fun cancelDownloads() {
@@ -274,10 +276,11 @@ class ModelDownloadOrchestratorImpl
                 }
                 return
             }
-            startDownloads(wifiOnly = false)
+            startDownloads(wifiOnly = requestedWifiOnly)
         }
 
         override suspend fun downloadOnMobileData() {
+            requestedWifiOnly = false
             stateManager.updateState { copy(waitingForUnmeteredNetwork = false) }
             // If startupModelsResult is null (edge case), set error and return
             if (startupModelsResult == null) {

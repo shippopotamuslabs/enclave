@@ -44,12 +44,12 @@ class DownloadSessionManagerTest {
     }
 
     @Test
-    fun createNewSession_persistsWithCommit() {
+    fun createNewSession_persistsWithApply() {
         sessionManager.createNewSession()
 
         verify { mockEditor.putString("download_session_id", any()) }
-        verify { mockEditor.commit() }
-        verify(exactly = 0) { mockEditor.apply() }
+        verify { mockEditor.apply() }
+        verify(exactly = 0) { mockEditor.commit() }
     }
 
     @Test
@@ -94,7 +94,7 @@ class DownloadSessionManagerTest {
 
         assertNull(sessionManager.currentSessionId)
         verify { mockEditor.remove("download_session_id") }
-        verify { mockEditor.commit() }
-        verify(exactly = 0) { mockEditor.apply() }
+        verify { mockEditor.apply() }
+        verify(exactly = 0) { mockEditor.commit() }
     }
 }

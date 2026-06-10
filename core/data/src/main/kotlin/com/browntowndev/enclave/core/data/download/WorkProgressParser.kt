@@ -91,7 +91,13 @@ class WorkProgressParser
                     null
                 }
                 WorkInfo.State.CANCELLED -> {
-                    DownloadProgressUpdate(status = DownloadStatus.PAUSED)
+                    val workSessionId = workInfo.outputData.getString(DownloadWorkKeys.KEY_SESSION_ID)
+                    if (sessionManager.isSessionStale(workSessionId)) {
+                        Log.w(TAG, "Ignoring stale CANCELLED: workSessionId=$workSessionId")
+                        null
+                    } else {
+                        DownloadProgressUpdate(status = DownloadStatus.PAUSED)
+                    }
                 }
                 else -> null
             }
@@ -191,8 +197,8 @@ class WorkProgressParser
 
             val parsedFiles =
                 filesData.mapNotNull { file ->
-                    parseFileProgress(file).also {
-                        if (it == null) Log.w(TAG, "Failed to parse file progress: $it")
+                    parseFileProgress(file).also { parsed ->
+                        if (parsed == null) Log.w(TAG, "Failed to parse file progress: $file")
                     }
                 }
 
@@ -296,7 +302,7 @@ class WorkProgressParser
             }
 
             return try {
-                val filename = parts[0]
+                val filename = unescapeProgressField(parts[0])
                 val bytesDownloaded = parts[1].toLong().coerceAtLeast(0L)
                 val totalBytes = parts[2].toLong().coerceAtLeast(0L)
                 val status = FileStatus.valueOf(parts[3])
@@ -347,6 +353,8 @@ class WorkProgressParser
                 DownloadProgressUpdate(status = DownloadStatus.CHECKING)
             }
         }
+
+        private fun unescapeProgressField(value: String): String = value.replace("%7C", "|")
 
         private fun formatEta(seconds: Long): String =
             when {

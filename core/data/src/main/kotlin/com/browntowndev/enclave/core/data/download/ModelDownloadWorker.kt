@@ -28,12 +28,17 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
 import java.net.SocketException
 import java.net.SocketTimeoutException
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -86,12 +91,14 @@ class ModelDownloadWorker
             val requestKind = inputData.getString(DownloadWorkKeys.KEY_REQUEST_KIND) ?: ""
             val sessionId =
                 inputData.getString(DownloadWorkKeys.KEY_SESSION_ID)
-                    ?: return failWithError("Missing required input: $DownloadWorkKeys.KEY_SESSION_ID")
+                    ?: return failWithError(
+                        "Missing required input: ${DownloadWorkKeys.KEY_SESSION_ID}",
+                    )
             val targetModelId = inputData.getString(DownloadWorkKeys.KEY_TARGET_MODEL_ID)
 
             val specs = parseDownloadSpecs()
             if (specs == null) {
-                logger.error(TAG, "No download files specified (key $DownloadWorkKeys.KEY_DOWNLOAD_FILES not found)")
+                logger.error(TAG, "No download files specified (key ${DownloadWorkKeys.KEY_DOWNLOAD_FILES} not found)")
                 return Result.failure(workDataOf(DownloadWorkKeys.KEY_ERROR_MESSAGE to "No files specified"))
             }
 
@@ -102,7 +109,7 @@ class ModelDownloadWorker
                         DownloadWorkKeys.KEY_SESSION_ID to sessionId,
                         DownloadWorkKeys.KEY_REQUEST_KIND to requestKind,
                         DownloadWorkKeys.KEY_WORKER_STAGE to STAGE_DOWNLOAD,
-                        DownloadWorkKeys.KEY_DOWNLOADED_SHAS to "",
+                        DownloadWorkKeys.KEY_DOWNLOADED_SHAS to "[]",
                         DownloadWorkKeys.KEY_TARGET_MODEL_ID to (targetModelId ?: ""),
                     ),
                 )
@@ -116,9 +123,15 @@ class ModelDownloadWorker
 
             // Initialize progress tracker with spec list (deduplicates by SHA256 internally).
             // Preserve terminal failures across WorkManager retries so the UI does not flip back to 0/b.
-            progressTracker.initialize(uniqueSpecs, preserveFailedStates = runAttemptCount > 0)
+            progressTracker.initialize(
+                sessionId = sessionId,
+                specs = uniqueSpecs,
+                preserveFailedStates = runAttemptCount > 0,
+            )
 
             return coroutineScope {
+                val downloadSemaphore = Semaphore(ModelConfig.CONCURRENT_DOWNLOADS)
+                val artifactLocks = ConcurrentHashMap<String, Mutex>()
                 // Channel for conflated progress updates to avoid overwhelming WorkManager's SQLite
                 val progressChannel = Channel<Unit>(Channel.CONFLATED)
 
@@ -146,7 +159,14 @@ class ModelDownloadWorker
                             .map { spec ->
                                 async {
                                     try {
-                                        downloadSpec(spec, progressChannel)
+                                        downloadSemaphore.withPermit {
+                                            downloadSpec(
+                                                sessionId = sessionId,
+                                                spec = spec,
+                                                progressChannel = progressChannel,
+                                                artifactLocks = artifactLocks,
+                                            )
+                                        }
                                         spec.sha256
                                     } catch (e: CancellationException) {
                                         throw e
@@ -154,7 +174,7 @@ class ModelDownloadWorker
                                         failedCount.incrementAndGet()
                                         logger.error(TAG, "Failed to download ${spec.localFileName}: ${e.message}", e)
                                         val errorMessage = "Download timed out: ${e.message}"
-                                        progressTracker.updateFileState(spec.sha256) {
+                                        progressTracker.updateFileState(sessionId, spec.sha256) {
                                             it.copy(status = FileStatus.FAILED, error = errorMessage)
                                         }
                                         delay(500)
@@ -163,7 +183,7 @@ class ModelDownloadWorker
                                         failedCount.incrementAndGet()
                                         logger.error(TAG, "Failed to download ${spec.localFileName}: ${e.message}", e)
                                         val errorMessage = "Connection reset: ${e.message}"
-                                        progressTracker.updateFileState(spec.sha256) {
+                                        progressTracker.updateFileState(sessionId, spec.sha256) {
                                             it.copy(status = FileStatus.FAILED, error = errorMessage)
                                         }
                                         delay(500)
@@ -173,7 +193,7 @@ class ModelDownloadWorker
                                         logger.error(TAG, "Failed to download ${spec.localFileName}: ${e.message}", e)
 
                                         val errorMessage = e.message
-                                        progressTracker.updateFileState(spec.sha256) {
+                                        progressTracker.updateFileState(sessionId, spec.sha256) {
                                             it.copy(status = FileStatus.FAILED, error = errorMessage)
                                         }
                                         null
@@ -242,7 +262,20 @@ class ModelDownloadWorker
                     throw e
                 } catch (e: Exception) {
                     logger.error(TAG, "Download error: ${e.message}", e)
-                    Result.retry()
+                    if (runAttemptCount >= ModelConfig.MAX_RETRY_ATTEMPTS) {
+                        Result.failure(
+                            workDataOf(
+                                DownloadWorkKeys.KEY_ERROR_MESSAGE to
+                                    "Download failed after ${runAttemptCount + 1} attempts: ${e.message}",
+                                DownloadWorkKeys.KEY_REQUEST_KIND to requestKind,
+                                DownloadWorkKeys.KEY_WORKER_STAGE to STAGE_DOWNLOAD,
+                                DownloadWorkKeys.KEY_SESSION_ID to sessionId,
+                                DownloadWorkKeys.KEY_TARGET_MODEL_ID to (targetModelId ?: ""),
+                            ),
+                        )
+                    } else {
+                        Result.retry()
+                    }
                 } finally {
                     // Ensure all progress updates are flushed before finishing
                     progressChannel.close()
@@ -268,8 +301,10 @@ class ModelDownloadWorker
          * Downloads all artifacts (primary file + optional mmproj) for a single DownloadFileSpec.
          */
         private suspend fun downloadSpec(
+            sessionId: String,
             spec: DownloadFileSpec,
             progressChannel: Channel<Unit>,
+            artifactLocks: ConcurrentHashMap<String, Mutex>,
         ) {
             val targetDir = File(applicationContext.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
             if (!targetDir.exists()) targetDir.mkdirs()
@@ -285,7 +320,7 @@ class ModelDownloadWorker
                     targetFile.exists() && targetFile.length() == artifact.sizeInBytes
                 }
             if (allArtifactsPresent) {
-                progressTracker.updateFileState(trackingKey) {
+                progressTracker.updateFileState(sessionId, trackingKey) {
                     it.copy(
                         status = FileStatus.COMPLETE,
                         bytesDownloaded = totalExpectedBytes,
@@ -315,7 +350,7 @@ class ModelDownloadWorker
                 return
             }
 
-            progressTracker.updateFileState(trackingKey) {
+            progressTracker.updateFileState(sessionId, trackingKey) {
                 it.copy(status = FileStatus.DOWNLOADING)
             }
 
@@ -325,67 +360,73 @@ class ModelDownloadWorker
             try {
                 var completedBytes = 0L
                 artifacts.forEach { artifact ->
-                    val downloadUrl =
-                        modelUrlProvider.getModelDownloadUrl(
-                            specWithArtifactName(spec, artifact),
+                    val artifactLock = artifactLocks.getOrPut(artifact.localFileName) { Mutex() }
+                    artifactLock.withLock {
+                        val downloadUrl =
+                            modelUrlProvider.getModelDownloadUrl(
+                                specWithArtifactName(spec, artifact),
+                            )
+                        logger.info(
+                            TAG,
+                            "[DOWNLOAD] Starting download: url=$downloadUrl, " +
+                                "remoteFileName=${artifact.remoteFileName}, localFileName=${artifact.localFileName}",
                         )
-                    logger.info(
-                        TAG,
-                        "[DOWNLOAD] Starting download: url=$downloadUrl, " +
-                            "remoteFileName=${artifact.remoteFileName}, localFileName=${artifact.localFileName}",
-                    )
 
-                    val paths = DownloadSecurity.resolveDownloadPaths(targetDir, artifact.localFileName)
-                    val targetFile = paths.targetFile
-                    if (targetFile.exists() && targetFile.length() == artifact.sizeInBytes) {
-                        completedBytes += artifact.sizeInBytes
-                        return@forEach
+                        val paths = DownloadSecurity.resolveDownloadPaths(targetDir, artifact.localFileName)
+                        val targetFile = paths.targetFile
+                        if (targetFile.exists() && targetFile.length() == artifact.sizeInBytes) {
+                            completedBytes += artifact.sizeInBytes
+                            return@withLock
+                        }
+
+                        val tempFile = paths.tempFile
+                        val metaFile = paths.metaFile
+                        val tempLength = if (tempFile.exists()) tempFile.length() else 0L
+                        val committedOffset = DownloadMetaFile.safeResumeOffset(metaFile, tempLength)
+                        DownloadMetaFile.truncateTempToCommittedOffset(tempFile, committedOffset)
+                        val existingBytes = if (tempFile.exists()) committedOffset else 0L
+                        val downloadConfig =
+                            FileDownloaderPort.FileDownloadConfig(
+                                filename = artifact.localFileName,
+                                expectedSha256 = artifact.sha256,
+                                expectedSizeBytes = artifact.sizeInBytes,
+                            )
+
+                        val downloadResult =
+                            fileDownloader.downloadFile(
+                                config = downloadConfig,
+                                downloadUrl = downloadUrl,
+                                targetDirPath = targetDir.absolutePath,
+                                existingBytes = existingBytes,
+                                progressCallback =
+                                    object : FileDownloaderPort.ProgressCallback {
+                                        override fun onProgress(
+                                            bytesDownloaded: Long,
+                                            totalBytes: Long,
+                                        ) {
+                                            progressTracker.updateFileState(sessionId, trackingKey) {
+                                                it.copy(
+                                                    bytesDownloaded = completedBytes + bytesDownloaded,
+                                                    totalBytes =
+                                                        totalExpectedBytes.coerceAtLeast(
+                                                            completedBytes + totalBytes,
+                                                        ),
+                                                    status = FileStatus.DOWNLOADING,
+                                                )
+                                            }
+
+                                            if (progressTracker.shouldUpdateProgress()) {
+                                                progressChannel.trySend(Unit)
+                                            }
+                                        }
+                                    },
+                            )
+
+                        completedBytes += downloadResult.totalBytes
                     }
-
-                    val tempFile = paths.tempFile
-                    val metaFile = paths.metaFile
-                    val tempLength = if (tempFile.exists()) tempFile.length() else 0L
-                    val committedOffset = DownloadMetaFile.safeResumeOffset(metaFile, tempLength)
-                    DownloadMetaFile.truncateTempToCommittedOffset(tempFile, committedOffset)
-                    val existingBytes = if (tempFile.exists()) committedOffset else 0L
-                    val downloadConfig =
-                        FileDownloaderPort.FileDownloadConfig(
-                            filename = artifact.localFileName,
-                            expectedSha256 = artifact.sha256,
-                            expectedSizeBytes = artifact.sizeInBytes,
-                        )
-
-                    val downloadResult =
-                        fileDownloader.downloadFile(
-                            config = downloadConfig,
-                            downloadUrl = downloadUrl,
-                            targetDirPath = targetDir.absolutePath,
-                            existingBytes = existingBytes,
-                            progressCallback =
-                                object : FileDownloaderPort.ProgressCallback {
-                                    override fun onProgress(
-                                        bytesDownloaded: Long,
-                                        totalBytes: Long,
-                                    ) {
-                                        progressTracker.updateFileState(trackingKey) {
-                                            it.copy(
-                                                bytesDownloaded = completedBytes + bytesDownloaded,
-                                                totalBytes = totalExpectedBytes.coerceAtLeast(completedBytes + totalBytes),
-                                                status = FileStatus.DOWNLOADING,
-                                            )
-                                        }
-
-                                        if (progressTracker.shouldUpdateProgress()) {
-                                            progressChannel.trySend(Unit)
-                                        }
-                                    }
-                                },
-                        )
-
-                    completedBytes += downloadResult.totalBytes
                 }
 
-                progressTracker.updateFileState(trackingKey) {
+                progressTracker.updateFileState(sessionId, trackingKey) {
                     it.copy(
                         status = FileStatus.COMPLETE,
                         bytesDownloaded = totalExpectedBytes,
@@ -458,11 +499,15 @@ class ModelDownloadWorker
             }
         }
 
-        private fun failWithError(errorMessage: String): Result =
+        private fun failWithError(
+            errorMessage: String,
+            sessionId: String? = null,
+        ): Result =
             Result.failure(
                 workDataOf(
                     DownloadWorkKeys.KEY_ERROR_MESSAGE to errorMessage,
                     DownloadWorkKeys.KEY_WORKER_STAGE to STAGE_DOWNLOAD,
+                    DownloadWorkKeys.KEY_SESSION_ID to (sessionId ?: ""),
                 ),
             )
 

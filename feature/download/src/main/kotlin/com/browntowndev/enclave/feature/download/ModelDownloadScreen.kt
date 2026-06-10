@@ -49,6 +49,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
@@ -128,22 +129,22 @@ fun ModelDownloadScreen(
     val fileProgressList by viewModel.fileProgressList.collectAsStateWithLifecycle()
 
     // Track lifecycle for foreground state to prevent race condition with WorkManager foreground service
-    LaunchedEffect(lifecycleOwner) {
-        // Check current state immediately to handle case where activity is already in ON_RESUME
-        // when this LaunchedEffect runs (observer would miss the event if we only listen for future events)
-        if (lifecycleOwner.lifecycle.currentState == Lifecycle.State.RESUMED) {
-            viewModel.onAppForegrounded()
-        }
-
-        lifecycleOwner.lifecycle.addObserver(
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val observer =
             LifecycleEventObserver { _, event ->
                 when (event) {
                     Lifecycle.Event.ON_RESUME -> viewModel.onAppForegrounded()
                     Lifecycle.Event.ON_PAUSE -> viewModel.onAppBackgrounded()
                     else -> {}
                 }
-            },
-        )
+            }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        if (lifecycleOwner.lifecycle.currentState == Lifecycle.State.RESUMED) {
+            viewModel.onAppForegrounded()
+        }
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
     }
 
     // Permission state for POST_NOTIFICATIONS (Android 13+)

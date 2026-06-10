@@ -16,6 +16,7 @@ internal object DownloadMetaFile {
         val expectedSizeBytes: Long,
         val expectedSha256: String,
         val committedOffset: Long,
+        val hasCommittedOffset: Boolean,
     )
 
     fun write(
@@ -24,7 +25,17 @@ internal object DownloadMetaFile {
         expectedSha256: String,
         committedOffset: Long = 0L,
     ) {
-        metaFile.writeText("$expectedSizeBytes\n$expectedSha256\n$committedOffset")
+        val content = "$expectedSizeBytes\n$expectedSha256\n$committedOffset"
+        val parent = metaFile.parentFile
+        if (parent != null) {
+            val stagingFile = File(parent, "${metaFile.name}.staging")
+            stagingFile.writeText(content)
+            if (stagingFile.renameTo(metaFile)) {
+                return
+            }
+            stagingFile.delete()
+        }
+        metaFile.writeText(content)
     }
 
     fun updateCommittedOffset(
@@ -51,16 +62,18 @@ internal object DownloadMetaFile {
             }
             val expectedSize = lines[0].toLongOrNull() ?: return null
             val expectedSha256 = lines[1]
+            val hasCommittedOffset = lines.size >= 3
             val committedOffset =
-                if (lines.size >= 3) {
+                if (hasCommittedOffset) {
                     lines[2].toLongOrNull()?.coerceAtLeast(0L) ?: 0L
                 } else {
-                    null
+                    0L
                 }
             Meta(
                 expectedSizeBytes = expectedSize,
                 expectedSha256 = expectedSha256,
-                committedOffset = committedOffset ?: 0L,
+                committedOffset = committedOffset,
+                hasCommittedOffset = hasCommittedOffset,
             )
         } catch (_: Exception) {
             null
@@ -76,8 +89,7 @@ internal object DownloadMetaFile {
         tempLength: Long,
     ): Long {
         val meta = readOrNull(metaFile) ?: return 0L
-        val hasCommittedOffset = metaFile.readLines().size >= 3
-        val committed = if (hasCommittedOffset) meta.committedOffset else tempLength
+        val committed = if (meta.hasCommittedOffset) meta.committedOffset else tempLength
         return committed.coerceIn(0L, tempLength)
     }
 

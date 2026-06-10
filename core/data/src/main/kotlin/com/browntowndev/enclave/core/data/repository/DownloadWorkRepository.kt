@@ -106,11 +106,12 @@ class DownloadWorkRepository
             withContext(ioDispatcher) {
                 try {
                     // Using getWorkInfosForUniqueWorkFlow().firstOrNull() avoids blocking the thread completely.
-                    val workInfo =
+                    val workInfos =
                         workManager
                             .getWorkInfosForUniqueWorkFlow(ModelConfig.WORK_TAG)
                             .firstOrNull()
-                            ?.firstOrNull()
+                            ?: emptyList()
+                    val workInfo = selectBestWorkInfo(workInfos)
 
                     workInfo?.state == WorkInfo.State.ENQUEUED ||
                         workInfo?.state == WorkInfo.State.RUNNING ||

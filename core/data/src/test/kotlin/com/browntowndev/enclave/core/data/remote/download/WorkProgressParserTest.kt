@@ -6,6 +6,7 @@ import androidx.work.NetworkType
 import androidx.work.WorkInfo
 import com.browntowndev.enclave.core.data.download.DownloadFinalizeWorker
 import com.browntowndev.enclave.core.data.download.DownloadSessionManager
+import com.browntowndev.enclave.core.data.download.DownloadWorkKeys
 import com.browntowndev.enclave.core.data.download.ModelDownloadWorker
 import com.browntowndev.enclave.core.data.download.WorkProgressParser
 import com.browntowndev.enclave.core.testing.TestClock
@@ -217,16 +218,18 @@ class WorkProgressParserTest {
 
     @Test
     fun `parse returns paused status for CANCELLED`() {
-        // Given: WorkInfo with CANCELLED state
         val workInfo =
             mockk<WorkInfo> {
                 every { state } returns WorkInfo.State.CANCELLED
+                every { outputData } returns
+                    androidx.work.workDataOf(
+                        DownloadWorkKeys.KEY_SESSION_ID to "current-session-id",
+                    )
             }
+        every { mockSessionManager.isSessionStale("current-session-id") } returns false
 
-        // When: Parse
         val result = parser.parse(workInfo, emptyList())
 
-        // Then: Return PAUSED status
         assertNotNull(result)
         assertEquals(DownloadStatus.PAUSED, result!!.status)
     }

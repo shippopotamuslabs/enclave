@@ -39,7 +39,7 @@ class DownloadSessionManager
             prefs
                 .edit()
                 .putString(KEY_PERSISTENT_SESSION_ID, newId)
-                .commit()
+                .apply()
             return newId
         }
 
@@ -48,7 +48,7 @@ class DownloadSessionManager
             prefs
                 .edit()
                 .remove(KEY_PERSISTENT_SESSION_ID)
-                .commit()
+                .apply()
         }
 
         fun isSessionStale(workSessionId: String?): Boolean {
