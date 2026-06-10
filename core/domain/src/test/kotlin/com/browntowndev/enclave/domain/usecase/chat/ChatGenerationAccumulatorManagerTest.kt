@@ -473,6 +473,59 @@ class ChatGenerationAccumulatorManagerTest {
         }
 
     @Test
+    fun `failed state surfaces underlying error detail to the user`() =
+        runTest {
+            val manager =
+                ChatGenerationAccumulatorManager(
+                    mode = Mode.FAST,
+                    chatId = ChatId("chat"),
+                    userMessageId = MessageId("user"),
+                    defaultAssistantMessageId = MessageId("assistant"),
+                    chatRepository = mockk(relaxed = true),
+                )
+
+            val result =
+                manager.reduce(
+                    MessageGenerationState.Failed(
+                        error =
+                            RuntimeException(
+                                "Agent loop failed: Model API unavailable: stream ended unexpectedly (attempts=3)",
+                            ),
+                        modelType = ModelType.FAST,
+                    ),
+                )
+
+            val snapshot = result.messages.getValue(MessageId("assistant"))
+            assertTrue(snapshot.content.contains("Sorry, something went wrong"))
+            assertTrue(snapshot.content.contains("Model API unavailable: stream ended unexpectedly (attempts=3)"))
+            assertEquals(MessageState.COMPLETE, snapshot.messageState)
+        }
+
+    @Test
+    fun `failed state without error message keeps generic copy`() =
+        runTest {
+            val manager =
+                ChatGenerationAccumulatorManager(
+                    mode = Mode.FAST,
+                    chatId = ChatId("chat"),
+                    userMessageId = MessageId("user"),
+                    defaultAssistantMessageId = MessageId("assistant"),
+                    chatRepository = mockk(relaxed = true),
+                )
+
+            val result =
+                manager.reduce(
+                    MessageGenerationState.Failed(
+                        error = RuntimeException(),
+                        modelType = ModelType.FAST,
+                    ),
+                )
+
+            val snapshot = result.messages.getValue(MessageId("assistant"))
+            assertEquals("Sorry, something went wrong. Please try again.", snapshot.content)
+        }
+
+    @Test
     fun `markWebSearchSourcesExtracted updates extracted flag on accumulator sources`() =
         runTest {
             val manager =
