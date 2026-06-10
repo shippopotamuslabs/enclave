@@ -429,7 +429,7 @@ class RustLoopInferenceServiceTest {
             val config = requireNotNull(port.capturedConfig)
             assertEquals(4096u, config.io.contextWindowTokens)
             assertEquals("system once", config.io.systemPrompt)
-            assertEquals(2u, config.agent.maxModelRequestsPerTurn)
+            assertEquals(6u, config.agent.maxModelRequestsPerTurn)
             assertTrue(config.agent.enableLoopHooks)
             assertTrue(config.agent.enablePendingWorkGuard)
             assertFalse(config.capabilities.summarizationAllowed)

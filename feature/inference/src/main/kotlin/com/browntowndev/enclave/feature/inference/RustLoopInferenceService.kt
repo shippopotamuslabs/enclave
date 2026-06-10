@@ -555,7 +555,10 @@ class RustLoopInferenceService(
         AgentLoopConfig(
             agent =
                 AgentLoopAgentConfig(
-                    maxModelRequestsPerTurn = 2u,
+                    // Each tool round consumes one model request; 2 allowed only a single
+                    // tool round before tools were force-blocked, which made multi-step
+                    // tool turns end in the tools-blocked fallback message.
+                    maxModelRequestsPerTurn = 6u,
                     enableLoopHooks = true,
                     enablePendingWorkGuard = true,
                 ),
