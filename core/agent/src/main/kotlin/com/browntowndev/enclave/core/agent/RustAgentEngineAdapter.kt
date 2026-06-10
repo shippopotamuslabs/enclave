@@ -54,8 +54,13 @@ class RustAgentEngineAdapter
             private const val TAG = "RustAgentEngineAdapter"
         }
 
+        @Volatile
         private var activeEngine: FfiAgentEngine? = null
+
+        @Volatile
         private var activeSession: FfiSession? = null
+
+        @Volatile
         private var activeHost: AgentLoopHostCallbacks? = null
 
         override fun execute(
@@ -94,6 +99,13 @@ class RustAgentEngineAdapter
                         sessionContextJson = sessionContextJson(sessionContext),
                         io = config.io.toFfi(),
                     )
+                if (activeSession != null) {
+                    loggingPort.warning(
+                        TAG,
+                        "execute() superseding a live agent session; manual compact and " +
+                            "context reads now target the new session",
+                    )
+                }
                 activeEngine = engine
                 activeSession = session
                 activeHost = host
@@ -232,9 +244,15 @@ class RustAgentEngineAdapter
                         }
                     }
                 } finally {
-                    activeEngine = null
-                    activeSession = null
-                    activeHost = null
+                    // A newer execute() may have replaced the active references while this
+                    // session was still draining; only clear them if they are still ours,
+                    // otherwise a finishing background session would break manual compact
+                    // and context-reference reads for the newer session.
+                    if (activeSession === session) {
+                        activeEngine = null
+                        activeSession = null
+                        activeHost = null
+                    }
                 }
             }
 
