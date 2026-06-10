@@ -206,6 +206,9 @@ bool copyGraphArray(
         return false;
     }
     for (uint32_t i = 0; i < num_graphs; ++i) {
+        // Link the entry before copying so a failed copy is still reachable by
+        // freeEnclaveGraphsInfo (which also needs entry 0 to find the backing array).
+        info_ptr_array[i] = &info_array[i];
         bool copied = false;
         if (graphs[i].version == QNN_SYSTEM_CONTEXT_GRAPH_INFO_VERSION_1) {
             copied = copyGraphInfoV1(graphs[i].graphInfoV1, info_array[i]);
@@ -216,7 +219,6 @@ bool copyGraphArray(
             freeEnclaveGraphsInfo(&info_ptr_array, i + 1);
             return false;
         }
-        info_ptr_array[i] = &info_array[i];
     }
     *graphs_info = info_ptr_array;
     return true;

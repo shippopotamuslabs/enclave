@@ -13,6 +13,10 @@ void diffusionProgressCallback(int step, int total_steps, void*) {
 }
 
 std::mutex g_engine_mutex;
+// Serializes whole generations. Without it, a second qnn_generate_image with a
+// different model_dir would destroy the engine the first call is still using.
+// Separate from g_engine_mutex so cancel/trim stay responsive mid-generation.
+std::mutex g_generate_mutex;
 EnclaveDiffusionHandle* g_engine = nullptr;
 std::string g_engine_model_dir;
 
@@ -74,6 +78,7 @@ extern "C" int qnn_generate_image(
     int memory_policy,
     char* error_out,
     int error_out_len) {
+    std::lock_guard<std::mutex> generate_lock(g_generate_mutex);
     if (qnn_probe_runtime() < 2) {
         const char* msg =
             "QNN runtime not ready. Run scripts/sync-qnn-jniLibs.sh.";
