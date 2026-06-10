@@ -18,6 +18,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -32,6 +33,7 @@ import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.domain.model.media.VisualGenerationSettings
 import com.browntowndev.enclave.feature.studio.components.StudioOptionsBottomSheet
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlin.ExperimentalStdlibApi
 
@@ -82,13 +84,20 @@ fun StudioScreen(
         }
     }
 
-    LaunchedEffect(uiState.isGenerating) {
+    LaunchedEffect(uiState.isGenerating, uiState.activeGenerationPrompt, generationPlaceholderCount) {
         if (scrollOnGenerationStart && uiState.isGenerating) {
             scrollOnGenerationStart = false
-            val lastIndex = listState.layoutInfo.totalItemsCount - 1
-            if (lastIndex >= 0) {
-                listState.animateScrollToItem(lastIndex)
-            }
+            val scrollTargetIndex =
+                computeStudioGenerationPlaceholderScrollIndex(
+                    groupedGallery = groupedGallery,
+                    isGenerating = uiState.isGenerating,
+                    activeGenerationPrompt = uiState.activeGenerationPrompt,
+                    generationPlaceholderCount = generationPlaceholderCount,
+                ) ?: return@LaunchedEffect
+
+            snapshotFlow { listState.layoutInfo.totalItemsCount }
+                .first { totalCount -> totalCount > scrollTargetIndex }
+            listState.animateScrollToItem(scrollTargetIndex)
         }
     }
 
