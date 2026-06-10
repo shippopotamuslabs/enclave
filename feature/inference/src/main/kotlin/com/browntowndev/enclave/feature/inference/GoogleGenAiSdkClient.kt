@@ -158,9 +158,19 @@ internal class GoogleGenAiSdkClientImpl(
                     }
                 }
             }
-            if (outputTextDeltaCount > 0 && finishReason == null && lastFunctionCall == null) {
+            // A function call is a complete unit even when the terminal chunk is lost, so it
+            // exempts the guard. Everything else without a finish reason — including
+            // thinking-only (CoT) streams and zero-delta streams — is a truncated turn.
+            // The message must contain "stream ended unexpectedly" so retry classification
+            // treats it as transient.
+            if (finishReason == null && lastFunctionCall == null && currentCoroutineContext().isActive) {
+                loggingPort.warning(
+                    TAG,
+                    "Gemini stream ended without finishReason model=$modelId " +
+                        "outputTextDeltas=$outputTextDeltaCount emittedAny=$emittedAny",
+                )
                 throw RuntimeException(
-                    "Stream ended mid-response without finish signal (provider=Google model=$modelId)",
+                    "Model stream ended unexpectedly without finish signal (provider=Google model=$modelId)",
                 )
             }
         } catch (e: Exception) {

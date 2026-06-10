@@ -947,16 +947,22 @@ abstract class BaseOpenAiSdkInferenceService(
                     if (shouldStop) break
                 }
 
-                if (!state.finishedEmitted) {
-                    loggingPort.debug(
+                if (!state.finishedEmitted && currentCoroutineContext().isActive) {
+                    loggingPort.warning(
                         tag,
-                        "Chat stream ended without finishReason model=$modelId outputTextDeltas=${state.outputTextDeltaCount}",
+                        "Chat stream ended without finishReason model=$modelId " +
+                            "outputTextDeltas=${state.outputTextDeltaCount} " +
+                            "reasoningChars=${state.accumulatedReasoning.length} " +
+                            "toolCallDeltas=${state.trackedToolCalls.size}",
                     )
-                    if (state.outputTextDeltaCount > 0 && state.trackedToolCalls.isEmpty()) {
-                        throw RuntimeException(
-                            "Stream ended mid-response without finish signal (provider=$provider model=$modelId)",
-                        )
-                    }
+                    // Throw for every truncated stream — including reasoning-only (CoT) and
+                    // mid-tool-call truncation — so the agent loop retries instead of treating
+                    // a dropped connection as a completed turn. The message must contain
+                    // "stream ended unexpectedly" so retry classification treats it as transient.
+                    throw RuntimeException(
+                        "Model stream ended unexpectedly without finish signal " +
+                            "(provider=$provider model=$modelId)",
+                    )
                 }
             }
         } catch (e: OpenAIServiceException) {
@@ -1041,13 +1047,17 @@ abstract class BaseOpenAiSdkInferenceService(
                     val event = runInterruptible { iterator.next() }
                     state = handler.handleEvent(event, state)
                 }
-                if (
-                    state.outputTextDeltaCount > 0 &&
-                    state.toolCallRequests.isEmpty() &&
-                    !state.receivedTerminalEvent
-                ) {
+                if (!state.receivedTerminalEvent && currentCoroutineContext().isActive) {
+                    loggingPort.warning(
+                        tag,
+                        "Responses stream ended without terminal event model=$modelId " +
+                            "outputTextDeltas=${state.outputTextDeltaCount} " +
+                            "reasoningTextDeltas=${state.reasoningTextDeltaCount} " +
+                            "toolCalls=${state.toolCallRequests.size}",
+                    )
                     throw RuntimeException(
-                        "Stream ended mid-response without finish signal (provider=$provider model=$modelId)",
+                        "Model stream ended unexpectedly without finish signal " +
+                            "(provider=$provider model=$modelId)",
                     )
                 }
             }

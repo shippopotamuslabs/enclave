@@ -29,7 +29,7 @@ class AppendOnlyProviderWiringTest {
             val streamResponse = mockk<com.anthropic.core.http.StreamResponse<RawMessageStreamEvent>>()
             every { client.messages() } returns messageService
             every { messageService.createStreaming(any<MessageCreateParams>()) } returns streamResponse
-            every { streamResponse.stream() } returns java.util.stream.Stream.empty()
+            every { streamResponse.stream() } returns java.util.stream.Stream.of(anthropicMessageStopEvent())
             every { streamResponse.close() } returns Unit
 
             val service =
