@@ -79,6 +79,35 @@ class ParsedModelCatalogTest {
     }
 
     @Test
+    @DisplayName("DL-015 Diffusion member that loses the slot competition is exposed as pack member asset")
+    fun dl015_losingDiffusionMemberExposedAsPackMemberAsset() {
+        val catalog = ModelPackTestFixtures.parsedCatalogWithAllThreeImagePacks()
+        val slice = filterForDownload(catalog, suppressImageGenerationSlot = false, suppressImageEditSlot = false)
+
+        // SDXL wins the single IMAGE_GENERATION slot; the SD15 diffusion GGUF must still
+        // surface for scanning/download or the SD15 pack stays permanently incomplete.
+        assertEquals(
+            ModelPackTestFixtures.SDXL_DIFFUSION_SHA,
+            slice.slotAssignments[ModelType.IMAGE_GENERATION]?.metadata?.sha256,
+        )
+        val packMemberShas = slice.packMemberAssets.map { it.metadata.sha256 }
+        assertTrue(ModelPackTestFixtures.DIFFUSION_SHA in packMemberShas)
+        // Slot winners and utility members are not duplicated into the pack-member list.
+        assertFalse(ModelPackTestFixtures.SDXL_DIFFUSION_SHA in packMemberShas)
+        assertFalse(ModelPackTestFixtures.JUGGERNAUT_DIFFUSION_SHA in packMemberShas)
+        assertTrue(slice.packMemberAssets.all { it.metadata.utilityType == null })
+    }
+
+    @Test
+    @DisplayName("DL-016 Suppressed IMAGE_GENERATION slot excludes its diffusion members from pack member assets")
+    fun dl016_suppressedSlotExcludesPackMemberAssets() {
+        val catalog = ModelPackTestFixtures.parsedCatalogWithAllThreeImagePacks()
+        val slice = filterForDownload(catalog, suppressImageGenerationSlot = true, suppressImageEditSlot = false)
+
+        assertFalse(slice.packMemberAssets.any { it.metadata.sha256 == ModelPackTestFixtures.DIFFUSION_SHA })
+    }
+
+    @Test
     @DisplayName("DL-001 Juggernaut pack slot is IMAGE_EDIT")
     fun dl001_juggernautPackSlotIsImageEdit() {
         val catalog = ModelPackTestFixtures.parsedCatalogWithAllThreeImagePacks()

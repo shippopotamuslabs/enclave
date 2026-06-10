@@ -811,6 +811,56 @@ class InitializeModelsUseCaseTest {
         }
 
     @Test
+    fun `DL-017 diffusion member dropped from the slot map is still scanned for download`() =
+        runTest {
+            // Gen3+ device: SDXL wins the single IMAGE_GENERATION slot, so the SD15
+            // diffusion GGUF must flow through the scan as a pack member asset.
+            every { capabilityPort.getCapabilities() } returns
+                com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilities(
+                    snapdragonTier = SnapdragonTier.GEN3_PLUS,
+                    npuAvailable = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
+                    sd15NpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
+                    sd15CpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.NO,
+                    sdxlNpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
+                    juggernautXlNpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
+                    recommendedBackend = com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind.QNN_NPU,
+                    recommendedModelId = com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId.SD15_QNN,
+                    diagnostics = emptyList(),
+                )
+
+            val parsedCatalog = ModelPackTestFixtures.parsedCatalogWithAllThreeImagePacks()
+
+            coEvery { modelConfigFetcher.fetchParsedCatalog() } returns Result.success(parsedCatalog)
+            coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
+
+            val expectedModelsSlot = slot<Map<ModelType, LocalModelAsset>>()
+            val utilitySlot = slot<List<LocalModelAsset>>()
+            coEvery {
+                checkModelsUseCase(
+                    expectedModels = capture(expectedModelsSlot),
+                    utilityAssets = capture(utilitySlot),
+                )
+            } returns
+                DownloadModelsResult(
+                    allModels = emptyMap(),
+                    utilityAssets = emptyList(),
+                    modelsToDownload = listOf(ModelPackTestFixtures.diffusionAsset()),
+                    scanResult = ModelScanResult(emptyList(), emptyMap(), false),
+                )
+
+            useCase()
+
+            // SDXL holds the IMAGE_GENERATION slot.
+            assertEquals(
+                ModelPackTestFixtures.SDXL_DIFFUSION_SHA,
+                expectedModelsSlot.captured[ModelType.IMAGE_GENERATION]?.metadata?.sha256,
+            )
+            // The losing SD15 diffusion member is still passed to the scan.
+            val scannedShas = utilitySlot.captured.map { it.metadata.sha256 }.toSet()
+            assertTrue(ModelPackTestFixtures.DIFFUSION_SHA in scannedShas)
+        }
+
+    @Test
     fun `DL-004 API IMAGE_GENERATION suppresses SD15 and SDXL but not Juggernaut`() =
         runTest {
             every { capabilityPort.getCapabilities() } returns
