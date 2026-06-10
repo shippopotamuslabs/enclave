@@ -144,8 +144,10 @@ bool loadEnclaveQnnBackend(
         if (providers[i] == nullptr) {
             continue;
         }
+        // Provider must be at least the header version: newer minors are backward
+        // compatible, older ones may lack entries this code calls.
         if (providers[i]->apiVersion.coreApiVersion.major == QNN_API_VERSION_MAJOR &&
-            providers[i]->apiVersion.coreApiVersion.minor <= QNN_API_VERSION_MINOR) {
+            providers[i]->apiVersion.coreApiVersion.minor >= QNN_API_VERSION_MINOR) {
             apis.core = providers[i]->QNN_INTERFACE_VER_NAME;
             found = true;
             break;
@@ -204,7 +206,7 @@ bool acquireEnclaveQnnSystem(
             continue;
         }
         if (providers[i]->systemApiVersion.major == QNN_SYSTEM_API_VERSION_MAJOR &&
-            providers[i]->systemApiVersion.minor <= QNN_SYSTEM_API_VERSION_MINOR) {
+            providers[i]->systemApiVersion.minor >= QNN_SYSTEM_API_VERSION_MINOR) {
             g_system_interface = providers[i]->QNN_SYSTEM_INTERFACE_VER_NAME;
             found = true;
             break;

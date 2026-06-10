@@ -98,6 +98,7 @@ set(ENGINE_SOURCES
 if(ENCLAVE_DIFFUSION_HAS_QNN)
     list(APPEND ENGINE_SOURCES
         ${ENGINE_DIR}/qnn/qnn_fastrpc.cpp
+        ${ENGINE_DIR}/qnn/qnn_htp_device.cpp
         ${ENGINE_DIR}/qnn/qnn_runtime.cpp
         ${ENGINE_DIR}/qnn/qnn_graph_info.cpp
         ${ENGINE_DIR}/qnn/qnn_tensor_io.cpp
