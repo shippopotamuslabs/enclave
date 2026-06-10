@@ -30,6 +30,7 @@ class DownloadSessionManagerTest {
         every { mockEditor.putString(any(), any()) } returns mockEditor
         every { mockEditor.remove(any()) } returns mockEditor
         every { mockEditor.apply() } returns Unit
+        every { mockEditor.commit() } returns true
 
         sessionManager = DownloadSessionManager(mockContext)
     }
@@ -43,10 +44,19 @@ class DownloadSessionManagerTest {
     }
 
     @Test
-    fun isSessionStale_false_whenNoActiveSession() {
+    fun createNewSession_persistsWithCommit() {
+        sessionManager.createNewSession()
+
+        verify { mockEditor.putString("download_session_id", any()) }
+        verify { mockEditor.commit() }
+        verify(exactly = 0) { mockEditor.apply() }
+    }
+
+    @Test
+    fun isSessionStale_true_whenNoActiveSession() {
         val result = sessionManager.isSessionStale("any-id")
 
-        assertFalse(result)
+        assertTrue(result)
     }
 
     @Test
@@ -84,6 +94,7 @@ class DownloadSessionManagerTest {
 
         assertNull(sessionManager.currentSessionId)
         verify { mockEditor.remove("download_session_id") }
-        verify { mockEditor.apply() }
+        verify { mockEditor.commit() }
+        verify(exactly = 0) { mockEditor.apply() }
     }
 }

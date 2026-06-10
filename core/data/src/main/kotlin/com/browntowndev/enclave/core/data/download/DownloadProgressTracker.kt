@@ -57,6 +57,7 @@ class DownloadProgressTracker(
         const val TRACE_LOG_INTERVAL_MS = 5000L
     }
 
+    @Volatile
     private var fileStates = ConcurrentHashMap<String, FileDownloadState>()
     private var lastProgressUpdateTime = 0L
     private var lastTraceLogTime = 0L

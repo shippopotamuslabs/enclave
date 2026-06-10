@@ -44,6 +44,7 @@ import com.browntowndev.enclave.core.data.sync.SearchToolSettingsSyncQueue
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
 import com.google.firebase.firestore.FirebaseFirestore
+import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
 import java.util.concurrent.atomic.AtomicBoolean
@@ -159,6 +160,23 @@ internal fun createTestFirestoreDataSource(
             feedIntegrityRecovery = resolvedFeedIntegrityRecovery,
         )
     return FirestoreDataSource(facade, externalScope, syncTrigger)
+}
+
+/** Avoids real Firestore meta reads during replay tests (prevents dangling Tasks.await coroutines). */
+internal fun testFeedIntegrityRecovery(
+    syncStateStore: FirestoreSyncStateStore,
+    loggingPort: LoggingPort,
+): FirestoreSyncFeedIntegrityRecovery {
+    val metaClient = mockk<FirestoreSyncFeedMetaClient>()
+    coEvery { metaClient.readFeedStatus(any()) } returns null
+    coEvery { metaClient.awaitSyncEvent(any(), any()) } returns false
+    return FirestoreSyncFeedIntegrityRecovery(
+        metaClient = metaClient,
+        callableClient = mockk(relaxed = true),
+        entityReconciler = mockk(relaxed = true),
+        syncStateStore = syncStateStore,
+        loggingPort = loggingPort,
+    )
 }
 
 /**

@@ -15,7 +15,9 @@ import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.core.data.sync.SearchToolSettingsSyncQueue
 import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.firestore.CollectionReference
 import com.google.firebase.firestore.DocumentChange
@@ -34,6 +36,7 @@ import io.mockk.slot
 import io.mockk.unmockkStatic
 import io.mockk.verify
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
@@ -822,7 +825,7 @@ class FirestoreDataSourceTest {
     inner class SyncEventFeedTests {
         @Test
         fun `SCN-ANDROID-001 fresh hydrate applies events after sequence zero`() =
-            runTest {
+            runTest(testDispatcher) {
                 val localEncryption =
                     com.browntowndev.enclave.core.data.repository
                         .FakeLocalDataEncryptionService()
@@ -852,6 +855,7 @@ class FirestoreDataSourceTest {
                         lastAppliedSequence = 0,
                         eventDispatcher = integration,
                         syncStateStore = stateStore,
+                        externalScope = this,
                     )
                 hydration.sourceDocuments.put(
                     "users/alice/chats/chat-1",
@@ -881,6 +885,7 @@ class FirestoreDataSourceTest {
                     )
                 assertEquals("Roadmap", decryptedName)
                 assertEquals(1, stateStore.sequence)
+                advanceUntilIdle()
             }
 
         @Test
@@ -1071,8 +1076,14 @@ class FirestoreDataSourceTest {
 
         @Test
         fun `SCN-DATASOURCE-003 replay loops until hasMore is false`() =
-            runTest {
-                val harness = EventFeedHarness(userId = "alice", vaultUnlocked = true, lastAppliedSequence = 0)
+            runTest(testDispatcher) {
+                val harness =
+                    EventFeedHarness(
+                        userId = "alice",
+                        vaultUnlocked = true,
+                        lastAppliedSequence = 0,
+                        externalScope = this,
+                    )
                 harness.feedGateway.pages.add(
                     (1L..200L).map { sequence -> syncEvent(sequence, "chats", "chat-$sequence") },
                 )
@@ -1092,11 +1103,12 @@ class FirestoreDataSourceTest {
                 assertEquals(202, second.lastAppliedSequence)
                 org.junit.jupiter.api.Assertions
                     .assertFalse(second.hasMore)
+                advanceUntilIdle()
             }
 
         @Test
         fun `SCN-HYDRATION-001 replay resets stale cursor when Room is empty`() =
-            runTest {
+            runTest(testDispatcher) {
                 val chatDao = mockk<com.browntowndev.enclave.core.data.local.ChatDao>(relaxed = true)
                 coEvery { chatDao.countActiveChats() } returns 0
                 val harness =
@@ -1105,6 +1117,7 @@ class FirestoreDataSourceTest {
                         vaultUnlocked = true,
                         lastAppliedSequence = 500,
                         chatDao = chatDao,
+                        externalScope = this,
                     )
                 harness.feedGateway.pages.add(
                     listOf(syncEvent(1L, "chats", "chat-1")),
@@ -1120,6 +1133,7 @@ class FirestoreDataSourceTest {
                 )
                 assertEquals(1, replay.eventsApplied)
                 assertEquals(1L, replay.lastAppliedSequence)
+                advanceUntilIdle()
             }
 
         @Test
@@ -1185,6 +1199,7 @@ class FirestoreDataSourceTest {
                 RecordOnlyDispatcher(),
             syncStateStore: com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncStateStore =
                 FakeFirestoreSyncStateStore(sequence = lastAppliedSequence),
+            externalScope: CoroutineScope = testScope,
         ) {
             private val applierDelegate = eventDispatcher
             val feedGateway = RecordingFeedGateway()
@@ -1202,13 +1217,21 @@ class FirestoreDataSourceTest {
                         chatDao = chatDao,
                         cryptoManager = cm,
                         userIdProvider = { userId },
-                        externalScope = testScope,
+                        externalScope = externalScope,
                         syncEventFeedClient =
                             com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncEventFeedClient(
                                 gateway = feedGateway,
                             ),
                         syncEventApplier = eventDispatcher,
                         syncStateStore = stateStore,
+                        feedIntegrityRecovery = testFeedIntegrityRecovery(stateStore, loggingPort),
+                        searchToolSettingsSyncQueue =
+                            SearchToolSettingsSyncQueue(
+                                dataStore =
+                                    PreferenceDataStoreFactory.create(scope = externalScope) {
+                                        java.io.File.createTempFile("search-settings-", ".preferences_pb")
+                                    },
+                            ),
                     )
             }
 

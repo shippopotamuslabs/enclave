@@ -302,6 +302,33 @@ class InitializeModelsUseCaseTest {
             assertNull(utilityModelRepository.getByUtilityType(UtilityType.WHISPER))
         }
 
+    @Test
+    @DisplayName("SCN-INIT-003")
+    fun scnInit003_defersQnnUtilityRegistryWhenPackNotOnDisk() =
+        runTest {
+            val qnnUtility = ModelPackTestFixtures.sd15QnnPackUtilityAsset()
+            coEvery { modelConfigFetcher.fetchParsedCatalog() } returns Result.success(catalogOf(listOf(qnnUtility)))
+            coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
+            coEvery { qnnPackInstaller.installIfNeeded(any()) } returns false
+            coEvery { qnnPackInstaller.installIfNeeded(any(), any()) } returns false
+            coEvery {
+                checkModelsUseCase(
+                    expectedModels = any(),
+                    utilityAssets = any(),
+                )
+            } returns
+                DownloadModelsResult(
+                    allModels = emptyMap(),
+                    utilityAssets = listOf(qnnUtility),
+                    modelsToDownload = emptyList(),
+                    scanResult = ModelScanResult(emptyList(), emptyMap(), true),
+                )
+
+            useCase()
+
+            assertNull(utilityModelRepository.getByUtilityType(UtilityType.SD15_QNN_PACK))
+        }
+
     // -------- API slot filtering (SCN-INIT-API-*) --------
 
     @Test
@@ -496,6 +523,13 @@ class InitializeModelsUseCaseTest {
             )
             assertTrue(result.utilityAssets.isEmpty())
             assertEquals(ModelPackTestFixtures.packMemberShas, result.imageGenerationPackMemberSha256s)
+            verify {
+                modelDownloadOrchestrator.initializeWithStartupResult(
+                    match { startupResult ->
+                        startupResult.modelsToDownload.single().metadata.sha256 == mainAsset.metadata.sha256
+                    },
+                )
+            }
         }
 
     @Test

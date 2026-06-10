@@ -124,6 +124,25 @@ internal object FirestoreSyncDependencyGraph {
         sourceData: Map<String, Any?>,
     ): List<ParentRef> = GRAPH[collectionPath]?.invoke(sourceData) ?: emptyList()
 
+    fun parentRefsFromSource(
+        collectionPath: String,
+        source: Map<String, Any?>,
+    ): List<ParentRef> = requiredParents(collectionPath, source)
+
+    /**
+     * True when [default_models] references at least one FK parent document that is absent from
+     * Firestore. Such events must be skipped — the slot assignment cannot be applied without its
+     * referenced provider/config row.
+     */
+    suspend fun defaultModelsMissingReferencedParent(
+        userId: String,
+        source: Map<String, Any?>,
+        sourceDocuments: FirestoreSyncSourceDocumentStore,
+    ): Boolean =
+        parentRefsFromSource("default_models", source).any { parent ->
+            sourceDocuments.getDocument("users/$userId/${parent.collectionPath}/${parent.entityId}") == null
+        }
+
     private fun firstNonBlankString(
         source: Map<String, Any?>,
         vararg keys: String,

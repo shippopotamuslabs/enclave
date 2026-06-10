@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.core.data.download.remote
 
+import com.browntowndev.enclave.core.data.download.DownloadMetaFile
 import com.browntowndev.enclave.domain.port.download.FileDownloaderPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import kotlinx.coroutines.Dispatchers
@@ -57,7 +58,12 @@ class HttpFileDownloader
                 val tempFile = downloadPaths.tempFile
                 val metaFile = downloadPaths.metaFile
 
-                metaFile.writeText("${config.expectedSizeBytes}\n${config.expectedSha256}")
+                DownloadMetaFile.write(
+                    metaFile = metaFile,
+                    expectedSizeBytes = config.expectedSizeBytes,
+                    expectedSha256 = config.expectedSha256,
+                    committedOffset = existingBytes,
+                )
 
                 val request =
                     Request
@@ -96,6 +102,14 @@ class HttpFileDownloader
                     }
 
                     val isResuming = response.code == HTTP_PARTIAL_CONTENT
+                    if (existingBytes > 0 && !isResuming) {
+                        logger.warning(
+                            TAG,
+                            "Server ignored Range header for $filename; restarting download from scratch.",
+                        )
+                        tempFile.delete()
+                        metaFile.delete()
+                    }
                     val actualExistingBytes = if (isResuming) existingBytes else 0L
 
                     val body =
@@ -158,6 +172,7 @@ class HttpFileDownloader
                                 // Periodic sync to disk (every 64MB) for durability
                                 if (bytesSinceLastSync >= SYNC_INTERVAL_BYTES) {
                                     channel.force(true)
+                                    DownloadMetaFile.updateCommittedOffset(metaFile, totalBytesRead)
                                     bytesSinceLastSync = 0L
                                 }
 
@@ -168,6 +183,7 @@ class HttpFileDownloader
 
                         // Final sync before hash verification to ensure data is durable
                         channel.force(true)
+                        DownloadMetaFile.updateCommittedOffset(metaFile, totalBytesRead)
                     } finally {
                         channel.close()
                     }
@@ -232,7 +248,12 @@ class HttpFileDownloader
                 val tempFile = downloadPaths.tempFile
                 val metaFile = downloadPaths.metaFile
 
-                metaFile.writeText("${config.expectedSizeBytes}\n${config.expectedSha256}")
+                DownloadMetaFile.write(
+                    metaFile = metaFile,
+                    expectedSizeBytes = config.expectedSizeBytes,
+                    expectedSha256 = config.expectedSha256,
+                    committedOffset = 0L,
+                )
 
                 okHttpClient.newCall(request).execute().use { response ->
                     if (response.priorResponse?.isRedirect == true) {
@@ -283,6 +304,7 @@ class HttpFileDownloader
                                 // Periodic sync to disk (every 64MB) for durability
                                 if (bytesSinceLastSync >= SYNC_INTERVAL_BYTES) {
                                     channel.force(true)
+                                    DownloadMetaFile.updateCommittedOffset(metaFile, totalBytesRead)
                                     bytesSinceLastSync = 0L
                                 }
 
@@ -293,6 +315,7 @@ class HttpFileDownloader
 
                         // Final sync before hash verification to ensure data is durable
                         channel.force(true)
+                        DownloadMetaFile.updateCommittedOffset(metaFile, totalBytesRead)
                     } finally {
                         channel.close()
                     }

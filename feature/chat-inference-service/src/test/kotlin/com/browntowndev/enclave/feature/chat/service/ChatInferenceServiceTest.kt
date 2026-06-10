@@ -19,6 +19,8 @@ import com.browntowndev.enclave.domain.port.inference.InferenceEvent
 import com.browntowndev.enclave.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.enclave.domain.port.inference.LlmInferencePort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
+import com.browntowndev.enclave.domain.port.inference.NoopOnDeviceInferenceCancellationPort
 import com.browntowndev.enclave.domain.port.inference.MonotonicToolActivationPort
 import com.browntowndev.enclave.domain.port.inference.PromptComposerPort
 import com.browntowndev.enclave.domain.port.inference.SearchIntentClassifierPort
@@ -96,6 +98,7 @@ class ChatInferenceServiceTest {
     private val chatGenerationProgressPersister = mockk<ChatGenerationProgressPersister>()
     private val monotonicToolActivation = mockk<MonotonicToolActivationPort>(relaxed = true)
     private val committedInferencePrompts = mockk<CommittedInferencePromptPort>(relaxed = true)
+    private val inferenceLockManager = mockk<InferenceLockManager>(relaxed = true)
 
     private val llmInferenceService = mockk<LlmInferencePort>()
     private val progressSession = mockk<ChatGenerationProgressSession>()
@@ -131,6 +134,8 @@ class ChatInferenceServiceTest {
         service.chatGenerationProgressPersister = chatGenerationProgressPersister
         service.monotonicToolActivation = monotonicToolActivation
         service.committedInferencePrompts = committedInferencePrompts
+        service.onDeviceInferenceCancellation = NoopOnDeviceInferenceCancellationPort
+        service.inferenceLockManager = inferenceLockManager
 
         val scopeField = ChatInferenceService::class.java.getDeclaredField("serviceScope")
         scopeField.isAccessible = true

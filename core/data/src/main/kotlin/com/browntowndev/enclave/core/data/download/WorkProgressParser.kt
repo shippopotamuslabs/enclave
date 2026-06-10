@@ -27,6 +27,7 @@ class WorkProgressParser
 
         // Tracks when the downloader was first observed in ENQUEUED state.
         // Reset whenever the state transitions away from ENQUEUED.
+        @Volatile
         private var firstEnqueuedTime: Long? = null
 
         fun parse(

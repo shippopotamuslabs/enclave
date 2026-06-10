@@ -78,6 +78,7 @@ class ModelDownloadOrchestratorImplTest {
                 speedTracker = speedTracker,
             )
         every { sessionManager.createNewSession() } returnsMany listOf("session-1", "session-2")
+        every { sessionManager.clearSession() } returns Unit
         coEvery { deviceEnvironment.hasRequiredStorage(any()) } returns true
     }
 
@@ -87,8 +88,26 @@ class ModelDownloadOrchestratorImplTest {
         orchestrator.initializeWithStartupResult(modelsResult)
 
         assertEquals(DownloadStatus.IDLE, orchestrator.downloadState.value.status)
+        verify(exactly = 1) { workScheduler.cancel() }
+        verify(exactly = 1) { sessionManager.clearSession() }
         verify(exactly = 0) { workScheduler.enqueue(any()) }
     }
+
+    @Test
+    @DisplayName("startDownloads surfaces ERROR when WorkManager payload is too large")
+    fun startDownloads_payloadTooLarge_setsError() =
+        runTest {
+            orchestrator.initializeWithStartupResult(modelsResult)
+            every { workScheduler.enqueue(any()) } throws DownloadWorkPayloadTooLargeException(fileSpecCount = 30)
+
+            val started = orchestrator.startDownloads(wifiOnly = true)
+
+            assertFalse(started)
+            assertEquals(DownloadStatus.ERROR, orchestrator.downloadState.value.status)
+            assertTrue(
+                orchestrator.downloadState.value.errorMessage.orEmpty().contains("Too many models"),
+            )
+        }
 
     @Test
     @DisplayName("startDownloads after init enqueues one session and sets DOWNLOADING")
@@ -169,7 +188,7 @@ class ModelDownloadOrchestratorImplTest {
             orchestrator.pauseDownloads()
 
             assertEquals(DownloadStatus.PAUSED, orchestrator.downloadState.value.status)
-            verify(exactly = 1) { workScheduler.cancel() }
+            verify(exactly = 2) { workScheduler.cancel() }
         }
 
     @Test
@@ -188,7 +207,7 @@ class ModelDownloadOrchestratorImplTest {
             )
             assertEquals(0f, orchestrator.downloadState.value.overallProgress)
             assertEquals(0, orchestrator.downloadState.value.modelsComplete)
-            verify(exactly = 1) { workScheduler.cancel() }
+            verify(exactly = 2) { workScheduler.cancel() }
             coVerify(exactly = 1) { workScheduler.cleanupTempFiles() }
             verify(atLeast = 1) { speedTracker.clearAll() }
         }

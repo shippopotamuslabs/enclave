@@ -235,14 +235,15 @@ class ModelFileScannerTest {
     ): LocalModelAsset {
         if (installArtifacts) {
             val packDir = File(modelsDir, packSubdir).apply { mkdirs() }
-            listOf(
-                "clip_v2.mnn",
-                "token_emb.bin",
-                "pos_emb.bin",
-                "unet.bin",
-                "vae_decoder.bin",
-                "tokenizer.json",
-            ).forEach { name ->
+            val requiredFiles =
+                when (utilityType) {
+                    UtilityType.SDXL_QNN_PACK,
+                    UtilityType.JUGGERNAUT_XL_QNN_PACK,
+                    -> LocalImageGenerationPaths.REQUIRED_SDXL_QNN_FILES
+                    UtilityType.SD15_QNN_PACK -> LocalImageGenerationPaths.REQUIRED_SD15_QNN_FILES
+                    else -> LocalImageGenerationPaths.REQUIRED_SD15_QNN_FILES
+                }
+            requiredFiles.forEach { name ->
                 File(packDir, name).writeText("stub")
             }
         }

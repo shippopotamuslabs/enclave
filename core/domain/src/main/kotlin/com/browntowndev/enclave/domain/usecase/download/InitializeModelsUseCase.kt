@@ -268,6 +268,22 @@ class InitializeModelsUseCase
         }
 
         private suspend fun persistUtilityAsset(asset: LocalModelAsset) {
+            when (asset.metadata.utilityType) {
+                UtilityType.SD15_QNN_PACK,
+                UtilityType.SDXL_QNN_PACK,
+                UtilityType.JUGGERNAUT_XL_QNN_PACK,
+                -> {
+                    val installed = qnnPackInstaller.installIfNeeded(asset.metadata)
+                    if (!installed) {
+                        logPort.debug(
+                            TAG,
+                            "Deferring utility ${asset.metadata.utilityType} registry until pack is on disk",
+                        )
+                        return
+                    }
+                }
+                else -> Unit
+            }
             syncUtilityModelRegistryUseCase(asset)
         }
 
@@ -323,11 +339,14 @@ class InitializeModelsUseCase
                     imageGenerationPackMemberSha256s = fallbackImageGenShas,
                     imageEditPackMemberSha256s = fallbackImageEditShas,
                 )
-            return LocalImagePackDownloadPolicy.applySlotDownloadSuppression(
-                result = modelsResult,
-                suppressImageGenerationSlot = suppressImageGenerationSlot,
-                suppressImageEditSlot = suppressImageEditSlot,
-            )
+            val startupResult =
+                LocalImagePackDownloadPolicy.applySlotDownloadSuppression(
+                    result = modelsResult,
+                    suppressImageGenerationSlot = suppressImageGenerationSlot,
+                    suppressImageEditSlot = suppressImageEditSlot,
+                )
+            modelDownloadOrchestrator.initializeWithStartupResult(startupResult)
+            return startupResult
         }
 
         private fun augmentSd15QnnPackUtilities(

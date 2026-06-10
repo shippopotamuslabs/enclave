@@ -9,8 +9,10 @@ import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.media.AspectRatio
 import com.browntowndev.enclave.domain.model.media.GenerationQuality
 import com.browntowndev.enclave.domain.model.media.GenerationSettings
+import com.browntowndev.enclave.domain.model.media.ImageGenerationProgress
 import com.browntowndev.enclave.domain.model.media.ProviderCapabilities
 import com.browntowndev.enclave.domain.model.media.VideoGenerationSettings
+import com.browntowndev.enclave.domain.port.repository.ActiveStudioGeneration
 import com.browntowndev.enclave.domain.port.media.ImageGenerationPort
 import com.browntowndev.enclave.domain.port.media.ShareMediaPort
 import com.browntowndev.enclave.domain.port.media.StudioGenerationDispatcherPort
@@ -41,6 +43,7 @@ import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -70,6 +73,8 @@ class MultimodalViewModelAnimateTest {
     private val playbackController = mockk<TtsPlaybackControllerPort>(relaxed = true)
     private val dispatcher = mockk<StudioGenerationDispatcherPort>(relaxed = true)
     private lateinit var viewModel: MultimodalViewModel
+    private val generationProgressFlow = MutableStateFlow<ImageGenerationProgress?>(null)
+    private val activeGenerationFlow = MutableStateFlow<ActiveStudioGeneration?>(null)
 
     @BeforeEach
     fun setup() {
@@ -103,8 +108,19 @@ class MultimodalViewModelAnimateTest {
         every { mediaProviderRepository.getMediaProviders() } returns flowOf(listOf(providerAsset))
         every { studioRepository.observeAllMedia() } returns flowOf(emptyList())
         every { studioRepository.observeAllAlbums() } returns flowOf(emptyList())
-        every { studioRepository.observeActiveGeneration() } returns flowOf(null)
-        every { studioRepository.reportActiveGeneration(any()) } returns true
+        every { studioRepository.observeGenerationProgress() } returns generationProgressFlow
+        every { studioRepository.observeActiveGeneration() } returns activeGenerationFlow
+        every { studioRepository.reportActiveGeneration(any()) } answers {
+            if (activeGenerationFlow.value != null) {
+                false
+            } else {
+                activeGenerationFlow.value = firstArg()
+                true
+            }
+        }
+        every { studioRepository.clearActiveGeneration() } answers {
+            activeGenerationFlow.value = null
+        }
         coEvery { videoGenerationPort.generateVideo(any(), any(), any()) } returns Result.success("video".toByteArray())
         coEvery { studioRepository.cacheEphemeralMedia(any(), any()) } returns "cache://video.mp4"
         coEvery { resolveMediaProviderCapabilitiesUseCase(any(), any()) } returns

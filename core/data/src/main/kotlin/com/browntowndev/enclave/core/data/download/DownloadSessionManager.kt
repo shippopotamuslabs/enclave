@@ -2,7 +2,6 @@ package com.browntowndev.enclave.core.data.download
 
 import android.content.Context
 import android.content.SharedPreferences
-import androidx.core.content.edit
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.UUID
 import javax.inject.Inject
@@ -37,21 +36,25 @@ class DownloadSessionManager
         fun createNewSession(): String {
             val newId = UUID.randomUUID().toString()
             cachedSessionId = newId
-            prefs.edit { putString(KEY_PERSISTENT_SESSION_ID, newId) }
+            prefs
+                .edit()
+                .putString(KEY_PERSISTENT_SESSION_ID, newId)
+                .commit()
             return newId
         }
 
         fun clearSession() {
             cachedSessionId = null
-            prefs.edit { remove(KEY_PERSISTENT_SESSION_ID) }
+            prefs
+                .edit()
+                .remove(KEY_PERSISTENT_SESSION_ID)
+                .commit()
         }
 
         fun isSessionStale(workSessionId: String?): Boolean {
-            // If no active session, nothing is stale
-            val current = currentSessionId ?: return false
-            // If work has no session ID, treat as stale (from old app run)
+            // Terminal WorkManager output without a matching in-app session is from a prior run.
             if (workSessionId == null) return true
-            // Only stale if IDs don't match
+            val current = currentSessionId ?: return true
             return workSessionId != current
         }
     }

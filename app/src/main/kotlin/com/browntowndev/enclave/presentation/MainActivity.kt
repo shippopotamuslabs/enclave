@@ -162,6 +162,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                 UnlockVaultScreen(
                                     authState = currentState.authState,
                                     isUnlocking = currentState.isUnlocking,
+                                    isVaultLocked = currentState.isVaultLocked,
+                                    isBiometricEnrollmentPending = currentState.isBiometricEnrollmentPending,
                                     isBiometricUnlockConfigured = currentState.isBiometricUnlockPossible,
                                     errorMessage = currentState.vaultErrorMessage,
                                     unlockSyncProgress = currentState.unlockSyncProgress,

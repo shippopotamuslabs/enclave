@@ -216,11 +216,13 @@ internal class LiveVoiceProvidersCoordinator
         ) {
             scope.launch(errorHandler.coroutineExceptionHandler(tag, "Failed to delete Live Voice provider", "Failed to delete provider")) {
                 val defaults = assignmentsUseCases.getDefaultModels().first()
-                liveVoiceUseCases.deleteLiveVoiceProvider(id)
                 val liveVoiceDefault = defaults.find { it.modelType == ModelType.LIVE_VOICE }
                 if (liveVoiceDefault?.liveVoiceProviderId == id) {
+                    // Clear the slot assignment before removing the provider so Firestore never
+                    // retains a default_models FK pointing at a deleted live_voice_providers doc.
                     assignmentsUseCases.clearDefaultModel(ModelType.LIVE_VOICE)
                 }
+                liveVoiceUseCases.deleteLiveVoiceProvider(id)
             }
         }
     }

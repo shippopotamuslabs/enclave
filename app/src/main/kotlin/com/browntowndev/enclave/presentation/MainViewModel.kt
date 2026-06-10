@@ -69,7 +69,8 @@ sealed interface AppStartupState {
                 when {
                     !onboardingCompleted -> Routes.ONBOARDING
                     initializationError != null ||
-                        modelsResult?.modelsToDownload?.isNotEmpty() == true -> Routes.MODEL_DOWNLOAD
+                        modelsResult == null ||
+                        modelsResult.modelsToDownload.isNotEmpty() -> Routes.MODEL_DOWNLOAD
                     else -> Routes.CHAT
                 }
     }
@@ -170,12 +171,21 @@ class MainViewModel
                     .onboardingCompleted
             getAuthStateUseCase().collect { authState ->
                 val vaultAuthUiState = authState.toVaultAuthUiState()
-                val vaultLockedNow = !cryptoManager.hasCachedKey()
+                val dekCached = cryptoManager.hasCachedKey()
+                val vaultLockedNow = !dekCached
                 _startupState.update {
                     if (it is AppStartupState.Ready) {
+                        // Cached DEK is authoritative — auth token refresh must never re-lock an active session.
+                        // While unlock work is in flight, keep the gate state stable until commitVaultUnlocked().
+                        val nextVaultLocked =
+                            when {
+                                dekCached -> false
+                                it.isUnlocking -> it.isVaultLocked
+                                else -> vaultLockedNow
+                            }
                         it.copy(
                             authState = vaultAuthUiState,
-                            isVaultLocked = vaultLockedNow,
+                            isVaultLocked = nextVaultLocked,
                         )
                     } else {
                         AppStartupState.Ready(
@@ -195,8 +205,33 @@ class MainViewModel
             viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to sign in with Google", "Failed to sign in")) {
                 loginWithGoogleUseCase().getOrThrow()
                 pendingVaultReconciliationPayload = null
-                // Same contract as Settings sign-in: drop any cached DEK and defer cloud sync until
-                // the user unlocks with their vault password and reconciliation completes.
+                if (cryptoManager.hasCachedKey()) {
+                    // Sign-in can finish after the user already unlocked locally (slow OAuth). Do not
+                    // wipe the session or return to the unlock gate.
+                    loggingPort.debug(TAG, "loginWithGoogle: vault already unlocked, preserving session")
+                    commitVaultUnlocked()
+                    _startupState.update {
+                        if (it is AppStartupState.Ready) {
+                            it.copy(
+                                cloudSyncDeferred = false,
+                                vaultErrorMessage = null,
+                                pendingVaultReconciliation = null,
+                            )
+                        } else {
+                            it
+                        }
+                    }
+                    startCloudListenerIfEligible()
+                    return@launch
+                }
+                // Locked vault: drop cached DEK and defer cloud sync until password unlock + reconcile.
+                // Re-check after the slow OAuth hop — unlock may have finished while the browser was open.
+                if (cryptoManager.hasCachedKey()) {
+                    loggingPort.debug(TAG, "loginWithGoogle: vault unlocked during OAuth, preserving session")
+                    commitVaultUnlocked()
+                    startCloudListenerIfEligible()
+                    return@launch
+                }
                 cryptoManager.clearKey()
                 cloudSyncPort.stopListening()
                 _startupState.update {
@@ -277,43 +312,39 @@ class MainViewModel
                     }
 
                     val readyAfterReconcile = startupState.value as? AppStartupState.Ready
-                    if (readyAfterReconcile?.pendingVaultReconciliation == null) {
-                        initializeModelsIfNeeded()
-                    }
-
                     val requestBiometricEnrollment = shouldRequestBiometricEnrollment(enableBiometric)
                     if (requestBiometricEnrollment) {
                         loggingPort.debug(TAG, "unlockVault: Biometric opt-in detected, requesting enrollment")
+                        if (readyAfterReconcile?.pendingVaultReconciliation == null) {
+                            initializeModelsIfNeeded()
+                        }
                         _startupState.update {
                             if (it is AppStartupState.Ready) {
                                 it.copy(
                                     isVaultLocked = true,
                                     vaultErrorMessage = null,
                                     isBiometricEnrollmentPending = true,
+                                    isUnlocking = false,
+                                    unlockSyncProgress = null,
+                                    unlockSyncStatus = null,
                                 )
                             } else {
                                 it
                             }
                         }
-                    } else {
-                        _startupState.update {
-                            if (it is AppStartupState.Ready) {
-                                it.copy(
-                                    isVaultLocked = false,
-                                    vaultErrorMessage = if (it.cloudSyncDeferred) it.vaultErrorMessage else null,
-                                )
-                            } else {
-                                it
-                            }
-                        }
-                    }
-
-                    if (requestBiometricEnrollment) {
                         return@launch
                     }
+
+                    if (readyAfterReconcile?.pendingVaultReconciliation == null) {
+                        initializeModelsIfNeeded()
+                    }
+
+                    // Open the main app only after model scan completes so DownloadViewModel receives
+                    // a populated modelsResult and can auto-start downloads.
+                    commitVaultUnlocked()
                 } finally {
                     _startupState.update {
-                        if (it is AppStartupState.Ready) {
+                        if (it is AppStartupState.Ready && it.isUnlocking) {
                             it.copy(
                                 isUnlocking = false,
                                 unlockSyncProgress = null,
@@ -789,6 +820,22 @@ class MainViewModel
 
         suspend fun refreshDownloadModels() {
             initializeModelsUseCase()
+        }
+
+        private fun commitVaultUnlocked() {
+            _startupState.update {
+                if (it is AppStartupState.Ready) {
+                    it.copy(
+                        isVaultLocked = false,
+                        vaultErrorMessage = if (it.cloudSyncDeferred) it.vaultErrorMessage else null,
+                        isUnlocking = false,
+                        unlockSyncProgress = null,
+                        unlockSyncStatus = null,
+                    )
+                } else {
+                    it
+                }
+            }
         }
 
         private suspend fun initializeModelsIfNeeded() {

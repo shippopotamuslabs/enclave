@@ -199,6 +199,46 @@ class HttpFileDownloaderTest {
             assertEquals(totalContent, File(result.filePath).readText())
         }
 
+    @Test
+    fun downloadFile_restartsFromScratch_whenServerIgnoresRangeHeader() =
+        kotlinx.coroutines.test.runTest {
+            val existingContent = "partial stale content"
+            val fullContent = "full replacement content from server"
+            val existingFile = File(tempDir, "test-model.gguf.tmp")
+            existingFile.writeText(existingContent)
+
+            val testConfig =
+                FileDownloaderPort.FileDownloadConfig(
+                    filename = "test-model.gguf",
+                    expectedSha256 = computeSha256(fullContent),
+                    expectedSizeBytes = fullContent.length.toLong(),
+                )
+
+            val mockCall = mockk<okhttp3.Call>(relaxed = true)
+            val mockResponse = mockk<Response>(relaxed = true)
+            val mockBody = mockk<ResponseBody>(relaxed = true)
+
+            every { mockClient.newCall(any()) } returns mockCall
+            every { mockCall.execute() } returns mockResponse
+            every { mockResponse.isSuccessful } returns true
+            every { mockResponse.code } returns 200
+            every { mockResponse.body } returns mockBody
+            every { mockResponse.header("Content-Length") } returns fullContent.length.toString()
+            every { mockBody.byteStream() } returns fullContent.byteInputStream()
+
+            val result =
+                httpFileDownloader.downloadFile(
+                    config = testConfig,
+                    downloadUrl = "https://example.com/model.gguf",
+                    targetDirPath = tempDir.absolutePath,
+                    existingBytes = existingContent.length.toLong(),
+                    progressCallback = null,
+                )
+
+            assertFalse(result.isResumed)
+            assertEquals(fullContent, File(result.filePath).readText())
+        }
+
     // ============ downloadFile Error Tests ============
 
     @Test
