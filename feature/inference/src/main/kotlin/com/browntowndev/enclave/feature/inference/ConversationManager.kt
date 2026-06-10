@@ -38,6 +38,12 @@ interface ConversationManager {
     suspend fun setHistory(messages: List<ChatMessage>)
 
     /**
+     * Snapshot of conversation context for local telemetry estimation.
+     * History excludes the active user/assistant pair; the current prompt is passed separately.
+     */
+    fun telemetryContext(): LiteRtTelemetryContext
+
+    /**
      * Closes the underlying engine and releases all resources.
      * After calling this, the ConversationManager should not be used.
      */

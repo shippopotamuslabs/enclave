@@ -15,7 +15,7 @@ class LocalKvCacheTelemetryTest {
                     rowId = "tel-llama-kv",
                     messageId = TelemetryTestFixtures.mLitert1.value,
                     chatId = TelemetryTestFixtures.chat1.value,
-                    providerLabel = "LiteRT",
+                    providerLabel = "llama.cpp",
                     modelLabel = "test-llama",
                     requestStartedAtMs = 1_000L,
                     firstOutputTokenAtMs = 1_200L,

@@ -115,6 +115,7 @@ class ProviderTelemetryNormalizer
             sequenceIndex: Int = 0,
             inputTokens: Int? = null,
             cacheReadInputTokens: Int? = null,
+            reasoningTokens: Int? = null,
         ): TurnTelemetry =
             TurnTelemetry(
                 id = TurnTelemetryId(rowId),
@@ -131,7 +132,7 @@ class ProviderTelemetryNormalizer
                 completedAtMs = completedAtMs,
                 inputTokens = inputTokens,
                 outputTokens = outputTokens,
-                reasoningTokens = null,
+                reasoningTokens = reasoningTokens,
                 cachedInputTokens = null,
                 cacheReadInputTokens = cacheReadInputTokens,
                 cacheWriteInputTokens = null,
@@ -152,6 +153,7 @@ class ProviderTelemetryNormalizer
                 "OpenAI" -> TelemetryProviderKey.OPENAI
                 "Anthropic" -> TelemetryProviderKey.ANTHROPIC
                 "LiteRT" -> TelemetryProviderKey.LITERT
+                "llama.cpp" -> TelemetryProviderKey.LLAMA
                 "OpenRouter" -> TelemetryProviderKey.OPENROUTER
                 "Google" -> TelemetryProviderKey.GOOGLE
                 "xAI" -> TelemetryProviderKey.XAI

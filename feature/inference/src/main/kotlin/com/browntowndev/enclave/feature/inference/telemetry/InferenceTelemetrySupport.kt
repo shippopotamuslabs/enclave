@@ -140,6 +140,7 @@ class InferenceTelemetrySupport
             outputTokens: Int?,
             inputTokens: Int? = null,
             cacheReadInputTokens: Int? = null,
+            reasoningTokens: Int? = null,
         ): TurnTelemetry =
             normalizer.normalizeLocalGeneration(
                 rowId = newRowId(),
@@ -157,6 +158,7 @@ class InferenceTelemetrySupport
                 sequenceIndex = context.sequenceIndex,
                 inputTokens = inputTokens,
                 cacheReadInputTokens = cacheReadInputTokens,
+                reasoningTokens = reasoningTokens,
             )
 
         fun providerLabel(provider: String): String =
@@ -167,7 +169,7 @@ class InferenceTelemetrySupport
                 ApiProvider.XAI.name -> "xAI"
                 "OPENROUTER" -> "OpenRouter"
                 "LITERT", "LITERTLM" -> "LiteRT"
-                "LLAMA" -> "LiteRT"
+                "LLAMA" -> "llama.cpp"
                 else -> provider
             }
 

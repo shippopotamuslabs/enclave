@@ -26,6 +26,7 @@ import com.browntowndev.enclave.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.browntowndev.enclave.feature.inference.llama.LlamaChatSessionManager
 import com.browntowndev.enclave.feature.inference.telemetry.InferenceTelemetrySupport
 import com.browntowndev.enclave.feature.inference.telemetry.InferenceTurnTiming
+import com.browntowndev.enclave.feature.inference.telemetry.estimateTokenCount
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -84,6 +85,7 @@ class LlamaInferenceServiceImpl
 
         private data class BufferedGeneration(
             val fullText: String,
+            val accumulatedThought: String = "",
             val promptTokens: Int? = null,
             val generatedTokens: Int? = null,
             val prefixReusedTokens: Int? = null,
@@ -293,17 +295,19 @@ class LlamaInferenceServiceImpl
             val rawText = buffered.fullText
             val outputTokens =
                 buffered.generatedTokens
-                    ?: rawText.takeIf { it.isNotBlank() }?.let { text -> (text.length / 4).coerceAtLeast(1) }
+                    ?: estimateTokenCount(rawText)
+            val reasoningTokens = estimateTokenCount(buffered.accumulatedThought)
             val telemetry =
                 if (telemetrySupport != null && timing != null && captureContext != null) {
                     telemetrySupport.localTurnTelemetry(
                         context = captureContext,
-                        providerLabel = "LiteRT",
+                        providerLabel = "llama.cpp",
                         modelLabel = turnOptions.modelId ?: "local",
                         timing = timing,
                         outputTokens = outputTokens,
                         inputTokens = buffered.promptTokens,
                         cacheReadInputTokens = buffered.prefixReusedTokens,
+                        reasoningTokens = reasoningTokens,
                     )
                 } else {
                     null
@@ -455,6 +459,7 @@ class LlamaInferenceServiceImpl
             var promptTokens: Int? = null
             var generatedTokens: Int? = null
             var prefixReusedTokens: Int? = null
+            val accumulatedThought = StringBuilder()
             var isThinking = false
             var buffer = ""
             var sawToken = false
@@ -474,7 +479,10 @@ class LlamaInferenceServiceImpl
 
                         state.emittedSegments.forEach { segment ->
                             when (segment.kind) {
-                                SegmentKind.THINKING -> emitEvent(InferenceEvent.Thinking(segment.text, targetModelType))
+                                SegmentKind.THINKING -> {
+                                    accumulatedThought.append(segment.text)
+                                    emitEvent(InferenceEvent.Thinking(segment.text, targetModelType))
+                                }
                                 SegmentKind.VISIBLE -> {
                                     timing?.markFirstOutput()
                                     if (emitVisible) {
@@ -491,6 +499,7 @@ class LlamaInferenceServiceImpl
                         if (sawToken) {
                             if (buffer.isNotEmpty()) {
                                 if (isThinking) {
+                                    accumulatedThought.append(buffer)
                                     emitEvent(InferenceEvent.Thinking(buffer, targetModelType))
                                 } else {
                                     timing?.markFirstOutput()
@@ -523,6 +532,7 @@ class LlamaInferenceServiceImpl
 
             return BufferedGeneration(
                 fullText = completedText.orEmpty(),
+                accumulatedThought = accumulatedThought.toString(),
                 promptTokens = promptTokens,
                 generatedTokens = generatedTokens,
                 prefixReusedTokens = prefixReusedTokens,

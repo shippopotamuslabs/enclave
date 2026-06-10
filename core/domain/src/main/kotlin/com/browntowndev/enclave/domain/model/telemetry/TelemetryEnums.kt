@@ -4,6 +4,7 @@ enum class TelemetryProviderKey {
     OPENAI,
     ANTHROPIC,
     LITERT,
+    LLAMA,
     OPENROUTER,
     GOOGLE,
     XAI,
