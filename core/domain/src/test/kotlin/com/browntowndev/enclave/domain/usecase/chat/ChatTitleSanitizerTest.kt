@@ -53,4 +53,18 @@ class ChatTitleSanitizerTest {
         val longTitle = "A".repeat(70)
         assertEquals("A".repeat(60) + "…", ChatTitleSanitizer.sanitize(longTitle))
     }
+
+    @Test
+    @DisplayName("strips wrapping double-quotes produced by LFM2 decoder")
+    fun stripsWrappingDoubleQuotes() {
+        assertEquals("Refinancing Made Easy", ChatTitleSanitizer.sanitize("\"Refinancing Made Easy\""))
+        assertEquals("Baking Sourdough Bread", ChatTitleSanitizer.sanitize("“Baking Sourdough Bread”"))
+    }
+
+    @Test
+    @DisplayName("strips trailing period produced by LFM2 decoder")
+    fun stripsTrailingPeriod() {
+        assertEquals("Sourdough Bread Baking", ChatTitleSanitizer.sanitize("Sourdough Bread Baking."))
+        assertEquals("How to Fix 500 Errors", ChatTitleSanitizer.sanitize("How to Fix 500 Errors."))
+    }
 }
