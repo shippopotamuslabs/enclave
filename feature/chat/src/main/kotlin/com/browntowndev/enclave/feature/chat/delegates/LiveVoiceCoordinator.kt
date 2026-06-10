@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.feature.chat.delegates
 
+import androidx.annotation.VisibleForTesting
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderAsset
@@ -16,7 +17,11 @@ import com.browntowndev.enclave.domain.usecase.chat.PersistVoiceTurnUseCase
 import com.browntowndev.enclave.feature.chat.LiveVoiceUiState
 import com.browntowndev.enclave.feature.inference.media.RealtimeAudioCaptureGain
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -500,11 +505,13 @@ class LiveVoiceCoordinator
             session = null
             stopJobsAndPlayback()
             if (sessionToClose != null) {
-                activeScope?.launch {
-                    runCatching { sessionToClose.close() }
-                        .onFailure { error ->
-                            loggingPort.error(TAG, "Failed to close Live Voice session: ${error.message}")
-                        }
+                sessionTeardownScope.launch {
+                    withContext(NonCancellable) {
+                        runCatching { sessionToClose.close() }
+                            .onFailure { error ->
+                                loggingPort.error(TAG, "Failed to close Live Voice session: ${error.message}")
+                            }
+                    }
                 }
             }
             if (resetToIdle) {
@@ -650,7 +657,16 @@ class LiveVoiceCoordinator
                 isTearingDown || assistantResponseCancelled || suppressAssistantOutput || turnPersisted
         }
 
-        private companion object {
+        internal companion object {
+            @VisibleForTesting
+            @JvmStatic
+            var sessionTeardownScopeOverride: CoroutineScope? = null
+
+            private val sessionTeardownScope: CoroutineScope
+                get() =
+                    sessionTeardownScopeOverride
+                        ?: CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
             private const val TAG = "LiveVoiceCoordinator"
             private const val CAPTURE_SAMPLE_RATE_OPENAI_HZ = 24_000
             private const val CAPTURE_SAMPLE_RATE_GOOGLE_HZ = 16_000

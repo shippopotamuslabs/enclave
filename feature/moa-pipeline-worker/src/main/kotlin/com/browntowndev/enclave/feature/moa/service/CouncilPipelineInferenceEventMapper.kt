@@ -1,6 +1,7 @@
 package com.browntowndev.enclave.feature.moa.service
 
 import com.browntowndev.enclave.domain.model.chat.MessageGenerationState
+import kotlinx.coroutines.CancellationException
 import com.browntowndev.enclave.domain.model.inference.PipelineStep
 import com.browntowndev.enclave.domain.port.inference.InferenceEvent
 import com.browntowndev.enclave.feature.inference.InferenceEventBus
@@ -62,7 +63,14 @@ internal object CouncilPipelineInferenceEventMapper {
             is InferenceEvent.TelemetryCaptured -> Unit
             is InferenceEvent.Finished -> Unit
             is InferenceEvent.SafetyBlocked -> {
-                throw SecurityException("Content blocked: ${event.reason}")
+                inferenceEventBus.tryEmitPipelineState(
+                    chatId,
+                    MessageGenerationState.Blocked(
+                        event.reason,
+                        CouncilPipelineStepSupport.getModelTypeForStep(step),
+                    ),
+                )
+                throw CancellationException("Content blocked: ${event.reason}")
             }
             is InferenceEvent.Error -> {
                 throw event.cause

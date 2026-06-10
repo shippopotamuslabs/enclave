@@ -1,6 +1,7 @@
 package com.browntowndev.enclave.feature.moa
 
 import com.browntowndev.enclave.domain.model.chat.MessageGenerationState
+import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.isPipelineTerminal
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.PipelineState
@@ -38,33 +39,36 @@ class InferenceServicePipelineExecutor
         override fun executePipeline(
             chatId: String,
             userMessage: String,
-        ): Flow<MessageGenerationState> {
-            val initialState = PipelineState.createInitial(chatId, userMessage)
-            val stateJson = initialState.toJson()
-
-            // Open the stream BEFORE starting the service to prevent a race condition:
-            // if the service starts first, it may emit to a stream the executor hasn't
-            // subscribed to yet, causing those emissions to be lost or orphaned.
-            val stateFlow = inferenceEventBus.openPipelineRequest(chatId)
-
-            try {
-                serviceStarter.startService(chatId, userMessage, stateJson)
-            } catch (ex: Exception) {
-                inferenceEventBus.clearPipelineRequest(chatId)
-                throw ex
+            userMessageId: MessageId?,
+            assistantMessageId: MessageId?,
+        ): Flow<MessageGenerationState> =
+            flow {
+                val initialState = PipelineState.createInitial(chatId, userMessage)
+                val stateJson = initialState.toJson()
+                val stateFlow = inferenceEventBus.openPipelineRequest(chatId)
+                try {
+                    serviceStarter.startService(
+                        chatId = chatId,
+                        userMessage = userMessage,
+                        stateJson = stateJson,
+                        userMessageId = userMessageId?.value,
+                        assistantMessageId = assistantMessageId?.value,
+                    )
+                } catch (ex: Exception) {
+                    inferenceEventBus.clearPipelineRequest(chatId)
+                    throw ex
+                }
+                try {
+                    emitAll(
+                        stateFlow.transformWhile { state ->
+                            emit(state)
+                            !state.isPipelineTerminal
+                        },
+                    )
+                } finally {
+                    inferenceEventBus.clearPipelineRequest(chatId)
+                }
             }
-
-            return flow {
-                emitAll(
-                    stateFlow.transformWhile { state ->
-                        emit(state)
-                        !state.isPipelineTerminal
-                    },
-                )
-            }.onCompletion {
-                inferenceEventBus.clearPipelineRequest(chatId)
-            }
-        }
 
         override suspend fun stopPipeline(pipelineId: String) {
             serviceStarter.stopService()

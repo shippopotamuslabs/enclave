@@ -11,6 +11,8 @@ import com.browntowndev.enclave.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.enclave.domain.port.inference.LlmInferencePort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
+import com.browntowndev.enclave.domain.port.repository.PipelineStateRepository
+import com.browntowndev.enclave.domain.usecase.chat.ChatGenerationProgressPersister
 import com.browntowndev.enclave.feature.inference.InferenceEventBus
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -44,6 +46,8 @@ class InferenceServiceTest {
     private val inferenceFactory = mockk<InferenceFactoryPort>()
     private val activeModelProvider = mockk<ActiveModelProviderPort>(relaxed = true)
     private val inferenceEventBus = mockk<InferenceEventBus>(relaxed = true)
+    private val chatGenerationProgressPersister = mockk<ChatGenerationProgressPersister>(relaxed = true)
+    private val pipelineStateRepository = mockk<PipelineStateRepository>(relaxed = true)
     private val llmInferenceService = mockk<LlmInferencePort>(relaxed = true)
     private val powerManager = mockk<android.os.PowerManager>(relaxed = true)
     private val testDispatcher = StandardTestDispatcher()
@@ -70,10 +74,14 @@ class InferenceServiceTest {
         service.inferenceFactoryProvider = lazyFactory
         service.activeModelProvider = activeModelProvider
         service.inferenceEventBus = inferenceEventBus
+        service.chatGenerationProgressPersister = chatGenerationProgressPersister
+        service.pipelineStateRepository = pipelineStateRepository
+        coEvery { pipelineStateRepository.persistPipelineState(any(), any()) } returns Unit
+        coEvery { pipelineStateRepository.clearPipelineState(any()) } returns Unit
 
         // Mock PowerManager
         every { service.getSystemService(android.content.Context.POWER_SERVICE) } returns powerManager
-        every { powerManager.getThermalHeadroom(any()) } returns 1.0f
+        every { powerManager.getThermalHeadroom(any()) } returns 0.5f
 
         // Mock active model config
         val mockActiveConfig = mockk<com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration>(relaxed = true)
@@ -164,7 +172,7 @@ class InferenceServiceTest {
 
             // Then
             verify { service.stopForeground(any<Int>()) }
-            verify { service.stopSelf() }
+            verify { service.stopSelf(any()) }
         }
 
     @Test
@@ -182,7 +190,7 @@ class InferenceServiceTest {
             advanceUntilIdle()
 
             // Then
-            verify { service.stopSelf() }
+            verify { service.stopSelf(any()) }
             assertTrue(invokedModelTypes.isEmpty())
         }
 
@@ -221,7 +229,7 @@ class InferenceServiceTest {
             advanceUntilIdle()
 
             // Then: verify cancellation and termination of service
-            verify { service.stopSelf() }
+            verify { service.stopSelf(any()) }
         }
 
     @Test
@@ -270,8 +278,8 @@ class InferenceServiceTest {
     @DisplayName("Scenario 2.6: Thermal Watchdog Fallback cancels pipeline mid-token")
     fun thermalWatchdogFallbackCancelsPipeline() =
         runTest(testDispatcher) {
-            // Given: Headroom is critically low (0.10f)
-            every { powerManager.getThermalHeadroom(any()) } returns 0.10f
+            // Given: Headroom forecasts severe throttling (>= 0.95)
+            every { powerManager.getThermalHeadroom(any()) } returns 0.96f
 
             val intent = mockk<Intent>(relaxed = true)
             every { intent.action } returns InferenceService.ACTION_START
@@ -292,7 +300,7 @@ class InferenceServiceTest {
                     },
                 )
             }
-            verify { service.stopSelf() }
+            verify { service.stopSelf(any()) }
         }
 
     @Test

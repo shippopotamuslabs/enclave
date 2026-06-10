@@ -133,6 +133,7 @@ object ChatViewModelTestSupport {
                     chatRepository = chatRepository,
                     errorHandler = errorHandler,
                     savedStateHandle = savedStateHandle,
+                    pipelineExecutor = mockk(relaxed = true),
                 ),
             )
         val chatInputCoordinator =

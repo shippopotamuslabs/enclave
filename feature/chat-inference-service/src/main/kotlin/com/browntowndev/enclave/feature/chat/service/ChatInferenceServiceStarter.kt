@@ -68,7 +68,11 @@ class ChatInferenceServiceStarter
                 Intent(context, ChatInferenceService::class.java).apply {
                     action = ChatInferenceService.ACTION_STOP
                 }
-            context.startService(intent)
-            loggingPort.info(TAG, "stopService intent sent")
+            try {
+                context.startService(intent)
+                loggingPort.info(TAG, "stopService intent sent")
+            } catch (e: IllegalStateException) {
+                loggingPort.warning(TAG, "stopService ignored; service not running in background: ${e.message}")
+            }
         }
     }

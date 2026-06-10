@@ -72,6 +72,7 @@ class InferenceOrchestratorStopTest {
                 chatRepository = chatRepository,
                 errorHandler = errorHandler,
                 savedStateHandle = SavedStateHandle(),
+                pipelineExecutor = mockk(relaxed = true),
             )
 
         mockAllowedSafetyGate(

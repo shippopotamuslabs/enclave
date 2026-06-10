@@ -1,6 +1,7 @@
 package com.browntowndev.enclave.domain.usecase
 
 import com.browntowndev.enclave.domain.model.chat.MessageGenerationState
+import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.PipelineStep
 import com.browntowndev.enclave.domain.port.inference.PipelineExecutorPort
@@ -24,6 +25,8 @@ class FakePipelineExecutor : PipelineExecutorPort {
     override fun executePipeline(
         chatId: String,
         userMessage: String,
+        userMessageId: MessageId?,
+        assistantMessageId: MessageId?,
     ): Flow<MessageGenerationState> =
         flow {
             executePipelineCalled = true
