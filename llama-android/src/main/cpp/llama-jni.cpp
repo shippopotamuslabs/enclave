@@ -548,12 +548,12 @@ Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeLoadM
     }
 
     if (!mmproj_path.empty()) {
-        mtmd_context_params mparams = mtmd_context_params_default();
-        mparams.use_gpu = false;
-        mparams.n_threads = thread_config.batch_threads;
-        mparams.flash_attn_type = LLAMA_FLASH_ATTN_TYPE_DISABLED;
+        mtmd_context_params mtmd_params = mtmd_context_params_default();
+        mtmd_params.use_gpu = false;
+        mtmd_params.n_threads = thread_config.batch_threads;
+        mtmd_params.flash_attn_type = LLAMA_FLASH_ATTN_TYPE_DISABLED;
 
-        g_mtmd = mtmd_init_from_file(mmproj_path.c_str(), g_model, mparams);
+        g_mtmd = mtmd_init_from_file(mmproj_path.c_str(), g_model, mtmd_params);
         if (!g_mtmd) {
             __android_log_print(ANDROID_LOG_ERROR, "llama-jni", "FAILED to load multimodal projector from: %s", mmproj_path.c_str());
             llama_detach_threadpool(g_ctx);
@@ -698,6 +698,12 @@ Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeStart
     jint reasoningBudget,
     jobject callback
 ) {
+    // Hold the same mutex as load/unload/clear so the model, context, sampler and
+    // batch cannot be freed underneath the generation loop. Stopping is done via
+    // the g_generating atomic, which is checked every token, so nativeStopCompletion
+    // does not need (and must not take) this lock.
+    std::lock_guard<std::mutex> lock(g_mutex);
+
     if (!g_model) {
         g_generating = false;
         env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Model not loaded");
@@ -850,37 +856,31 @@ Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeStart
     }
     g_sampler = llama_sampler_chain_init(llama_sampler_chain_default_params());
 
-    // Temperature
-    float temp = temperature > 0 ? temperature : 0.7f;
-    llama_sampler_chain_add(g_sampler, llama_sampler_init_temp(temp));
+    // Temperature: 0 means greedy decoding; only negative values fall back to default
+    float temp = temperature >= 0.0f ? temperature : 0.7f;
 
-    // Only add probabilistic samplers when using temperature > 0
-    // For greedy (temp = 0), these add unnecessary overhead per token
-    if (temp > 0.0f) {
-        // Top-K
-        if (topK > 0) {
-            llama_sampler_chain_add(g_sampler, llama_sampler_init_top_k(topK));
-        }
-
-        // Top-P
-        if (topP > 0) {
-            llama_sampler_chain_add(g_sampler, llama_sampler_init_top_p(topP, 1));
-        }
-
-        // Min-P
-        llama_sampler_chain_add(g_sampler, llama_sampler_init_min_p(minP, 1));
-    }
-
-    // Repeat penalties - reduced from 128 to 32 for better performance
-    // The 128 value was causing unnecessary history scanning per token
+    // Repeat penalties operate on raw logits, so they go first in the chain
     float penalty_repeat = (repeatPenalty > 0) ? repeatPenalty : 1.10f;
     float penalty_freq = (penaltyFreq > 0.0f) ? penaltyFreq : 0.05f;
     float penalty_present = (penaltyPresent > 0.0f) ? penaltyPresent : 0.05f;
     int   penalty_last_n = 128;
     llama_sampler_chain_add(g_sampler, llama_sampler_init_penalties(penalty_last_n, penalty_repeat, penalty_freq, penalty_present));
 
-    // Final sampler: use dist for probabilistic sampling (temp > 0), greedy for deterministic (temp = 0)
+    // Only add probabilistic samplers when using temperature > 0
+    // For greedy (temp = 0), these add unnecessary overhead per token
     if (temp > 0.0f) {
+        // Truncation samplers before temperature, matching llama.cpp's default order
+        if (topK > 0) {
+            llama_sampler_chain_add(g_sampler, llama_sampler_init_top_k(topK));
+        }
+
+        if (topP > 0) {
+            llama_sampler_chain_add(g_sampler, llama_sampler_init_top_p(topP, 1));
+        }
+
+        llama_sampler_chain_add(g_sampler, llama_sampler_init_min_p(minP, 1));
+
+        llama_sampler_chain_add(g_sampler, llama_sampler_init_temp(temp));
         llama_sampler_chain_add(g_sampler, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
     } else {
         llama_sampler_chain_add(g_sampler, llama_sampler_init_greedy());
@@ -1196,7 +1196,6 @@ Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeStart
 
     // Get special tokens and vocab
     llama_token eos_token = llama_vocab_eos(get_model_vocab());
-    const int vocab_size = llama_vocab_n_tokens(get_model_vocab());
 
     // Generation loop using official llama.cpp sampler
     while (g_generating && n_generated_tokens < maxTokens) {
@@ -1276,6 +1275,10 @@ Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeStart
                     if (forceStr) {
                         env->CallVoidMethod(g_callback, onTokenMethod, forceStr);
                         env->DeleteLocalRef(forceStr);
+                        if (env->ExceptionCheck()) {
+                            env->ExceptionClear();
+                            __android_log_print(ANDROID_LOG_ERROR, "llama-jni", "onToken callback threw during force-close");
+                        }
                     }
 
                     // CRITICAL: Inject forced close into KV cache so model sees it
@@ -1287,14 +1290,21 @@ Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeStart
 
                     if (n_force > 0) {
                         llama_pos force_pos = g_last_eval_pos;
-                        llama_batch_clear(*g_batch);
 
-                        for (int i = 0; i < n_force; ++i) {
-                            llama_batch_add(*g_batch, force_tokens[i],
-                                force_pos + i, {0}, (i == n_force - 1));
+                        // Decode in chunks so a small n_batch cannot overflow the batch buffers
+                        const int force_batch_cap = std::max(1, (int) llama_n_batch(g_ctx));
+                        int decode_res = 0;
+                        for (int done = 0; done < n_force && decode_res == 0; ) {
+                            llama_batch_clear(*g_batch);
+                            const int chunk = std::min(force_batch_cap, n_force - done);
+                            for (int i = 0; i < chunk; ++i) {
+                                llama_batch_add(*g_batch, force_tokens[done + i],
+                                    force_pos + done + i, {0}, (done + i == n_force - 1));
+                            }
+                            decode_res = llama_decode(g_ctx, *g_batch);
+                            done += chunk;
                         }
 
-                        int decode_res = llama_decode(g_ctx, *g_batch);
                         if (decode_res != 0) {
                             __android_log_print(ANDROID_LOG_ERROR, "llama-jni",
                                 "ERROR: llama_decode failed for force-close (err %d)", decode_res);
@@ -1331,8 +1341,9 @@ Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeStart
         // Calculate position after thinking check (position doesn't change if we skip)
         const llama_pos current_pos = g_last_eval_pos;
 
-        // Accept the token (updates sampler state for next iteration)
-        llama_sampler_accept(g_sampler, token);
+        // Note: llama_sampler_sample() already accepted the token into the sampler
+        // state; calling llama_sampler_accept() here again would double-count it
+        // in the penalty window.
 
         // Extract and send valid UTF-8 sequences from buffer
         // If in thinking phase, protect the expected_end_tag from being split by extraction
@@ -1343,6 +1354,11 @@ Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeStart
             if (tokenStr) {
                 env->CallVoidMethod(g_callback, onTokenMethod, tokenStr);
                 env->DeleteLocalRef(tokenStr);
+                if (env->ExceptionCheck()) {
+                    env->ExceptionClear();
+                    __android_log_print(ANDROID_LOG_ERROR, "llama-jni", "onToken callback threw - stopping generation");
+                    break;
+                }
             }
         }
 
