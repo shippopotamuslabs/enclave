@@ -64,7 +64,7 @@ internal class OpenAiResponseStreamHandler(
         message: String?,
         context: String,
     ): StreamState? {
-        if (!shouldRecoverFromStreamTermination(state.emittedAny, message)) {
+        if (!shouldRecoverFromStreamTermination(state, message)) {
             return null
         }
         streamContext.loggingPort.warning(

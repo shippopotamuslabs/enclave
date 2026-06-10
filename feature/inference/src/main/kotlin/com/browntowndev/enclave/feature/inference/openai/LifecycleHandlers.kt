@@ -59,7 +59,7 @@ internal suspend fun OpenAiStreamHandlerContext.handleFailed(
             .error()
             .map { it.message() }
             .orElse("Unknown API error")
-    if (shouldRecoverFromStreamTermination(state.emittedAny, errorMsg)) {
+    if (shouldRecoverFromStreamTermination(state, errorMsg)) {
         loggingPort.warning(
             tag,
             "Responses stream reported recoverable API failure after partial output " +
@@ -76,7 +76,7 @@ internal suspend fun OpenAiStreamHandlerContext.handleError(
 ): StreamState {
     val errorEvent = event.error().get()
     val errorMsg = errorEvent.message()
-    if (shouldRecoverFromStreamTermination(state.emittedAny, errorMsg)) {
+    if (shouldRecoverFromStreamTermination(state, errorMsg)) {
         loggingPort.warning(
             tag,
             "Responses stream reported recoverable stream error after partial output " +
@@ -100,10 +100,22 @@ internal fun OpenAiStreamHandlerContext.handleUnexpectedStreamEvent(
     return state
 }
 
+/**
+ * Minimum streamed text length worth salvaging as the final answer. Below this,
+ * rethrowing is better: the Rust model-API retry path replays the turn cleanly
+ * (the UI discards the short partial on ModelApiRetryScheduled), instead of
+ * silently presenting a truncated reply as complete.
+ */
+internal const val MIN_SALVAGEABLE_STREAM_CHARS = 200
+
 internal fun shouldRecoverFromStreamTermination(
-    emittedAny: Boolean,
+    state: StreamState,
     message: String?,
-): Boolean = emittedAny && isRecoverableStreamTermination(message)
+): Boolean {
+    if (!isRecoverableStreamTermination(message)) return false
+    return state.toolCallRequests.isNotEmpty() ||
+        state.streamedAssistantMessage.length >= MIN_SALVAGEABLE_STREAM_CHARS
+}
 
 internal fun isRecoverableStreamTermination(message: String?): Boolean {
     val normalized = message?.lowercase() ?: return false
