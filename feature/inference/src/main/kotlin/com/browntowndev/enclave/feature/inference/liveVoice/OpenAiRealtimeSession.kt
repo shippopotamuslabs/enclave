@@ -1,7 +1,9 @@
 package com.browntowndev.enclave.feature.inference.liveVoice
 
+import androidx.annotation.VisibleForTesting
 import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderAsset
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
+import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.port.media.LiveVoiceEvent
 import com.browntowndev.enclave.domain.port.media.LiveVoiceSession
 import kotlinx.coroutines.channels.awaitClose
@@ -20,6 +22,8 @@ import java.util.concurrent.TimeUnit
 class OpenAiRealtimeSession(
     private val asset: LiveVoiceProviderAsset,
     private val apiKey: String,
+    @get:VisibleForTesting
+    internal val tools: List<ToolDefinition> = emptyList(),
 ) : LiveVoiceSession {
     private val httpClient =
         OkHttpClient
@@ -55,7 +59,7 @@ class OpenAiRealtimeSession(
                         webSocket: WebSocket,
                         text: String,
                     ) {
-                        parseOpenAiRealtimeEvent(text)?.let { trySend(it) }
+                        parseOpenAiRealtimeEvents(text).forEach { trySend(it) }
                     }
 
                     override fun onFailure(
@@ -107,6 +111,27 @@ class OpenAiRealtimeSession(
         webSocket?.close(1000, "client closed")
         webSocket = null
         shutdownHttpClient()
+    }
+
+    override suspend fun sendToolResult(
+        callId: String,
+        name: String,
+        resultJson: String,
+    ) {
+        val socket = webSocket ?: return
+        buildOpenAiToolResultMessages(callId, name, resultJson).forEach { message ->
+            socket.send(message)
+        }
+    }
+
+    @VisibleForTesting
+    internal fun attachWebSocketForTest(socket: WebSocket) {
+        webSocket = socket
+    }
+
+    @VisibleForTesting
+    internal fun sendSessionUpdateForTest(socket: WebSocket) {
+        sendSessionUpdate(socket)
     }
 
     private fun shutdownHttpClient() {
@@ -168,6 +193,7 @@ class OpenAiRealtimeSession(
                                 put("interrupt_response", true)
                             },
                         )
+                        applyOpenAiRealtimeToolsToSession(this, tools)
                     },
                 )
             }

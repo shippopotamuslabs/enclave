@@ -1,7 +1,9 @@
 package com.browntowndev.enclave.feature.inference.liveVoice
 
+import androidx.annotation.VisibleForTesting
 import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderAsset
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
+import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.port.media.LiveVoiceEvent
 import com.browntowndev.enclave.domain.port.media.LiveVoiceSession
 import kotlinx.coroutines.channels.awaitClose
@@ -20,6 +22,8 @@ import java.util.concurrent.TimeUnit
 class GeminiLiveSession(
     private val asset: LiveVoiceProviderAsset,
     private val apiKey: String,
+    @get:VisibleForTesting
+    internal val tools: List<ToolDefinition> = emptyList(),
 ) : LiveVoiceSession {
     private val httpClient =
         OkHttpClient
@@ -52,7 +56,7 @@ class GeminiLiveSession(
                         webSocket: WebSocket,
                         text: String,
                     ) {
-                        parseGeminiLiveEvent(text)?.let { trySend(it) }
+                        parseGeminiLiveEvents(text).forEach { trySend(it) }
                     }
 
                     override fun onFailure(
@@ -120,6 +124,20 @@ class GeminiLiveSession(
         shutdownHttpClient()
     }
 
+    override suspend fun sendToolResult(
+        callId: String,
+        name: String,
+        resultJson: String,
+    ) {
+        val socket = webSocket ?: return
+        socket.send(buildGeminiToolResponseMessage(callId, name, resultJson))
+    }
+
+    @VisibleForTesting
+    internal fun attachWebSocketForTest(socket: WebSocket) {
+        webSocket = socket
+    }
+
     private fun shutdownHttpClient() {
         httpClient.dispatcher.executorService.shutdown()
         httpClient.connectionPool.evictAll()
@@ -165,6 +183,9 @@ class GeminiLiveSession(
                                 )
                             },
                         )
+                        buildGeminiLiveSetupTools(tools)?.let { setupTools ->
+                            put("tools", setupTools)
+                        }
                     },
                 )
             }

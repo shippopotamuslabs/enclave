@@ -1,12 +1,14 @@
 package com.browntowndev.enclave.domain.port.media
 
 import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderAsset
+import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import kotlinx.coroutines.flow.Flow
 
 interface LiveVoicePort {
     suspend fun openSession(
         asset: LiveVoiceProviderAsset,
         apiKey: String,
+        tools: List<ToolDefinition> = emptyList(),
     ): Result<LiveVoiceSession>
 }
 
@@ -21,6 +23,12 @@ interface LiveVoiceSession {
     suspend fun cancelAssistantResponse()
 
     suspend fun close()
+
+    suspend fun sendToolResult(
+        callId: String,
+        name: String,
+        resultJson: String,
+    )
 }
 
 sealed interface LiveVoiceEvent {
@@ -66,4 +74,10 @@ sealed interface LiveVoiceEvent {
     ) : LiveVoiceEvent
 
     data object Closed : LiveVoiceEvent
+
+    data class ToolCallRequested(
+        val callId: String,
+        val name: String,
+        val argumentsJson: String,
+    ) : LiveVoiceEvent
 }
