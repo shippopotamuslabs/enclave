@@ -270,7 +270,7 @@ class LiveVoiceCoordinatorTest {
 
             assertTrue(fakeSession.sentAudio.isEmpty())
 
-            fakeCapture.emit(loudPcm16Frame())
+            emitLoudBargeInFrames(fakeCapture)
             advanceUntilIdle()
 
             assertTrue(fakePlayer.stopped)
@@ -392,8 +392,8 @@ class LiveVoiceCoordinatorTest {
         }
 
     @Test
-    @DisplayName("LV-COORD-009: mic upload continues during assistant speech for server-side interrupt")
-    fun lvCoord009_micUploadContinuesDuringAssistantSpeech() =
+    @DisplayName("LV-COORD-009: half-duplex pauses mic upload during assistant speech without AEC")
+    fun lvCoord009_halfDuplexPausesMicUploadDuringAssistantSpeech() =
         runTest {
             stubOpenSession()
             val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
@@ -401,6 +401,25 @@ class LiveVoiceCoordinatorTest {
             coordinator.start(scope, chatId = null)
             fakeSession.emit(LiveVoiceEvent.Connected)
             fakeCapture.emitSession(echoCancellationActive = false)
+            fakeSession.emit(LiveVoiceEvent.AssistantAudioChunk(byteArrayOf(1)))
+            advanceUntilIdle()
+
+            fakeCapture.emit(quietPcm16Frame())
+            advanceUntilIdle()
+
+            assertTrue(fakeSession.sentAudio.isEmpty())
+        }
+
+    @Test
+    @DisplayName("LV-COORD-009b: full-duplex uploads mic during assistant speech when AEC is active")
+    fun lvCoord009b_fullDuplexUploadsMicDuringAssistantSpeech() =
+        runTest {
+            stubOpenSession()
+            val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
+
+            coordinator.start(scope, chatId = null)
+            fakeSession.emit(LiveVoiceEvent.Connected)
+            fakeCapture.emitSession(echoCancellationActive = true)
             fakeSession.emit(LiveVoiceEvent.AssistantAudioChunk(byteArrayOf(1)))
             advanceUntilIdle()
 
@@ -439,9 +458,7 @@ class LiveVoiceCoordinatorTest {
             fakeSession.emit(LiveVoiceEvent.AssistantAudioChunk(byteArrayOf(1)))
             advanceUntilIdle()
 
-            repeat(2) {
-                fakeCapture.emit(loudPcm16Frame())
-            }
+            emitLoudBargeInFrames(fakeCapture)
             advanceUntilIdle()
 
             fakeSession.emit(LiveVoiceEvent.AssistantAudioChunk(byteArrayOf(2)))
@@ -614,7 +631,7 @@ class LiveVoiceCoordinatorTest {
             assertTrue(fakePlayer.playbackStarted)
             assertTrue(coordinator.state.value is LiveVoiceUiState.Listening)
 
-            fakeCapture.emit(loudPcm16Frame())
+            emitLoudBargeInFrames(fakeCapture)
             advanceUntilIdle()
 
             assertEquals(0, fakeSession.cancelAssistantResponseCount)
@@ -633,6 +650,12 @@ class LiveVoiceCoordinatorTest {
             fakeSession.emit(LiveVoiceEvent.Connected)
             fakeCapture.emitSession(echoCancellationActive = false)
             fakeSession.emit(LiveVoiceEvent.AssistantAudioChunk(byteArrayOf(1)))
+            advanceUntilIdle()
+
+            fakeCapture.emit(quietPcm16Frame())
+            advanceUntilIdle()
+            assertTrue(fakeSession.sentAudio.isEmpty())
+
             fakeSession.emit(LiveVoiceEvent.AssistantResponseComplete)
             advanceUntilIdle()
 
@@ -718,7 +741,7 @@ class LiveVoiceCoordinatorTest {
             fakeSession.emit(LiveVoiceEvent.AssistantTranscriptDelta("How to clean a fish"))
             advanceUntilIdle()
 
-            fakeCapture.emit(loudPcm16Frame())
+            emitLoudBargeInFrames(fakeCapture)
             advanceUntilIdle()
 
             verifyPersistVoiceTurn(
@@ -799,7 +822,7 @@ class LiveVoiceCoordinatorTest {
             fakeSession.emit(LiveVoiceEvent.AssistantTranscriptDelta("How to clean a fish"))
             advanceUntilIdle()
 
-            fakeCapture.emit(loudPcm16Frame())
+            emitLoudBargeInFrames(fakeCapture)
             advanceUntilIdle()
 
             fakeSession.emit(LiveVoiceEvent.AssistantAudioChunk(byteArrayOf(2)))
@@ -1411,6 +1434,15 @@ class LiveVoiceCoordinatorTest {
             val low = (LOUD_SAMPLE and 0xFF).toByte()
             val high = ((LOUD_SAMPLE shr 8) and 0xFF).toByte()
             return byteArrayOf(low, high, low, high)
+        }
+
+        suspend fun emitLoudBargeInFrames(
+            fakeCapture: FakeRealtimeAudioCapture,
+            frameCount: Int = 3,
+        ) {
+            repeat(frameCount) {
+                fakeCapture.emit(loudPcm16Frame())
+            }
         }
 
         fun quietPcm16Frame(): ByteArray {

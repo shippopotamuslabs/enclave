@@ -182,14 +182,14 @@ class OpenAiRealtimeSession(
                                 put("model", "whisper-1")
                             },
                         )
+                        val vadConfig = OpenAiRealtimeSessionVadConfig.forProvider(asset.provider)
                         put(
                             "turn_detection",
                             buildJsonObject {
                                 put("type", "server_vad")
-                                // Lower threshold improves quiet-speech pickup; AEC handles echo.
-                                put("threshold", OpenAiRealtimeSessionVadConfig.threshold)
-                                put("prefix_padding_ms", OpenAiRealtimeSessionVadConfig.prefixPaddingMs)
-                                put("silence_duration_ms", OpenAiRealtimeSessionVadConfig.silenceDurationMs)
+                                put("threshold", vadConfig.threshold)
+                                put("prefix_padding_ms", vadConfig.prefixPaddingMs)
+                                put("silence_duration_ms", vadConfig.silenceDurationMs)
                                 put("interrupt_response", true)
                             },
                         )
@@ -207,10 +207,29 @@ class OpenAiRealtimeSession(
     }
 }
 
-/** Test-visible server VAD defaults for OpenAI-compatible realtime sessions. */
+/** Test-visible server VAD tuning for OpenAI-compatible realtime sessions. */
+internal data class OpenAiRealtimeSessionVadSettings(
+    val threshold: Double,
+    val prefixPaddingMs: Int,
+    val silenceDurationMs: Int,
+)
+
 internal object OpenAiRealtimeSessionVadConfig {
-    const val threshold = 0.35
-    const val prefixPaddingMs = 400
-    /** Longer silence window so pauses mid-utterance do not commit the turn early. */
-    const val silenceDurationMs = 900
+    fun forProvider(provider: ApiProvider): OpenAiRealtimeSessionVadSettings =
+        when (provider) {
+            ApiProvider.XAI ->
+                OpenAiRealtimeSessionVadSettings(
+                    threshold = 0.85,
+                    prefixPaddingMs = 333,
+                    silenceDurationMs = 900,
+                )
+            else ->
+                OpenAiRealtimeSessionVadSettings(
+                    // Lower threshold improves quiet-speech pickup; AEC handles echo.
+                    threshold = 0.35,
+                    prefixPaddingMs = 400,
+                    // Longer silence window so pauses mid-utterance do not commit the turn early.
+                    silenceDurationMs = 900,
+                )
+        }
 }
