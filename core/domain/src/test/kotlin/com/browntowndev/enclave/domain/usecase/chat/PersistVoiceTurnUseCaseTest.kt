@@ -12,12 +12,25 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.slot
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class PersistVoiceTurnUseCaseTest {
+    private fun useCase(
+        createUserMessageUseCase: CreateUserMessageUseCase,
+        messageRepository: MessageRepository,
+        generateChatTitleUseCase: GenerateChatTitleUseCase = mockk(relaxed = true),
+    ): PersistVoiceTurnUseCase =
+        PersistVoiceTurnUseCase(
+            createUserMessageUseCase = createUserMessageUseCase,
+            messageRepository = messageRepository,
+            generateChatTitleUseCase = generateChatTitleUseCase,
+        )
     @Test
     @DisplayName("LV-PERSIST-001")
     fun lvPersist001_bothTurnsExistingChat() =
@@ -38,7 +51,7 @@ class PersistVoiceTurnUseCaseTest {
             coEvery { messageRepository.saveMessage(capture(assistantMessageSlot)) } returns MessageId("a1")
 
             val result =
-                PersistVoiceTurnUseCase(createUserMessageUseCase, messageRepository)
+                useCase(createUserMessageUseCase, messageRepository)
                     .invoke(ChatId("c1"), "hello there", "hi back")
 
             assertEquals(Role.USER, userMessageSlot.captured.role)
@@ -68,7 +81,7 @@ class PersistVoiceTurnUseCaseTest {
             coEvery { messageRepository.saveMessage(capture(assistantMessageSlot)) } returns MessageId("a1")
 
             val result =
-                PersistVoiceTurnUseCase(createUserMessageUseCase, messageRepository)
+                useCase(createUserMessageUseCase, messageRepository)
                     .invoke(null, "start a session", "ready")
 
             assertEquals(ChatId("new-chat"), assistantMessageSlot.captured.chatId)
@@ -93,7 +106,7 @@ class PersistVoiceTurnUseCaseTest {
             coEvery { messageRepository.saveMessage(capture(assistantMessageSlot)) } returns MessageId("a1")
 
             val result =
-                PersistVoiceTurnUseCase(createUserMessageUseCase, messageRepository)
+                useCase(createUserMessageUseCase, messageRepository)
                     .invoke(null, "   ", "the answer is 42")
 
             assertEquals("the answer is 42", userMessageSlot.captured.content.text)
@@ -113,7 +126,7 @@ class PersistVoiceTurnUseCaseTest {
             coEvery { messageRepository.saveMessage(capture(assistantMessageSlot)) } returns MessageId("a1")
 
             val result =
-                PersistVoiceTurnUseCase(createUserMessageUseCase, messageRepository)
+                useCase(createUserMessageUseCase, messageRepository)
                     .invoke(ChatId("c1"), "", "assistant reply only")
 
             coVerify(exactly = 0) { createUserMessageUseCase(any()) }
@@ -131,11 +144,80 @@ class PersistVoiceTurnUseCaseTest {
             val messageRepository = mockk<MessageRepository>(relaxed = true)
 
             val result =
-                PersistVoiceTurnUseCase(createUserMessageUseCase, messageRepository)
+                useCase(createUserMessageUseCase, messageRepository)
                     .invoke(ChatId("c1"), "", "   ")
 
             coVerify(exactly = 0) { createUserMessageUseCase(any()) }
             coVerify(exactly = 0) { messageRepository.saveMessage(any()) }
             assertEquals(ChatId("c1"), result)
+        }
+
+    @Test
+    @DisplayName("LV-PERSIST-006")
+    fun lvPersist006_newChatWithUserTextTriggersTitleGen() =
+        runTest {
+            val createUserMessageUseCase = mockk<CreateUserMessageUseCase>()
+            val messageRepository = mockk<MessageRepository>(relaxed = true)
+            val generateChatTitleUseCase = mockk<GenerateChatTitleUseCase>(relaxed = true)
+
+            coEvery { createUserMessageUseCase(any()) } returns
+                UserPromptResult(
+                    userMessageId = MessageId("u9"),
+                    chatId = ChatId("new-chat"),
+                    userMessageCreatedAtMillis = 0L,
+                )
+
+            useCase(createUserMessageUseCase, messageRepository, generateChatTitleUseCase)
+                .invoke(null, "start a session", "ready")
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) {
+                generateChatTitleUseCase(ChatId("new-chat"), "start a session")
+            }
+        }
+
+    @Test
+    @DisplayName("LV-PERSIST-007")
+    fun lvPersist007_existingChatDoesNotTriggerTitleGen() =
+        runTest {
+            val createUserMessageUseCase = mockk<CreateUserMessageUseCase>()
+            val messageRepository = mockk<MessageRepository>(relaxed = true)
+            val generateChatTitleUseCase = mockk<GenerateChatTitleUseCase>(relaxed = true)
+
+            coEvery { createUserMessageUseCase(any()) } returns
+                UserPromptResult(
+                    userMessageId = MessageId("u1"),
+                    chatId = ChatId("c1"),
+                    userMessageCreatedAtMillis = 1_700_000_000_000L,
+                )
+
+            useCase(createUserMessageUseCase, messageRepository, generateChatTitleUseCase)
+                .invoke(ChatId("c1"), "hello there", "hi back")
+            advanceUntilIdle()
+
+            coVerify(exactly = 0) { generateChatTitleUseCase(any(), any()) }
+        }
+
+    @Test
+    @DisplayName("LV-PERSIST-008")
+    fun lvPersist008_assistantOnlyNewChatDoesNotTriggerTitleGen() =
+        runTest {
+            val createUserMessageUseCase = mockk<CreateUserMessageUseCase>()
+            val messageRepository = mockk<MessageRepository>()
+            val generateChatTitleUseCase = mockk<GenerateChatTitleUseCase>(relaxed = true)
+
+            coEvery { createUserMessageUseCase(any()) } returns
+                UserPromptResult(
+                    userMessageId = MessageId("u2"),
+                    chatId = ChatId("seed-chat"),
+                    userMessageCreatedAtMillis = 0L,
+                )
+            coEvery { messageRepository.saveMessage(any()) } returns MessageId("a1")
+
+            useCase(createUserMessageUseCase, messageRepository, generateChatTitleUseCase)
+                .invoke(null, "   ", "the answer is 42")
+            advanceUntilIdle()
+
+            coVerify(exactly = 0) { generateChatTitleUseCase(any(), any()) }
         }
 }
