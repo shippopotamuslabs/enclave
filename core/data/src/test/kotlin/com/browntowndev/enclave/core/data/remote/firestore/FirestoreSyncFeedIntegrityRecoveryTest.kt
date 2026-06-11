@@ -3,7 +3,6 @@ package com.browntowndev.enclave.core.data.remote.firestore
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import io.mockk.coEvery
 import io.mockk.coVerify
-import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals

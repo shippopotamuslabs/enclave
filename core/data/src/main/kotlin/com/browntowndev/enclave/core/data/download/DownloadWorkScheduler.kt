@@ -2,9 +2,9 @@ package com.browntowndev.enclave.core.data.download
 
 import android.content.Context
 import android.util.Log
-import androidx.work.Data
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
+import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder

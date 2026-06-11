@@ -14,8 +14,13 @@ import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.config.LocalModelMetadata
 import com.browntowndev.enclave.domain.model.config.SlotResolvedLocalModel
 import com.browntowndev.enclave.domain.model.config.UtilityType
+import com.browntowndev.enclave.domain.model.download.ModelPack
+import com.browntowndev.enclave.domain.model.download.ModelPackVerificationDepth
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationPaths
+import com.browntowndev.enclave.domain.port.download.HashingPort
+import com.browntowndev.enclave.domain.port.download.QnnPackInstallerPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
@@ -39,11 +44,6 @@ import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
-import com.browntowndev.enclave.domain.model.download.ModelPack
-import com.browntowndev.enclave.domain.model.download.ModelPackVerificationDepth
-import com.browntowndev.enclave.domain.model.media.LocalImageGenerationPaths
-import com.browntowndev.enclave.domain.port.download.HashingPort
-import com.browntowndev.enclave.domain.port.download.QnnPackInstallerPort
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
@@ -1084,15 +1084,80 @@ class DownloadFinalizeWorkerTest {
     fun dl007_incompleteSdxlExtractionStaysIncompleteAndSkipsRegistry(
         @TempDir tempDir: File,
     ) = runTest {
-            val sdxlSha = "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83"
-            val filesRoot = File(tempDir, "files").apply { mkdirs() }
-            every { mockContext.getExternalFilesDir(null) } returns filesRoot
-            val modelsDir = File(filesRoot, com.browntowndev.enclave.domain.model.download.ModelConfig.MODELS_DIR).apply { mkdirs() }
-            val packDir = File(modelsDir, LocalImageGenerationPaths.SDXL_QNN_SUBDIR).apply { mkdirs() }
-            listOf("clip_v2.mnn", "token_emb.bin", "pos_emb.bin", "unet.bin", "vae_decoder.bin").forEach { name ->
-                File(packDir, name).writeBytes(byteArrayOf(1))
+        val sdxlSha = "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83"
+        val filesRoot = File(tempDir, "files").apply { mkdirs() }
+        every { mockContext.getExternalFilesDir(null) } returns filesRoot
+        val modelsDir = File(filesRoot, com.browntowndev.enclave.domain.model.download.ModelConfig.MODELS_DIR).apply { mkdirs() }
+        val packDir = File(modelsDir, LocalImageGenerationPaths.SDXL_QNN_SUBDIR).apply { mkdirs() }
+        listOf("clip_v2.mnn", "token_emb.bin", "pos_emb.bin", "unet.bin", "vae_decoder.bin").forEach { name ->
+            File(packDir, name).writeBytes(byteArrayOf(1))
+        }
+        File(modelsDir, "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip").writeBytes(byteArrayOf(1, 2, 3))
+        val sdxlAsset =
+            createTestAsset("realvis_xl_v5_dmd2_qnn2.28_8gen3.zip", sdxlSha).let { asset ->
+                asset.copy(
+                    metadata =
+                        asset.metadata.copy(
+                            id = LocalModelId("sdxl-qnn-pack"),
+                            utilityType = UtilityType.SDXL_QNN_PACK,
+                        ),
+                    configurations = emptyList(),
+                )
             }
-            File(modelsDir, "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip").writeBytes(byteArrayOf(1, 2, 3))
+        setInputData(
+            workDataOf(
+                KEY_SESSION_ID to SESSION_ID,
+                KEY_REQUEST_KIND to REQUEST_INITIALIZE,
+                KEY_DOWNLOADED_SHAS to Json.encodeToString(listOf(sdxlSha)),
+            ),
+        )
+        coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(sdxlAsset))
+        coEvery {
+            mockQnnPackInstaller.installIfNeeded(
+                match { it.utilityType == UtilityType.SDXL_QNN_PACK },
+                any(),
+            )
+        } returns false
+
+        val result = worker.doWork()
+
+        assertTrue(result is androidx.work.ListenableWorker.Result.Failure)
+        assertFalse(LocalImageGenerationPaths.hasSdxlQnnArtifacts(packDir))
+        val packVerifier =
+            ModelPackVerifierImpl(
+                mockContext,
+                mockk<HashingPort>(relaxed = true),
+                mockk<com.browntowndev.enclave.domain.port.media.LocalImageGenerationCapabilityPort>(relaxed = true),
+            )
+        val completeness =
+            packVerifier.verifyPack(
+                ModelPack(
+                    packId = "sdxl-t2i",
+                    displayName = "Stable Diffusion XL",
+                    slot = ModelType.IMAGE_GENERATION,
+                    members = emptyList(),
+                ),
+                ModelPackVerificationDepth.SIZE_ON_DISK,
+            )
+        assertFalse(completeness.isComplete)
+        assertEquals(
+            null,
+            fakeUtilityModelRepository.getByUtilityType(UtilityType.SDXL_QNN_PACK),
+        )
+        coVerify(exactly = 1) {
+            mockQnnPackInstaller.installIfNeeded(
+                match { it.utilityType == UtilityType.SDXL_QNN_PACK },
+                any(),
+            )
+        }
+        coVerify(exactly = 0) { mockSyncLocalModelRegistryUseCase.invoke(any(), any(), any()) }
+    }
+
+    @Test
+    @DisplayName("DL-009 registers SDXL without overriding the SD1.5 default")
+    fun dl009_registersSdxlWithoutOverridingSd15Default() =
+        runTest {
+            val sdxlSha = "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83"
             val sdxlAsset =
                 createTestAsset("realvis_xl_v5_dmd2_qnn2.28_8gen3.zip", sdxlSha).let { asset ->
                     asset.copy(
@@ -1101,7 +1166,27 @@ class DownloadFinalizeWorkerTest {
                                 id = LocalModelId("sdxl-qnn-pack"),
                                 utilityType = UtilityType.SDXL_QNN_PACK,
                             ),
-                        configurations = emptyList(),
+                        configurations =
+                            listOf(
+                                LocalModelConfiguration(
+                                    id =
+                                        com.browntowndev.enclave.domain.model.config
+                                            .LocalModelConfigurationId("sdxl-local-config"),
+                                    localModelId = LocalModelId("sdxl-qnn-pack"),
+                                    displayName = "Stable Diffusion XL",
+                                    temperature = 0.0,
+                                    topK = 1,
+                                    topP = 1.0,
+                                    minP = 0.0,
+                                    repetitionPenalty = 1.0,
+                                    maxTokens = 0,
+                                    contextWindow = 0,
+                                    systemPrompt = "",
+                                    isSystemPreset = true,
+                                    thinkingEnabled = false,
+                                    defaultAssignments = listOf(ModelType.IMAGE_GENERATION),
+                                ),
+                            ),
                     )
                 }
             setInputData(
@@ -1111,84 +1196,10 @@ class DownloadFinalizeWorkerTest {
                     KEY_DOWNLOADED_SHAS to Json.encodeToString(listOf(sdxlSha)),
                 ),
             )
-            coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(sdxlAsset))
-            coEvery {
-                mockQnnPackInstaller.installIfNeeded(
-                    match { it.utilityType == UtilityType.SDXL_QNN_PACK },
-                    any(),
-                )
-            } returns false
-
-            val result = worker.doWork()
-
-            assertTrue(result is androidx.work.ListenableWorker.Result.Failure)
-            assertFalse(LocalImageGenerationPaths.hasSdxlQnnArtifacts(packDir))
-            val packVerifier = ModelPackVerifierImpl(mockContext, mockk<HashingPort>(relaxed = true))
-            val completeness =
-                packVerifier.verifyPack(
-                    ModelPack(
-                        packId = "sdxl-t2i",
-                        displayName = "Stable Diffusion XL",
-                        slot = ModelType.IMAGE_GENERATION,
-                        members = emptyList(),
-                    ),
-                    ModelPackVerificationDepth.SIZE_ON_DISK,
-                )
-            assertFalse(completeness.isComplete)
-            assertEquals(
-                null,
-                fakeUtilityModelRepository.getByUtilityType(UtilityType.SDXL_QNN_PACK),
-            )
-            coVerify(exactly = 1) {
-                mockQnnPackInstaller.installIfNeeded(
-                    match { it.utilityType == UtilityType.SDXL_QNN_PACK },
-                    any(),
-                )
-            }
-            coVerify(exactly = 0) { mockSyncLocalModelRegistryUseCase.invoke(any(), any(), any()) }
-        }
-
-    @Test
-    @DisplayName("DL-009 registers SDXL without overriding the SD1.5 default")
-    fun dl009_registersSdxlWithoutOverridingSd15Default() =
-        runTest {
-            val sdxlSha = "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83"
-            val sdxlAsset = createTestAsset("realvis_xl_v5_dmd2_qnn2.28_8gen3.zip", sdxlSha).let { asset ->
-                asset.copy(
-                    metadata = asset.metadata.copy(
-                        id = LocalModelId("sdxl-qnn-pack"),
-                        utilityType = UtilityType.SDXL_QNN_PACK
-                    ),
-                    configurations = listOf(
-                        LocalModelConfiguration(
-                            id = com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId("sdxl-local-config"),
-                            localModelId = LocalModelId("sdxl-qnn-pack"),
-                            displayName = "Stable Diffusion XL",
-                            temperature = 0.0,
-                            topK = 1,
-                            topP = 1.0,
-                            minP = 0.0,
-                            repetitionPenalty = 1.0,
-                            maxTokens = 0,
-                            contextWindow = 0,
-                            systemPrompt = "",
-                            isSystemPreset = true,
-                            thinkingEnabled = false,
-                            defaultAssignments = listOf(ModelType.IMAGE_GENERATION),
-                        )
-                    ),
-                )
-            }
-            setInputData(
-                workDataOf(
-                    KEY_SESSION_ID to SESSION_ID,
-                    KEY_REQUEST_KIND to REQUEST_INITIALIZE,
-                    KEY_DOWNLOADED_SHAS to Json.encodeToString(listOf(sdxlSha)),
-                ),
-            )
             // Seed an existing default: IMAGE_GENERATION -> sd15-local-config.
             val existingSd15Default =
-                com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId("sd15-local-config")
+                com.browntowndev.enclave.domain.model.config
+                    .LocalModelConfigurationId("sd15-local-config")
             var persistedImageGenerationDefault = existingSd15Default
             coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(sdxlAsset))
             coEvery {
@@ -1232,32 +1243,37 @@ class DownloadFinalizeWorkerTest {
     fun dl013_registersJuggernautWithoutOverridingImageEditDefault() =
         runTest {
             val juggernautSha = "b27231823434c4e4184a61f77401227264a5308c6846c6fc628c37583e76413c"
-            val juggernautAsset = createTestAsset("juggernaut_qnn2.28_8gen3.zip", juggernautSha).let { asset ->
-                asset.copy(
-                    metadata = asset.metadata.copy(
-                        id = LocalModelId("juggernaut-qnn-pack"),
-                        utilityType = UtilityType.JUGGERNAUT_XL_QNN_PACK,
-                    ),
-                    configurations = listOf(
-                        LocalModelConfiguration(
-                            id = com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId("juggernaut-local-config"),
-                            localModelId = LocalModelId("juggernaut-qnn-pack"),
-                            displayName = "Juggernaut XL",
-                            temperature = 0.0,
-                            topK = 1,
-                            topP = 1.0,
-                            minP = 0.0,
-                            repetitionPenalty = 1.0,
-                            maxTokens = 0,
-                            contextWindow = 0,
-                            systemPrompt = "",
-                            isSystemPreset = true,
-                            thinkingEnabled = false,
-                            defaultAssignments = listOf(ModelType.IMAGE_EDIT),
-                        ),
-                    ),
-                )
-            }
+            val juggernautAsset =
+                createTestAsset("juggernaut_qnn2.28_8gen3.zip", juggernautSha).let { asset ->
+                    asset.copy(
+                        metadata =
+                            asset.metadata.copy(
+                                id = LocalModelId("juggernaut-qnn-pack"),
+                                utilityType = UtilityType.JUGGERNAUT_XL_QNN_PACK,
+                            ),
+                        configurations =
+                            listOf(
+                                LocalModelConfiguration(
+                                    id =
+                                        com.browntowndev.enclave.domain.model.config
+                                            .LocalModelConfigurationId("juggernaut-local-config"),
+                                    localModelId = LocalModelId("juggernaut-qnn-pack"),
+                                    displayName = "Juggernaut XL",
+                                    temperature = 0.0,
+                                    topK = 1,
+                                    topP = 1.0,
+                                    minP = 0.0,
+                                    repetitionPenalty = 1.0,
+                                    maxTokens = 0,
+                                    contextWindow = 0,
+                                    systemPrompt = "",
+                                    isSystemPreset = true,
+                                    thinkingEnabled = false,
+                                    defaultAssignments = listOf(ModelType.IMAGE_EDIT),
+                                ),
+                            ),
+                    )
+                }
             setInputData(
                 workDataOf(
                     KEY_SESSION_ID to SESSION_ID,
@@ -1266,7 +1282,8 @@ class DownloadFinalizeWorkerTest {
                 ),
             )
             val existingImageEditDefault =
-                com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId("sdxl-local-config")
+                com.browntowndev.enclave.domain.model.config
+                    .LocalModelConfigurationId("sdxl-local-config")
             var persistedImageEditDefault = existingImageEditDefault
             coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(juggernautAsset))
             coEvery {

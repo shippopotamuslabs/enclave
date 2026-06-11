@@ -44,6 +44,15 @@ class LocalImageGenerationCapabilityPolicyTest {
         assertEquals(LocalImageGenTriState.NO, capabilities.sdxlNpuSupported)
     }
 
+    @Test
+    fun `CAP-014 Gen1 QNN blocks SD15 NPU because graphs need Hexagon V73`() {
+        val capabilities = LocalImageGenerationCapabilityPolicy.resolve(SnapdragonTier.GEN1, LocalImageGenTriState.YES)
+
+        assertEquals(LocalImageGenTriState.NO, capabilities.sd15NpuSupported)
+        assertEquals(LocalImageGenTriState.NO, capabilities.sdxlNpuSupported)
+        assertEquals(LocalImageGenerationBackendKind.NONE, capabilities.recommendedBackend)
+    }
+
     // CAP-008 ("When LocalImageGenerationCapabilityPortImpl.getCapabilities() runs") is asserted once
     // in feature/inference/.../LocalImageGenerationDevicePolicyTest.kt per its test_spec "When" clause.
 

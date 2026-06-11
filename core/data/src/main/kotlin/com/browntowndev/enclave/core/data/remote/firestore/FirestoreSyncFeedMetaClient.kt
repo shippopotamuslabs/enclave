@@ -49,8 +49,7 @@ internal class FirestoreSyncFeedMetaClient(
         return false
     }
 
-    private fun paddedSequence(sequence: Long): String =
-        sequence.toString().padStart(SEQUENCE_DOC_ID_WIDTH, '0')
+    private fun paddedSequence(sequence: Long): String = sequence.toString().padStart(SEQUENCE_DOC_ID_WIDTH, '0')
 
     companion object {
         const val GAP_VERIFY_ATTEMPTS = 3

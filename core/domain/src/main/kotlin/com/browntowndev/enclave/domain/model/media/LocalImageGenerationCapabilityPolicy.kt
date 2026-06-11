@@ -33,10 +33,11 @@ object LocalImageGenerationCapabilityPolicy {
         }
 
         val sd15Npu =
-            when (npuAvailable) {
-                LocalImageGenTriState.YES -> LocalImageGenTriState.YES
-                LocalImageGenTriState.UNKNOWN -> LocalImageGenTriState.UNKNOWN
-                LocalImageGenTriState.NO -> LocalImageGenTriState.NO
+            when {
+                // SD1.5 QNN graphs are compiled for Hexagon V73; NPUs below 8 Gen 2 cannot
+                // load them even when the QNN host libraries are present.
+                snapdragonTier < SnapdragonTier.GEN2 -> LocalImageGenTriState.NO
+                else -> npuAvailable
             }
         val sdxlFamilyNpu =
             when {
@@ -63,8 +64,18 @@ object LocalImageGenerationCapabilityPolicy {
             sd15CpuSupported = LocalImageGenTriState.NO,
             sdxlNpuSupported = sdxlFamilyNpu,
             juggernautXlNpuSupported = sdxlFamilyNpu,
-            recommendedBackend = LocalImageGenerationBackendKind.QNN_NPU,
-            recommendedModelId = LocalImageGenerationModelId.SD15_QNN,
+            recommendedBackend =
+                if (sd15Npu == LocalImageGenTriState.NO) {
+                    LocalImageGenerationBackendKind.NONE
+                } else {
+                    LocalImageGenerationBackendKind.QNN_NPU
+                },
+            recommendedModelId =
+                if (sd15Npu == LocalImageGenTriState.NO) {
+                    null
+                } else {
+                    LocalImageGenerationModelId.SD15_QNN
+                },
             diagnostics = emptyList(),
             disabledReasonsByModelId = disabledReasons,
         )

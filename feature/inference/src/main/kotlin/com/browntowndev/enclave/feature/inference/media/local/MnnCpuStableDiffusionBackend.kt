@@ -55,9 +55,10 @@ class MnnCpuStableDiffusionBackend
                         ),
                     )
                 if (code != 0) {
+                    val detail = nativeRuntime.lastGenerationError()?.let { ": $it" }.orEmpty()
                     throw LocalImageGenerationError.GenerationFailed(
                         kind,
-                        "Native MNN returned code $code",
+                        "Native MNN returned code $code$detail",
                     )
                 }
                 val file = File(outputPath)

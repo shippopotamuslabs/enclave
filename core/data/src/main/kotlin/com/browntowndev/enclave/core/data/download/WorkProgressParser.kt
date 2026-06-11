@@ -161,8 +161,7 @@ class WorkProgressParser
             return (extractedBytes.toFloat() / totalBytes.toFloat()).coerceIn(0f, 1f)
         }
 
-        private fun requiresPostProcessing(file: FileProgress): Boolean =
-            file.filename.endsWith(".zip", ignoreCase = true)
+        private fun requiresPostProcessing(file: FileProgress): Boolean = file.filename.endsWith(".zip", ignoreCase = true)
 
         private fun parseRunning(
             workInfo: WorkInfo,

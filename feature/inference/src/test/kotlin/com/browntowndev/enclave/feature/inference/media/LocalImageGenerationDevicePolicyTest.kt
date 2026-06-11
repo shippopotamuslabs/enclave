@@ -87,6 +87,40 @@ class LocalImageGenerationDevicePolicyTest {
     }
 
     @Test
+    fun `CAP-011 GEN1 tier blocks SD15 NPU and recommends MNN CPU fallback even when QNN probe passes`() {
+        every { SnapdragonDeviceClassifier.tier() } returns SnapdragonTier.GEN1
+
+        val caps = LocalImageGenerationCapabilityPortImpl(context, nativeRuntime).getCapabilities()
+
+        assertEquals(LocalImageGenTriState.NO, caps.sd15NpuSupported)
+        assertEquals(LocalImageGenTriState.YES, caps.sd15CpuSupported)
+        assertEquals(LocalImageGenerationBackendKind.CPU_MNN, caps.recommendedBackend)
+        assertEquals(LocalImageGenerationModelId.SD15_CPU, caps.recommendedModelId)
+        assertTrue(caps.diagnostics.any { it.contains("Hexagon V73") })
+    }
+
+    @Test
+    fun `CAP-012 GEN2 tier keeps SD15 NPU available when QNN probe passes`() {
+        every { SnapdragonDeviceClassifier.tier() } returns SnapdragonTier.GEN2
+
+        val caps = LocalImageGenerationCapabilityPortImpl(context, nativeRuntime).getCapabilities()
+
+        assertEquals(LocalImageGenTriState.YES, caps.sd15NpuSupported)
+        assertEquals(LocalImageGenerationBackendKind.QNN_NPU, caps.recommendedBackend)
+        assertEquals(LocalImageGenerationModelId.SD15_QNN, caps.recommendedModelId)
+    }
+
+    @Test
+    fun `CAP-013 GEN3_PLUS tier keeps SD15 NPU available when QNN probe passes`() {
+        every { SnapdragonDeviceClassifier.tier() } returns SnapdragonTier.GEN3_PLUS
+
+        val caps = LocalImageGenerationCapabilityPortImpl(context, nativeRuntime).getCapabilities()
+
+        assertEquals(LocalImageGenTriState.YES, caps.sd15NpuSupported)
+        assertEquals(LocalImageGenerationBackendKind.QNN_NPU, caps.recommendedBackend)
+    }
+
+    @Test
     fun `MNN probe one marks SD15 CPU fallback available`() {
         every { SnapdragonDeviceClassifier.tier() } returns SnapdragonTier.UNKNOWN
         every { nativeRuntime.probe(LocalImageGenerationBackendKind.QNN_NPU) } returns 0

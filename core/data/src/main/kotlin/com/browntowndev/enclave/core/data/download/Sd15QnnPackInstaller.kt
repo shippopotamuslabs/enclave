@@ -3,13 +3,13 @@ package com.browntowndev.enclave.core.data.download
 import android.content.Context
 import com.browntowndev.enclave.domain.model.config.LocalModelMetadata
 import com.browntowndev.enclave.domain.model.config.UtilityType
-import com.browntowndev.enclave.domain.model.download.ModelConfig
 import com.browntowndev.enclave.domain.model.download.JuggernautXlQnnPackCatalog
+import com.browntowndev.enclave.domain.model.download.ModelConfig
 import com.browntowndev.enclave.domain.model.download.Sd15QnnPackCatalog
 import com.browntowndev.enclave.domain.model.download.SdxlQnnPackCatalog
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationPaths
-import com.browntowndev.enclave.domain.port.download.QnnPackInstallerPort
 import com.browntowndev.enclave.domain.port.download.QnnPackInstallProgressListener
+import com.browntowndev.enclave.domain.port.download.QnnPackInstallerPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -45,15 +45,34 @@ class Sd15QnnPackInstaller
         ): Boolean =
             withContext(Dispatchers.IO) {
                 when (metadata.utilityType) {
-                    UtilityType.SD15_QNN_PACK ->
-                        installQnnPack(
-                            metadata = metadata,
-                            packSubdir = LocalImageGenerationPaths.SD15_QNN_SUBDIR,
-                            variantLookup = Sd15QnnPackCatalog::findBySha256,
-                            label = "SD15",
-                            progressListener = progressListener,
-                            artifactsPresent = LocalImageGenerationPaths::hasSd15QnnArtifacts,
-                        )
+                    UtilityType.SD15_QNN_PACK -> {
+                        // The SD15 weights slot is variant-substituted per device: NPU-capable
+                        // tiers get a QNN zip, older tiers get the MNN CPU zip, which extracts
+                        // to the sd15-cpu directory the MNN backend launches from.
+                        val isCpuVariant =
+                            Sd15QnnPackCatalog
+                                .variantForAsset(metadata.sha256, metadata.localFileName)
+                                ?.isCpuMnn == true
+                        if (isCpuVariant) {
+                            installQnnPack(
+                                metadata = metadata,
+                                packSubdir = LocalImageGenerationPaths.SD15_CPU_SUBDIR,
+                                variantLookup = Sd15QnnPackCatalog::findBySha256,
+                                label = "SD15 CPU",
+                                progressListener = progressListener,
+                                artifactsPresent = LocalImageGenerationPaths::hasMnnArtifacts,
+                            )
+                        } else {
+                            installQnnPack(
+                                metadata = metadata,
+                                packSubdir = LocalImageGenerationPaths.SD15_QNN_SUBDIR,
+                                variantLookup = Sd15QnnPackCatalog::findBySha256,
+                                label = "SD15",
+                                progressListener = progressListener,
+                                artifactsPresent = LocalImageGenerationPaths::hasSd15QnnArtifacts,
+                            )
+                        }
+                    }
                     UtilityType.SDXL_QNN_PACK ->
                         installQnnPack(
                             metadata = metadata,

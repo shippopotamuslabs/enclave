@@ -65,9 +65,10 @@ class QnnStableDiffusionBackend
                         ),
                     )
                 if (code != 0) {
+                    val detail = nativeRuntime.lastGenerationError()?.let { ": $it" }.orEmpty()
                     throw LocalImageGenerationError.GenerationFailed(
                         kind,
-                        "Native QNN returned code $code",
+                        "Native QNN returned code $code$detail",
                     )
                 }
                 val file = File(outputPath)

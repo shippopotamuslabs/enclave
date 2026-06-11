@@ -5,9 +5,9 @@ import androidx.test.core.app.ApplicationProvider
 import com.browntowndev.enclave.core.data.local.EnclaveDatabase
 import com.browntowndev.enclave.core.data.local.LiveVoiceProviderEntity
 import com.browntowndev.enclave.core.data.local.UtilityModelEntity
-import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.config.UtilityModelId
 import com.browntowndev.enclave.domain.model.config.UtilityType
+import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.AfterEach

@@ -6,6 +6,7 @@ import com.browntowndev.enclave.domain.model.download.ModelPackCompleteness
 import com.browntowndev.enclave.domain.model.download.ModelPackRole
 import com.browntowndev.enclave.domain.port.download.ModelPackVerifierPort
 import com.browntowndev.enclave.domain.model.media.LocalImageGenTriState
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendLabels
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilities
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId
 import com.browntowndev.enclave.domain.port.media.LOCAL_ON_DEVICE_IMAGE_GENERATION_ENABLED
@@ -26,6 +27,8 @@ data class ModelPackSettingsRow(
     val showDownloadAction: Boolean,
     val disabledReason: String? = null,
     val isEligible: Boolean = true,
+    /** SD 1.5 routes to the MNN CPU backend on this device (labels show "(CPU)"). */
+    val sd15CpuFallbackActive: Boolean = false,
 )
 
 class GetModelPacksForSettingsUseCase
@@ -55,6 +58,9 @@ class GetModelPacksForSettingsUseCase
                     .map { it.metadata.sha256 }
                     .toSet()
 
+            val capabilities = capabilityPort.getCapabilities()
+            val sd15CpuFallbackActive = LocalImageGenerationBackendLabels.sd15CpuFallbackActive(capabilities)
+
             return packs.map { pack ->
                 val completeness =
                     if (catalog != null) {
@@ -76,25 +82,40 @@ class GetModelPacksForSettingsUseCase
                             val utilityType = member.asset.metadata.utilityType ?: return@all true
                             utilityModelRepository.getByUtilityType(utilityType) == null
                         }
-                val (isEligible, disabledReason) = packEligibility(pack.packId)
+                val (isEligible, disabledReason) = packEligibility(pack.packId, capabilities)
                 val needsDownloadAction =
                     diffusionSoftDeleted ||
                         areUtilityRegistryEntriesAbsent ||
                         !completeness.isComplete
+                val displayPack =
+                    if (pack.packId == LocalImagePackIds.SD15) {
+                        pack.copy(
+                            displayName =
+                                LocalImageGenerationBackendLabels.sd15DeviceAware(
+                                    pack.displayName,
+                                    sd15CpuFallbackActive,
+                                ),
+                        )
+                    } else {
+                        pack
+                    }
                 ModelPackSettingsRow(
-                    pack = pack,
+                    pack = displayPack,
                     completeness = completeness,
                     isDiffusionSoftDeleted = diffusionSoftDeleted,
                     areUtilityRegistryEntriesAbsent = areUtilityRegistryEntriesAbsent,
                     showDownloadAction = isEligible && needsDownloadAction,
                     disabledReason = disabledReason,
                     isEligible = isEligible,
+                    sd15CpuFallbackActive = sd15CpuFallbackActive,
                 )
             }
         }
 
-        private fun packEligibility(packId: String): Pair<Boolean, String?> {
-            val capabilities = capabilityPort.getCapabilities()
+        private fun packEligibility(
+            packId: String,
+            capabilities: LocalImageGenerationCapabilities,
+        ): Pair<Boolean, String?> {
             return when (packId) {
                 LocalImagePackIds.SDXL -> {
                     val isEligible = capabilities.sdxlNpuSupported == LocalImageGenTriState.YES

@@ -102,15 +102,15 @@ import com.browntowndev.enclave.core.data.security.StaticSensitiveFieldCatalog
 import com.browntowndev.enclave.core.data.sync.SyncOrchestratorImpl
 import com.browntowndev.enclave.core.data.sync.TelemetryUploadConfig
 import com.browntowndev.enclave.domain.port.auth.AuthManager
+import com.browntowndev.enclave.domain.port.device.SnapdragonTierPort
 import com.browntowndev.enclave.domain.port.download.DownloadSpeedTrackerPort
 import com.browntowndev.enclave.domain.port.download.FileDownloaderPort
 import com.browntowndev.enclave.domain.port.download.HashingPort
-import com.browntowndev.enclave.domain.port.device.SnapdragonTierPort
 import com.browntowndev.enclave.domain.port.download.ModelDownloadOrchestratorPort
 import com.browntowndev.enclave.domain.port.download.ModelFileScannerPort
 import com.browntowndev.enclave.domain.port.download.ModelPackVerifierPort
-import com.browntowndev.enclave.domain.port.download.QnnPackInstallerPort
 import com.browntowndev.enclave.domain.port.download.ModelUrlProviderPort
+import com.browntowndev.enclave.domain.port.download.QnnPackInstallerPort
 import com.browntowndev.enclave.domain.port.inference.CommittedInferencePromptPort
 import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
@@ -131,6 +131,7 @@ import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPor
 import com.browntowndev.enclave.domain.port.repository.DeviceEnvironmentRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.ExtractedUrlTrackerPort
 import com.browntowndev.enclave.domain.port.repository.InferenceTelemetryRepositoryPort
+import com.browntowndev.enclave.domain.port.repository.LiveVoiceProviderRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.MemoriesRepository
@@ -144,7 +145,6 @@ import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.SyncOrchestrator
 import com.browntowndev.enclave.domain.port.repository.TransactionProvider
 import com.browntowndev.enclave.domain.port.repository.TrustedDomainRepositoryPort
-import com.browntowndev.enclave.domain.port.repository.LiveVoiceProviderRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.TtsProviderRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.UtilityModelFilePort
 import com.browntowndev.enclave.domain.port.repository.UtilityModelRepositoryPort

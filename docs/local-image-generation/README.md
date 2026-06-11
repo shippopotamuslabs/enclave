@@ -41,10 +41,28 @@ Optional CPU package uses registry SHA placeholder `000…001` until a real cata
 
 ## Add MNN CPU fallback
 
+On CPU-routed devices the SD1.5 weights slot is variant-substituted at download time:
+`Sd15QnnPackCatalog.variantFor(tier)` returns the `xororz/sd-mnn` `AnythingV5.zip` for
+GEN1/UNKNOWN tiers (instead of a QNN zip), and `Sd15QnnPackInstaller` extracts it to
+`files/models/sd15-cpu/`. No manual install needed on catalog-driven devices.
+
+For manual/sideload installs:
+
 1. Run `./scripts/setup-enclave-diffusion-deps.sh` so MNN links statically into `liblocal_image_gen_jni.so`.
-2. Place SD 1.5 CPU models under `files/models/sd15-cpu/` (`clip.mnn`, `unet.mnn`, `vae_decoder.mnn`, `tokenizer.json`).
+   MNN is pinned to 3.2.1 (the Local Dream pin); 3.0.0 fails on current packs with
+   `Unary Op can not execute` because it lacks int8 unary table support.
+2. Place SD 1.5 CPU models under `files/models/sd15-cpu/`. Both layouts are accepted:
+   - `clip.mnn`, `unet.mnn`, `vae_decoder.mnn`, `tokenizer.json`
+   - `clip_v2.mnn` + `token_emb.bin` + `pos_emb.bin`, `unet.mnn`, `vae_decoder.mnn`, `tokenizer.json`
+     (xororz / Local Dream layout — e.g. `https://huggingface.co/xororz/sd-mnn/resolve/main/AnythingV5.zip`;
+     keep the `.mnn.weight` external weight files next to their `.mnn` graphs)
 3. Add optional `vae_encoder.mnn` for img2img.
 4. `mnn_bridge.cpp` launches the in-process MNN CPU pipeline when the required artifacts are present.
+
+SD 1.5 NPU (QNN) is gated to Snapdragon 8 Gen 2+ (`SnapdragonTier.GEN2`): the catalog pack ships
+Hexagon **V73** graphs, so older DSPs (888 / 8 Gen 1) route to the MNN CPU fallback. Verified on
+Galaxy S21 Ultra (SM8350): QNN graph load fails with native code -1; MNN CPU pipeline generates
+correctly via the device harness.
 
 The CPU model layout and tensor names follow [Local Dream](https://github.com/xororz/local-dream):
 `clip.mnn` uses `input_ids`, `unet.mnn` uses `sample` / `timestep` /

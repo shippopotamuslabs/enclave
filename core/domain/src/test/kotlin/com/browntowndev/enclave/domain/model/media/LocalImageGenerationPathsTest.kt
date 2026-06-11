@@ -102,6 +102,21 @@ class LocalImageGenerationPathsTest {
         assertTrue(LocalImageGenerationPaths.hasMnnArtifacts(dir))
     }
 
+    @Test
+    fun hasMnnArtifacts_trueForClipV2EmbeddingLayout() {
+        val dir = tempDir.toFile()
+        listOf("clip_v2.mnn", "token_emb.bin", "pos_emb.bin", "unet.mnn", "vae_decoder.mnn", "tokenizer.json")
+            .forEach { File(dir, it).writeText("x") }
+        assertTrue(LocalImageGenerationPaths.hasMnnArtifacts(dir))
+    }
+
+    @Test
+    fun hasMnnArtifacts_falseWithoutAnyClipVariant() {
+        val dir = tempDir.toFile()
+        listOf("unet.mnn", "vae_decoder.mnn", "tokenizer.json").forEach { File(dir, it).writeText("x") }
+        assertFalse(LocalImageGenerationPaths.hasMnnArtifacts(dir))
+    }
+
     private fun touchQnn(dir: File) {
         listOf("clip_v2.mnn", "token_emb.bin", "pos_emb.bin", "unet.bin", "vae_decoder.bin", "tokenizer.json").forEach {
             File(dir, it).writeText("x")

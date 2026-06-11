@@ -46,8 +46,14 @@ bool loadPackManifest(const std::string& model_dir, PackManifest& out) {
 
 bool hasRequiredArtifacts(const PackManifest& manifest, EnclaveModelFamily family) {
     if (family == ENCLAVE_MODEL_SD15_MNN) {
-        return isFile(manifest.clip_mnn) && isFile(manifest.unet_mnn) &&
-               isFile(manifest.vae_decoder_mnn) && isFile(manifest.tokenizer_json);
+        // CPU packs ship either clip.mnn (built-in embeddings) or clip_v2.mnn plus
+        // external token/pos embedding bins (xororz / Local Dream layout).
+        const bool has_clip =
+            isFile(manifest.clip_mnn) ||
+            (isFile(manifest.clip_v2_mnn) && isFile(manifest.token_emb_bin) &&
+             isFile(manifest.pos_emb_bin));
+        return has_clip && isFile(manifest.unet_mnn) && isFile(manifest.vae_decoder_mnn) &&
+               isFile(manifest.tokenizer_json);
     }
     if (!isFile(manifest.unet_bin) || !isFile(manifest.vae_decoder_bin) ||
         !isFile(manifest.tokenizer_json)) {

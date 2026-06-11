@@ -78,6 +78,10 @@ class NativeLocalImageGenRuntime
             LocalImageGenNative.nativeCancel()
         }
 
+        /** Error text from the most recent failed generate call, or null after success. */
+        fun lastGenerationError(): String? =
+            LocalImageGenNative.nativeGetLastGenerationError()?.takeIf { it.isNotBlank() }
+
         fun currentGenerationProgress(): Pair<Int, Int>? {
             val values = LocalImageGenNative.nativeGetGenerationProgress() ?: return null
             if (values.size < 2) return null

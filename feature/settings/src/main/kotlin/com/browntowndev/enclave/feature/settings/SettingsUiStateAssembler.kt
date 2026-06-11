@@ -4,6 +4,7 @@ import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.config.ApiModelAsset
 import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
 import com.browntowndev.enclave.domain.model.config.LocalModelAsset
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendLabels
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.config.MediaProviderAsset
 import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderAsset
@@ -91,9 +92,11 @@ class SettingsUiStateAssembler
             modelPackRows: List<ModelPackSettingsRow> = emptyList(),
         ): SettingsUiState {
             val resolvedPackRows = modelPackRows
+            val sd15CpuFallbackActive = resolvedPackRows.any { it.sd15CpuFallbackActive }
             val localModels =
                 localModelsExcludingPackUtilities(localAssets, resolvedPackRows)
                     .map(localModelAssetUiMapper::map)
+                    .map { asset -> asset.withSd15DeviceAwareLabels(sd15CpuFallbackActive) }
             val refreshedSelectedLocalAsset =
                 localModelsState.selectedAsset?.let { selected ->
                     if (selected.metadataId.value.isEmpty()) {
@@ -294,7 +297,7 @@ class SettingsUiStateAssembler
                     defaultModels = defaultModels,
                     localModels = localModels,
                     apiModels = apiModels,
-                )
+                ).map { row -> row.withSd15DeviceAwareLabels(sd15CpuFallbackActive) }
 
             return SettingsUiState(
                 home =
@@ -587,6 +590,44 @@ class SettingsUiStateAssembler
  * Match by [LocalModelMetadata.utilityType] (not file name): SDXL diffusion and utility share one
  * zip on disk.
  */
+/**
+ * Rewrites SD 1.5 "(NPU)" labels to "(CPU)" on devices whose SD 1.5 pathway is the MNN CPU
+ * fallback. Names outside the SD 1.5 family pass through unchanged.
+ */
+internal fun LocalModelAssetUi.withSd15DeviceAwareLabels(sd15CpuFallbackActive: Boolean): LocalModelAssetUi {
+    if (!sd15CpuFallbackActive || !isImageGenerationCapable) {
+        return this
+    }
+    return copy(
+        friendlyName = LocalImageGenerationBackendLabels.sd15DeviceAware(friendlyName, sd15CpuFallbackActive),
+        configurations =
+            configurations.map { config ->
+                config.copy(
+                    displayName =
+                        LocalImageGenerationBackendLabels.sd15DeviceAware(
+                            config.displayName,
+                            sd15CpuFallbackActive,
+                        ),
+                )
+            },
+    )
+}
+
+internal fun DefaultModelAssignmentUi.withSd15DeviceAwareLabels(
+    sd15CpuFallbackActive: Boolean,
+): DefaultModelAssignmentUi {
+    if (!sd15CpuFallbackActive || source != ModelSource.ON_DEVICE) {
+        return this
+    }
+    return copy(
+        currentModelName = LocalImageGenerationBackendLabels.sd15DeviceAware(currentModelName, sd15CpuFallbackActive),
+        presetName =
+            presetName?.let {
+                LocalImageGenerationBackendLabels.sd15DeviceAware(it, sd15CpuFallbackActive)
+            },
+    )
+}
+
 internal fun localModelsExcludingPackUtilities(
     localAssets: List<LocalModelAsset>,
     modelPackRows: List<ModelPackSettingsRow>,

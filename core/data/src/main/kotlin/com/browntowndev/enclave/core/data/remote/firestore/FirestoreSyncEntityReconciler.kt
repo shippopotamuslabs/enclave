@@ -118,9 +118,18 @@ internal class FirestoreSyncEntityReconciler(
                     .map { it.message.id.value }
             "memories" -> ctx.daos.memoriesDao.getAllIds()
             "documents" -> ctx.daos.documentDao.getAllIds()
-            "api_credentials" -> ctx.daos.apiCredentialsDao.getAll().map { it.id.value }
-            "local_models" -> ctx.daos.localModelsDao.getAll().map { it.id.value }
-            "utility_models" -> ctx.daos.utilityModelsDao.getAll().map { it.id.value }
+            "api_credentials" ->
+                ctx.daos.apiCredentialsDao
+                    .getAll()
+                    .map { it.id.value }
+            "local_models" ->
+                ctx.daos.localModelsDao
+                    .getAll()
+                    .map { it.id.value }
+            "utility_models" ->
+                ctx.daos.utilityModelsDao
+                    .getAll()
+                    .map { it.id.value }
             "tts_providers" ->
                 ctx.daos.ttsProviderDao
                     .getTtsProvidersSync()

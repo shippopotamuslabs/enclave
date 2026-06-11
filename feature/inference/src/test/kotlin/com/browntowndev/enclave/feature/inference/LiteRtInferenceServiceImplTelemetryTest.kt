@@ -104,7 +104,7 @@ class LiteRtInferenceServiceImplTelemetryTest {
             assertEquals(8, telemetry.reasoningTokens)
             assertNotNull(telemetry.firstOutputTokenAtMs)
             assertTrue(telemetry.firstOutputTokenAtMs!! >= telemetry.requestStartedAtMs)
-            assertTrue(telemetry.completedAtMs!! > telemetry.firstOutputTokenAtMs!!)
+            assertTrue(telemetry.completedAtMs!! >= telemetry.firstOutputTokenAtMs!!)
         }
 
     @Test

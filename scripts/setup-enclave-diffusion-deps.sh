@@ -20,8 +20,22 @@ clone_if_missing() {
   fi
 }
 
+# Pin a repo to an exact commit (for refs that are not tags/branches).
+pin_commit() {
+  local dir="$1"
+  local commit="$2"
+  if [[ "$(git -C "$dir" rev-parse HEAD)" != "$commit" ]]; then
+    git -C "$dir" fetch --depth 1 origin "$commit"
+    git -C "$dir" checkout "$commit"
+  fi
+}
+
 mkdir -p "$DEPS"
-clone_if_missing https://github.com/alibaba/MNN.git "$DEPS/MNN" "3.0.0"
+# MNN 3.2.1 — matches the Local Dream pin; 3.0.0 lacks int8 unary table support
+# needed by current xororz CPU (MNN) model packs.
+MNN_COMMIT="3db3cc904dfea55286972b472b040ad5525aa083"
+clone_if_missing https://github.com/alibaba/MNN.git "$DEPS/MNN"
+pin_commit "$DEPS/MNN" "$MNN_COMMIT"
 clone_if_missing https://github.com/mlc-ai/tokenizers-cpp.git "$DEPS/tokenizers-cpp"
 if [[ -d "$DEPS/tokenizers-cpp/.git" ]]; then
   git -C "$DEPS/tokenizers-cpp" submodule update --init --depth 1 msgpack sentencepiece 2>/dev/null || true

@@ -3,7 +3,6 @@ package com.browntowndev.enclave.core.data.repository
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.media.AspectRatio
 import com.browntowndev.enclave.domain.model.media.GenerationQuality
-import com.browntowndev.enclave.domain.model.media.GenerationSettings
 import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
 import com.browntowndev.enclave.domain.model.media.MusicGenerationSettings
 import com.browntowndev.enclave.domain.model.media.VideoGenerationSettings
@@ -73,7 +72,8 @@ internal object ActiveStudioGenerationCodec {
                             generationCount = json.optInt("generationCount", 1),
                             imageResolution = json.optString("imageResolution").takeIf { it.isNotBlank() },
                             diffusionSteps =
-                                json.optInt("diffusionSteps", Int.MIN_VALUE)
+                                json
+                                    .optInt("diffusionSteps", Int.MIN_VALUE)
                                     .takeIf { it != Int.MIN_VALUE },
                             img2ImgDenoiseStrength = json.optDouble("img2ImgDenoiseStrength").toFloat(),
                         )

@@ -13,14 +13,14 @@ import com.browntowndev.enclave.core.data.util.formatBytes
 import com.browntowndev.enclave.domain.model.config.LocalModelAsset
 import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.config.UtilityType
+import com.browntowndev.enclave.domain.model.download.JuggernautXlQnnPackCatalog
 import com.browntowndev.enclave.domain.model.download.ModelConfig
 import com.browntowndev.enclave.domain.model.download.Sd15QnnPackCatalog
-import com.browntowndev.enclave.domain.model.download.JuggernautXlQnnPackCatalog
 import com.browntowndev.enclave.domain.model.download.SdxlQnnPackCatalog
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelRegistry
-import com.browntowndev.enclave.domain.port.download.QnnPackInstallerPort
 import com.browntowndev.enclave.domain.port.download.QnnPackInstallProgressListener
+import com.browntowndev.enclave.domain.port.download.QnnPackInstallerPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
@@ -441,11 +441,11 @@ class DownloadFinalizeWorker
                 )
                 if (
                     asset.metadata.utilityType in
-                        setOf(
-                            UtilityType.SD15_QNN_PACK,
-                            UtilityType.SDXL_QNN_PACK,
-                            UtilityType.JUGGERNAUT_XL_QNN_PACK,
-                        ) &&
+                    setOf(
+                        UtilityType.SD15_QNN_PACK,
+                        UtilityType.SDXL_QNN_PACK,
+                        UtilityType.JUGGERNAUT_XL_QNN_PACK,
+                    ) &&
                     asset.metadata.sha256 in downloadedShas
                 ) {
                     throw e

@@ -80,7 +80,7 @@ internal class FirestoreListenerCoordinator(
         } catch (failure: Throwable) {
             ctx.loggingPort.error(
                 FirestoreSyncContext.TAG,
-                "applyListenerOperation: failed for attach=${listenerDesiredAttached}",
+                "applyListenerOperation: failed for attach=$listenerDesiredAttached",
                 failure,
             )
         }

@@ -20,12 +20,27 @@ class ResolveSd15QnnPackCatalogAssetUseCaseTest {
         )
 
     @Test
-    fun invoke_unknownTierSelectsMinZip() {
+    fun invoke_unknownTierSelectsMnnCpuZipFromCpuRepo() {
         val asset = baseSd15Asset()
         val resolved = useCase.invoke(asset)
-        val min = Sd15QnnPackCatalog.variantFor(SnapdragonTier.UNKNOWN)
-        assertEquals(min.zipFileName, resolved.metadata.localFileName)
-        assertEquals(min.sha256, resolved.metadata.sha256)
+        val cpu = Sd15QnnPackCatalog.variantFor(SnapdragonTier.UNKNOWN)
+        assertEquals(cpu.zipFileName, resolved.metadata.localFileName)
+        assertEquals(cpu.sha256, resolved.metadata.sha256)
+        assertEquals(Sd15QnnPackCatalog.HF_CPU_REPO, resolved.metadata.huggingFaceModelName)
+    }
+
+    @Test
+    fun invoke_gen2TierKeepsQnnZipFromQnnRepo() {
+        val gen2UseCase =
+            ResolveSd15QnnPackCatalogAssetUseCase(
+                object : SnapdragonTierPort {
+                    override fun currentTier(): SnapdragonTier = SnapdragonTier.GEN2
+                },
+            )
+        val resolved = gen2UseCase.invoke(baseSd15Asset())
+        val gen2 = Sd15QnnPackCatalog.variantFor(SnapdragonTier.GEN2)
+        assertEquals(gen2.zipFileName, resolved.metadata.localFileName)
+        assertEquals(Sd15QnnPackCatalog.HF_REPO, resolved.metadata.huggingFaceModelName)
     }
 
     private fun baseSd15Asset(): LocalModelAsset =

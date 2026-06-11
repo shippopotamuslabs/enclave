@@ -44,7 +44,7 @@ class LocalImageGenerationCapabilityPortImpl
             val mnnProbe = probeBackend(LocalImageGenerationBackendKind.CPU_MNN, diagnostics, "MNN")
 
             val npuAvailable = resolveNpuAvailable(snapdragon, qnnProbe, diagnostics)
-            val sd15Npu = resolveSd15Npu(arm64, totalMem, minRam, npuAvailable, snapdragon)
+            val sd15Npu = resolveSd15Npu(arm64, totalMem, minRam, npuAvailable, tier, diagnostics)
             val sd15Cpu = resolveSd15Cpu(arm64, totalMem, minRam, mnnProbe)
             val sdxlNpu = resolveSdxlNpu(arm64, totalMem, minRam, tier, npuAvailable)
             // Juggernaut shares the SDXL-family QNN gate (Gen3+).
@@ -121,14 +121,24 @@ class LocalImageGenerationCapabilityPortImpl
             totalMem: Long,
             minRam: Long,
             npuAvailable: LocalImageGenTriState,
-            snapdragon: Boolean,
+            tier: SnapdragonTier,
+            diagnostics: MutableList<String>,
         ): LocalImageGenTriState =
             when {
                 !arm64 || totalMem < minRam -> LocalImageGenTriState.NO
+                tier == SnapdragonTier.UNKNOWN -> LocalImageGenTriState.NO
+                // The SD1.5 QNN pack ships Hexagon V73 graphs (8 Gen 2+). The QNN probe only
+                // verifies host libraries, so older Hexagon DSPs (888/8 Gen 1) pass it and then
+                // fail at graph load — they must fall back to the MNN CPU pipeline.
+                tier < SnapdragonTier.GEN2 -> {
+                    diagnostics +=
+                        "SD1.5 QNN pack requires Hexagon V73 (Snapdragon 8 Gen 2+); " +
+                            "tier $tier cannot run it. Falling back to CPU."
+                    LocalImageGenTriState.NO
+                }
                 npuAvailable == LocalImageGenTriState.YES -> LocalImageGenTriState.YES
                 npuAvailable == LocalImageGenTriState.UNKNOWN -> LocalImageGenTriState.UNKNOWN
-                snapdragon -> LocalImageGenTriState.UNKNOWN
-                else -> LocalImageGenTriState.NO
+                else -> LocalImageGenTriState.UNKNOWN
             }
 
         private fun resolveSd15Cpu(

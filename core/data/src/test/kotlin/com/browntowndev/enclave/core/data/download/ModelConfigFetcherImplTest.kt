@@ -1,6 +1,7 @@
 package com.browntowndev.enclave.core.data.download
 
 import android.util.Log
+import androidx.test.core.app.ApplicationProvider
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.RemoteModelAsset
 import com.browntowndev.enclave.domain.model.config.RemoteModelConfiguration
@@ -20,7 +21,6 @@ import okhttp3.OkHttpClient
 import okhttp3.Protocol
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
-import androidx.test.core.app.ApplicationProvider
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -693,7 +693,14 @@ class ModelConfigFetcherImplTest {
             val result = fetcher.fetchParsedCatalog()
 
             assertTrue(result.isSuccess)
-            assertEquals(ModelPackTestFixtures.PACK_ID, result.getOrThrow().packs.single().packId)
+            assertEquals(
+                ModelPackTestFixtures.PACK_ID,
+                result
+                    .getOrThrow()
+                    .packs
+                    .single()
+                    .packId,
+            )
         }
 
     @Test
@@ -716,7 +723,14 @@ class ModelConfigFetcherImplTest {
             val result = offlineFetcher.getPersistedParsedCatalog()
 
             assertTrue(result.isSuccess)
-            assertEquals(ModelPackTestFixtures.PACK_ID, result.getOrThrow().packs.single().packId)
+            assertEquals(
+                ModelPackTestFixtures.PACK_ID,
+                result
+                    .getOrThrow()
+                    .packs
+                    .single()
+                    .packId,
+            )
         }
 
     @Test

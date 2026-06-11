@@ -31,10 +31,18 @@ class ResolveSd15QnnPackCatalogAssetUseCase
             variant: Sd15QnnPackVariant,
         ): LocalModelAsset {
             val meta = asset.metadata
+            // The catalog row is authored for the NPU zip; the CPU variant must not inherit
+            // its "NPU weights" label.
+            val displayName =
+                if (variant.isCpuMnn) {
+                    "SD 1.5 CPU weights"
+                } else {
+                    meta.displayName.ifBlank { "SD 1.5 NPU weights" }
+                }
             return asset.copy(
                 metadata =
                     meta.copy(
-                        huggingFaceModelName = Sd15QnnPackCatalog.HF_REPO,
+                        huggingFaceModelName = variant.hfRepo,
                         huggingFacePath = null,
                         remoteFileName = variant.zipFileName,
                         localFileName = variant.localZipFileName,
@@ -43,7 +51,7 @@ class ResolveSd15QnnPackCatalogAssetUseCase
                         modelFileFormat = ModelFileFormat.BIN,
                         source = DownloadSource.HUGGING_FACE,
                         utilityType = UtilityType.SD15_QNN_PACK,
-                        displayName = meta.displayName.ifBlank { "SD 1.5 NPU weights" },
+                        displayName = displayName,
                     ),
             )
         }

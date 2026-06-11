@@ -8,6 +8,7 @@ import com.browntowndev.enclave.core.data.remote.firestore.handlers.ChatSummaryS
 import com.browntowndev.enclave.core.data.remote.firestore.handlers.ChatSyncHandler
 import com.browntowndev.enclave.core.data.remote.firestore.handlers.DefaultModelSyncHandler
 import com.browntowndev.enclave.core.data.remote.firestore.handlers.DocumentSyncHandler
+import com.browntowndev.enclave.core.data.remote.firestore.handlers.LiveVoiceProviderSyncHandler
 import com.browntowndev.enclave.core.data.remote.firestore.handlers.LocalModelConfigSyncHandler
 import com.browntowndev.enclave.core.data.remote.firestore.handlers.LocalModelSyncHandler
 import com.browntowndev.enclave.core.data.remote.firestore.handlers.MediaProviderSyncHandler
@@ -19,7 +20,6 @@ import com.browntowndev.enclave.core.data.remote.firestore.handlers.MessageTrans
 import com.browntowndev.enclave.core.data.remote.firestore.handlers.SearchToolSettingsSyncHandler
 import com.browntowndev.enclave.core.data.remote.firestore.handlers.StudioAlbumSyncHandler
 import com.browntowndev.enclave.core.data.remote.firestore.handlers.StudioMediaSyncHandler
-import com.browntowndev.enclave.core.data.remote.firestore.handlers.LiveVoiceProviderSyncHandler
 import com.browntowndev.enclave.core.data.remote.firestore.handlers.TtsProviderSyncHandler
 import com.browntowndev.enclave.core.data.remote.firestore.handlers.UtilityModelSyncHandler
 import com.browntowndev.enclave.core.data.remote.firestore.handlers.VisionAnalysisSyncHandler
