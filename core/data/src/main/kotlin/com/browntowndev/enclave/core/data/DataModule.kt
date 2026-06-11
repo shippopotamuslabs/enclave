@@ -61,6 +61,7 @@ import com.browntowndev.enclave.core.data.media.AndroidAudioRecordFactory
 import com.browntowndev.enclave.core.data.media.AndroidSaveBinaryToDownloadsAdapter
 import com.browntowndev.enclave.core.data.media.AndroidShareMediaAdapter
 import com.browntowndev.enclave.core.data.media.AndroidStreamingAudioPlayer
+import com.browntowndev.enclave.core.data.media.AndroidVoiceChatAudioRoute
 import com.browntowndev.enclave.core.data.media.AudioRecordFactory
 import com.browntowndev.enclave.core.data.media.CachedImageAttachmentStorage
 import com.browntowndev.enclave.core.data.remote.FirestoreDataSource
@@ -121,6 +122,7 @@ import com.browntowndev.enclave.domain.port.media.ImageAttachmentStoragePort
 import com.browntowndev.enclave.domain.port.media.SaveBinaryToDownloadsPort
 import com.browntowndev.enclave.domain.port.media.ShareMediaPort
 import com.browntowndev.enclave.domain.port.media.StreamingAudioPlayerPort
+import com.browntowndev.enclave.domain.port.media.VoiceChatAudioRoutePort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.ChatRepository
@@ -520,6 +522,10 @@ abstract class DataRepositoryModule {
     @Binds
     @Singleton
     abstract fun bindStreamingAudioPlayer(impl: AndroidStreamingAudioPlayer): StreamingAudioPlayerPort
+
+    @Binds
+    @Singleton
+    abstract fun bindVoiceChatAudioRoute(impl: AndroidVoiceChatAudioRoute): VoiceChatAudioRoutePort
 
     @Binds
     @Singleton
