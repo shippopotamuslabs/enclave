@@ -149,3 +149,5 @@ local-image-gen-android/src/main/cpp/engine/thirdparty/
 # Bonsai model and build artifacts
 bonsai-*.gguf
 bonsai-unpacked/
+
+.local-models/
