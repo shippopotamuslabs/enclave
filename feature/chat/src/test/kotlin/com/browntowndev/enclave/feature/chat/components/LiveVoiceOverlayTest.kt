@@ -8,6 +8,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.feature.chat.LiveVoiceUiState
+import com.browntowndev.enclave.feature.chat.ToolCallBannerKind
+import com.browntowndev.enclave.feature.chat.ToolCallBannerUi
 import org.junit.Rule
 import org.junit.Test
 import org.junit.jupiter.api.DisplayName
@@ -23,14 +25,18 @@ class LiveVoiceOverlayTest {
 
     @Test
     @DisplayName("LV-TOOL-071")
-    fun lvTool071_overlayRendersToolStatusCaption() {
+    fun lvTool071_overlayRendersToolCallBanner() {
         var state by mutableStateOf(
             LiveVoiceUiState.Listening(
                 userCaption = "",
                 assistantCaption = "",
                 isMuted = false,
                 micLevel = 0f,
-                toolStatusCaption = "Searching the web...",
+                activeToolCallBanner =
+                    ToolCallBannerUi(
+                        kind = ToolCallBannerKind.SEARCH,
+                        label = "Searching the web...",
+                    ),
             ),
         )
 
@@ -52,7 +58,7 @@ class LiveVoiceOverlayTest {
                 assistantCaption = "",
                 isMuted = false,
                 micLevel = 0f,
-                toolStatusCaption = null,
+                activeToolCallBanner = null,
             )
         composeTestRule.waitForIdle()
 
