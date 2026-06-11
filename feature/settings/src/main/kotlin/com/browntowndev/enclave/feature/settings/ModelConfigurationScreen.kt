@@ -282,6 +282,7 @@ internal fun selectableLocalAssetsForSlot(
             }
         }
         modelType in LOCAL_MODEL_UNSUPPORTED_ASSIGNMENT_TYPES -> emptyList()
+        modelType.isTextModel -> assets.filter { !it.isImageGenerationCapable }
         else -> assets
     }
 

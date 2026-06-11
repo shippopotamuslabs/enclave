@@ -27,20 +27,20 @@ class SwipeToDeleteBehaviorTest {
         assertFalse(isPresetSwipeDeletionEnabled(configurationCount = 0))
     }
 
-    // S4 — Available-for-download asset is not swipeable (onRequestDeleteAsset == null)
+    // S4 — Removed-section asset is not swipeable (onRequestDeleteAsset == null)
     @Test
     fun `isLocalModelAssetSwipeable returns false when delete handler is null`() {
         assertFalse(isLocalModelAssetSwipeable(onRequestDeleteAsset = null))
     }
 
-    // S3 — Downloaded LocalModelAssetCard is swipeable when delete handler is provided
+    // S3 — Models-section LocalModelAssetCard is swipeable when delete handler is provided
     @Test
     fun `isLocalModelAssetSwipeable returns true when delete handler is provided`() {
         val handler: (LocalModelAssetUi) -> Unit = { _ -> }
         assertTrue(isLocalModelAssetSwipeable(onRequestDeleteAsset = handler))
     }
 
-    // E2 — isSoftDeleted asset in Downloaded section IS swipeable (handler non-null)
+    // E2 — Swipeability depends only on delete handler presence, not asset state
     @Test
     fun `isLocalModelAssetSwipeable returns true for soft-deleted asset with non-null handler`() {
         val handler: (LocalModelAssetUi) -> Unit = { _ -> }

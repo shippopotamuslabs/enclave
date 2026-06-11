@@ -24,8 +24,11 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -52,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.browntowndev.enclave.core.ui.component.neo.NeoCircularProgressIndicator
+import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
 import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
 import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
 import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
@@ -291,7 +295,7 @@ private fun LocalModelAssetListView(
     Column(modifier = Modifier.fillMaxWidth()) {
         NeoSheetHeader(
             title = "Local AI Models",
-            subtitle = "Manage your downloaded models and their tuning presets.",
+            subtitle = "Manage your model packs, local models, and tuning presets.",
             onDismiss = onDismiss,
         )
 
@@ -308,7 +312,7 @@ private fun LocalModelAssetListView(
 
             if (displayedLocalModels.isNotEmpty()) {
                 item {
-                    NeoSectionHeader(text = "Downloaded")
+                    NeoSectionHeader(text = "Models")
                 }
                 items(displayedLocalModels, key = { it.metadataId.value }) { asset ->
                     LocalModelAssetCard(
@@ -330,7 +334,7 @@ private fun LocalModelAssetListView(
             if (displayedAvailableToDownloadModels.isNotEmpty()) {
                 item {
                     Spacer(modifier = Modifier.height(EnclaveNeoTokens.sectionSpacing))
-                    NeoSectionHeader(text = "Available for download")
+                    NeoSectionHeader(text = "Removed")
                 }
                 items(displayedAvailableToDownloadModels, key = { "dl_${it.metadataId.value}" }) { asset ->
                     LocalModelAssetCard(
@@ -346,7 +350,7 @@ private fun LocalModelAssetListView(
             if (modelPacks.isEmpty() && displayedLocalModels.isEmpty() && displayedAvailableToDownloadModels.isEmpty()) {
                 item {
                     Text(
-                        text = "No models downloaded yet.",
+                        text = "No local models or packs yet.",
                         style = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier.padding(bottom = 16.dp),
                     )
@@ -563,21 +567,37 @@ private fun LocalModelConfigListView(
             "Presets"
         }
 
+    var menuExpanded by remember { mutableStateOf(false) }
+
     Column(modifier = Modifier.fillMaxWidth()) {
-        Box(modifier = Modifier.fillMaxWidth()) {
-            NeoSheetHeader(
-                title = asset.friendlyName,
-                subtitle = presetSubtitle,
-                onDismiss = onDismiss,
-                onBackClick = onBack,
-            )
-            TextButton(
-                onClick = { onRequestDeleteAsset(asset) },
-                modifier = Modifier.align(Alignment.CenterEnd),
-            ) {
-                Text("Delete Model", color = MaterialTheme.colorScheme.error)
-            }
-        }
+        NeoSheetHeader(
+            title = asset.friendlyName,
+            subtitle = presetSubtitle,
+            onDismiss = onDismiss,
+            onBackClick = onBack,
+            trailingContent = {
+                Box {
+                    NeoIconButton(
+                        onClick = { menuExpanded = true },
+                        icon = Icons.Default.MoreVert,
+                        contentDescription = "Options",
+                    )
+                    DropdownMenu(
+                        expanded = menuExpanded,
+                        onDismissRequest = { menuExpanded = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Delete") },
+                            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
+                            onClick = {
+                                menuExpanded = false
+                                onRequestDeleteAsset(asset)
+                            },
+                        )
+                    }
+                }
+            },
+        )
 
         LazyColumn(
             modifier = Modifier.weight(1f, fill = false),
