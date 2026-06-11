@@ -6,7 +6,9 @@ import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.MessageState
 import com.browntowndev.enclave.domain.model.chat.Role
+import com.browntowndev.enclave.domain.model.chat.WebSearchSource
 import com.browntowndev.enclave.domain.model.inference.ModelType
+import com.browntowndev.enclave.domain.port.repository.ChatRepository
 import com.browntowndev.enclave.domain.port.repository.MessageRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -24,11 +26,13 @@ class PersistVoiceTurnUseCaseTest {
     private fun useCase(
         createUserMessageUseCase: CreateUserMessageUseCase,
         messageRepository: MessageRepository,
+        chatRepository: ChatRepository = mockk(relaxed = true),
         generateChatTitleUseCase: GenerateChatTitleUseCase = mockk(relaxed = true),
     ): PersistVoiceTurnUseCase =
         PersistVoiceTurnUseCase(
             createUserMessageUseCase = createUserMessageUseCase,
             messageRepository = messageRepository,
+            chatRepository = chatRepository,
             generateChatTitleUseCase = generateChatTitleUseCase,
         )
     @Test
@@ -167,8 +171,11 @@ class PersistVoiceTurnUseCaseTest {
                     userMessageCreatedAtMillis = 0L,
                 )
 
-            useCase(createUserMessageUseCase, messageRepository, generateChatTitleUseCase)
-                .invoke(null, "start a session", "ready")
+            useCase(
+                createUserMessageUseCase = createUserMessageUseCase,
+                messageRepository = messageRepository,
+                generateChatTitleUseCase = generateChatTitleUseCase,
+            ).invoke(null, "start a session", "ready")
             advanceUntilIdle()
 
             coVerify(exactly = 1) {
@@ -191,11 +198,60 @@ class PersistVoiceTurnUseCaseTest {
                     userMessageCreatedAtMillis = 1_700_000_000_000L,
                 )
 
-            useCase(createUserMessageUseCase, messageRepository, generateChatTitleUseCase)
-                .invoke(ChatId("c1"), "hello there", "hi back")
+            useCase(
+                createUserMessageUseCase = createUserMessageUseCase,
+                messageRepository = messageRepository,
+                generateChatTitleUseCase = generateChatTitleUseCase,
+            ).invoke(ChatId("c1"), "hello there", "hi back")
             advanceUntilIdle()
 
             coVerify(exactly = 0) { generateChatTitleUseCase(any(), any()) }
+        }
+
+    @Test
+    @DisplayName("LV-PERSIST-009")
+    fun lvPersist009_webSearchSourcesPersistedWithAssistantMessage() =
+        runTest {
+            val createUserMessageUseCase = mockk<CreateUserMessageUseCase>()
+            val messageRepository = mockk<MessageRepository>()
+            val chatRepository = mockk<ChatRepository>(relaxed = true)
+            val assistantMessageSlot = slot<Message>()
+            val assistantMessageId = MessageId("assistant-1")
+            val sources =
+                listOf(
+                    WebSearchSource(
+                        messageId = assistantMessageId,
+                        title = "Example",
+                        url = "https://example.com",
+                        content = "Example content",
+                        score = 0.9,
+                    ),
+                )
+
+            coEvery { createUserMessageUseCase(any()) } returns
+                UserPromptResult(
+                    userMessageId = MessageId("u1"),
+                    chatId = ChatId("c1"),
+                    userMessageCreatedAtMillis = 1_700_000_000_000L,
+                )
+            coEvery { messageRepository.saveMessage(capture(assistantMessageSlot)) } returns assistantMessageId
+
+            useCase(createUserMessageUseCase, messageRepository, chatRepository)
+                .invoke(
+                    chatId = ChatId("c1"),
+                    userText = "search the web",
+                    assistantText = "here are results",
+                    webSearchSources = sources,
+                    assistantMessageId = assistantMessageId,
+                )
+
+            assertEquals(sources, assistantMessageSlot.captured.webSearchSources)
+            coVerify(exactly = 1) {
+                chatRepository.persistWebSearchSources(
+                    messageId = assistantMessageId,
+                    sources = sources,
+                )
+            }
         }
 
     @Test
@@ -214,8 +270,11 @@ class PersistVoiceTurnUseCaseTest {
                 )
             coEvery { messageRepository.saveMessage(any()) } returns MessageId("a1")
 
-            useCase(createUserMessageUseCase, messageRepository, generateChatTitleUseCase)
-                .invoke(null, "   ", "the answer is 42")
+            useCase(
+                createUserMessageUseCase = createUserMessageUseCase,
+                messageRepository = messageRepository,
+                generateChatTitleUseCase = generateChatTitleUseCase,
+            ).invoke(null, "   ", "the answer is 42")
             advanceUntilIdle()
 
             coVerify(exactly = 0) { generateChatTitleUseCase(any(), any()) }

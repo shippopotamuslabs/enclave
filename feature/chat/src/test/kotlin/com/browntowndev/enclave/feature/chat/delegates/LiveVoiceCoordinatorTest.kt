@@ -25,10 +25,12 @@ import com.browntowndev.enclave.domain.usecase.chat.LiveVoiceSessionOpenResult
 import com.browntowndev.enclave.domain.usecase.chat.LiveVoiceSessionUseCase
 import com.browntowndev.enclave.domain.usecase.chat.PersistVoiceTurnUseCase
 import com.browntowndev.enclave.feature.chat.LiveVoiceUiState
+import com.browntowndev.enclave.feature.chat.ToolCallBannerKind
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
@@ -119,6 +121,52 @@ class LiveVoiceCoordinatorTest {
                     asset = liveVoiceAsset,
                 ),
             )
+    }
+
+    private fun stubPersistVoiceTurn(
+        chatId: ChatId?,
+        userText: String,
+        assistantText: String,
+        resolvedChatId: ChatId = chatId ?: ChatId("c1"),
+    ) {
+        coEvery {
+            persistVoiceTurnUseCase(
+                chatId = chatId,
+                userText = userText,
+                assistantText = assistantText,
+                webSearchSources = any(),
+                assistantMessageId = any(),
+            )
+        } returns resolvedChatId
+    }
+
+    private fun verifyPersistVoiceTurn(
+        chatId: ChatId?,
+        userText: String,
+        assistantText: String,
+        exactly: Int = 1,
+    ) {
+        coVerify(exactly = exactly) {
+            persistVoiceTurnUseCase(
+                chatId = chatId,
+                userText = userText,
+                assistantText = assistantText,
+                webSearchSources = any(),
+                assistantMessageId = any(),
+            )
+        }
+    }
+
+    private fun verifyNoPersistVoiceTurn() {
+        coVerify(exactly = 0) {
+            persistVoiceTurnUseCase(
+                chatId = any(),
+                userText = any(),
+                assistantText = any(),
+                webSearchSources = any(),
+                assistantMessageId = any(),
+            )
+        }
     }
 
     @Test
@@ -257,9 +305,7 @@ class LiveVoiceCoordinatorTest {
     fun lvCoord005_endPersistsTurns() =
         runTest {
             stubOpenSession()
-            coEvery {
-                persistVoiceTurnUseCase(ChatId("c1"), "hello", "hi")
-            } returns ChatId("c1")
+            stubPersistVoiceTurn(chatId = ChatId("c1"), userText = "hello", assistantText = "hi")
             val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
 
             coordinator.start(scope, chatId = ChatId("c1"))
@@ -272,9 +318,7 @@ class LiveVoiceCoordinatorTest {
             coordinator.end(scope)
             advanceUntilIdle()
 
-            coVerify(exactly = 1) {
-                persistVoiceTurnUseCase(ChatId("c1"), "hello", "hi")
-            }
+            verifyPersistVoiceTurn(chatId = ChatId("c1"), userText = "hello", assistantText = "hi")
             assertEquals(LiveVoiceUiState.Idle, coordinator.state.value)
         }
 
@@ -316,7 +360,7 @@ class LiveVoiceCoordinatorTest {
             coordinator.cancel()
             advanceUntilIdle()
 
-            coVerify(exactly = 0) { persistVoiceTurnUseCase(any(), any(), any()) }
+            verifyNoPersistVoiceTurn()
             assertTrue(fakeSession.closed)
             assertEquals(LiveVoiceUiState.Idle, coordinator.state.value)
         }
@@ -419,9 +463,7 @@ class LiveVoiceCoordinatorTest {
     fun lvCoord013_endDuringAssistantPlayback() =
         runTest {
             stubOpenSession()
-            coEvery {
-                persistVoiceTurnUseCase(null, "", "")
-            } returns ChatId("c1")
+            stubPersistVoiceTurn(chatId = null, userText = "", assistantText = "")
             val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
 
             coordinator.start(scope, chatId = null)
@@ -447,9 +489,7 @@ class LiveVoiceCoordinatorTest {
     fun lvCoord014_endWhileEnqueueInFlight() =
         runTest {
             stubOpenSession()
-            coEvery {
-                persistVoiceTurnUseCase(null, "", "partial")
-            } returns ChatId("c1")
+            stubPersistVoiceTurn(chatId = null, userText = "", assistantText = "partial")
             val slowPlayer = SlowFakeStreamingAudioPlayer()
             val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
 
@@ -507,7 +547,7 @@ class LiveVoiceCoordinatorTest {
             assertEquals(LiveVoiceUiState.Idle, coordinator.state.value)
             assertEquals(1, fakePlayer.enqueuedChunks.size)
             assertTrue(fakePlayer.stopped)
-            coVerify(exactly = 0) { persistVoiceTurnUseCase(any(), any(), any()) }
+            verifyNoPersistVoiceTurn()
         }
 
     @Test
@@ -515,9 +555,7 @@ class LiveVoiceCoordinatorTest {
     fun lvCoord016_assistantResponseCompleteReturnsToListening() =
         runTest {
             stubOpenSession()
-            coEvery {
-                persistVoiceTurnUseCase(null, "", "Hi there")
-            } returns ChatId("c1")
+            stubPersistVoiceTurn(chatId = null, userText = "", assistantText = "Hi there")
             val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
 
             coordinator.start(scope, chatId = null)
@@ -534,9 +572,7 @@ class LiveVoiceCoordinatorTest {
             assertTrue(coordinator.state.value is LiveVoiceUiState.Listening)
             val listening = coordinator.state.value as LiveVoiceUiState.Listening
             assertEquals("", listening.assistantCaption)
-            coVerify(exactly = 1) {
-                persistVoiceTurnUseCase(null, "", "Hi there")
-            }
+            verifyPersistVoiceTurn(chatId = null, userText = "", assistantText = "Hi there")
         }
 
     @Test
@@ -649,19 +685,17 @@ class LiveVoiceCoordinatorTest {
             )
             advanceUntilIdle()
 
-            coVerify(exactly = 0) { persistVoiceTurnUseCase(any(), any(), any()) }
+            verifyNoPersistVoiceTurn()
 
             fakeSession.emit(LiveVoiceEvent.AssistantTranscriptDone("Persona engaged."))
             fakeSession.emit(LiveVoiceEvent.AssistantResponseComplete)
             advanceUntilIdle()
 
-            coVerify(exactly = 1) {
-                persistVoiceTurnUseCase(
-                    ChatId("c1"),
-                    "I want you to take on the persona of a talking, yelling at their deadbeat boyfriend.",
-                    "Persona engaged.",
-                )
-            }
+            verifyPersistVoiceTurn(
+                chatId = ChatId("c1"),
+                userText = "I want you to take on the persona of a talking, yelling at their deadbeat boyfriend.",
+                assistantText = "Persona engaged.",
+            )
         }
 
     @Test
@@ -669,9 +703,11 @@ class LiveVoiceCoordinatorTest {
     fun lvCoord021_localBargeInPersistsPartialAssistantTurn() =
         runTest {
             stubOpenSession()
-            coEvery {
-                persistVoiceTurnUseCase(ChatId("c1"), "clean the fish", "How to clean a fish")
-            } returns ChatId("c1")
+            stubPersistVoiceTurn(
+                chatId = ChatId("c1"),
+                userText = "clean the fish",
+                assistantText = "How to clean a fish",
+            )
             val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
 
             coordinator.start(scope, chatId = ChatId("c1"))
@@ -685,9 +721,11 @@ class LiveVoiceCoordinatorTest {
             fakeCapture.emit(loudPcm16Frame())
             advanceUntilIdle()
 
-            coVerify(exactly = 1) {
-                persistVoiceTurnUseCase(ChatId("c1"), "clean the fish", "How to clean a fish")
-            }
+            verifyPersistVoiceTurn(
+                chatId = ChatId("c1"),
+                userText = "clean the fish",
+                assistantText = "How to clean a fish",
+            )
             assertTrue(coordinator.state.value is LiveVoiceUiState.Listening)
         }
 
@@ -709,7 +747,7 @@ class LiveVoiceCoordinatorTest {
             fakeSession.emit(LiveVoiceEvent.SpeechStarted)
             advanceUntilIdle()
 
-            coVerify(exactly = 0) { persistVoiceTurnUseCase(any(), any(), any()) }
+            verifyNoPersistVoiceTurn()
             assertTrue(fakePlayer.stopped)
         }
 
@@ -718,9 +756,11 @@ class LiveVoiceCoordinatorTest {
     fun lvCoord024_duplicateAssistantResponseCompletePersistsOnce() =
         runTest {
             stubOpenSession()
-            coEvery {
-                persistVoiceTurnUseCase(ChatId("c1"), "hello", "full assistant reply")
-            } returns ChatId("c1")
+            stubPersistVoiceTurn(
+                chatId = ChatId("c1"),
+                userText = "hello",
+                assistantText = "full assistant reply",
+            )
             val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
 
             coordinator.start(scope, chatId = ChatId("c1"))
@@ -732,9 +772,11 @@ class LiveVoiceCoordinatorTest {
             fakeSession.emit(LiveVoiceEvent.AssistantResponseComplete)
             advanceUntilIdle()
 
-            coVerify(exactly = 1) {
-                persistVoiceTurnUseCase(ChatId("c1"), "hello", "full assistant reply")
-            }
+            verifyPersistVoiceTurn(
+                chatId = ChatId("c1"),
+                userText = "hello",
+                assistantText = "full assistant reply",
+            )
         }
 
     @Test
@@ -742,9 +784,11 @@ class LiveVoiceCoordinatorTest {
     fun lvCoord026_lateEventsAfterBargeInPersistDoNotSplitTurn() =
         runTest {
             stubOpenSession()
-            coEvery {
-                persistVoiceTurnUseCase(ChatId("c1"), "clean the fish", "How to clean a fish")
-            } returns ChatId("c1")
+            stubPersistVoiceTurn(
+                chatId = ChatId("c1"),
+                userText = "clean the fish",
+                assistantText = "How to clean a fish",
+            )
             val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
 
             coordinator.start(scope, chatId = ChatId("c1"))
@@ -763,9 +807,11 @@ class LiveVoiceCoordinatorTest {
             fakeSession.emit(LiveVoiceEvent.AssistantResponseComplete)
             advanceUntilIdle()
 
-            coVerify(exactly = 1) {
-                persistVoiceTurnUseCase(ChatId("c1"), "clean the fish", "How to clean a fish")
-            }
+            verifyPersistVoiceTurn(
+                chatId = ChatId("c1"),
+                userText = "clean the fish",
+                assistantText = "How to clean a fish",
+            )
         }
 
     @Test
@@ -798,9 +844,11 @@ class LiveVoiceCoordinatorTest {
     fun lvCoord025_responseCompleteWaitsForFinalTranscript() =
         runTest {
             stubOpenSession()
-            coEvery {
-                persistVoiceTurnUseCase(ChatId("c1"), "hello", "final transcript")
-            } returns ChatId("c1")
+            stubPersistVoiceTurn(
+                chatId = ChatId("c1"),
+                userText = "hello",
+                assistantText = "final transcript",
+            )
             val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
 
             coordinator.start(scope, chatId = ChatId("c1"))
@@ -811,14 +859,16 @@ class LiveVoiceCoordinatorTest {
             fakeSession.emit(LiveVoiceEvent.AssistantResponseComplete)
             advanceUntilIdle()
 
-            coVerify(exactly = 0) { persistVoiceTurnUseCase(any(), any(), any()) }
+            verifyNoPersistVoiceTurn()
 
             fakeSession.emit(LiveVoiceEvent.AssistantTranscriptDone("final transcript"))
             advanceUntilIdle()
 
-            coVerify(exactly = 1) {
-                persistVoiceTurnUseCase(ChatId("c1"), "hello", "final transcript")
-            }
+            verifyPersistVoiceTurn(
+                chatId = ChatId("c1"),
+                userText = "hello",
+                assistantText = "final transcript",
+            )
         }
 
     @Test
@@ -826,12 +876,16 @@ class LiveVoiceCoordinatorTest {
     fun lvCoord020_persistsEachCompletedTurn() =
         runTest {
             stubOpenSession()
-            coEvery {
-                persistVoiceTurnUseCase(ChatId("c1"), "first question", "first answer")
-            } returns ChatId("c1")
-            coEvery {
-                persistVoiceTurnUseCase(ChatId("c1"), "second question", "second answer")
-            } returns ChatId("c1")
+            stubPersistVoiceTurn(
+                chatId = ChatId("c1"),
+                userText = "first question",
+                assistantText = "first answer",
+            )
+            stubPersistVoiceTurn(
+                chatId = ChatId("c1"),
+                userText = "second question",
+                assistantText = "second answer",
+            )
             val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
 
             coordinator.start(scope, chatId = ChatId("c1"))
@@ -845,12 +899,16 @@ class LiveVoiceCoordinatorTest {
             fakeSession.emit(LiveVoiceEvent.AssistantResponseComplete)
             advanceUntilIdle()
 
-            coVerify(exactly = 1) {
-                persistVoiceTurnUseCase(ChatId("c1"), "first question", "first answer")
-            }
-            coVerify(exactly = 1) {
-                persistVoiceTurnUseCase(ChatId("c1"), "second question", "second answer")
-            }
+            verifyPersistVoiceTurn(
+                chatId = ChatId("c1"),
+                userText = "first question",
+                assistantText = "first answer",
+            )
+            verifyPersistVoiceTurn(
+                chatId = ChatId("c1"),
+                userText = "second question",
+                assistantText = "second answer",
+            )
         }
 
     private suspend fun TestScope.startActiveCoordinator(chatId: ChatId = ChatId("c1")): CoroutineScope {
@@ -897,7 +955,7 @@ class LiveVoiceCoordinatorTest {
             coVerify(exactly = 1) { toolExecutorPort.execute(any()) }
             assertEquals(1, fakeSession.sendToolResultInvocations.size)
             val listening = coordinator.state.value as LiveVoiceUiState.Listening
-            assertNull(listening.toolStatusCaption)
+            assertNull(listening.activeToolCallBanner)
         }
 
     @Test
@@ -1036,10 +1094,12 @@ class LiveVoiceCoordinatorTest {
 
     @Test
     @DisplayName("LV-TOOL-065")
-    fun lvTool065_unknownToolWithoutCaption() =
+    fun lvTool065_unknownToolShowsGenericBanner() =
         runTest {
-            coEvery { toolExecutorPort.execute(any()) } returns
-                ToolExecutionResult(toolName = "unknown_tool", resultJson = "{}")
+            val (started, gate) =
+                suspendToolExecutor(
+                    ToolExecutionResult(toolName = "unknown_tool", resultJson = "{}"),
+                )
             startActiveCoordinator()
 
             fakeSession.emit(
@@ -1049,13 +1109,18 @@ class LiveVoiceCoordinatorTest {
                     argumentsJson = "{}",
                 ),
             )
+            started.await()
             advanceUntilIdle()
 
-            coVerify(exactly = 1) { toolExecutorPort.execute(any()) }
-            val listening = coordinator.state.value as? LiveVoiceUiState.Listening
-            if (listening != null) {
-                assertNull(listening.toolStatusCaption)
-            }
+            val listening = coordinator.state.value as LiveVoiceUiState.Listening
+            assertEquals(ToolCallBannerKind.GENERIC, listening.activeToolCallBanner?.kind)
+            assertEquals("Executing tool", listening.activeToolCallBanner?.label)
+
+            gate.complete(Unit)
+            advanceUntilIdle()
+
+            val cleared = coordinator.state.value as LiveVoiceUiState.Listening
+            assertNull(cleared.activeToolCallBanner)
         }
 
     @Test
@@ -1084,7 +1149,7 @@ class LiveVoiceCoordinatorTest {
 
     @Test
     @DisplayName("LV-TOOL-066")
-    fun lvTool066_nullDisplayNameSkipsCaption() =
+    fun lvTool066_toolWithoutDisplayNameUsesFallbackBannerLabel() =
         runTest {
             assertNull(ToolDefinition.MANAGE_MEMORIES.displayName)
             val (started, gate) =
@@ -1102,21 +1167,19 @@ class LiveVoiceCoordinatorTest {
             )
             started.await()
             val listening = coordinator.state.value as LiveVoiceUiState.Listening
-            assertNull(listening.toolStatusCaption)
+            assertEquals("Executing tool", listening.activeToolCallBanner?.label)
 
             gate.complete(Unit)
             advanceUntilIdle()
 
             assertEquals(1, fakeSession.sendToolResultInvocations.size)
-            val finalListening = coordinator.state.value as? LiveVoiceUiState.Listening
-            if (finalListening != null) {
-                assertNull(finalListening.toolStatusCaption)
-            }
+            val finalListening = coordinator.state.value as LiveVoiceUiState.Listening
+            assertNull(finalListening.activeToolCallBanner)
         }
 
     @Test
     @DisplayName("LV-TOOL-070")
-    fun lvTool070_toolStatusCaptionLifecycle() =
+    fun lvTool070_activeToolCallBannerLifecycle() =
         runTest {
             assertEquals("Searching the web...", ToolDefinition.WEB_SEARCH.displayName)
             val (started, gate) = suspendToolExecutor()
@@ -1131,13 +1194,69 @@ class LiveVoiceCoordinatorTest {
             )
             started.await()
             val listening = coordinator.state.value as LiveVoiceUiState.Listening
-            assertEquals("Searching the web...", listening.toolStatusCaption)
+            assertEquals(ToolCallBannerKind.SEARCH, listening.activeToolCallBanner?.kind)
+            assertEquals("Searching the web...", listening.activeToolCallBanner?.label)
 
             gate.complete(Unit)
             advanceUntilIdle()
 
             val cleared = coordinator.state.value as LiveVoiceUiState.Listening
-            assertNull(cleared.toolStatusCaption)
+            assertNull(cleared.activeToolCallBanner)
+        }
+
+    @Test
+    @DisplayName("LV-TOOL-072")
+    fun lvTool072_searchToolSourcesPersistedWithVoiceTurn() =
+        runTest {
+            val searchResultJson =
+                """
+                {
+                  "results": [
+                    {
+                      "title": "Example",
+                      "url": "https://example.com",
+                      "content": "Example content",
+                      "score": 0.95
+                    }
+                  ]
+                }
+                """.trimIndent()
+            val sourcesSlot = slot<List<com.browntowndev.enclave.domain.model.chat.WebSearchSource>>()
+            coEvery { toolExecutorPort.execute(any()) } returns
+                ToolExecutionResult(toolName = "web_search", resultJson = searchResultJson)
+            coEvery {
+                persistVoiceTurnUseCase(
+                    chatId = any(),
+                    userText = any(),
+                    assistantText = any(),
+                    webSearchSources = capture(sourcesSlot),
+                    assistantMessageId = any(),
+                )
+            } returns ChatId("c1")
+            val scope = startActiveCoordinator()
+
+            fakeSession.emit(
+                LiveVoiceEvent.ToolCallRequested(
+                    callId = "call_sources",
+                    name = "web_search",
+                    argumentsJson = """{"query":"latest news"}""",
+                ),
+            )
+            fakeSession.emit(LiveVoiceEvent.UserTranscriptDone("latest news"))
+            fakeSession.emit(LiveVoiceEvent.AssistantTranscriptDone("here is what I found"))
+            fakeSession.emit(LiveVoiceEvent.AssistantResponseComplete)
+            advanceUntilIdle()
+
+            verifyPersistVoiceTurn(
+                chatId = ChatId("c1"),
+                userText = "latest news",
+                assistantText = "here is what I found",
+            )
+            assertEquals(1, sourcesSlot.captured.size)
+            assertEquals("https://example.com", sourcesSlot.captured.single().url)
+            assertEquals("Example", sourcesSlot.captured.single().title)
+            coordinator.end(scope)
+            advanceUntilIdle()
         }
 
     @Test

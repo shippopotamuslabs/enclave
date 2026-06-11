@@ -3,11 +3,12 @@ package com.browntowndev.enclave.feature.chat.delegates
 import androidx.annotation.VisibleForTesting
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.chat.ChatId
+import com.browntowndev.enclave.domain.model.chat.MessageId
+import com.browntowndev.enclave.domain.model.chat.WebSearchSource
 import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderAsset
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
-import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
 import com.browntowndev.enclave.domain.port.media.LiveVoiceEvent
@@ -19,7 +20,10 @@ import com.browntowndev.enclave.domain.port.media.StreamingAudioPlayerPort
 import com.browntowndev.enclave.domain.port.media.VoiceChatAudioRoutePort
 import com.browntowndev.enclave.domain.usecase.chat.LiveVoiceSessionUseCase
 import com.browntowndev.enclave.domain.usecase.chat.PersistVoiceTurnUseCase
+import com.browntowndev.enclave.domain.util.WebSearchResultParser
 import com.browntowndev.enclave.feature.chat.LiveVoiceUiState
+import com.browntowndev.enclave.feature.chat.ToolCallBannerUi
+import com.browntowndev.enclave.feature.chat.mapping.ToolCallBannerMapper
 import com.browntowndev.enclave.feature.inference.media.RealtimeAudioCaptureGain
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -42,6 +46,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.util.ArrayDeque
+import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import kotlin.math.min
@@ -77,7 +82,9 @@ class LiveVoiceCoordinator
         private var currentAsset: LiveVoiceProviderAsset? = null
         private val toolJobs = ConcurrentHashMap<String, Job>()
         private val acceptedToolCallIds = ConcurrentHashMap.newKeySet<String>()
-        private var toolStatusCaption: String? = null
+        private var activeToolCallBanner: ToolCallBannerUi? = null
+        private var currentAssistantMessageId: MessageId? = null
+        private val turnWebSearchSources = mutableListOf<WebSearchSource>()
 
         private var chatId: ChatId? = null
         private var userCaption: String = ""
@@ -133,6 +140,8 @@ class LiveVoiceCoordinator
                     responseCompleteAwaitingTranscript = false
                     assistantResponseCancelled = false
                     acceptedToolCallIds.clear()
+                    currentAssistantMessageId = null
+                    turnWebSearchSources.clear()
                     latestMicLevel = 0f
                     resetAssistantAudioVisualization()
                     _state.value = LiveVoiceUiState.Connecting
@@ -314,6 +323,9 @@ class LiveVoiceCoordinator
 
         private fun beginAssistantTurn() {
             if (turnPersisted) return
+            if (currentAssistantMessageId == null) {
+                currentAssistantMessageId = MessageId(UUID.randomUUID().toString())
+            }
             isAssistantResponseActive = true
             assistantTranscriptFinalized = false
             responseCompleteAwaitingTranscript = false
@@ -353,7 +365,7 @@ class LiveVoiceCoordinator
             if (userBargeInActive && suppressAssistantOutput) return
             toolJobs.values.forEach { it.cancel() }
             toolJobs.clear()
-            toolStatusCaption = null
+            activeToolCallBanner = null
             if (persistPartialTurn && userCaption.isNotBlank()) {
                 persistCurrentTurnOnce()
             }
@@ -459,7 +471,7 @@ class LiveVoiceCoordinator
                             assistantCaption = assistantCaption,
                             isMuted = isMuted,
                             micLevel = latestMicLevel,
-                            toolStatusCaption = toolStatusCaption,
+                            activeToolCallBanner = activeToolCallBanner,
                         )
                     is LiveVoiceUiState.AssistantSpeaking ->
                         current.copy(
@@ -467,7 +479,7 @@ class LiveVoiceCoordinator
                             assistantCaption = assistantCaption,
                             isMuted = isMuted,
                             audioLevel = latestAssistantAudioLevel,
-                            toolStatusCaption = toolStatusCaption,
+                            activeToolCallBanner = activeToolCallBanner,
                         )
                     else -> current
                 }
@@ -477,7 +489,9 @@ class LiveVoiceCoordinator
             toolJobs.values.forEach { it.cancel() }
             toolJobs.clear()
             acceptedToolCallIds.clear()
-            toolStatusCaption = null
+            activeToolCallBanner = null
+            currentAssistantMessageId = null
+            turnWebSearchSources.clear()
             voiceChatAudioRoute.deactivateSpeakerphone()
             captureJob?.cancel()
             captureJob = null
@@ -512,7 +526,14 @@ class LiveVoiceCoordinator
             turnPersisted = true
             assistantTranscriptFinalized = false
             responseCompleteAwaitingTranscript = false
-            val resolvedChatId = persistVoiceTurnUseCase(chatId, userText, assistantText)
+            val resolvedChatId =
+                persistVoiceTurnUseCase(
+                    chatId = chatId,
+                    userText = userText,
+                    assistantText = assistantText,
+                    webSearchSources = turnWebSearchSources.toList(),
+                    assistantMessageId = currentAssistantMessageId,
+                )
             resolvedChatId?.let { resolved ->
                 if (chatId == null) {
                     onChatIdPersisted?.invoke(resolved)
@@ -521,6 +542,8 @@ class LiveVoiceCoordinator
             }
             userCaption = ""
             assistantCaption = ""
+            currentAssistantMessageId = null
+            turnWebSearchSources.clear()
         }
 
         private fun isBenignLiveVoiceError(message: String): Boolean {
@@ -564,11 +587,11 @@ class LiveVoiceCoordinator
                 toolJobs[event.callId]?.cancel()
                 val job =
                     scope.launch {
-                        val displayName = ToolDefinition.fromName(event.name)?.displayName
-                        if (displayName != null) {
-                            toolStatusCaption = displayName
-                            updateActiveUiState()
-                        }
+                        val assistantMessageId =
+                            currentAssistantMessageId
+                                ?: MessageId(UUID.randomUUID().toString()).also { currentAssistantMessageId = it }
+                        activeToolCallBanner = ToolCallBannerMapper.toStartedBanner(event.name)
+                        updateActiveUiState()
                         try {
                             val result =
                                 withContext(toolExecutionDispatcher) {
@@ -583,6 +606,15 @@ class LiveVoiceCoordinator
                                     )
                                 }
                             if (generation != sessionGeneration) return@launch
+                            WebSearchResultParser
+                                .parse(
+                                    messageId = assistantMessageId,
+                                    resultJson = result.resultJson,
+                                ).forEach { source ->
+                                    if (turnWebSearchSources.none { it.url == source.url }) {
+                                        turnWebSearchSources.add(source)
+                                    }
+                                }
                             session?.sendToolResult(event.callId, event.name, result.resultJson)
                         } catch (e: CancellationException) {
                             throw e
@@ -600,7 +632,7 @@ class LiveVoiceCoordinator
                         } finally {
                             toolJobs.remove(event.callId, coroutineContext.job)
                             if (toolJobs.isEmpty()) {
-                                toolStatusCaption = null
+                                activeToolCallBanner = null
                                 updateActiveUiState()
                             }
                         }
@@ -659,6 +691,8 @@ class LiveVoiceCoordinator
                     turnPersisted = false
                     assistantTranscriptFinalized = false
                     responseCompleteAwaitingTranscript = false
+                    currentAssistantMessageId = null
+                    turnWebSearchSources.clear()
                 }
                 userCaption = event.text
                 updateActiveUiState()
@@ -705,7 +739,7 @@ class LiveVoiceCoordinator
                         assistantCaption = assistantCaption,
                         isMuted = isMuted,
                         audioLevel = latestAssistantAudioLevel,
-                        toolStatusCaption = toolStatusCaption,
+                        activeToolCallBanner = activeToolCallBanner,
                     )
             }
 
