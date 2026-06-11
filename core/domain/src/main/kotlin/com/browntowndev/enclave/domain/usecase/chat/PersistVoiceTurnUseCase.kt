@@ -10,18 +10,23 @@ import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.repository.MessageRepository
 import java.util.UUID
 import javax.inject.Inject
+import kotlin.coroutines.coroutineContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 
 class PersistVoiceTurnUseCase
     @Inject
     constructor(
         private val createUserMessageUseCase: CreateUserMessageUseCase,
         private val messageRepository: MessageRepository,
+        private val generateChatTitleUseCase: GenerateChatTitleUseCase,
     ) {
         suspend operator fun invoke(
             chatId: ChatId?,
             userText: String,
             assistantText: String,
         ): ChatId? {
+            val wasNewChat = chatId == null
             val hasUserText = userText.isNotBlank()
             val hasAssistantText = assistantText.isNotBlank()
             if (!hasUserText && !hasAssistantText) {
@@ -40,6 +45,12 @@ class PersistVoiceTurnUseCase
                         ),
                     )
                 val resolvedChatId = userPromptResult.chatId
+                if (wasNewChat && userText.isNotBlank()) {
+                    val prompt = userText
+                    CoroutineScope(coroutineContext).launch {
+                        generateChatTitleUseCase(resolvedChatId, prompt)
+                    }
+                }
                 if (hasAssistantText) {
                     saveAssistantMessage(
                         chatId = resolvedChatId,
