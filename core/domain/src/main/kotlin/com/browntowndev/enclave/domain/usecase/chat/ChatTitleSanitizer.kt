@@ -34,6 +34,7 @@ object ChatTitleSanitizer {
             .replace(WHITESPACE_REGEX, " ")
             .trim()
             .trim('"', '\'', '“', '”', '‘', '’')
+            .trimEnd('.')
             .trim()
 
     private fun isLowQuality(cleaned: String): Boolean {

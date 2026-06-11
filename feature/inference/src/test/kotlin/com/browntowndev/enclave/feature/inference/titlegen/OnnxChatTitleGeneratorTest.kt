@@ -36,9 +36,21 @@ class OnnxChatTitleGeneratorTest {
         }
 
     @Test
-    fun returnsNullAndDegradesSilentlyWhenModelPathIsUnresolved() =
+    fun returnsNullAndDegradesSilentlyWhenGraphPathIsUnresolved() =
         runTest {
             coEvery { utilityModelFilePort.resolveUtilityModelPath(UtilityType.TITLE_GENERATOR_ENCODER) } returns null
+            coEvery { utilityModelFilePort.resolveUtilityModelPath(UtilityType.TITLE_GENERATOR_DECODER) } returns "path/to/data"
+            coEvery { utilityModelFilePort.resolveUtilityModelPath(UtilityType.TITLE_GENERATOR_TOKENIZER) } returns "path/to/tokenizer"
+
+            val result = titleGenerator.generateTitle("Generate title please")
+            assertNull(result)
+        }
+
+    @Test
+    fun returnsNullAndDegradesSilentlyWhenDataPathIsUnresolved() =
+        runTest {
+            coEvery { utilityModelFilePort.resolveUtilityModelPath(UtilityType.TITLE_GENERATOR_ENCODER) } returns "path/to/model.onnx"
+            coEvery { utilityModelFilePort.resolveUtilityModelPath(UtilityType.TITLE_GENERATOR_DECODER) } returns null
             coEvery { utilityModelFilePort.resolveUtilityModelPath(UtilityType.TITLE_GENERATOR_TOKENIZER) } returns "path/to/tokenizer"
 
             val result = titleGenerator.generateTitle("Generate title please")
@@ -48,7 +60,8 @@ class OnnxChatTitleGeneratorTest {
     @Test
     fun returnsNullAndDegradesSilentlyWhenTokenizerPathIsUnresolved() =
         runTest {
-            coEvery { utilityModelFilePort.resolveUtilityModelPath(UtilityType.TITLE_GENERATOR_ENCODER) } returns "path/to/model"
+            coEvery { utilityModelFilePort.resolveUtilityModelPath(UtilityType.TITLE_GENERATOR_ENCODER) } returns "path/to/model.onnx"
+            coEvery { utilityModelFilePort.resolveUtilityModelPath(UtilityType.TITLE_GENERATOR_DECODER) } returns "path/to/data"
             coEvery { utilityModelFilePort.resolveUtilityModelPath(UtilityType.TITLE_GENERATOR_TOKENIZER) } returns null
 
             val result = titleGenerator.generateTitle("Generate title please")
@@ -59,6 +72,7 @@ class OnnxChatTitleGeneratorTest {
     fun returnsNullAndDegradesSilentlyOnFileReadingExceptions() =
         runTest {
             coEvery { utilityModelFilePort.resolveUtilityModelPath(UtilityType.TITLE_GENERATOR_ENCODER) } returns "non_existent_file.onnx"
+            coEvery { utilityModelFilePort.resolveUtilityModelPath(UtilityType.TITLE_GENERATOR_DECODER) } returns "non_existent_data"
             coEvery { utilityModelFilePort.resolveUtilityModelPath(UtilityType.TITLE_GENERATOR_TOKENIZER) } returns "non_existent_tokenizer.json"
 
             val result = titleGenerator.generateTitle("Generate title please")

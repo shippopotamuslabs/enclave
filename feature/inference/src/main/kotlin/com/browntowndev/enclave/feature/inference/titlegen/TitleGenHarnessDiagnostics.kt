@@ -1,8 +1,6 @@
 package com.browntowndev.enclave.feature.inference.titlegen
 
-import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
-import ai.onnxruntime.OrtSession
 import android.content.Context
 import android.util.Log
 import com.browntowndev.enclave.domain.model.config.UtilityType
@@ -10,7 +8,6 @@ import com.browntowndev.enclave.domain.model.download.ModelConfig
 import com.browntowndev.enclave.domain.port.repository.UtilityModelFilePort
 import com.browntowndev.enclave.domain.usecase.chat.ChatTitleSanitizer
 import java.io.File
-import java.nio.LongBuffer
 import java.security.MessageDigest
 
 /**
@@ -71,6 +68,7 @@ object TitleGenHarnessDiagnostics {
         userPrompt: String,
         portGenerateTitle: suspend (String) -> String?,
     ): Report {
+        // encoder = graph file (model_q4.onnx), decoder = external weights file (model_q4.onnx_data)
         val encoderPath = utilityModelFilePort.resolveUtilityModelPath(UtilityType.TITLE_GENERATOR_ENCODER)
         val decoderPath = utilityModelFilePort.resolveUtilityModelPath(UtilityType.TITLE_GENERATOR_DECODER)
         val tokenizerPath = utilityModelFilePort.resolveUtilityModelPath(UtilityType.TITLE_GENERATOR_TOKENIZER)
@@ -129,16 +127,11 @@ object TitleGenHarnessDiagnostics {
                         .bufferedReader()
                         .use { it.readText() },
                 )
-            val tokenizer = T5UnigramTokenizer.fromTokenizerJson(File(resolvedTokenizerPath).readText())
-            val inputIds =
-                tokenizer.encode(
-                    text = config.taskPrefix + userPrompt,
-                    eosTokenId = config.eosTokenId,
-                    maxLength = config.maxInputLength,
-                )
+            val tokenizer = Lfm2BpeTokenizer.fromTokenizerJson(File(resolvedTokenizerPath).readText())
+
             val preflight =
                 when {
-                    config.taskPrefix.isBlank() ->
+                    config.instruction.isBlank() ->
                         baseReport(
                             userPrompt = userPrompt,
                             encoderPath = resolvedEncoderPath,
@@ -149,68 +142,58 @@ object TitleGenHarnessDiagnostics {
                             config = config,
                             portGenerateTitle = portGenerateTitle,
                             stage = "config",
-                            detail = "Bundled task_prefix is blank",
-                        )
-                    inputIds.isEmpty() ->
-                        baseReport(
-                            userPrompt = userPrompt,
-                            encoderPath = resolvedEncoderPath,
-                            decoderPath = resolvedDecoderPath,
-                            tokenizerPath = resolvedTokenizerPath,
-                            encoderSize = encoderSize,
-                            encoderShaPrefix = encoderShaPrefix,
-                            config = config,
-                            portGenerateTitle = portGenerateTitle,
-                            stage = "tokenize",
-                            detail = "encode returned empty ids",
+                            detail = "Bundled instruction is blank",
                         )
                     else -> null
                 }
             if (preflight != null) return preflight
 
             val environment = OrtEnvironment.getEnvironment()
-            val encoderSession =
-                OrtSession.SessionOptions().use { options ->
-                    options.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.NO_OPT)
-                    environment.createSession(resolvedEncoderPath, options)
-                }
-            val decoderSession =
-                OrtSession.SessionOptions().use { options ->
-                    options.setOptimizationLevel(OrtSession.SessionOptions.OptLevel.NO_OPT)
-                    environment.createSession(resolvedDecoderPath, options)
-                }
-            encoderSession.use { encSession ->
-                decoderSession.use { decSession ->
-                    val generation =
-                        runGeneration(
-                            encoderSession = encSession,
-                            decoderSession = decSession,
-                            environment = environment,
-                            config = config,
-                            tokenizer = tokenizer,
-                            inputIds = inputIds,
-                        )
-                    val sanitized = ChatTitleSanitizer.sanitize(generation.rawDecode)
-                    val portTitle = portGenerateTitle(userPrompt)
-                    Report(
-                        userPrompt = userPrompt,
-                        encoderPath = resolvedEncoderPath,
-                        decoderPath = resolvedDecoderPath,
-                        tokenizerPath = resolvedTokenizerPath,
-                        modelSizeBytes = encoderSize,
-                        modelSha256Prefix = encoderShaPrefix,
-                        configPrefix = config.taskPrefix,
-                        inputTokenCount = inputIds.size,
-                        inputTailTokenIds = inputIds.takeLast(12).toList(),
-                        onnxOutputShape = generation.outputShape,
-                        generatedTokenIds = generation.tokenIds,
-                        rawDecode = generation.rawDecode,
-                        sanitizedTitle = sanitized,
-                        portGenerateTitle = portTitle,
-                        failureStage = generation.failureStage,
-                        failureDetail = generation.failureDetail,
+            val session = createSession(environment = environment, modelPath = resolvedEncoderPath)
+            session.use { openSession ->
+                val generation =
+                    runTitleGeneration(
+                        session = openSession,
+                        tokenizer = tokenizer,
+                        config = config,
+                        userMessage = userPrompt,
                     )
-                }
+                val sanitized = ChatTitleSanitizer.sanitize(generation.rawDecode)
+                val portTitle = portGenerateTitle(userPrompt)
+
+                // Compute approximate input token count from the assembled prompt.
+                val bosId = tokenizer.specialTokenId("<|startoftext|>")
+                val imStartId = tokenizer.specialTokenId("<|im_start|>")
+                val imEndId = tokenizer.specialTokenId("<|im_end|>")
+                val truncated = userPrompt.take(config.maxInputChars)
+                val promptIds: LongArray =
+                    (
+                        listOf(bosId.toLong(), imStartId.toLong()) +
+                            tokenizer.encode("user\n" + config.instruction + truncated).map { it.toLong() } +
+                            listOf(imEndId.toLong()) +
+                            tokenizer.encode("\n").map { it.toLong() } +
+                            listOf(imStartId.toLong()) +
+                            tokenizer.encode("assistant\n").map { it.toLong() }
+                    ).toLongArray()
+
+                Report(
+                    userPrompt = userPrompt,
+                    encoderPath = resolvedEncoderPath,
+                    decoderPath = resolvedDecoderPath,
+                    tokenizerPath = resolvedTokenizerPath,
+                    modelSizeBytes = encoderSize,
+                    modelSha256Prefix = encoderShaPrefix,
+                    configPrefix = config.instruction,
+                    inputTokenCount = promptIds.size,
+                    inputTailTokenIds = promptIds.takeLast(12).toList(),
+                    onnxOutputShape = generation.outputShape,
+                    generatedTokenIds = generation.tokenIds,
+                    rawDecode = generation.rawDecode,
+                    sanitizedTitle = sanitized,
+                    portGenerateTitle = portTitle,
+                    failureStage = generation.failureStage,
+                    failureDetail = generation.failureDetail,
+                )
             }
         } catch (e: Exception) {
             Log.w(LOG_TAG, "Harness run failed", e)
@@ -232,125 +215,6 @@ object TitleGenHarnessDiagnostics {
                 failureStage = "exception",
                 failureDetail = "${e.javaClass.simpleName}: ${e.message}",
             )
-        }
-    }
-
-    private data class GenerationResult(
-        val tokenIds: List<Int>,
-        val rawDecode: String?,
-        val outputShape: String?,
-        val failureStage: String?,
-        val failureDetail: String?,
-    )
-
-    private fun runGeneration(
-        encoderSession: OrtSession,
-        decoderSession: OrtSession,
-        environment: OrtEnvironment,
-        config: TitleGenAssetConfig,
-        tokenizer: T5UnigramTokenizer,
-        inputIds: LongArray,
-    ): GenerationResult {
-        val encoderHiddenStates =
-            runEncoder(
-                environment = environment,
-                session = encoderSession,
-                inputIds = inputIds,
-            )
-                ?: return GenerationResult(
-                    tokenIds = emptyList(),
-                    rawDecode = null,
-                    outputShape = null,
-                    failureStage = "encoder_forward",
-                    failureDetail = "Encoder returned no hidden states",
-                )
-
-        val seqLen = inputIds.size
-        val attentionMask = LongArray(seqLen) { 1L }
-        val encoderAttention =
-            OnnxTensor.createTensor(
-                environment,
-                LongBuffer.wrap(attentionMask),
-                longArrayOf(1, seqLen.toLong()),
-            )
-        var outputShape: String? = null
-        val generated =
-            try {
-                TitleGenBeamDecoder.decode(config) { decoderIds ->
-                    val decoderTensor =
-                        OnnxTensor.createTensor(
-                            environment,
-                            LongBuffer.wrap(decoderIds),
-                            longArrayOf(1, decoderIds.size.toLong()),
-                        )
-                    decoderTensor.use { tensor ->
-                        val decoderInputs =
-                            mapOf(
-                                "input_ids" to tensor,
-                                "encoder_attention_mask" to encoderAttention,
-                                "encoder_hidden_states" to encoderHiddenStates,
-                            )
-                        decoderSession.run(decoderInputs).use { result ->
-                            val logits = lastStepLogits(result[0].value)
-                            outputShape = logits?.size?.let { vocab -> "[1, ${decoderIds.size}, $vocab]" }
-                            logits
-                        }
-                    }
-                }
-            } finally {
-                encoderAttention.close()
-                encoderHiddenStates.close()
-            }
-        val rawDecode = tokenizer.decode(generated).trim()
-        val stage =
-            when {
-                generated.isEmpty() -> "decode"
-                rawDecode.isBlank() -> "decode"
-                else -> null
-            }
-        val detail =
-            when {
-                generated.isEmpty() -> "No tokens generated before EOS/PAD or max steps"
-                rawDecode.isBlank() -> "Decoded output blank after ${generated.size} tokens"
-                else -> null
-            }
-        return GenerationResult(
-            tokenIds = generated,
-            rawDecode = rawDecode,
-            outputShape = outputShape,
-            failureStage = stage,
-            failureDetail = detail,
-        )
-    }
-
-    private fun runEncoder(
-        environment: OrtEnvironment,
-        session: OrtSession,
-        inputIds: LongArray,
-    ): OnnxTensor? {
-        val seqLen = inputIds.size
-        val attentionMask = LongArray(seqLen) { 1L }
-        val inputs =
-            mapOf(
-                "input_ids" to
-                    OnnxTensor.createTensor(
-                        environment,
-                        LongBuffer.wrap(inputIds),
-                        longArrayOf(1, seqLen.toLong()),
-                    ),
-                "attention_mask" to
-                    OnnxTensor.createTensor(
-                        environment,
-                        LongBuffer.wrap(attentionMask),
-                        longArrayOf(1, seqLen.toLong()),
-                    ),
-            )
-        return try {
-            session.run(inputs).use { result ->
-                result[0] as? OnnxTensor
-            }
-        } finally {
-            inputs.values.forEach(OnnxTensor::close)
         }
     }
 
@@ -403,7 +267,7 @@ object TitleGenHarnessDiagnostics {
             tokenizerPath = tokenizerPath,
             modelSizeBytes = encoderSize,
             modelSha256Prefix = encoderShaPrefix,
-            configPrefix = config.taskPrefix,
+            configPrefix = config.instruction,
             inputTokenCount = -1,
             inputTailTokenIds = emptyList(),
             onnxOutputShape = null,
@@ -440,8 +304,8 @@ object TitleGenHarnessDiagnostics {
                 .listFiles()
                 ?.filter { file ->
                     file.name == "tokenizer.json" ||
-                        file.name.startsWith("encoder_model") ||
-                        file.name.startsWith("decoder_model")
+                        file.name == "model_q4.onnx" ||
+                        file.name == "model_q4.onnx_data"
                 }
                 ?.sortedBy { it.name }
                 .orEmpty()

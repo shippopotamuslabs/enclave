@@ -20,19 +20,19 @@ adb install -r "$APP_APK" || {
   exit 1
 }
 
-ENCODER="$DIST_DIR/encoder_model_fp16.onnx"
-DECODER="$DIST_DIR/decoder_model_fp16.onnx"
+MODEL="$DIST_DIR/model_q4.onnx"
+MODEL_DATA="$DIST_DIR/model_q4.onnx_data"
 TOKENIZER="$DIST_DIR/tokenizer.json"
 
-if [[ -f "$ENCODER" && -f "$DECODER" && -f "$TOKENIZER" ]]; then
-  echo "Staging T5 title generator assets on device (app copies into sandbox)..."
+if [[ -f "$MODEL" && -f "$MODEL_DATA" && -f "$TOKENIZER" ]]; then
+  echo "Staging LFM2.5 title generator assets on device (app copies into sandbox)..."
   adb shell "rm -rf /storage/emulated/0/Android/data/${APP_ID}/files/models"
   adb shell "mkdir -p $STAGING_DIR"
   adb push "$TOKENIZER" "$STAGING_DIR/tokenizer.json"
-  adb push "$ENCODER" "$STAGING_DIR/encoder_model_fp16.onnx"
-  adb push "$DECODER" "$STAGING_DIR/decoder_model_fp16.onnx"
+  adb push "$MODEL" "$STAGING_DIR/model_q4.onnx"
+  adb push "$MODEL_DATA" "$STAGING_DIR/model_q4.onnx_data"
 else
-  echo "WARN: $DIST_DIR T5 assets missing; harness will only work if models are already staged on device"
+  echo "WARN: $DIST_DIR LFM2.5 assets missing; harness will only work if models are already staged on device"
 fi
 
 echo "Running harness (prompt=$PROMPT)..."

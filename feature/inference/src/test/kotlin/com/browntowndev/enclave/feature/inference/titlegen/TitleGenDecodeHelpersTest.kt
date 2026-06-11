@@ -2,8 +2,13 @@ package com.browntowndev.enclave.feature.inference.titlegen
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
+/**
+ * Unit tests for decode helpers that survive the LFM2 rewrite:
+ * [argmax], [lastStepLogits], and [describeLogitsHealth].
+ */
 class TitleGenDecodeHelpersTest {
     @Test
     fun `argmax returns index of largest value`() {
@@ -32,5 +37,15 @@ class TitleGenDecodeHelpersTest {
         assertNull(lastStepLogits(null))
         assertNull(lastStepLogits("not a tensor"))
         assertNull(lastStepLogits(arrayOf<Any?>()))
+    }
+
+    @Test
+    fun `describeLogitsHealth counts nan and inf and includes top5`() {
+        val logits = floatArrayOf(Float.NaN, Float.POSITIVE_INFINITY, Float.NEGATIVE_INFINITY, 1.0f, 2.0f)
+        val description = describeLogitsHealth(logits)
+        assertTrue(description.contains("nan=1"))
+        assertTrue(description.contains("+inf=1"))
+        assertTrue(description.contains("-inf=1"))
+        assertTrue(description.contains("top5="))
     }
 }

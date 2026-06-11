@@ -1,8 +1,7 @@
-# Chat title generator (Dafilab/flan-t5-small ONNX export)
-#   scripts/.venv_classifier/bin/pip install -r scripts/requirements-chat-title.txt
-#   scripts/.venv_classifier/bin/python scripts/export_chat_title_generator_onnx.py
-onnx>=1.16.0
-onnxruntime>=1.20.0
-optimum[onnxruntime]>=1.23.0
-sentencepiece>=0.2.0
-transformers>=4.46.0
+# Chat title generator (LiquidAI/LFM2.5-350M-ONNX q4 packaging)
+#   .venv-titlegen/bin/pip install -r scripts/requirements-chat-title.txt
+#   .venv-titlegen/bin/python scripts/package_chat_title_generator.py
+onnxruntime>=1.20
+tokenizers>=0.20
+requests
+numpy
