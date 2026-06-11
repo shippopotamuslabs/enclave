@@ -308,14 +308,28 @@ class LiveVoiceCoordinator
             updateActiveUiState()
             if (isMuted) return
 
+            val mayUploadMic =
+                shouldUseFullDuplexCapture() || _state.value !is LiveVoiceUiState.AssistantSpeaking
             val uploadFrame =
                 when (_state.value) {
                     is LiveVoiceUiState.Listening -> {
-                        bargeInHighEnergyFrameCount = 0
-                        RealtimeAudioCaptureGain.amplifyPcm16Le(frame, LISTENING_MIC_UPLOAD_GAIN)
+                        // Tail playback can still be draining while UI is Listening; keep counting
+                        // consecutive loud frames so local barge-in can stop buffered audio.
+                        if (!playbackStarted) {
+                            bargeInHighEnergyFrameCount = 0
+                        }
+                        if (mayUploadMic) {
+                            RealtimeAudioCaptureGain.amplifyPcm16Le(frame, LISTENING_MIC_UPLOAD_GAIN)
+                        } else {
+                            null
+                        }
                     }
                     is LiveVoiceUiState.AssistantSpeaking ->
-                        RealtimeAudioCaptureGain.amplifyPcm16Le(frame, ASSISTANT_MIC_UPLOAD_GAIN)
+                        if (mayUploadMic) {
+                            RealtimeAudioCaptureGain.amplifyPcm16Le(frame, ASSISTANT_MIC_UPLOAD_GAIN)
+                        } else {
+                            null
+                        }
                     else -> null
                 }
             uploadFrame?.let { session?.sendAudio(it) }
@@ -820,7 +834,7 @@ class LiveVoiceCoordinator
             private const val BARGE_IN_RMS_THRESHOLD = 0.015f
             private const val MIN_BARGE_IN_RMS_THRESHOLD = 0.012f
             private const val BARGE_IN_BASELINE_MARGIN = 0.01f
-            private const val BARGE_IN_CONSECUTIVE_FRAMES = 1
+            private const val BARGE_IN_CONSECUTIVE_FRAMES = 3
             private const val BASELINE_EMA_RETAIN = 0.95f
             private const val BASELINE_EMA_ADOPT = 0.05f
             private const val ASSISTANT_LEVEL_WINDOW_BYTES = 960
