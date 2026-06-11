@@ -61,4 +61,44 @@ class GeminiLiveEventParsingTest {
 
         assertEquals(LiveVoiceEvent.AssistantTranscriptDelta("hello"), result)
     }
+
+    @Test
+    @DisplayName("LV-TOOL-050")
+    fun lvTool050_geminiToolCallParser() {
+        val json =
+            """
+            {"serverContent":{"toolCall":{"functionCalls":[{"id":"fc_9","name":"manage_memories","args":{"action":"search","query":"favorite color"}}]}}}
+            """.trimIndent()
+
+        val result = parseGeminiLiveEvents(json)
+
+        assertEquals(1, result.size)
+        assertEquals(
+            LiveVoiceEvent.ToolCallRequested(
+                callId = "fc_9",
+                name = "manage_memories",
+                argumentsJson = """{"action":"search","query":"favorite color"}""",
+            ),
+            result.single(),
+        )
+    }
+
+    @Test
+    @DisplayName("LV-TOOL-023")
+    fun lvTool023_geminiMultipleFunctionCalls() {
+        val json =
+            """
+            {"serverContent":{"toolCall":{"functionCalls":[{"id":"fc_1","name":"web_search","args":{"query":"a"}},{"id":"fc_2","name":"web_extract","args":{"url":"https://example.com"}}]}}}
+            """.trimIndent()
+
+        val result = parseGeminiLiveEvents(json)
+
+        assertEquals(2, result.size)
+        val first = result[0] as LiveVoiceEvent.ToolCallRequested
+        val second = result[1] as LiveVoiceEvent.ToolCallRequested
+        assertEquals("fc_1", first.callId)
+        assertEquals("web_search", first.name)
+        assertEquals("fc_2", second.callId)
+        assertEquals("web_extract", second.name)
+    }
 }

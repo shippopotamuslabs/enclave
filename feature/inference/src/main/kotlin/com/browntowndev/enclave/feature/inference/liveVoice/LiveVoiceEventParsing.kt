@@ -14,13 +14,80 @@ private val liveVoiceJson =
         ignoreUnknownKeys = true
     }
 
-fun parseOpenAiRealtimeEvent(json: String): LiveVoiceEvent? {
+fun parseOpenAiRealtimeEvents(json: String): List<LiveVoiceEvent> {
     val root =
         runCatching { liveVoiceJson.parseToJsonElement(json).jsonObject }
-            .getOrNull() ?: return null
-    val type = root["type"]?.jsonPrimitive?.contentOrNull ?: return null
+            .getOrNull() ?: return emptyList()
+    val type = root["type"]?.jsonPrimitive?.contentOrNull ?: return emptyList()
 
     return when (type) {
+        "response.output_item.done" -> parseOpenAiOutputItemDone(root)
+        "response.done", "response.completed" -> parseOpenAiResponseDone(root)
+        else -> parseOpenAiRealtimeSingleEvent(root, type)?.let { listOf(it) } ?: emptyList()
+    }
+}
+
+fun parseOpenAiRealtimeEvent(json: String): LiveVoiceEvent? =
+    parseOpenAiRealtimeEvents(json).singleOrNull()
+
+fun parseGeminiLiveEvents(json: String): List<LiveVoiceEvent> {
+    val root =
+        runCatching { liveVoiceJson.parseToJsonElement(json).jsonObject }
+            .getOrNull() ?: return emptyList()
+
+    if (root.containsKey("setupComplete")) return listOf(LiveVoiceEvent.Connected)
+
+    val serverContent = root["serverContent"]?.jsonObject ?: return emptyList()
+    val toolCallEvents = parseGeminiToolCallEvents(serverContent)
+    if (toolCallEvents.isNotEmpty()) return toolCallEvents
+
+    return parseGeminiLiveSingleEvent(root)?.let { listOf(it) } ?: emptyList()
+}
+
+fun parseGeminiLiveEvent(json: String): LiveVoiceEvent? =
+    parseGeminiLiveEvents(json).singleOrNull()
+
+private fun parseOpenAiOutputItemDone(root: JsonObject): List<LiveVoiceEvent> {
+    val item = root["item"]?.jsonObject
+    val toolCall =
+        if (item != null && item["type"]?.jsonPrimitive?.contentOrNull == "function_call") {
+            val callId = item["call_id"]?.jsonPrimitive?.contentOrNull
+            val name = item["name"]?.jsonPrimitive?.contentOrNull
+            val arguments = item["arguments"]?.jsonPrimitive?.contentOrNull
+            if (callId != null && name != null && arguments != null) {
+                LiveVoiceEvent.ToolCallRequested(callId, name, arguments)
+            } else {
+                null
+            }
+        } else {
+            null
+        }
+    return toolCall?.let { listOf(it) } ?: emptyList()
+}
+
+private fun parseOpenAiResponseDone(root: JsonObject): List<LiveVoiceEvent> {
+    val events = mutableListOf<LiveVoiceEvent>()
+    root["response"]
+        ?.jsonObject
+        ?.get("output")
+        ?.jsonArray
+        ?.forEach { item ->
+            val itemObject = item.jsonObject
+            if (itemObject["type"]?.jsonPrimitive?.contentOrNull != "function_call") return@forEach
+            val callId = itemObject["call_id"]?.jsonPrimitive?.contentOrNull ?: return@forEach
+            val name = itemObject["name"]?.jsonPrimitive?.contentOrNull ?: return@forEach
+            val arguments = itemObject["arguments"]?.jsonPrimitive?.contentOrNull ?: return@forEach
+            events.add(LiveVoiceEvent.ToolCallRequested(callId, name, arguments))
+        }
+    events.add(LiveVoiceEvent.AssistantResponseComplete)
+    return events
+}
+
+private fun parseOpenAiRealtimeSingleEvent(
+    root: JsonObject,
+    type: String,
+): LiveVoiceEvent? =
+    when (type) {
         "conversation.item.input_audio_transcription.delta" ->
             root["delta"]?.jsonPrimitive?.contentOrNull?.let(LiveVoiceEvent::UserTranscriptDelta)
 
@@ -44,11 +111,6 @@ fun parseOpenAiRealtimeEvent(json: String): LiveVoiceEvent? {
         ->
             root["delta"]?.jsonPrimitive?.contentOrNull?.decodeBase64Pcm16()?.let(LiveVoiceEvent::AssistantAudioChunk)
 
-        // Only terminal response events — audio.done fires before the transcript is final.
-        "response.done",
-        "response.completed",
-        -> LiveVoiceEvent.AssistantResponseComplete
-
         "input_audio_buffer.speech_started" -> LiveVoiceEvent.SpeechStarted
         "input_audio_buffer.speech_stopped" -> LiveVoiceEvent.SpeechStopped
         "session.created" -> LiveVoiceEvent.Connected
@@ -66,28 +128,30 @@ fun parseOpenAiRealtimeEvent(json: String): LiveVoiceEvent? {
 
         else -> null
     }
-}
 
-fun parseGeminiLiveEvent(json: String): LiveVoiceEvent? {
-    val root =
-        runCatching { liveVoiceJson.parseToJsonElement(json).jsonObject }
-            .getOrNull() ?: return null
-
-    return when {
-        root.containsKey("setupComplete") -> LiveVoiceEvent.Connected
-        else -> parseGeminiServerContent(root["serverContent"]?.jsonObject)
+private fun parseGeminiToolCallEvents(serverContent: JsonObject): List<LiveVoiceEvent> {
+    val functionCalls =
+        serverContent["toolCall"]
+            ?.jsonObject
+            ?.get("functionCalls")
+            ?.jsonArray
+            ?: return emptyList()
+    return functionCalls.mapNotNull { call ->
+        val callObject = call.jsonObject
+        val id = callObject["id"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+        val name = callObject["name"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+        val args = callObject["args"]?.jsonObject ?: return@mapNotNull null
+        LiveVoiceEvent.ToolCallRequested(id, name, args.toString())
     }
 }
 
-private fun parseGeminiServerContent(serverContent: JsonObject?): LiveVoiceEvent? {
-    if (serverContent == null) return null
-
+private fun parseGeminiLiveSingleEvent(root: JsonObject): LiveVoiceEvent? {
+    val serverContent = root["serverContent"]?.jsonObject ?: return null
     return when {
         serverContent["turnComplete"]?.jsonPrimitive?.contentOrNull?.toBooleanStrictOrNull() == true ->
             LiveVoiceEvent.AssistantResponseComplete
 
-        else ->
-            parseGeminiServerContentPayload(serverContent)
+        else -> parseGeminiServerContentPayload(serverContent)
     }
 }
 

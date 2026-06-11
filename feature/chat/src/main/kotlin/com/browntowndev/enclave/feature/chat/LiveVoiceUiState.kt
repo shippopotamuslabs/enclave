@@ -16,6 +16,7 @@ sealed interface LiveVoiceUiState {
         val assistantCaption: String,
         val isMuted: Boolean,
         val micLevel: Float,
+        val toolStatusCaption: String? = null,
     ) : LiveVoiceUiState
 
     @Immutable
@@ -24,6 +25,7 @@ sealed interface LiveVoiceUiState {
         val assistantCaption: String,
         val isMuted: Boolean,
         val audioLevel: Float,
+        val toolStatusCaption: String? = null,
     ) : LiveVoiceUiState
 
     @Immutable

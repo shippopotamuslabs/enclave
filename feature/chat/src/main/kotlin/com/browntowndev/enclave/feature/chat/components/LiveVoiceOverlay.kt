@@ -41,6 +41,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -71,6 +72,7 @@ fun LiveVoiceOverlay(
     val isConnecting = state is LiveVoiceUiState.Connecting
     val errorState = state as? LiveVoiceUiState.Error
     val isAssistantSpeaking = speakingState != null
+    val toolStatusCaption = listeningState?.toolStatusCaption ?: speakingState?.toolStatusCaption
     val isAudioMotionActive =
         when {
             isConnecting || errorState != null -> false
@@ -136,6 +138,17 @@ fun LiveVoiceOverlay(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onBackground,
+                )
+            }
+
+            if (toolStatusCaption != null) {
+                Text(
+                    text = toolStatusCaption,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    fontStyle = FontStyle.Italic,
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
 

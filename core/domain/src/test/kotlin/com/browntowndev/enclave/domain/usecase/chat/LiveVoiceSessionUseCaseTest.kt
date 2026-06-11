@@ -3,6 +3,7 @@ package com.browntowndev.enclave.domain.usecase.chat
 import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderAsset
 import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
+import com.browntowndev.enclave.domain.model.inference.LiveVoiceToolset
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.media.LiveVoicePort
 import com.browntowndev.enclave.domain.port.media.LiveVoiceSession
@@ -10,6 +11,7 @@ import com.browntowndev.enclave.domain.port.security.ApiKeyProviderPort
 import com.browntowndev.enclave.domain.usecase.settings.ResolveAssignedModelSelectionUseCase
 import com.browntowndev.enclave.domain.usecase.settings.ResolvedAssignedModelSelection
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.runTest
@@ -34,6 +36,12 @@ class LiveVoiceSessionUseCaseTest {
             override suspend fun cancelAssistantResponse() = Unit
 
             override suspend fun close() = Unit
+
+            override suspend fun sendToolResult(
+                callId: String,
+                name: String,
+                resultJson: String,
+            ) = Unit
         }
 
     private val liveVoiceAsset =
@@ -61,7 +69,9 @@ class LiveVoiceSessionUseCaseTest {
             coEvery { resolveAssignedModelSelectionUseCase(ModelType.LIVE_VOICE) } returns
                 ResolvedAssignedModelSelection(liveVoiceAsset = liveVoiceAsset)
             coEvery { apiKeyProvider.getApiKey("alias") } returns "sk-live"
-            coEvery { liveVoicePort.openSession(liveVoiceAsset, "sk-live") } returns Result.success(fakeSession)
+            coEvery {
+                liveVoicePort.openSession(liveVoiceAsset, "sk-live", tools = LiveVoiceToolset.tools)
+            } returns Result.success(fakeSession)
 
             val result = useCase()
 
@@ -113,5 +123,45 @@ class LiveVoiceSessionUseCaseTest {
             val error = result.exceptionOrNull()
             assertTrue(error is IllegalStateException)
             assertEquals("Assigned Live Voice selection is invalid.", error?.message)
+        }
+
+    @Test
+    @DisplayName("LV-TOOL-002")
+    fun lvTool002_useCaseForwardsLiveVoiceToolsetTools() =
+        runTest {
+            coEvery { resolveAssignedModelSelectionUseCase(ModelType.LIVE_VOICE) } returns
+                ResolvedAssignedModelSelection(liveVoiceAsset = liveVoiceAsset)
+            coEvery { apiKeyProvider.getApiKey("alias") } returns "sk-live"
+            coEvery {
+                liveVoicePort.openSession(liveVoiceAsset, "sk-live", tools = LiveVoiceToolset.tools)
+            } returns Result.success(fakeSession)
+
+            val result = useCase()
+
+            assertTrue(result.isSuccess)
+            assertEquals(fakeSession, result.getOrNull()?.session)
+            assertEquals(liveVoiceAsset, result.getOrNull()?.asset)
+            coVerify(exactly = 1) {
+                liveVoicePort.openSession(liveVoiceAsset, "sk-live", tools = LiveVoiceToolset.tools)
+            }
+        }
+
+    @Test
+    @DisplayName("LV-TOOL-MUT-002")
+    fun lvToolMut002_useCaseMustPassWhitelistNotEmptyList() =
+        runTest {
+            coEvery { resolveAssignedModelSelectionUseCase(ModelType.LIVE_VOICE) } returns
+                ResolvedAssignedModelSelection(liveVoiceAsset = liveVoiceAsset)
+            coEvery { apiKeyProvider.getApiKey("alias") } returns "sk-live"
+            coEvery { liveVoicePort.openSession(any(), any(), any()) } returns Result.success(fakeSession)
+
+            useCase()
+
+            coVerify(exactly = 1) {
+                liveVoicePort.openSession(liveVoiceAsset, "sk-live", tools = LiveVoiceToolset.tools)
+            }
+            coVerify(exactly = 0) {
+                liveVoicePort.openSession(any(), any(), tools = emptyList())
+            }
         }
 }

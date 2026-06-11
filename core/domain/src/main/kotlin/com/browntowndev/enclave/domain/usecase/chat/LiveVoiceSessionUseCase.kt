@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.domain.usecase.chat
 
+import com.browntowndev.enclave.domain.model.inference.LiveVoiceToolset
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.media.LiveVoicePort
 import com.browntowndev.enclave.domain.port.security.ApiKeyProviderPort
@@ -28,8 +29,10 @@ class LiveVoiceSessionUseCase
                         IllegalStateException("API key not found for Live Voice provider: ${asset.displayName}"),
                     )
 
-            return liveVoicePort.openSession(asset, apiKey).map { session ->
-                LiveVoiceSessionOpenResult(session = session, asset = asset)
-            }
+            return liveVoicePort
+                .openSession(asset, apiKey, tools = LiveVoiceToolset.tools)
+                .map { session ->
+                    LiveVoiceSessionOpenResult(session = session, asset = asset)
+                }
         }
     }

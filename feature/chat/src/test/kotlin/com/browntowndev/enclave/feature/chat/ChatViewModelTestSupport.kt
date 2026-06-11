@@ -13,6 +13,7 @@ import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.domain.usecase.artifact.ExportArtifactDocumentsUseCase
 import com.browntowndev.enclave.domain.port.media.RealtimeAudioCapturePort
 import com.browntowndev.enclave.domain.port.media.StreamingAudioPlayerPort
+import com.browntowndev.enclave.domain.port.media.VoiceChatAudioRoutePort
 import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
 import com.browntowndev.enclave.domain.usecase.chat.GetModelDisplayNameUseCase
 import com.browntowndev.enclave.domain.usecase.chat.StageImageAttachmentUseCase
@@ -195,6 +196,8 @@ object ChatViewModelTestSupport {
                 streamingAudioPlayer = mockk<StreamingAudioPlayerPort>(relaxed = true),
                 errorHandler = errorHandler,
                 loggingPort = loggingPort,
+                toolExecutorPort = mockk(relaxed = true),
+                voiceChatAudioRoute = mockk(relaxed = true),
             )
 
         return Harness(

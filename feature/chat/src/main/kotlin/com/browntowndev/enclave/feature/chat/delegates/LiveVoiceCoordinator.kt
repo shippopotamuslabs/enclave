@@ -5,17 +5,24 @@ import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderAsset
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
+import com.browntowndev.enclave.domain.model.inference.ModelType
+import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
+import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
 import com.browntowndev.enclave.domain.port.media.LiveVoiceEvent
 import com.browntowndev.enclave.domain.port.media.LiveVoiceSession
 import com.browntowndev.enclave.domain.port.media.RealtimeAudioCapturePort
 import com.browntowndev.enclave.domain.port.media.RealtimeCaptureEvent
 import com.browntowndev.enclave.domain.port.media.StreamingAudioConfig
 import com.browntowndev.enclave.domain.port.media.StreamingAudioPlayerPort
+import com.browntowndev.enclave.domain.port.media.VoiceChatAudioRoutePort
 import com.browntowndev.enclave.domain.usecase.chat.LiveVoiceSessionUseCase
 import com.browntowndev.enclave.domain.usecase.chat.PersistVoiceTurnUseCase
 import com.browntowndev.enclave.feature.chat.LiveVoiceUiState
 import com.browntowndev.enclave.feature.inference.media.RealtimeAudioCaptureGain
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -28,10 +35,14 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import java.util.ArrayDeque
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import kotlin.math.min
 import kotlin.math.sqrt
@@ -45,6 +56,8 @@ class LiveVoiceCoordinator
         private val streamingAudioPlayer: StreamingAudioPlayerPort,
         private val errorHandler: ViewModelErrorHandler,
         private val loggingPort: LoggingPort,
+        private val toolExecutorPort: ToolExecutorPort,
+        private val voiceChatAudioRoute: VoiceChatAudioRoutePort,
     ) {
         private val _state = MutableStateFlow<LiveVoiceUiState>(LiveVoiceUiState.Idle)
         val state: StateFlow<LiveVoiceUiState> = _state.asStateFlow()
@@ -60,6 +73,11 @@ class LiveVoiceCoordinator
         private var endJob: Job? = null
         private var sessionGeneration: Int = 0
         private var isTearingDown: Boolean = false
+
+        private var currentAsset: LiveVoiceProviderAsset? = null
+        private val toolJobs = ConcurrentHashMap<String, Job>()
+        private val acceptedToolCallIds = ConcurrentHashMap.newKeySet<String>()
+        private var toolStatusCaption: String? = null
 
         private var chatId: ChatId? = null
         private var userCaption: String = ""
@@ -114,6 +132,7 @@ class LiveVoiceCoordinator
                     assistantTranscriptFinalized = false
                     responseCompleteAwaitingTranscript = false
                     assistantResponseCancelled = false
+                    acceptedToolCallIds.clear()
                     latestMicLevel = 0f
                     resetAssistantAudioVisualization()
                     _state.value = LiveVoiceUiState.Connecting
@@ -125,6 +144,7 @@ class LiveVoiceCoordinator
                             liveVoiceSessionUseCase().fold(
                                 onSuccess = { openResult ->
                                     if (generation != sessionGeneration) return@launch
+                                    currentAsset = openResult.asset
                                     applyProviderConfig(openResult.asset)
                                     session = openResult.session
                                     subscribeToEvents(scope, generation, openResult.session)
@@ -331,6 +351,9 @@ class LiveVoiceCoordinator
 
         private suspend fun interruptAssistantOutput(persistPartialTurn: Boolean) {
             if (userBargeInActive && suppressAssistantOutput) return
+            toolJobs.values.forEach { it.cancel() }
+            toolJobs.clear()
+            toolStatusCaption = null
             if (persistPartialTurn && userCaption.isNotBlank()) {
                 persistCurrentTurnOnce()
             }
@@ -436,6 +459,7 @@ class LiveVoiceCoordinator
                             assistantCaption = assistantCaption,
                             isMuted = isMuted,
                             micLevel = latestMicLevel,
+                            toolStatusCaption = toolStatusCaption,
                         )
                     is LiveVoiceUiState.AssistantSpeaking ->
                         current.copy(
@@ -443,12 +467,18 @@ class LiveVoiceCoordinator
                             assistantCaption = assistantCaption,
                             isMuted = isMuted,
                             audioLevel = latestAssistantAudioLevel,
+                            toolStatusCaption = toolStatusCaption,
                         )
                     else -> current
                 }
         }
 
         private fun stopJobsAndPlayback() {
+            toolJobs.values.forEach { it.cancel() }
+            toolJobs.clear()
+            acceptedToolCallIds.clear()
+            toolStatusCaption = null
+            voiceChatAudioRoute.deactivateSpeakerphone()
             captureJob?.cancel()
             captureJob = null
             eventsJob?.cancel()
@@ -503,6 +533,7 @@ class LiveVoiceCoordinator
             isTearingDown = true
             val sessionToClose = session
             session = null
+            currentAsset = null
             stopJobsAndPlayback()
             if (sessionToClose != null) {
                 sessionTeardownScope.launch {
@@ -518,6 +549,72 @@ class LiveVoiceCoordinator
                 _state.value = LiveVoiceUiState.Idle
             }
         }
+
+        private inner class ToolCallExecutor {
+            fun handleRequested(event: LiveVoiceEvent.ToolCallRequested) {
+                val scope = activeScope ?: return
+                if (!acceptedToolCallIds.add(event.callId)) {
+                    loggingPort.debug(
+                        TAG,
+                        "Ignoring duplicate Live Voice tool call id=${event.callId} name=${event.name}",
+                    )
+                    return
+                }
+                val generation = sessionGeneration
+                toolJobs[event.callId]?.cancel()
+                val job =
+                    scope.launch {
+                        val displayName = ToolDefinition.fromName(event.name)?.displayName
+                        if (displayName != null) {
+                            toolStatusCaption = displayName
+                            updateActiveUiState()
+                        }
+                        try {
+                            val result =
+                                withContext(toolExecutionDispatcher) {
+                                    toolExecutorPort.execute(
+                                        ToolCallRequest(
+                                            toolName = event.name,
+                                            argumentsJson = event.argumentsJson,
+                                            provider = currentAsset?.provider?.name ?: "UNKNOWN",
+                                            modelType = ModelType.LIVE_VOICE,
+                                            chatId = chatId,
+                                        ),
+                                    )
+                                }
+                            if (generation != sessionGeneration) return@launch
+                            session?.sendToolResult(event.callId, event.name, result.resultJson)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            loggingPort.error(
+                                TAG,
+                                "Live Voice tool failed id=${event.callId} name=${event.name}: ${e.message}",
+                                e,
+                            )
+                            if (generation != sessionGeneration) return@launch
+                            val errorJson = buildToolErrorJson(e.message)
+                            runCatching {
+                                session?.sendToolResult(event.callId, event.name, errorJson)
+                            }
+                        } finally {
+                            toolJobs.remove(event.callId, coroutineContext.job)
+                            if (toolJobs.isEmpty()) {
+                                toolStatusCaption = null
+                                updateActiveUiState()
+                            }
+                        }
+                    }
+                toolJobs[event.callId] = job
+            }
+
+            private fun buildToolErrorJson(message: String?): String =
+                buildJsonObject {
+                    put("error", message ?: "tool execution failed")
+                }.toString()
+        }
+
+        private val toolCallExecutor = ToolCallExecutor()
 
         private inner class SessionEventRouter {
             suspend fun handle(event: LiveVoiceEvent) {
@@ -535,10 +632,13 @@ class LiveVoiceCoordinator
                     LiveVoiceEvent.Closed -> handleClosed()
                     LiveVoiceEvent.AssistantResponseComplete -> handleAssistantResponseComplete()
                     LiveVoiceEvent.SpeechStopped -> handleSpeechStopped()
+                    is LiveVoiceEvent.ToolCallRequested ->
+                        toolCallExecutor.handleRequested(event)
                 }
             }
 
             private fun handleConnected() {
+                voiceChatAudioRoute.activateSpeakerphone()
                 _state.value =
                     LiveVoiceUiState.Listening(
                         userCaption = userCaption,
@@ -605,6 +705,7 @@ class LiveVoiceCoordinator
                         assistantCaption = assistantCaption,
                         isMuted = isMuted,
                         audioLevel = latestAssistantAudioLevel,
+                        toolStatusCaption = toolStatusCaption,
                     )
             }
 
@@ -661,6 +762,13 @@ class LiveVoiceCoordinator
             @VisibleForTesting
             @JvmStatic
             var sessionTeardownScopeOverride: CoroutineScope? = null
+
+            @VisibleForTesting
+            @JvmStatic
+            var toolExecutionDispatcherOverride: CoroutineDispatcher? = null
+
+            private val toolExecutionDispatcher: CoroutineDispatcher
+                get() = toolExecutionDispatcherOverride ?: Dispatchers.IO
 
             private val sessionTeardownScope: CoroutineScope
                 get() =

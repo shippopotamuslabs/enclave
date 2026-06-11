@@ -7,7 +7,12 @@ import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderAsset
 import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
+import com.browntowndev.enclave.domain.model.inference.ModelType
+import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
+import com.browntowndev.enclave.domain.model.inference.ToolDefinition
+import com.browntowndev.enclave.domain.model.inference.ToolExecutionResult
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
 import com.browntowndev.enclave.domain.port.media.LiveVoiceEvent
 import com.browntowndev.enclave.domain.port.media.LiveVoiceSession
 import com.browntowndev.enclave.domain.port.media.RealtimeAudioCapturePort
@@ -15,6 +20,7 @@ import com.browntowndev.enclave.domain.port.media.RealtimeCaptureEvent
 import com.browntowndev.enclave.domain.port.media.RealtimeCaptureSessionInfo
 import com.browntowndev.enclave.domain.port.media.StreamingAudioConfig
 import com.browntowndev.enclave.domain.port.media.StreamingAudioPlayerPort
+import com.browntowndev.enclave.domain.port.media.VoiceChatAudioRoutePort
 import com.browntowndev.enclave.domain.usecase.chat.LiveVoiceSessionOpenResult
 import com.browntowndev.enclave.domain.usecase.chat.LiveVoiceSessionUseCase
 import com.browntowndev.enclave.domain.usecase.chat.PersistVoiceTurnUseCase
@@ -31,12 +37,14 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
@@ -51,6 +59,8 @@ class LiveVoiceCoordinatorTest {
     private val persistVoiceTurnUseCase = mockk<PersistVoiceTurnUseCase>(relaxed = true)
     private val errorHandler = mockk<ViewModelErrorHandler>()
     private val loggingPort = mockk<LoggingPort>(relaxed = true)
+    private val toolExecutorPort = mockk<ToolExecutorPort>()
+    private val voiceChatAudioRoute = mockk<VoiceChatAudioRoutePort>(relaxed = true)
 
     private val liveVoiceAsset =
         LiveVoiceProviderAsset(
@@ -72,6 +82,7 @@ class LiveVoiceCoordinatorTest {
     fun setUp() {
         LiveVoiceCoordinator.sessionTeardownScopeOverride =
             CoroutineScope(UnconfinedTestDispatcher())
+        LiveVoiceCoordinator.toolExecutionDispatcherOverride = UnconfinedTestDispatcher()
 
         every {
             errorHandler.coroutineExceptionHandler(any(), any(), any())
@@ -89,12 +100,15 @@ class LiveVoiceCoordinatorTest {
                 streamingAudioPlayer = fakePlayer,
                 errorHandler = errorHandler,
                 loggingPort = loggingPort,
+                toolExecutorPort = toolExecutorPort,
+                voiceChatAudioRoute = voiceChatAudioRoute,
             )
     }
 
     @AfterEach
     fun tearDown() {
         LiveVoiceCoordinator.sessionTeardownScopeOverride = null
+        LiveVoiceCoordinator.toolExecutionDispatcherOverride = null
     }
 
     private fun stubOpenSession() {
@@ -126,6 +140,8 @@ class LiveVoiceCoordinatorTest {
                 val listening = awaitItem() as LiveVoiceUiState.Listening
                 assertFalse(listening.isMuted)
             }
+
+            verify(exactly = 1) { voiceChatAudioRoute.activateSpeakerphone() }
         }
 
     @Test
@@ -445,6 +461,8 @@ class LiveVoiceCoordinatorTest {
                     streamingAudioPlayer = slowPlayer,
                     errorHandler = errorHandler,
                     loggingPort = loggingPort,
+                    toolExecutorPort = toolExecutorPort,
+                    voiceChatAudioRoute = voiceChatAudioRoute,
                 )
 
             coordinator.start(scope, chatId = null)
@@ -835,9 +853,321 @@ class LiveVoiceCoordinatorTest {
             }
         }
 
+    private suspend fun TestScope.startActiveCoordinator(chatId: ChatId = ChatId("c1")): CoroutineScope {
+        stubOpenSession()
+        val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
+        coordinator.start(scope, chatId)
+        fakeSession.emit(LiveVoiceEvent.Connected)
+        fakeCapture.emitSession(echoCancellationActive = true)
+        advanceUntilIdle()
+        return scope
+    }
+
+    private suspend fun TestScope.suspendToolExecutor(
+        result: ToolExecutionResult = ToolExecutionResult(toolName = "web_search", resultJson = """{"results":[]}"""),
+    ): Pair<CompletableDeferred<Unit>, CompletableDeferred<Unit>> {
+        val started = CompletableDeferred<Unit>()
+        val gate = CompletableDeferred<Unit>()
+        coEvery { toolExecutorPort.execute(any()) } coAnswers {
+            started.complete(Unit)
+            gate.await()
+            result
+        }
+        return started to gate
+    }
+
+    @Test
+    @DisplayName("LV-TOOL-067")
+    fun lvTool067_duplicateToolCallIdExecutesOnce() =
+        runTest {
+            coEvery { toolExecutorPort.execute(any()) } returns
+                ToolExecutionResult(toolName = "web_search", resultJson = """{"results":[]}""")
+            startActiveCoordinator()
+
+            val duplicateEvent =
+                LiveVoiceEvent.ToolCallRequested(
+                    callId = "call_dup",
+                    name = "web_search",
+                    argumentsJson = """{"query":"weather"}""",
+                )
+            fakeSession.emit(duplicateEvent)
+            fakeSession.emit(duplicateEvent)
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { toolExecutorPort.execute(any()) }
+            assertEquals(1, fakeSession.sendToolResultInvocations.size)
+            val listening = coordinator.state.value as LiveVoiceUiState.Listening
+            assertNull(listening.toolStatusCaption)
+        }
+
+    @Test
+    @DisplayName("LV-TOOL-060")
+    fun lvTool060_happyPathToolExecution() =
+        runTest {
+            coEvery {
+                toolExecutorPort.execute(
+                    ToolCallRequest(
+                        toolName = "web_search",
+                        argumentsJson = """{"query":"test"}""",
+                        provider = "OPENAI",
+                        modelType = ModelType.LIVE_VOICE,
+                        chatId = ChatId("c1"),
+                    ),
+                )
+            } returns ToolExecutionResult(toolName = "web_search", resultJson = """{"results":[]}""")
+            startActiveCoordinator()
+
+            fakeSession.emit(
+                LiveVoiceEvent.ToolCallRequested(
+                    callId = "call_1",
+                    name = "web_search",
+                    argumentsJson = """{"query":"test"}""",
+                ),
+            )
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) {
+                toolExecutorPort.execute(
+                    ToolCallRequest(
+                        toolName = "web_search",
+                        argumentsJson = """{"query":"test"}""",
+                        provider = "OPENAI",
+                        modelType = ModelType.LIVE_VOICE,
+                        chatId = ChatId("c1"),
+                    ),
+                )
+            }
+            assertEquals(1, fakeSession.sendToolResultInvocations.size)
+            assertEquals(
+                Triple("call_1", "web_search", """{"results":[]}"""),
+                fakeSession.sendToolResultInvocations.single(),
+            )
+        }
+
+    @Test
+    @DisplayName("LV-TOOL-061")
+    fun lvTool061_failureSendsErrorJsonStaysInSession() =
+        runTest {
+            coEvery { toolExecutorPort.execute(any()) } throws RuntimeException("network down")
+            startActiveCoordinator()
+
+            fakeSession.emit(
+                LiveVoiceEvent.ToolCallRequested(
+                    callId = "call_2",
+                    name = "web_search",
+                    argumentsJson = "{}",
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals(1, fakeSession.sendToolResultInvocations.size)
+            val resultJson = fakeSession.sendToolResultInvocations.single().third
+            assertTrue(resultJson.contains("error"))
+            assertTrue(resultJson.contains("network down"))
+            assertFalse(coordinator.state.value is LiveVoiceUiState.Error)
+            assertTrue(
+                coordinator.state.value is LiveVoiceUiState.Listening ||
+                    coordinator.state.value is LiveVoiceUiState.AssistantSpeaking,
+            )
+        }
+
+    @Test
+    @DisplayName("LV-TOOL-062")
+    fun lvTool062_bargeInCancelsInFlightToolJob() =
+        runTest {
+            val (started, _) = suspendToolExecutor()
+            startActiveCoordinator()
+
+            fakeSession.emit(
+                LiveVoiceEvent.ToolCallRequested(
+                    callId = "call_3",
+                    name = "web_search",
+                    argumentsJson = "{}",
+                ),
+            )
+            started.await()
+            fakeSession.emit(LiveVoiceEvent.SpeechStarted)
+            advanceUntilIdle()
+
+            assertTrue(fakeSession.sendToolResultInvocations.isEmpty())
+        }
+
+    @Test
+    @DisplayName("LV-TOOL-063")
+    fun lvTool063_teardownCancelsInFlightToolJob() =
+        runTest {
+            val (started, _) = suspendToolExecutor()
+            startActiveCoordinator()
+
+            fakeSession.emit(
+                LiveVoiceEvent.ToolCallRequested(
+                    callId = "call_4",
+                    name = "web_search",
+                    argumentsJson = "{}",
+                ),
+            )
+            started.await()
+            coordinator.cancel()
+            advanceUntilIdle()
+
+            assertTrue(fakeSession.sendToolResultInvocations.isEmpty())
+        }
+
+    @Test
+    @DisplayName("LV-TOOL-064")
+    fun lvTool064_endCancelsInFlightToolJob() =
+        runTest {
+            val (started, _) = suspendToolExecutor()
+            val scope = startActiveCoordinator()
+
+            fakeSession.emit(
+                LiveVoiceEvent.ToolCallRequested(
+                    callId = "call_5",
+                    name = "web_search",
+                    argumentsJson = "{}",
+                ),
+            )
+            started.await()
+            coordinator.end(scope)
+            advanceUntilIdle()
+
+            assertTrue(fakeSession.sendToolResultInvocations.isEmpty())
+        }
+
+    @Test
+    @DisplayName("LV-TOOL-065")
+    fun lvTool065_unknownToolWithoutCaption() =
+        runTest {
+            coEvery { toolExecutorPort.execute(any()) } returns
+                ToolExecutionResult(toolName = "unknown_tool", resultJson = "{}")
+            startActiveCoordinator()
+
+            fakeSession.emit(
+                LiveVoiceEvent.ToolCallRequested(
+                    callId = "call_u",
+                    name = "unknown_tool",
+                    argumentsJson = "{}",
+                ),
+            )
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { toolExecutorPort.execute(any()) }
+            val listening = coordinator.state.value as? LiveVoiceUiState.Listening
+            if (listening != null) {
+                assertNull(listening.toolStatusCaption)
+            }
+        }
+
+    @Test
+    @DisplayName("LV-TOOL-024")
+    fun lvTool024_staleSessionGenerationSkipsSendToolResult() =
+        runTest {
+            val (started, gate) = suspendToolExecutor(
+                ToolExecutionResult(toolName = "web_search", resultJson = """{"ok":true}"""),
+            )
+            startActiveCoordinator()
+
+            fakeSession.emit(
+                LiveVoiceEvent.ToolCallRequested(
+                    callId = "call_6",
+                    name = "web_search",
+                    argumentsJson = "{}",
+                ),
+            )
+            started.await()
+            coordinator.cancel()
+            gate.complete(Unit)
+            advanceUntilIdle()
+
+            assertTrue(fakeSession.sendToolResultInvocations.isEmpty())
+        }
+
+    @Test
+    @DisplayName("LV-TOOL-066")
+    fun lvTool066_nullDisplayNameSkipsCaption() =
+        runTest {
+            assertNull(ToolDefinition.MANAGE_MEMORIES.displayName)
+            val (started, gate) =
+                suspendToolExecutor(
+                    ToolExecutionResult(toolName = "manage_memories", resultJson = "{}"),
+                )
+            startActiveCoordinator()
+
+            fakeSession.emit(
+                LiveVoiceEvent.ToolCallRequested(
+                    callId = "call_mm",
+                    name = "manage_memories",
+                    argumentsJson = """{"action":"search"}""",
+                ),
+            )
+            started.await()
+            val listening = coordinator.state.value as LiveVoiceUiState.Listening
+            assertNull(listening.toolStatusCaption)
+
+            gate.complete(Unit)
+            advanceUntilIdle()
+
+            assertEquals(1, fakeSession.sendToolResultInvocations.size)
+            val finalListening = coordinator.state.value as? LiveVoiceUiState.Listening
+            if (finalListening != null) {
+                assertNull(finalListening.toolStatusCaption)
+            }
+        }
+
+    @Test
+    @DisplayName("LV-TOOL-070")
+    fun lvTool070_toolStatusCaptionLifecycle() =
+        runTest {
+            assertEquals("Searching the web...", ToolDefinition.WEB_SEARCH.displayName)
+            val (started, gate) = suspendToolExecutor()
+            startActiveCoordinator()
+
+            fakeSession.emit(
+                LiveVoiceEvent.ToolCallRequested(
+                    callId = "call_1",
+                    name = "web_search",
+                    argumentsJson = "{}",
+                ),
+            )
+            started.await()
+            val listening = coordinator.state.value as LiveVoiceUiState.Listening
+            assertEquals("Searching the web...", listening.toolStatusCaption)
+
+            gate.complete(Unit)
+            advanceUntilIdle()
+
+            val cleared = coordinator.state.value as LiveVoiceUiState.Listening
+            assertNull(cleared.toolStatusCaption)
+        }
+
+    @Test
+    @DisplayName("LV-TOOL-MUT-007")
+    fun lvToolMut007_toolFailureMustNotSetSessionError() =
+        runTest {
+            coEvery { toolExecutorPort.execute(any()) } throws IllegalStateException("executor broken")
+            startActiveCoordinator()
+
+            fakeSession.emit(
+                LiveVoiceEvent.ToolCallRequested(
+                    callId = "call_7",
+                    name = "web_search",
+                    argumentsJson = "{}",
+                ),
+            )
+            advanceUntilIdle()
+
+            assertFalse(
+                coordinator.state.value is LiveVoiceUiState.Error &&
+                    (coordinator.state.value as LiveVoiceUiState.Error).message == "executor broken",
+            )
+            assertEquals(1, fakeSession.sendToolResultInvocations.size)
+            assertTrue(fakeSession.sendToolResultInvocations.single().third.contains("error"))
+        }
+
     private class FakeLiveVoiceSession : LiveVoiceSession {
         private val eventsFlow = MutableSharedFlow<LiveVoiceEvent>(extraBufferCapacity = 16)
         val sentAudio = mutableListOf<ByteArray>()
+        val sendToolResultInvocations = mutableListOf<Triple<String, String, String>>()
         var closed = false
         var cancelAssistantResponseCount = 0
 
@@ -859,6 +1189,14 @@ class LiveVoiceCoordinatorTest {
 
         override suspend fun close() {
             closed = true
+        }
+
+        override suspend fun sendToolResult(
+            callId: String,
+            name: String,
+            resultJson: String,
+        ) {
+            sendToolResultInvocations.add(Triple(callId, name, resultJson))
         }
     }
 

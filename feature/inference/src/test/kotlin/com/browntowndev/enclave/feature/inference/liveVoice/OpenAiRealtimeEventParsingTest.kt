@@ -141,4 +141,102 @@ class OpenAiRealtimeEventParsingTest {
         val chunk = result as LiveVoiceEvent.AssistantAudioChunk
         assertArrayEquals(byteArrayOf(0, 1, 2), chunk.pcm16)
     }
+
+    @Test
+    @DisplayName("LV-TOOL-020")
+    fun lvTool020_outputItemDoneFunctionCallParser() {
+        val json =
+            """
+            {"type":"response.output_item.done","item":{"type":"function_call","call_id":"call_1","name":"web_search","arguments":"{\"query\":\"cats\"}"}}
+            """.trimIndent()
+
+        val result = parseOpenAiRealtimeEvents(json)
+
+        assertEquals(1, result.size)
+        assertEquals(
+            LiveVoiceEvent.ToolCallRequested(
+                callId = "call_1",
+                name = "web_search",
+                argumentsJson = """{"query":"cats"}""",
+            ),
+            result.single(),
+        )
+    }
+
+    @Test
+    @DisplayName("LV-TOOL-023")
+    fun lvTool023_functionCallArgumentsDoneIgnoredUntilOutputItemDone() {
+        val json =
+            """
+            {"type":"response.function_call_arguments.done","call_id":"call_1","name":"web_search","arguments":"{\"query\":\"cats\"}"}
+            """.trimIndent()
+
+        val result = parseOpenAiRealtimeEvents(json)
+
+        assertTrue(result.isEmpty())
+    }
+
+    @Test
+    @DisplayName("LV-TOOL-021")
+    fun lvTool021_responseDoneFunctionCallFallback() {
+        val json =
+            """
+            {"type":"response.done","response":{"output":[{"type":"function_call","call_id":"call_2","name":"web_extract","arguments":"{\"url\":\"https://example.com\"}"}]}}
+            """.trimIndent()
+
+        val result = parseOpenAiRealtimeEvents(json)
+
+        assertEquals(2, result.size)
+        assertEquals(
+            LiveVoiceEvent.ToolCallRequested(
+                callId = "call_2",
+                name = "web_extract",
+                argumentsJson = """{"url":"https://example.com"}""",
+            ),
+            result[0],
+        )
+        assertEquals(LiveVoiceEvent.AssistantResponseComplete, result.last())
+    }
+
+    @Test
+    @DisplayName("LV-TOOL-022")
+    fun lvTool022_malformedToolCallJsonReturnsEmptyList() {
+        val json =
+            """
+            {"type":"response.output_item.done","item":{"type":"function_call","call_id":"call_x"}}
+            """.trimIndent()
+
+        val result = parseOpenAiRealtimeEvents(json)
+
+        assertTrue(result.isEmpty())
+    }
+
+    @Test
+    @DisplayName("LV-TOOL-025")
+    fun lvTool025_plainResponseDoneRegression() {
+        val json =
+            """
+            {"type":"response.done"}
+            """.trimIndent()
+
+        val result = parseOpenAiRealtimeEvents(json)
+
+        assertEquals(listOf(LiveVoiceEvent.AssistantResponseComplete), result)
+        assertEquals(LiveVoiceEvent.AssistantResponseComplete, parseOpenAiRealtimeEvent(json))
+    }
+
+    @Test
+    @DisplayName("LV-TOOL-MUT-004")
+    fun lvToolMut004_primaryParserEventNotAssistantResponseComplete() {
+        val json =
+            """
+            {"type":"response.output_item.done","item":{"type":"function_call","call_id":"call_1","name":"web_search","arguments":"{\"query\":\"cats\"}"}}
+            """.trimIndent()
+
+        val result = parseOpenAiRealtimeEvents(json)
+
+        assertTrue(result.isNotEmpty())
+        assertTrue(result.first() !is LiveVoiceEvent.AssistantResponseComplete)
+        assertEquals("web_search", (result.first() as LiveVoiceEvent.ToolCallRequested).name)
+    }
 }
