@@ -30,6 +30,7 @@ import com.browntowndev.enclave.core.ui.component.neo.NeoAppBarChrome
 import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
 import com.browntowndev.enclave.core.ui.component.sheet.MoveToAlbumBottomSheet
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
+import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.media.VisualGenerationSettings
 import com.browntowndev.enclave.feature.studio.components.StudioOptionsBottomSheet
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -185,7 +186,25 @@ fun StudioScreen(
                 hasImageEditModel = uiState.hasImageEditModel,
                 hasImageToVideoModel = uiState.hasImageToVideoModel,
                 onPromptChange = viewModel::onPromptChange,
-                onReferenceImageClick = { imagePickerLauncher.launch("image/*") },
+                onReferenceImageClick = {
+                    val isEnabled = when (uiState.mediaType) {
+                        MediaCapability.IMAGE -> uiState.hasImageEditModel
+                        MediaCapability.VIDEO -> uiState.hasImageToVideoModel
+                        else -> false
+                    }
+                    if (isEnabled) {
+                        imagePickerLauncher.launch("image/*")
+                    } else {
+                        val message = when (uiState.mediaType) {
+                            MediaCapability.IMAGE -> STUDIO_REFERENCE_IMAGE_EDIT_UNAVAILABLE
+                            MediaCapability.VIDEO -> STUDIO_REFERENCE_I2V_UNAVAILABLE
+                            else -> ""
+                        }
+                        if (message.isNotEmpty()) {
+                            onShowSnackbar(message, "DISMISS")
+                        }
+                    }
+                },
                 onClearReferenceImage = { viewModel.onUpdateReferenceImage(null) },
                 onSettingsClick = viewModel::onSettingsToggle,
                 onMicClick = {
