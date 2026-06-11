@@ -57,13 +57,27 @@ class ModelTurnFailureClassifierTest {
     }
 
     @Test
-    fun `MAR-K-06 unknown internal error defaults to permanent`() {
+    fun `MAR-K-06 unknown internal error defaults to transient retry`() {
         val report =
             ModelTurnFailureClassifier.classify(
                 IllegalStateException("Unexpected serializer state"),
                 partialOutputChars = 0,
             )
 
-        assertEquals(FfiModelApiErrorClass.PERMANENT, report.errorClass)
+        assertEquals(FfiModelApiErrorClass.TRANSIENT, report.errorClass)
+    }
+
+    @Test
+    fun `MAR-K-07 interrupted io stream failed is transient with partial output`() {
+        val root = java.io.InterruptedIOException("Stream failed")
+        val error = RuntimeException("Stream failed", root)
+
+        val report = ModelTurnFailureClassifier.classify(error, partialOutputChars = 842)
+
+        assertEquals(FfiModelApiErrorClass.TRANSIENT, report.errorClass)
+        assertTrue(report.hadPartialOutput)
+        assertEquals(842u, report.partialOutputChars)
+        assertTrue(report.message.contains("InterruptedIOException"))
+        assertTrue(report.message.contains("Stream failed"))
     }
 }

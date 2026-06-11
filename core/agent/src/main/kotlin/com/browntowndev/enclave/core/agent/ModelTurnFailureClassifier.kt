@@ -8,8 +8,6 @@ import com.browntowndev.enclave.domain.model.inference.ModelApiTransportHeuristi
 internal object ModelTurnFailureClassifier {
     private const val HTTP_STATUS_MIN = 100
     private const val HTTP_STATUS_MAX = 599
-    private const val HTTP_CLIENT_ERROR_MIN = 400
-    private const val HTTP_CLIENT_ERROR_MAX = 499
 
     fun classify(
         error: Throwable,
@@ -81,17 +79,10 @@ internal object ModelTurnFailureClassifier {
         error: Throwable,
         message: String,
         httpStatus: UShort?,
-    ): Boolean {
-        val status = httpStatus?.toInt()
-        val normalized = message.lowercase()
-        return when {
-            ModelApiTransportHeuristics.isTransientHttpStatus(status) -> false
-            ModelApiTransportHeuristics.isPermanentHttpStatus(status) -> true
-            ModelApiTransportHeuristics.isTransientTransportMessage(normalized) ||
-                ModelApiTransportHeuristics.isTransientTransportErrorType(error) -> false
-            ModelApiTransportHeuristics.isPermanentTransportMessage(normalized) -> true
-            status != null && status in HTTP_CLIENT_ERROR_MIN..HTTP_CLIENT_ERROR_MAX -> true
-            else -> true
-        }
-    }
+    ): Boolean =
+        !ModelApiTransportHeuristics.shouldRetryModelApiFailure(
+            error = error,
+            normalizedMessage = message.lowercase(),
+            httpStatus = httpStatus?.toInt(),
+        )
 }

@@ -2,6 +2,9 @@ package com.browntowndev.enclave.domain.model.inference
 
 /**
  * Shared transport-failure heuristics for model API streaming and retry classification.
+ *
+ * Retry policy: transient by default. Only explicitly permanent HTTP statuses, messages,
+ * or client-error bands are blacklisted from model-API retry.
  */
 object ModelApiTransportHeuristics {
     private const val HTTP_REQUEST_TIMEOUT = 408
@@ -13,6 +16,8 @@ object ModelApiTransportHeuristics {
     private const val HTTP_UNAUTHORIZED = 401
     private const val HTTP_FORBIDDEN = 403
     private const val HTTP_NOT_FOUND = 404
+    private const val HTTP_CLIENT_ERROR_MIN = 400
+    private const val HTTP_CLIENT_ERROR_MAX = 499
 
     fun isRecoverableStreamTermination(message: String?): Boolean {
         val normalized = message?.lowercase() ?: return false
@@ -55,6 +60,7 @@ object ModelApiTransportHeuristics {
             normalizedMessage.contains("gateway timeout") ||
             normalizedMessage.contains("stream ended unexpectedly") ||
             normalizedMessage.contains("internal stream ended unexpectedly") ||
+            normalizedMessage.contains("stream failed") ||
             normalizedMessage.contains("eof") ||
             normalizedMessage.contains("socket")
 
@@ -63,8 +69,24 @@ object ModelApiTransportHeuristics {
         return name.contains("timeout") ||
             name.contains("socket") ||
             name.contains("connect") ||
-            name.contains("sse")
+            name.contains("sse") ||
+            name.contains("interruptedio")
     }
+
+    fun shouldRetryModelApiFailure(
+        error: Throwable,
+        normalizedMessage: String,
+        httpStatus: Int?,
+    ): Boolean =
+        when {
+            isTransientHttpStatus(httpStatus) -> true
+            isPermanentHttpStatus(httpStatus) -> false
+            isTransientTransportMessage(normalizedMessage) ||
+                isTransientTransportErrorType(error) -> true
+            isPermanentTransportMessage(normalizedMessage) -> false
+            httpStatus != null && httpStatus in HTTP_CLIENT_ERROR_MIN..HTTP_CLIENT_ERROR_MAX -> false
+            else -> true
+        }
 
     fun isPermanentTransportMessage(normalizedMessage: String): Boolean =
         normalizedMessage.contains("invalid api key") ||
