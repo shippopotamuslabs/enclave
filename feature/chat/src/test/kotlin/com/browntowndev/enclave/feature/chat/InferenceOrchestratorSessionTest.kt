@@ -10,6 +10,9 @@ import com.browntowndev.enclave.feature.chat.delegates.InferenceOrchestrator
 import com.browntowndev.enclave.feature.inference.ActiveChatTurnStore
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
@@ -41,6 +44,7 @@ class InferenceOrchestratorSessionTest {
                 errorHandler = mockk<ViewModelErrorHandler>(relaxed = true),
                 savedStateHandle = savedStateHandle,
                 pipelineExecutor = mockk(relaxed = true),
+                applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
             )
     }
 

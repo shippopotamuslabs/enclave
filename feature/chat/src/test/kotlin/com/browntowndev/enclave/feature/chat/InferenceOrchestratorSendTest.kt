@@ -21,7 +21,9 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -56,9 +58,11 @@ class InferenceOrchestratorSendTest {
     private lateinit var settingsUseCases: SettingsUseCases
     private lateinit var orchestrator: InferenceOrchestrator
     private lateinit var errorHandler: RecordingErrorHandler
+    private lateinit var applicationScope: CoroutineScope
 
     @BeforeEach
     fun setUp() {
+        applicationScope = CoroutineScope(SupervisorJob() + testDispatcher)
         errorHandler = RecordingErrorHandler()
         chatUseCases = mockk(relaxed = true)
         settingsUseCases = mockk()
@@ -74,6 +78,7 @@ class InferenceOrchestratorSendTest {
                 errorHandler = errorHandler,
                 savedStateHandle = SavedStateHandle(),
                 pipelineExecutor = mockk(relaxed = true),
+                applicationScope = applicationScope,
             )
     }
 

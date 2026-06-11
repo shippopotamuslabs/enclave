@@ -857,7 +857,7 @@ class ChatViewModel
 
         override fun onCleared() {
             super.onCleared()
-            inferenceOrchestrator.cancelInference(viewModelScope)
+            inferenceOrchestrator.detachOnViewModelCleared()
             liveVoiceCoordinator.cancel()
             speechInputCoordinator.stopListening()
             onStopTts()
