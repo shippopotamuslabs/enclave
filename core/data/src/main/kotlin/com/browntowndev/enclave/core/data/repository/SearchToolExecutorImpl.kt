@@ -58,7 +58,7 @@ class SearchToolExecutorImpl
                     }
                 } catch (e: java.io.IOException) {
                     loggingPort.warning(TAG, "Search failed with network error: ${e.message}")
-                    telemetryEventPort.emitToolExecutionOutcome(
+                    telemetryEventPort?.emitToolExecutionOutcome(
                         startedAtMs = startedAtMs,
                         toolName = request.toolName,
                         success = false,
@@ -77,7 +77,7 @@ class SearchToolExecutorImpl
                     "resultChars=${resultJson.length}",
             )
 
-            telemetryEventPort.emitToolExecutionOutcome(
+            telemetryEventPort?.emitToolExecutionOutcome(
                 startedAtMs = startedAtMs,
                 toolName = request.toolName,
                 success = true,
