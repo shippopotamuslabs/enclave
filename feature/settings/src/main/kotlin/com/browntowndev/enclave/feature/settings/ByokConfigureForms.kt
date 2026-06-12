@@ -46,6 +46,8 @@ import com.browntowndev.enclave.core.ui.component.neo.NeoApiKeyField
 import com.browntowndev.enclave.core.ui.component.neo.NeoCircularProgressIndicator
 import com.browntowndev.enclave.core.ui.component.neo.NeoFilterChip
 import com.browntowndev.enclave.core.ui.component.neo.NeoOutlinedTextField
+import com.browntowndev.enclave.core.ui.component.neo.neoBorder
+import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
 import com.browntowndev.enclave.core.ui.component.neo.neoOutlinedTextFieldColors
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
@@ -131,6 +133,9 @@ fun ProviderSelectionField(
         ExposedDropdownMenu(
             expanded = providerDropdownExpanded,
             onDismissRequest = { providerDropdownExpanded = false },
+            modifier = Modifier.neoBorder(color = neoBorderColor(), shape = EnclaveNeoTokens.shape),
+            shape = EnclaveNeoTokens.shape,
+            containerColor = MaterialTheme.colorScheme.surface,
         ) {
             ApiProvider.entries.filter(ApiProvider::supportsChat).forEach { provider ->
                 DropdownMenuItem(
@@ -527,6 +532,9 @@ fun ReusableCredentialDropdown(
         DropdownMenu(
             expanded = reusableCredentialDropdownExpanded,
             onDismissRequest = { reusableCredentialDropdownExpanded = false },
+            modifier = Modifier.neoBorder(color = neoBorderColor(), shape = EnclaveNeoTokens.shape),
+            shape = EnclaveNeoTokens.shape,
+            containerColor = MaterialTheme.colorScheme.surface,
         ) {
             if (selectedReusableCredential != null) {
                 DropdownMenuItem(
@@ -884,6 +892,9 @@ fun TuningConfiguration(
             ExposedDropdownMenu(
                 expanded = reasoningDropdownExpanded,
                 onDismissRequest = { reasoningDropdownExpanded = false },
+                modifier = Modifier.neoBorder(color = neoBorderColor(), shape = EnclaveNeoTokens.shape),
+                shape = EnclaveNeoTokens.shape,
+                containerColor = MaterialTheme.colorScheme.surface,
             ) {
                 reasoningOptions(reasoningPolicy).forEach { option ->
                     DropdownMenuItem(

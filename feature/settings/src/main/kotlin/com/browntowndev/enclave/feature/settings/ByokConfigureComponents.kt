@@ -42,6 +42,12 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.browntowndev.enclave.core.ui.component.PersistentTooltip
+import com.browntowndev.enclave.core.ui.component.neo.NeoOutlinedTextField
+import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
+import com.browntowndev.enclave.core.ui.component.neo.NeoSecondaryButton
+import com.browntowndev.enclave.core.ui.component.neo.neoBorder
+import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
+import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.config.OpenRouterDataCollectionPolicy
 import com.browntowndev.enclave.domain.model.config.OpenRouterProviderSort
@@ -79,7 +85,7 @@ fun OpenRouterRoutingSection(
             onExpandedChange = { sortExpanded = it },
             modifier = Modifier.fillMaxWidth(),
         ) {
-            OutlinedTextField(
+            NeoOutlinedTextField(
                 value = routing.providerSort.displayName,
                 onValueChange = {},
                 readOnly = true,
@@ -89,11 +95,13 @@ fun OpenRouterRoutingSection(
                     Modifier
                         .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
                         .fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
             )
             ExposedDropdownMenu(
                 expanded = sortExpanded,
                 onDismissRequest = { sortExpanded = false },
+                modifier = Modifier.neoBorder(color = neoBorderColor(), shape = EnclaveNeoTokens.shape),
+                shape = EnclaveNeoTokens.shape,
+                containerColor = MaterialTheme.colorScheme.surface,
             ) {
                 OpenRouterProviderSort.entries.forEach { sort ->
                     DropdownMenuItem(
@@ -112,7 +120,7 @@ fun OpenRouterRoutingSection(
             onExpandedChange = { dataCollectionExpanded = it },
             modifier = Modifier.fillMaxWidth(),
         ) {
-            OutlinedTextField(
+            NeoOutlinedTextField(
                 value = routing.dataCollectionPolicy.displayName,
                 onValueChange = {},
                 readOnly = true,
@@ -122,11 +130,13 @@ fun OpenRouterRoutingSection(
                     Modifier
                         .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
                         .fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
             )
             ExposedDropdownMenu(
                 expanded = dataCollectionExpanded,
                 onDismissRequest = { dataCollectionExpanded = false },
+                modifier = Modifier.neoBorder(color = neoBorderColor(), shape = EnclaveNeoTokens.shape),
+                shape = EnclaveNeoTokens.shape,
+                containerColor = MaterialTheme.colorScheme.surface,
             ) {
                 OpenRouterDataCollectionPolicy.entries.forEach { policy ->
                     DropdownMenuItem(
@@ -355,6 +365,9 @@ fun TuningSlider(
     if (showDialog) {
         AlertDialog(
             onDismissRequest = { showDialog = false },
+            modifier = Modifier.neoBorder(color = neoBorderColor(), shape = EnclaveNeoTokens.shape),
+            shape = EnclaveNeoTokens.shape,
+            containerColor = MaterialTheme.colorScheme.surface,
             title = { Text("Edit $label") },
             text = {
                 Column {
@@ -363,32 +376,36 @@ fun TuningSlider(
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(bottom = 8.dp),
                     )
-                    OutlinedTextField(
+                    NeoOutlinedTextField(
                         value = textValue,
                         onValueChange = { textValue = it },
                         modifier = Modifier.fillMaxWidth(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
                         singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
                     )
                 }
             },
             confirmButton = {
-                Button(
-                    onClick = {
-                        val newValue = textValue.toFloatOrNull()
-                        if (newValue != null && newValue in range) {
-                            onValueChange(newValue)
-                            showDialog = false
-                        }
-                    },
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Text("Save")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDialog = false }) {
-                    Text("Cancel")
+                    NeoSecondaryButton(
+                        text = "Cancel",
+                        onClick = { showDialog = false },
+                        modifier = Modifier.weight(1f),
+                    )
+                    NeoPrimaryButton(
+                        text = "Save",
+                        onClick = {
+                            val newValue = textValue.toFloatOrNull()
+                            if (newValue != null && newValue in range) {
+                                onValueChange(newValue)
+                                showDialog = false
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
                 }
             },
         )
