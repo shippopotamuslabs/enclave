@@ -19,7 +19,8 @@ class DownloadWorkChainObserverTest {
                 every { state } returns WorkInfo.State.SUCCEEDED
                 every { tags } returns setOf(ModelDownloadWorker::class.java.name)
                 every { outputData } returns
-                    Data.Builder()
+                    Data
+                        .Builder()
                         .putString(DownloadWorkKeys.KEY_WORKER_STAGE, DownloadWorkKeys.STAGE_DOWNLOAD)
                         .build()
                 every { progress } returns Data.EMPTY
@@ -37,7 +38,8 @@ class DownloadWorkChainObserverTest {
                 every { state } returns WorkInfo.State.SUCCEEDED
                 every { tags } returns setOf(DownloadFinalizeWorker::class.java.name)
                 every { outputData } returns
-                    Data.Builder()
+                    Data
+                        .Builder()
                         .putString(DownloadWorkKeys.KEY_WORKER_STAGE, DownloadWorkKeys.STAGE_FINALIZE)
                         .build()
                 every { progress } returns Data.EMPTY
@@ -52,7 +54,8 @@ class DownloadWorkChainObserverTest {
         val workInfo =
             mockk<WorkInfo> {
                 every { progress } returns
-                    Data.Builder()
+                    Data
+                        .Builder()
                         .putLong(DownloadKey.POST_PROCESS_BYTES.key, 500L)
                         .putLong(DownloadKey.POST_PROCESS_TOTAL.key, 1_000L)
                         .build()

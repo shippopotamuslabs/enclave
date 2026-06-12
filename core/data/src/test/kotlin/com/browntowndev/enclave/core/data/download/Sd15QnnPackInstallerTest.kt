@@ -63,6 +63,52 @@ class Sd15QnnPackInstallerTest {
         }
 
     @Test
+    fun installIfNeeded_extractsMnnCpuZipIntoSd15CpuDir() =
+        runTest {
+            val filesDir = File(tempDir, "files").apply { mkdirs() }
+            val modelsDir = File(filesDir, ModelConfig.MODELS_DIR).apply { mkdirs() }
+            val zipFile = File(modelsDir, "AnythingV5.zip")
+            // xororz CPU pack layout: single root folder + clip_v2 embedding variant.
+            writePackZip(
+                zipFile,
+                listOf(
+                    "AnythingV5/clip_v2.mnn",
+                    "AnythingV5/token_emb.bin",
+                    "AnythingV5/pos_emb.bin",
+                    "AnythingV5/unet.mnn",
+                    "AnythingV5/vae_decoder.mnn",
+                    "AnythingV5/tokenizer.json",
+                ),
+            )
+
+            val context = mockk<Context>(relaxed = true)
+            every { context.getExternalFilesDir(null) } returns filesDir
+
+            val installer =
+                Sd15QnnPackInstaller(
+                    context = context,
+                    logger = mockk<LoggingPort>(relaxed = true),
+                )
+            val metadata =
+                LocalModelMetadata(
+                    id = LocalModelId("sd15-qnn-pack"),
+                    huggingFaceModelName = Sd15QnnPackCatalog.HF_CPU_REPO,
+                    remoteFileName = "AnythingV5.zip",
+                    localFileName = "AnythingV5.zip",
+                    sha256 = sha256Hex(zipFile),
+                    sizeInBytes = zipFile.length(),
+                    modelFileFormat = ModelFileFormat.BIN,
+                    utilityType = UtilityType.SD15_QNN_PACK,
+                )
+
+            assertTrue(installer.installIfNeeded(metadata))
+            val cpuDir = File(modelsDir, LocalImageGenerationPaths.SD15_CPU_SUBDIR)
+            assertTrue(LocalImageGenerationPaths.hasMnnArtifacts(cpuDir))
+            assertFalse(File(modelsDir, LocalImageGenerationPaths.SD15_QNN_SUBDIR).exists())
+            assertFalse(zipFile.exists())
+        }
+
+    @Test
     fun installIfNeeded_rejectsZipEntriesThatEscapePackDir() =
         runTest {
             val filesDir = File(tempDir, "files").apply { mkdirs() }

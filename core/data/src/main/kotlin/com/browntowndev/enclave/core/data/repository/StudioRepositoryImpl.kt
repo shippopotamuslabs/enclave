@@ -185,35 +185,35 @@ class StudioRepositoryImpl
             createdAt: Long?,
         ): StudioMediaAsset =
             withContext(Dispatchers.IO) {
-            var finalUri = localUri
-            if (localUri.startsWith("file://")) {
-                val file = File(localUri.replace("file://", ""))
-                if (file.exists() && file.absolutePath.contains(context.cacheDir.path)) {
-                    val destinationFile = File(context.filesDir, file.name)
-                    file.copyTo(destinationFile, overwrite = true)
-                    file.delete()
-                    finalUri = "file://${destinationFile.absolutePath}"
+                var finalUri = localUri
+                if (localUri.startsWith("file://")) {
+                    val file = File(localUri.replace("file://", ""))
+                    if (file.exists() && file.absolutePath.contains(context.cacheDir.path)) {
+                        val destinationFile = File(context.filesDir, file.name)
+                        file.copyTo(destinationFile, overwrite = true)
+                        file.delete()
+                        finalUri = "file://${destinationFile.absolutePath}"
+                    }
                 }
-            }
 
-            val newId =
-                java.util.UUID
-                    .randomUUID()
-                    .toString()
-            val plain =
-                StudioMediaEntity(
-                    id = newId,
-                    prompt = prompt,
-                    mediaUri = finalUri,
-                    mediaType = mediaType,
-                    createdAt = createdAt ?: System.currentTimeMillis(),
-                    albumId = albumId.toPersistentAlbumId(),
-                    pendingSync = 1,
-                )
-            studioMediaDao.insertMedia(SensitiveEntityFieldEncryptors.encrypt(plain, healer))
-            triggerSync()
-            getMediaById(newId)!!
-        }
+                val newId =
+                    java.util.UUID
+                        .randomUUID()
+                        .toString()
+                val plain =
+                    StudioMediaEntity(
+                        id = newId,
+                        prompt = prompt,
+                        mediaUri = finalUri,
+                        mediaType = mediaType,
+                        createdAt = createdAt ?: System.currentTimeMillis(),
+                        albumId = albumId.toPersistentAlbumId(),
+                        pendingSync = 1,
+                    )
+                studioMediaDao.insertMedia(SensitiveEntityFieldEncryptors.encrypt(plain, healer))
+                triggerSync()
+                getMediaById(newId)!!
+            }
 
         override suspend fun saveMedia(
             bytes: ByteArray,
@@ -223,14 +223,14 @@ class StudioRepositoryImpl
             createdAt: Long?,
         ): StudioMediaAsset =
             withContext(Dispatchers.IO) {
-            val extension = StudioMediaExtensionResolver.extensionFor(mediaType)
-            val fileName = "studio_${UUID.randomUUID()}.$extension"
-            val file = File(context.filesDir, fileName)
-            file.writeBytes(bytes)
+                val extension = StudioMediaExtensionResolver.extensionFor(mediaType)
+                val fileName = "studio_${UUID.randomUUID()}.$extension"
+                val file = File(context.filesDir, fileName)
+                file.writeBytes(bytes)
 
-            val persistedUri = "file://${file.absolutePath}"
-            saveMedia(persistedUri, prompt, mediaType, albumId, createdAt)
-        }
+                val persistedUri = "file://${file.absolutePath}"
+                saveMedia(persistedUri, prompt, mediaType, albumId, createdAt)
+            }
 
         override suspend fun updateMedia(asset: StudioMediaAsset) {
             val existing = studioMediaDao.getMediaById(asset.id)
@@ -279,17 +279,17 @@ class StudioRepositoryImpl
             mediaType: String,
         ): String =
             withContext(Dispatchers.IO) {
-            val ephemeralDir = File(context.cacheDir, "studio_ephemeral")
-            if (!ephemeralDir.exists()) {
-                ephemeralDir.mkdirs()
-            }
+                val ephemeralDir = File(context.cacheDir, "studio_ephemeral")
+                if (!ephemeralDir.exists()) {
+                    ephemeralDir.mkdirs()
+                }
 
-            val extension = StudioMediaExtensionResolver.extensionFor(mediaType)
-            val fileName = "ephemeral_${UUID.randomUUID()}.$extension"
-            val file = File(ephemeralDir, fileName)
-            file.writeBytes(bytes)
-            "file://${file.absolutePath}"
-        }
+                val extension = StudioMediaExtensionResolver.extensionFor(mediaType)
+                val fileName = "ephemeral_${UUID.randomUUID()}.$extension"
+                val file = File(ephemeralDir, fileName)
+                file.writeBytes(bytes)
+                "file://${file.absolutePath}"
+            }
 
         override suspend fun clearEphemeralCache() {
             if (hasActiveGeneration()) {
@@ -342,14 +342,14 @@ class StudioRepositoryImpl
             bytes: ByteArray,
         ) {
             withContext(Dispatchers.IO) {
-            val raw = studioMediaDao.getMediaById(id) ?: return@withContext
-            val plain = SensitiveEntityFieldEncryptors.decrypt(raw, healer, null)
-            val extension = StudioMediaExtensionResolver.extensionFor(plain.mediaType)
-            val file = File(context.filesDir, "studio_synced_$id.$extension")
-            file.writeBytes(bytes)
+                val raw = studioMediaDao.getMediaById(id) ?: return@withContext
+                val plain = SensitiveEntityFieldEncryptors.decrypt(raw, healer, null)
+                val extension = StudioMediaExtensionResolver.extensionFor(plain.mediaType)
+                val file = File(context.filesDir, "studio_synced_$id.$extension")
+                file.writeBytes(bytes)
 
-            val updated = plain.copy(mediaUri = "file://${file.absolutePath}")
-            studioMediaDao.insertMedia(SensitiveEntityFieldEncryptors.encrypt(updated, healer))
+                val updated = plain.copy(mediaUri = "file://${file.absolutePath}")
+                studioMediaDao.insertMedia(SensitiveEntityFieldEncryptors.encrypt(updated, healer))
             }
         }
 
@@ -409,18 +409,18 @@ class StudioRepositoryImpl
 
         override suspend fun readMediaBytes(localUri: String): ByteArray? =
             withContext(Dispatchers.IO) {
-            if (localUri.startsWith("content://")) {
-                return@withContext context.contentResolver.openInputStream(android.net.Uri.parse(localUri))?.use { it.readBytes() }
-            }
+                if (localUri.startsWith("content://")) {
+                    return@withContext context.contentResolver.openInputStream(android.net.Uri.parse(localUri))?.use { it.readBytes() }
+                }
 
-            val path = localUri.replace("file://", "")
-            val file = File(path)
-            if (file.exists()) {
-                file.readBytes()
-            } else {
-                null
+                val path = localUri.replace("file://", "")
+                val file = File(path)
+                if (file.exists()) {
+                    file.readBytes()
+                } else {
+                    null
+                }
             }
-        }
 
         private fun StudioMediaEntity.toDomain(readRepairs: MutableList<SensitiveRoomReadRepair>?): StudioMediaAsset {
             val e = SensitiveEntityFieldEncryptors.decrypt(this, healer, readRepairs)

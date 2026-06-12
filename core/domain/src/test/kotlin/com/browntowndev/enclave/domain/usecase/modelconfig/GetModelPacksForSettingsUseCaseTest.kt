@@ -107,6 +107,42 @@ class GetModelPacksForSettingsUseCaseTest {
 
             assertTrue(sd15Row.isEligible)
             assertNull(sd15Row.disabledReason)
+            assertTrue(sd15Row.sd15CpuFallbackActive)
+            assertEquals("Stable Diffusion 1.5 (CPU)", sd15Row.pack.displayName)
+        }
+
+    @Test
+    fun `SD15 pack keeps NPU label when the NPU pathway is available`() =
+        runTest {
+            every { capabilityPort.getCapabilities() } returns
+                LocalImageGenerationCapabilities(
+                    npuAvailable = LocalImageGenTriState.YES,
+                    sd15NpuSupported = LocalImageGenTriState.YES,
+                    sd15CpuSupported = LocalImageGenTriState.YES,
+                    sdxlNpuSupported = LocalImageGenTriState.NO,
+                    recommendedBackend = LocalImageGenerationBackendKind.QNN_NPU,
+                    recommendedModelId = LocalImageGenerationModelId.SD15_QNN,
+                    diagnostics = emptyList(),
+                )
+            coEvery { resolveModelCatalog() } returns Result.success(ModelPackTestFixtures.parsedCatalog())
+            coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
+            coEvery { utilityModelRepository.getByUtilityType(any()) } returns null
+            coEvery { verifyModelPackCompleteness(ModelPackTestFixtures.PACK_ID) } returns
+                Result.success(
+                    ModelPackCompleteness(
+                        packId = ModelPackTestFixtures.PACK_ID,
+                        installedCount = 1,
+                        totalCount = 1,
+                        isComplete = true,
+                        members = emptyList(),
+                    ),
+                )
+
+            val rows = useCase()
+            val sd15Row = rows.single { it.pack.packId == ModelPackTestFixtures.PACK_ID }
+
+            assertFalse(sd15Row.sd15CpuFallbackActive)
+            assertEquals(ModelPackTestFixtures.PACK_DISPLAY, sd15Row.pack.displayName)
         }
 
     @Test

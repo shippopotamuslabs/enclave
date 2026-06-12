@@ -38,7 +38,9 @@ class DownloadProgressTrackerTest {
             )
 
         tracker.initialize(
-            TEST_SESSION_ID,specs)
+            TEST_SESSION_ID,
+            specs,
+        )
 
         assertEquals(2, tracker.getTotalCount())
         assertEquals(1500L, tracker.getTotalSize())
@@ -53,7 +55,9 @@ class DownloadProgressTrackerTest {
             )
 
         tracker.initialize(
-            TEST_SESSION_ID,specs)
+            TEST_SESSION_ID,
+            specs,
+        )
 
         val states = tracker.getFileStates()
         assertTrue(states.containsKey("sha256_main"))
@@ -70,7 +74,9 @@ class DownloadProgressTrackerTest {
             )
 
         tracker.initialize(
-            TEST_SESSION_ID,specs)
+            TEST_SESSION_ID,
+            specs,
+        )
 
         // Should only have 1 entry since they share the same SHA256
         assertEquals(1, tracker.getTotalCount())
@@ -79,7 +85,9 @@ class DownloadProgressTrackerTest {
     @Test
     fun initialize_handlesEmptyList() {
         tracker.initialize(
-            TEST_SESSION_ID,emptyList())
+            TEST_SESSION_ID,
+            emptyList(),
+        )
 
         assertEquals(0, tracker.getTotalCount())
         assertEquals(0L, tracker.getTotalSize())
@@ -88,7 +96,9 @@ class DownloadProgressTrackerTest {
     @Test
     fun updateFileState_changesFileStatus() {
         tracker.initialize(
-            TEST_SESSION_ID,listOf(createFileSpec("main.litertlm", 1000L, sha256 = "sha256_main")))
+            TEST_SESSION_ID,
+            listOf(createFileSpec("main.litertlm", 1000L, sha256 = "sha256_main")),
+        )
 
         tracker.updateFileState(TEST_SESSION_ID, "sha256_main") { state ->
             state.copy(status = FileStatus.DOWNLOADING, bytesDownloaded = 500L)
@@ -102,7 +112,9 @@ class DownloadProgressTrackerTest {
     @Test
     fun updateFileState_throwsForUnknownFile() {
         tracker.initialize(
-            TEST_SESSION_ID,listOf(createFileSpec("main.litertlm", 1000L, sha256 = "sha256_main")))
+            TEST_SESSION_ID,
+            listOf(createFileSpec("main.litertlm", 1000L, sha256 = "sha256_main")),
+        )
 
         val exception =
             Assertions.assertThrows(IllegalStateException::class.java) {
@@ -137,7 +149,9 @@ class DownloadProgressTrackerTest {
     @Test
     fun computeOverallProgress_calculatesCorrectPercentage() {
         tracker.initialize(
-            TEST_SESSION_ID,listOf(createFileSpec("main.litertlm", 1000L, sha256 = "sha256_main")))
+            TEST_SESSION_ID,
+            listOf(createFileSpec("main.litertlm", 1000L, sha256 = "sha256_main")),
+        )
 
         tracker.updateFileState(TEST_SESSION_ID, "sha256_main") { it.copy(bytesDownloaded = 250L) }
 
@@ -172,7 +186,9 @@ class DownloadProgressTrackerTest {
     @Test
     fun computeOverallProgress_returnsZero_whenNoFiles() {
         tracker.initialize(
-            TEST_SESSION_ID,emptyList())
+            TEST_SESSION_ID,
+            emptyList(),
+        )
 
         val snapshot = tracker.computeOverallProgress()
 
@@ -200,7 +216,9 @@ class DownloadProgressTrackerTest {
     @Test
     fun isAllComplete_returnsTrue_whenAllComplete() {
         tracker.initialize(
-            TEST_SESSION_ID,listOf(createFileSpec("file1.litertlm", 1000L, sha256 = "sha256_file1")))
+            TEST_SESSION_ID,
+            listOf(createFileSpec("file1.litertlm", 1000L, sha256 = "sha256_file1")),
+        )
 
         tracker.updateFileState(TEST_SESSION_ID, "sha256_file1") { it.copy(status = FileStatus.COMPLETE) }
 
@@ -240,7 +258,9 @@ class DownloadProgressTrackerTest {
     @Test
     fun getCurrentDownloadingFile_returnsNull_whenNoneDownloading() {
         tracker.initialize(
-            TEST_SESSION_ID,listOf(createFileSpec("file1.litertlm", 1000L, sha256 = "sha256_file1")))
+            TEST_SESSION_ID,
+            listOf(createFileSpec("file1.litertlm", 1000L, sha256 = "sha256_file1")),
+        )
 
         tracker.updateFileState(TEST_SESSION_ID, "sha256_file1") { it.copy(status = FileStatus.COMPLETE) }
 

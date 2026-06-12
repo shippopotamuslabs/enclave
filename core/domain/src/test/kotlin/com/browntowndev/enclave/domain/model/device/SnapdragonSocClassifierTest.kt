@@ -10,6 +10,16 @@ class SnapdragonSocClassifierTest {
     }
 
     @Test
+    fun `CAP-005 SM8350 classifies as GEN1`() {
+        assertEquals(SnapdragonTier.GEN1, SnapdragonSocClassifier.tier("qcom sm8350"))
+    }
+
+    @Test
+    fun `CAP-006 lahaina classifies as GEN1`() {
+        assertEquals(SnapdragonTier.GEN1, SnapdragonSocClassifier.tier("qcom lahaina"))
+    }
+
+    @Test
     fun `CAP-002 SM8550 kalama classifies as GEN2`() {
         assertEquals(SnapdragonTier.GEN2, SnapdragonSocClassifier.tier("qcom sm8550 kalama"))
     }

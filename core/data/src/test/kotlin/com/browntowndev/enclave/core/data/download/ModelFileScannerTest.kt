@@ -6,11 +6,11 @@ import com.browntowndev.enclave.domain.model.config.LocalModelAsset
 import com.browntowndev.enclave.domain.model.config.LocalModelConfiguration
 import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.config.LocalModelMetadata
+import com.browntowndev.enclave.domain.model.config.UtilityType
+import com.browntowndev.enclave.domain.model.download.DownloadSource
 import com.browntowndev.enclave.domain.model.download.ModelConfig
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.model.config.UtilityType
-import com.browntowndev.enclave.domain.model.download.DownloadSource
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationPaths
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
@@ -159,11 +159,12 @@ class ModelFileScannerTest {
     @Test
     fun `scan treats installed SDXL QNN pack directory as present`() =
         kotlinx.coroutines.test.runTest {
-            val asset = createQnnPackAsset(
-                filename = "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip",
-                utilityType = UtilityType.SDXL_QNN_PACK,
-                packSubdir = LocalImageGenerationPaths.SDXL_QNN_SUBDIR,
-            )
+            val asset =
+                createQnnPackAsset(
+                    filename = "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip",
+                    utilityType = UtilityType.SDXL_QNN_PACK,
+                    packSubdir = LocalImageGenerationPaths.SDXL_QNN_SUBDIR,
+                )
 
             val result =
                 scanner.scanAndCreateDirIfNotExist(
@@ -178,12 +179,13 @@ class ModelFileScannerTest {
     @Test
     fun `scan marks SDXL QNN pack missing when extracted artifacts are absent`() =
         kotlinx.coroutines.test.runTest {
-            val asset = createQnnPackAsset(
-                filename = "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip",
-                utilityType = UtilityType.SDXL_QNN_PACK,
-                packSubdir = LocalImageGenerationPaths.SDXL_QNN_SUBDIR,
-                installArtifacts = false,
-            )
+            val asset =
+                createQnnPackAsset(
+                    filename = "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip",
+                    utilityType = UtilityType.SDXL_QNN_PACK,
+                    packSubdir = LocalImageGenerationPaths.SDXL_QNN_SUBDIR,
+                    installArtifacts = false,
+                )
 
             val result =
                 scanner.scanAndCreateDirIfNotExist(

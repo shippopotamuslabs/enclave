@@ -66,6 +66,9 @@ internal object LocalImageGenNative {
 
     external fun nativeCancel()
 
+    /** Error text from the most recent failed generate call, or null after success. */
+    external fun nativeGetLastGenerationError(): String?
+
     external fun nativeGetGenerationProgress(): IntArray?
 
     external fun nativeOnTrimMemory(level: Int)

@@ -37,6 +37,9 @@ EnclaveModelFamily detectFamily(const std::string& model_dir) {
         }
         return ENCLAVE_MODEL_SDXL_QNN;
     }
+    if (pathExists(joinPath(model_dir, "unet.mnn"))) {
+        return ENCLAVE_MODEL_SD15_MNN;
+    }
     return ENCLAVE_MODEL_SD15_QNN;
 }
 
@@ -76,7 +79,7 @@ void printUsage(const char* program) {
         << "  --model-dir PATH          Model pack directory (required)\n"
         << "  --qnn-runtime-dir PATH    Directory with libQnnHtp.so / libQnnSystem.so\n"
         << "  --dsp-library-path PATH   Skel search path (defaults to qnn-runtime-dir)\n"
-        << "  --family sd15|sdxl|juggernaut  Override auto-detected family\n"
+        << "  --family sd15|sd15-cpu|sdxl|juggernaut  Override auto-detected family\n"
         << "  --prompt TEXT\n"
         << "  --negative-prompt TEXT\n"
         << "  --output PATH             Output PNG for generate\n"
@@ -131,6 +134,9 @@ bool parseArgs(int argc, char** argv, HarnessOptions& out, std::string& error) {
                 out.family_explicit = true;
             } else if (std::strcmp(value, "sd15") == 0) {
                 out.family = ENCLAVE_MODEL_SD15_QNN;
+                out.family_explicit = true;
+            } else if (std::strcmp(value, "sd15-cpu") == 0) {
+                out.family = ENCLAVE_MODEL_SD15_MNN;
                 out.family_explicit = true;
             } else {
                 error = "Unknown --family value.";

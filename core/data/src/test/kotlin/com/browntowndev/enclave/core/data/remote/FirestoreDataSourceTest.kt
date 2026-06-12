@@ -1,6 +1,7 @@
 package com.browntowndev.enclave.core.data.remote
 
 import android.util.Log
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import com.browntowndev.enclave.core.data.local.ChatDao
 import com.browntowndev.enclave.core.data.local.ChatEntity
 import com.browntowndev.enclave.core.data.local.ChatSummaryDao
@@ -10,14 +11,13 @@ import com.browntowndev.enclave.core.data.local.MessageDao
 import com.browntowndev.enclave.core.data.local.MessageEntity
 import com.browntowndev.enclave.core.data.local.MessageWithFiles
 import com.browntowndev.enclave.core.data.security.LocalDataEncryptionService
+import com.browntowndev.enclave.core.data.sync.SearchToolSettingsSyncQueue
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.core.data.sync.SearchToolSettingsSyncQueue
 import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
-import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.firestore.CollectionReference
 import com.google.firebase.firestore.DocumentChange

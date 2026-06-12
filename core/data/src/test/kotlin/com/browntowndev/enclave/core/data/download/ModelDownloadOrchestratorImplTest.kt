@@ -105,7 +105,9 @@ class ModelDownloadOrchestratorImplTest {
             assertFalse(started)
             assertEquals(DownloadStatus.ERROR, orchestrator.downloadState.value.status)
             assertTrue(
-                orchestrator.downloadState.value.errorMessage.orEmpty().contains("Too many models"),
+                orchestrator.downloadState.value.errorMessage
+                    .orEmpty()
+                    .contains("Too many models"),
             )
         }
 

@@ -9,7 +9,6 @@ import com.browntowndev.enclave.domain.model.config.LocalModelMetadata
 import com.browntowndev.enclave.domain.model.config.RemoteModelAsset
 import com.browntowndev.enclave.domain.model.config.RemoteModelPack
 import com.browntowndev.enclave.domain.model.config.RemoteModelPackMember
-import com.browntowndev.enclave.domain.model.config.UtilityType
 import com.browntowndev.enclave.domain.model.config.effectiveDisplayName
 import com.browntowndev.enclave.domain.model.download.ModelPack
 import com.browntowndev.enclave.domain.model.download.ModelPackMember

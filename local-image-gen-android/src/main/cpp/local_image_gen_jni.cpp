@@ -1,10 +1,23 @@
 #include <jni.h>
 #include <android/log.h>
 
+#include <mutex>
+#include <string>
+
 #include "local_image_gen_runtime.h"
 #include "progress_state.h"
 
 #define LOG_TAG "local-image-gen-jni"
+
+namespace {
+std::mutex g_last_error_mutex;
+std::string g_last_generation_error;
+
+void set_last_generation_error(const char* message) {
+    std::lock_guard<std::mutex> lock(g_last_error_mutex);
+    g_last_generation_error = message != nullptr ? message : "";
+}
+}  // namespace
 
 extern "C" int qnn_probe_runtime();
 extern "C" int qnn_generate_image(
@@ -121,8 +134,22 @@ static int generateInternal(
     }
     if (code != 0) {
         __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, "Generate failed: %s", error);
+        set_last_generation_error(error);
+    } else {
+        set_last_generation_error("");
     }
     return code;
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_browntowndev_enclave_localimagegen_LocalImageGenNative_nativeGetLastGenerationError(
+    JNIEnv* env,
+    jclass) {
+    std::lock_guard<std::mutex> lock(g_last_error_mutex);
+    if (g_last_generation_error.empty()) {
+        return nullptr;
+    }
+    return env->NewStringUTF(g_last_generation_error.c_str());
 }
 
 extern "C" JNIEXPORT void JNICALL

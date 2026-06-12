@@ -206,13 +206,22 @@ bool mnn_model_dir_ready(const char* model_dir, char* error_out, int error_out_l
         copy_error("Model directory is empty.", error_out, error_out_len);
         return false;
     }
-    const char* required[] = {"clip.mnn", "unet.mnn", "vae_decoder.mnn", "tokenizer.json"};
+    const std::string dir(model_dir);
+    const char* required[] = {"unet.mnn", "vae_decoder.mnn", "tokenizer.json"};
     for (const char* name : required) {
-        const std::string path = std::string(model_dir) + "/" + name;
-        if (!file_exists(path)) {
+        if (!file_exists(dir + "/" + name)) {
             copy_error("Missing MNN model file in model directory.", error_out, error_out_len);
             return false;
         }
+    }
+    // CPU packs ship either clip.mnn or clip_v2.mnn + embedding bins (Local Dream layout).
+    const bool has_clip =
+        file_exists(dir + "/clip.mnn") ||
+        (file_exists(dir + "/clip_v2.mnn") && file_exists(dir + "/token_emb.bin") &&
+         file_exists(dir + "/pos_emb.bin"));
+    if (!has_clip) {
+        copy_error("Missing MNN model file in model directory.", error_out, error_out_len);
+        return false;
     }
     return true;
 }

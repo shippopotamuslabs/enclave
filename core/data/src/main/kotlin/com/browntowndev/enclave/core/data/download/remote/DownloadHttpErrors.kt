@@ -12,7 +12,13 @@ object DownloadHttpErrors {
     fun isNonRetryable(message: String?): Boolean {
         val code =
             message
-                ?.let { HTTP_STATUS_PATTERN.find(it)?.groupValues?.getOrNull(1)?.toIntOrNull() }
+                ?.let {
+                    HTTP_STATUS_PATTERN
+                        .find(it)
+                        ?.groupValues
+                        ?.getOrNull(1)
+                        ?.toIntOrNull()
+                }
                 ?: return false
         return code in HTTP_CLIENT_ERROR_MIN..HTTP_CLIENT_ERROR_MAX && code !in RETRYABLE_CLIENT_ERROR_CODES
     }

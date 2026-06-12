@@ -82,8 +82,20 @@ object LocalImageGenerationPaths {
     )
     fun hasQnnArtifacts(dir: File): Boolean = hasSd15QnnArtifacts(dir)
 
+    /**
+     * CPU packs ship either `clip.mnn` (built-in embeddings) or `clip_v2.mnn` plus external
+     * token/pos embedding bins (xororz / Local Dream layout).
+     */
     fun hasMnnArtifacts(dir: File): Boolean =
-        REQUIRED_MNN_FILES.all { File(dir, it).isFile }
+        REQUIRED_MNN_FILES.all { File(dir, it).isFile } &&
+            (
+                File(dir, "clip.mnn").isFile ||
+                    (
+                        File(dir, "clip_v2.mnn").isFile &&
+                            File(dir, "token_emb.bin").isFile &&
+                            File(dir, "pos_emb.bin").isFile
+                    )
+            )
 
     private fun resolveSubdirOrParent(
         parentPath: String,
@@ -151,7 +163,6 @@ object LocalImageGenerationPaths {
 
     private val REQUIRED_MNN_FILES =
         listOf(
-            "clip.mnn",
             "unet.mnn",
             "vae_decoder.mnn",
             "tokenizer.json",

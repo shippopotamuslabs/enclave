@@ -1,23 +1,25 @@
 package com.browntowndev.enclave.core.data.download
 
 import android.content.Context
-import com.browntowndev.enclave.domain.model.config.requiredArtifacts
 import com.browntowndev.enclave.domain.model.config.UtilityType
+import com.browntowndev.enclave.domain.model.config.requiredArtifacts
+import com.browntowndev.enclave.domain.model.download.JuggernautXlQnnPackCatalog
+import com.browntowndev.enclave.domain.model.download.LocalImagePackIds
 import com.browntowndev.enclave.domain.model.download.ModelConfig
 import com.browntowndev.enclave.domain.model.download.ModelPack
 import com.browntowndev.enclave.domain.model.download.ModelPackCompleteness
 import com.browntowndev.enclave.domain.model.download.ModelPackMemberStatus
-import com.browntowndev.enclave.domain.model.download.LocalImagePackIds
 import com.browntowndev.enclave.domain.model.download.ModelPackVerificationDepth
 import com.browntowndev.enclave.domain.model.download.ParsedModelCatalog
-import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.model.download.JuggernautXlQnnPackCatalog
 import com.browntowndev.enclave.domain.model.download.Sd15QnnPackCatalog
 import com.browntowndev.enclave.domain.model.download.SdxlQnnPackCatalog
+import com.browntowndev.enclave.domain.model.inference.ModelType
+import com.browntowndev.enclave.domain.model.media.LocalImageGenTriState
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelFamily
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationPaths
 import com.browntowndev.enclave.domain.port.download.HashingPort
 import com.browntowndev.enclave.domain.port.download.ModelPackVerifierPort
+import com.browntowndev.enclave.domain.port.media.LocalImageGenerationCapabilityPort
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -31,6 +33,7 @@ class ModelPackVerifierImpl
     constructor(
         @param:ApplicationContext private val context: Context,
         private val hashingPort: HashingPort,
+        private val capabilityPort: LocalImageGenerationCapabilityPort,
     ) : ModelPackVerifierPort {
         override suspend fun verifyPack(
             pack: ModelPack,
@@ -38,14 +41,28 @@ class ModelPackVerifierImpl
         ): ModelPackCompleteness =
             withContext(Dispatchers.IO) {
                 val modelsDir = File(context.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
+                val capabilities = capabilityPort.getCapabilities()
+                // The SD15 weights member is variant-substituted per device: CPU-routed tiers
+                // download the MNN zip, which installs under sd15-cpu instead of sd15-qnn.
+                val isSd15CpuFallback =
+                    pack.packId == LocalImagePackIds.SD15 &&
+                        capabilities.sd15NpuSupported == LocalImageGenTriState.NO &&
+                        capabilities.sd15CpuSupported == LocalImageGenTriState.YES
+
                 val memberStatuses =
                     pack.members.map { member ->
                         val verified =
                             when (member.asset.metadata.utilityType) {
                                 UtilityType.SD15_QNN_PACK ->
-                                    LocalImageGenerationPaths.hasSd15QnnArtifacts(
-                                        File(modelsDir, LocalImageGenerationPaths.SD15_QNN_SUBDIR),
-                                    )
+                                    if (isSd15CpuFallback) {
+                                        LocalImageGenerationPaths.hasMnnArtifacts(
+                                            File(modelsDir, LocalImageGenerationPaths.SD15_CPU_SUBDIR),
+                                        )
+                                    } else {
+                                        LocalImageGenerationPaths.hasSd15QnnArtifacts(
+                                            File(modelsDir, LocalImageGenerationPaths.SD15_QNN_SUBDIR),
+                                        )
+                                    }
                                 UtilityType.SDXL_QNN_PACK ->
                                     LocalImageGenerationPaths.hasSdxlQnnArtifacts(
                                         File(modelsDir, LocalImageGenerationPaths.SDXL_QNN_SUBDIR),

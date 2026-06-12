@@ -175,10 +175,15 @@ class InitializeModelsUseCase
                             remoteAssets.filter { asset ->
                                 asset.metadata.utilityType != null && asset.metadata.sha256 in imageGenPackMemberShas
                             }
+                        // Variant-substitute before filtering: on CPU-routed tiers the SD15
+                        // catalog row resolves to the MNN zip, and queueing the raw catalog
+                        // (QNN) row alongside it would download both zips.
                         addAll(
-                            packUtilityAssets.filter { asset ->
-                                asset.metadata.sha256 !in softDeletedShaSet
-                            },
+                            packUtilityAssets
+                                .map(resolveSd15QnnPackCatalogAssetUseCase::invoke)
+                                .filter { asset ->
+                                    asset.metadata.sha256 !in softDeletedShaSet
+                                },
                         )
                     }
                     if (!suppressImageEditSlot) {
@@ -187,12 +192,14 @@ class InitializeModelsUseCase
                                 asset.metadata.utilityType != null && asset.metadata.sha256 in imageEditPackMemberShas
                             }
                         addAll(
-                            editPackUtilityAssets.filter { asset ->
-                                asset.metadata.sha256 !in softDeletedShaSet
-                            },
+                            editPackUtilityAssets
+                                .map(resolveSd15QnnPackCatalogAssetUseCase::invoke)
+                                .filter { asset ->
+                                    asset.metadata.sha256 !in softDeletedShaSet
+                                },
                         )
                     }
-                }
+                }.distinctBy { it.metadata.sha256 }
 
             val capabilities = capabilityPort.getCapabilities()
             val (tierAwareSlotAssignments, tierAwareUtilityAssets) =

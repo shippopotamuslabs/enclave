@@ -15,8 +15,14 @@ import com.browntowndev.enclave.domain.model.download.ModelPackTestFixtures
 import com.browntowndev.enclave.domain.model.download.ModelPackVerificationDepth
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
+import com.browntowndev.enclave.domain.model.media.LocalImageGenTriState
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilities
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationPaths
 import com.browntowndev.enclave.domain.port.download.HashingPort
+import com.browntowndev.enclave.domain.port.media.LocalImageGenerationCapabilityPort
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -38,12 +44,24 @@ class ModelPackVerifierImplTest {
     private lateinit var hashingPort: HashingPort
     private lateinit var verifier: ModelPackVerifierImpl
     private lateinit var appContext: android.content.Context
+    private lateinit var capabilityPort: LocalImageGenerationCapabilityPort
 
     @BeforeEach
     fun setup() {
         appContext = ApplicationProvider.getApplicationContext()
         hashingPort = mockk(relaxed = true)
-        verifier = ModelPackVerifierImpl(appContext, hashingPort)
+        capabilityPort = mockk(relaxed = true)
+        coEvery { capabilityPort.getCapabilities() } returns
+            LocalImageGenerationCapabilities(
+                npuAvailable = LocalImageGenTriState.YES,
+                sd15NpuSupported = LocalImageGenTriState.YES,
+                sd15CpuSupported = LocalImageGenTriState.NO,
+                sdxlNpuSupported = LocalImageGenTriState.NO,
+                recommendedBackend = LocalImageGenerationBackendKind.QNN_NPU,
+                recommendedModelId = LocalImageGenerationModelId.SD15_QNN,
+                diagnostics = emptyList(),
+            )
+        verifier = ModelPackVerifierImpl(appContext, hashingPort, capabilityPort)
     }
 
     @Test
@@ -132,7 +150,16 @@ class ModelPackVerifierImplTest {
             val modelsDir = File(appContext.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
             val packDir = File(modelsDir, LocalImageGenerationPaths.SDXL_QNN_SUBDIR).apply { mkdirs() }
             // Missing tokenizer.json
-            listOf("clip.mnn", "clip_2.mnn", "token_emb.bin", "token_emb_2.bin", "pos_emb.bin", "pos_emb_2.bin", "unet.bin", "vae_decoder.bin").forEach { name ->
+            listOf(
+                "clip.mnn",
+                "clip_2.mnn",
+                "token_emb.bin",
+                "token_emb_2.bin",
+                "pos_emb.bin",
+                "pos_emb_2.bin",
+                "unet.bin",
+                "vae_decoder.bin",
+            ).forEach { name ->
                 File(packDir, name).writeBytes(byteArrayOf(1))
             }
 
@@ -194,7 +221,9 @@ class ModelPackVerifierImplTest {
                 configurations =
                     listOf(
                         LocalModelConfiguration(
-                            id = com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId("cfg"),
+                            id =
+                                com.browntowndev.enclave.domain.model.config
+                                    .LocalModelConfigurationId("cfg"),
                             localModelId = LocalModelId("test"),
                             displayName = "Test",
                             maxTokens = 0,
@@ -349,4 +378,38 @@ class ModelPackVerifierImplTest {
             members = listOf(ModelPackMember(ModelPackRole.TEXT_ENCODER, asset)),
         )
     }
+
+    @Test
+    @DisplayName("Verify SD1.5 pack completeness for CPU fallback maps to hasMnnArtifacts")
+    fun verifySd15PackCpuFallback() =
+        runTest {
+            coEvery { capabilityPort.getCapabilities() } returns
+                LocalImageGenerationCapabilities(
+                    npuAvailable = LocalImageGenTriState.NO,
+                    sd15NpuSupported = LocalImageGenTriState.NO,
+                    sd15CpuSupported = LocalImageGenTriState.YES,
+                    sdxlNpuSupported = LocalImageGenTriState.NO,
+                    recommendedBackend = LocalImageGenerationBackendKind.CPU_MNN,
+                    recommendedModelId = LocalImageGenerationModelId.SD15_CPU,
+                    diagnostics = emptyList(),
+                )
+
+            val modelsDir = File(appContext.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
+            val cpuDir = File(modelsDir, LocalImageGenerationPaths.SD15_CPU_SUBDIR).apply { mkdirs() }
+
+            // Initially empty, should be incomplete
+            val incompleteResult = verifier.verifyPack(sd15QnnPack(), ModelPackVerificationDepth.SIZE_ON_DISK)
+            assertFalse(incompleteResult.isComplete)
+            assertEquals(0, incompleteResult.installedCount)
+
+            // Create MNN artifacts
+            File(cpuDir, "unet.mnn").createNewFile()
+            File(cpuDir, "vae_decoder.mnn").createNewFile()
+            File(cpuDir, "tokenizer.json").createNewFile()
+            File(cpuDir, "clip.mnn").createNewFile()
+
+            val completeResult = verifier.verifyPack(sd15QnnPack(), ModelPackVerificationDepth.SIZE_ON_DISK)
+            assertTrue(completeResult.isComplete)
+            assertEquals(completeResult.totalCount, completeResult.installedCount)
+        }
 }

@@ -8,12 +8,12 @@ import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.config.UtilityType
 import com.browntowndev.enclave.domain.model.config.requiredArtifacts
-import com.browntowndev.enclave.domain.model.media.LocalImageGenerationPaths
+import com.browntowndev.enclave.domain.model.download.JuggernautXlQnnPackCatalog
 import com.browntowndev.enclave.domain.model.download.ModelConfig
 import com.browntowndev.enclave.domain.model.download.ModelScanResult
-import com.browntowndev.enclave.domain.model.download.JuggernautXlQnnPackCatalog
 import com.browntowndev.enclave.domain.model.download.SdxlQnnPackCatalog
 import com.browntowndev.enclave.domain.model.inference.ModelType
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationPaths
 import com.browntowndev.enclave.domain.port.download.ModelFileScannerPort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import dagger.hilt.android.qualifiers.ApplicationContext

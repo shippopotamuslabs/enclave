@@ -66,7 +66,9 @@ object LocalImagePackDownloadPolicy {
         catalog: ParsedModelCatalog,
         capabilities: LocalImageGenerationCapabilities,
     ): Set<String> {
-        if (capabilities.sd15NpuSupported == LocalImageGenTriState.NO) {
+        if (capabilities.sd15NpuSupported == LocalImageGenTriState.NO &&
+            capabilities.sd15CpuSupported != LocalImageGenTriState.YES
+        ) {
             return catalog.packs
                 .filter { it.slot in LOCAL_IMAGE_SLOTS }
                 .flatMap { pack -> pack.members.map { it.asset.metadata.sha256 } }
@@ -81,7 +83,12 @@ object LocalImagePackDownloadPolicy {
 
     fun eligibleQnnUtilityTypes(capabilities: LocalImageGenerationCapabilities): Set<UtilityType> =
         buildSet {
-            if (capabilities.sd15NpuSupported == LocalImageGenTriState.YES) {
+            // SD15_QNN_PACK is the SD1.5 weights slot; the download resolver substitutes the
+            // MNN CPU zip on tiers whose NPU cannot run the QNN graphs, so the slot stays
+            // eligible whenever either backend works.
+            if (capabilities.sd15NpuSupported == LocalImageGenTriState.YES ||
+                capabilities.sd15CpuSupported == LocalImageGenTriState.YES
+            ) {
                 add(UtilityType.SD15_QNN_PACK)
             }
             if (capabilities.sdxlNpuSupported == LocalImageGenTriState.YES) {
@@ -97,7 +104,9 @@ object LocalImagePackDownloadPolicy {
         capabilities: LocalImageGenerationCapabilities,
     ): Boolean =
         when (packId) {
-            LocalImagePackIds.SD15 -> capabilities.sd15NpuSupported == LocalImageGenTriState.YES
+            LocalImagePackIds.SD15 ->
+            capabilities.sd15NpuSupported == LocalImageGenTriState.YES ||
+                capabilities.sd15CpuSupported == LocalImageGenTriState.YES
             LocalImagePackIds.SDXL -> capabilities.sdxlNpuSupported == LocalImageGenTriState.YES
             LocalImagePackIds.JUGGERNAUT -> capabilities.juggernautXlNpuSupported == LocalImageGenTriState.YES
             else -> true
