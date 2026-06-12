@@ -39,7 +39,7 @@ data class ToolDefinition(
         when (strategy) {
             ToolCallStrategy.JSON_XML_ENVELOPE -> {
                 val arguments = buildExampleJsonMap()
-                "ActionResult{\"name\":\"$name\",\"arguments\":$arguments}ActionResult"
+                "<tool_call>{\"name\":\"$name\",\"arguments\":$arguments}</tool_call>"
             }
             ToolCallStrategy.LITE_RT_NATIVE -> {
                 val args = buildExampleLiteRtArgs()
@@ -207,9 +207,9 @@ data class ToolDefinition(
 
         val SEARCH_TOOLS =
             ToolDefinition(
-                name = "search_tools",
+                name = "tool_discovery_tool",
                 description =
-                    "Search available tools by natural-language query and activate matching tools for this conversation.",
+                    "Activate additional capabilities for this conversation. Describe what you need to do and matching tools are enabled. This does not search the web or answer questions.",
                 parametersClass = SearchToolsParams::class,
                 disclosureMode = ToolDisclosureMode.PRELOADED,
                 supportsLazyDisclosure = false,

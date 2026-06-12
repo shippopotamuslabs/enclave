@@ -31,4 +31,18 @@ class SearchToolsCallArgsTest {
         assertEquals("append blocks", args.query)
         assertEquals(2, args.limit)
     }
+
+    @Test
+    fun parse_reads_capability_key() {
+        val args = SearchToolsCallArgs.parse("""{"capability":"send email","limit":3}""")
+        assertEquals("send email", args.query)
+        assertEquals(3, args.limit)
+    }
+
+    @Test
+    fun parse_falls_back_to_query_when_capability_absent() {
+        val args = SearchToolsCallArgs.parse("""{"query":"send email","limit":3}""")
+        assertEquals("send email", args.query)
+        assertEquals(3, args.limit)
+    }
 }

@@ -72,7 +72,7 @@ class ChatInferenceRequestPreparerTest {
                 {
                     assertEquals(
                         listOf(
-                            "search_tools",
+                            "tool_discovery_tool",
                             "read_context_reference",
                             "web_search",
                             "web_extract",
@@ -89,7 +89,7 @@ class ChatInferenceRequestPreparerTest {
                 },
                 {
                     assertEquals(
-                        listOf("search_tools", "web_search", "web_extract"),
+                        listOf("tool_discovery_tool", "web_search", "web_extract"),
                         request.options.activeTools.map { it.name },
                     )
                 },
@@ -372,7 +372,8 @@ class ChatInferenceRequestPreparerTest {
                     modelType = ModelType.FAST,
                 )
 
-            assertTrue(request.options.systemPrompt?.contains("ActionResult") == true)
+            assertTrue(request.options.systemPrompt?.contains("<tool_call>") == true)
+            assertFalse(request.options.systemPrompt?.contains("ActionResult") == true)
             assertTrue(request.options.systemPrompt?.contains("web_search") == true)
         }
 
@@ -616,11 +617,12 @@ class ChatInferenceRequestPreparerTest {
             id = LocalModelConfigurationId("gguf-thinking"),
             name = "GGUF Thinking",
             thinkingEnabled = true,
+            reasoningBudget = 1536,
             localModelFormat = ModelFileFormat.GGUF,
         )
 
     @Test
-    fun `LiteRT local model with thinkingEnabled true derives reasoningBudget 2048`() =
+    fun `LiteRT local model with thinkingEnabled true derives reasoningBudget 0`() =
         runTest {
             val preparer =
                 ChatInferenceRequestPreparer(
@@ -650,11 +652,11 @@ class ChatInferenceRequestPreparerTest {
                     modelType = ModelType.FAST,
                 )
 
-            assertEquals(2048, request.options.reasoningBudget)
+            assertEquals(0, request.options.reasoningBudget)
         }
 
     @Test
-    fun `GGUF local model with thinkingEnabled true derives reasoningBudget 2048`() =
+    fun `GGUF local model with thinkingEnabled true uses configured reasoningBudget`() =
         runTest {
             val preparer =
                 ChatInferenceRequestPreparer(
@@ -684,7 +686,7 @@ class ChatInferenceRequestPreparerTest {
                     modelType = ModelType.FAST,
                 )
 
-            assertEquals(2048, request.options.reasoningBudget)
+            assertEquals(1536, request.options.reasoningBudget)
         }
 
     @Test

@@ -16,10 +16,10 @@ class ToolSessionActivationRegistryTest {
     @Test
     fun seedTurn_replaces_registry() {
         val registry = ToolSessionActivationRegistry()
-        registry.seedTurn(listOf("search_tools", "web_search"))
+        registry.seedTurn(listOf("tool_discovery_tool", "web_search"))
         registry.applySearchActivations(listOf("append_blocks"), chatId = null)
-        registry.seedTurn(listOf("search_tools"))
-        assertEquals(listOf("search_tools"), registry.orderedActiveNames())
+        registry.seedTurn(listOf("tool_discovery_tool"))
+        assertEquals(listOf("tool_discovery_tool"), registry.orderedActiveNames())
     }
 
     @Test
@@ -31,11 +31,11 @@ class ToolSessionActivationRegistryTest {
                 monotonicToolActivation = monotonic,
                 onSearchDiscoveredNewTools = { searchCallbackCount++ },
             )
-        registry.seedTurn(listOf("search_tools"))
+        registry.seedTurn(listOf("tool_discovery_tool"))
         registry.applySearchActivations(listOf("append_blocks"), ChatId("chat-1"))
 
         assertEquals(
-            listOf("search_tools", "append_blocks"),
+            listOf("tool_discovery_tool", "append_blocks"),
             registry.orderedActiveNames(),
         )
         assertEquals(setOf("append_blocks"), monotonic.activatedNames(ChatId("chat-1")))
@@ -46,7 +46,7 @@ class ToolSessionActivationRegistryTest {
     fun applySearchActivations_is_thread_safe_under_parallel_calls() =
         runTest {
             val registry = ToolSessionActivationRegistry()
-            registry.seedTurn(listOf("search_tools"))
+            registry.seedTurn(listOf("tool_discovery_tool"))
 
             coroutineScope {
                 List(16) { index ->
@@ -58,7 +58,7 @@ class ToolSessionActivationRegistryTest {
 
             val names = registry.orderedActiveNames()
             assertEquals(ToolSearchThresholds.MAX_ACTIVATED_TOOLS_PER_SESSION, names.size)
-            assertEquals("search_tools", names.first())
+            assertEquals("tool_discovery_tool", names.first())
             assertTrue(names.drop(1).all { it.startsWith("tool_") })
             assertEquals(names.size, names.toSet().size)
         }
@@ -78,7 +78,7 @@ class ToolSessionActivationRegistryTest {
             ToolSessionActivationRegistry(
                 onSearchDiscoveredNewTools = { changed = true },
             )
-        registry.seedTurn(listOf("search_tools"))
+        registry.seedTurn(listOf("tool_discovery_tool"))
         registry.applySearchActivations(emptyList(), chatId = null)
         assertFalse(changed)
     }

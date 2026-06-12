@@ -516,6 +516,7 @@ data class LocalModelConfigUi(
     val repetitionPenalty: Double = 1.1,
     val systemPrompt: String = "",
     val thinkingEnabled: Boolean = false,
+    val reasoningBudget: String = "1024",
     val isSystemPreset: Boolean = false,
     val defaultAssignments: List<ModelType> = emptyList(),
 )

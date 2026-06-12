@@ -10,7 +10,7 @@ object ToolSearchThresholds {
     const val BM25_K1 = 1.2
     const val BM25_B = 0.75
     const val EMBEDDING_DIMENSION = 384
-    const val EMPTY_QUERY_ERROR_MESSAGE = "search_tools requires a non-empty query."
+    const val EMPTY_QUERY_ERROR_MESSAGE = "tool_discovery_tool requires a non-empty capability description."
     const val L2_NORM_EPSILON = 1e-6f
     const val BM25_IDF_SMOOTHING = 0.5
     const val EMBEDDING_HASH_MODULUS = 997

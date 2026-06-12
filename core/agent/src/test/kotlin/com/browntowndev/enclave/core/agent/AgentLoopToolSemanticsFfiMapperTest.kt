@@ -11,7 +11,7 @@ class AgentLoopToolSemanticsFfiMapperTest {
     fun ts030_domainEnclaveDefaultPassesSemanticsJson() {
         val json = AgentLoopAgentConfig().toFfi().toolSemanticsJson
 
-        assertTrue(json.contains("search_tools"))
+        assertTrue(json.contains("tool_discovery_tool"))
         assertTrue(json.contains("append_blocks"))
         assertTrue(json.contains("greedy_extension_tools"))
     }
@@ -23,7 +23,7 @@ class AgentLoopToolSemanticsFfiMapperTest {
                 toolSemanticsJson = """{"catalog":{"tools":[]}}""",
             ).toFfi().toolSemanticsJson
 
-        assertFalse(json.contains("search_tools"))
+        assertFalse(json.contains("tool_discovery_tool"))
         assertFalse(json.contains("append_blocks"))
     }
 

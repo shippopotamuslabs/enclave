@@ -1,15 +1,15 @@
 {
   "tools": [
     {
-      "name": "search_tools",
-      "aliases": [],
+      "name": "tool_discovery_tool",
+      "aliases": ["search_tools"],
       "reproducible": true,
       "schema_hint": {
         "required_fields": [
           {
-            "name": "query",
+            "name": "capability",
             "ty": "string",
-            "description": "Natural-language query describing the capability to find"
+            "description": "Description of the capability needed; not a web-search query"
           }
         ],
         "defaults": {}

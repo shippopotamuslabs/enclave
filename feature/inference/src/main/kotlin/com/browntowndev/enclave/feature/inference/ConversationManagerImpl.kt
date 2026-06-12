@@ -175,7 +175,7 @@ class ConversationManagerImpl
         }
 
         private fun invalidateLiteRtConversationForToolChange() {
-            // Keep the active conversation alive while search_tools is executing; rebuild on the
+            // Keep the active conversation alive while tool_discovery_tool is executing; rebuild on the
             // next getConversation when the signature no longer matches activeToolNames.
             cache.currentSignature = null
         }

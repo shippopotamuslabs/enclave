@@ -140,7 +140,7 @@ internal class LiteRtToolCallLoop(
     }
 
     /**
-     * Intercepts `search_tools` locally without invoking [ToolExecutorPort].
+     * Intercepts `tool_discovery_tool` locally without invoking [ToolExecutorPort].
      * Updates [ConversationSignatureCache.toolActivationRegistry] (single activation source).
      */
     suspend fun handleToolSearch(

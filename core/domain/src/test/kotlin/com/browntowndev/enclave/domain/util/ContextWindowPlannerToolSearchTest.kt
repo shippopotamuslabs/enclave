@@ -57,7 +57,7 @@ class ContextWindowPlannerToolSearchTest {
             when {
                 text.contains("TOOL CATALOG deferred_1") -> 500
                 text == SearchToolPromptComposer.TOOL_DISCOVERY_INSTRUCTION_TEXT -> 12
-                text.contains("search_tools") && text.contains("web_search") -> 40
+                text.contains("tool_discovery_tool") && text.contains("web_search") -> 40
                 else -> text.length
             }
     }

@@ -34,10 +34,12 @@ class SearchToolPromptComposerTest {
         assertTrue(prompt.contains("# TOOL DISCOVERY:"))
         assertFalse(prompt.contains("# TOOL CATALOG:"))
         assertFalse(prompt.contains("# SCHEMA DISCLOSURE:"))
-        assertTrue(prompt.contains("ActionResult{\"name\":\"web_search\""))
-        assertTrue(prompt.contains("ActionResult{\"name\":\"search_tools\""))
-        assertFalse(prompt.contains("ActionResult{\"name\":\"append_blocks\""))
-        assertFalse(prompt.contains("ActionResult{\"name\":\"search_current_artifact\""))
+        assertTrue(prompt.contains("<tool_call>{\"name\":\"web_search\""))
+        assertTrue(prompt.contains("<tool_call>{\"name\":\"tool_discovery_tool\""))
+        assertFalse(prompt.contains("<tool_call>{\"name\":\"append_blocks\""))
+        assertFalse(prompt.contains("<tool_call>{\"name\":\"search_current_artifact\""))
+        assertFalse(prompt.contains("ActionResult"))
+        assertFalse(prompt.contains("ipsis"))
     }
 
     @Test
@@ -60,7 +62,7 @@ class SearchToolPromptComposerTest {
             )
 
         assertTrue(prompt.contains("call:web_search{query: <|\"|>...<|\"|>}"))
-        assertTrue(prompt.contains("call:search_tools{query: <|\"|>describe the capability you need<|\"|>}"))
+        assertTrue(prompt.contains("call:tool_discovery_tool{capability: <|\"|>describe the capability you need<|\"|>}"))
         assertFalse(prompt.contains("call:append_blocks{"))
         assertFalse(prompt.contains("call:search_current_artifact{"))
     }
@@ -79,7 +81,7 @@ class SearchToolPromptComposerTest {
                     ),
             )
 
-        assertFalse(prompt.contains("ActionResult{\"name\":\"append_blocks\""))
+        assertFalse(prompt.contains("<tool_call>{\"name\":\"append_blocks\""))
         assertFalse(prompt.contains("call:append_blocks{"))
     }
 
@@ -158,7 +160,7 @@ class SearchToolPromptComposerTest {
                 strategy = ToolCallStrategy.JSON_XML_ENVELOPE,
             )
 
-        assertTrue(prompt.contains("ActionResult{\"name\":\"search_x_recent\""))
+        assertTrue(prompt.contains("<tool_call>{\"name\":\"search_x_recent\""))
         assertFalse(prompt.contains("# TOOL CATALOG:"))
     }
 
@@ -180,7 +182,7 @@ class SearchToolPromptComposerTest {
                 strategy = ToolCallStrategy.JSON_XML_ENVELOPE,
             )
 
-        assertTrue(prompt.contains("ActionResult{\"name\":\"start_artifact\""))
+        assertTrue(prompt.contains("<tool_call>{\"name\":\"start_artifact\""))
         assertFalse(prompt.contains("tool_names\":[\"start_artifact\"]"))
     }
 

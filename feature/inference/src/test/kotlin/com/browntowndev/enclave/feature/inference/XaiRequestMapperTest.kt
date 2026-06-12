@@ -344,7 +344,7 @@ class XaiRequestMapperTest {
 
         val toolsPayload = params._additionalBodyProperties()["tools"].toString()
 
-        assertTrue(toolsPayload.contains("search_tools"))
+        assertTrue(toolsPayload.contains("tool_discovery_tool"))
         assertTrue(toolsPayload.contains("web_search"))
         assertFalse(toolsPayload.contains("\"append_blocks\""))
     }

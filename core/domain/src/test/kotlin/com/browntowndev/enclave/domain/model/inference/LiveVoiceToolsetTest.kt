@@ -29,7 +29,7 @@ class LiveVoiceToolsetTest {
             "generate_image",
             "generate_video",
             "generate_music",
-            "search_tools",
+            "tool_discovery_tool",
             "attached_image_inspect",
             "read_context_reference",
         )

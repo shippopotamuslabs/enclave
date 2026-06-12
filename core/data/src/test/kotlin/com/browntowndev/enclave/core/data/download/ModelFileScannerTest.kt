@@ -197,6 +197,36 @@ class ModelFileScannerTest {
             assertFalse(result.allValid)
         }
 
+    @Test
+    fun `scan treats installed SD15 CPU MNN pack directory as present`() =
+        kotlinx.coroutines.test.runTest {
+            val asset = createSd15CpuPackAsset(installArtifacts = true)
+
+            val result =
+                scanner.scanAndCreateDirIfNotExist(
+                    expectedModels = emptyMap(),
+                    utilityAssets = listOf(asset),
+                )
+
+            assertTrue(result.missingModels.isEmpty())
+            assertTrue(result.allValid)
+        }
+
+    @Test
+    fun `scan marks SD15 CPU MNN pack missing when extracted artifacts are absent`() =
+        kotlinx.coroutines.test.runTest {
+            val asset = createSd15CpuPackAsset(installArtifacts = false)
+
+            val result =
+                scanner.scanAndCreateDirIfNotExist(
+                    expectedModels = emptyMap(),
+                    utilityAssets = listOf(asset),
+                )
+
+            assertEquals(listOf(asset), result.missingModels)
+            assertFalse(result.allValid)
+        }
+
     private fun createAsset(
         filename: String,
         sizeBytes: Long,
@@ -261,6 +291,30 @@ class ModelFileScannerTest {
                     modelFileFormat = ModelFileFormat.BIN,
                     source = DownloadSource.HUGGING_FACE,
                     utilityType = utilityType,
+                ),
+            configurations = emptyList(),
+        )
+    }
+
+    private fun createSd15CpuPackAsset(installArtifacts: Boolean): LocalModelAsset {
+        if (installArtifacts) {
+            val packDir = File(modelsDir, LocalImageGenerationPaths.SD15_CPU_SUBDIR).apply { mkdirs() }
+            listOf("unet.mnn", "vae_decoder.mnn", "tokenizer.json", "clip.mnn").forEach { name ->
+                File(packDir, name).writeText("stub")
+            }
+        }
+        return LocalModelAsset(
+            metadata =
+                LocalModelMetadata(
+                    id = LocalModelId("sd15-cpu-pack"),
+                    huggingFaceModelName = "xororz/sd15-mnn",
+                    remoteFileName = "AnythingV5.zip",
+                    localFileName = "AnythingV5.zip",
+                    sha256 = "6183835e6b3f438a743ee16d4f929cb8bd2f20e50dc56d1a8eab0185e0734bbf",
+                    sizeInBytes = 100L,
+                    modelFileFormat = ModelFileFormat.BIN,
+                    source = DownloadSource.HUGGING_FACE,
+                    utilityType = UtilityType.SD15_QNN_PACK,
                 ),
             configurations = emptyList(),
         )

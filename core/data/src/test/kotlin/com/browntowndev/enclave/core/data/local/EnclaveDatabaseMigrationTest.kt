@@ -82,6 +82,20 @@ class EnclaveDatabaseMigrationTest {
             }
         assertTrue(localModelColumnNames.contains("display_name"))
 
+        val localConfigColumns = sqliteDb.query("PRAGMA table_info('local_model_configurations')")
+        val localConfigColumnDefaults =
+            buildMap {
+                localConfigColumns.use {
+                    while (it.moveToNext()) {
+                        put(
+                            it.getString(it.getColumnIndexOrThrow("name")),
+                            it.getString(it.getColumnIndexOrThrow("dflt_value")),
+                        )
+                    }
+                }
+            }
+        assertEquals("1024", localConfigColumnDefaults["reasoning_budget"])
+
         db.close()
     }
 
@@ -350,7 +364,7 @@ class EnclaveDatabaseMigrationTest {
 
     @Test
     @org.junit.jupiter.api.DisplayName("LV-DB-VERSION-001")
-    fun lvDbVersion001_databaseVersionIsTwo() {
+    fun lvDbVersion001_databaseVersionIsThree() {
         val db =
             Room
                 .inMemoryDatabaseBuilder(
@@ -360,7 +374,7 @@ class EnclaveDatabaseMigrationTest {
                 .build()
 
         try {
-            assertEquals(2, db.openHelper.writableDatabase.version)
+            assertEquals(3, db.openHelper.writableDatabase.version)
         } finally {
             db.close()
         }

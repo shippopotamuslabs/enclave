@@ -30,7 +30,7 @@ import kotlinx.serialization.json.Json as KJson
 /**
  * Native LiteRT [ToolSet] providers for high-frequency and artifact tools.
  *
- * Tools discovered via `search_tools` that are not listed here (X APIs, media generation, etc.)
+ * Tools discovered via `tool_discovery_tool` that are not listed here (X APIs, media generation, etc.)
  * remain callable through the envelope [ToolExecutorPort] path when the model uses text/JSON tools.
  */
 internal object LiteRtNativeToolsets {
@@ -44,7 +44,7 @@ internal object LiteRtNativeToolsets {
             activeToolNames.forEach { name ->
                 val set: ToolSet? =
                     when (name) {
-                        "search_tools" -> LocalSearchToolsToolset(context)
+                        "tool_discovery_tool" -> LocalSearchToolsToolset(context)
                         "web_search" -> LocalSearchToolset(context)
                         "web_extract" -> LocalExtractToolset(context)
                         "attached_image_inspect" -> LocalImageInspectToolset(context)
@@ -77,17 +77,17 @@ internal object LiteRtNativeToolsets {
     ) : ToolSet {
         @com.google.ai.edge.litertlm.Tool(
             description =
-                "Search available tools by natural-language query and activate matching tools for this conversation.",
+                "Activate additional capabilities for this conversation. Describe what you need to do and matching tools are enabled.",
         )
         fun search_tools(
-            @ToolParam(description = "Natural-language query describing the capability to find.") query: String,
+            @ToolParam(description = "Description of the capability you need, e.g. 'send an email' or 'generate an image'. Not a web-search query.") query: String,
             @ToolParam(description = "Maximum number of matches to return.") limit: String? = null,
         ): String =
             runBlocking(Dispatchers.IO) {
                 val parsedLimit = limit?.toIntOrNull() ?: ToolSearchThresholds.DEFAULT_SEARCH_LIMIT
                 val argumentsJson =
                     buildJsonObject {
-                        put("query", query)
+                        put("capability", query)
                         put("limit", parsedLimit.toString())
                     }.toString()
                 context.toolLoop.handleToolSearch(

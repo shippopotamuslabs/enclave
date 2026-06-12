@@ -179,6 +179,7 @@ internal class SettingsLocalModelsDelegate
                 minP = minP,
                 repetitionPenalty = repetitionPenalty,
                 thinkingEnabled = thinkingEnabled,
+                reasoningBudget = reasoningBudget,
                 systemPrompt = systemPrompt,
                 isSystemPreset = isSystemPreset,
             )

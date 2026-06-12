@@ -30,4 +30,12 @@ enum class ModelFileFormat(
 
     @SerialName("TXT")
     TXT(".txt"),
+
+    ;
+
+    companion object {
+        /** Resolves the format from a file name's extension, or null if no format matches. */
+        fun fromFileName(fileName: String): ModelFileFormat? =
+            entries.firstOrNull { fileName.endsWith(it.extension, ignoreCase = true) }
+    }
 }

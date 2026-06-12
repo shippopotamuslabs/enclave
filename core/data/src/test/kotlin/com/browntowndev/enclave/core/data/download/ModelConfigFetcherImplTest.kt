@@ -487,6 +487,84 @@ class ModelConfigFetcherImplTest {
         }
 
     @Test
+    fun fetchRemoteConfig_infersFormatFromFileExtensionWhenFieldOmitted() =
+        runTest {
+            // Catalog assets that omit modelFileFormat must resolve from the file
+            // extension instead of silently defaulting to LITERTLM (which hid the
+            // llama.cpp-only settings for GGUF models in the configure screen).
+            val json =
+                """
+                {
+                  "assets": [
+                    {
+                      "displayName": "GGUF Model",
+                      "fileName": "model.gguf",
+                      "sha256": "gguf-sha",
+                      "sizeInBytes": 1000000,
+                      "configurations": [
+                        {
+                          "configId": "config-gguf-1",
+                          "displayName": "GGUF Model",
+                          "systemPrompt": "Hi",
+                          "temperature": 0.7,
+                          "topK": 40,
+                          "topP": 0.95,
+                          "minP": 0.05,
+                          "repetitionPenalty": 1.1,
+                          "maxTokens": 2048,
+                          "contextWindow": 4096,
+                          "defaultAssignments": ["main"]
+                        }
+                      ]
+                    },
+                    {
+                      "displayName": "LiteRT Model",
+                      "fileName": "model.litertlm",
+                      "sha256": "litert-sha",
+                      "sizeInBytes": 1000000,
+                      "configurations": [
+                        {
+                          "configId": "config-litert-1",
+                          "displayName": "LiteRT Model",
+                          "systemPrompt": "Hi",
+                          "temperature": 0.7,
+                          "topK": 40,
+                          "topP": 0.95,
+                          "minP": 0.05,
+                          "repetitionPenalty": 1.1,
+                          "maxTokens": 2048,
+                          "contextWindow": 4096,
+                          "defaultAssignments": ["fast"]
+                        }
+                      ]
+                    }
+                  ]
+                }
+                """.trimIndent()
+
+            val mockCall = mockk<okhttp3.Call>()
+            val response =
+                Response
+                    .Builder()
+                    .request(mockk())
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(200)
+                    .message("OK")
+                    .body(json.toResponseBody())
+                    .build()
+
+            every { mockOkHttpClient.newCall(any()) } returns mockCall
+            every { mockCall.execute() } returns response
+
+            val result = fetcher.fetchRemoteConfig()
+
+            assertTrue(result.isSuccess)
+            val assets = result.getOrNull()!!
+            assertEquals(ModelFileFormat.GGUF, assets[0].metadata.modelFileFormat)
+            assertEquals(ModelFileFormat.LITERTLM, assets[1].metadata.modelFileFormat)
+        }
+
+    @Test
     fun fetchRemoteConfig_parsesUtilityAsset() =
         runTest {
             val json =

@@ -654,7 +654,7 @@ class RustLoopInferenceService(
     }
 
     /**
-     * Session append-only wire registry: preload ∪ tools activated via [search_tools] this prompt.
+     * Session append-only wire registry: preload ∪ tools activated via [tool_discovery_tool] this prompt.
      */
     private fun wireToolsForRequest(
         options: GenerationOptions,

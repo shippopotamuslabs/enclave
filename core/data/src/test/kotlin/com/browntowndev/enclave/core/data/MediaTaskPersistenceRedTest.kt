@@ -122,7 +122,7 @@ class MediaTaskPersistenceRedTest {
 
     @Test
     fun `DB-01 EnclaveDatabase version matches current schema`() {
-        assertEquals(2, databaseAnnotationVersion())
+        assertEquals(3, databaseAnnotationVersion())
     }
 
     @Test

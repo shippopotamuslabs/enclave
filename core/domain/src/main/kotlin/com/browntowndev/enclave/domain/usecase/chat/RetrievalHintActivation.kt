@@ -8,7 +8,7 @@ import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * Activates tools referenced by context-management `retrieval_hint` strings so the model can
- * follow spill envelopes and sidecar references without a prior `search_tools` call.
+ * follow spill envelopes and sidecar references without a prior `tool_discovery_tool` call.
  */
 object RetrievalHintActivation {
     private val readContextReferenceHint =

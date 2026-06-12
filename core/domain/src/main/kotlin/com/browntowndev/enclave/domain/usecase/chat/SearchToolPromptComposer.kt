@@ -47,7 +47,7 @@ class SearchToolPromptComposer
 
         companion object {
             const val TOOL_DISCOVERY_INSTRUCTION_TEXT =
-                "Call search_tools with a natural-language query before using tools not already active."
+                "Use the tool_discovery_tool to activate capabilities you need but do not see listed. Describe the capability, not the user's question."
 
             private fun formatCoreMemories(memories: List<Memory>): String {
                 if (memories.isEmpty()) return ""
@@ -122,9 +122,10 @@ IMPORTANT: DO NOT include metadata tags or mentions of the footer in your respon
                     ToolCallStrategy.JSON_XML_ENVELOPE ->
                         """
 # STRICT EXECUTION RULES:
-1. Respond ONLY with the ipsis tag. No preamble, no "Sure, let me search", no markdown code blocks.
+1. Respond ONLY with the <tool_call> tag. No preamble, no "Sure, let me search", no markdown code blocks.
 2. After you receive a <tool_result>...</tool_result> message, use that data to provide a comprehensive answer.
-3. NEVER expose raw tool JSON or ipsis tags in your final response to the user.
+3. NEVER expose raw tool JSON or <tool_call> tags in your final response to the user.
+4. NEVER use call:tool_name{...} syntax. Use only the <tool_call> JSON envelope shown above.
                         """.trimIndent()
                     ToolCallStrategy.LITE_RT_NATIVE ->
                         """
@@ -133,7 +134,7 @@ IMPORTANT: DO NOT include metadata tags or mentions of the footer in your respon
 2. Enclose all string arguments in <|"|> and <|"|>, not standard double quotes.
 3. Close the argument list with exactly '}' (Do NOT add trailing brackets like ']').
 4. Respond ONLY with the tool call. No conversational preamble or surrounding text.
-5. NEVER wrap the tool call in special tokens or tags like ipsis, <tool_call|>, or [TOOL]. The response must start immediately with 'call:'.
+5. NEVER wrap the tool call in special tokens or tags like <tool_call>, <tool_call|>, or [TOOL]. The response must start immediately with 'call:'.
                         """.trimIndent()
                     ToolCallStrategy.SDK_NATIVE -> ""
                 }
@@ -170,15 +171,15 @@ IMPORTANT: DO NOT include metadata tags or mentions of the footer in your respon
                         append("# TOOL DISCOVERY:\n")
                         append(TOOL_DISCOVERY_INSTRUCTION_TEXT)
                         append("\n")
-                        append("To search:\n")
+                        append("To activate:\n")
                         if (strategy == ToolCallStrategy.JSON_XML_ENVELOPE) {
                             append(
-                                "ActionResult{\"name\":\"${ToolDefinition.SEARCH_TOOLS.name}\",\"arguments\":" +
-                                    "{\"query\":\"describe the capability you need\"}}ActionResult",
+                                "<tool_call>{\"name\":\"${ToolDefinition.SEARCH_TOOLS.name}\",\"arguments\":" +
+                                    "{\"capability\":\"describe the capability you need, e.g. send an email\"}}</tool_call>",
                             )
                         } else {
                             append(
-                                "call:${ToolDefinition.SEARCH_TOOLS.name}{query: <|\"|>describe the capability you need<|\"|>}",
+                                "call:${ToolDefinition.SEARCH_TOOLS.name}{capability: <|\"|>describe the capability you need, e.g. send an email<|\"|>}",
                             )
                         }
                     }.trimEnd()
@@ -216,7 +217,7 @@ IMPORTANT: DO NOT include metadata tags or mentions of the footer in your respon
                     append("# CONVERSATION MEMORY TOOLS:\n")
                     append(
                         "When you need past chats, message context, or long-term memories, call " +
-                            "'${ToolDefinition.SEARCH_TOOLS.name}' with queries such as " +
+                            "'${ToolDefinition.SEARCH_TOOLS.name}' with capabilities such as " +
                             "\"search past conversations\" or \"manage user memories\" before invoking memory tools.",
                     )
                     if (currentChatId != null) {

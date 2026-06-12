@@ -22,6 +22,7 @@ set(CMAKE_ANDROID_NDK_DEPRECATED_HEADERS ON)
 set(LLAMA_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_SERVER OFF CACHE BOOL "" FORCE)
+set(LLAMA_BUILD_COMMON ON CACHE BOOL "" FORCE)
 
 # CPU-only mode - disable all GPU backends for stability
 set(GGML_VULKAN OFF CACHE BOOL "" FORCE)
@@ -190,6 +191,7 @@ target_link_libraries(mtmd
 )
 
 target_link_libraries(llama-jni
+    common
     llama
     ggml
     ggml-cpu

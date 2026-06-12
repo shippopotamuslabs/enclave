@@ -103,11 +103,11 @@ class ConversationManagerImplToolsTest {
     fun `LTD-12 LiteRT native toolset list expands after search_tools`() =
         runTest {
             signatureCache.toolActivationRegistry.seedTurn(
-                listOf("search_tools", "web_search", "web_extract"),
+                listOf("tool_discovery_tool", "web_search", "web_extract"),
             )
             signatureCache.toolCatalog =
                 listOf(
-                    catalogEntry("search_tools", ToolDisclosureMode.PRELOADED),
+                    catalogEntry("tool_discovery_tool", ToolDisclosureMode.PRELOADED),
                     catalogEntry("web_search", ToolDisclosureMode.PRELOADED),
                     catalogEntry("web_extract", ToolDisclosureMode.PRELOADED),
                     catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND),
@@ -115,7 +115,7 @@ class ConversationManagerImplToolsTest {
             signatureCache.toolCallStrategy = ToolCallStrategy.LITE_RT_NATIVE
             val searchResult =
                 toolLoop.handleToolSearch(
-                    argumentsJson = """{"query":"append_blocks","limit":"5"}""",
+                    argumentsJson = """{"capability":"append_blocks","limit":"5"}""",
                     turnContext = createToolContext(),
                 )
             val toolsets =
@@ -127,16 +127,16 @@ class ConversationManagerImplToolsTest {
 
             assertTrue(searchResult.contains("\"activated_tools\":[\"append_blocks\"]"))
             assertEquals(
-                listOf("search_tools", "web_search", "web_extract", "append_blocks"),
+                listOf("tool_discovery_tool", "web_search", "web_extract", "append_blocks"),
                 signatureCache.activeToolNames,
             )
             assertEquals(
-                listOf("search_tools", "tavily_web_search", "tavily_extract", "append_blocks"),
+                listOf("tool_discovery_tool", "tavily_web_search", "tavily_extract", "append_blocks"),
                 callableNames
                     .filter {
                         it in
                             listOf(
-                                "search_tools",
+                                "tool_discovery_tool",
                                 "tavily_web_search",
                                 "tavily_extract",
                                 ToolDefinition.APPEND_BLOCKS.name,
@@ -216,11 +216,11 @@ class ConversationManagerImplToolsTest {
     fun `search_tools returns no activation for tools absent from turn catalog`() =
         runTest {
             signatureCache.toolActivationRegistry.seedTurn(
-                listOf("search_tools", "web_search", "web_extract"),
+                listOf("tool_discovery_tool", "web_search", "web_extract"),
             )
             signatureCache.toolCatalog =
                 listOf(
-                    catalogEntry("search_tools", ToolDisclosureMode.PRELOADED),
+                    catalogEntry("tool_discovery_tool", ToolDisclosureMode.PRELOADED),
                     catalogEntry("web_search", ToolDisclosureMode.PRELOADED),
                     catalogEntry("web_extract", ToolDisclosureMode.PRELOADED),
                     catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND),
@@ -228,14 +228,14 @@ class ConversationManagerImplToolsTest {
 
             val searchResult =
                 toolLoop.handleToolSearch(
-                    argumentsJson = """{"query":"xyzzy_nonexistent_capability_token","limit":"5"}""",
+                    argumentsJson = """{"capability":"xyzzy_nonexistent_capability_token","limit":"5"}""",
                     turnContext = createToolContext(),
                 )
 
             assertTrue(searchResult.contains("\"status\":\"ok\""))
             assertTrue(searchResult.contains("\"activated_tools\":[]"))
             assertEquals(
-                listOf("search_tools", "web_search", "web_extract"),
+                listOf("tool_discovery_tool", "web_search", "web_extract"),
                 signatureCache.activeToolNames,
             )
         }

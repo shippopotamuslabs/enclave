@@ -92,11 +92,11 @@ class ToolSearchLiteRtDiscoveryTest {
     fun `TSD-12 LiteRtToolCallLoop updates active names after search`() =
         runTest {
             signatureCache.toolActivationRegistry.seedTurn(
-                listOf("search_tools", "web_search", "web_extract"),
+                listOf("tool_discovery_tool", "web_search", "web_extract"),
             )
             signatureCache.toolCatalog =
                 listOf(
-                    catalogEntry("search_tools", ToolDisclosureMode.PRELOADED),
+                    catalogEntry("tool_discovery_tool", ToolDisclosureMode.PRELOADED),
                     catalogEntry("web_search", ToolDisclosureMode.PRELOADED),
                     catalogEntry("web_extract", ToolDisclosureMode.PRELOADED),
                     catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND),
@@ -107,7 +107,7 @@ class ToolSearchLiteRtDiscoveryTest {
                 toolLoop.executeToolSafely(
                     ToolCallRequest(
                         toolName = ToolDefinition.SEARCH_TOOLS.name,
-                        argumentsJson = """{"query":"append_blocks"}""",
+                        argumentsJson = """{"capability":"append_blocks"}""",
                         provider = "LITERT",
                         modelType = ModelType.FAST,
                         chatId = ChatId("chat"),
@@ -120,7 +120,7 @@ class ToolSearchLiteRtDiscoveryTest {
             assertEquals(0, executorCalls.get())
             assertTrue(result.contains("\"status\":\"ok\""))
             assertEquals(
-                listOf("search_tools", "web_search", "web_extract", "append_blocks"),
+                listOf("tool_discovery_tool", "web_search", "web_extract", "append_blocks"),
                 signatureCache.activeToolNames,
             )
         }
@@ -145,7 +145,7 @@ class ToolSearchLiteRtDiscoveryTest {
                     hasMemoryTools = false,
                     hasGetMessageContextTool = false,
                     hasArtifactTools = false,
-                    activeToolNamesKey = "search_tools",
+                    activeToolNamesKey = "tool_discovery_tool",
                 )
             signatureCache.toolActivationRegistry =
                 ToolSessionActivationRegistry(
@@ -154,12 +154,12 @@ class ToolSearchLiteRtDiscoveryTest {
                 )
             signatureCache.toolCatalog =
                 listOf(
-                    catalogEntry("search_tools", ToolDisclosureMode.PRELOADED),
+                    catalogEntry("tool_discovery_tool", ToolDisclosureMode.PRELOADED),
                     catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND),
                 )
 
             toolLoop.handleToolSearch(
-                argumentsJson = """{"query":"append_blocks"}""",
+                argumentsJson = """{"capability":"append_blocks"}""",
                 turnContext = createToolContext(),
             )
 

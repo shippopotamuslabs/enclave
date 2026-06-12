@@ -1,8 +1,8 @@
 {
   "catalog": { "tools": [] },
   "discovery": {
-    "tool_name": "search_tools",
-    "request_field_name": "query",
+    "tool_name": "tool_discovery_tool",
+    "request_field_name": "capability",
     "always_callable": true,
     "companion_callable_tools": ["read_context_reference"]
   },
@@ -18,6 +18,11 @@
     "empty_append_payload_value": []
   },
   "argument_repairs": [
+    {
+      "tool_name": "tool_discovery_tool",
+      "aliases": [{"alias": "query", "canonical": "capability"}],
+      "special_values": []
+    },
     {
       "tool_name": "append_blocks",
       "aliases": [

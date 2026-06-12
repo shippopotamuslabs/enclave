@@ -181,6 +181,10 @@ class RustAgentEngineAdapter
                                             channel.send(AgentLoopEvent.TextToken(trailing))
                                         }
                                     }
+                                loggingPort.debug(TAG, "model turn raw text (${bufferedText.length} chars)")
+                                bufferedText.chunked(3000).forEachIndexed { i, part ->
+                                    loggingPort.debug(TAG, "model turn raw[$i]: $part")
+                                }
                                 engine.submitModelResponse(
                                     session,
                                     resp.copy(assistantText = bufferedText.takeIf { it.isNotBlank() }).toFfi(loggingPort),

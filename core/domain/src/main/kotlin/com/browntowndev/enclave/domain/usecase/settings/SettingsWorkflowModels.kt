@@ -38,6 +38,7 @@ data class LocalModelPresetDraft(
     val minP: Double = 0.0,
     val repetitionPenalty: Double = 1.1,
     val thinkingEnabled: Boolean = false,
+    val reasoningBudget: String = "1024",
     val systemPrompt: String = "",
     val isSystemPreset: Boolean = false,
 )

@@ -164,7 +164,6 @@ internal fun ReferenceImageAction(
     hasImageEditModel: Boolean,
     hasImageToVideoModel: Boolean,
     onReferenceImageClick: () -> Unit,
-    modifier: Modifier = Modifier,
 ) {
     val isEnabled =
         when (mediaType) {

@@ -34,7 +34,7 @@ data class RemoteModelAsset(
     val fileName: String,
     val sha256: String,
     val sizeInBytes: Long = 0L,
-    val modelFileFormat: ModelFileFormat = ModelFileFormat.LITERTLM,
+    val modelFileFormat: ModelFileFormat? = null,
     val source: DownloadSource = DownloadSource.HUGGING_FACE,
     val utilityType: UtilityType? = null,
     val isMultimodal: Boolean = false,
@@ -43,6 +43,17 @@ data class RemoteModelAsset(
     val mmprojSizeInBytes: Long? = null,
     val configurations: List<RemoteModelConfiguration> = emptyList(),
 )
+
+/**
+ * Resolves the model file format for a catalog asset.
+ * Prefers the explicit [RemoteModelAsset.modelFileFormat] field; when the catalog omits it,
+ * infers the format from the file name extension. A blanket LITERTLM fallback previously
+ * mislabeled GGUF assets and hid llama.cpp-only settings in the UI.
+ */
+fun RemoteModelAsset.resolvedModelFileFormat(): ModelFileFormat =
+    modelFileFormat
+        ?: ModelFileFormat.fromFileName(fileName)
+        ?: ModelFileFormat.LITERTLM
 
 /**
  * Resolves the human-readable asset label from catalog JSON.
@@ -93,5 +104,6 @@ data class RemoteModelConfiguration(
     val maxTokens: Int,
     val contextWindow: Int,
     val thinkingEnabled: Boolean = false,
+    val reasoningBudget: Int? = null,
     val defaultAssignments: List<ModelType> = emptyList(),
 )

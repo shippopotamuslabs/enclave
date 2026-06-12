@@ -35,7 +35,7 @@ class GoogleRequestMapperTest {
                 .flatMap { it.functionDeclarations().orElseThrow() }
                 .map { it.name().orElseThrow() }
 
-        assertEquals(listOf("search_tools", "web_search"), declaredFunctionNames)
+        assertEquals(listOf("tool_discovery_tool", "web_search"), declaredFunctionNames)
         assertFalse(declaredFunctionNames.contains("append_blocks"))
     }
 

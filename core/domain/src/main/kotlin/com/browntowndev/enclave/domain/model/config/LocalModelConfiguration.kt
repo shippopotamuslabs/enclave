@@ -25,6 +25,7 @@ data class LocalModelConfiguration(
     val minP: Double = 0.0,
     val repetitionPenalty: Double,
     val thinkingEnabled: Boolean = false,
+    val reasoningBudget: Int = defaultReasoningBudget(contextWindow),
     val systemPrompt: String,
     /**
      * When true, this config is a factory preset from R2 and is read-only in UI.
@@ -36,4 +37,8 @@ data class LocalModelConfiguration(
      * Transient — populated from remote config, not persisted to the database.
      */
     val defaultAssignments: List<ModelType> = emptyList(),
-) : ModelTuningConfiguration
+) : ModelTuningConfiguration {
+    companion object {
+        fun defaultReasoningBudget(contextWindow: Int): Int = (contextWindow / 4).coerceAtLeast(1)
+    }
+}
