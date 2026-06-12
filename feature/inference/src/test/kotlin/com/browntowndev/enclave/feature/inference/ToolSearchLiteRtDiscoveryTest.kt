@@ -16,6 +16,7 @@ import com.browntowndev.enclave.domain.usecase.chat.ToolCallStrategy
 import com.browntowndev.enclave.domain.usecase.chat.ToolSessionActivationRegistry
 import com.browntowndev.enclave.feature.inference.conversation.ConversationCancellationGate
 import com.browntowndev.enclave.feature.inference.conversation.ConversationSignatureCache
+import com.browntowndev.enclave.feature.inference.conversation.LiteRtNativeToolsets
 import com.browntowndev.enclave.feature.inference.conversation.LiteRtToolCallLoop
 import com.browntowndev.enclave.feature.inference.conversation.LiteRtTurnSnapshot
 import com.browntowndev.enclave.feature.inference.conversation.LiteRtToolContext
@@ -124,6 +125,49 @@ class ToolSearchLiteRtDiscoveryTest {
                 signatureCache.activeToolNames,
             )
         }
+
+    @Test
+    fun `LiteRT exposes canonical discovery tool name and capability parameter`() {
+        val method =
+            LiteRtNativeToolsets.LocalSearchToolsToolset::class.members
+                .single { it.name == "tool_discovery_tool" }
+        val javaMethod =
+            LiteRtNativeToolsets.LocalSearchToolsToolset::class.java.declaredMethods
+                .single { it.name == "tool_discovery_tool" }
+
+        assertEquals(listOf("capability", "limit"), method.parameters.drop(1).map { it.name })
+        assertTrue(
+            requireNotNull(javaMethod.getAnnotation(com.google.ai.edge.litertlm.Tool::class.java)) {
+                "tool_discovery_tool must expose a LiteRT Tool annotation"
+            }.description.contains("Search hidden tool metadata"),
+        )
+        assertTrue(
+            javaMethod.parameterAnnotations
+                .first()
+                .filterIsInstance<com.google.ai.edge.litertlm.ToolParam>()
+                .single()
+                .description
+                .contains("Never a fact, question, topic, or web-search query"),
+        )
+        assertTrue(
+            LiteRtNativeToolsets.LocalSearchToolsToolset::class.java.declaredMethods
+                .none { it.name == "search_tools" },
+        )
+    }
+
+    @Test
+    fun `LiteRT web search directs models to call it without discovery`() {
+        val javaMethod =
+            LiteRtNativeToolsets.LocalSearchToolset::class.java.declaredMethods
+                .single { it.name == "tavily_web_search" }
+        val description =
+            requireNotNull(javaMethod.getAnnotation(com.google.ai.edge.litertlm.Tool::class.java)) {
+                "tavily_web_search must expose a LiteRT Tool annotation"
+            }.description
+
+        assertTrue(description.contains("current or explicitly requested online information"))
+        assertTrue(description.contains("Use directly without tool_discovery_tool"))
+    }
 
     @Test
     fun `search_tools discovery marks signature stale without closing conversation`() =

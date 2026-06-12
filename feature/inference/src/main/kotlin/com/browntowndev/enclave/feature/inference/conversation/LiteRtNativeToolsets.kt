@@ -77,17 +77,24 @@ internal object LiteRtNativeToolsets {
     ) : ToolSet {
         @com.google.ai.edge.litertlm.Tool(
             description =
-                "Activate additional capabilities for this conversation. Describe what you need to do and matching tools are enabled.",
+                "Search hidden tool metadata and activate matching executable tools. Use only when the task requires " +
+                    "an action unavailable in the active tool set. Never use to look up facts, research a question, " +
+                    "or decide whether web_search is needed.",
         )
-        fun search_tools(
-            @ToolParam(description = "Description of the capability you need, e.g. 'send an email' or 'generate an image'. Not a web-search query.") query: String,
+        fun tool_discovery_tool(
+            @ToolParam(
+                description =
+                    "Executable action to enable, e.g. 'generate an image' or 'search past conversations'. " +
+                        "Never a fact, question, topic, or web-search query.",
+            )
+            capability: String,
             @ToolParam(description = "Maximum number of matches to return.") limit: String? = null,
         ): String =
             runBlocking(Dispatchers.IO) {
                 val parsedLimit = limit?.toIntOrNull() ?: ToolSearchThresholds.DEFAULT_SEARCH_LIMIT
                 val argumentsJson =
                     buildJsonObject {
-                        put("capability", query)
+                        put("capability", capability)
                         put("limit", parsedLimit.toString())
                     }.toString()
                 context.toolLoop.handleToolSearch(
@@ -102,7 +109,11 @@ internal object LiteRtNativeToolsets {
     internal class LocalSearchToolset(
         private val context: LiteRtToolContext,
     ) : ToolSet {
-        @com.google.ai.edge.litertlm.Tool(description = "Search the web for information.")
+        @com.google.ai.edge.litertlm.Tool(
+            description =
+                "Search the public web for current or explicitly requested online information. " +
+                    "Use directly without tool_discovery_tool when a web lookup is needed.",
+        )
         fun tavily_web_search(
             @ToolParam(description = "The search query.") query: String,
         ): String =

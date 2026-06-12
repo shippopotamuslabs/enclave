@@ -166,7 +166,7 @@ internal class LiteRtToolCallLoop(
             val rootCause = ConversationErrorMapper.rootCause(t)
             loggingPort.error(
                 TAG,
-                "search_tools host failed cause=${rootCause::class.java.simpleName}: ${rootCause.message}",
+                "tool_discovery_tool host failed cause=${rootCause::class.java.simpleName}: ${rootCause.message}",
                 rootCause,
             )
             ConversationErrorMapper.executionFailed(ToolDefinition.SEARCH_TOOLS.name, rootCause)

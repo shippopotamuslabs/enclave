@@ -334,7 +334,7 @@ class ChatInferenceRequestPreparerCacheStabilityTest {
                 result2.options.toolCatalog
                     .single { it.name == "search_x_recent" }
                     .disclosureMode
-            val systemPromptTurn2 = result2.options.systemPrompt
+            val toolCatalogTurn2 = result2.options.toolCatalog
 
             assertEquals(
                 ToolDisclosureMode.INTENT_ACTIVATED,
@@ -347,7 +347,7 @@ class ChatInferenceRequestPreparerCacheStabilityTest {
                 result3.options.toolCatalog
                     .single { it.name == "search_x_recent" }
                     .disclosureMode
-            val systemPromptTurn3 = result3.options.systemPrompt
+            val toolCatalogTurn3 = result3.options.toolCatalog
 
             assertEquals(
                 ToolDisclosureMode.DISCLOSE_ON_DEMAND,
@@ -355,9 +355,9 @@ class ChatInferenceRequestPreparerCacheStabilityTest {
                 "CSPC-MUTDEF-01 turn 3: identity stub returns DISCLOSE_ON_DEMAND (regressed — confirms stub is broken)",
             )
             assertNotEquals(
-                systemPromptTurn2,
-                systemPromptTurn3,
-                "CSPC-MUTDEF-01: systemPromptTurn2 must NOT equal systemPromptTurn3 when using identity stub — proves stub is insufficient",
+                toolCatalogTurn2,
+                toolCatalogTurn3,
+                "CSPC-MUTDEF-01: toolCatalogTurn2 must NOT equal toolCatalogTurn3 when using identity stub — proves stub is insufficient",
             )
         }
 

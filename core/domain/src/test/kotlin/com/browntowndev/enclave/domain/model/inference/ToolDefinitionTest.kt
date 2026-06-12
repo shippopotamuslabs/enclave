@@ -101,11 +101,22 @@ class ToolDefinitionTest {
         assertEquals("tool_discovery_tool", tool.name)
         assertEquals(ToolDisclosureMode.PRELOADED, tool.disclosureMode)
         assertEquals(false, tool.supportsLazyDisclosure)
+        assertTrue(tool.description.contains("Search hidden tool metadata"))
+        assertTrue(tool.description.contains("Never use to look up facts"))
+        assertTrue(tool.description.contains("decide whether web_search is needed"))
 
         val entry = tool.catalogEntry()
         assertEquals(ToolDisclosureMode.PRELOADED, entry.disclosureMode)
         assertTrue(entry.requiredArguments.any { it.name == "capability" })
         assertEquals(listOf("discovery"), entry.categoryTags)
+    }
+
+    @Test
+    fun `WEB_SEARCH directs models to call it without discovery`() {
+        val tool = ToolDefinition.WEB_SEARCH
+
+        assertTrue(tool.description.contains("current or explicitly requested online information"))
+        assertTrue(tool.description.contains("Use directly without tool_discovery_tool"))
     }
 
     @Test

@@ -178,7 +178,9 @@ data class ToolDefinition(
         val WEB_SEARCH =
             ToolDefinition(
                 name = "web_search",
-                description = "Search the web and return ranked results.",
+                description =
+                    "Search the public web for current or explicitly requested online information. " +
+                        "Use directly without tool_discovery_tool when a web lookup is needed.",
                 parametersClass = WebSearchParams::class,
                 displayName = "Searching the web...",
                 disclosureMode = ToolDisclosureMode.PRELOADED,
@@ -209,7 +211,9 @@ data class ToolDefinition(
             ToolDefinition(
                 name = "tool_discovery_tool",
                 description =
-                    "Activate additional capabilities for this conversation. Describe what you need to do and matching tools are enabled. This does not search the web or answer questions.",
+                    "Search hidden tool metadata and activate matching executable tools. Use only when the task requires " +
+                        "an action unavailable in the active tool set. Never use to look up facts, research a question, " +
+                        "or decide whether web_search is needed.",
                 parametersClass = SearchToolsParams::class,
                 disclosureMode = ToolDisclosureMode.PRELOADED,
                 supportsLazyDisclosure = false,
