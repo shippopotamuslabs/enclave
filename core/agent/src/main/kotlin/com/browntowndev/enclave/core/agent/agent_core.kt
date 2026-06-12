@@ -831,6 +831,8 @@ internal open class UniffiVTableCallbackInterfaceAgentTransportCallback(
 
 
 
+
+
 // For large crates we prevent `MethodTooLargeException` (see #2340)
 // N.B. the name of the extension is very misleading, since it is 
 // rather `InterfaceTooLargeException`, caused by too many methods 
@@ -891,6 +893,8 @@ fun uniffi_agent_core_checksum_method_ffiagentengine_submit_tool_results(
 fun uniffi_agent_core_checksum_method_ffitoolstreamgate_buffered_text(
 ): Short
 fun uniffi_agent_core_checksum_method_ffitoolstreamgate_finish(
+): Short
+fun uniffi_agent_core_checksum_method_ffitoolstreamgate_has_tool_markup(
 ): Short
 fun uniffi_agent_core_checksum_method_ffitoolstreamgate_push(
 ): Short
@@ -994,6 +998,8 @@ fun uniffi_agent_core_fn_method_ffitoolstreamgate_buffered_text(`ptr`: Pointer,u
 ): RustBuffer.ByValue
 fun uniffi_agent_core_fn_method_ffitoolstreamgate_finish(`ptr`: Pointer,`hasNativeToolCalls`: Byte,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_agent_core_fn_method_ffitoolstreamgate_has_tool_markup(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+): Byte
 fun uniffi_agent_core_fn_method_ffitoolstreamgate_push(`ptr`: Pointer,`chunk`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_agent_core_fn_method_ffitoolstreamgate_reset(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
@@ -1215,6 +1221,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_agent_core_checksum_method_ffitoolstreamgate_finish() != 41900.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_agent_core_checksum_method_ffitoolstreamgate_has_tool_markup() != 6418.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_agent_core_checksum_method_ffitoolstreamgate_push() != 30234.toShort()) {
@@ -2291,6 +2300,8 @@ public interface FfiToolStreamGateInterface {
     
     fun `finish`(`hasNativeToolCalls`: kotlin.Boolean): FfiStreamGateFinish
     
+    fun `hasToolMarkup`(): kotlin.Boolean
+    
     fun `push`(`chunk`: kotlin.String): FfiStreamGatePushResult
     
     fun `reset`()
@@ -2398,6 +2409,18 @@ open class FfiToolStreamGate: Disposable, AutoCloseable, FfiToolStreamGateInterf
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffitoolstreamgate_finish(
         it, FfiConverterBoolean.lower(`hasNativeToolCalls`),_status)
+}
+    }
+    )
+    }
+    
+
+    override fun `hasToolMarkup`(): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffitoolstreamgate_has_tool_markup(
+        it, _status)
 }
     }
     )
