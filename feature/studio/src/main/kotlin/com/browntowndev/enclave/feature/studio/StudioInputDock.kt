@@ -166,36 +166,25 @@ internal fun ReferenceImageAction(
     onReferenceImageClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val isVisible =
+    val isEnabled =
         when (mediaType) {
             MediaCapability.IMAGE -> hasImageEditModel
             MediaCapability.VIDEO -> hasImageToVideoModel
             else -> false
         }
-    val unavailableHint =
-        when {
-            isVisible -> null
-            mediaType == MediaCapability.IMAGE && !hasImageEditModel ->
-                STUDIO_REFERENCE_IMAGE_EDIT_UNAVAILABLE
-            mediaType == MediaCapability.VIDEO && !hasImageToVideoModel ->
-                STUDIO_REFERENCE_I2V_UNAVAILABLE
-            else -> null
-        }
-    Column(modifier = modifier) {
-        if (isVisible) {
-            NeoIconButton(
-                onClick = onReferenceImageClick,
-                icon = if (hasReferenceImage) Icons.Default.Edit else Icons.Default.AddPhotoAlternate,
-                contentDescription = "Reference image",
-            )
-        }
-        unavailableHint?.let { hint ->
-            Text(
-                text = hint,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = if (isVisible) 4.dp else 0.dp),
-            )
-        }
+    val shouldShow = mediaType == MediaCapability.IMAGE || mediaType == MediaCapability.VIDEO
+
+    if (shouldShow) {
+        NeoIconButton(
+            onClick = onReferenceImageClick,
+            icon = if (hasReferenceImage) Icons.Default.Edit else Icons.Default.AddPhotoAlternate,
+            contentDescription = "Reference image",
+            iconTint = if (isEnabled) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+            },
+            withShadow = isEnabled,
+        )
     }
 }

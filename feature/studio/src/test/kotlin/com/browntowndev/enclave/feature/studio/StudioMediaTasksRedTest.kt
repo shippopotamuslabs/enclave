@@ -242,11 +242,11 @@ class StudioMediaTasksRedTest {
     }
 
     @Test
-    fun `UI-01 image reference picker hidden without edit model`() {
+    fun `UI-01 image reference picker shown but disabled without edit model`() {
         composeReferenceDock(mediaType = MediaCapability.IMAGE, hasImageEditModel = false)
 
-        composeTestRule.onNodeWithContentDescription("Reference image").assertDoesNotExist()
-        composeTestRule.onNodeWithText(STUDIO_REFERENCE_IMAGE_EDIT_UNAVAILABLE).assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Reference image").assertIsDisplayed()
+        composeTestRule.onNodeWithText(STUDIO_REFERENCE_IMAGE_EDIT_UNAVAILABLE).assertDoesNotExist()
     }
 
     @Test
@@ -258,11 +258,11 @@ class StudioMediaTasksRedTest {
     }
 
     @Test
-    fun `UI-03 video reference picker hidden without image-to-video model`() {
+    fun `UI-03 video reference picker shown but disabled without image-to-video model`() {
         composeReferenceDock(mediaType = MediaCapability.VIDEO, hasImageToVideoModel = false)
 
-        composeTestRule.onNodeWithContentDescription("Reference image").assertDoesNotExist()
-        composeTestRule.onNodeWithText(STUDIO_REFERENCE_I2V_UNAVAILABLE).assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Reference image").assertIsDisplayed()
+        composeTestRule.onNodeWithText(STUDIO_REFERENCE_I2V_UNAVAILABLE).assertDoesNotExist()
     }
 
     @Test
