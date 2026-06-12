@@ -32,6 +32,12 @@ class SaveLocalModelPresetUseCase
                     minP = draft.minP,
                     repetitionPenalty = draft.repetitionPenalty,
                     thinkingEnabled = draft.thinkingEnabled,
+                    reasoningBudget =
+                        draft.reasoningBudget.toIntOrNull()
+                            ?.coerceIn(1, draft.contextWindow.toIntOrNull() ?: 4096)
+                            ?: LocalModelConfiguration.defaultReasoningBudget(
+                                draft.contextWindow.toIntOrNull() ?: 4096,
+                            ),
                     systemPrompt = draft.systemPrompt,
                 ),
             )

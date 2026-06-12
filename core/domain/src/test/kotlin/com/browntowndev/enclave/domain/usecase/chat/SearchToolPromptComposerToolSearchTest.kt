@@ -32,11 +32,11 @@ class SearchToolPromptComposerToolSearchTest {
 
         assertAll(
             { assertTrue(prompt.contains("# TOOL DISCOVERY:")) },
-            { assertTrue(prompt.contains("search_tools")) },
+            { assertTrue(prompt.contains("tool_discovery_tool")) },
             { assertFalse(prompt.contains("# TOOL CATALOG:")) },
             { assertFalse(prompt.contains("# SCHEMA DISCLOSURE:")) },
-            { assertTrue(prompt.contains("ActionResult{\"name\":\"web_search\"")) },
-            { assertFalse(prompt.contains("ActionResult{\"name\":\"append_blocks\"")) },
+            { assertTrue(prompt.contains("<tool_call>{\"name\":\"web_search\"")) },
+            { assertFalse(prompt.contains("<tool_call>{\"name\":\"append_blocks\"")) },
         )
     }
 
@@ -99,7 +99,7 @@ class SearchToolPromptComposerToolSearchTest {
                 baseSystemPrompt = "Be concise.",
                 toolCatalog =
                     listOf(
-                        catalogEntry("search_tools", ToolDisclosureMode.PRELOADED),
+                        catalogEntry("tool_discovery_tool", ToolDisclosureMode.PRELOADED),
                         catalogEntry("web_search", ToolDisclosureMode.PRELOADED),
                         catalogEntry("web_extract", ToolDisclosureMode.PRELOADED),
                         catalogEntry("search_chat_history", ToolDisclosureMode.DISCLOSE_ON_DEMAND),

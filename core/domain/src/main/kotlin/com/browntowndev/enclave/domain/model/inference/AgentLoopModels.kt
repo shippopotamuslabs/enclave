@@ -72,8 +72,8 @@ data class AgentLoopToolSemanticsConfig(
             AgentLoopToolSemanticsConfig(
                 discovery =
                     AgentLoopToolDiscoverySemantics(
-                        toolName = "search_tools",
-                        requestFieldName = "query",
+                        toolName = "tool_discovery_tool",
+                        requestFieldName = "capability",
                         alwaysCallable = true,
                         companionCallableTools = listOf("read_context_reference"),
                     ),

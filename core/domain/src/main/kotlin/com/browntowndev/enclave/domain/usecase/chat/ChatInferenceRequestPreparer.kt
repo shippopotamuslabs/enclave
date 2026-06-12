@@ -3,6 +3,8 @@ package com.browntowndev.enclave.domain.usecase.chat
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.WebSearchSource
+import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
+import com.browntowndev.enclave.domain.model.config.LocalModelConfiguration
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
@@ -90,7 +92,7 @@ class ChatInferenceRequestPreparer(
                 hasImageContext && apiVisionConfigured && !activeVisionCapable -> ChatImageHandling.TOOL
                 else -> ChatImageHandling.NONE
             }
-        val reasoningBudget = if (config?.isLocal == true && config.thinkingEnabled) 2048 else 0
+        val reasoningBudget = resolveLocalReasoningBudget(config)
 
         val coreMemories = memoriesRepository.getCoreMemories()
         val embedding = if (prompt.isNotBlank()) embeddingEnginePort.getEmbedding(prompt) else null
@@ -585,6 +587,18 @@ class ChatInferenceRequestPreparer(
             return numericOnly.takeIf { it.isNotEmpty() } ?: tweetUrlOrId
         }
     }
+}
+
+private fun resolveLocalReasoningBudget(config: ActiveModelConfiguration?): Int {
+    if (
+        config?.isLocal != true ||
+        config.localModelFormat != ModelFileFormat.GGUF ||
+        !config.thinkingEnabled
+    ) {
+        return 0
+    }
+    return config.reasoningBudget
+        ?: LocalModelConfiguration.defaultReasoningBudget(config.contextWindow ?: 4096)
 }
 
 data class PreparedChatInferenceRequest(

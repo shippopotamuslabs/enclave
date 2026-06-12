@@ -45,7 +45,7 @@ class ChatInferenceRequestPreparerToolSearchTest {
             assertAll(
                 {
                     assertEquals(
-                        listOf("search_tools", "web_search", "web_extract"),
+                        listOf("tool_discovery_tool", "web_search", "web_extract"),
                         request.options.activeTools.map { it.name },
                     )
                 },
@@ -117,7 +117,7 @@ class ChatInferenceRequestPreparerToolSearchTest {
                 },
                 {
                     assertEquals(
-                        listOf("search_tools"),
+                        listOf("tool_discovery_tool"),
                         request.options.activeTools.map { it.name },
                     )
                 },

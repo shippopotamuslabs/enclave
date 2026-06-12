@@ -10,9 +10,8 @@ import com.browntowndev.enclave.domain.usecase.chat.ToolCallStrategy
 
 /**
  * Per-response generation options passed at request time.
- * Derive reasoningBudget from LocalModelConfiguration.thinkingEnabled:
- * - thinkingEnabled = true  -> reasoningBudget = 2048
- * - thinkingEnabled = false -> reasoningBudget = 0
+ * For llama.cpp presets, derive [reasoningBudget] from the configured local-model budget when
+ * thinking is enabled. Other local runtimes receive zero from the preset path.
  */
 data class GenerationOptions(
     val reasoningBudget: Int, // 0 = reasoning OFF, >0 = reasoning ON with budget

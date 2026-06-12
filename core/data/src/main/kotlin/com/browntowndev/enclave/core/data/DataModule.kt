@@ -34,6 +34,7 @@ import com.browntowndev.enclave.core.data.local.CleanupDao
 import com.browntowndev.enclave.core.data.local.DefaultModelsDao
 import com.browntowndev.enclave.core.data.local.EmbeddingDao
 import com.browntowndev.enclave.core.data.local.EnclaveDatabase
+import com.browntowndev.enclave.core.data.local.EnclaveDatabaseMigrations
 import com.browntowndev.enclave.core.data.local.FirestoreSyncPlaceholderDao
 import com.browntowndev.enclave.core.data.local.LiveVoiceProviderDao
 import com.browntowndev.enclave.core.data.local.LocalModelConfigurationsDao
@@ -190,7 +191,8 @@ object DataModule {
                 context,
                 EnclaveDatabase::class.java,
                 "enclave.db",
-            ).fallbackToDestructiveMigration(dropAllTables = true)
+            ).addMigrations(EnclaveDatabaseMigrations.MIGRATION_2_3)
+            .fallbackToDestructiveMigration(dropAllTables = true)
             .openHelperFactory(SQLiteVecInstaller.createOpenHelperFactory(context))
             .addCallback(
                 object : RoomDatabase.Callback() {

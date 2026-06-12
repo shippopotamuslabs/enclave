@@ -107,6 +107,7 @@ class LocalModelRepositoryImpl
                         maxTokens = config.maxTokens,
                         contextWindow = config.contextWindow,
                         thinkingEnabled = config.thinkingEnabled,
+                        reasoningBudget = config.reasoningBudget,
                         systemPrompt = config.systemPrompt,
                         isSystemPreset = config.isSystemPreset,
                         pendingSync = 1,
@@ -258,6 +259,7 @@ class LocalModelRepositoryImpl
                 maxTokens = e.maxTokens,
                 contextWindow = e.contextWindow,
                 thinkingEnabled = e.thinkingEnabled,
+                reasoningBudget = e.reasoningBudget,
                 systemPrompt = e.systemPrompt ?: "",
                 isSystemPreset = e.isSystemPreset,
             )

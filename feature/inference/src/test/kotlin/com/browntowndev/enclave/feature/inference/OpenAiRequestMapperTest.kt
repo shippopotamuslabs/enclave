@@ -37,7 +37,7 @@ class OpenAiRequestMapperTest {
             )
 
         val toolsPayload = params.tools().orElseThrow().toString()
-        assertTrue(toolsPayload.contains("search_tools"))
+        assertTrue(toolsPayload.contains("tool_discovery_tool"))
         assertTrue(toolsPayload.contains("web_search"))
     }
 
@@ -58,7 +58,7 @@ class OpenAiRequestMapperTest {
             )
 
         val toolsPayload = params.tools().orElseThrow().toString()
-        assertTrue(toolsPayload.contains("search_tools"))
+        assertTrue(toolsPayload.contains("tool_discovery_tool"))
         assertTrue(toolsPayload.contains("web_search"))
         assertFalse(
             params

@@ -146,6 +146,23 @@ void test_complex_mixing() {
     assert(processor.extract_utf8("") == "</think>");
 }
 
+void test_trailing_thinking_open_tag() {
+    std::cout << "Running test_trailing_thinking_open_tag..." << std::endl;
+
+    assert(trailing_thinking_open_tag("assistant\n<think>\n") == "<think>");
+    assert(trailing_thinking_open_tag("assistant\n[THINK]\r\n") == "[THINK]");
+    assert(trailing_thinking_open_tag("assistant\n") == "");
+    assert(trailing_thinking_open_tag("mention <think> in prose") == "");
+}
+
+void test_reached_reasoning_budget() {
+    std::cout << "Running test_reached_reasoning_budget..." << std::endl;
+
+    assert(!reached_reasoning_budget(999, 2048));
+    assert(reached_reasoning_budget(2047, 2048));
+    assert(!reached_reasoning_budget(999, 0));
+}
+
 int main() {
     try {
         test_basic_string();
@@ -156,6 +173,8 @@ int main() {
         test_invalid_utf8_recovery();
         test_empty_pieces();
         test_complex_mixing();
+        test_trailing_thinking_open_tag();
+        test_reached_reasoning_budget();
         
         std::cout << "\nALL TESTS PASSED!" << std::endl;
         return 0;

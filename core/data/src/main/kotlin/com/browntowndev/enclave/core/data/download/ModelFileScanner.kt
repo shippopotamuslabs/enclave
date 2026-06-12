@@ -11,6 +11,7 @@ import com.browntowndev.enclave.domain.model.config.requiredArtifacts
 import com.browntowndev.enclave.domain.model.download.JuggernautXlQnnPackCatalog
 import com.browntowndev.enclave.domain.model.download.ModelConfig
 import com.browntowndev.enclave.domain.model.download.ModelScanResult
+import com.browntowndev.enclave.domain.model.download.Sd15QnnPackCatalog
 import com.browntowndev.enclave.domain.model.download.SdxlQnnPackCatalog
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationPaths
@@ -236,7 +237,20 @@ class ModelFileScanner
                 val missing =
                     when (expectedAsset.metadata.utilityType) {
                         UtilityType.SDXL_QNN_PACK -> !LocalImageGenerationPaths.hasSdxlQnnArtifacts(packDir)
-                        UtilityType.SD15_QNN_PACK -> !LocalImageGenerationPaths.hasSd15QnnArtifacts(packDir)
+                        UtilityType.SD15_QNN_PACK -> {
+                            val isCpuVariant =
+                                Sd15QnnPackCatalog
+                                    .variantForAsset(
+                                        expectedAsset.metadata.sha256,
+                                        expectedAsset.metadata.localFileName,
+                                    )?.isCpuMnn == true
+                            if (isCpuVariant) {
+                                val cpuPackDir = File(modelsDir, LocalImageGenerationPaths.SD15_CPU_SUBDIR)
+                                !LocalImageGenerationPaths.hasMnnArtifacts(cpuPackDir)
+                            } else {
+                                !LocalImageGenerationPaths.hasSd15QnnArtifacts(packDir)
+                            }
+                        }
                         UtilityType.JUGGERNAUT_XL_QNN_PACK ->
                             !LocalImageGenerationPaths.hasJuggernautXlQnnArtifacts(packDir)
                         else -> !LocalImageGenerationPaths.hasSd15QnnArtifacts(packDir)

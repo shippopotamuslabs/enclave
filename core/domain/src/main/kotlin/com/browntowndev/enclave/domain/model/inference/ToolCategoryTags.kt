@@ -3,7 +3,7 @@ package com.browntowndev.enclave.domain.model.inference
 object ToolCategoryTags {
     val byToolName: Map<String, List<String>> =
         mapOf(
-            "search_tools" to listOf("discovery"),
+            "tool_discovery_tool" to listOf("discovery"),
             "web_search" to listOf("web"),
             "web_extract" to listOf("web"),
             "search_chat_history" to listOf("memory"),

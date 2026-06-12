@@ -135,11 +135,6 @@ class JniLlamaEngine
                             content = domainMsg.content,
                         )
                 }
-                // Rehydrated or replaced history invalidates prefix-cache metadata in native.
-                llamaExecutor
-                    .submit<Unit> {
-                        nativeClearKvCache()
-                    }.get(10, TimeUnit.SECONDS)
             }
 
         override fun generate(): Flow<GenerationEvent> =

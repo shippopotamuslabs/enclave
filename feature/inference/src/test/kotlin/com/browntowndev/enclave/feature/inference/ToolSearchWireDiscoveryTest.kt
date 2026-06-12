@@ -75,8 +75,8 @@ class ToolSearchWireDiscoveryTest {
                                 listOf(
                                     AgentToolCall(
                                         callId = "call-search",
-                                        name = "search_tools",
-                                        argumentsJson = """{"query":"append_blocks"}""",
+                                        name = "tool_discovery_tool",
+                                        argumentsJson = """{"capability":"append_blocks"}""",
                                     ),
                                 ),
                             ).single()
@@ -117,7 +117,7 @@ class ToolSearchWireDiscoveryTest {
                     host.completeModelTurn(
                         sessionMessages = emptyList(),
                         systemPrompt = "system",
-                        toolsSchemaJson = serializeToolNames(listOf("search_tools", "web_search", "web_extract")),
+                        toolsSchemaJson = serializeToolNames(listOf("tool_discovery_tool", "web_search", "web_extract")),
                         allowToolCall = true,
                     )
                     send(AgentLoopEvent.Finished)
@@ -132,7 +132,7 @@ class ToolSearchWireDiscoveryTest {
                             reasoningBudget = 0,
                             toolCatalog =
                                 listOf(
-                                    catalogEntry("search_tools", ToolDisclosureMode.PRELOADED),
+                                    catalogEntry("tool_discovery_tool", ToolDisclosureMode.PRELOADED),
                                     catalogEntry("web_search", ToolDisclosureMode.PRELOADED),
                                     catalogEntry("web_extract", ToolDisclosureMode.PRELOADED),
                                     catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND),
@@ -147,7 +147,7 @@ class ToolSearchWireDiscoveryTest {
                 ).toList()
 
             val registered = inner.toolsPerInvocation.single().map { it.name }.sorted()
-            assertEquals(listOf("search_tools", "web_extract", "web_search"), registered)
+            assertEquals(listOf("tool_discovery_tool", "web_extract", "web_search"), registered)
             assertFalse(registered.contains("append_blocks"))
         }
 
@@ -164,7 +164,7 @@ class ToolSearchWireDiscoveryTest {
                         toolsSchemaJson =
                             serializeToolNames(
                                 listOf(
-                                    "search_tools",
+                                    "tool_discovery_tool",
                                     "web_search",
                                     "web_extract",
                                 ),
@@ -176,8 +176,8 @@ class ToolSearchWireDiscoveryTest {
                             listOf(
                                 AgentToolCall(
                                     callId = "call-search",
-                                    name = "search_tools",
-                                    argumentsJson = """{"query":"append_blocks"}""",
+                                    name = "tool_discovery_tool",
+                                    argumentsJson = """{"capability":"append_blocks"}""",
                                 ),
                             ),
                         ).single()
@@ -187,7 +187,7 @@ class ToolSearchWireDiscoveryTest {
                         toolsSchemaJson =
                             serializeToolNames(
                                 listOf(
-                                    "search_tools",
+                                    "tool_discovery_tool",
                                     "web_search",
                                     "web_extract",
                                     "append_blocks",
@@ -228,7 +228,7 @@ class ToolSearchWireDiscoveryTest {
                         lastWire.any { name ->
                             name !in
                                 setOf(
-                                    "search_tools",
+                                    "tool_discovery_tool",
                                     "web_search",
                                     "web_extract",
                                     "append_blocks",
@@ -254,8 +254,8 @@ class ToolSearchWireDiscoveryTest {
                                 listOf(
                                     AgentToolCall(
                                         callId = "call-search",
-                                        name = "search_tools",
-                                        argumentsJson = """{"query":"append_blocks"}""",
+                                        name = "tool_discovery_tool",
+                                        argumentsJson = """{"capability":"append_blocks"}""",
                                     ),
                                 ),
                             ).single()
@@ -264,7 +264,7 @@ class ToolSearchWireDiscoveryTest {
                     host.completeModelTurn(
                         sessionMessages = emptyList(),
                         systemPrompt = "system",
-                        toolsSchemaJson = serializeToolNames(listOf("search_tools")),
+                        toolsSchemaJson = serializeToolNames(listOf("tool_discovery_tool")),
                         allowToolCall = true,
                     )
                     send(AgentLoopEvent.Finished)
@@ -326,7 +326,7 @@ class ToolSearchWireDiscoveryTest {
                     host.completeModelTurn(
                         sessionMessages = emptyList(),
                         systemPrompt = "system",
-                        toolsSchemaJson = serializeToolNames(listOf("search_tools", "web_search")),
+                        toolsSchemaJson = serializeToolNames(listOf("tool_discovery_tool", "web_search")),
                         allowToolCall = true,
                     )
                     send(AgentLoopEvent.Finished)
@@ -342,7 +342,7 @@ class ToolSearchWireDiscoveryTest {
                             toolingEnabled = true,
                             toolCatalog =
                                 listOf(
-                                    catalogEntry("search_tools", ToolDisclosureMode.PRELOADED),
+                                    catalogEntry("tool_discovery_tool", ToolDisclosureMode.PRELOADED),
                                     catalogEntry("web_search", ToolDisclosureMode.PRELOADED),
                                     catalogEntry("web_extract", ToolDisclosureMode.PRELOADED),
                                     catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND),
@@ -366,7 +366,7 @@ class ToolSearchWireDiscoveryTest {
             val payload = params.tools().orElseThrow().toString()
 
             assertAll(
-                { assertTrue(payload.contains("search_tools")) },
+                { assertTrue(payload.contains("tool_discovery_tool")) },
                 { assertTrue(payload.contains("web_search")) },
                 { assertFalse(payload.contains("\"append_blocks\"")) },
             )
@@ -406,7 +406,7 @@ class ToolSearchWireDiscoveryTest {
 
     private fun discoveryCatalog(): List<ToolCatalogEntry> =
         listOf(
-            catalogEntry("search_tools", ToolDisclosureMode.PRELOADED),
+            catalogEntry("tool_discovery_tool", ToolDisclosureMode.PRELOADED),
             catalogEntry("web_search", ToolDisclosureMode.PRELOADED),
             catalogEntry("web_extract", ToolDisclosureMode.PRELOADED),
             catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND),

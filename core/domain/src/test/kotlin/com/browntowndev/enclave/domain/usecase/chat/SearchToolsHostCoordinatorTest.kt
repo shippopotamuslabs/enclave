@@ -37,7 +37,7 @@ class SearchToolsHostCoordinatorTest {
             assertEquals("ok", json["status"]?.jsonPrimitive?.content)
             assertTrue(result.activatedToolNames.contains("append_blocks"))
             assertEquals(
-                listOf("search_tools", "append_blocks"),
+                listOf("tool_discovery_tool", "append_blocks"),
                 registry.orderedActiveNames(),
             )
         }
@@ -88,5 +88,39 @@ class SearchToolsHostCoordinatorTest {
         assertEquals("read_context", input.query)
         assertEquals(2, input.limit)
         assertEquals(ChatId("c1"), input.chatId)
+    }
+
+    @Test
+    fun inputFrom_parses_capability_key() {
+        val registry = ToolSessionActivationRegistry()
+        val input =
+            SearchToolsHostCoordinator.inputFrom(
+                argumentsJson = """{"capability":"send email","limit":"2"}""",
+                toolCatalog = ToolSearchTestFixtures.bm25Catalog,
+                activationRegistry = registry,
+                providedIndex = null,
+                strategy = ToolCallStrategy.LITE_RT_NATIVE,
+                chatId = ChatId("c2"),
+            )
+
+        assertEquals("send email", input.query)
+        assertEquals(2, input.limit)
+    }
+
+    @Test
+    fun inputFrom_parses_query_key_as_fallback() {
+        val registry = ToolSessionActivationRegistry()
+        val input =
+            SearchToolsHostCoordinator.inputFrom(
+                argumentsJson = """{"query":"send email","limit":"1"}""",
+                toolCatalog = ToolSearchTestFixtures.bm25Catalog,
+                activationRegistry = registry,
+                providedIndex = null,
+                strategy = ToolCallStrategy.LITE_RT_NATIVE,
+                chatId = ChatId("c3"),
+            )
+
+        assertEquals("send email", input.query)
+        assertEquals(1, input.limit)
     }
 }

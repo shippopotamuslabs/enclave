@@ -8,7 +8,7 @@ class AgentLoopToolDiscoverySemanticsTest {
     fun `TSD-26 enclave default semantics reference search_tools discovery`() {
         val semantics = AgentLoopToolSemanticsConfig.enclaveDefault()
 
-        assertEquals("search_tools", semantics.discovery?.toolName)
-        assertEquals("query", semantics.discovery?.requestFieldName)
+        assertEquals("tool_discovery_tool", semantics.discovery?.toolName)
+        assertEquals("capability", semantics.discovery?.requestFieldName)
     }
 }

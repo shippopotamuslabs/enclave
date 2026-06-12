@@ -89,8 +89,8 @@ class RustLoopInferenceServiceTest {
                                 listOf(
                                     AgentToolCall(
                                         callId = "call-1",
-                                        name = "search_tools",
-                                        argumentsJson = """{"query":"append_blocks"}""",
+                                        name = "tool_discovery_tool",
+                                        argumentsJson = """{"capability":"append_blocks"}""",
                                     ),
                                 ),
                             ).single()
@@ -100,7 +100,7 @@ class RustLoopInferenceServiceTest {
                         toolsSchemaJson =
                             serializeToolNames(
                                 listOf(
-                                    "search_tools",
+                                    "tool_discovery_tool",
                                     "web_search",
                                     "web_extract",
                                     "append_blocks",
@@ -141,7 +141,7 @@ class RustLoopInferenceServiceTest {
                     assertEquals(
                         listOf(
                             "append_blocks",
-                            "search_tools",
+                            "tool_discovery_tool",
                             "web_extract",
                             "web_search",
                         ),
@@ -171,8 +171,8 @@ class RustLoopInferenceServiceTest {
                                 listOf(
                                     AgentToolCall(
                                         callId = "call-1",
-                                        name = "search_tools",
-                                        argumentsJson = """{"query":"append_blocks"}""",
+                                        name = "tool_discovery_tool",
+                                        argumentsJson = """{"capability":"append_blocks"}""",
                                     ),
                                 ),
                             ).single()
@@ -197,7 +197,7 @@ class RustLoopInferenceServiceTest {
 
             val disclosureCatalog =
                 listOf(
-                    catalogEntry("search_tools", ToolDisclosureMode.PRELOADED),
+                    catalogEntry("tool_discovery_tool", ToolDisclosureMode.PRELOADED),
                     catalogEntry("web_search", ToolDisclosureMode.PRELOADED),
                     catalogEntry("web_extract", ToolDisclosureMode.PRELOADED),
                     catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND),
@@ -207,7 +207,7 @@ class RustLoopInferenceServiceTest {
                 com.browntowndev.enclave.domain.usecase.chat.ToolSessionActivationRegistry(
                     onActiveNamesUpdated = { names -> cache.activeToolNames = names },
                 )
-            cache.toolActivationRegistry.seedTurn(listOf("search_tools", "web_search", "web_extract"))
+            cache.toolActivationRegistry.seedTurn(listOf("tool_discovery_tool", "web_search", "web_extract"))
             cache.toolCallStrategy = com.browntowndev.enclave.domain.usecase.chat.ToolCallStrategy.LITE_RT_NATIVE
             service
                 .sendPrompt(
@@ -247,8 +247,8 @@ class RustLoopInferenceServiceTest {
             val liteRtResult =
                 liteRtLoop.executeToolSafely(
                     ToolCallRequest(
-                        toolName = "search_tools",
-                        argumentsJson = """{"query":"append_blocks"}""",
+                        toolName = "tool_discovery_tool",
+                        argumentsJson = """{"capability":"append_blocks"}""",
                         provider = "LITERT",
                         modelType = ModelType.FAST,
                     ),
@@ -290,7 +290,7 @@ class RustLoopInferenceServiceTest {
                         toolsSchemaJson =
                             serializeToolNames(
                                 listOf(
-                                    "search_tools",
+                                    "tool_discovery_tool",
                                     "web_search",
                                     "web_extract",
                                     "start_artifact",
@@ -327,7 +327,7 @@ class RustLoopInferenceServiceTest {
                             reasoningBudget = 0,
                             toolCatalog =
                                 listOf(
-                                    catalogEntry("search_tools", ToolDisclosureMode.PRELOADED),
+                                    catalogEntry("tool_discovery_tool", ToolDisclosureMode.PRELOADED),
                                     catalogEntry("web_search", ToolDisclosureMode.PRELOADED),
                                     catalogEntry("web_extract", ToolDisclosureMode.PRELOADED),
                                     catalogEntry("start_artifact", ToolDisclosureMode.DISCLOSE_ON_DEMAND),
@@ -362,7 +362,7 @@ class RustLoopInferenceServiceTest {
                         listOf(
                             "append_blocks",
                             "search_current_artifact",
-                            "search_tools",
+                            "tool_discovery_tool",
                             "start_artifact",
                             "web_extract",
                             "web_search",
@@ -375,7 +375,7 @@ class RustLoopInferenceServiceTest {
 
     private fun lazyDisclosureCatalog(): List<ToolCatalogEntry> =
         listOf(
-            catalogEntry("search_tools", ToolDisclosureMode.PRELOADED),
+            catalogEntry("tool_discovery_tool", ToolDisclosureMode.PRELOADED),
             catalogEntry("web_search", ToolDisclosureMode.PRELOADED),
             catalogEntry("web_extract", ToolDisclosureMode.PRELOADED),
             catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND),

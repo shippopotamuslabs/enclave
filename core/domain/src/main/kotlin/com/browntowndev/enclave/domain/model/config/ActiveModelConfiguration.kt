@@ -20,6 +20,7 @@ data class ActiveModelConfiguration(
     val repetitionPenalty: Double?,
     val contextWindow: Int?,
     val thinkingEnabled: Boolean,
+    val reasoningBudget: Int? = null,
     val maxTokensDisabled: Boolean = false,
     val temperatureDisabled: Boolean = false,
     val topPDisabled: Boolean = false,

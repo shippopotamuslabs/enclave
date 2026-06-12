@@ -67,6 +67,7 @@ class ActiveModelProviderImplTest {
                     id = configId,
                     localModelId = modelId,
                     displayName = localEncryption.encryptString("Fast"),
+                    reasoningBudget = 1536,
                 )
             coEvery { localModelsDao.getById(modelId) } returns
                 LocalModelEntity(
@@ -84,6 +85,7 @@ class ActiveModelProviderImplTest {
 
             assertEquals("Gemma 4 E4B", result?.name)
             assertEquals("gemma-4-E4B-it.litertlm", result?.modelId)
+            assertEquals(1536, result?.reasoningBudget)
         }
 
     @Test

@@ -17,6 +17,7 @@
 #include <fstream>
 
 #include "token_processor.hpp"
+#include "chat.h"
 #include "llama.h"
 #include "ggml.h"
 #include "mtmd.h"
@@ -243,8 +244,6 @@ static mtmd_context* g_mtmd = nullptr;
 static std::atomic<bool> g_generating(false);
 static std::mutex g_mutex;
 
-// Thinking token limit - hard cutoff at 1000 tokens to prevent infinite thinking
-static const int THINK_TOKEN_LIMIT = 1000;
 static bool g_in_thinking_phase = false;
 static std::vector<llama_token> g_history_tokens; // Current tokens in KV cache
 static std::vector<llama_pos> g_history_positions; // Actual KV positions for each tracked token
@@ -784,28 +783,49 @@ Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeStart
     const char* tmpl_raw = llama_model_chat_template(g_model, nullptr);
     std::string promptStr;
     bool template_applied = false;
+    bool template_forced_thinking_open = false;
+    std::string template_thinking_open_tag;
 
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "=== CHAT TEMPLATE (Unsloth LFM2.5 check) ===");
+    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "=== CHAT TEMPLATE ===");
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Template from GGUF: %s", tmpl_raw ? tmpl_raw : "(null)");
 
-    // Try the metadata template first
-    if (tmpl_raw != nullptr) {
-        int32_t len = llama_chat_apply_template(tmpl_raw, chat_messages.data(), chat_messages.size(), true, nullptr, 0);
-        if (len > 0) {
-            promptStr.resize(len);
-            int32_t filled = llama_chat_apply_template(tmpl_raw, chat_messages.data(), chat_messages.size(), true, promptStr.data(), len);
-            if (filled == len && filled > 0) {
-                template_applied = true;
-                __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Template from GGUF applied successfully (%d chars)", len);
-            } else {
-                __android_log_print(ANDROID_LOG_WARN, "llama-jni", "GGUF template sizing ok but fill failed (%d vs %d)", filled, len);
-            }
-        } else {
-            __android_log_print(ANDROID_LOG_WARN, "llama-jni", "GGUF template apply failed (len=%d)", len);
+    // Prefer llama.cpp's Jinja-capable template path so arbitrary GGUF templates
+    // use the model's actual special tokens.
+    try {
+        common_chat_templates_inputs template_inputs;
+        template_inputs.add_generation_prompt = true;
+        template_inputs.use_jinja = true;
+        template_inputs.enable_thinking = reasoningBudget > 0;
+        template_inputs.messages.reserve(chat_messages.size());
+        for (const auto & msg : chat_messages) {
+            common_chat_msg common_msg;
+            common_msg.role = msg.role;
+            common_msg.content = msg.content;
+            template_inputs.messages.push_back(std::move(common_msg));
         }
+
+        auto templates = common_chat_templates_init(g_model, "");
+        const common_chat_params chat_params =
+            common_chat_templates_apply(templates.get(), template_inputs);
+        promptStr = chat_params.prompt;
+        template_thinking_open_tag = std::string(trailing_thinking_open_tag(promptStr));
+        template_forced_thinking_open =
+            reasoningBudget > 0 && !template_thinking_open_tag.empty();
+        template_applied = !promptStr.empty();
+        if (template_applied) {
+            __android_log_print(
+                ANDROID_LOG_INFO,
+                "llama-jni",
+                "Jinja GGUF template applied successfully (%zu chars, reported_forced_open=%d, detected_forced_open=%d)",
+                promptStr.size(),
+                chat_params.thinking_forced_open ? 1 : 0,
+                template_forced_thinking_open ? 1 : 0);
+        }
+    } catch (const std::exception & e) {
+        __android_log_print(ANDROID_LOG_WARN, "llama-jni", "Jinja GGUF template apply failed: %s", e.what());
     }
 
-    // Fallback chain if metadata template didn't work
+    // Legacy fallback supports known templates without guessing model-specific tokens.
     if (!template_applied) {
         // Try well-known built-in templates that don't require Jinja parsing
         const char* fallback_names[] = {"chatml", "llama3", "llama2", "mistral-v1", "gemma", nullptr};
@@ -827,28 +847,26 @@ Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeStart
                 }
             }
         }
-
-        // Ultimate fallback - try ChatML directly since LFM2.5 uses ChatML-like format
-        if (!template_applied) {
-            __android_log_print(ANDROID_LOG_WARN, "llama-jni", "Trying ChatML format as final fallback");
-            // Manual ChatML format - use double newlines for proper word boundaries
-            promptStr = "<|startoftext|>";
-            for (const auto& msg : chat_messages) {
-                promptStr += "<|im_start|>" + std::string(msg.role) + "\n" + std::string(msg.content) + "<|im_end|>\n\n";
-            }
-            promptStr += "<|im_start|>assistant\n";
-            template_applied = true;
-            __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Manual ChatML format applied");
-        }
     }
 
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Final prompt length: %zu chars", promptStr.size());
+    template_thinking_open_tag = std::string(trailing_thinking_open_tag(promptStr));
+    template_forced_thinking_open =
+        reasoningBudget > 0 && !template_thinking_open_tag.empty();
 
     // Free chat message strings
     for (auto& msg : chat_messages) {
         delete[] msg.role;
         delete[] msg.content;
     }
+
+    if (!template_applied) {
+        g_generating = false;
+        env->ThrowNew(env->FindClass("java/lang/IllegalStateException"),
+            "Model chat template is unsupported; refusing to apply a model-specific manual fallback");
+        return;
+    }
+
+    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Final prompt length: %zu chars", promptStr.size());
 
     if (g_sampler) {
         llama_sampler_free(g_sampler);
@@ -859,12 +877,19 @@ Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeStart
     // Temperature: 0 means greedy decoding; only negative values fall back to default
     float temp = temperature >= 0.0f ? temperature : 0.7f;
 
-    // Repeat penalties operate on raw logits, so they go first in the chain
+    const bool tool_contract_turn =
+        promptStr.find("<tool_call>") != std::string::npos ||
+        promptStr.find("call:tool_name{") != std::string::npos;
+
+    // Repeat penalties operate on raw logits, so they go first in the chain.
+    // Tool envelopes repeat JSON punctuation heavily; penalties corrupt that syntax.
     float penalty_repeat = (repeatPenalty > 0) ? repeatPenalty : 1.10f;
     float penalty_freq = (penaltyFreq > 0.0f) ? penaltyFreq : 0.05f;
     float penalty_present = (penaltyPresent > 0.0f) ? penaltyPresent : 0.05f;
     int   penalty_last_n = 128;
-    llama_sampler_chain_add(g_sampler, llama_sampler_init_penalties(penalty_last_n, penalty_repeat, penalty_freq, penalty_present));
+    if (!tool_contract_turn) {
+        llama_sampler_chain_add(g_sampler, llama_sampler_init_penalties(penalty_last_n, penalty_repeat, penalty_freq, penalty_present));
+    }
 
     // Only add probabilistic samplers when using temperature > 0
     // For greedy (temp = 0), these add unnecessary overhead per token
@@ -887,7 +912,11 @@ Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeStart
     }
 
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "=== SAMPLER CONFIGURED ===");
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Penalties: repeat=%.2f, freq=%.2f, present=%.2f, last_n=%d", penalty_repeat, penalty_freq, penalty_present, penalty_last_n);
+    if (tool_contract_turn) {
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Penalties disabled for tool-contract turn");
+    } else {
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Penalties: repeat=%.2f, freq=%.2f, present=%.2f, last_n=%d", penalty_repeat, penalty_freq, penalty_present, penalty_last_n);
+    }
     if (temp > 0.0f) {
         __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Using probabilistic sampling: Top-K: %d | Top-P: %.2f | Min-P: %.2f | Temp: %.2f", topK, topP, minP, temp);
     } else {
@@ -1182,16 +1211,38 @@ Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeStart
 
     auto gen_start = std::chrono::high_resolution_clock::now();
 
-    // Initialize thinking token tracking - assume we're in thinking phase at start
-    // This will be disabled if reasoning_budget is 0 (thinking disabled)
-    g_in_thinking_phase = (reasoningBudget > 0);
+    const bool thinking_budget_enabled = reasoningBudget > 0;
+    const bool template_uses_bracket_thinking = template_thinking_open_tag == "[THINK]";
+    std::string expected_end_tag = template_uses_bracket_thinking ? "[/THINK]" : "</think>";
+    std::string expected_force_close = template_uses_bracket_thinking ? "\n[/THINK]\n" : "\n</think>\n";
+    std::string thinking_tag_probe;
+    bool thinking_phase_seen = thinking_budget_enabled && template_forced_thinking_open;
+    g_in_thinking_phase = thinking_phase_seen;
     g_think_token_count = 0;
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Thinking tracking initialized: enabled=%d, budget=%d",
-                       g_in_thinking_phase ? 1 : 0, reasoningBudget);
 
-    std::string expected_end_tag = "</think>";
-    std::string expected_force_close = "\n</think>\n";
-    std::string first_token_output = "";
+    __android_log_print(
+        ANDROID_LOG_INFO,
+        "llama-jni",
+        "Thinking budget configured: enabled=%d, forced_open=%d, budget=%d",
+        thinking_budget_enabled ? 1 : 0,
+        template_forced_thinking_open ? 1 : 0,
+        reasoningBudget);
+
+    if (thinking_phase_seen) {
+        // The template already opened the thinking section inside the prompt, so
+        // generated tokens contain reasoning and a closing tag but no opening tag.
+        // Emit a synthetic opener so downstream streaming classification remains correct.
+        jstring openingThinkTag = env->NewStringUTF(template_thinking_open_tag.c_str());
+        if (openingThinkTag) {
+            env->CallVoidMethod(g_callback, onTokenMethod, openingThinkTag);
+            env->DeleteLocalRef(openingThinkTag);
+            if (env->ExceptionCheck()) {
+                env->ExceptionClear();
+                __android_log_print(ANDROID_LOG_ERROR, "llama-jni", "onToken callback threw during synthetic think open");
+            }
+        }
+    }
+
     TokenProcessor processor;
 
     // Get special tokens and vocab
@@ -1218,11 +1269,33 @@ Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeStart
 
         // Get token text BEFORE accepting - needed for thinking limit check
         char tokenBuffer[256];
-        int tokenLen = llama_token_to_piece(get_model_vocab(), token, tokenBuffer, sizeof(tokenBuffer) - 1, 0, false);
+        // Preserve rendered special-token text so reasoning and tool-call markers
+        // reach the stream parser. EOS/EOT tokens are filtered above.
+        int tokenLen = llama_token_to_piece(get_model_vocab(), token, tokenBuffer, sizeof(tokenBuffer) - 1, 0, true);
         
         // Add piece to buffer if valid (clamp to buffer size for safety)
         if (tokenLen > 0) {
             processor.append(tokenBuffer, std::min(tokenLen, (int)(sizeof(tokenBuffer) - 1)));
+            if (thinking_budget_enabled && !thinking_phase_seen) {
+                thinking_tag_probe.append(tokenBuffer, std::min(tokenLen, (int)(sizeof(tokenBuffer) - 1)));
+                if (thinking_tag_probe.find("<think>") != std::string::npos) {
+                    expected_end_tag = "</think>";
+                    expected_force_close = "\n</think>\n";
+                    g_in_thinking_phase = true;
+                } else if (thinking_tag_probe.find("[THINK]") != std::string::npos) {
+                    expected_end_tag = "[/THINK]";
+                    expected_force_close = "\n[/THINK]\n";
+                    g_in_thinking_phase = true;
+                }
+                if (g_in_thinking_phase) {
+                    thinking_phase_seen = true;
+                    g_think_token_count = 0;
+                    thinking_tag_probe.clear();
+                    __android_log_print(ANDROID_LOG_DEBUG, "llama-jni", "Opening thinking tag detected");
+                } else if (thinking_tag_probe.size() > 32) {
+                    thinking_tag_probe.erase(0, thinking_tag_probe.size() - 32);
+                }
+            }
         }
 
         // ============================================================
@@ -1235,40 +1308,14 @@ Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeStart
                 g_in_thinking_phase = false;
                 __android_log_print(ANDROID_LOG_DEBUG, "llama-jni", "End of thinking detected in buffer at token %d", n_generated_tokens);
             } else {
-                // Detect tag format from the very first non-whitespace token output
-                if (first_token_output.empty()) {
-                    // Check internal buffer for non-whitespace
-                    const std::string& buf = processor.get_buffer();
-                    bool is_ws = true;
-                    for (char c : buf) {
-                        if (!std::isspace(static_cast<unsigned char>(c))) {
-                            is_ws = false;
-                            break;
-                        }
-                    }
-                    if (!is_ws) {
-                        first_token_output = buf;
-                        // If the first non-whitespace contains '[' or 'THINK', assume [THINK] format
-                        if (first_token_output.find("[") != std::string::npos || 
-                            first_token_output.find("THINK") != std::string::npos) {
-                            expected_end_tag = "[/THINK]";
-                            expected_force_close = "\n[/THINK]\n";
-                        } else {
-                            // Default to standard <think> format
-                            expected_end_tag = "</think>";
-                            expected_force_close = "\n</think>\n";
-                        }
-                    }
-                }
-
                 // Check if adding this token would exceed the limit
-                if (g_think_token_count + 1 >= THINK_TOKEN_LIMIT) {
+                if (reached_reasoning_budget(g_think_token_count, reasoningBudget)) {
                     // === HARD LIMIT HIT - Force close thinking ===
                     const char* force_close = expected_force_close.c_str();
 
                     __android_log_print(ANDROID_LOG_WARN, "llama-jni",
                         "Hard think limit %d reached at token %d - forcing end of thinking",
-                        THINK_TOKEN_LIMIT, n_generated_tokens);
+                        reasoningBudget, n_generated_tokens);
 
                     // Stream forced close to UI
                     jstring forceStr = env->NewStringUTF(force_close);

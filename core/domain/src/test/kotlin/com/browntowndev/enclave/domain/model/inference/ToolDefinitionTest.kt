@@ -56,7 +56,7 @@ class ToolDefinitionTest {
                 )
 
             assertEquals(
-                """ActionResult{"name":"nullable_tool","arguments":{"title":"...","author":"..."}}ActionResult""",
+                """<tool_call>{"name":"nullable_tool","arguments":{"title":"...","author":"..."}}</tool_call>""",
                 tool.toExample(ToolCallStrategy.JSON_XML_ENVELOPE),
             )
         }
@@ -98,13 +98,13 @@ class ToolDefinitionTest {
     fun `SEARCH_TOOLS is preloaded and not lazily disclosable`() {
         val tool = ToolDefinition.SEARCH_TOOLS
 
-        assertEquals("search_tools", tool.name)
+        assertEquals("tool_discovery_tool", tool.name)
         assertEquals(ToolDisclosureMode.PRELOADED, tool.disclosureMode)
         assertEquals(false, tool.supportsLazyDisclosure)
 
         val entry = tool.catalogEntry()
         assertEquals(ToolDisclosureMode.PRELOADED, entry.disclosureMode)
-        assertTrue(entry.requiredArguments.any { it.name == "query" })
+        assertTrue(entry.requiredArguments.any { it.name == "capability" })
         assertEquals(listOf("discovery"), entry.categoryTags)
     }
 

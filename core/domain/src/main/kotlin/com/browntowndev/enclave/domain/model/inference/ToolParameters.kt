@@ -60,7 +60,7 @@ interface ToolParameters {
 
 @kotlinx.serialization.Serializable
 data class SearchToolsParams(
-    @ToolParam(description = "Natural-language query describing the capability to find.")
+    @ToolParam(description = "Description of the capability you need, e.g. 'send an email' or 'generate an image'. Not a web-search query.")
     val query: String,
     @ToolParam(description = "Maximum number of matches to return.")
     val limit: Int? = null,

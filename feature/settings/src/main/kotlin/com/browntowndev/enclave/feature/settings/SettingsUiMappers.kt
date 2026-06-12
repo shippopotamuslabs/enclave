@@ -176,6 +176,7 @@ class LocalModelAssetUiMapper
                 repetitionPenalty = config.repetitionPenalty,
                 systemPrompt = config.systemPrompt,
                 thinkingEnabled = config.thinkingEnabled,
+                reasoningBudget = config.reasoningBudget.toString(),
                 isSystemPreset = config.isSystemPreset,
                 defaultAssignments = config.defaultAssignments,
             )

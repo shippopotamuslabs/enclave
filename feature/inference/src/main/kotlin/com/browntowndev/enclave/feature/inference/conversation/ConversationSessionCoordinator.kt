@@ -204,7 +204,7 @@ internal class ConversationSessionCoordinator(
                 turn = turnSnapshot,
             )
         // Seed the LiteRT-local active-tool set from GenerationOptions on a fresh build, and
-        // preserve any search_tools activations accumulated against the prior conversation
+        // preserve any tool_discovery_tool activations accumulated against the prior conversation
         // when rebuilding within the same engine session (e.g., signature change after
         // discovery widens the callable set).
         val preloadNames = options?.activeTools?.map { it.name }.orEmpty()

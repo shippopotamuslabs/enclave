@@ -56,6 +56,7 @@ class ActiveModelProviderImpl
                     repetitionPenalty = config.repetitionPenalty,
                     contextWindow = config.contextWindow,
                     thinkingEnabled = config.thinkingEnabled,
+                    reasoningBudget = config.reasoningBudget,
                     maxTokensDisabled = false,
                     temperatureDisabled = false,
                     topPDisabled = false,

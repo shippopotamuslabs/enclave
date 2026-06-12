@@ -3,7 +3,7 @@ package com.browntowndev.enclave.domain.port.inference
 import com.browntowndev.enclave.domain.model.chat.ChatId
 
 /**
- * Chat-scoped set of tools activated by intent classification or `search_tools`.
+ * Chat-scoped set of tools activated by intent classification or `tool_discovery_tool`.
  * Once a tool name is recorded it stays until [clearSession].
  */
 interface MonotonicToolActivationPort {

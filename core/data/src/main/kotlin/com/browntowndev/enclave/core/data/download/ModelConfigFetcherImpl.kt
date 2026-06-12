@@ -10,6 +10,7 @@ import com.browntowndev.enclave.domain.model.config.RemoteModelAsset
 import com.browntowndev.enclave.domain.model.config.RemoteModelPack
 import com.browntowndev.enclave.domain.model.config.RemoteModelPackMember
 import com.browntowndev.enclave.domain.model.config.effectiveDisplayName
+import com.browntowndev.enclave.domain.model.config.resolvedModelFileFormat
 import com.browntowndev.enclave.domain.model.download.ModelPack
 import com.browntowndev.enclave.domain.model.download.ModelPackMember
 import com.browntowndev.enclave.domain.model.download.ModelPackRole
@@ -312,7 +313,7 @@ class ModelConfigFetcherImpl
                         localFileName = asset.fileName,
                         sha256 = asset.sha256,
                         sizeInBytes = asset.sizeInBytes,
-                        modelFileFormat = asset.modelFileFormat,
+                        modelFileFormat = asset.resolvedModelFileFormat(),
                         source = asset.source,
                         utilityType = asset.utilityType,
                         isMultimodal = asset.isMultimodal,
@@ -336,6 +337,9 @@ class ModelConfigFetcherImpl
                             minP = config.minP,
                             repetitionPenalty = config.repetitionPenalty,
                             thinkingEnabled = config.thinkingEnabled,
+                            reasoningBudget =
+                                config.reasoningBudget
+                                    ?: LocalModelConfiguration.defaultReasoningBudget(config.contextWindow),
                             systemPrompt = config.systemPrompt,
                             isSystemPreset = true,
                             defaultAssignments = config.defaultAssignments,

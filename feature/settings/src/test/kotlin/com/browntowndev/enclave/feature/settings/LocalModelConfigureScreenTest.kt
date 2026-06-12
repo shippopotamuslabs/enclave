@@ -6,7 +6,11 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -257,5 +261,100 @@ class LocalModelConfigureScreenTest {
         composeTestRule.onNodeWithText("Creative", useUnmergedTree = true).assertExists()
         composeTestRule.onNodeWithTag("ContextWindowField", useUnmergedTree = true).assertExists()
         composeTestRule.onNodeWithText("8192", useUnmergedTree = true).assertExists()
+    }
+
+    @Test
+    fun reasoningBudgetField_isVisible_forGgufWhenThinkingEnabled() {
+        val uiState =
+            SettingsUiState(
+                localModelEditor =
+                    LocalModelEditorUiState(
+                        configDraft =
+                            LocalModelConfigUi(
+                                displayName = "Reasoning",
+                                thinkingEnabled = true,
+                                reasoningBudget = "1024",
+                            ),
+                    ),
+            )
+
+        composeTestRule.setContent {
+            EnclaveTheme {
+                LocalModelConfigureScreen(
+                    uiState = uiState,
+                    modelFormat = MODEL_FORMAT_GGUF,
+                    onNavigateBack = {},
+                    onConfigChange = {},
+                    onSave = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("ReasoningBudgetField").assertExists()
+        composeTestRule.onNodeWithText("1024", useUnmergedTree = true).assertExists()
+    }
+
+    @Test
+    fun reasoningBudgetField_isHidden_forLiteRtWhenThinkingEnabled() {
+        val uiState =
+            SettingsUiState(
+                localModelEditor =
+                    LocalModelEditorUiState(
+                        configDraft =
+                            LocalModelConfigUi(
+                                displayName = "Reasoning",
+                                thinkingEnabled = true,
+                            ),
+                    ),
+            )
+
+        composeTestRule.setContent {
+            EnclaveTheme {
+                LocalModelConfigureScreen(
+                    uiState = uiState,
+                    modelFormat = MODEL_FORMAT_LITERT,
+                    onNavigateBack = {},
+                    onConfigChange = {},
+                    onSave = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("ReasoningBudgetField").assertDoesNotExist()
+    }
+
+    @Test
+    fun reasoningBudget_defaultsTo25Percent_whenThinkingToggledOn() {
+        var updatedConfig: LocalModelConfigUi? = null
+        val uiState =
+            SettingsUiState(
+                localModelEditor =
+                    LocalModelEditorUiState(
+                        configDraft =
+                            LocalModelConfigUi(
+                                displayName = "Reasoning",
+                                thinkingEnabled = false,
+                                reasoningBudget = "",
+                                contextWindow = "8000",
+                            ),
+                    ),
+            )
+
+        composeTestRule.setContent {
+            EnclaveTheme {
+                LocalModelConfigureScreen(
+                    uiState = uiState,
+                    modelFormat = MODEL_FORMAT_GGUF,
+                    onNavigateBack = {},
+                    onConfigChange = { updatedConfig = it },
+                    onSave = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("ThinkingRow").performScrollTo().performClick()
+        assertNotNull(updatedConfig)
+        assertEquals(true, updatedConfig?.thinkingEnabled)
+        assertEquals("2000", updatedConfig?.reasoningBudget)
     }
 }
