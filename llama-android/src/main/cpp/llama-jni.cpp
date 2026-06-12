@@ -695,6 +695,8 @@ Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeStart
     jfloat penaltyFreq,
     jfloat penaltyPresent,
     jint reasoningBudget,
+    jboolean continuation,
+    jint prevMessageCount,
     jobject callback
 ) {
     // Hold the same mutex as load/unload/clear so the model, context, sampler and
@@ -782,7 +784,9 @@ Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeStart
     // Get chat template from model - llama.cpp reads from GGUF metadata automatically
     const char* tmpl_raw = llama_model_chat_template(g_model, nullptr);
     std::string promptStr;
+    std::string prefixPromptStr;
     bool template_applied = false;
+    bool prefix_template_applied = false;
     bool template_forced_thinking_open = false;
     std::string template_thinking_open_tag;
 
@@ -808,6 +812,22 @@ Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeStart
         const common_chat_params chat_params =
             common_chat_templates_apply(templates.get(), template_inputs);
         promptStr = chat_params.prompt;
+        if (continuation &&
+                image_paths.empty() &&
+                prevMessageCount > 0 &&
+                prevMessageCount < num_messages) {
+            common_chat_templates_inputs prefix_inputs;
+            prefix_inputs.add_generation_prompt = false;
+            prefix_inputs.use_jinja = true;
+            prefix_inputs.enable_thinking = reasoningBudget > 0;
+            prefix_inputs.messages.assign(
+                template_inputs.messages.begin(),
+                template_inputs.messages.begin() + prevMessageCount);
+            const common_chat_params prefix_params =
+                common_chat_templates_apply(templates.get(), prefix_inputs);
+            prefixPromptStr = prefix_params.prompt;
+            prefix_template_applied = !prefixPromptStr.empty();
+        }
         template_thinking_open_tag = std::string(trailing_thinking_open_tag(promptStr));
         template_forced_thinking_open =
             reasoningBudget > 0 && !template_thinking_open_tag.empty();
@@ -962,27 +982,138 @@ Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeStart
     jmethodID onErrorMethod = getCallbackMethod(env, g_callback, "onError", "(Ljava/lang/String;)V");
 
     if (image_paths.empty()) {
-        if (!tokenizePrompt(promptStr.c_str(), promptStr.size(), tokens)) {
-            g_generating = false;
-            env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Failed to tokenize prompt");
-            return;
+        bool delta_mode = false;
+        const bool delta_requested =
+            continuation &&
+            prevMessageCount > 0 &&
+            prevMessageCount < num_messages &&
+            !g_history_tokens.empty() &&
+            g_last_eval_pos > 0;
+
+        if (delta_requested) {
+            if (!prefix_template_applied ||
+                    promptStr.compare(0, prefixPromptStr.size(), prefixPromptStr) != 0) {
+                __android_log_print(
+                    ANDROID_LOG_WARN,
+                    "llama-jni",
+                    "delta mode: rendered prefix mismatch, falling back to full rebuild");
+                clear_kv_cache_and_tracking();
+            } else {
+                const std::string delta_str = promptStr.substr(prefixPromptStr.size());
+                std::vector<llama_token> delta_tokens;
+                if (!tokenizePrompt(delta_str.c_str(), delta_str.size(), delta_tokens)) {
+                    __android_log_print(
+                        ANDROID_LOG_WARN,
+                        "llama-jni",
+                        "delta mode: failed to tokenize delta, falling back to full rebuild");
+                    clear_kv_cache_and_tracking();
+                } else {
+                    const llama_vocab * vocab = get_model_vocab();
+                    if (!delta_tokens.empty() &&
+                            delta_tokens.front() == g_history_tokens.back() &&
+                            (llama_vocab_is_eog(vocab, delta_tokens.front()) ||
+                                llama_vocab_is_control(vocab, delta_tokens.front()))) {
+                        __android_log_print(
+                            ANDROID_LOG_INFO,
+                            "llama-jni",
+                            "delta mode: removed duplicated control token at seam");
+                        delta_tokens.erase(delta_tokens.begin());
+                    }
+
+                    const llama_pos delta_start_pos = g_last_eval_pos;
+                    if (delta_tokens.empty()) {
+                        __android_log_print(
+                            ANDROID_LOG_WARN,
+                            "llama-jni",
+                            "delta mode: empty delta, falling back to full rebuild");
+                        clear_kv_cache_and_tracking();
+                    } else if (delta_start_pos + (llama_pos) delta_tokens.size() + maxTokens > n_ctx) {
+                        __android_log_print(
+                            ANDROID_LOG_WARN,
+                            "llama-jni",
+                            "delta mode: would overflow context, falling back to full rebuild");
+                        clear_kv_cache_and_tracking();
+                    } else {
+                        const int n_batch = llama_n_batch(g_ctx);
+                        int processed_tokens = 0;
+                        bool decode_failed = false;
+                        while (processed_tokens < (int) delta_tokens.size()) {
+                            llama_batch_clear(*g_batch);
+                            const int chunk_size =
+                                std::min(n_batch, (int) delta_tokens.size() - processed_tokens);
+                            for (int i = 0; i < chunk_size; ++i) {
+                                const bool final_token =
+                                    processed_tokens + i == (int) delta_tokens.size() - 1;
+                                llama_batch_add(
+                                    *g_batch,
+                                    delta_tokens[processed_tokens + i],
+                                    delta_start_pos + processed_tokens + i,
+                                    { 0 },
+                                    final_token);
+                            }
+
+                            const int decode_result = llama_decode(g_ctx, *g_batch);
+                            if (decode_result != 0) {
+                                __android_log_print(
+                                    ANDROID_LOG_WARN,
+                                    "llama-jni",
+                                    "delta mode: decode failed at token %d (result=%d), falling back to full rebuild",
+                                    processed_tokens,
+                                    decode_result);
+                                decode_failed = true;
+                                break;
+                            }
+                            processed_tokens += chunk_size;
+                        }
+
+                        if (decode_failed) {
+                            clear_kv_cache_and_tracking();
+                        } else {
+                            n_prompt_tokens = (int) delta_tokens.size();
+                            g_last_prefix_reused_tokens = (int) delta_start_pos;
+                            for (size_t i = 0; i < delta_tokens.size(); ++i) {
+                                g_history_tokens.push_back(delta_tokens[i]);
+                                g_history_positions.push_back(delta_start_pos + (llama_pos) i);
+                            }
+                            g_last_eval_pos = sync_last_eval_pos_from_memory();
+                            g_last_prompt_was_multimodal = false;
+                            delta_mode = true;
+                            __android_log_print(
+                                ANDROID_LOG_INFO,
+                                "llama-jni",
+                                "Delta eval: %d new tokens at pos %d (kv total now %d)",
+                                n_prompt_tokens,
+                                (int) delta_start_pos,
+                                (int) g_last_eval_pos);
+                        }
+                    }
+                }
+            }
         }
 
-        n_prompt_tokens = (int) tokens.size();
+        if (!delta_mode) {
+            if (!tokenizePrompt(promptStr.c_str(), promptStr.size(), tokens)) {
+                g_generating = false;
+                env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Failed to tokenize prompt");
+                return;
+            }
 
-        if (g_history_tokens.empty() && sync_last_eval_pos_from_memory() > 0) {
+            n_prompt_tokens = (int) tokens.size();
+
+            if (g_history_tokens.empty() && sync_last_eval_pos_from_memory() > 0) {
             // We have KV state but no trusted token metadata (for example after state restore).
             // Rebuild from scratch rather than attempting unsafe prefix reuse.
             clear_kv_cache_and_tracking();
             __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Cleared untracked KV cache before prompt rebuild");
-        }
+            }
 
-        const std::vector<llama_pos> old_history_positions = g_history_positions;
-        size_t n_past = 0;
-        while (n_past < g_history_tokens.size() && n_past < (size_t) n_prompt_tokens && g_history_tokens[n_past] == tokens[n_past]) {
-            n_past++;
-        }
+            const std::vector<llama_pos> old_history_positions = g_history_positions;
+            size_t n_past = 0;
+            while (n_past < g_history_tokens.size() && n_past < (size_t) n_prompt_tokens && g_history_tokens[n_past] == tokens[n_past]) {
+                n_past++;
+            }
 
+        const size_t prefix_reused = n_past;
         bool refresh_last_token = false;
         // If the prompt perfectly matches the prefix, force one token eval to refresh logits.
         if (n_past == (size_t) n_prompt_tokens && n_past > 0) {
@@ -991,7 +1122,7 @@ Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeStart
         }
 
         const bool cache_diverged = n_past < g_history_tokens.size();
-        g_last_prefix_reused_tokens = (int) n_past;
+        g_last_prefix_reused_tokens = (int) prefix_reused;
         rebuild_from = n_past;
         if (cache_diverged) {
             const llama_pos trim_pos = old_history_positions[n_past];
@@ -1105,6 +1236,7 @@ Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeStart
         double prompt_ms = std::chrono::duration<double, std::milli>(prompt_end - prompt_start).count();
         __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Prompt evaluation took %.2f ms (%.2f ms/token)",
             prompt_ms, prompt_ms / n_prompt_tokens);
+        }
     } else {
         clear_kv_cache_and_tracking();
 
@@ -1356,8 +1488,6 @@ Java_com_browntowndev_enclave_feature_inference_llama_JniLlamaEngine_nativeStart
                             __android_log_print(ANDROID_LOG_ERROR, "llama-jni",
                                 "ERROR: llama_decode failed for force-close (err %d)", decode_res);
                         } else {
-                            // CRITICAL: Update token count to account for injected force tokens
-                            n_generated_tokens += n_force;
                             // Add force tokens to history to keep KV cache strictly synchronized
                             for (int i = 0; i < n_force; ++i) {
                                 g_history_tokens.push_back(force_tokens[i]);

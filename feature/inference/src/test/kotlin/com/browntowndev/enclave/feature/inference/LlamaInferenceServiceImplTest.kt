@@ -331,6 +331,136 @@ class LlamaInferenceServiceImplTest {
             assertEquals("Assistant text", result.assistantText)
         }
 
+    @Test
+    fun `completeSingleTurn enables continuation only for a valid append-only transcript`() =
+        runTest {
+            val continuations = mutableListOf<Boolean>()
+            val prevMessageCounts = mutableListOf<Int>()
+            every {
+                sessionManager.streamAssistantResponseWithOptions(
+                    any(),
+                    capture(continuations),
+                    capture(prevMessageCounts),
+                )
+            } returns flowOf(GenerationEvent.Completed("Assistant text"))
+            val service = createService(ModelType.FAST)
+            val baseOptions = GenerationOptions(reasoningBudget = 0, modelType = ModelType.FAST, transcriptRevision = 1L)
+            val transcripts =
+                (1..7).map { count ->
+                    (1..count).map { index ->
+                        AgentLoopMessage(id = "m$index", role = Role.USER, content = "message $index")
+                    }
+                }
+
+            service.completeTurnForTest(transcripts[0], "System A", baseOptions)
+            service.completeTurnForTest(transcripts[1], "System A", baseOptions)
+            service.completeTurnForTest(transcripts[2], "System A", baseOptions.copy(transcriptRevision = 2L))
+            service.completeTurnForTest(transcripts[3], "System B", baseOptions.copy(transcriptRevision = 2L))
+            service.completeTurnForTest(transcripts[4], "System B", baseOptions.copy(transcriptRevision = 2L))
+            service.clearAppendOnlyOnRustCompactionBoundary()
+            service.completeTurnForTest(transcripts[5], "System B", baseOptions.copy(transcriptRevision = 2L))
+            service.completeTurnForTest(
+                transcripts[6],
+                "System B",
+                baseOptions.copy(reasoningBudget = 1, transcriptRevision = 2L),
+            )
+            service.completeTurnForTest(
+                listOf(AgentLoopMessage(id = "rewritten", role = Role.USER, content = "replacement")),
+                "System B",
+                baseOptions.copy(reasoningBudget = 1, transcriptRevision = 2L),
+            )
+
+            assertEquals(listOf(false, true, false, false, true, false, false, false), continuations)
+            assertEquals(listOf(0, 2, 0, 0, 5, 0, 0, 0), prevMessageCounts)
+        }
+
+    @Test
+    fun `completeSingleTurn preserves injected sidecars in the continuation prefix`() =
+        runTest {
+            val capturedHistories = mutableListOf<List<ChatMessage>>()
+            val continuations = mutableListOf<Boolean>()
+            val prevMessageCounts = mutableListOf<Int>()
+            coEvery { sessionManager.setHistory(capture(capturedHistories)) } returns Unit
+            every {
+                sessionManager.streamAssistantResponseWithOptions(
+                    any(),
+                    capture(continuations),
+                    capture(prevMessageCounts),
+                )
+            } returns flowOf(GenerationEvent.Completed("Assistant text"))
+            val service = createService(ModelType.FAST)
+            val options = GenerationOptions(reasoningBudget = 0, modelType = ModelType.FAST, transcriptRevision = 7L)
+            val firstTurn = listOf(AgentLoopMessage(id = "u1", role = Role.USER, content = "First question"))
+            val secondTurn =
+                firstTurn +
+                    AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "First answer") +
+                    AgentLoopMessage(id = "u2", role = Role.USER, content = "Second question")
+
+            service.completeTurnForTest(firstTurn, "Stable system", options, contextSidecars = "ledger one")
+            service.completeTurnForTest(secondTurn, "Stable system", options, contextSidecars = "ledger two")
+
+            assertEquals(listOf(false, true), continuations)
+            assertEquals(listOf(0, 2), prevMessageCounts)
+            assertEquals(
+                listOf(
+                    ChatMessage(Role.USER, "[context]\nledger one\n[/context]\n\nFirst question"),
+                    ChatMessage(Role.ASSISTANT, "First answer"),
+                    ChatMessage(Role.USER, "[context]\nledger two\n[/context]\n\nSecond question"),
+                ),
+                capturedHistories.last(),
+            )
+        }
+
+    @Test
+    fun `completeSingleTurn invalidates continuation after generation error`() =
+        runTest {
+            val continuations = mutableListOf<Boolean>()
+            val prevMessageCounts = mutableListOf<Int>()
+            every {
+                sessionManager.streamAssistantResponseWithOptions(
+                    any(),
+                    capture(continuations),
+                    capture(prevMessageCounts),
+                )
+            } returnsMany
+                listOf(
+                    flowOf(GenerationEvent.Completed("First answer")),
+                    flowOf(GenerationEvent.Error(IllegalStateException("decode failed"))),
+                    flowOf(GenerationEvent.Completed("Recovered answer")),
+                )
+            val service = createService(ModelType.FAST)
+            val options = GenerationOptions(reasoningBudget = 0, modelType = ModelType.FAST, transcriptRevision = 9L)
+            val firstTurn = listOf(AgentLoopMessage(id = "u1", role = Role.USER, content = "First"))
+            val secondTurn = firstTurn + AgentLoopMessage(id = "u2", role = Role.USER, content = "Second")
+            val thirdTurn = secondTurn + AgentLoopMessage(id = "u3", role = Role.USER, content = "Third")
+
+            service.completeTurnForTest(firstTurn, "System", options)
+            val failed = runCatching { service.completeTurnForTest(secondTurn, "System", options) }
+            service.completeTurnForTest(thirdTurn, "System", options)
+
+            assertTrue(failed.isFailure)
+            assertEquals(listOf(false, true, false), continuations)
+            assertEquals(listOf(0, 2, 0), prevMessageCounts)
+        }
+
+    private suspend fun LlamaInferenceServiceImpl.completeTurnForTest(
+        messages: List<AgentLoopMessage>,
+        systemPrompt: String,
+        options: GenerationOptions,
+        contextSidecars: String? = null,
+    ) {
+        completeSingleTurn(
+            sessionMessages = messages,
+            systemPrompt = systemPrompt,
+            contextSidecars = contextSidecars,
+            availableTools = emptyList(),
+            allowToolCall = false,
+            onTextToken = {},
+            onThinkingToken = {},
+            options = options,
+        )
+    }
+
     private fun createService(modelType: ModelType = ModelType.FAST): LlamaInferenceServiceImpl =
         LlamaInferenceServiceImpl(
             sessionManager = sessionManager,

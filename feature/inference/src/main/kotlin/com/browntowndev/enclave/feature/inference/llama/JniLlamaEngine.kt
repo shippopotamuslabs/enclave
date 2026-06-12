@@ -192,6 +192,8 @@ class JniLlamaEngine
                                 penaltyFreq = params.penaltyFreq,
                                 penaltyPresent = params.penaltyPresent,
                                 reasoningBudget = params.reasoningBudget,
+                                continuation = false,
+                                prevMessageCount = 0,
                                 callback = callback,
                             )
                         }
@@ -209,7 +211,11 @@ class JniLlamaEngine
                 }
             }.buffer(Channel.UNLIMITED).flowOn(Dispatchers.IO)
 
-        override fun generateWithOptions(options: GenerationOptions): Flow<GenerationEvent> =
+        override fun generateWithOptions(
+            options: GenerationOptions,
+            continuation: Boolean,
+            prevMessageCount: Int,
+        ): Flow<GenerationEvent> =
             callbackFlow {
                 Log.i(TAG, "Starting generation with options: reasoningBudget=${options.reasoningBudget}")
                 check(modelLifecycle.loaded.get()) { "Engine not initialized" }
@@ -267,6 +273,8 @@ class JniLlamaEngine
                                 penaltyFreq = params.penaltyFreq,
                                 penaltyPresent = params.penaltyPresent,
                                 reasoningBudget = params.reasoningBudget,
+                                continuation = continuation,
+                                prevMessageCount = prevMessageCount,
                                 callback = callback,
                             )
                         }
@@ -325,6 +333,8 @@ class JniLlamaEngine
 
         override fun isLoaded(): Boolean = modelLifecycle.loaded.get()
 
+        override suspend fun contextUsage(): Int = withContext(ioDispatcher) { modelLifecycle.readContextUsage() }
+
         private fun unloadInternal() {
             try {
                 nativeStopCompletion()
@@ -354,6 +364,7 @@ class JniLlamaEngine
 
         private external fun nativeClearKvCache()
 
+        @Suppress("LongParameterList")
         internal fun startCompletion(
             roles: Array<String>,
             contents: Array<String>,
@@ -368,6 +379,8 @@ class JniLlamaEngine
             penaltyPresent: Float,
             reasoningBudget: Int,
             callback: NativeTokenCallback,
+            continuation: Boolean = false,
+            prevMessageCount: Int = 0,
         ) {
             nativeStartCompletion(
                 roles,
@@ -382,10 +395,13 @@ class JniLlamaEngine
                 penaltyFreq,
                 penaltyPresent,
                 reasoningBudget,
+                continuation,
+                prevMessageCount,
                 callback,
             )
         }
 
+        @Suppress("LongParameterList")
         private external fun nativeStartCompletion(
             roles: Array<String>,
             contents: Array<String>,
@@ -399,6 +415,8 @@ class JniLlamaEngine
             penaltyFreq: Float,
             penaltyPresent: Float,
             reasoningBudget: Int,
+            continuation: Boolean,
+            prevMessageCount: Int,
             callback: NativeTokenCallback,
         )
 
