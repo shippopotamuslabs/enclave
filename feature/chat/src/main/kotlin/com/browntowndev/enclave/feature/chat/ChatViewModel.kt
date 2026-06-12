@@ -116,6 +116,8 @@ class ChatViewModel
         val shareUiEvents = chatShareCoordinator.shareUiEvents
         private val _moderationMessages = Channel<Int>(Channel.BUFFERED)
         val moderationMessages: Flow<Int> = _moderationMessages.receiveAsFlow()
+        private val _chatErrorMessages = Channel<Int>(Channel.BUFFERED)
+        val chatErrorMessages: Flow<Int> = _chatErrorMessages.receiveAsFlow()
         private var lastBlockedPrompt: String? = null
 
         private val modelDisplayNamesFlow =
@@ -459,6 +461,13 @@ class ChatViewModel
             viewModelScope.launch {
                 activeChatIdFlow.collect { chatId ->
                     chatShareCoordinator.onActiveChatChanged(chatId)
+                }
+            }
+
+            viewModelScope.launch {
+                inferenceOrchestrator.promptTooLargeFailures.collect { failure ->
+                    chatInputCoordinator.onInputChange(failure.prompt)
+                    _chatErrorMessages.send(R.string.chat_prompt_too_large)
                 }
             }
 

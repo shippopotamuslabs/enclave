@@ -57,14 +57,30 @@ class ModelTurnFailureClassifierTest {
     }
 
     @Test
-    fun `MAR-K-06 unknown internal error defaults to transient retry`() {
+    fun `MAR-K-06 illegal state failure is permanent`() {
         val report =
             ModelTurnFailureClassifier.classify(
                 IllegalStateException("Unexpected serializer state"),
                 partialOutputChars = 0,
             )
 
-        assertEquals(FfiModelApiErrorClass.TRANSIENT, report.errorClass)
+        assertEquals(FfiModelApiErrorClass.PERMANENT, report.errorClass)
+    }
+
+    @Test
+    fun `chat template illegal state failure is permanent`() {
+        val report =
+            ModelTurnFailureClassifier.classify(
+                RuntimeException(
+                    "Model turn failed",
+                    IllegalStateException(
+                        "Model chat template is unsupported; refusing to apply a model-specific manual fallback",
+                    ),
+                ),
+                partialOutputChars = 0,
+            )
+
+        assertEquals(FfiModelApiErrorClass.PERMANENT, report.errorClass)
     }
 
     @Test

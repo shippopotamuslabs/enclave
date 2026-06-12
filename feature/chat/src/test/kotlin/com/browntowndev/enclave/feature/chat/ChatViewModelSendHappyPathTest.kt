@@ -3,10 +3,12 @@ package com.browntowndev.enclave.feature.chat
 import androidx.lifecycle.SavedStateHandle
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
+import com.browntowndev.enclave.domain.model.chat.AccumulatedMessages
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.Content
 import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.chat.MessageId
+import com.browntowndev.enclave.domain.model.chat.MessageSnapshot
 import com.browntowndev.enclave.domain.model.chat.MessageState
 import com.browntowndev.enclave.domain.model.chat.Mode
 import com.browntowndev.enclave.domain.model.chat.Role
@@ -314,6 +316,50 @@ class ChatViewModelSendHappyPathTest {
             assertEquals(R.string.chat_moderation_prompt_rejected, snackbar.await())
             assertEquals("blocked input", viewModel.uiState.value.inputText)
             coVerify(exactly = 1) { chatUseCases.processPromptWithSafetyGate(any()) }
+            collectJob.cancel()
+        }
+
+    @Test
+    fun `compaction failure restores prompt and emits prompt too large snackbar`() =
+        runTest {
+            val collectJob = backgroundScope.launch { viewModel.uiState.collect { } }
+            coEvery {
+                chatUseCases.generateChatResponse(
+                    prompt = any(),
+                    userMessageId = any(),
+                    assistantMessageId = any(),
+                    chatId = any(),
+                    mode = any(),
+                    backgroundInferenceEnabled = any(),
+                )
+            } returns
+                flowOf(
+                    AccumulatedMessages(
+                        messages =
+                            mapOf(
+                                MessageId("assistant-failed") to
+                                    MessageSnapshot(
+                                        messageId = MessageId("assistant-failed"),
+                                        modelType = ModelType.FAST,
+                                        content =
+                                            "Sorry, something went wrong. Please try again.\n\n" +
+                                                "Error: Agent loop failed: tier=pipeline, " +
+                                                "reason=Projected prompt exceeds hard ceiling",
+                                        thinkingRaw = "",
+                                        isComplete = true,
+                                    ),
+                            ),
+                    ),
+                )
+            val snackbar = async { viewModel.chatErrorMessages.first() }
+
+            viewModel.onInputChange("oversized prompt")
+            viewModel.onSendMessage()
+            advanceTimeBy(ChatTurnTiming.ASSISTANT_PLACEHOLDER_DELAY_MS)
+
+            assertEquals(R.string.chat_prompt_too_large, snackbar.await())
+            advanceUntilIdle()
+            assertEquals("oversized prompt", viewModel.uiState.value.inputText)
             collectJob.cancel()
         }
 
