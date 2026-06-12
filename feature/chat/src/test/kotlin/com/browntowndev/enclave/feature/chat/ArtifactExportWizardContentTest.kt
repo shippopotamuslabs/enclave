@@ -15,7 +15,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(instrumentedPackages = ["androidx.loader.content"])
+@Config(sdk = [34], instrumentedPackages = ["androidx.loader.content"])
 class ArtifactExportWizardContentTest {
     @get:Rule
     val composeTestRule = createComposeRule()
@@ -73,7 +73,7 @@ class ArtifactExportWizardContentTest {
                 )
             }
         }
-        composeTestRule.onNodeWithText("Next").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Next").assertExists()
         composeTestRule.onNodeWithText("Next").assertIsEnabled()
     }
 

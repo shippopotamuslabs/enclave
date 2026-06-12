@@ -20,7 +20,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(instrumentedPackages = ["androidx.loader.content"])
+@Config(sdk = [34], instrumentedPackages = ["androidx.loader.content"])
 class InputBarTest {
     @get:Rule
     val composeTestRule = createComposeRule()
@@ -53,7 +53,7 @@ class InputBarTest {
         }
 
         // Click plus button
-        composeTestRule.onNodeWithContentDescription("Toggle attachment menu").performClick()
+        composeTestRule.onNodeWithContentDescription("Show attachment options").performClick()
 
         // Verify options are displayed
         composeTestRule.onNodeWithText("Attach Photo").assertIsDisplayed()

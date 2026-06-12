@@ -97,120 +97,123 @@ fun ChatScreen(
         }
 
     ProvideDetailBottomSheet {
-        Scaffold(
-            containerColor = MaterialTheme.colorScheme.background,
-            topBar = {
-                ChatTopBar(
-                    selectedMode = uiState.selectedMode,
-                    selectedModeModelName = uiState.selectedModeModelName,
-                    modeModelNames = uiState.modeModelNames,
-                    onModeChange = onModeChange,
-                    onMenuClick = onNavigateToHistory,
-                    onNewChatClick = onNewChat,
-                    onViewChatStatsClick = onViewChatStatsClick,
-                )
-            },
-            contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        ) { innerPadding ->
-            ShareBottomSheet(
-                shareState = uiState.shareState,
-                onShareTurn = onShareTurn,
-                onShareFullChat = onShareFullChat,
-                onDismiss = onDismissShareSheet,
-            )
-
-            Column(
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .padding(top = innerPadding.calculateTopPadding())
-                        .imePadding(),
-            ) {
-                // Message area — shrinks via weight(1f) when keyboard opens
-                Box(modifier = Modifier.weight(1f)) {
-                    MessageList(
-                        modifier = Modifier.fillMaxSize(),
-                        messages = uiState.messages,
-                        hasActiveIndicator = uiState.hasActiveIndicator,
-                        activeToolCallBanner = uiState.activeToolCallBanner,
-                        activeIndicatorMessageId = uiState.activeIndicatorMessageId,
-                        hasTtsProviderAssigned = uiState.hasTtsProviderAssigned,
-                        isPlayingTts = uiState.isPlayingTts,
-                        isLoadingTts = uiState.isLoadingTts,
-                        isPausedTts = uiState.isPausedTts,
-                        chatMode = uiState.selectedMode,
-                        onEditMessage = onEditMessage,
-                        onPlayAudio = onPlayAudio,
-                        onPauseAudio = onPauseAudio,
-                        onArtifactCardClick = onArtifactCardClick,
-                        onNavigateToStudio = onNavigateToStudio,
-                        onShareClick = onShareClick,
-                        onStatsClick = onStatsClick,
-                        onReportMessage = onReportMessage,
+        Box(modifier = Modifier.fillMaxSize()) {
+            Scaffold(
+                containerColor = MaterialTheme.colorScheme.background,
+                topBar = {
+                    ChatTopBar(
+                        selectedMode = uiState.selectedMode,
+                        selectedModeModelName = uiState.selectedModeModelName,
+                        modeModelNames = uiState.modeModelNames,
+                        onModeChange = onModeChange,
+                        onMenuClick = onNavigateToHistory,
+                        onNewChatClick = onNewChat,
+                        onViewChatStatsClick = onViewChatStatsClick,
                     )
+                },
+                contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            ) { innerPadding ->
+                ShareBottomSheet(
+                    shareState = uiState.shareState,
+                    onShareTurn = onShareTurn,
+                    onShareFullChat = onShareFullChat,
+                    onDismiss = onDismissShareSheet,
+                )
 
-                    if (uiState.shieldReason != null) {
-                        ShieldOverlay(
-                            modifier =
-                                Modifier
-                                    .align(Alignment.TopEnd)
-                                    .padding(16.dp),
-                            reason = uiState.shieldReason ?: "",
-                            onTap = onShieldTap,
+                Column(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .padding(top = innerPadding.calculateTopPadding())
+                            .imePadding(),
+                ) {
+                    // Message area — shrinks via weight(1f) when keyboard opens
+                    Box(modifier = Modifier.weight(1f)) {
+                        MessageList(
+                            modifier = Modifier.fillMaxSize(),
+                            messages = uiState.messages,
+                            hasActiveIndicator = uiState.hasActiveIndicator,
+                            activeToolCallBanner = uiState.activeToolCallBanner,
+                            activeIndicatorMessageId = uiState.activeIndicatorMessageId,
+                            hasTtsProviderAssigned = uiState.hasTtsProviderAssigned,
+                            isPlayingTts = uiState.isPlayingTts,
+                            isLoadingTts = uiState.isLoadingTts,
+                            isPausedTts = uiState.isPausedTts,
+                            chatMode = uiState.selectedMode,
+                            onEditMessage = onEditMessage,
+                            onPlayAudio = onPlayAudio,
+                            onPauseAudio = onPauseAudio,
+                            onArtifactCardClick = onArtifactCardClick,
+                            onNavigateToStudio = onNavigateToStudio,
+                            onShareClick = onShareClick,
+                            onStatsClick = onStatsClick,
+                            onReportMessage = onReportMessage,
+                        )
+
+                        if (uiState.shieldReason != null) {
+                            ShieldOverlay(
+                                modifier =
+                                    Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(16.dp),
+                                reason = uiState.shieldReason ?: "",
+                                onTap = onShieldTap,
+                            )
+                        }
+                    }
+
+                    if (!uiState.isReadOnly) {
+                        InputBar(
+                            modifier = Modifier.fillMaxWidth(),
+                            inputText = uiState.inputText,
+                            speechState = uiState.speechState,
+                            selectedImageUris = uiState.selectedImageUris,
+                            selectedFileName = uiState.selectedFileName,
+                            isPhotoAttachmentEnabled = uiState.isPhotoAttachmentEnabled,
+                            photoAttachmentMaxItems = uiState.photoAttachmentMaxItems,
+                            photoAttachmentDisabledReason = uiState.photoAttachmentDisabledReason,
+                            isGenerating = uiState.isGenerating,
+                            canStop = uiState.canStop,
+                            isGlobalInferenceBlocked = uiState.isGlobalInferenceBlocked,
+                            isLiveVoiceEnabled = uiState.hasLiveVoiceProviderAssigned,
+                            onInputChange = onInputChange,
+                            onSend = onSendMessage,
+                            onStopGenerating = onStopGenerating,
+                            onImageAttach = {
+                                if (uiState.photoAttachmentMaxItems > 1) {
+                                    multipleImagePickerLauncher.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                                    )
+                                } else {
+                                    singleImagePickerLauncher.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                                    )
+                                }
+                            },
+                            onFileAttach = {
+                                filePickerLauncher.launch(
+                                    arrayOf(
+                                        "text/*",
+                                        "application/json",
+                                        "application/xml",
+                                        "application/javascript",
+                                        "application/x-yaml",
+                                        "application/toml",
+                                    ),
+                                )
+                            },
+                            onClearImage = onRemoveImage,
+                            onClearFile = onClearFile,
+                            onMicClick = onMicClick,
+                            onLiveVoiceClick = onStartLiveVoice,
                         )
                     }
-                }
-
-                if (!uiState.isReadOnly) {
-                    InputBar(
-                        modifier = Modifier.fillMaxWidth(),
-                        inputText = uiState.inputText,
-                        speechState = uiState.speechState,
-                        selectedImageUris = uiState.selectedImageUris,
-                        selectedFileName = uiState.selectedFileName,
-                        isPhotoAttachmentEnabled = uiState.isPhotoAttachmentEnabled,
-                        photoAttachmentMaxItems = uiState.photoAttachmentMaxItems,
-                        photoAttachmentDisabledReason = uiState.photoAttachmentDisabledReason,
-                        isGenerating = uiState.isGenerating,
-                        canStop = uiState.canStop,
-                        isGlobalInferenceBlocked = uiState.isGlobalInferenceBlocked,
-                        isLiveVoiceEnabled = uiState.hasLiveVoiceProviderAssigned,
-                        onInputChange = onInputChange,
-                        onSend = onSendMessage,
-                        onStopGenerating = onStopGenerating,
-                        onImageAttach = {
-                            if (uiState.photoAttachmentMaxItems > 1) {
-                                multipleImagePickerLauncher.launch(
-                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-                                )
-                            } else {
-                                singleImagePickerLauncher.launch(
-                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-                                )
-                            }
-                        },
-                        onFileAttach = {
-                            filePickerLauncher.launch(
-                                arrayOf(
-                                    "text/*",
-                                    "application/json",
-                                    "application/xml",
-                                    "application/javascript",
-                                    "application/x-yaml",
-                                    "application/toml",
-                                ),
-                            )
-                        },
-                        onClearImage = onRemoveImage,
-                        onClearFile = onClearFile,
-                        onMicClick = onMicClick,
-                        onLiveVoiceClick = onStartLiveVoice,
-                    )
                 }
             }
 
             if (uiState.liveVoiceState !is LiveVoiceUiState.Idle) {
                 LiveVoiceOverlay(
+                    modifier = Modifier.fillMaxSize(),
                     state = uiState.liveVoiceState,
                     onEnd = onEndLiveVoice,
                     onToggleMute = onToggleLiveVoiceMute,

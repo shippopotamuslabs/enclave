@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.feature.chat.components
 
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -12,7 +13,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -20,10 +20,15 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -38,11 +43,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Devices
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
@@ -86,11 +94,16 @@ fun LiveVoiceOverlay(
             isActive = isAudioMotionActive,
         )
 
+    var isUserCaptionExpanded by remember { mutableStateOf(false) }
+    LaunchedEffect(userCaption) {
+        if (userCaption.isBlank()) isUserCaptionExpanded = false
+    }
+
     Box(
         modifier =
             modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background.copy(alpha = 0.96f))
+                .background(MaterialTheme.colorScheme.background)
                 .statusBarsPadding()
                 .navigationBarsPadding(),
     ) {
@@ -100,13 +113,14 @@ fun LiveVoiceOverlay(
                     .fillMaxSize()
                     .padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween,
         ) {
-            Spacer(modifier = Modifier.height(24.dp))
-
             Column(
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(24.dp),
+                verticalArrangement = Arrangement.spacedBy(CONTENT_SECTION_SPACING_DP.dp),
             ) {
                 LiveVoiceOrb(
                     isConnecting = isConnecting,
@@ -139,58 +153,92 @@ fun LiveVoiceOverlay(
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onBackground,
                 )
-            }
 
-            if (activeToolCallBanner != null) {
-                ToolCallBanner(
-                    banner = activeToolCallBanner,
+                if (activeToolCallBanner != null) {
+                    ToolCallBanner(
+                        banner = activeToolCallBanner,
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .neoSurface(
+                                    backgroundColor = MaterialTheme.colorScheme.surface,
+                                    borderColor = neoBorderColor(),
+                                    withShadow = true,
+                                    shape = EnclaveNeoTokens.shape,
+                                ).padding(horizontal = 16.dp, vertical = 12.dp),
+                    )
+                }
+
+                Box(
                     modifier =
                         Modifier
-                            .fillMaxWidth()
-                            .neoSurface(
-                                backgroundColor = MaterialTheme.colorScheme.surface,
-                                borderColor = neoBorderColor(),
-                                withShadow = true,
-                                shape = EnclaveNeoTokens.shape,
-                            ).padding(horizontal = 16.dp, vertical = 12.dp),
-                )
+                            .weight(1f)
+                            .fillMaxWidth(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(CAPTION_CARD_SPACING_DP.dp),
+                    ) {
+                        LiveVoiceUserCaptionCard(
+                            text = userCaption,
+                            isExpanded = isUserCaptionExpanded,
+                            onToggleExpanded = { isUserCaptionExpanded = !isUserCaptionExpanded },
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .then(
+                                        if (isUserCaptionExpanded) {
+                                            Modifier.weight(1f, fill = false)
+                                        } else {
+                                            Modifier
+                                        },
+                                    ),
+                        )
+                        LiveVoiceCaptionCard(
+                            label = "Assistant",
+                            text = assistantCaption,
+                            modifier = Modifier.fillMaxWidth().weight(1f, fill = false),
+                        )
+                    }
+                }
             }
 
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                LiveVoiceCaptionCard(
-                    label = "You",
-                    text = userCaption,
-                )
-                LiveVoiceCaptionCard(
-                    label = "Assistant",
-                    text = assistantCaption,
-                )
-            }
-
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 24.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                NeoIconButton(
-                    onClick = onToggleMute,
-                    icon = if (isMuted) Icons.Default.MicOff else Icons.Default.Mic,
-                    contentDescription = if (isMuted) "Unmute microphone" else "Mute microphone",
-                    size = 52.dp,
-                )
-                NeoPrimaryButton(
-                    text = "End",
-                    onClick = onEnd,
-                    modifier = Modifier.weight(1f),
-                )
-            }
+            LiveVoiceControlsRow(
+                isMuted = isMuted,
+                onToggleMute = onToggleMute,
+                onEnd = onEnd,
+            )
         }
+    }
+}
+
+@Composable
+private fun LiveVoiceControlsRow(
+    isMuted: Boolean,
+    onToggleMute: () -> Unit,
+    onEnd: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(top = CAPTION_TO_CONTROLS_GAP_DP.dp, bottom = 24.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        NeoIconButton(
+            onClick = onToggleMute,
+            icon = if (isMuted) Icons.Default.MicOff else Icons.Default.Mic,
+            contentDescription = if (isMuted) "Unmute microphone" else "Mute microphone",
+            size = 52.dp,
+        )
+        NeoPrimaryButton(
+            text = "End",
+            onClick = onEnd,
+            modifier = Modifier.weight(1f),
+        )
     }
 }
 
@@ -362,11 +410,112 @@ private fun LiveVoiceWaveform(
 }
 
 @Composable
+private fun LiveVoiceUserCaptionCard(
+    text: String,
+    isExpanded: Boolean,
+    onToggleExpanded: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val displayText = text.ifBlank { "..." }
+    var isTruncatable by remember { mutableStateOf(false) }
+    val showChevron = isTruncatable || isExpanded
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (isExpanded) 180f else 0f,
+        animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+        label = "liveVoiceUserCaptionChevronRotation",
+    )
+
+    Column(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .neoSurface(
+                    backgroundColor = MaterialTheme.colorScheme.surface,
+                    borderColor = neoBorderColor(),
+                    withShadow = true,
+                    shape = EnclaveNeoTokens.shape,
+                ).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "You",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            if (showChevron) {
+                IconButton(
+                    onClick = onToggleExpanded,
+                    modifier = Modifier.size(40.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowDown,
+                        contentDescription =
+                            if (isExpanded) "Collapse caption" else "Expand caption",
+                        modifier = Modifier.rotate(chevronRotation),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+        if (isExpanded) {
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .weight(1f, fill = false),
+            ) {
+                Text(
+                    text = displayText,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Start,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState()),
+                )
+            }
+        } else {
+            Text(
+                text = displayText,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Start,
+                modifier = Modifier.fillMaxWidth(),
+                maxLines = USER_CAPTION_MAX_LINES,
+                overflow = TextOverflow.Ellipsis,
+                onTextLayout = { layout ->
+                    if (!isExpanded) {
+                        val truncated = layout.lineCount >= USER_CAPTION_MAX_LINES
+                        if (truncated != isTruncatable) {
+                            isTruncatable = truncated
+                        }
+                    }
+                },
+            )
+        }
+    }
+}
+
+@Composable
 private fun LiveVoiceCaptionCard(
     label: String,
     text: String,
     modifier: Modifier = Modifier,
 ) {
+    val displayText = text.ifBlank { "..." }
+    val scrollState = rememberScrollState()
+
+    LaunchedEffect(displayText) {
+        scrollState.animateScrollTo(scrollState.maxValue)
+    }
+
     Column(
         modifier =
             modifier
@@ -385,12 +534,23 @@ private fun LiveVoiceCaptionCard(
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary,
         )
-        Text(
-            text = text.ifBlank { "..." },
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.Start,
-        )
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = false),
+        ) {
+            Text(
+                text = displayText,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Start,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(scrollState),
+            )
+        }
     }
 }
 
@@ -419,8 +579,17 @@ private const val SILENCE_ORB_PULSE = 0.04f
 private const val MIN_LISTENING_ORB_PULSE = 0.1f
 private const val SILENCE_THRESHOLD = 0.01f
 private const val IDLE_WAVE_LEVEL = 0.04f
+private const val CAPTION_CARD_SPACING_DP = 12
+private const val CAPTION_TO_CONTROLS_GAP_DP = 20
+private const val CONTENT_SECTION_SPACING_DP = 20
+private const val USER_CAPTION_MAX_LINES = 3
 
-@Preview(showBackground = true, name = "Live Voice Overlay Listening")
+@Preview(
+    showBackground = true,
+    name = "Live Voice Overlay Listening",
+    device = Devices.PIXEL_6,
+    showSystemUi = true,
+)
 @Composable
 @Suppress("UnusedPrivateMember")
 private fun LiveVoiceOverlayListeningPreview() {
@@ -439,7 +608,12 @@ private fun LiveVoiceOverlayListeningPreview() {
     }
 }
 
-@Preview(showBackground = true, name = "Live Voice Overlay Assistant Speaking")
+@Preview(
+    showBackground = true,
+    name = "Live Voice Overlay Assistant Speaking",
+    device = Devices.PIXEL_6,
+    showSystemUi = true,
+)
 @Composable
 @Suppress("UnusedPrivateMember")
 private fun LiveVoiceOverlayAssistantSpeakingPreview() {
@@ -458,13 +632,127 @@ private fun LiveVoiceOverlayAssistantSpeakingPreview() {
     }
 }
 
-@Preview(showBackground = true, name = "Live Voice Overlay Connecting")
+@Preview(
+    showBackground = true,
+    name = "Live Voice Overlay Long Assistant Caption",
+    device = Devices.PIXEL_6,
+    showSystemUi = true,
+)
+@Composable
+@Suppress("UnusedPrivateMember")
+private fun LiveVoiceOverlayLongAssistantCaptionPreview() {
+    EnclaveTheme {
+        LiveVoiceOverlay(
+            state =
+                LiveVoiceUiState.AssistantSpeaking(
+                    userCaption = "Summarize the history of computing.",
+                    assistantCaption =
+                        "Computing began with mechanical devices like the abacus, evolved through " +
+                            "Babbage's analytical engine, and accelerated with electronic computers " +
+                            "such as ENIAC. The transistor and integrated circuit made machines smaller " +
+                            "and cheaper, leading to personal computers, the internet, mobile devices, " +
+                            "and modern AI systems that now assist us in conversation.",
+                    isMuted = false,
+                    audioLevel = 0.45f,
+                ),
+            onEnd = {},
+            onToggleMute = {},
+        )
+    }
+}
+
+@Preview(
+    showBackground = true,
+    name = "Live Voice Overlay Connecting",
+    device = Devices.PIXEL_6,
+    showSystemUi = true,
+)
 @Composable
 @Suppress("UnusedPrivateMember")
 private fun LiveVoiceOverlayConnectingPreview() {
     EnclaveTheme {
         LiveVoiceOverlay(
             state = LiveVoiceUiState.Connecting,
+            onEnd = {},
+            onToggleMute = {},
+        )
+    }
+}
+
+@Preview(
+    showBackground = true,
+    name = "Live Voice Overlay Long User Caption",
+    device = Devices.PIXEL_6,
+    showSystemUi = true,
+)
+@Composable
+@Suppress("UnusedPrivateMember")
+private fun LiveVoiceOverlayLongUserCaptionPreview() {
+    EnclaveTheme {
+        LiveVoiceOverlay(
+            state =
+                LiveVoiceUiState.Listening(
+                    userCaption = "The weather today is quite warm and sunny. I was wondering if you " +
+                        "could help me plan a picnic. Maybe we could find a nice spot in the park " +
+                        "near the lake. What foods do you think would work best for an outdoor " +
+                        "picnic on a warm day like this?",
+                    assistantCaption = "",
+                    isMuted = false,
+                    micLevel = 0.3f,
+                ),
+            onEnd = {},
+            onToggleMute = {},
+        )
+    }
+}
+
+@Preview(
+    showBackground = true,
+    name = "Live Voice Overlay Long User And Assistant",
+    device = Devices.PIXEL_6,
+    showSystemUi = true,
+)
+@Composable
+@Suppress("UnusedPrivateMember")
+private fun LiveVoiceOverlayLongUserAndAssistantPreview() {
+    EnclaveTheme {
+        LiveVoiceOverlay(
+            state =
+                LiveVoiceUiState.AssistantSpeaking(
+                    userCaption = "Summarize the entire history of computing from mechanical devices " +
+                        "to modern AI systems and explain how each era influenced the next.",
+                    assistantCaption = "Computing began with mechanical devices like the abacus, " +
+                        "evolved through Babbage's analytical engine, and accelerated with electronic " +
+                        "computers such as ENIAC. The transistor and integrated circuit made machines " +
+                        "smaller and cheaper, leading to personal computers, the internet, mobile " +
+                        "devices, and modern AI systems that now assist us in conversation.",
+                    isMuted = false,
+                    audioLevel = 0.45f,
+                ),
+            onEnd = {},
+            onToggleMute = {},
+        )
+    }
+}
+
+@Preview(
+    showBackground = true,
+    name = "Live Voice Overlay Empty Captions",
+    device = Devices.PIXEL_6,
+    showSystemUi = true,
+)
+@Composable
+@Suppress("UnusedPrivateMember")
+private fun LiveVoiceOverlayEmptyCaptionsPreview() {
+    EnclaveTheme {
+        LiveVoiceOverlay(
+            state =
+                LiveVoiceUiState.Listening(
+                    userCaption = "",
+                    assistantCaption = "",
+                    isMuted = false,
+                    micLevel = 0f,
+                ),
             onEnd = {},
             onToggleMute = {},
         )
