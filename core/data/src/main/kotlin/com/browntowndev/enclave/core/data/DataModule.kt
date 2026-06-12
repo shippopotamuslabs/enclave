@@ -11,6 +11,7 @@ import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.work.WorkManager
 import com.browntowndev.enclave.core.data.auth.FirebaseGoogleAuthManager
+import com.browntowndev.enclave.core.data.device.AndroidDeviceMemoryProbePort
 import com.browntowndev.enclave.core.data.device.SnapdragonTierPortImpl
 import com.browntowndev.enclave.core.data.download.DownloadNotificationManager
 import com.browntowndev.enclave.core.data.download.DownloadProgressTracker
@@ -103,6 +104,7 @@ import com.browntowndev.enclave.core.data.security.StaticSensitiveFieldCatalog
 import com.browntowndev.enclave.core.data.sync.SyncOrchestratorImpl
 import com.browntowndev.enclave.core.data.sync.TelemetryUploadConfig
 import com.browntowndev.enclave.domain.port.auth.AuthManager
+import com.browntowndev.enclave.domain.port.device.DeviceMemoryProbePort
 import com.browntowndev.enclave.domain.port.device.SnapdragonTierPort
 import com.browntowndev.enclave.domain.port.download.DownloadSpeedTrackerPort
 import com.browntowndev.enclave.domain.port.download.FileDownloaderPort
@@ -564,6 +566,10 @@ abstract class DataRepositoryModule {
     @Binds
     @Singleton
     abstract fun bindSnapdragonTierPort(impl: SnapdragonTierPortImpl): SnapdragonTierPort
+
+    @Binds
+    @Singleton
+    abstract fun bindDeviceMemoryProbePort(impl: AndroidDeviceMemoryProbePort): DeviceMemoryProbePort
 
     @Binds
     @Singleton

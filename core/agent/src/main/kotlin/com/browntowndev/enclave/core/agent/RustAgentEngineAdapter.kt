@@ -368,14 +368,13 @@ private fun Role.toFfi(): FfiAgentRole =
         Role.SYSTEM -> FfiAgentRole.SYSTEM
     }
 
-private fun FfiAgentRole.toDomain(): Role =
+internal fun FfiAgentRole.toDomainRole(): Role =
     when (this) {
         FfiAgentRole.USER -> Role.USER
         FfiAgentRole.ASSISTANT -> Role.ASSISTANT
         FfiAgentRole.SYSTEM -> Role.SYSTEM
-        FfiAgentRole.TOOL,
-        FfiAgentRole.COMPACT_SUMMARY,
-        -> Role.ASSISTANT
+        FfiAgentRole.TOOL -> Role.ASSISTANT
+        FfiAgentRole.COMPACT_SUMMARY -> Role.USER
     }
 
 private fun AgentLoopMessage.toFfi(): FfiAgentMessage =
@@ -389,7 +388,7 @@ private fun AgentLoopMessage.toFfi(): FfiAgentMessage =
 private fun FfiAgentMessage.toDomain(): AgentLoopMessage =
     AgentLoopMessage(
         id = id,
-        role = role.toDomain(),
+        role = role.toDomainRole(),
         content = content,
         metadataJson = metadataJson,
     )

@@ -23,6 +23,27 @@ import org.junit.jupiter.api.Test
  * and [JTokkitTokenCounter] for real-world accuracy verification.
  */
 class ContextWindowPlannerTest {
+    @Test
+    fun `compact volatile context bounds small local search payload`() {
+        val context = "search result ".repeat(2_000)
+
+        val compacted =
+            requireNotNull(ContextWindowPlanner.compactVolatileTurnContext(context, contextWindowTokens = 4_096))
+
+        assertTrue(compacted.length <= 2_048)
+        assertTrue(compacted.endsWith("[Context truncated to fit local model window]"))
+    }
+
+    @Test
+    fun `compact volatile context preserves payload already within budget`() {
+        val context = "short search result"
+
+        assertEquals(
+            context,
+            ContextWindowPlanner.compactVolatileTurnContext(context, contextWindowTokens = 4_096),
+        )
+    }
+
     // ── Fakes ──────────────────────────────────────────────────────────────
 
     /** Deterministic token counter: 1 token per character, for exact boundary testing. */
@@ -31,6 +52,14 @@ class ContextWindowPlannerTest {
             text: String,
             modelName: String?,
         ): Int = text.length
+    }
+
+    @Test
+    fun `isSmallContextLocalWindow is true only for local models below 32k`() {
+        assertTrue(ContextWindowPlanner.isSmallContextLocalWindow(isLocal = true, contextWindowTokens = 4096))
+        assertFalse(ContextWindowPlanner.isSmallContextLocalWindow(isLocal = true, contextWindowTokens = 32_000))
+        assertFalse(ContextWindowPlanner.isSmallContextLocalWindow(isLocal = false, contextWindowTokens = 4096))
+        assertFalse(ContextWindowPlanner.isSmallContextLocalWindow(isLocal = true, contextWindowTokens = null))
     }
 
     private fun makeTool(

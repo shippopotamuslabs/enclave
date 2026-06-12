@@ -2,6 +2,7 @@ package com.browntowndev.enclave.app
 
 import android.content.Context
 import com.browntowndev.enclave.domain.port.inference.ChatTitleGeneratorPort
+import com.browntowndev.enclave.domain.port.inference.CompactionSummarizerPort
 import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.enclave.domain.port.inference.CriminalIntentModerationPort
 import com.browntowndev.enclave.domain.port.inference.InferenceFactoryPort
@@ -21,6 +22,7 @@ import com.browntowndev.enclave.feature.inference.OnDeviceInferenceCancellationI
 import com.browntowndev.enclave.feature.inference.ProfileAnalysisInferenceAdapter
 import com.browntowndev.enclave.feature.inference.moderation.OnnxCriminalIntentClassifier
 import com.browntowndev.enclave.feature.inference.moderation.OnnxPromptModerationClassifier
+import com.browntowndev.enclave.feature.inference.compaction.OnnxCompactionSummarizer
 import com.browntowndev.enclave.feature.inference.titlegen.OnnxChatTitleGenerator
 import dagger.Binds
 import dagger.Module
@@ -57,6 +59,10 @@ abstract class EngineModule {
     @Binds
     @Singleton
     abstract fun bindChatTitleGeneratorPort(impl: OnnxChatTitleGenerator): ChatTitleGeneratorPort
+
+    @Binds
+    @Singleton
+    abstract fun bindCompactionSummarizerPort(impl: OnnxCompactionSummarizer): CompactionSummarizerPort
 
     @Binds
     @Singleton

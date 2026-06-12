@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.browntowndev.enclave.domain.model.config.UtilityType
 import com.browntowndev.enclave.domain.port.repository.UtilityModelFilePort
+import com.browntowndev.enclave.feature.inference.utilityonnx.UtilityOnnxLoadCoordinator
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
@@ -25,7 +26,12 @@ class OnnxChatTitleGeneratorTest {
     fun setup() {
         context = ApplicationProvider.getApplicationContext()
         utilityModelFilePort = mockk()
-        titleGenerator = OnnxChatTitleGenerator(context, utilityModelFilePort)
+        titleGenerator =
+            OnnxChatTitleGenerator(
+                context = context,
+                utilityModelFilePort = utilityModelFilePort,
+                loadCoordinator = UtilityOnnxLoadCoordinator(),
+            )
     }
 
     @Test

@@ -26,7 +26,9 @@ import com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.model.inference.ToolDisclosureMode
 import com.browntowndev.enclave.domain.model.inference.ToolExecutionResult
+import com.browntowndev.enclave.domain.port.device.DeviceMemoryProbePort
 import com.browntowndev.enclave.domain.port.inference.AgentLoopEvent
+import com.browntowndev.enclave.domain.port.inference.CompactionSummarizerPort
 import com.browntowndev.enclave.domain.port.inference.AgentLoopPort
 import com.browntowndev.enclave.domain.port.inference.InferenceEvent
 import com.browntowndev.enclave.domain.port.inference.InferenceFactoryPort
@@ -362,8 +364,8 @@ class RustLoopInferenceServiceTest {
                         listOf(
                             "append_blocks",
                             "search_current_artifact",
-                            "tool_discovery_tool",
                             "start_artifact",
+                            "tool_discovery_tool",
                             "web_extract",
                             "web_search",
                         ),
@@ -432,8 +434,10 @@ class RustLoopInferenceServiceTest {
             assertEquals(6u, config.agent.maxModelRequestsPerTurn)
             assertTrue(config.agent.enableLoopHooks)
             assertTrue(config.agent.enablePendingWorkGuard)
-            assertFalse(config.capabilities.summarizationAllowed)
+            assertFalse(config.capabilities.summarizationAllowed, "default dummy summarizer is not installed")
             assertTrue(config.capabilities.kvFixed)
+            assertTrue(config.capabilities.toolSchemaDeferralSupported)
+            assertEquals(AgentLoopContextPolicyTier.SMALL_CONTEXT, config.capabilities.contextPolicyTier)
             assertTrue(config.capabilities.lifecycleHooksSupported)
             assertEquals(
                 mapOf(
@@ -443,6 +447,28 @@ class RustLoopInferenceServiceTest {
                 ),
                 port.capturedSessionContext,
             )
+        }
+
+    @Test
+    fun sendPrompt_usesFixedKvPolicyForLargeLocalWindows() =
+        runTest {
+            val port = CapturingAgentLoopPort { _ -> send(AgentLoopEvent.Finished) }
+            val service = createService(agentLoopPort = port, provider = "LLAMA")
+
+            service
+                .sendPrompt(
+                    prompt = "hello",
+                    options =
+                        GenerationOptions(
+                            reasoningBudget = 0,
+                            contextWindow = 32_768,
+                            systemPrompt = "system once",
+                        ),
+                ).toList()
+
+            val config = requireNotNull(port.capturedConfig)
+            assertEquals(AgentLoopContextPolicyTier.FIXED_KV, config.capabilities.contextPolicyTier)
+            assertTrue(config.capabilities.toolSchemaDeferralSupported)
         }
 
     @Test
@@ -735,6 +761,143 @@ class RustLoopInferenceServiceTest {
             assertTrue(result.softFailure)
             assertTrue(result.resultJson.contains("tool_execution_failed"))
             assertTrue(result.resultJson.contains("boom"))
+        }
+
+    @Test
+    fun sendPrompt_enablesSummarizationWhenUtilityModelInstalled() =
+        runTest {
+            val port = CapturingAgentLoopPort { _ -> send(AgentLoopEvent.Finished) }
+            val summarizer =
+                object : CompactionSummarizerPort {
+                    override suspend fun isModelInstalled(): Boolean = true
+
+                    override suspend fun summarize(prompt: String): String? = null
+                }
+            val service =
+                createService(
+                    agentLoopPort = port,
+                    provider = "LLAMA",
+                    compactionSummarizer = summarizer,
+                )
+
+            service
+                .sendPrompt(
+                    prompt = "hello",
+                    options = GenerationOptions(reasoningBudget = 0, contextWindow = 4096),
+                ).toList()
+
+            assertTrue(requireNotNull(port.capturedConfig).capabilities.summarizationAllowed)
+        }
+
+    @Test
+    fun summarize_usesUtilityOnnxForLocalWhenMemoryAllows() =
+        runTest {
+            val summarizer =
+                object : CompactionSummarizerPort {
+                    override suspend fun isModelInstalled(): Boolean = true
+
+                    override suspend fun summarize(prompt: String): String? = "utility summary"
+                }
+            lateinit var summary: AgentSummaryResult
+            val port =
+                CapturingAgentLoopPort { host ->
+                    summary =
+                        host.summarize(
+                            AgentSummaryRequest(
+                                messagesToSummarize =
+                                    listOf(
+                                        AgentLoopMessage("u1", Role.USER, "Question one"),
+                                        AgentLoopMessage("a1", Role.ASSISTANT, "Answer one"),
+                                    ),
+                                instruction = "summarize",
+                                lastMessageId = "a1",
+                            ),
+                        )
+                    send(AgentLoopEvent.Finished)
+                }
+            val factory = RecordingInferenceFactory(RecordingInferenceService())
+            val service =
+                createService(
+                    agentLoopPort = port,
+                    provider = "LLAMA",
+                    inferenceFactoryProvider = Provider { factory },
+                    compactionSummarizer = summarizer,
+                    deviceMemoryProbe = DeviceMemoryProbePort.Permissive,
+                )
+
+            service.sendPrompt("summarize").toList()
+
+            assertEquals("utility summary", summary.summaryText)
+            assertNull(factory.requestedModelType)
+        }
+
+    @Test
+    fun sendPrompt_disablesSummarizationWhenUtilityInstalledButMemoryConstrained() =
+        runTest {
+            val port = CapturingAgentLoopPort { _ -> send(AgentLoopEvent.Finished) }
+            val summarizer =
+                object : CompactionSummarizerPort {
+                    override suspend fun isModelInstalled(): Boolean = true
+
+                    override suspend fun summarize(prompt: String): String? = error("should not run")
+                }
+            val service =
+                createService(
+                    agentLoopPort = port,
+                    provider = "LLAMA",
+                    compactionSummarizer = summarizer,
+                    deviceMemoryProbe = DeviceMemoryProbePort.Constrained,
+                )
+
+            service
+                .sendPrompt(
+                    prompt = "hello",
+                    options = GenerationOptions(reasoningBudget = 0, contextWindow = 4096),
+                ).toList()
+
+            assertFalse(requireNotNull(port.capturedConfig).capabilities.summarizationAllowed)
+        }
+
+    @Test
+    fun summarize_skipsUtilityOnnxWhenMemoryConstrainedWithoutMainModelFallback() =
+        runTest {
+            val summarizer =
+                object : CompactionSummarizerPort {
+                    override suspend fun isModelInstalled(): Boolean = true
+
+                    override suspend fun summarize(prompt: String): String? = error("should not run utility lane")
+                }
+            val factory = RecordingInferenceFactory(RecordingInferenceService())
+            lateinit var summary: AgentSummaryResult
+            val port =
+                CapturingAgentLoopPort { host ->
+                    summary =
+                        host.summarize(
+                            AgentSummaryRequest(
+                                messagesToSummarize =
+                                    listOf(
+                                        AgentLoopMessage("u1", Role.USER, "Question one"),
+                                        AgentLoopMessage("a1", Role.ASSISTANT, "Answer one"),
+                                    ),
+                                instruction = "summarize",
+                                lastMessageId = "a1",
+                            ),
+                        )
+                    send(AgentLoopEvent.Finished)
+                }
+            val service =
+                createService(
+                    agentLoopPort = port,
+                    provider = "LLAMA",
+                    inferenceFactoryProvider = Provider { factory },
+                    compactionSummarizer = summarizer,
+                    deviceMemoryProbe = DeviceMemoryProbePort.Constrained,
+                )
+
+            service.sendPrompt("summarize").toList()
+
+            assertEquals("", summary.summaryText)
+            assertNull(factory.requestedModelType)
         }
 
     @Test
@@ -1402,6 +1565,8 @@ class RustLoopInferenceServiceTest {
         committedInferenceTranscripts: InMemoryCommittedInferenceTranscriptStore =
             InMemoryCommittedInferenceTranscriptStore(),
         deviceEnvironmentRepository: DeviceEnvironmentRepositoryPort = NoopDeviceEnvironmentRepository,
+        compactionSummarizer: CompactionSummarizerPort = CompactionSummarizerPort.Dummy,
+        deviceMemoryProbe: DeviceMemoryProbePort = DeviceMemoryProbePort.Permissive,
     ): RustLoopInferenceService =
         RustLoopInferenceService(
             inner = inner,
@@ -1416,6 +1581,8 @@ class RustLoopInferenceServiceTest {
             committedInferenceTranscripts = committedInferenceTranscripts,
             deviceEnvironmentRepository = deviceEnvironmentRepository,
             embeddingEnginePort = com.browntowndev.enclave.domain.port.inference.Bm25OnlyEmbeddingEnginePort,
+            compactionSummarizer = compactionSummarizer,
+            deviceMemoryProbe = deviceMemoryProbe,
         )
 
     private fun resolveCompactionSummaryModel(fastConfig: ActiveModelConfiguration?): ResolveCompactionSummaryModelUseCase {

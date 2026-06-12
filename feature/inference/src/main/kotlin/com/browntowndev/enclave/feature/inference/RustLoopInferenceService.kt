@@ -19,12 +19,15 @@ import com.browntowndev.enclave.domain.model.inference.AgentSummaryResult
 import com.browntowndev.enclave.domain.model.inference.AgentToolCall
 import com.browntowndev.enclave.domain.model.inference.AgentToolResult
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
+import com.browntowndev.enclave.domain.model.inference.UtilityOnnxRuntimeRequirements
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.port.inference.AgentLoopEvent
 import com.browntowndev.enclave.domain.port.inference.AgentLoopPort
+import com.browntowndev.enclave.domain.port.device.DeviceMemoryProbePort
+import com.browntowndev.enclave.domain.port.inference.CompactionSummarizerPort
 import com.browntowndev.enclave.domain.port.inference.CommittedInferencePromptPort
 import com.browntowndev.enclave.domain.port.inference.CommittedInferenceTranscriptPort
 import com.browntowndev.enclave.domain.port.inference.InferenceEvent
@@ -37,6 +40,7 @@ import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
 import com.browntowndev.enclave.domain.port.repository.DeviceEnvironmentRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.NoopDeviceEnvironmentRepository
 import com.browntowndev.enclave.domain.port.telemetry.TelemetryEventPort
+import com.browntowndev.enclave.domain.util.ContextWindowPlanner
 import com.browntowndev.enclave.domain.usecase.chat.InferencePromptContentBuilder
 import com.browntowndev.enclave.domain.usecase.chat.RollingSummarizer
 import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
@@ -94,7 +98,7 @@ private val INTERNET_DEPENDENT_TOOL_NAMES =
  * History, compaction, tool retry, and KV-cache tracking are all delegated to the Rust
  * engine. Kotlin handles model I/O and tool execution at each callback boundary.
  */
-@Suppress("LargeClass")
+@Suppress("LargeClass", "TooManyFunctions")
 class RustLoopInferenceService(
     private val inner: RustCompatibleInferenceService,
     private val agentLoopPort: AgentLoopPort,
@@ -105,6 +109,8 @@ class RustLoopInferenceService(
     private val inferenceFactoryProvider: Provider<InferenceFactoryPort>,
     private val rollingSummarizer: RollingSummarizer,
     private val resolveCompactionSummaryModel: ResolveCompactionSummaryModelUseCase,
+    private val compactionSummarizer: CompactionSummarizerPort = CompactionSummarizerPort.Dummy,
+    private val deviceMemoryProbe: DeviceMemoryProbePort = DeviceMemoryProbePort.Permissive,
     private val committedInferencePrompts: CommittedInferencePromptPort = NoopCommittedInferencePromptPort,
     private val committedInferenceTranscripts: CommittedInferenceTranscriptPort = NoopCommittedInferenceTranscriptPort,
     private val telemetryEventPort: TelemetryEventPort? = null,
@@ -145,7 +151,7 @@ class RustLoopInferenceService(
                 val history = buildHistory(options.chatId)
                 val userContent = buildUserContent(prompt, options)
                 val initialMessages = history + listOf(ChatMessage(Role.USER, userContent))
-                val config = buildAgentLoopConfig(options)
+                val config = buildAgentLoopConfig(options, resolveUtilitySummarizerCapability())
                 val assistantText = StringBuilder()
 
                 var telemetrySequenceIndex = 0
@@ -228,54 +234,41 @@ class RustLoopInferenceService(
 
                         override suspend fun summarize(request: AgentSummaryRequest): AgentSummaryResult {
                             val messages = request.messagesToSummarize.map { it.toChatMessage() }
-                            val summaryModelType =
-                                resolveCompactionSummaryModel.invoke(
-                                    activeTurnModelType = modelType,
-                                    messagesToSummarize = messages,
+                            val prompt =
+                                rollingSummarizer.buildAgentSummaryPrompt(
+                                    messages = messages,
+                                    instruction = request.instruction,
+                                    focusInstruction = request.focusInstruction,
+                                    historyRef = request.historyRef,
+                                    stateLedgerSnapshotJson = request.stateLedgerSnapshotJson,
+                                    trigger = request.trigger,
                                 )
-                            loggingPort.debug(
-                                TAG,
-                                "compaction_summary provider=$provider activeTurn=$modelType " +
-                                    "selectedModel=$summaryModelType messageCount=${messages.size} " +
-                                    "trigger=${request.trigger.name}",
-                            )
                             val summaryText =
-                                inferenceFactoryProvider.get().withInferenceService(summaryModelType) { summaryService ->
-                                    if (summaryService is RustCompatibleInferenceService) {
-                                        val prompt =
-                                            rollingSummarizer.buildAgentSummaryPrompt(
-                                                messages = messages,
-                                                instruction = request.instruction,
-                                                focusInstruction = request.focusInstruction,
-                                                historyRef = request.historyRef,
-                                                stateLedgerSnapshotJson = request.stateLedgerSnapshotJson,
-                                                trigger = request.trigger,
-                                            )
-                                        summaryService
-                                            .completeSingleTurn(
-                                                sessionMessages = listOf(AgentLoopMessage("summary-request", Role.USER, prompt)),
-                                                systemPrompt = "",
-                                                contextSidecars = null,
-                                                availableTools = emptyList(),
-                                                allowToolCall = false,
-                                                onTextToken = {},
-                                                onThinkingToken = {},
-                                                options = GenerationOptions(reasoningBudget = 0, maxTokens = 1024),
-                                            ).assistantText
-                                    } else {
-                                        rollingSummarizer.summarizeAgentRequest(
-                                            messages = messages,
-                                            service = summaryService,
-                                            instruction = request.instruction,
-                                            focusInstruction = request.focusInstruction,
-                                            historyRef = request.historyRef,
-                                            stateLedgerSnapshotJson = request.stateLedgerSnapshotJson,
-                                            trigger = request.trigger,
+                                when {
+                                    provider == "LLAMA" && shouldUseUtilityCompactionSummarizer() -> {
+                                        loggingPort.debug(
+                                            TAG,
+                                            "compaction_summary lane=utility_onnx messageCount=${messages.size} " +
+                                                "trigger=${request.trigger.name}",
                                         )
+                                        compactionSummarizer.summarize(prompt)
+                                    }
+                                    provider != "LLAMA" ->
+                                        runHostedCompactionSummary(
+                                            messages = messages,
+                                            request = request,
+                                        )
+                                    else -> {
+                                        loggingPort.debug(
+                                            TAG,
+                                            "compaction_summary lane=skipped provider=$provider " +
+                                                "messageCount=${messages.size} trigger=${request.trigger.name}",
+                                        )
+                                        null
                                     }
                                 }
                             return AgentSummaryResult(
-                                summaryText = summaryText ?: "Summary unavailable.",
+                                summaryText = summaryText.orEmpty(),
                                 lastMessageId = request.lastMessageId,
                             )
                         }
@@ -310,8 +303,10 @@ class RustLoopInferenceService(
                                 )
                             is AgentLoopEvent.ToolRepaired ->
                                 send(InferenceEvent.ToolRepaired(event.originalName, event.resolvedName, event.confidence, modelType))
-                            is AgentLoopEvent.KvCacheInvalidated ->
+                            is AgentLoopEvent.KvCacheInvalidated -> {
+                                inner.clearAppendOnlyOnRustCompactionBoundary()
                                 loggingPort.info(TAG, "KV cache invalidated reason=${event.reason}")
+                            }
                             is AgentLoopEvent.PreCompact ->
                                 send(InferenceEvent.PreCompact(event.trigger, modelType)).also {
                                     loggingPort.debug(TAG, "pre_compact trigger=${event.trigger}")
@@ -551,7 +546,47 @@ class RustLoopInferenceService(
         }.toString()
     }
 
-    private fun buildAgentLoopConfig(options: GenerationOptions): AgentLoopConfig =
+    private suspend fun resolveUtilitySummarizerCapability(): Boolean =
+        provider == "LLAMA" &&
+            compactionSummarizer.isModelInstalled() &&
+            deviceMemoryProbe.hasHeadroom(
+                UtilityOnnxRuntimeRequirements.requiredHeadroomBytes(chatModelLoaded = true),
+            )
+
+    private suspend fun shouldUseUtilityCompactionSummarizer(): Boolean = resolveUtilitySummarizerCapability()
+
+    private suspend fun runHostedCompactionSummary(
+        messages: List<ChatMessage>,
+        request: AgentSummaryRequest,
+    ): String? {
+        val summaryModelType =
+            resolveCompactionSummaryModel.invoke(
+                activeTurnModelType = modelType,
+                messagesToSummarize = messages,
+            )
+        loggingPort.debug(
+            TAG,
+            "compaction_summary lane=hosted provider=$provider activeTurn=$modelType " +
+                "selectedModel=$summaryModelType messageCount=${messages.size} " +
+                "trigger=${request.trigger.name}",
+        )
+        return inferenceFactoryProvider.get().withInferenceService(summaryModelType) { summaryService ->
+            rollingSummarizer.summarizeAgentRequest(
+                messages = messages,
+                service = summaryService,
+                instruction = request.instruction,
+                focusInstruction = request.focusInstruction,
+                historyRef = request.historyRef,
+                stateLedgerSnapshotJson = request.stateLedgerSnapshotJson,
+                trigger = request.trigger,
+            )
+        }
+    }
+
+    private fun buildAgentLoopConfig(
+        options: GenerationOptions,
+        summarizationAllowed: Boolean,
+    ): AgentLoopConfig =
         AgentLoopConfig(
             agent =
                 AgentLoopAgentConfig(
@@ -564,14 +599,22 @@ class RustLoopInferenceService(
                 ),
             capabilities =
                 when (provider) {
-                    "LLAMA" ->
+                    "LLAMA" -> {
+                        val contextWindow = options.contextWindow ?: DEFAULT_CONTEXT_WINDOW
                         AgentLoopSessionCapabilities(
-                            summarizationAllowed = false,
+                            summarizationAllowed = summarizationAllowed,
                             kvFixed = true,
-                            contextPolicyTier = AgentLoopContextPolicyTier.FIXED_KV,
+                            contextPolicyTier =
+                                if (contextWindow < ContextWindowPlanner.LOCAL_FIXED_KV_CONTEXT_THRESHOLD) {
+                                    AgentLoopContextPolicyTier.SMALL_CONTEXT
+                                } else {
+                                    AgentLoopContextPolicyTier.FIXED_KV
+                                },
+                            toolSchemaDeferralSupported = true,
                             historyRewriteSupported = true,
                             lifecycleHooksSupported = true,
                         )
+                    }
                     else ->
                         AgentLoopSessionCapabilities(
                             contextPolicyTier =
