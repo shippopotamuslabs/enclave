@@ -2,6 +2,9 @@ package com.browntowndev.enclave.feature.inference.telemetry
 
 import com.browntowndev.enclave.domain.model.chat.ChatMessage
 import com.browntowndev.enclave.domain.model.chat.Role
+import com.browntowndev.enclave.domain.model.inference.GenerationOptions
+import com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry
+import com.browntowndev.enclave.domain.model.inference.ToolDisclosureMode
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
@@ -54,6 +57,38 @@ class LocalTelemetryTokenEstimatorTest {
                 systemPrompt = "system",
             )
 
-        assertEquals(9, estimate)
+        assertEquals(49, estimate)
+    }
+
+    @Test
+    fun `estimateLiteRtPromptTokens includes tools volatile context and images`() {
+        val options =
+            GenerationOptions(
+                reasoningBudget = 0,
+                toolingEnabled = true,
+                toolCatalog =
+                    listOf(
+                        ToolCatalogEntry(
+                            name = "test_tool",
+                            description = "A description of test_tool",
+                            disclosureMode = ToolDisclosureMode.PRELOADED,
+                        ),
+                    ),
+                volatileTurnContext = "volatile_context",
+                imageUris = listOf("uri1", "uri2"),
+            )
+
+        val estimate =
+            estimateLiteRtPromptTokens(
+                history =
+                    listOf(
+                        ChatMessage(Role.USER, "user_msg"),
+                    ),
+                currentPrompt = "current_prompt",
+                systemPrompt = "sys_prompt",
+                options = options,
+            )
+
+        assertEquals(1222, estimate)
     }
 }

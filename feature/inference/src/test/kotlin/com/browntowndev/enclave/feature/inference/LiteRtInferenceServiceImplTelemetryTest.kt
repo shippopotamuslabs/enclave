@@ -172,6 +172,6 @@ class LiteRtInferenceServiceImplTelemetryTest {
             assertTrue(events.none { it is InferenceEvent.Error })
             val telemetryEvent = events.filterIsInstance<InferenceEvent.TelemetryCaptured>().single()
             assertEquals(2, telemetryEvent.telemetry.outputTokens)
-            assertEquals(1, telemetryEvent.telemetry.inputTokens)
+            assertEquals(15, telemetryEvent.telemetry.inputTokens)
         }
 }

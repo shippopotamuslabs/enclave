@@ -92,6 +92,10 @@ class ChatTelemetryUiMapper
                         "Cache read input tokens",
                         formatInt(summary.totalCacheReadInputTokens ?: single?.cacheReadInputTokens),
                     ),
+                    responseMetric(
+                        "Cache write input tokens",
+                        formatInt(summary.totalCacheWriteInputTokens ?: single?.cacheCreationInputTokens),
+                    ),
                     responseMetric("Cache hit rate", formatPercent(summary.cacheHitRatePercent)),
                     responseMetric("Cost", formatCost(summary.totalCostUsd, summary.costStatus)),
                     responseMetric("Cost status", formatCostStatus(summary.costStatus)),

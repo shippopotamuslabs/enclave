@@ -165,6 +165,7 @@ class LiteRtInferenceServiceImpl
                                 history = telemetryContext.history,
                                 currentPrompt = prompt,
                                 systemPrompt = telemetryContext.systemPrompt,
+                                options = options,
                             )
                         val inputTelemetry =
                             resolveLiteRtInputTelemetry(
