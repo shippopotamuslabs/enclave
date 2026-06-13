@@ -49,6 +49,8 @@ class SafeBufferedTextLengthTest {
         ): ToolStreamGateFinish = ToolStreamGateFinish(trailingFlush = "", hasToolMarker = false)
 
         override fun bufferedText(handle: ToolStreamGateHandle): String = buffer
+
+        override fun hasToolMarkup(handle: ToolStreamGateHandle): Boolean = false
     }
 
     private class BrokenBufferedTextPort : ToolStreamGatePort {
@@ -69,5 +71,7 @@ class SafeBufferedTextLengthTest {
 
         override fun bufferedText(handle: ToolStreamGateHandle): String =
             error("tool stream gate lock: PoisonError { .. }")
+
+        override fun hasToolMarkup(handle: ToolStreamGateHandle): Boolean = false
     }
 }

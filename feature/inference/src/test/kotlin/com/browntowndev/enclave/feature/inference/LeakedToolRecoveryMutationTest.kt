@@ -149,5 +149,7 @@ class LeakedToolRecoveryMutationTest {
         ): ToolStreamGateFinish = ToolStreamGateFinish(trailingFlush = "", hasToolMarker = false)
 
         override fun bufferedText(handle: ToolStreamGateHandle): String = ""
+
+        override fun hasToolMarkup(handle: ToolStreamGateHandle): Boolean = false
     }
 }

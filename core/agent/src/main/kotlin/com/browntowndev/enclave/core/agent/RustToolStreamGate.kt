@@ -44,5 +44,7 @@ class RustToolStreamGate
 
         override fun bufferedText(handle: ToolStreamGateHandle): String = ffi(handle).bufferedText()
 
+        override fun hasToolMarkup(handle: ToolStreamGateHandle): Boolean = ffi(handle).hasToolMarkup()
+
         private fun ffi(handle: ToolStreamGateHandle): FfiToolStreamGate = handle.nativeHandle as FfiToolStreamGate
     }

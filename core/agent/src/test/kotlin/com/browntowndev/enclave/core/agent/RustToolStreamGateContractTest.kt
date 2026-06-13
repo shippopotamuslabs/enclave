@@ -40,6 +40,13 @@ class RustToolStreamGateContractTest {
     }
 
     @Test
+    fun k03HasToolMarkupReflectsBufferedEnvelopeWithoutFinishing() {
+        val handle = gatePort.create(allowToolCall = true)
+        gatePort.push(handle, dsmlSample)
+        assertTrue(gatePort.hasToolMarkup(handle), "K-03 hasToolMarkup")
+    }
+
+    @Test
     fun k02BufferedTextRetainsFullDsmlSample() {
         val handle = gatePort.create(allowToolCall = true)
         gatePort.push(handle, dsmlSample)
