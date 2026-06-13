@@ -55,7 +55,7 @@ class ChatHistoryRehydratorTest {
                 )
             val committedPrompt =
                 "# RELEVANT WEB SEARCH RESULTS:\nresult-text-abc\n\n" +
-                    "search query\n\n[Metadata: Current Time: Tuesday, May 26, 2026 at 3:44 PM]"
+                    "search query\n\n[Metadata: Sent at Tuesday, May 26, 2026 at 3:44 PM]"
             val committedPrompts = InMemoryCommittedInferencePromptStore()
             committedPrompts.commit(
                 userMessageId = priorUser.id,

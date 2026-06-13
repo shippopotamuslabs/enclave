@@ -451,7 +451,7 @@ class ChatInferenceRequestPreparer(
 
     private fun promptWithTemporalMetadata(prompt: String): String {
         val formattedTime = dateTimeFormatter.format(java.time.Instant.now())
-        return "$prompt\n\n[Metadata: Current Time: $formattedTime]"
+        return "$prompt\n\n[Metadata: Sent at $formattedTime]"
     }
 
     private fun composeInferencePrompts(
