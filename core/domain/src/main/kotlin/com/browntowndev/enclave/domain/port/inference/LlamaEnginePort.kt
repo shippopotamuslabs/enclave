@@ -48,7 +48,11 @@ interface LlamaEnginePort {
      *
      * @param options Per-request generation options
      */
-    fun generateWithOptions(options: GenerationOptions): Flow<GenerationEvent>
+    fun generateWithOptions(
+        options: GenerationOptions,
+        continuation: Boolean = false,
+        prevMessageCount: Int = 0,
+    ): Flow<GenerationEvent>
 
     /**
      * Stop the current generation if in progress.
@@ -69,4 +73,10 @@ interface LlamaEnginePort {
      * Check if a model is currently loaded.
      */
     fun isLoaded(): Boolean
+
+    /**
+     * Returns the total KV cache token count accumulated across all prior turns.
+     * For KV-fixed sessions this gives the true full-context size as seen by the model.
+     */
+    suspend fun contextUsage(): Int
 }

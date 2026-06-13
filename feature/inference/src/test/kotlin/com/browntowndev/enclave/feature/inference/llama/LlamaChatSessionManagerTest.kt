@@ -3,6 +3,7 @@ package com.browntowndev.enclave.feature.inference.llama
 import com.browntowndev.enclave.domain.model.chat.ChatMessage
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.GenerationEvent
+import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.LlamaModelConfig
 import com.browntowndev.enclave.domain.port.inference.LlamaEnginePort
 import io.mockk.coEvery
@@ -118,6 +119,23 @@ class LlamaChatSessionManagerTest {
         // Then
         assertEquals(expectedFlow, result)
         verify { engine.generate() }
+    }
+
+    @Test
+    fun `streamAssistantResponseWithOptions forwards continuation metadata`() {
+        val options = GenerationOptions(reasoningBudget = 0)
+        val expectedFlow = flowOf<GenerationEvent>()
+        every { engine.generateWithOptions(options, true, 4) } returns expectedFlow
+
+        val result =
+            sessionManager.streamAssistantResponseWithOptions(
+                options = options,
+                continuation = true,
+                prevMessageCount = 4,
+            )
+
+        assertEquals(expectedFlow, result)
+        verify { engine.generateWithOptions(options, true, 4) }
     }
 
     @Test

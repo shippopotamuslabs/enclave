@@ -57,7 +57,22 @@ class LlamaChatSessionManager
         /**
          * Stream the assistant's response with per-request GenerationOptions.
          */
-        fun streamAssistantResponseWithOptions(options: GenerationOptions): Flow<GenerationEvent> = engine.generateWithOptions(options)
+        fun streamAssistantResponseWithOptions(
+            options: GenerationOptions,
+            continuation: Boolean = false,
+            prevMessageCount: Int = 0,
+        ): Flow<GenerationEvent> =
+            engine.generateWithOptions(
+                options = options,
+                continuation = continuation,
+                prevMessageCount = prevMessageCount,
+            )
+
+        /**
+         * Total KV cache token count across all turns in this session.
+         * Grows each turn; use instead of n_prompt_tokens for full-context input token stats.
+         */
+        suspend fun readContextUsage(): Int = engine.contextUsage()
 
         /**
          * Stop the current generation if in progress.

@@ -158,7 +158,7 @@ class LlamaInferenceServiceImplTelemetryTest {
             val telemetry = result.telemetry
             assertNotNull(telemetry)
             assertEquals(42, telemetry!!.outputTokens)
-            assertEquals(100, telemetry.inputTokens)
+            assertEquals(180, telemetry.inputTokens)
             assertEquals(80, telemetry.cacheReadInputTokens)
             assertEquals("llama.cpp", telemetry.providerLabel)
             assertEquals(TelemetryProviderKey.LLAMA, telemetry.providerKey)
@@ -169,6 +169,6 @@ class LlamaInferenceServiceImplTelemetryTest {
                     messageId = MessageId("assistant-1"),
                     rows = listOf(telemetry),
                 )
-            assertEquals(80.0, summary.cacheHitRatePercent)
+            assertEquals(44.4, summary.cacheHitRatePercent)
         }
 }

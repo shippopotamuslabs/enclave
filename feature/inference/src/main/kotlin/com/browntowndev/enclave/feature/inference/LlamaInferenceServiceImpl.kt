@@ -71,6 +71,7 @@ class LlamaInferenceServiceImpl
             private const val TAG = "LlamaInferenceService"
             private const val DEFAULT_TEMPERATURE = 0.7f
             private const val DEFAULT_TOP_P = 0.9f
+            private const val MISMATCH_LOG_PREVIEW_LENGTH = 80
         }
 
         private data class SessionSignature(
@@ -81,6 +82,7 @@ class LlamaInferenceServiceImpl
             val topK: Int,
             val topP: Float,
             val maxTokens: Int,
+            val contextWindow: Int,
         )
 
         private data class BufferedGeneration(
@@ -94,7 +96,13 @@ class LlamaInferenceServiceImpl
         private val mutex = Mutex()
         private var currentSignature: SessionSignature? = null
         private var history: List<DomainChatMessage> = emptyList()
+        private var kvRawTranscript: List<AgentLoopMessage> = emptyList()
+        private var kvTranscriptAsSent: List<DomainChatMessage> = emptyList()
+        private var kvSystemPrompt: String? = null
+        private var kvTranscriptRevision: Long? = null
+        private var kvContinuationValid = false
         private var isInitialized = false
+
         private fun getModelPath(filename: String): String {
             // Use getExternalFilesDir to match ModelFileScanner's directory choice
             val modelsDir = File(context.getExternalFilesDir(null), "models")
@@ -132,6 +140,7 @@ class LlamaInferenceServiceImpl
             val targetTopK = options.topK ?: activeConfig.topK ?: 40
             val targetTopP = options.topP ?: activeConfig.topP?.toFloat() ?: DEFAULT_TOP_P
             val targetMaxTokens = options.maxTokens ?: activeConfig.maxTokens ?: 4096
+            val targetContextWindow = activeConfig.contextWindow ?: 4096
 
             val newSignature =
                 SessionSignature(
@@ -142,6 +151,7 @@ class LlamaInferenceServiceImpl
                     topK = targetTopK,
                     topP = targetTopP,
                     maxTokens = targetMaxTokens,
+                    contextWindow = targetContextWindow,
                 )
 
             mutex.withLock {
@@ -152,6 +162,7 @@ class LlamaInferenceServiceImpl
                 }
 
                 // Model, config, options, or history changed - need to reinitialize
+                invalidateKvContinuation()
                 onLoading()
                 sessionManager.shutdown()
                 isInitialized = false
@@ -172,7 +183,7 @@ class LlamaInferenceServiceImpl
                         topK = targetTopK,
                         minP = activeConfig.minP?.toFloat() ?: 0.0f,
                         maxTokens = targetMaxTokens,
-                        contextWindow = activeConfig.contextWindow ?: 4096,
+                        contextWindow = targetContextWindow,
                         batchSize = 512,
                         gpuLayers = 0,
                         thinkingEnabled = targetReasoningBudget > 0,
@@ -204,6 +215,7 @@ class LlamaInferenceServiceImpl
         override suspend fun closeSession() {
             // Constitutional Fix: remove runBlocking.
             mutex.withLock {
+                invalidateKvContinuation()
                 try {
                     sessionManager.shutdown()
                     isInitialized = false
@@ -221,6 +233,7 @@ class LlamaInferenceServiceImpl
         suspend fun clearConversation() {
             // Constitutional Fix: remove runBlocking.
             mutex.withLock {
+                invalidateKvContinuation()
                 try {
                     sessionManager.clearConversation()
                 } catch (e: Exception) {
@@ -253,71 +266,145 @@ class LlamaInferenceServiceImpl
             if (options.imageUris.isNotEmpty()) {
                 loggingPort.warning(TAG, "Images are not supported in Llama agent loop turns; imageUris will be ignored")
             }
-            val mergedSystemPrompt =
-                if (!contextSidecars.isNullOrBlank()) {
-                    "$systemPrompt\n\n$contextSidecars"
+            val revision = options.transcriptRevision
+            // Ids and metadata are session-local; only role+content affect the rendered prompt.
+            val prefixMismatchIndex =
+                sessionMessages
+                    .zip(kvRawTranscript)
+                    .indexOfFirst { (new, old) -> new.role != old.role || new.content != old.content }
+            val continuation =
+                kvContinuationValid &&
+                    revision == kvTranscriptRevision &&
+                    systemPrompt == kvSystemPrompt &&
+                    sessionMessages.size > kvRawTranscript.size &&
+                    prefixMismatchIndex < 0
+            if (!continuation) {
+                val mismatchDetail =
+                    if (prefixMismatchIndex >= 0) {
+                        val new = sessionMessages[prefixMismatchIndex]
+                        val old = kvRawTranscript[prefixMismatchIndex]
+                        " mismatchAt=$prefixMismatchIndex newRole=${new.role} oldRole=${old.role}" +
+                            " newContent='${new.content.take(MISMATCH_LOG_PREVIEW_LENGTH)}'" +
+                            " oldContent='${old.content.take(MISMATCH_LOG_PREVIEW_LENGTH)}'"
+                    } else {
+                        ""
+                    }
+                loggingPort.debug(
+                    TAG,
+                    "kv_continuation=false valid=$kvContinuationValid" +
+                        " revisionMatch=${revision == kvTranscriptRevision}" +
+                        " (rev=$revision stored=$kvTranscriptRevision)" +
+                        " systemPromptMatch=${systemPrompt == kvSystemPrompt}" +
+                        " sizeOk=${sessionMessages.size > kvRawTranscript.size}" +
+                        " (new=${sessionMessages.size} stored=${kvRawTranscript.size})" +
+                        mismatchDetail,
+                )
+            }
+            val newMessages =
+                if (continuation) {
+                    sessionMessages.drop(kvRawTranscript.size).map(::toLlamaDomainMessage)
                 } else {
-                    systemPrompt
+                    sessionMessages.map(::toLlamaDomainMessage)
                 }
+            val newMessagesAsSent = injectSidecarIntoLastUserMessage(newMessages, contextSidecars)
+            val domainHistory =
+                if (continuation) {
+                    kvTranscriptAsSent + newMessagesAsSent
+                } else {
+                    newMessagesAsSent
+                }
+            val prevMessageCount = if (continuation) kvTranscriptAsSent.size + 1 else 0
             val turnOptions =
                 options.copy(
                     toolingEnabled = allowToolCall && availableTools.isNotEmpty(),
                     activeTools = availableTools,
-                    systemPrompt = mergedSystemPrompt.ifBlank { options.systemPrompt },
+                    systemPrompt = systemPrompt.ifBlank { options.systemPrompt },
                 )
-            val domainHistory = sessionMessages.map { message -> toLlamaDomainMessage(message) }
 
             mutex.withLock {
                 history = domainHistory
             }
-            ensureModelLoaded(targetModelType, turnOptions) {
-                onLifecycleEvent(InferenceEvent.EngineLoading(targetModelType))
-            }
-            onLifecycleEvent(InferenceEvent.Processing(targetModelType))
-            sessionManager.setHistory(domainHistory)
-
-            val timing = telemetrySupport?.let { InferenceTurnTiming() }
-            val captureContext = telemetrySupport?.captureContext(turnOptions)
-            val buffered =
-                streamBufferedGeneration(
-                    events = sessionManager.streamAssistantResponseWithOptions(turnOptions),
-                    targetModelType = targetModelType,
-                    emitVisible = true,
-                    timing = timing,
-                    emitEvent = { event ->
-                        when (event) {
-                            is InferenceEvent.Thinking -> onThinkingToken(event.chunk)
-                            is InferenceEvent.PartialResponse -> onTextToken(event.chunk)
-                            else -> Unit
-                        }
-                    },
-                )
-            val rawText = buffered.fullText
-            val outputTokens =
-                buffered.generatedTokens
-                    ?: estimateTokenCount(rawText)
-            val reasoningTokens = estimateTokenCount(buffered.accumulatedThought)
-            val telemetry =
-                if (telemetrySupport != null && timing != null && captureContext != null) {
-                    telemetrySupport.localTurnTelemetry(
-                        context = captureContext,
-                        providerLabel = "llama.cpp",
-                        modelLabel = turnOptions.modelId ?: "local",
-                        timing = timing,
-                        outputTokens = outputTokens,
-                        inputTokens = buffered.promptTokens,
-                        cacheReadInputTokens = buffered.prefixReusedTokens,
-                        reasoningTokens = reasoningTokens,
-                    )
-                } else {
-                    null
+            try {
+                ensureModelLoaded(targetModelType, turnOptions) {
+                    onLifecycleEvent(InferenceEvent.EngineLoading(targetModelType))
                 }
-            return AgentModelTurnResult(
-                assistantText = rawText.takeIf { it.isNotBlank() },
-                toolCalls = emptyList(),
-                finishReason = AgentFinishReason.Stop,
-                telemetry = telemetry,
-            )
+                val nativeContinuation = continuation && kvContinuationValid
+                val nativePrevMessageCount = if (nativeContinuation) prevMessageCount else 0
+                onLifecycleEvent(InferenceEvent.Processing(targetModelType))
+                sessionManager.setHistory(domainHistory)
+
+                val timing = telemetrySupport?.let { InferenceTurnTiming() }
+                val captureContext = telemetrySupport?.captureContext(turnOptions)
+                val buffered =
+                    streamBufferedGeneration(
+                        events =
+                            sessionManager.streamAssistantResponseWithOptions(
+                                options = turnOptions,
+                                continuation = nativeContinuation,
+                                prevMessageCount = nativePrevMessageCount,
+                            ),
+                        targetModelType = targetModelType,
+                        emitVisible = true,
+                        timing = timing,
+                        emitEvent = { event ->
+                            when (event) {
+                                is InferenceEvent.Thinking -> onThinkingToken(event.chunk)
+                                is InferenceEvent.PartialResponse -> onTextToken(event.chunk)
+                                else -> Unit
+                            }
+                        },
+                    )
+                val rawText = buffered.fullText
+                val outputTokens =
+                    buffered.generatedTokens
+                        ?: estimateTokenCount(rawText)
+                val reasoningTokens = estimateTokenCount(buffered.accumulatedThought)
+                val inputTokens =
+                    listOfNotNull(buffered.prefixReusedTokens, buffered.promptTokens)
+                        .takeIf { it.isNotEmpty() }
+                        ?.sum()
+                val telemetry =
+                    if (telemetrySupport != null && timing != null && captureContext != null) {
+                        telemetrySupport.localTurnTelemetry(
+                            context = captureContext,
+                            providerLabel = "llama.cpp",
+                            modelLabel = turnOptions.modelId ?: "local",
+                            timing = timing,
+                            outputTokens = outputTokens,
+                            inputTokens = inputTokens,
+                            cacheReadInputTokens = buffered.prefixReusedTokens,
+                            reasoningTokens = reasoningTokens,
+                        )
+                    } else {
+                        null
+                    }
+                mutex.withLock {
+                    kvRawTranscript = sessionMessages.toList()
+                    kvTranscriptAsSent = domainHistory.toList()
+                    kvSystemPrompt = systemPrompt
+                    kvTranscriptRevision = revision
+                    kvContinuationValid = true
+                }
+                return AgentModelTurnResult(
+                    assistantText = rawText.takeIf { it.isNotBlank() },
+                    toolCalls = emptyList(),
+                    finishReason = AgentFinishReason.Stop,
+                    telemetry = telemetry,
+                )
+            } catch (e: CancellationException) {
+                invalidateKvContinuation()
+                throw e
+            } catch (e: JavaCancellationException) {
+                invalidateKvContinuation()
+                throw e
+            } catch (e: Exception) {
+                invalidateKvContinuation()
+                throw e
+            }
+        }
+
+        internal fun clearAppendOnlyOnRustCompactionBoundary() {
+            invalidateKvContinuation()
         }
 
         override fun sendPrompt(
@@ -352,6 +439,7 @@ class LlamaInferenceServiceImpl
                     }
 
                 try {
+                    mutex.withLock { invalidateKvContinuation() }
                     ensureModelLoaded(targetModelType, processedOptions) {
                         send(InferenceEvent.EngineLoading(targetModelType))
                     }
@@ -480,6 +568,7 @@ class LlamaInferenceServiceImpl
                         state.emittedSegments.forEach { segment ->
                             when (segment.kind) {
                                 SegmentKind.THINKING -> {
+                                    timing?.markFirstOutput()
                                     accumulatedThought.append(segment.text)
                                     emitEvent(InferenceEvent.Thinking(segment.text, targetModelType))
                                 }
@@ -499,6 +588,7 @@ class LlamaInferenceServiceImpl
                         if (sawToken) {
                             if (buffer.isNotEmpty()) {
                                 if (isThinking) {
+                                    timing?.markFirstOutput()
                                     accumulatedThought.append(buffer)
                                     emitEvent(InferenceEvent.Thinking(buffer, targetModelType))
                                 } else {
@@ -557,6 +647,27 @@ class LlamaInferenceServiceImpl
             }
         }
 
+        private fun injectSidecarIntoLastUserMessage(
+            messages: List<DomainChatMessage>,
+            contextSidecars: String?,
+        ): List<DomainChatMessage> {
+            if (contextSidecars.isNullOrBlank()) return messages
+            val lastUserIndex = messages.indexOfLast { it.role == Role.USER }
+            if (lastUserIndex < 0) return messages
+
+            return messages.mapIndexed { index, message ->
+                if (index == lastUserIndex) {
+                    message.copy(content = "[context]\n$contextSidecars\n[/context]\n\n${message.content}")
+                } else {
+                    message
+                }
+            }
+        }
+
+        private fun invalidateKvContinuation() {
+            kvContinuationValid = false
+        }
+
         private suspend fun emitProcessedText(
             rawText: String,
             targetModelType: ModelType,
@@ -576,7 +687,10 @@ class LlamaInferenceServiceImpl
 
             state.emittedSegments.forEach { segment ->
                 when (segment.kind) {
-                    SegmentKind.THINKING -> emitEvent(InferenceEvent.Thinking(segment.text, targetModelType))
+                    SegmentKind.THINKING -> {
+                        timing?.markFirstOutput()
+                        emitEvent(InferenceEvent.Thinking(segment.text, targetModelType))
+                    }
                     SegmentKind.VISIBLE -> {
                         timing?.markFirstOutput()
                         emitEvent(InferenceEvent.PartialResponse(segment.text, targetModelType))
@@ -586,6 +700,7 @@ class LlamaInferenceServiceImpl
 
             if (buffer.isNotEmpty()) {
                 if (isThinking) {
+                    timing?.markFirstOutput()
                     emitEvent(InferenceEvent.Thinking(buffer, targetModelType))
                 } else {
                     timing?.markFirstOutput()
