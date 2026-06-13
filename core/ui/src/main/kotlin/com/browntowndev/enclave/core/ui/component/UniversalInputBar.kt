@@ -1,11 +1,14 @@
 package com.browntowndev.enclave.core.ui.component
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -65,10 +68,12 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.browntowndev.enclave.core.ui.R
 import com.browntowndev.enclave.core.ui.component.ShimmerText
 import com.browntowndev.enclave.core.ui.component.neo.NeoCircularProgressIndicator
 import com.browntowndev.enclave.core.ui.component.neo.NeoDisabledActionTooltip
@@ -101,7 +106,6 @@ fun UniversalInputBar(
     actionContent: (@Composable RowScope.() -> Unit)? = null,
     trailingAction: @Composable (RowScope.() -> Unit)? = null,
     isExpanded: Boolean = false,
-    onExpandToggle: (() -> Unit)? = null,
     maxHeightCollapsed: androidx.compose.ui.unit.Dp = 200.dp,
     hazeState: HazeState? = null,
     hazeAlpha: Float = 0.4f,
@@ -232,11 +236,6 @@ fun UniversalInputBar(
                                     ) {
                                         inputContent()
                                     }
-
-                                    if (onExpandToggle != null) {
-                                        // Sufficient space for the top-right chevron
-                                        Spacer(Modifier.width(InputBarLayoutMetrics.expandChevronWidth))
-                                    }
                                 }
                             }
                         }
@@ -269,30 +268,6 @@ fun UniversalInputBar(
                         }
                     }
 
-                    // Top Right: Expand/Collapse Toggle
-                    if (onExpandToggle != null) {
-                        NeoIconButton(
-                            onClick = {
-                                if (isExpanded) focusManager.clearFocus()
-                                onExpandToggle()
-                            },
-                            icon =
-                                if (isExpanded) {
-                                    Icons.Default.ExpandLess
-                                } else {
-                                    Icons.Default.ExpandMore
-                                },
-                            contentDescription = if (isExpanded) "Collapse" else "Expand",
-                            modifier =
-                                Modifier
-                                    .align(Alignment.TopEnd)
-                                    .padding(top = 4.dp),
-                            size = 32.dp,
-                            backgroundColor = MaterialTheme.colorScheme.surface,
-                            iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            withShadow = false,
-                        )
-                    }
 
                     // Bottom Right: Trailing Container (Mic, Send)
                     if (trailingAction != null) {
@@ -434,7 +409,7 @@ fun UniversalVoicePromptPlaceholder(
  * A shared trailing action that handles swapping between Mic, Send, and Stop buttons
  * based on the current speech and generation states.
  */
-@Suppress("CyclomaticComplexMethod")
+@Suppress("CyclomaticComplexMethod", "LongParameterList")
 @Composable
 fun UniversalVoiceTrailingAction(
     inputText: String,
@@ -450,6 +425,8 @@ fun UniversalVoiceTrailingAction(
     onCollapse: (() -> Unit)? = null,
     onLiveVoiceClick: (() -> Unit)? = null,
     isLiveVoiceEnabled: Boolean = true,
+    isExpanded: Boolean = false,
+    onExpandToggle: (() -> Unit)? = null,
 ) {
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -470,10 +447,29 @@ fun UniversalVoiceTrailingAction(
                 !speechState.isActiveVoiceInput
 
         Row(
-            modifier = modifier,
+            modifier = modifier.animateContentSize(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            AnimatedVisibility(
+                visible = isSending && onExpandToggle != null,
+                enter = fadeIn() + expandHorizontally(),
+                exit = fadeOut() + shrinkHorizontally(),
+            ) {
+                val expandCollapseIcon = painterResource(
+                    id = if (isExpanded) R.drawable.collapse_content else R.drawable.expand_content
+                )
+                StandardTrailingAction(
+                    painter = expandCollapseIcon,
+                    onClick = {
+                        if (isExpanded) focusManager.clearFocus()
+                        onExpandToggle?.invoke()
+                    },
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    description = if (isExpanded) "Collapse" else "Expand",
+                )
+            }
             AnimatedContent(
                 targetState = isSending,
                 transitionSpec = { fadeIn() togetherWith fadeOut() },
@@ -543,7 +539,7 @@ fun UniversalVoiceTrailingAction(
                     val handleLiveVoiceClick =
                         rememberNeoDisabledClick(
                             enabled = isLiveVoiceEnabled,
-                            onEnabledClick = { onLiveVoiceClick?.invoke() },
+                            onEnabledClick = { onLiveVoiceClick() },
                         )
                     StandardTrailingAction(
                         onClick = handleLiveVoiceClick,

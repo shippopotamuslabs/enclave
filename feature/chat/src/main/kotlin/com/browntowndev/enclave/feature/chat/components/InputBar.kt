@@ -149,7 +149,6 @@ fun InputBar(
 
     UniversalInputBar(
         isExpanded = isExpanded,
-        onExpandToggle = { isExpanded = !isExpanded },
         modifier =
             modifier.then(
                 if (!isExpanded && !speechState.isActiveVoiceInput) {
@@ -264,6 +263,8 @@ fun InputBar(
                     }
                 },
                 isLiveVoiceEnabled = isLiveVoiceEnabled,
+                isExpanded = isExpanded,
+                onExpandToggle = { isExpanded = !isExpanded },
             )
         },
     )
