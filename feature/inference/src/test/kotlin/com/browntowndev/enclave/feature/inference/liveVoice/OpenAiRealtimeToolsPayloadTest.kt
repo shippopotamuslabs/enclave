@@ -38,7 +38,8 @@ class OpenAiRealtimeToolsPayloadTest {
         assertEquals("function", tools[0].jsonObject["type"]!!.jsonPrimitive.content)
         assertEquals("web_search", tools[0].jsonObject["name"]!!.jsonPrimitive.content)
         assertEquals(
-            "Search the web and return ranked results.",
+            "Search the public web for current or explicitly requested online information. " +
+                "Use directly without tool_discovery_tool when a web lookup is needed.",
             tools[0].jsonObject["description"]!!.jsonPrimitive.content,
         )
         assertEquals(

@@ -17,7 +17,7 @@ data class SearchToolsCallArgs(
             val args =
                 runCatching { json.parseToJsonElement(argumentsJson).jsonObject }
                     .getOrDefault(buildJsonObject {})
-            val query = args.readStringField("capability").ifEmpty { args.readStringField("query") }
+            val query = args.readStringField("capability")
             val limit = args.readIntField("limit") ?: ToolSearchThresholds.DEFAULT_SEARCH_LIMIT
             return SearchToolsCallArgs(query = query, limit = limit)
         }

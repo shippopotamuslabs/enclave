@@ -25,7 +25,7 @@ class SearchToolsHostCoordinatorTest {
 
             val result =
                 coordinator.executeFromArguments(
-                    argumentsJson = """{"query":"append_blocks","limit":"3"}""",
+                    argumentsJson = """{"capability":"append_blocks","limit":"3"}""",
                     toolCatalog = ToolSearchTestFixtures.bm25Catalog,
                     activationRegistry = registry,
                     providedIndex = ToolSearchTestFixtures.searchIndex(),
@@ -77,7 +77,7 @@ class SearchToolsHostCoordinatorTest {
         val registry = ToolSessionActivationRegistry()
         val input =
             SearchToolsHostCoordinator.inputFrom(
-                argumentsJson = """{"query":"read_context","limit":"2"}""",
+                argumentsJson = """{"capability":"read_context","limit":"2"}""",
                 toolCatalog = ToolSearchTestFixtures.bm25Catalog,
                 activationRegistry = registry,
                 providedIndex = null,
@@ -108,7 +108,7 @@ class SearchToolsHostCoordinatorTest {
     }
 
     @Test
-    fun inputFrom_parses_query_key_as_fallback() {
+    fun inputFrom_rejects_legacy_query_key() {
         val registry = ToolSessionActivationRegistry()
         val input =
             SearchToolsHostCoordinator.inputFrom(
@@ -120,7 +120,7 @@ class SearchToolsHostCoordinatorTest {
                 chatId = ChatId("c3"),
             )
 
-        assertEquals("send email", input.query)
+        assertEquals("", input.query)
         assertEquals(1, input.limit)
     }
 }

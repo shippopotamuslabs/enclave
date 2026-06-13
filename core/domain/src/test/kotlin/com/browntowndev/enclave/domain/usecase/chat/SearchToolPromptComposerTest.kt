@@ -43,6 +43,24 @@ class SearchToolPromptComposerTest {
     }
 
     @Test
+    fun `JSON XML prompt makes direct answers the default and limits discovery`() {
+        val prompt =
+            composer.compose(
+                baseSystemPrompt = "Be concise.",
+                toolCatalog = listOf(catalogEntry("tool_discovery_tool", ToolDisclosureMode.PRELOADED)),
+                activeTools = listOf(ToolDefinition.SEARCH_TOOLS),
+                strategy = ToolCallStrategy.JSON_XML_ENVELOPE,
+            )
+
+        assertTrue(prompt.contains("If no tool is needed, answer the user directly"))
+        assertTrue(prompt.contains("answer stable facts and ordinary questions directly"))
+        assertTrue(prompt.contains("For current information or an explicit web lookup, call web_search directly"))
+        assertTrue(prompt.contains("It searches tool metadata, never facts or the web"))
+        assertTrue(prompt.contains("If you choose to call a tool, respond ONLY with the <tool_call> tag"))
+        assertFalse(prompt.contains("1. Respond ONLY with the <tool_call> tag."))
+    }
+
+    @Test
     fun `LTD-03 LiteRT prompt keeps deferred native examples out of the base prompt`() {
         val prompt =
             composer.compose(
@@ -62,9 +80,31 @@ class SearchToolPromptComposerTest {
             )
 
         assertTrue(prompt.contains("call:web_search{query: <|\"|>...<|\"|>}"))
-        assertTrue(prompt.contains("call:tool_discovery_tool{capability: <|\"|>describe the capability you need<|\"|>}"))
+        assertTrue(
+            prompt.contains(
+                "call:tool_discovery_tool{capability: <|\"|>describe the executable action, e.g. generate an image<|\"|>}",
+            ),
+        )
         assertFalse(prompt.contains("call:append_blocks{"))
         assertFalse(prompt.contains("call:search_current_artifact{"))
+    }
+
+    @Test
+    fun `LiteRT prompt makes direct answers the default and limits discovery`() {
+        val prompt =
+            composer.compose(
+                baseSystemPrompt = "Be concise.",
+                toolCatalog = listOf(catalogEntry("tool_discovery_tool", ToolDisclosureMode.PRELOADED)),
+                activeTools = listOf(ToolDefinition.SEARCH_TOOLS),
+                strategy = ToolCallStrategy.LITE_RT_NATIVE,
+            )
+
+        assertTrue(prompt.contains("If no tool is needed, answer the user directly"))
+        assertTrue(prompt.contains("answer stable facts and ordinary questions directly"))
+        assertTrue(prompt.contains("For current information or an explicit web lookup, call web_search directly"))
+        assertTrue(prompt.contains("It searches tool metadata, never facts or the web"))
+        assertTrue(prompt.contains("If you choose to call a tool, use exactly the 'call:tool_name{...}' format"))
+        assertFalse(prompt.contains("4. Respond ONLY with the tool call."))
     }
 
     @Test
@@ -254,6 +294,34 @@ class SearchToolPromptComposerTest {
         val profileIndex = composed.indexOf("# PSYCHOLOGICAL PROFILE:")
         assertTrue(aboutIndex >= 0)
         assertTrue(profileIndex > aboutIndex)
+    }
+
+    @Test
+    fun `compact static prompt omits psych profile and active tool examples`() {
+        val profileMemory = Memory(category = MemoryCategory.PSYCH_PROFILE, content = "Avoids vulnerability.")
+        val prompt =
+            composer.compose(
+                baseSystemPrompt = "Be concise.",
+                toolCatalog =
+                    listOf(
+                        catalogEntry("web_search", ToolDisclosureMode.PRELOADED),
+                        catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND),
+                    ),
+                activeTools =
+                    listOf(
+                        ToolDefinition.SEARCH_TOOLS,
+                        ToolDefinition.WEB_SEARCH,
+                    ),
+                strategy = ToolCallStrategy.JSON_XML_ENVELOPE,
+                coreMemories = listOf(profileMemory),
+                compactStaticPrompt = true,
+            )
+
+        assertFalse(prompt.contains("PSYCHOLOGICAL PROFILE"))
+        assertFalse(prompt.contains("Avoids vulnerability."))
+        assertFalse(prompt.contains("# ACTIVE TOOL EXAMPLES:"))
+        assertFalse(prompt.contains("<tool_call>{\"name\":\"web_search\""))
+        assertTrue(prompt.contains("# TOOL DISCOVERY:"))
     }
 
     @Test

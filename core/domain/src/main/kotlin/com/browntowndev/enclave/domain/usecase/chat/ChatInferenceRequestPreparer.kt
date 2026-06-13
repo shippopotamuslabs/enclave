@@ -16,7 +16,6 @@ import com.browntowndev.enclave.domain.model.memory.MemoryRetrievalPolicy
 import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.MonotonicToolActivationPort
-import com.browntowndev.enclave.domain.port.inference.NoopMonotonicToolActivationPort
 import com.browntowndev.enclave.domain.port.inference.NoopToolSearchEmbeddingCachePort
 import com.browntowndev.enclave.domain.port.inference.PromptComposerPort
 import com.browntowndev.enclave.domain.port.inference.ToolSearchEmbeddingCachePort
@@ -30,6 +29,7 @@ import com.browntowndev.enclave.domain.port.repository.MessageRepository
 import com.browntowndev.enclave.domain.port.repository.SettingsRepository
 import com.browntowndev.enclave.domain.usecase.media.GetProviderCapabilitiesUseCase
 import com.browntowndev.enclave.domain.usecase.media.MediaToolDefinitionFactory
+import com.browntowndev.enclave.domain.util.ContextWindowPlanner
 import com.browntowndev.enclave.domain.util.SearchIntentPolicy
 import com.browntowndev.enclave.domain.util.ToolIntentActivationPolicy
 import com.browntowndev.enclave.domain.util.WebSearchResultParser
@@ -395,15 +395,14 @@ class ChatInferenceRequestPreparer(
                 retrievedMemories = retrievedMemories,
                 retrievedSearchResults = retrievedSearchResults,
                 retrievedXSearchResults = retrievedXSearchResults,
+                isLocal = config?.isLocal == true,
+                contextWindow = config?.contextWindow,
             )
-
-        val formattedTime = dateTimeFormatter.format(java.time.Instant.now())
-        val promptWithMetadata = "$prompt\n\n[Metadata: Current Time: $formattedTime]"
 
         return PreparedChatInferenceRequest(
             prompt =
                 prepareChatPrompt(
-                    prompt = promptWithMetadata,
+                    prompt = promptWithTemporalMetadata(prompt),
                     hasImageContext = hasImageContext,
                     imageHandling = imageHandling,
                     fileAttachments = userMessage?.content?.fileAttachments ?: emptyList(),
@@ -450,6 +449,11 @@ class ChatInferenceRequestPreparer(
         )
     }
 
+    private fun promptWithTemporalMetadata(prompt: String): String {
+        val formattedTime = dateTimeFormatter.format(java.time.Instant.now())
+        return "$prompt\n\n[Metadata: Current Time: $formattedTime]"
+    }
+
     private fun composeInferencePrompts(
         toolingEnabled: Boolean,
         configSystemPrompt: String?,
@@ -461,13 +465,22 @@ class ChatInferenceRequestPreparer(
         retrievedMemories: List<com.browntowndev.enclave.domain.model.memory.Memory>,
         retrievedSearchResults: String?,
         retrievedXSearchResults: String?,
+        isLocal: Boolean,
+        contextWindow: Int?,
     ): ComposedInferencePrompts {
-        val volatileTurnContext =
+        val compactStaticPrompt = ContextWindowPlanner.isSmallContextLocalWindow(isLocal, contextWindow)
+        val rawVolatileTurnContext =
             promptComposer.composeVolatileTurnContext(
                 retrievedMemories = retrievedMemories,
                 retrievedSearchResults = retrievedSearchResults,
                 retrievedXSearchResults = retrievedXSearchResults,
             )
+        val volatileTurnContext =
+            if (compactStaticPrompt) {
+                ContextWindowPlanner.compactVolatileTurnContext(rawVolatileTurnContext, contextWindow)
+            } else {
+                rawVolatileTurnContext
+            }
         val systemPrompt =
             if (toolingEnabled) {
                 promptComposer.compose(
@@ -480,6 +493,7 @@ class ChatInferenceRequestPreparer(
                     retrievedMemories = emptyList(),
                     retrievedSearchResults = null,
                     retrievedXSearchResults = null,
+                    compactStaticPrompt = compactStaticPrompt,
                 )
             } else {
                 configSystemPrompt

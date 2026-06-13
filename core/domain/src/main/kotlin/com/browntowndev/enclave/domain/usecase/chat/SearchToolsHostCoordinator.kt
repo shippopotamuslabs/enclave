@@ -22,7 +22,7 @@ data class SearchToolsHostInput(
 )
 
 /**
- * Shared `search_tools` host path for API (RustLoop) and LiteRT.
+ * Shared discovery-tool host path for API (RustLoop) and LiteRT.
  * Parses args, resolves hybrid search, updates [ToolSessionActivationRegistry].
  */
 class SearchToolsHostCoordinator(

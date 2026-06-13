@@ -27,7 +27,7 @@ interface ToolParameters {
         /**
          * Extracts top-level argument hints from a [ToolSchema]. Nested object schemas,
          * `oneOf`, `anyOf`, and `definitions` are intentionally excluded — the catalog
-         * stays compact while full schemas are returned by [search_tools] on activation.
+         * stays compact while full schemas are returned by the discovery tool on activation.
          */
         fun extractArgumentHints(schema: ToolSchema): Pair<List<ToolArgumentHint>, List<ToolArgumentHint>> {
             val required = mutableListOf<ToolArgumentHint>()
@@ -60,8 +60,12 @@ interface ToolParameters {
 
 @kotlinx.serialization.Serializable
 data class SearchToolsParams(
-    @ToolParam(description = "Description of the capability you need, e.g. 'send an email' or 'generate an image'. Not a web-search query.")
-    val query: String,
+    @ToolParam(
+        description =
+            "Executable action to enable, e.g. 'generate an image' or 'search past conversations'. " +
+                "Never a fact, question, topic, or web-search query.",
+    )
+    val capability: String,
     @ToolParam(description = "Maximum number of matches to return.")
     val limit: Int? = null,
 ) : ToolParameters

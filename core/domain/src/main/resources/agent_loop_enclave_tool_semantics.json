@@ -19,11 +19,6 @@
   },
   "argument_repairs": [
     {
-      "tool_name": "tool_discovery_tool",
-      "aliases": [{"alias": "query", "canonical": "capability"}],
-      "special_values": []
-    },
-    {
       "tool_name": "append_blocks",
       "aliases": [
         { "alias": "artifact_id", "canonical": "artifactId" },

@@ -51,6 +51,7 @@ class GenerateChatResponseUseCaseSearchToolTest {
                 retrievedMemories: List<com.browntowndev.enclave.domain.model.memory.Memory>,
                 retrievedSearchResults: String?,
                 retrievedXSearchResults: String?,
+                compactStaticPrompt: Boolean,
             ): String = baseSystemPrompt ?: ""
         }
 

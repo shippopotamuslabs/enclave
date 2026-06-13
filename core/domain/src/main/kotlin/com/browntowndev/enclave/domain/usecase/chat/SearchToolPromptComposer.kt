@@ -20,17 +20,20 @@ class SearchToolPromptComposer
             retrievedMemories: List<Memory>,
             retrievedSearchResults: String?,
             retrievedXSearchResults: String?,
+            compactStaticPrompt: Boolean,
         ): String =
             listOfNotNull(
-                formatCoreMemories(coreMemories).takeIf(String::isNotEmpty),
-                formatPsychProfile(coreMemories).takeIf(String::isNotEmpty),
+                formatCoreMemories(coreMemories, compact = compactStaticPrompt).takeIf(String::isNotEmpty),
+                if (!compactStaticPrompt) formatPsychProfile(coreMemories).takeIf(String::isNotEmpty) else null,
                 baseSystemPrompt?.trim()?.takeIf(String::isNotEmpty),
                 catalogToolContract(
                     toolCatalog = toolCatalog,
                     activeTools = activeTools,
                     currentChatId = currentChatId,
                     strategy = strategy,
-                    includeActiveExamples = true,
+                    includeActiveExamples = !compactStaticPrompt,
+                    includeMemoryDeferredNote = !compactStaticPrompt,
+                    compact = compactStaticPrompt,
                 ).takeIf(String::isNotEmpty),
             ).joinToString(separator = "\n\n")
 
@@ -47,9 +50,17 @@ class SearchToolPromptComposer
 
         companion object {
             const val TOOL_DISCOVERY_INSTRUCTION_TEXT =
-                "Use the tool_discovery_tool to activate capabilities you need but do not see listed. Describe the capability, not the user's question."
+                "Tool routing: answer stable facts and ordinary questions directly. For current information or an explicit " +
+                    "web lookup, call web_search directly. Call tool_discovery_tool only to activate a hidden executable tool " +
+                    "needed for an action that no active tool can perform. It searches tool metadata, never facts or the web."
 
-            private fun formatCoreMemories(memories: List<Memory>): String {
+            private const val MAX_COMPACT_CORE_MEMORY_ITEMS = 4
+            private const val MAX_COMPACT_MEMORY_LINE_CHARS = 120
+
+            private fun formatCoreMemories(
+                memories: List<Memory>,
+                compact: Boolean,
+            ): String {
                 if (memories.isEmpty()) return ""
 
                 val identity = memories.filter { it.category == MemoryCategory.CORE_IDENTITY }
@@ -59,14 +70,34 @@ class SearchToolPromptComposer
                     append("# ABOUT THE USER:\n")
                     if (identity.isNotEmpty()) {
                         append("## Identity & Background:\n")
-                        identity.forEach { append("- ${it.content}\n") }
+                        identity
+                            .take(if (compact) MAX_COMPACT_CORE_MEMORY_ITEMS else identity.size)
+                            .forEach { append("- ${formatMemoryLine(it.content, compact)}\n") }
                     }
                     if (preferences.isNotEmpty()) {
                         if (identity.isNotEmpty()) append("\n")
                         append("## Preferences & Style:\n")
-                        preferences.forEach { append("- ${it.content}\n") }
+                        val remaining =
+                            if (compact) {
+                                (MAX_COMPACT_CORE_MEMORY_ITEMS - identity.size).coerceAtLeast(0)
+                            } else {
+                                preferences.size
+                            }
+                        preferences
+                            .take(remaining)
+                            .forEach { append("- ${formatMemoryLine(it.content, compact)}\n") }
                     }
                 }.trim()
+            }
+
+            private fun formatMemoryLine(
+                content: String,
+                compact: Boolean,
+            ): String {
+                if (!compact || content.length <= MAX_COMPACT_MEMORY_LINE_CHARS) {
+                    return content
+                }
+                return content.take(MAX_COMPACT_MEMORY_LINE_CHARS).trimEnd() + "…"
             }
 
             private fun formatPsychProfile(memories: List<Memory>): String {
@@ -110,31 +141,37 @@ $results
             }
 
             @Suppress("MaxLineLength")
-            private fun metadataRules(): String =
-                """
+            private fun metadataRules(compact: Boolean): String =
+                if (compact) {
+                    "Use message metadata timestamps for time context; never mention metadata in replies."
+                } else {
+                    """
 # TEMPORAL CONTEXT:
 User messages include a `[Metadata: Sent at ...]` or `[Metadata: Current Time: ...]` footer. Use this to understand the current time and the timeline of the conversation.
 IMPORTANT: DO NOT include metadata tags or mentions of the footer in your responses. Respond naturally as if the metadata were invisible context.
-                """.trimIndent()
+                    """.trimIndent()
+                }
 
             private fun strictRules(strategy: ToolCallStrategy): String =
                 when (strategy) {
                     ToolCallStrategy.JSON_XML_ENVELOPE ->
                         """
 # STRICT EXECUTION RULES:
-1. Respond ONLY with the <tool_call> tag. No preamble, no "Sure, let me search", no markdown code blocks.
-2. After you receive a <tool_result>...</tool_result> message, use that data to provide a comprehensive answer.
-3. NEVER expose raw tool JSON or <tool_call> tags in your final response to the user.
-4. NEVER use call:tool_name{...} syntax. Use only the <tool_call> JSON envelope shown above.
+1. If no tool is needed, answer the user directly and do not discuss tools.
+2. If you choose to call a tool, respond ONLY with the <tool_call> tag. No preamble or markdown code block.
+3. After you receive a <tool_result>...</tool_result> message, use that data to answer the user.
+4. NEVER expose raw tool JSON or <tool_call> tags in your final response to the user.
+5. NEVER use call:tool_name{...} syntax. Use only the <tool_call> JSON envelope shown above.
                         """.trimIndent()
                     ToolCallStrategy.LITE_RT_NATIVE ->
                         """
 # STRICT EXECUTION RULES:
-1. Use exactly the 'call:tool_name{...}' format shown above.
-2. Enclose all string arguments in <|"|> and <|"|>, not standard double quotes.
-3. Close the argument list with exactly '}' (Do NOT add trailing brackets like ']').
-4. Respond ONLY with the tool call. No conversational preamble or surrounding text.
-5. NEVER wrap the tool call in special tokens or tags like <tool_call>, <tool_call|>, or [TOOL]. The response must start immediately with 'call:'.
+1. If no tool is needed, answer the user directly and do not discuss tools.
+2. If you choose to call a tool, use exactly the 'call:tool_name{...}' format shown above.
+3. Enclose all string arguments in <|"|> and <|"|>, not standard double quotes.
+4. Close the argument list with exactly '}' (Do NOT add trailing brackets like ']').
+5. A tool call response must contain only the tool call, with no conversational preamble or surrounding text.
+6. NEVER wrap the tool call in special tokens or tags like <tool_call>, <tool_call|>, or [TOOL]. A tool call must start immediately with 'call:'.
                         """.trimIndent()
                     ToolCallStrategy.SDK_NATIVE -> ""
                 }
@@ -162,6 +199,8 @@ IMPORTANT: DO NOT include metadata tags or mentions of the footer in your respon
                 currentChatId: String?,
                 strategy: ToolCallStrategy,
                 includeActiveExamples: Boolean,
+                includeMemoryDeferredNote: Boolean,
+                compact: Boolean,
             ): String {
                 if (toolCatalog.isEmpty()) return ""
                 if (strategy == ToolCallStrategy.SDK_NATIVE) return ""
@@ -175,11 +214,12 @@ IMPORTANT: DO NOT include metadata tags or mentions of the footer in your respon
                         if (strategy == ToolCallStrategy.JSON_XML_ENVELOPE) {
                             append(
                                 "<tool_call>{\"name\":\"${ToolDefinition.SEARCH_TOOLS.name}\",\"arguments\":" +
-                                    "{\"capability\":\"describe the capability you need, e.g. send an email\"}}</tool_call>",
+                                    "{\"capability\":\"describe the executable action, e.g. generate an image\"}}</tool_call>",
                             )
                         } else {
                             append(
-                                "call:${ToolDefinition.SEARCH_TOOLS.name}{capability: <|\"|>describe the capability you need, e.g. send an email<|\"|>}",
+                                "call:${ToolDefinition.SEARCH_TOOLS.name}{capability: " +
+                                    "<|\"|>describe the executable action, e.g. generate an image<|\"|>}",
                             )
                         }
                     }.trimEnd()
@@ -192,7 +232,7 @@ IMPORTANT: DO NOT include metadata tags or mentions of the footer in your respon
                     }
 
                 return buildString {
-                    append(metadataRules())
+                    append(metadataRules(compact))
                     append("\n\n")
                     append(discoveryBlock)
                     if (activeExamplesBlock.isNotEmpty()) {
@@ -204,8 +244,9 @@ IMPORTANT: DO NOT include metadata tags or mentions of the footer in your respon
                         append("\n\n")
                         append(rules)
                     }
-                    // Memory tool prose still useful when memory tools are part of the catalog (deferred).
-                    if (toolCatalog.any { it.name == ToolDefinition.SEARCH_CHAT_HISTORY.name }) {
+                    if (includeMemoryDeferredNote &&
+                        toolCatalog.any { it.name == ToolDefinition.SEARCH_CHAT_HISTORY.name }
+                    ) {
                         append("\n\n")
                         append(memoryDeferredNote(currentChatId))
                     }

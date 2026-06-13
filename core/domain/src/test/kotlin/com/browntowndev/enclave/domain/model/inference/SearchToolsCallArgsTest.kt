@@ -12,22 +12,22 @@ class SearchToolsCallArgsTest {
     }
 
     @Test
-    fun parse_coerces_non_primitive_query_to_empty() {
-        val args = SearchToolsCallArgs.parse("""{"query":["nested"],"limit":"3"}""")
+    fun parse_coerces_non_primitive_capability_to_empty() {
+        val args = SearchToolsCallArgs.parse("""{"capability":["nested"],"limit":"3"}""")
         assertEquals("", args.query)
         assertEquals(3, args.limit)
     }
 
     @Test
     fun parse_coerces_non_numeric_limit_to_default() {
-        val args = SearchToolsCallArgs.parse("""{"query":"web search","limit":{"bad":true}}""")
+        val args = SearchToolsCallArgs.parse("""{"capability":"web search","limit":{"bad":true}}""")
         assertEquals("web search", args.query)
         assertEquals(ToolSearchThresholds.DEFAULT_SEARCH_LIMIT, args.limit)
     }
 
     @Test
     fun parse_accepts_valid_payload() {
-        val args = SearchToolsCallArgs.parse("""{"query":"append blocks","limit":2}""")
+        val args = SearchToolsCallArgs.parse("""{"capability":"append blocks","limit":2}""")
         assertEquals("append blocks", args.query)
         assertEquals(2, args.limit)
     }
@@ -40,9 +40,9 @@ class SearchToolsCallArgsTest {
     }
 
     @Test
-    fun parse_falls_back_to_query_when_capability_absent() {
+    fun parse_rejects_legacy_query_when_capability_absent() {
         val args = SearchToolsCallArgs.parse("""{"query":"send email","limit":3}""")
-        assertEquals("send email", args.query)
+        assertEquals("", args.query)
         assertEquals(3, args.limit)
     }
 }

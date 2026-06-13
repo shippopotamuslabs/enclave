@@ -2,14 +2,14 @@
   "tools": [
     {
       "name": "tool_discovery_tool",
-      "aliases": ["search_tools"],
+      "aliases": [],
       "reproducible": true,
       "schema_hint": {
         "required_fields": [
           {
             "name": "capability",
             "ty": "string",
-            "description": "Description of the capability needed; not a web-search query"
+            "description": "Executable action to enable; never a fact, question, topic, or web-search query"
           }
         ],
         "defaults": {}
