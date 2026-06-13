@@ -623,6 +623,10 @@ abstract class BaseOpenAiSdkInferenceService(
             ApiProvider.XAI ->
                 builder.putAdditionalHeader(ProviderInferenceConstants.XAI_CONVERSATION_ID_HEADER, conversationId)
             ApiProvider.OPENAI -> builder.promptCacheKey(conversationId)
+            ApiProvider.OPENROUTER -> {
+                builder.putAdditionalHeader("X-Session-Id", conversationId)
+                builder.putAdditionalBodyProperty("session_id", JsonValue.from(conversationId))
+            }
             else -> Unit
         }
     }
