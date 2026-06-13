@@ -68,6 +68,10 @@ class ByokModelOnPresetInferenceTest {
                     com.browntowndev.enclave.domain.usecase.chat.InMemoryMonotonicToolActivationStore(),
                 toolSearchEmbeddingCache =
                     com.browntowndev.enclave.domain.port.inference.NoopToolSearchEmbeddingCachePort,
+                compactionSummarizer =
+                    com.browntowndev.enclave.domain.port.inference.CompactionSummarizerPort.Dummy,
+                deviceMemoryProbe =
+                    com.browntowndev.enclave.domain.port.device.DeviceMemoryProbePort.Permissive,
             )
     }
 

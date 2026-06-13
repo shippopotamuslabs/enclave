@@ -349,7 +349,10 @@ abstract class BaseOpenAiSdkInferenceService(
                         timing?.markFirstOutput()
                         onTextToken(event.chunk)
                     }
-                    is InferenceEvent.Thinking -> onThinkingToken(event.chunk)
+                    is InferenceEvent.Thinking -> {
+                        timing?.markFirstOutput()
+                        onThinkingToken(event.chunk)
+                    }
                     else -> {}
                 }
             }

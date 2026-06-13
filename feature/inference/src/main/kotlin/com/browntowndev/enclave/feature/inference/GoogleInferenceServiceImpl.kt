@@ -250,7 +250,10 @@ class GoogleInferenceServiceImpl(
                                 timing?.markFirstOutput()
                                 onTextToken(event.chunk)
                             }
-                            is InferenceEvent.Thinking -> onThinkingToken(event.chunk)
+                            is InferenceEvent.Thinking -> {
+                                timing?.markFirstOutput()
+                                onThinkingToken(event.chunk)
+                            }
                             else -> {}
                         }
                     },
@@ -283,12 +286,18 @@ class GoogleInferenceServiceImpl(
                     ?.let { text -> (text.length / 4).coerceAtLeast(1) }
             val telemetry =
                 if (telemetrySupport != null && timing != null && captureContext != null) {
-                    telemetrySupport.localTurnTelemetry(
+                    telemetrySupport.openAiTurnTelemetry(
                         context = captureContext,
                         providerLabel = "Google",
+                        modelId = modelId,
                         modelLabel = modelId,
                         timing = timing,
-                        outputTokens = outputTokenEstimate,
+                        inputTokens = response.promptTokens,
+                        outputTokens = response.completionTokens,
+                        reasoningTokens = response.thoughtsTokens,
+                        cacheReadInputTokens = response.cachedContentTokens,
+                        costUsd = null,
+                        savedPricing = options.apiModelPricing,
                     )
                 } else {
                     null
@@ -317,7 +326,7 @@ class GoogleInferenceServiceImpl(
                     provider = "Google",
                     modelId = modelId,
                     success = true,
-                    tokenCount = outputTokenEstimate,
+                    tokenCount = response.completionTokens ?: outputTokenEstimate,
                     baseUrl = baseUrl,
                 )
             }

@@ -21,6 +21,10 @@ data class GoogleSdkResult(
     val functionCall: FunctionCall?,
     val assistantContent: Content?,
     val finishReason: String?,
+    val promptTokens: Int? = null,
+    val completionTokens: Int? = null,
+    val cachedContentTokens: Int? = null,
+    val thoughtsTokens: Int? = null,
 )
 
 interface GoogleGenAiSdkClient {
@@ -120,6 +124,10 @@ internal class GoogleGenAiSdkClientImpl(
         var lastFunctionCall: FunctionCall? = null
         var assistantContent: Content? = null
         var finishReason: String? = null
+        var promptTokens: Int? = null
+        var completionTokens: Int? = null
+        var cachedContentTokens: Int? = null
+        var thoughtsTokens: Int? = null
 
         try {
             runInterruptible(Dispatchers.IO) {
@@ -128,6 +136,13 @@ internal class GoogleGenAiSdkClientImpl(
                 val iterator = responseStream.iterator()
                 while (currentCoroutineContext().isActive && runInterruptible(Dispatchers.IO) { iterator.hasNext() }) {
                     val response = runInterruptible(Dispatchers.IO) { iterator.next() }
+
+                    response.usageMetadata().orElse(null)?.let { meta ->
+                        meta.promptTokenCount().ifPresent { promptTokens = it }
+                        meta.candidatesTokenCount().ifPresent { completionTokens = it }
+                        meta.cachedContentTokenCount().ifPresent { cachedContentTokens = it }
+                        meta.thoughtsTokenCount().ifPresent { thoughtsTokens = it }
+                    }
 
                     response.candidates().orElse(emptyList()).forEach { candidate ->
                         finishReason = candidate.finishReason().map { it.toString() }.orElse(finishReason)
@@ -183,6 +198,10 @@ internal class GoogleGenAiSdkClientImpl(
             functionCall = lastFunctionCall,
             assistantContent = assistantContent,
             finishReason = finishReason,
+            promptTokens = promptTokens,
+            completionTokens = completionTokens,
+            cachedContentTokens = cachedContentTokens,
+            thoughtsTokens = thoughtsTokens,
         )
     }
 

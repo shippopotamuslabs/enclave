@@ -56,7 +56,7 @@ class ConversationSignatureTest {
                 cachedActiveToolNames = listOf("append_blocks"),
             )
 
-        assertEquals("append_blocks,search_tools,web_search", signature.activeToolNamesKey)
+        assertEquals("append_blocks,tool_discovery_tool,web_search", signature.activeToolNamesKey)
     }
 
     @Test
