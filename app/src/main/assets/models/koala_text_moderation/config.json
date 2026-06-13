@@ -1,0 +1,57 @@
+{
+  "_attn_implementation_autoset": true,
+  "_num_labels": 9,
+  "architectures": [
+    "DebertaForSequenceClassification"
+  ],
+  "attention_probs_dropout_prob": 0.1,
+  "hidden_act": "gelu",
+  "hidden_dropout_prob": 0.1,
+  "hidden_size": 768,
+  "id2label": {
+    "0": "H",
+    "1": "H2",
+    "2": "HR",
+    "3": "OK",
+    "4": "S",
+    "5": "S3",
+    "6": "SH",
+    "7": "V",
+    "8": "V2"
+  },
+  "initializer_range": 0.02,
+  "intermediate_size": 3072,
+  "label2id": {
+    "H": 0,
+    "H2": 1,
+    "HR": 2,
+    "OK": 3,
+    "S": 4,
+    "S3": 5,
+    "SH": 6,
+    "V": 7,
+    "V2": 8
+  },
+  "layer_norm_eps": 1e-07,
+  "legacy": true,
+  "max_length": 384,
+  "max_position_embeddings": 512,
+  "max_relative_positions": -1,
+  "model_type": "deberta",
+  "num_attention_heads": 12,
+  "num_hidden_layers": 12,
+  "pad_token_id": 0,
+  "padding": "max_length",
+  "pooler_dropout": 0,
+  "pooler_hidden_act": "gelu",
+  "pooler_hidden_size": 768,
+  "pos_att_type": [
+    "c2p",
+    "p2c"
+  ],
+  "position_biased_input": false,
+  "relative_attention": true,
+  "transformers_version": "4.57.6",
+  "type_vocab_size": 0,
+  "vocab_size": 50265
+}

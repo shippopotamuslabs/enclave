@@ -314,6 +314,18 @@
       "utilityType": "title_generator_tokenizer",
       "isMultimodal": false,
       "configurations": []
+    },
+    {
+      "displayName": "Image Safety Classifier",
+      "huggingFaceModelName": null,
+      "huggingFacePath": "image_safety_classifier",
+      "fileName": "model_quantized.onnx",
+      "sha256": "6de8c7322b88223f734dabe0dfed6761b476a7d31c0b7443c35ec0c887ab2464",
+      "sizeInBytes": 87018507,
+      "source": "R2",
+      "utilityType": "image_safety_classifier",
+      "isMultimodal": false,
+      "configurations": []
     }
   ],
   "modelPacks": [

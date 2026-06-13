@@ -1,0 +1,27 @@
+{
+  "blocked_labels": [
+    "nsfw"
+  ],
+  "channel_mean": [
+    0.5,
+    0.5,
+    0.5
+  ],
+  "channel_std": [
+    0.5,
+    0.5,
+    0.5
+  ],
+  "input_name": "pixel_values",
+  "input_size": 224,
+  "labels": [
+    "normal",
+    "nsfw"
+  ],
+  "model_path": "model_quantized.onnx",
+  "output_name": "logits",
+  "resize_mode": "stretch",
+  "thresholds": {
+    "nsfw": 0.5
+  }
+}
