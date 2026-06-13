@@ -27,7 +27,6 @@ import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.enclave.domain.usecase.inference.ShouldModeratePromptUseCase
 import com.browntowndev.enclave.domain.usecase.inference.SubmitModerationReportUseCase
 import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
-import com.browntowndev.enclave.domain.util.throttleLatest
 import com.browntowndev.enclave.feature.chat.BuildConfig
 import com.browntowndev.enclave.feature.chat.delegates.ArtifactExportCoordinator
 import com.browntowndev.enclave.feature.chat.delegates.ChatInputCoordinator
@@ -57,6 +56,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.flatMapLatest
@@ -528,7 +528,7 @@ class ChatViewModel
                             )
                         activeChatTurnSnapshotPort
                             .observe(key)
-                            .throttleLatest(16L)
+                            .conflate()
                             .distinctUntilChanged()
                             .collect { snapshot ->
                                 if (BuildConfig.DEBUG) {
