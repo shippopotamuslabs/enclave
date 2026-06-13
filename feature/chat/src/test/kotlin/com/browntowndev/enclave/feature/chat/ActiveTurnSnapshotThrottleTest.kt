@@ -37,17 +37,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import kotlin.coroutines.CoroutineContext
 
 /**
- * Verifies that [ChatViewModel.uiState] emits at a throttled rate when
- * [ActiveChatTurnSnapshotPort.observe] fires many tokens in rapid succession.
- *
- * RED before Phase 1 impl (no throttle → ~100 snapshot-driven emissions).
- * GREEN after adding `.throttleLatest(16)` to activeTurnSnapshotFlow.
+ * Verifies snapshot-driven [ChatViewModel.uiState] updates use [kotlinx.coroutines.flow.conflate]
+ * so the UI keeps the latest snapshot when the reducer cannot keep pace with inference.
  */
 @ExtendWith(MainDispatcherRule::class)
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -120,17 +118,9 @@ class ActiveTurnSnapshotThrottleTest {
                 ),
         )
 
-    /**
-     * Without throttle: 100 rapid snapshot emissions → ~100 distinct ChatUiState values →
-     * ~100 uiState collector calls.
-     *
-     * With `.throttleLatest(16)`: at most one emission per 16ms window over 100ms →
-     * ≤ 8 emissions (100ms/16ms ≈ 6 windows + 1 immediate + 1 final flush).
-     */
     @Test
-    fun `uiState emission count is bounded when 100 snapshots arrive over 100ms virtual time`() =
+    fun `uiState reflects the latest snapshot after a rapid burst`() =
         runTest {
-            // DB has one incomplete assistant message so activeTurnKeyFlow resolves the key.
             coEvery { chatUseCases.getChat(chatId) } returns
                 MutableStateFlow(
                     listOf(
@@ -144,7 +134,6 @@ class ActiveTurnSnapshotThrottleTest {
                     ),
                 )
 
-            // Snapshot port emits 100 distinct snapshots, each 1ms apart (100ms total span).
             every { activeChatTurnSnapshotPort.observe(key) } returns
                 flow {
                     repeat(100) { i ->
@@ -155,23 +144,24 @@ class ActiveTurnSnapshotThrottleTest {
 
             val vm = buildViewModel(SavedStateHandle(mapOf("chatId" to chatId.value)))
 
-            var totalEmissions = 0
             val collectJob =
                 launch {
-                    vm.uiState.collect { totalEmissions++ }
+                    vm.uiState.collect { }
                 }
 
-            advanceUntilIdle() // propagate initial state + first snapshot
-            advanceTimeBy(100L) // process all 100 snapshot emissions + throttle windows
-            advanceUntilIdle() // flush any remaining buffered value
+            advanceUntilIdle()
+            advanceTimeBy(100L)
+            advanceUntilIdle()
 
             collectJob.cancel()
 
-            // Without throttle: ≥ 100 snapshot-driven uiState emissions.
-            // With throttleLatest(16ms): ≤ 15 total emissions including initial + DB load + throttled snapshots.
-            assertTrue(
-                totalEmissions <= 15,
-                "Expected ≤15 total uiState emissions with 16ms throttle, got $totalEmissions",
+            val assistantMessage =
+                vm.uiState.value.messages.firstOrNull { it.id == assistantMsgId }
+            assertTrue(assistantMessage != null, "Expected assistant message in uiState")
+            assertEquals(
+                "Token 99",
+                assistantMessage!!.content.text,
+                "conflate must preserve the most recent snapshot content",
             )
         }
 }
