@@ -89,15 +89,7 @@ class AgentEngineActionDriver {
 private fun FfiAgentMessage.toDomainMessage() =
     com.browntowndev.enclave.domain.model.inference.AgentLoopMessage(
         id = id,
-        role =
-            when (role) {
-                FfiAgentRole.USER -> com.browntowndev.enclave.domain.model.chat.Role.USER
-                FfiAgentRole.SYSTEM -> com.browntowndev.enclave.domain.model.chat.Role.SYSTEM
-                FfiAgentRole.ASSISTANT,
-                FfiAgentRole.TOOL,
-                FfiAgentRole.COMPACT_SUMMARY,
-                -> com.browntowndev.enclave.domain.model.chat.Role.ASSISTANT
-            },
+        role = role.toDomainRole(),
         content = content,
         metadataJson = metadataJson,
     )

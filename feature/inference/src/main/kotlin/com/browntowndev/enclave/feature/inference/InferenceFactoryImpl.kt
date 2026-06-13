@@ -9,7 +9,9 @@ import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
 import com.browntowndev.enclave.domain.model.error.InferenceIOException
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ModelType
+import com.browntowndev.enclave.domain.port.device.DeviceMemoryProbePort
 import com.browntowndev.enclave.domain.port.inference.AgentLoopPort
+import com.browntowndev.enclave.domain.port.inference.CompactionSummarizerPort
 import com.browntowndev.enclave.domain.port.inference.CommittedInferencePromptPort
 import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.enclave.domain.port.inference.MonotonicToolActivationPort
@@ -88,6 +90,8 @@ class InferenceFactoryImpl
         private val embeddingEnginePort: EmbeddingEnginePort,
         private val monotonicToolActivation: MonotonicToolActivationPort,
         private val toolSearchEmbeddingCache: ToolSearchEmbeddingCachePort,
+        private val compactionSummarizer: CompactionSummarizerPort,
+        private val deviceMemoryProbe: DeviceMemoryProbePort,
     ) : InferenceFactoryPort {
         companion object {
             private const val TAG = "InferenceFactory"
@@ -485,6 +489,8 @@ class InferenceFactoryImpl
                     embeddingEnginePort = embeddingEnginePort,
                     monotonicToolActivation = monotonicToolActivation,
                     toolSearchEmbeddingCache = toolSearchEmbeddingCache,
+                    compactionSummarizer = compactionSummarizer,
+                    deviceMemoryProbe = deviceMemoryProbe,
                 )
             } else {
                 service

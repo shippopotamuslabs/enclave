@@ -13,7 +13,9 @@ import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.error.InferenceIOException
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ModelType
+import com.browntowndev.enclave.domain.port.device.DeviceMemoryProbePort
 import com.browntowndev.enclave.domain.port.inference.AgentLoopPort
+import com.browntowndev.enclave.domain.port.inference.CompactionSummarizerPort
 import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.enclave.domain.port.inference.NoopToolSearchEmbeddingCachePort
 import com.browntowndev.enclave.domain.usecase.chat.InMemoryMonotonicToolActivationStore
@@ -111,6 +113,8 @@ class InferenceFactoryImplTest {
                 embeddingEnginePort = embeddingEnginePort,
                 monotonicToolActivation = InMemoryMonotonicToolActivationStore(),
                 toolSearchEmbeddingCache = NoopToolSearchEmbeddingCachePort,
+                compactionSummarizer = CompactionSummarizerPort.Dummy,
+                deviceMemoryProbe = DeviceMemoryProbePort.Permissive,
             )
     }
 
