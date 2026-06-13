@@ -16,7 +16,7 @@ internal object ModelTurnFailureClassifier {
         val message = buildMessage(error)
         val httpStatus = extractHttpStatus(message)
         val errorClass =
-            if (isPermanent(error, message, httpStatus)) {
+            if (hasIllegalStateCause(error) || isPermanent(error, message, httpStatus)) {
                 FfiModelApiErrorClass.PERMANENT
             } else {
                 FfiModelApiErrorClass.TRANSIENT
@@ -74,6 +74,9 @@ internal object ModelTurnFailureClassifier {
                 .find(message)
         return match?.groupValues?.getOrNull(1)?.toULongOrNull()
     }
+
+    private fun hasIllegalStateCause(error: Throwable): Boolean =
+        generateSequence(error) { it.cause }.any { it is IllegalStateException }
 
     private fun isPermanent(
         error: Throwable,

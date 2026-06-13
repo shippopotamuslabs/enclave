@@ -3,6 +3,7 @@ package com.browntowndev.enclave.feature.chat.delegates
 import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
+import com.browntowndev.enclave.domain.model.chat.AccumulatedMessages
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.Content
 import com.browntowndev.enclave.domain.model.chat.FileAttachment
@@ -28,12 +29,15 @@ import com.browntowndev.enclave.feature.chat.ChatModeUi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -67,6 +71,9 @@ class InferenceOrchestrator
 
         private val _optimisticUserMessage = MutableStateFlow<Message?>(null)
         val optimisticUserMessage: StateFlow<Message?> = _optimisticUserMessage.asStateFlow()
+
+        private val _promptTooLargeFailures = Channel<PromptTooLargeFailure>(Channel.BUFFERED)
+        val promptTooLargeFailures: Flow<PromptTooLargeFailure> = _promptTooLargeFailures.receiveAsFlow()
 
         fun clearOptimisticUser() {
             _optimisticUserMessage.value = null
@@ -181,6 +188,7 @@ class InferenceOrchestrator
                                         "Failed to generate response. Please try again.",
                                     ),
                                 ) {
+                                    var compactionFailureReported = false
                                     chatUseCases
                                         .generateChatResponse(
                                             prompt = input,
@@ -198,8 +206,12 @@ class InferenceOrchestrator
                                                     "Failed to generate response. Please try again."
                                                 }
                                             errorHandler.handleError(TAG, "Inference failed", cause, userMessage)
-                                        }.collect {
-                                            // Snapshot publication is owned by the generation pipeline
+                                        }.collect { accumulatedMessages ->
+                                            if (!compactionFailureReported && accumulatedMessages.hasCompactionFailure()) {
+                                                compactionFailureReported = true
+                                                _promptTooLargeFailures.send(PromptTooLargeFailure(prompt = input))
+                                            }
+                                            // Snapshot publication is owned by the generation pipeline.
                                         }
                                 }
                         }
@@ -330,4 +342,19 @@ class InferenceOrchestrator
         private companion object {
             private const val TAG = "InferenceOrchestrator"
         }
+    }
+
+data class PromptTooLargeFailure(
+    val prompt: String,
+)
+
+private fun AccumulatedMessages.hasCompactionFailure(): Boolean =
+    messages.values.any { snapshot ->
+        snapshot.isComplete &&
+            (
+                snapshot.content.contains("Compaction failed", ignoreCase = true) ||
+                    snapshot.content.contains("Agent loop failed:", ignoreCase = true) &&
+                    snapshot.content.contains("tier=", ignoreCase = true) &&
+                    snapshot.content.contains(", reason=", ignoreCase = true)
+            )
     }

@@ -63,6 +63,12 @@ fun ChatRoute(
     }
 
     LaunchedEffect(Unit) {
+        viewModel.chatErrorMessages.collect { messageRes ->
+            onShowSnackbar(context.getString(messageRes), null, null)
+        }
+    }
+
+    LaunchedEffect(Unit) {
         viewModel.moderationMessages.collect { messageRes ->
             val message = context.getString(messageRes)
             val isPromptRejected = messageRes == R.string.chat_moderation_prompt_rejected
