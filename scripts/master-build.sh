@@ -10,12 +10,16 @@
 #   --skip-diffusion-deps  Skip cloning MNN/tokenizers diffusion third-party sources
 #   --skip-qnn             Skip Qualcomm QNN jniLibs sync (local SDXL QNN won't work)
 #   --skip-kleidiai        Skip KleidiAI dual-variant llama jniLibs preparation
+#   --skip-image-safety    Skip ONNX image-safety classifier export + bundled model_config refresh
 #   --help                 Show this help text
 #
 # Prerequisites:
 #   - Android SDK + NDK (see local.properties sdk.dir)
 #   - Rust toolchain (cargo)
 #   - JDK 17
+#   - Python 3 (for Falconsai image-safety ONNX export unless --skip-image-safety)
+#   - After export: upload build/image_safety_classifier_dist/model_quantized.onnx to R2
+#     (weights are not bundled in the APK; see root model_config.json image_safety_classifier entry)
 #   - Release signing: .keystore/enclave_keystore.jks and RELEASE_* keys in local.properties
 #   - Optional: qnn.sdk.dir or QNN_SDK_ROOT for local-image-gen QNN runtime libs
 #
@@ -29,6 +33,7 @@ SKIP_RUST=0
 SKIP_DIFFUSION_DEPS=0
 SKIP_QNN=0
 SKIP_KLEIDIAI=0
+SKIP_IMAGE_SAFETY=0
 
 usage() {
   sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
@@ -40,6 +45,7 @@ while [[ $# -gt 0 ]]; do
     --skip-diffusion-deps) SKIP_DIFFUSION_DEPS=1 ;;
     --skip-qnn) SKIP_QNN=1 ;;
     --skip-kleidiai) SKIP_KLEIDIAI=1 ;;
+    --skip-image-safety) SKIP_IMAGE_SAFETY=1 ;;
     -h|--help)
       usage
       exit 0
@@ -116,6 +122,54 @@ build_rust_bindings() {
 setup_diffusion_deps() {
   log "Ensuring local-image-gen diffusion native third-party sources"
   "$SCRIPT_DIR/setup-enclave-diffusion-deps.sh"
+}
+
+export_image_safety_classifier() {
+  log "Exporting ONNX image-safety classifier (Falconsai/nsfw_image_detection -> R2 dist)"
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "WARN: python3 not found on PATH; skipping image-safety classifier export." >&2
+    echo "      APK will ship preprocessing config only; moderation needs the R2 download." >&2
+    return 0
+  fi
+
+  local venv_dir="$PROJECT_ROOT/build/image_safety_venv"
+  local deps_stamp="$venv_dir/.deps_installed"
+  local dist_dir="$PROJECT_ROOT/build/image_safety_classifier_dist"
+  local dist_model="$dist_dir/model_quantized.onnx"
+  local asset_config="$PROJECT_ROOT/app/src/main/assets/models/image_safety_classifier/model_config.json"
+
+  if [[ ! -d "$venv_dir" ]]; then
+    python3 -m venv "$venv_dir"
+  fi
+  # shellcheck disable=SC1091
+  source "$venv_dir/bin/activate"
+  if [[ ! -f "$deps_stamp" ]]; then
+    pip install -q --upgrade pip
+    # CPU wheels only: the full CUDA torch stack is ~2 GB and often breaks CI/disk budgets.
+    pip install -q torch torchvision --index-url https://download.pytorch.org/whl/cpu
+    pip install -q "onnx>=1.16" "transformers>=4.46" "onnxruntime>=1.20" "pillow"
+    touch "$deps_stamp"
+  fi
+
+  local export_args=()
+  if [[ -f "$PROJECT_ROOT/build/image_safety_probe/test_image.png" ]]; then
+    export_args+=(--probe-image "$PROJECT_ROOT/build/image_safety_probe/test_image.png")
+  else
+    echo "NOTE: build/image_safety_probe/test_image.png not found; exporting without ONNX fidelity probe." >&2
+  fi
+  python3 "$SCRIPT_DIR/export_image_safety_classifier_onnx.py" "${export_args[@]}"
+
+  [[ -f "$asset_config" ]] || die "Missing bundled asset config at $asset_config"
+  [[ -f "$dist_model" ]] || die "Missing R2 dist artifact at $dist_model"
+  [[ ! -f "$PROJECT_ROOT/app/src/main/assets/models/image_safety_classifier/model_quantized.onnx" ]] \
+    || die "APK must not bundle image-safety ONNX weights (remove app/src/main/assets/models/image_safety_classifier/*.onnx)"
+
+  echo "Image-safety export complete:"
+  echo "  bundled config: $asset_config"
+  echo "  R2 upload file: $dist_model ($(du -h "$dist_model" | awk '{print $1}'))"
+  echo "  Next: upload dist/model_quantized.onnx to R2 image_safety_classifier/ and sync root model_config.json sha256 if it changed."
+
+  deactivate
 }
 
 sync_qnn_libs() {
@@ -199,6 +253,12 @@ main() {
     setup_diffusion_deps
   else
     log "Skipping diffusion third-party setup (--skip-diffusion-deps)"
+  fi
+
+  if [[ "$SKIP_IMAGE_SAFETY" -eq 0 ]]; then
+    export_image_safety_classifier
+  else
+    log "Skipping image-safety classifier export (--skip-image-safety)"
   fi
 
   if [[ "$SKIP_QNN" -eq 0 ]]; then

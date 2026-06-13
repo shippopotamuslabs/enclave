@@ -1,17 +1,21 @@
 package com.browntowndev.enclave.feature.inference.di
 
+import com.browntowndev.enclave.domain.port.inference.ImageModerationPort
 import com.browntowndev.enclave.domain.port.media.GpuCapabilityPort
+import com.browntowndev.enclave.domain.port.media.ImageGenerationPort
 import com.browntowndev.enclave.domain.port.media.LocalImageGenerationCancelPort
 import com.browntowndev.enclave.domain.port.media.LocalImageGenerationCapabilityPort
-import com.browntowndev.enclave.domain.port.media.ImageGenerationPort
 import com.browntowndev.enclave.domain.port.media.MusicGenerationPort
 import com.browntowndev.enclave.domain.port.media.VideoGenerationPort
+import com.browntowndev.enclave.feature.inference.media.DelegateImageGenerationPort
 import com.browntowndev.enclave.feature.inference.media.GpuCapabilityPortImpl
-import com.browntowndev.enclave.feature.inference.media.local.LocalImageGenerationCancelPortImpl
-import com.browntowndev.enclave.feature.inference.media.LocalImageGenerationCapabilityPortImpl
 import com.browntowndev.enclave.feature.inference.media.ImageGenerationPortImpl
+import com.browntowndev.enclave.feature.inference.media.ModeratingImageGenerationPort
 import com.browntowndev.enclave.feature.inference.media.MusicGenerationPortImpl
 import com.browntowndev.enclave.feature.inference.media.VideoGenerationPortImpl
+import com.browntowndev.enclave.feature.inference.media.local.LocalImageGenerationCancelPortImpl
+import com.browntowndev.enclave.feature.inference.media.LocalImageGenerationCapabilityPortImpl
+import com.browntowndev.enclave.feature.inference.moderation.OnnxImageSafetyClassifier
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -39,7 +43,16 @@ abstract class MediaInferenceModule {
 
     @Binds
     @Singleton
-    abstract fun bindImageGenerationPort(impl: ImageGenerationPortImpl): ImageGenerationPort
+    @DelegateImageGenerationPort
+    abstract fun bindDelegateImageGenerationPort(impl: ImageGenerationPortImpl): ImageGenerationPort
+
+    @Binds
+    @Singleton
+    abstract fun bindImageGenerationPort(impl: ModeratingImageGenerationPort): ImageGenerationPort
+
+    @Binds
+    @Singleton
+    abstract fun bindImageModerationPort(impl: OnnxImageSafetyClassifier): ImageModerationPort
 
     @Binds
     @Singleton

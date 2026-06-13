@@ -1,0 +1,6 @@
+{
+  "eos_token_id": 7,
+  "instruction": "Write a 3-6 word title summarizing the topic of this message. Respond with the title and nothing else.\n\nMessage: ",
+  "max_input_chars": 1500,
+  "max_output_tokens": 24
+}

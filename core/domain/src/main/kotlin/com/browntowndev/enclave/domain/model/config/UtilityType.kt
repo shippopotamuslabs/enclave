@@ -42,6 +42,9 @@ enum class UtilityType(
 
     @SerialName("juggernaut_xl_qnn_pack")
     JUGGERNAUT_XL_QNN_PACK("juggernaut_xl_qnn_pack"),
+
+    @SerialName("image_safety_classifier")
+    IMAGE_SAFETY_CLASSIFIER("image_safety_classifier"),
     ;
 
     /**
@@ -61,6 +64,7 @@ enum class UtilityType(
             SD15_QNN_PACK -> "SD 1.5 NPU weights"
             SDXL_QNN_PACK -> "SDXL NPU weights"
             JUGGERNAUT_XL_QNN_PACK -> "Juggernaut XL NPU weights"
+            IMAGE_SAFETY_CLASSIFIER -> "Image Safety Classifier"
         }
 
     companion object {

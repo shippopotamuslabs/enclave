@@ -1,0 +1,6 @@
+{
+  "eos_token_id": 7,
+  "instruction": "Summarize the conversation history below. Preserve objective, constraints, decisions, tool outcomes, touched files, open questions, and key facts. Omit bulky raw JSON.\n\n",
+  "max_input_chars": 28000,
+  "max_output_tokens": 768
+}
