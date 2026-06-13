@@ -225,8 +225,8 @@ class OnboardingViewModelTest {
     // -------- OB-08 --------
 
     @Test
-    @DisplayName("OB-08 — Step 1 LOCAL path — Continue advances immediately")
-    fun `OB-08 selecting LOCAL model choice and calling onNextStep advances to step 2`() =
+    @DisplayName("OB-08 — Step 1 LOCAL path — Continue skips optional media setup")
+    fun `OB-08 selecting LOCAL model choice and calling onNextStep advances to step 3`() =
         runTest {
             // Navigate to step 1
             viewModel.onAgeConfirmedChange(true)
@@ -238,7 +238,25 @@ class OnboardingViewModelTest {
             viewModel.onNextStep()
             advanceUntilIdle()
 
-            assertEquals(2, viewModel.uiState.value.currentStep)
+            assertEquals(3, viewModel.uiState.value.currentStep)
+        }
+
+    @Test
+    @DisplayName("OB-08b — Back from LOCAL completion returns to model choice")
+    fun `OB-08b onPreviousStep from LOCAL completion returns to step 1`() =
+        runTest {
+            viewModel.onAgeConfirmedChange(true)
+            viewModel.onTosAcceptedChange(true)
+            viewModel.onNextStep()
+            advanceUntilIdle()
+            viewModel.onModelChoiceSelected(ModelChoice.LOCAL)
+            viewModel.onNextStep()
+            advanceUntilIdle()
+
+            viewModel.onPreviousStep()
+            advanceUntilIdle()
+
+            assertEquals(1, viewModel.uiState.value.currentStep)
         }
 
     // -------- OB-09 --------
@@ -252,7 +270,10 @@ class OnboardingViewModelTest {
             viewModel.onTosAcceptedChange(true)
             viewModel.onNextStep()
             advanceUntilIdle()
-            viewModel.onModelChoiceSelected(ModelChoice.LOCAL)
+            viewModel.onModelChoiceSelected(ModelChoice.API)
+            viewModel.onProviderSelected(ApiProvider.OPENROUTER)
+            viewModel.onApiKeyChanged("sk-valid-key")
+            viewModel.onModelSelected("openrouter/gpt-4o")
             viewModel.onNextStep()
             advanceUntilIdle()
 
@@ -322,8 +343,6 @@ class OnboardingViewModelTest {
             advanceUntilIdle()
             viewModel.onModelChoiceSelected(ModelChoice.LOCAL)
             viewModel.onNextStep()
-            advanceUntilIdle()
-            viewModel.onSkipMedia()
             advanceUntilIdle()
 
             assertEquals(3, viewModel.uiState.value.currentStep)
@@ -455,8 +474,6 @@ class OnboardingViewModelTest {
             advanceUntilIdle()
             viewModel.onModelChoiceSelected(ModelChoice.LOCAL)
             viewModel.onNextStep()
-            advanceUntilIdle()
-            viewModel.onSkipMedia()
             advanceUntilIdle()
 
             viewModel.events.test {

@@ -103,7 +103,7 @@ class OnboardingViewModel
                 }
                 1 -> {
                     when (state.selectedModelChoice) {
-                        ModelChoice.LOCAL -> _uiState.update { it.copy(currentStep = 2) }
+                        ModelChoice.LOCAL -> _uiState.update { it.copy(currentStep = 3) }
                         ModelChoice.API -> {
                             if (state.selectedProvider == null || state.apiKey.isBlank() || state.selectedModelId.isBlank()) return
                             _uiState.update { it.copy(currentStep = 2) }
@@ -120,9 +120,16 @@ class OnboardingViewModel
         }
 
         fun onPreviousStep() {
-            val step = _uiState.value.currentStep
+            val state = _uiState.value
+            val step = state.currentStep
             if (step > 0) {
-                _uiState.update { it.copy(currentStep = step - 1) }
+                val previousStep =
+                    if (step == 3 && state.selectedModelChoice == ModelChoice.LOCAL) {
+                        1
+                    } else {
+                        step - 1
+                    }
+                _uiState.update { it.copy(currentStep = previousStep) }
             }
         }
 
