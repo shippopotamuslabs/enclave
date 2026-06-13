@@ -36,6 +36,24 @@ class TelemetrySummaryBuilderTest {
     }
 
     @Test
+    fun `cache hit rate adds cache read and cache creation to Anthropic input denominator`() {
+        val row =
+            TelemetryTestFixtures.telAnthropic1.copy(
+                messageId = MessageId("m-anthropic-cache-creation"),
+                inputTokens = 7_787,
+                cacheReadInputTokens = 16_000,
+                cacheCreationInputTokens = 3_000,
+            )
+        val summary =
+            TelemetrySummaryBuilder.buildMessageSummary(
+                messageId = MessageId("m-anthropic-cache-creation"),
+                rows = listOf(row),
+            )
+
+        assertEquals(59.7, summary.cacheHitRatePercent)
+    }
+
+    @Test
     fun `mixed provider chat rollup keeps OpenAI fixture expectation`() {
         val summary =
             TelemetrySummaryBuilder.buildChatSummary(
@@ -43,6 +61,6 @@ class TelemetrySummaryBuilderTest {
                 rows = TelemetryTestFixtures.chat1Rows,
             )
 
-        assertEquals(22.2, summary.cacheHitRatePercent)
+        assertEquals(19.0, summary.cacheHitRatePercent)
     }
 }

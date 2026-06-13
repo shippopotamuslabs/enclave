@@ -56,7 +56,7 @@ object TelemetrySummaryBuilder {
             totalOutputTokens = sumOrNull(rows) { it.outputTokens },
             totalReasoningTokens = sumOrNull(rows) { it.reasoningTokens },
             totalCacheReadInputTokens = sumOrNull(rows) { it.cacheReadInputTokens },
-            totalCacheWriteInputTokens = sumOrNull(rows) { it.cacheWriteInputTokens },
+            totalCacheWriteInputTokens = sumOrNull(rows) { it.cacheWriteInputTokens ?: it.cacheCreationInputTokens },
             cacheHitRatePercent = cacheHitRate(rows),
             requestRows = rows,
         )
@@ -270,7 +270,7 @@ object TelemetrySummaryBuilder {
         val input = row.inputTokens ?: return null
         val cacheRead = row.cacheReadInputTokens ?: 0
         return when (row.providerKey) {
-            TelemetryProviderKey.ANTHROPIC -> input + cacheRead
+            TelemetryProviderKey.ANTHROPIC -> input + cacheRead + (row.cacheCreationInputTokens ?: 0)
             else -> input
         }
     }

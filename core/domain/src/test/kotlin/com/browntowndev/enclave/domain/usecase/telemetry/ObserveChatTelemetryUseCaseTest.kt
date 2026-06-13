@@ -28,7 +28,7 @@ class ObserveChatTelemetryUseCaseTest {
                 assertEquals(45.0, summary.averageOutputTokensPerSecond)
                 assertEquals(360, summary.totalOutputTokens)
                 assertEquals(130, summary.totalReasoningTokens)
-                assertEquals(22.2, summary.cacheHitRatePercent)
+                assertEquals(19.0, summary.cacheHitRatePercent)
                 cancelAndIgnoreRemainingEvents()
             }
         }

@@ -1,6 +1,10 @@
 package com.browntowndev.enclave.feature.inference.telemetry
 
 import com.browntowndev.enclave.domain.model.chat.ChatMessage
+import com.browntowndev.enclave.domain.model.chat.Role
+import com.browntowndev.enclave.domain.model.inference.GenerationOptions
+
+private const val IMAGE_TOKENS_PER_URI = 576
 
 internal fun estimateTokenCount(text: CharSequence): Int? =
     text.takeIf { it.isNotEmpty() }?.let { (it.length / 4).coerceAtLeast(1) }
@@ -14,18 +18,49 @@ internal fun estimateLiteRtPromptTokens(
     history: List<ChatMessage>,
     currentPrompt: String,
     systemPrompt: String,
+    options: GenerationOptions? = null,
 ): Int {
-    val combined =
+    val templatedString =
         buildString {
             if (systemPrompt.isNotBlank()) {
+                append("<start_of_turn>system\n")
                 append(systemPrompt)
+                append("<end_of_turn>\n")
+            }
+            if (options?.toolingEnabled == true && options.toolCatalog.isNotEmpty()) {
+                append("<start_of_turn>system\n")
+                options.toolCatalog.forEach { tool ->
+                    append(tool.name)
+                    append("\n")
+                    append(tool.description)
+                    append("\n")
+                }
+                append("<end_of_turn>\n")
+            }
+            if (!options?.volatileTurnContext.isNullOrBlank()) {
+                append("<start_of_turn>user\n")
+                append(options.volatileTurnContext)
+                append("<end_of_turn>\n")
             }
             history.forEach { message ->
+                val roleStr =
+                    when (message.role) {
+                        Role.USER -> "user"
+                        Role.ASSISTANT -> "model"
+                        Role.SYSTEM -> "system"
+                    }
+                append("<start_of_turn>$roleStr\n")
                 append(message.content)
+                append("<end_of_turn>\n")
             }
+            append("<start_of_turn>user\n")
             append(currentPrompt)
+            append("<end_of_turn>\n")
+            append("<start_of_turn>model\n")
         }
-    return estimateTokenCount(combined) ?: 0
+    val baseTokenCount = (templatedString.length / 4).coerceAtLeast(1)
+    val imageTokens = if (options != null) options.imageUris.size * IMAGE_TOKENS_PER_URI else 0
+    return baseTokenCount + imageTokens
 }
 
 /**
