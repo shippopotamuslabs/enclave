@@ -15,8 +15,18 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.Alignment
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.dp
+import com.browntowndev.enclave.core.ui.R
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -75,7 +85,6 @@ fun CustomAnimationPromptPane(
                     },
                 ),
         isExpanded = isExpanded,
-        onExpandToggle = { isExpanded = !isExpanded },
         inputContent = {
             UniversalPromptTextField(
                 value = prompt,
@@ -89,12 +98,29 @@ fun CustomAnimationPromptPane(
             )
         },
         trailingAction = {
-            StandardTrailingAction(
-                icon = Icons.AutoMirrored.Filled.Send,
-                onClick = sendPrompt,
-                enabled = canSend,
-                description = "Send animation prompt",
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                val expandCollapseIcon = painterResource(
+                    id = if (isExpanded) R.drawable.collapse_content else R.drawable.expand_content
+                )
+                StandardTrailingAction(
+                    painter = expandCollapseIcon,
+                    onClick = {
+                        isExpanded = !isExpanded
+                    },
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    description = if (isExpanded) "Collapse" else "Expand",
+                )
+                StandardTrailingAction(
+                    icon = Icons.AutoMirrored.Filled.Send,
+                    onClick = sendPrompt,
+                    enabled = canSend,
+                    description = "Send animation prompt",
+                )
+            }
         },
     )
 }

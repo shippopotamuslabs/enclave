@@ -68,7 +68,6 @@ internal fun StudioInputDock(
     ) {
         UniversalInputBar(
             isExpanded = isExpanded,
-            onExpandToggle = { isExpanded = !isExpanded },
             attachmentContent =
                 if (referenceImageUri != null) {
                     {
@@ -132,6 +131,8 @@ internal fun StudioInputDock(
                     onStop = onGenerateClick,
                     onMicClick = onMicClick,
                     onCollapse = { isExpanded = false },
+                    isExpanded = isExpanded,
+                    onExpandToggle = { isExpanded = !isExpanded },
                 )
             },
         )
