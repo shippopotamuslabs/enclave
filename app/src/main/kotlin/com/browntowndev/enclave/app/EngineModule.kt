@@ -21,7 +21,7 @@ import com.browntowndev.enclave.feature.inference.InferenceFactoryImpl
 import com.browntowndev.enclave.feature.inference.OnDeviceInferenceCancellationImpl
 import com.browntowndev.enclave.feature.inference.ProfileAnalysisInferenceAdapter
 import com.browntowndev.enclave.feature.inference.moderation.NoOpPromptModerationPort
-import com.browntowndev.enclave.feature.inference.moderation.OnnxPromptModerationClassifier
+import com.browntowndev.enclave.feature.inference.moderation.ResponseModerationClassifier
 import com.browntowndev.enclave.feature.inference.compaction.OnnxCompactionSummarizer
 import com.browntowndev.enclave.feature.inference.titlegen.OnnxChatTitleGenerator
 import dagger.Binds
@@ -74,9 +74,10 @@ abstract class EngineModule {
         fun providePromptModerationPort(
             @ApplicationContext context: Context,
             distributionConfig: DistributionConfigurationPort,
+            utilityModelFilePort: com.browntowndev.enclave.domain.port.repository.UtilityModelFilePort,
         ): PromptModerationPort =
             if (distributionConfig.isPlayStoreFlavor) {
-                OnnxPromptModerationClassifier(context)
+                ResponseModerationClassifier(context, utilityModelFilePort)
             } else {
                 NoOpPromptModerationPort
             }

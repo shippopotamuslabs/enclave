@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Copies Qualcomm QNN runtime libraries into local-image-gen-android jniLibs (primary)
-# and assets/qnnlibs (legacy fallback).
+# Copies Qualcomm QNN runtime libraries into local-image-gen-android assets/qnnlibs.
+# QNN libs are loaded at runtime via dlopen from the app-private dir that
+# QnnRuntimeBootstrap copies them to — they must NOT also live in jniLibs/
+# (that duplicates ~221 MB of .so files into lib/arm64-v8a/ in the final APK).
 # libcdsprpc.so is NOT copied — it must load from vendor via uses-native-library + System.loadLibrary.
 set -euo pipefail
 
@@ -43,7 +45,6 @@ install_so() {
   if [[ ! -f "$src" ]]; then
     return 0
   fi
-  cp -f "$src" "$JNILIBS_DIR/"
   cp -f "$src" "$ASSETS_DIR/"
 }
 
@@ -74,14 +75,35 @@ copy_hexagon() {
 }
 
 remove_bundled_cdsp_rpc() {
-  rm -f "$JNILIBS_DIR/libcdsprpc.so" "$ASSETS_DIR/libcdsprpc.so"
+  rm -f "$ASSETS_DIR/libcdsprpc.so"
+}
+
+remove_stale_jnilibs_copies() {
+  # Remove QNN .so files left in jniLibs by older versions of this script
+  # (they duplicated ~221 MB into lib/arm64-v8a/ in the APK).
+  local removed=0
+  for f in libQnnHtp.so libQnnSystem.so libQnnHtpPrepare.so \
+    libQnnHtpV68.so libQnnHtpV68Skel.so libQnnHtpV68Stub.so \
+    libQnnHtpV69.so libQnnHtpV69Skel.so libQnnHtpV69Stub.so \
+    libQnnHtpV73.so libQnnHtpV73Skel.so libQnnHtpV73Stub.so \
+    libQnnHtpV75.so libQnnHtpV75Skel.so libQnnHtpV75Stub.so \
+    libQnnHtpV79.so libQnnHtpV79Skel.so libQnnHtpV79Stub.so \
+    libQnnHtpV81.so libQnnHtpV81Skel.so libQnnHtpV81Stub.so; do
+    if [[ -f "$JNILIBS_DIR/$f" ]]; then
+      rm -f "$JNILIBS_DIR/$f"
+      removed=$((removed + 1))
+    fi
+  done
+  if [[ $removed -gt 0 ]]; then
+    echo "Removed $removed stale QNN .so file(s) from jniLibs (deduplicated)."
+  fi
 }
 
 copy_android
 copy_hexagon
 remove_bundled_cdsp_rpc
+remove_stale_jnilibs_copies
 
-chmod 0755 "$JNILIBS_DIR"/*.so 2>/dev/null || true
 chmod 0755 "$ASSETS_DIR"/*.so 2>/dev/null || true
 
-echo "Synced QNN libs from $SDK into $JNILIBS_DIR (primary) and $ASSETS_DIR (fallback)."
+echo "Synced QNN libs from $SDK into $ASSETS_DIR."
