@@ -625,15 +625,15 @@ class AnthropicInferenceServiceImpl(
                     inputTokens = usage.inputTokens().toInt()
                     outputTokens = usage.outputTokens().toInt()
                     reasoningTokens = null
-                    val rawCacheCreationStart = usage.cacheCreationInputTokens().orElse(-1L)
-                    val rawCacheReadStart = usage.cacheReadInputTokens().orElse(-1L)
+                    val cacheCreationOpt = usage.cacheCreationInputTokens()
+                    val cacheReadOpt = usage.cacheReadInputTokens()
                     loggingPort.debug(
                         TAG,
                         @Suppress("MaxLineLength")
-                        "Anthropic messageStart usage model=$modelId inputTokens=$inputTokens outputTokens=$outputTokens rawCacheCreation=$rawCacheCreationStart rawCacheRead=$rawCacheReadStart (-1=absent, 0=present-zero)",
+                        "Anthropic messageStart usage model=$modelId inputTokens=$inputTokens outputTokens=$outputTokens cacheCreation=${cacheCreationOpt.map { it.toString() }.orElse("absent")} cacheRead=${cacheReadOpt.map { it.toString() }.orElse("absent")}",
                     )
-                    cacheCreationInputTokens = rawCacheCreationStart.toInt().takeIf { it > 0 }
-                    cacheReadInputTokens = rawCacheReadStart.toInt().takeIf { it > 0 }
+                    cacheCreationInputTokens = cacheCreationOpt.map { it.toInt() }.orElse(null)
+                    cacheReadInputTokens = cacheReadOpt.map { it.toInt() }.orElse(null)
                 }
                 val contentBlockStart = event.contentBlockStart()
                 if (contentBlockStart.isPresent) {
@@ -710,25 +710,19 @@ class AnthropicInferenceServiceImpl(
                     val usage = deltaEvent.usage()
                     outputTokens = usage.outputTokens().toInt()
                     usage.inputTokens().ifPresent { inputTokens = it.toInt() }
-                    val rawCacheCreationDelta = usage.cacheCreationInputTokens().orElse(-1L)
-                    val rawCacheReadDelta = usage.cacheReadInputTokens().orElse(-1L)
+                    val cacheCreationDeltaOpt = usage.cacheCreationInputTokens()
+                    val cacheReadDeltaOpt = usage.cacheReadInputTokens()
                     loggingPort.debug(
                         TAG,
                         @Suppress("MaxLineLength")
-                        "Anthropic messageDelta usage model=$modelId rawCacheCreation=$rawCacheCreationDelta rawCacheRead=$rawCacheReadDelta priorCacheCreation=$cacheCreationInputTokens priorCacheRead=$cacheReadInputTokens (-1=absent, 0=present-zero)",
+                        "Anthropic messageDelta usage model=$modelId cacheCreation=${cacheCreationDeltaOpt.map { it.toString() }.orElse("absent")} cacheRead=${cacheReadDeltaOpt.map { it.toString() }.orElse("absent")} priorCacheCreation=$cacheCreationInputTokens priorCacheRead=$cacheReadInputTokens",
                     )
-                    cacheCreationInputTokens =
-                        usage
-                            .cacheCreationInputTokens()
-                            .orElse(cacheCreationInputTokens?.toLong() ?: 0L)
-                            .toInt()
-                            .takeIf { it > 0 }
-                    cacheReadInputTokens =
-                        usage
-                            .cacheReadInputTokens()
-                            .orElse(cacheReadInputTokens?.toLong() ?: 0L)
-                            .toInt()
-                            .takeIf { it > 0 }
+                    if (cacheCreationDeltaOpt.isPresent) {
+                        cacheCreationInputTokens = cacheCreationDeltaOpt.get().toInt()
+                    }
+                    if (cacheReadDeltaOpt.isPresent) {
+                        cacheReadInputTokens = cacheReadDeltaOpt.get().toInt()
+                    }
                     loggingPort.debug(TAG, "Anthropic stream message delta model=$modelId")
                 }
             }
