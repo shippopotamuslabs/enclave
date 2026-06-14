@@ -1,4 +1,4 @@
-**Enclave – Inference Layer Contract v2.5**
+**Enclave – Inference Layer Contract v2.6**
 
 Non-negotiable rules for the `:feature:inference` module and all model/runtime operations.
 Always enforce together with `ARCHITECTURE_RULES.md` and the defined **Always/Never** Kotlin standards.
@@ -72,9 +72,10 @@ Execute the required 6-step pipeline for complex queries:
 ## 7. Utility ONNX Models (Auxiliary Lane)
 
 The "LiteRT only" rule (§Strict Boundaries) governs the **chat LLM**. Small auxiliary
-models — prompt **moderation**, criminal-intent classification, semantic **embeddings**,
-and **chat-title generation** — run on **ONNX Runtime** (`com.microsoft.onnxruntime`) as a
-sanctioned exception. They are not chat engines and must never replace LiteRT for chat.
+models — response **moderation** (KoalaAI/Text-Moderation), image-safety classification
+(Falconsai/nsfw_image_detection), semantic **embeddings**, and **chat-title generation** —
+run on **ONNX Runtime** (`com.microsoft.onnxruntime`) as a sanctioned exception. They are
+not chat engines and must never replace LiteRT for chat.
 
 | Always | Never |
 | :--- | :--- |

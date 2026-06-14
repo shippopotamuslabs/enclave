@@ -67,6 +67,10 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
+        ndk {
+            abiFilters += listOf("arm64-v8a")
+        }
+
         buildConfigField("boolean", "ALLOW_CANCEL_DOWNLOAD", "false")
         buildConfigField(
             "String",

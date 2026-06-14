@@ -4,8 +4,11 @@ import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
 import android.content.Context
+import android.util.Log
+import com.browntowndev.enclave.domain.model.config.UtilityType
 import com.browntowndev.enclave.domain.port.inference.PromptModerationPort
 import com.browntowndev.enclave.domain.port.inference.PromptModerationScores
+import com.browntowndev.enclave.domain.port.repository.UtilityModelFilePort
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -17,11 +20,20 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.exp
 
+/**
+ * ONNX-Runtime implementation of [PromptModerationPort] running a DeBERTa text-safety classifier
+ * (KoalaAI/Text-Moderation) on the CPU. The ONNX weights are downloaded on demand from R2 via
+ * [UtilityModelFilePort]; only the small tokenizer/config files ship in APK assets. Loads lazily
+ * once (guarded by [loadMutex] and [loadedModel]) and degrades silently — any load or inference
+ * failure returns empty scores so the moderation pipeline is never broken (per
+ * `INFERENCE_RULES.md §7`).
+ */
 @Singleton
-class OnnxPromptModerationClassifier
+class ResponseModerationClassifier
     @Inject
     constructor(
         @param:ApplicationContext private val context: Context,
+        private val utilityModelFilePort: UtilityModelFilePort,
     ) : PromptModerationPort {
         private val loadMutex = Mutex()
 
@@ -30,36 +42,52 @@ class OnnxPromptModerationClassifier
 
         override suspend fun classify(prompt: String): PromptModerationScores =
             withContext(Dispatchers.IO) {
-                val model = getLoadedModel()
-                val encoded = model.tokenizer.encode(prompt)
-                val logits = model.session.runModeration(encoded, model.config.maxSequenceLength)
-                val probabilities =
-                    if (model.config.isSigmoid()) {
-                        logits.map { logit -> sigmoid(logit) }
-                    } else {
-                        softmax(logits).toList().map { it.toDouble() }
+                runCatching {
+                    val model = getLoadedModel()
+                    if (model == null) {
+                        Log.w(TAG, "Model not downloaded; prompt passes unmoderated (${prompt.length} chars)")
+                        return@withContext notBlocked()
                     }
-                PromptModerationScores(
-                    scoresByLabel =
-                        model.config.labels.zip(probabilities).associate { (label, score) ->
-                            label to score
-                        },
-                    labelAliases = model.config.labelAliases,
-                    thresholds = model.config.thresholds,
-                    combinedIllegalLabels = model.config.combinedIllegalLabels,
-                )
-            }
-
-        private suspend fun getLoadedModel(): LoadedModerationModel =
-            loadedModel ?: loadMutex.withLock {
-                loadedModel ?: loadModerationModel().also { model ->
-                    loadedModel = model
+                    val encoded = model.tokenizer.encode(prompt)
+                    val logits = model.session.runModeration(encoded, model.config.maxSequenceLength)
+                    val probabilities =
+                        if (model.config.isSigmoid()) {
+                            logits.map { logit -> sigmoid(logit) }
+                        } else {
+                            softmax(logits).toList().map { it.toDouble() }
+                        }
+                    PromptModerationScores(
+                        scoresByLabel =
+                            model.config.labels.zip(probabilities).associate { (label, score) ->
+                                label to score
+                            },
+                        labelAliases = model.config.labelAliases,
+                        thresholds = model.config.thresholds,
+                        combinedIllegalLabels = model.config.combinedIllegalLabels,
+                    )
+                }.getOrElse { e ->
+                    Log.w(TAG, "Classification failed; prompt passes unmoderated (${prompt.length} chars)", e)
+                    notBlocked()
                 }
             }
 
-        private fun loadModerationModel(): LoadedModerationModel {
+        private fun notBlocked(): PromptModerationScores = PromptModerationScores(scoresByLabel = emptyMap())
+
+        private suspend fun getLoadedModel(): LoadedModerationModel? =
+            loadedModel ?: loadMutex.withLock {
+                loadedModel ?: runCatching { loadModerationModel() }
+                    .onFailure { e -> Log.w(TAG, "Failed to load prompt-moderation model", e) }
+                    .getOrNull()
+                    ?.also { loadedModel = it }
+            }
+
+        private suspend fun loadModerationModel(): LoadedModerationModel {
             val config = ModerationAssetConfig.parse(readAssetText(CONFIG_ASSET_PATH))
-            val modelFile = copyAssetToModelDirectory(config.modelPath)
+            val modelFile =
+                resolveDownloadedModelFile()
+                    ?: throw IllegalStateException(
+                        "Prompt safety classifier is not downloaded (utilityType=${UtilityType.PROMPT_SAFETY_CLASSIFIER.apiValue})",
+                    )
             val tokenizerJson = readAssetText("$ASSET_BASE_PATH/${config.tokenizerPath}")
             val tokenizer =
                 HuggingFaceByteLevelBpeTokenizer.fromTokenizerJson(
@@ -119,30 +147,12 @@ class OnnxPromptModerationClassifier
                 .bufferedReader()
                 .use { reader -> reader.readText() }
 
-        private fun copyAssetToModelDirectory(modelPath: String): File {
-            val targetDirectory = File(context.noBackupFilesDir, ASSET_BASE_PATH)
-            targetDirectory.mkdirs()
-            val targetFile = File(targetDirectory, modelPath)
-            if (targetFile.exists()) {
-                return targetFile
-            }
-            val tempFile = File(targetDirectory, "$modelPath.tmp")
-            try {
-                context.assets.open("$ASSET_BASE_PATH/$modelPath").use { input ->
-                    tempFile.outputStream().use { output ->
-                        input.copyTo(output)
-                    }
-                }
-                if (!tempFile.renameTo(targetFile)) {
-                    throw java.io.IOException("Failed to rename temporary model file to $targetFile")
-                }
-            } catch (e: Exception) {
-                if (tempFile.exists()) {
-                    tempFile.delete()
-                }
-                throw e
-            }
-            return targetFile
+        private suspend fun resolveDownloadedModelFile(): File? {
+            val resolvedPath =
+                utilityModelFilePort.resolveUtilityModelPath(UtilityType.PROMPT_SAFETY_CLASSIFIER)
+                    ?: return null
+            val file = File(resolvedPath)
+            return file.takeIf { it.exists() && it.isFile }
         }
 
         private data class LoadedModerationModel(
@@ -152,6 +162,7 @@ class OnnxPromptModerationClassifier
         )
 
         private companion object {
+            private const val TAG = "ResponseModeration"
             private const val ASSET_BASE_PATH = "models/nsfw_text_classifier"
             private const val CONFIG_ASSET_PATH = "$ASSET_BASE_PATH/model_config.json"
         }

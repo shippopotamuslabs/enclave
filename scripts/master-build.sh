@@ -216,7 +216,19 @@ build_kleidiai_llama_jni_libs() {
   rm -rf "$llama_dir/.cxx" "$llama_dir/build"
 }
 
+verify_no_bundled_moderation_weights() {
+  log "Verifying no moderation ONNX weights are bundled in APK assets"
+  local image_safety_onnx="$PROJECT_ROOT/app/src/main/assets/models/image_safety_classifier/model_quantized.onnx"
+  local prompt_safety_onnx="$PROJECT_ROOT/app/src/playStore/assets/models/nsfw_text_classifier/model_quantized.onnx"
+  [[ ! -f "$image_safety_onnx" ]] \
+    || die "APK must not bundle image-safety ONNX weights (remove $image_safety_onnx)"
+  [[ ! -f "$prompt_safety_onnx" ]] \
+    || die "APK must not bundle prompt-safety ONNX weights (remove $prompt_safety_onnx)"
+  echo "OK: moderation ONNX weights are R2-hosted (not bundled)."
+}
+
 build_native_android_modules() {
+  verify_no_bundled_moderation_weights
   log "Building CMake native Android modules (release)"
   ./gradlew \
     :llama-android:assembleRelease \

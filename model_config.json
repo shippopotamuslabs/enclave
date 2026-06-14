@@ -326,6 +326,18 @@
       "utilityType": "image_safety_classifier",
       "isMultimodal": false,
       "configurations": []
+    },
+    {
+      "displayName": "Prompt Safety Classifier",
+      "huggingFaceModelName": "KoalaAI/Text-Moderation",
+      "huggingFacePath": "nsfw_text_classifier",
+      "fileName": "model_quantized.onnx",
+      "sha256": "ff451bd2ebf4eda6ff296a749ebadb6f500c4a0a63e7e5f2ecd4111fdffd4327",
+      "sizeInBytes": 142975672,
+      "source": "R2",
+      "utilityType": "prompt_safety_classifier",
+      "isMultimodal": false,
+      "configurations": []
     }
   ],
   "modelPacks": [
