@@ -18,6 +18,21 @@ internal object StudioGenerationErrorMessages {
         return raw.truncateForSnackbar()
     }
 
+    /**
+     * Returns true when the raw generation error string originates from a provider-side
+     * content-policy / sensitive-content block rather than a generic network or API failure.
+     * Used to route moderation failures to a dedicated snackbar with a "GOT IT WRONG?" action.
+     */
+    fun isModerationError(raw: String?): Boolean {
+        if (raw.isNullOrBlank()) return false
+        extractProviderMessage(raw)?.let { return isModerationProviderMessage(it) }
+        return isModerationProviderMessage(raw)
+    }
+
+    private fun isModerationProviderMessage(apiMessage: String): Boolean =
+        apiMessage.contains("sensitive content", ignoreCase = true) ||
+            apiMessage.contains("content_policy", ignoreCase = true)
+
     private fun extractProviderMessage(raw: String): String? {
         nestedParentheticalMessages(raw).forEach { candidate ->
             extractFromSegment(candidate)?.let { return it }

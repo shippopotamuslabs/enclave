@@ -152,6 +152,7 @@ class MultimodalViewModelAnimateTest {
                 mediaProviderRepository = mediaProviderRepository,
                 moderatePromptUseCase = allowPromptModerationUseCase(),
                 shouldModeratePromptUseCase = allowShouldModeratePromptUseCase(),
+                submitModerationReportUseCase = mockk(relaxed = true),
                 resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase(),
                 getImageGenerationCapabilitiesUseCase = mockk(relaxed = true),
                 generationCoordinator = generationCoordinator,
