@@ -128,12 +128,11 @@ class ChatViewModelGenerationStateTransitionTest {
         }
         coEvery { modelDisplayNamesUseCase.invoke(any()) } returns "LiteRT Model"
         coEvery { activeModelProvider.getActiveConfiguration(any()) } returns null
-        mockAllowedSafetyGate(
+        mockSubmitPrompt(
             chatUseCases = chatUseCases,
             userMessageId = userMessageId,
             chatId = chatId,
             userMessageCreatedAtMillis = 2L,
-            wasNewChat = false,
         )
         coEvery {
             chatUseCases.generateChatResponse(

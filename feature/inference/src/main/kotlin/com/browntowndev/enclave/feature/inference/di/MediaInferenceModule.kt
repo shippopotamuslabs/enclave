@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.feature.inference.di
 
+import com.browntowndev.enclave.domain.port.config.DistributionConfigurationPort
 import com.browntowndev.enclave.domain.port.inference.ImageModerationPort
 import com.browntowndev.enclave.domain.port.media.GpuCapabilityPort
 import com.browntowndev.enclave.domain.port.media.ImageGenerationPort
@@ -18,6 +19,7 @@ import com.browntowndev.enclave.feature.inference.media.LocalImageGenerationCapa
 import com.browntowndev.enclave.feature.inference.moderation.OnnxImageSafetyClassifier
 import dagger.Binds
 import dagger.Module
+import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
@@ -48,10 +50,6 @@ abstract class MediaInferenceModule {
 
     @Binds
     @Singleton
-    abstract fun bindImageGenerationPort(impl: ModeratingImageGenerationPort): ImageGenerationPort
-
-    @Binds
-    @Singleton
     abstract fun bindImageModerationPort(impl: OnnxImageSafetyClassifier): ImageModerationPort
 
     @Binds
@@ -61,4 +59,15 @@ abstract class MediaInferenceModule {
     @Binds
     @Singleton
     abstract fun bindMusicGenerationPort(impl: MusicGenerationPortImpl): MusicGenerationPort
+
+    companion object {
+        @Provides
+        @Singleton
+        fun provideImageGenerationPort(
+            @DelegateImageGenerationPort delegate: ImageGenerationPort,
+            moderatingPort: ModeratingImageGenerationPort,
+            distributionConfig: DistributionConfigurationPort,
+        ): ImageGenerationPort =
+            if (distributionConfig.isPlayStoreFlavor) moderatingPort else delegate
+    }
 }

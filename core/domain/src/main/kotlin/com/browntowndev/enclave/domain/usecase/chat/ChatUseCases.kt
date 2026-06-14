@@ -13,9 +13,9 @@ interface ChatUseCases {
     val createAssistantPlaceholderUseCase: CreateAssistantPlaceholderUseCase
 
     /**
-     * Persists user + assistant placeholder, then runs ONNX moderation with rollback on block.
+     * Persists user + assistant placeholder, launches title generation for new chats, and triggers cloud sync.
      */
-    val processPromptWithSafetyGateUseCase: ProcessPromptWithSafetyGateUseCase
+    val submitPromptUseCase: SubmitPromptUseCase
 
     /**
      * Merges database messages with an optimistic user row for UI projection.
@@ -53,10 +53,10 @@ interface ChatUseCases {
     val processFileAttachmentUseCase: ProcessFileAttachmentUseCase
 
     /**
-     * Persists user + assistant placeholder, then moderates; rolls back on block.
+     * Persists user + assistant placeholder, then triggers cloud sync.
      */
-    suspend fun processPromptWithSafetyGate(request: PromptSafetyGateRequest): PromptSafetyGateResult =
-        processPromptWithSafetyGateUseCase(request)
+    suspend fun submitPrompt(request: SubmitPromptRequest): UserPromptResult =
+        submitPromptUseCase(request)
 
     /**
      * Persists an empty assistant placeholder row after the user message.

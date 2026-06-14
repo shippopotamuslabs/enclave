@@ -6,7 +6,7 @@ class ChatUseCasesImpl
     @Inject
     constructor(
         override val createAssistantPlaceholderUseCase: CreateAssistantPlaceholderUseCase,
-        override val processPromptWithSafetyGateUseCase: ProcessPromptWithSafetyGateUseCase,
+        override val submitPromptUseCase: SubmitPromptUseCase,
         override val mergeDbMessagesWithOptimisticUseCase: MergeDbMessagesWithOptimisticUseCase,
         override val generateChatResponseUseCase: GenerateChatResponseUseCase,
         override val generateChatTitleUseCase: GenerateChatTitleUseCase,

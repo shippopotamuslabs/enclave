@@ -118,7 +118,6 @@ class ChatViewModel
         val moderationMessages: Flow<Int> = _moderationMessages.receiveAsFlow()
         private val _chatErrorMessages = Channel<Int>(Channel.BUFFERED)
         val chatErrorMessages: Flow<Int> = _chatErrorMessages.receiveAsFlow()
-        private var lastBlockedPrompt: String? = null
 
         private val modelDisplayNamesFlow =
             flow {
@@ -593,10 +592,8 @@ class ChatViewModel
         fun onEditMessage(message: String) = chatInputCoordinator.onInputChange(message)
 
         fun reportBlockedPrompt(prompt: String) {
-            val reportedPrompt = lastBlockedPrompt ?: prompt
-            lastBlockedPrompt = null
             viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to submit report")) {
-                submitModerationReportUseCase(reportedPrompt, "blocked")
+                submitModerationReportUseCase(prompt, "blocked")
                 _moderationMessages.send(R.string.chat_moderation_feedback_submitted)
             }
         }
@@ -724,7 +721,7 @@ class ChatViewModel
                     "Could not send message. Please try again.",
                 ),
             ) {
-                val shouldModerate =
+                val shouldModerateResponse =
                     when (chatInputCoordinator.selectedMode.value) {
                         ChatModeUi.FAST -> shouldModeratePromptUseCase(ModelType.FAST)
                         ChatModeUi.THINKING -> shouldModeratePromptUseCase(ModelType.THINKING)
@@ -757,12 +754,10 @@ class ChatViewModel
                     selectedImageUris = selectedImageUris,
                     fileAttachments = fileAttachments,
                     initialChatId = initialChatId,
-                    shouldModerate = shouldModerate,
+                    shouldModerateResponse = shouldModerateResponse,
                     onInputCleared = { chatInputCoordinator.clearInput() },
-                    onModerationBlocked = { blockedPrompt ->
-                        lastBlockedPrompt = blockedPrompt
-                        loggingPort.debug(TAG, "Prompt moderation rejected chat input after persist")
-                        chatInputCoordinator.onInputChange(blockedPrompt)
+                    onResponseBlocked = {
+                        loggingPort.debug(TAG, "Response blocked by post-turn moderation")
                         viewModelScope.launch {
                             _moderationMessages.send(R.string.chat_moderation_prompt_rejected)
                         }

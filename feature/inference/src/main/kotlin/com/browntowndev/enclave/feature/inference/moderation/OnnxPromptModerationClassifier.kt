@@ -33,11 +33,16 @@ class OnnxPromptModerationClassifier
                 val model = getLoadedModel()
                 val encoded = model.tokenizer.encode(prompt)
                 val logits = model.session.runModeration(encoded, model.config.maxSequenceLength)
-                val probabilities = softmax(logits)
+                val probabilities =
+                    if (model.config.isSigmoid()) {
+                        logits.map { logit -> sigmoid(logit) }
+                    } else {
+                        softmax(logits).toList().map { it.toDouble() }
+                    }
                 PromptModerationScores(
                     scoresByLabel =
-                        model.config.labels.zip(probabilities.asIterable()).associate { (label, score) ->
-                            label to score.toDouble()
+                        model.config.labels.zip(probabilities).associate { (label, score) ->
+                            label to score
                         },
                     labelAliases = model.config.labelAliases,
                     thresholds = model.config.thresholds,
@@ -147,7 +152,7 @@ class OnnxPromptModerationClassifier
         )
 
         private companion object {
-            private const val ASSET_BASE_PATH = "models/koala_text_moderation"
+            private const val ASSET_BASE_PATH = "models/nsfw_text_classifier"
             private const val CONFIG_ASSET_PATH = "$ASSET_BASE_PATH/model_config.json"
         }
     }
@@ -158,3 +163,5 @@ private fun softmax(logits: FloatArray): FloatArray {
     val sum = expValues.sum()
     return expValues.map { value -> (value / sum).toFloat() }.toFloatArray()
 }
+
+private fun sigmoid(logit: Float): Double = 1.0 / (1.0 + exp(-logit.toDouble()))

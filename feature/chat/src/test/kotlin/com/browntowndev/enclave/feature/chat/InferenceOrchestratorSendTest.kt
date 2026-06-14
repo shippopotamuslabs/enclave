@@ -9,8 +9,6 @@ import com.browntowndev.enclave.domain.model.chat.Mode
 import com.browntowndev.enclave.domain.port.repository.SettingsData
 import com.browntowndev.enclave.domain.usecase.chat.ChatTurnTiming
 import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
-import com.browntowndev.enclave.domain.usecase.chat.PromptSafetyGateRequest
-import com.browntowndev.enclave.domain.usecase.chat.PromptSafetyGateResult
 import com.browntowndev.enclave.domain.usecase.chat.UserPromptResult
 import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.enclave.feature.chat.delegates.InferenceOrchestrator
@@ -78,27 +76,23 @@ class InferenceOrchestratorSendTest {
                 errorHandler = errorHandler,
                 savedStateHandle = SavedStateHandle(),
                 pipelineExecutor = mockk(relaxed = true),
+                moderatePromptUseCase = mockk(relaxed = true),
+                loggingPort = mockk(relaxed = true),
                 applicationScope = applicationScope,
             )
     }
 
     @Test
-    @DisplayName("DOPG-O-01 — optimistic StateFlow set before safety gate returns")
+    @DisplayName("DOPG-O-01 — optimistic StateFlow set before submit returns")
     fun dopgO01_optimisticBeforePersist() =
         runTest(testDispatcher) {
-            val safetyGate = CompletableDeferred<Unit>()
-            coEvery { chatUseCases.processPromptWithSafetyGate(any()) } coAnswers {
-                safetyGate.await()
-                val request = firstArg<PromptSafetyGateRequest>()
-                PromptSafetyGateResult.Allowed(
-                    userResult =
-                        UserPromptResult(
-                            userMessageId = MessageId("user-1"),
-                            chatId = ChatId("chat-1"),
-                            userMessageCreatedAtMillis = 100L,
-                        ),
-                    assistantMessageId = request.assistantMessageId,
-                    wasNewChat = true,
+            val submitPrompt = CompletableDeferred<Unit>()
+            coEvery { chatUseCases.submitPrompt(any()) } coAnswers {
+                submitPrompt.await()
+                UserPromptResult(
+                    userMessageId = MessageId("user-1"),
+                    chatId = ChatId("chat-1"),
+                    userMessageCreatedAtMillis = 100L,
                 )
             }
 
@@ -110,9 +104,9 @@ class InferenceOrchestratorSendTest {
                     selectedImageUris = emptyList(),
                     fileAttachments = emptyList(),
                     initialChatId = null,
-                    shouldModerate = true,
+                    shouldModerateResponse = true,
                     onInputCleared = {},
-                    onModerationBlocked = {},
+                    onResponseBlocked = {},
                 )
             }
             runCurrent()
@@ -123,15 +117,15 @@ class InferenceOrchestratorSendTest {
                     ?.content
                     ?.text,
             )
-            assertFalse(safetyGate.isCompleted)
-            safetyGate.complete(Unit)
+            assertFalse(submitPrompt.isCompleted)
+            submitPrompt.complete(Unit)
         }
 
     @Test
-    @DisplayName("DOPG-O-02 — generateChatResponse runs after 650ms delay once gate allows")
+    @DisplayName("DOPG-O-02 — generateChatResponse runs after 650ms delay once submit returns")
     fun dopgO02_generationAfterDelay() =
         runTest(testDispatcher) {
-            mockAllowedSafetyGate(chatUseCases)
+            mockSubmitPrompt(chatUseCases)
             coEvery {
                 chatUseCases.generateChatResponse(
                     prompt = any(),
@@ -151,9 +145,9 @@ class InferenceOrchestratorSendTest {
                     selectedImageUris = emptyList(),
                     fileAttachments = emptyList(),
                     initialChatId = null,
-                    shouldModerate = true,
+                    shouldModerateResponse = true,
                     onInputCleared = {},
-                    onModerationBlocked = {},
+                    onResponseBlocked = {},
                 )
             }
             advanceTimeBy(649)
@@ -183,10 +177,10 @@ class InferenceOrchestratorSendTest {
         }
 
     @Test
-    @DisplayName("DOPG-O-03 — placeholder is inside gate, not delayed by ChatTurnTiming in orchestrator")
-    fun dopgO03_placeholderInsideGateNotOrchestrator() =
+    @DisplayName("DOPG-O-03 — placeholder is inside submit, not delayed by ChatTurnTiming in orchestrator")
+    fun dopgO03_placeholderInsideSubmitNotOrchestrator() =
         runTest(testDispatcher) {
-            mockAllowedSafetyGate(chatUseCases)
+            mockSubmitPrompt(chatUseCases)
             coEvery {
                 chatUseCases.generateChatResponse(
                     prompt = any(),
@@ -206,14 +200,14 @@ class InferenceOrchestratorSendTest {
                     selectedImageUris = emptyList(),
                     fileAttachments = emptyList(),
                     initialChatId = null,
-                    shouldModerate = true,
+                    shouldModerateResponse = true,
                     onInputCleared = {},
-                    onModerationBlocked = {},
+                    onResponseBlocked = {},
                 )
             }
             runCurrent()
 
-            coVerify(exactly = 1) { chatUseCases.processPromptWithSafetyGate(any()) }
+            coVerify(exactly = 1) { chatUseCases.submitPrompt(any()) }
             coVerify(exactly = 0) {
                 chatUseCases.createAssistantPlaceholder(
                     chatId = any(),
@@ -228,7 +222,7 @@ class InferenceOrchestratorSendTest {
     fun osdaO04_processPromptFailureClearsOptimistic() =
         runTest(testDispatcher) {
             val exception = IOException("persist failed")
-            mockGateThrows(chatUseCases, exception)
+            mockSubmitPromptThrows(chatUseCases, exception)
 
             launch {
                 orchestrator.sendMessage(
@@ -238,9 +232,9 @@ class InferenceOrchestratorSendTest {
                     selectedImageUris = emptyList(),
                     fileAttachments = emptyList(),
                     initialChatId = null,
-                    shouldModerate = true,
+                    shouldModerateResponse = true,
                     onInputCleared = {},
-                    onModerationBlocked = {},
+                    onResponseBlocked = {},
                 )
             }
             advanceUntilIdle()
@@ -294,7 +288,7 @@ class InferenceOrchestratorSendTest {
     @DisplayName("OSDA-O-05 — generateChatResponse receives orchestrator assistant id")
     fun osdaO05_generationUsesPreassignedIds() =
         runTest(testDispatcher) {
-            mockAllowedSafetyGate(
+            mockSubmitPrompt(
                 chatUseCases = chatUseCases,
                 userMessageId = MessageId("user-orch-1"),
                 chatId = ChatId("chat-1"),
@@ -318,9 +312,9 @@ class InferenceOrchestratorSendTest {
                     selectedImageUris = emptyList(),
                     fileAttachments = emptyList(),
                     initialChatId = null,
-                    shouldModerate = true,
+                    shouldModerateResponse = true,
                     onInputCleared = {},
-                    onModerationBlocked = {},
+                    onResponseBlocked = {},
                 )
             }
             advanceTimeBy(ChatTurnTiming.ASSISTANT_PLACEHOLDER_DELAY_MS)
@@ -343,37 +337,38 @@ class InferenceOrchestratorSendTest {
         }
 
     @Test
-    @DisplayName("DOPG-O-04 — blocked moderation aborts inference")
-    fun dopgO04_blockedClearsOptimisticAndSkipsGeneration() =
+    @DisplayName("DOPG-O-04 — post-turn response moderation blocks NSFW output")
+    fun dopgO04_postTurnResponseModerationBlocksNsfw() =
         runTest(testDispatcher) {
-            var blockedPrompt: String? = null
-            mockBlockedSafetyGate(chatUseCases)
-
-            launch {
-                orchestrator.sendMessage(
-                    scope = this,
-                    input = "blocked input",
-                    selectedMode = ChatModeUi.FAST,
-                    selectedImageUris = emptyList(),
-                    fileAttachments = emptyList(),
-                    initialChatId = null,
-                    shouldModerate = true,
-                    onInputCleared = {},
-                    onModerationBlocked = { blockedPrompt = it },
+            val moderatePromptUseCase =
+                mockk<com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase>(relaxed = true)
+            coEvery { moderatePromptUseCase(any()) } returns
+                com.browntowndev.enclave.domain.usecase.inference.PromptModerationResult(
+                    blocked = true,
+                    scoresByLabel = mapOf("nsfw" to 0.95),
+                    canonicalScores = mapOf("nsfw" to 0.95),
+                    triggeredLabels = listOf("nsfw"),
+                    combinedIllegalScore = 0.95,
                 )
-            }
-            advanceUntilIdle()
 
-            assertNull(orchestrator.optimisticUserMessage.value)
-            assertEquals("blocked input", blockedPrompt)
-            coVerify(exactly = 1) {
-                chatUseCases.processPromptWithSafetyGate(
-                    match { request ->
-                        request.shouldModerate && request.promptTextForModeration == "blocked input"
-                    },
+            val orchestratorWithModeration =
+                InferenceOrchestrator(
+                    chatUseCases = chatUseCases,
+                    settingsUseCases = settingsUseCases,
+                    cancelInferenceUseCase = mockk(relaxed = true),
+                    activeChatTurnSnapshotPort = ActiveChatTurnStore(),
+                    chatRepository = mockk(relaxed = true),
+                    errorHandler = errorHandler,
+                    savedStateHandle = SavedStateHandle(),
+                    pipelineExecutor = mockk(relaxed = true),
+                    moderatePromptUseCase = moderatePromptUseCase,
+                    loggingPort = mockk(relaxed = true),
+                    applicationScope = applicationScope,
                 )
-            }
-            coVerify(exactly = 0) {
+
+            mockSubmitPrompt(chatUseCases)
+            val responseBlocked = CompletableDeferred<Unit>()
+            coEvery {
                 chatUseCases.generateChatResponse(
                     prompt = any(),
                     userMessageId = any(),
@@ -382,24 +377,57 @@ class InferenceOrchestratorSendTest {
                     mode = any(),
                     backgroundInferenceEnabled = any(),
                 )
+            } returns
+                kotlinx.coroutines.flow.flow {
+                    emit(
+                        com.browntowndev.enclave.domain.model.chat.AccumulatedMessages(
+                            messages =
+                                mapOf(
+                                    MessageId("asst-1") to
+                                        com.browntowndev.enclave.domain.model.chat.MessageSnapshot(
+                                            messageId = MessageId("asst-1"),
+                                            modelType = com.browntowndev.enclave.domain.model.inference.ModelType.FAST,
+                                            content = "Explicit NSFW response",
+                                            thinkingRaw = "",
+                                            thinkingDurationSeconds = 0L,
+                                            thinkingStartTime = 0L,
+                                            thinkingEndTime = 0L,
+                                            messageState = com.browntowndev.enclave.domain.model.chat.MessageState.COMPLETE,
+                                            isComplete = true,
+                                            transcriptSegments = emptyList(),
+                                        ),
+                                ),
+                        ),
+                    )
+                }
+
+            launch {
+                orchestratorWithModeration.sendMessage(
+                    scope = this,
+                    input = "Hi",
+                    selectedMode = ChatModeUi.FAST,
+                    selectedImageUris = emptyList(),
+                    fileAttachments = emptyList(),
+                    initialChatId = null,
+                    shouldModerateResponse = true,
+                    onInputCleared = {},
+                    onResponseBlocked = { responseBlocked.complete(Unit) },
+                )
             }
+            advanceUntilIdle()
+
+            coVerify { moderatePromptUseCase("Explicit NSFW response") }
         }
 
     @Test
-    @DisplayName("DOPG-O-05 — orchestrator does not launch title; gate owns title generation")
+    @DisplayName("DOPG-O-05 — orchestrator does not launch title; submit owns title generation")
     fun dopgO05_orchestratorDoesNotLaunchTitle() =
         runTest(testDispatcher) {
-            coEvery { chatUseCases.processPromptWithSafetyGate(any()) } coAnswers {
-                val request = firstArg<PromptSafetyGateRequest>()
-                PromptSafetyGateResult.Allowed(
-                    userResult =
-                        UserPromptResult(
-                            userMessageId = MessageId("user-title-1"),
-                            chatId = ChatId("chat-title-1"),
-                            userMessageCreatedAtMillis = 100L,
-                        ),
-                    assistantMessageId = request.assistantMessageId,
-                    wasNewChat = true,
+            coEvery { chatUseCases.submitPrompt(any()) } coAnswers {
+                UserPromptResult(
+                    userMessageId = MessageId("user-title-1"),
+                    chatId = ChatId("chat-title-1"),
+                    userMessageCreatedAtMillis = 100L,
                 )
             }
             coEvery {
@@ -421,24 +449,18 @@ class InferenceOrchestratorSendTest {
                     selectedImageUris = emptyList(),
                     fileAttachments = emptyList(),
                     initialChatId = null,
-                    shouldModerate = true,
+                    shouldModerateResponse = true,
                     onInputCleared = {},
-                    onModerationBlocked = {},
+                    onResponseBlocked = {},
                 )
             }
             advanceUntilIdle()
 
-            coEvery { chatUseCases.processPromptWithSafetyGate(any()) } coAnswers {
-                val request = firstArg<PromptSafetyGateRequest>()
-                PromptSafetyGateResult.Allowed(
-                    userResult =
-                        UserPromptResult(
-                            userMessageId = MessageId("user-title-2"),
-                            chatId = ChatId("chat-title-2"),
-                            userMessageCreatedAtMillis = 100L,
-                        ),
-                    assistantMessageId = request.assistantMessageId,
-                    wasNewChat = true,
+            coEvery { chatUseCases.submitPrompt(any()) } coAnswers {
+                UserPromptResult(
+                    userMessageId = MessageId("user-title-2"),
+                    chatId = ChatId("chat-title-2"),
+                    userMessageCreatedAtMillis = 100L,
                 )
             }
 
@@ -450,24 +472,18 @@ class InferenceOrchestratorSendTest {
                     selectedImageUris = emptyList(),
                     fileAttachments = emptyList(),
                     initialChatId = null,
-                    shouldModerate = true,
+                    shouldModerateResponse = true,
                     onInputCleared = {},
-                    onModerationBlocked = {},
+                    onResponseBlocked = {},
                 )
             }
             advanceUntilIdle()
 
-            coEvery { chatUseCases.processPromptWithSafetyGate(any()) } coAnswers {
-                val request = firstArg<PromptSafetyGateRequest>()
-                PromptSafetyGateResult.Allowed(
-                    userResult =
-                        UserPromptResult(
-                            userMessageId = MessageId("user-title-3"),
-                            chatId = ChatId("chat-existing-title"),
-                            userMessageCreatedAtMillis = 100L,
-                        ),
-                    assistantMessageId = request.assistantMessageId,
-                    wasNewChat = false,
+            coEvery { chatUseCases.submitPrompt(any()) } coAnswers {
+                UserPromptResult(
+                    userMessageId = MessageId("user-title-3"),
+                    chatId = ChatId("chat-existing-title"),
+                    userMessageCreatedAtMillis = 100L,
                 )
             }
 
@@ -479,9 +495,9 @@ class InferenceOrchestratorSendTest {
                     selectedImageUris = emptyList(),
                     fileAttachments = emptyList(),
                     initialChatId = ChatId("chat-existing-title"),
-                    shouldModerate = true,
+                    shouldModerateResponse = true,
                     onInputCleared = {},
-                    onModerationBlocked = {},
+                    onResponseBlocked = {},
                 )
             }
             advanceUntilIdle()
@@ -489,29 +505,6 @@ class InferenceOrchestratorSendTest {
             coVerify(exactly = 0) {
                 chatUseCases.generateChatTitle(any(), any())
             }
-        }
-
-    @Test
-    @DisplayName("DOPG-O-06 — blocked new-chat path does not leave requestedTurnKey set")
-    fun dopgO06_blockedClearsRequestedTurnKey() =
-        runTest(testDispatcher) {
-            mockBlockedSafetyGate(chatUseCases)
-
-            launch {
-                orchestrator.sendMessage(
-                    scope = this,
-                    input = "blocked input",
-                    selectedMode = ChatModeUi.FAST,
-                    selectedImageUris = emptyList(),
-                    fileAttachments = emptyList(),
-                    initialChatId = null,
-                    shouldModerate = true,
-                    onInputCleared = {},
-                    onModerationBlocked = {},
-                )
-            }
-            advanceUntilIdle()
-            assertNull(orchestrator.requestedTurnKey.value)
         }
 
     @Test
@@ -526,18 +519,12 @@ class InferenceOrchestratorSendTest {
     fun dopgO07_rapidDoubleSendLaunchesSingleInference() =
         runTest(testDispatcher) {
             val gateStarted = CompletableDeferred<Unit>()
-            coEvery { chatUseCases.processPromptWithSafetyGate(any()) } coAnswers {
+            coEvery { chatUseCases.submitPrompt(any()) } coAnswers {
                 gateStarted.await()
-                val request = firstArg<PromptSafetyGateRequest>()
-                PromptSafetyGateResult.Allowed(
-                    userResult =
-                        UserPromptResult(
-                            userMessageId = MessageId("user-double"),
-                            chatId = ChatId("chat-double"),
-                            userMessageCreatedAtMillis = 100L,
-                        ),
-                    assistantMessageId = request.assistantMessageId,
-                    wasNewChat = false,
+                UserPromptResult(
+                    userMessageId = MessageId("user-double"),
+                    chatId = ChatId("chat-double"),
+                    userMessageCreatedAtMillis = 100L,
                 )
             }
             coEvery {
@@ -559,9 +546,9 @@ class InferenceOrchestratorSendTest {
                     selectedImageUris = emptyList(),
                     fileAttachments = emptyList(),
                     initialChatId = null,
-                    shouldModerate = true,
+                    shouldModerateResponse = true,
                     onInputCleared = {},
-                    onModerationBlocked = {},
+                    onResponseBlocked = {},
                 )
             }
             runCurrent()
@@ -574,9 +561,9 @@ class InferenceOrchestratorSendTest {
                     selectedImageUris = emptyList(),
                     fileAttachments = emptyList(),
                     initialChatId = null,
-                    shouldModerate = true,
+                    shouldModerateResponse = true,
                     onInputCleared = {},
-                    onModerationBlocked = {},
+                    onResponseBlocked = {},
                 )
             }
             gateStarted.complete(Unit)

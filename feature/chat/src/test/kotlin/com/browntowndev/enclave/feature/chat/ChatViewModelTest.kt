@@ -182,7 +182,7 @@ class ChatViewModelTest {
             chatViewModel.onInputChange(input)
 
             val exception = IOException("Network error")
-            coEvery { chatUseCases.processPromptWithSafetyGate(any()) } throws exception
+            coEvery { chatUseCases.submitPrompt(any()) } throws exception
 
             // When
             chatViewModel.onSendMessage()
@@ -740,7 +740,7 @@ class ChatViewModelTest {
             // Mock prompt result
             val chatId = ChatId("chat")
             val assistantId = MessageId("assistant")
-            mockAllowedSafetyGate(
+            mockSubmitPrompt(
                 chatUseCases = chatUseCases,
                 chatId = chatId,
                 userMessageId = MessageId("user"),
@@ -765,7 +765,7 @@ class ChatViewModelTest {
             advanceUntilIdle()
 
             coVerify {
-                chatUseCases.processPromptWithSafetyGate(
+                chatUseCases.submitPrompt(
                     match {
                         it.message.content.text == "Hello" &&
                             it.message.content.fileAttachments.size == 1 &&
@@ -874,18 +874,12 @@ class ChatViewModelTest {
             coEvery { chatUseCases.getChat(any()) } returns dbFlow
 
             val safetyGate = CompletableDeferred<Unit>()
-            coEvery { chatUseCases.processPromptWithSafetyGate(any()) } coAnswers {
+            coEvery { chatUseCases.submitPrompt(any()) } coAnswers {
                 safetyGate.await()
-                val request = firstArg<com.browntowndev.enclave.domain.usecase.chat.PromptSafetyGateRequest>()
-                com.browntowndev.enclave.domain.usecase.chat.PromptSafetyGateResult.Allowed(
-                    userResult =
-                        UserPromptResult(
-                            userMessageId = MessageId("opt-1"),
-                            chatId = ChatId("chat-1"),
-                            userMessageCreatedAtMillis = 100L,
-                        ),
-                    assistantMessageId = request.assistantMessageId,
-                    wasNewChat = true,
+                UserPromptResult(
+                    userMessageId = MessageId("opt-1"),
+                    chatId = ChatId("chat-1"),
+                    userMessageCreatedAtMillis = 100L,
                 )
             }
 
@@ -939,7 +933,7 @@ class ChatViewModelTest {
                     ),
                 )
             coEvery { chatUseCases.getChat(chatId) } returns dbFlow
-            mockAllowedSafetyGate(
+            mockSubmitPrompt(
                 chatUseCases = chatUseCases,
                 userMessageId = MessageId("opt-1"),
                 chatId = chatId,
@@ -1012,7 +1006,7 @@ class ChatViewModelTest {
                 )
 
             harness.viewModel.onInputChange("Hello")
-            coEvery { chatUseCases.processPromptWithSafetyGate(any()) } throws IOException("Network error")
+            coEvery { chatUseCases.submitPrompt(any()) } throws IOException("Network error")
             harness.viewModel.onSendMessage()
             advanceUntilIdle()
 
@@ -1035,18 +1029,12 @@ class ChatViewModelTest {
             coEvery { chatUseCases.getChat(any()) } returns dbFlow
 
             val safetyGate = CompletableDeferred<Unit>()
-            coEvery { chatUseCases.processPromptWithSafetyGate(any()) } coAnswers {
+            coEvery { chatUseCases.submitPrompt(any()) } coAnswers {
                 safetyGate.await()
-                val request = firstArg<com.browntowndev.enclave.domain.usecase.chat.PromptSafetyGateRequest>()
-                com.browntowndev.enclave.domain.usecase.chat.PromptSafetyGateResult.Allowed(
-                    userResult =
-                        UserPromptResult(
-                            userMessageId = MessageId("opt-1"),
-                            chatId = ChatId("chat-1"),
-                            userMessageCreatedAtMillis = 100L,
-                        ),
-                    assistantMessageId = request.assistantMessageId,
-                    wasNewChat = true,
+                UserPromptResult(
+                    userMessageId = MessageId("opt-1"),
+                    chatId = ChatId("chat-1"),
+                    userMessageCreatedAtMillis = 100L,
                 )
             }
 

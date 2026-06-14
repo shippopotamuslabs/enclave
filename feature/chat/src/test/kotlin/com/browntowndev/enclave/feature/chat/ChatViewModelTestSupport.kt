@@ -19,6 +19,7 @@ import com.browntowndev.enclave.domain.usecase.chat.GetModelDisplayNameUseCase
 import com.browntowndev.enclave.domain.usecase.chat.StageImageAttachmentUseCase
 import com.browntowndev.enclave.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
+import com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase
 import com.browntowndev.enclave.domain.usecase.inference.ShouldModeratePromptUseCase
 import com.browntowndev.enclave.domain.usecase.inference.SubmitModerationReportUseCase
 import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
@@ -139,7 +140,9 @@ object ChatViewModelTestSupport {
                     errorHandler = errorHandler,
                     savedStateHandle = savedStateHandle,
                     pipelineExecutor = mockk(relaxed = true),
-                    applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+                    moderatePromptUseCase = ModeratePromptUseCase(AllowPromptModerationPort, NoOpLoggingPort),
+                    loggingPort = loggingPort,
+                    applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
                 ),
             )
         val chatInputCoordinator =
@@ -233,5 +236,12 @@ object ChatViewModelTestSupport {
 
     private object AllowPromptModerationPort : PromptModerationPort {
         override suspend fun classify(prompt: String): PromptModerationScores = PromptModerationScores(scoresByLabel = mapOf("OK" to 1.0))
+    }
+
+    private object NoOpLoggingPort : LoggingPort {
+        override fun debug(tag: String, message: String) = Unit
+        override fun info(tag: String, message: String) = Unit
+        override fun warning(tag: String, message: String) = Unit
+        override fun error(tag: String, message: String, throwable: Throwable?) = Unit
     }
 }

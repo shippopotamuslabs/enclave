@@ -1,4 +1,5 @@
 {
+  "activation": "softmax",
   "combined_illegal_labels": [
     "S3"
   ],

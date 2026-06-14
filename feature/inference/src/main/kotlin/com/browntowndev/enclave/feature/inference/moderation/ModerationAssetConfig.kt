@@ -15,7 +15,10 @@ internal data class ModerationAssetConfig(
     val labelAliases: Map<String, List<String>>,
     val thresholds: Map<String, Double>,
     val combinedIllegalLabels: List<String>,
+    val activation: String,
 ) {
+    fun isSigmoid(): Boolean = activation.equals("sigmoid", ignoreCase = true)
+
     companion object {
         fun parse(configJson: String): ModerationAssetConfig {
             val root = Json.parseToJsonElement(configJson).jsonObject
@@ -42,6 +45,7 @@ internal data class ModerationAssetConfig(
                     root["combined_illegal_labels"]
                         ?.jsonArray
                         ?.map { label -> label.jsonPrimitive.content } ?: emptyList(),
+                activation = root["activation"]?.jsonPrimitive?.content ?: "softmax",
             )
         }
 
