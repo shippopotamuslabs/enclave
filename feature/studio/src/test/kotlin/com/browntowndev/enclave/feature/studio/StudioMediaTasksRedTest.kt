@@ -342,7 +342,6 @@ class StudioMediaTasksRedTest {
                     onPromptChange = {},
                     onReferenceImageClick = {},
                     onClearReferenceImage = {},
-                    onSettingsClick = {},
                     onMicClick = {},
                     onGenerateClick = {},
                 )

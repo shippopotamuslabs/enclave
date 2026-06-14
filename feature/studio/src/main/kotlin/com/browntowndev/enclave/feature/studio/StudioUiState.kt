@@ -55,4 +55,5 @@ data class StudioUiState(
     val activeGenerationRemainingPlaceholderCount: Int = 0,
     val hasImageEditModel: Boolean = false,
     val hasImageToVideoModel: Boolean = false,
+    val activeModelDisplayName: String? = null,
 )

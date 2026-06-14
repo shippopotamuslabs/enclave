@@ -7,13 +7,16 @@ import android.content.pm.PackageManager
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -21,8 +24,10 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -149,6 +154,10 @@ fun StudioScreen(
         topBar = {
             StudioTopBar(
                 selectedCount = uiState.selectedMediaItemIds.size,
+                mediaType = uiState.mediaType,
+                activeModelDisplayName = uiState.activeModelDisplayName,
+                isSettingsOpen = uiState.isSettingsOpen,
+                onMediaTypeClick = viewModel::onSettingsToggle,
                 onClearSelection = viewModel::clearMediaSelection,
                 onSaveClick = viewModel::onToggleSaveBottomSheet,
                 onShareClick = { viewModel.shareMedia(uiState.selectedMediaItemIds) },
@@ -221,7 +230,6 @@ fun StudioScreen(
                     }
                 },
                 onClearReferenceImage = { viewModel.onUpdateReferenceImage(null) },
-                onSettingsClick = viewModel::onSettingsToggle,
                 onMicClick = {
                     if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
                         viewModel.onMicClick()
@@ -263,6 +271,10 @@ fun StudioScreen(
 @Composable
 private fun StudioTopBar(
     selectedCount: Int,
+    mediaType: MediaCapability,
+    activeModelDisplayName: String?,
+    isSettingsOpen: Boolean,
+    onMediaTypeClick: () -> Unit,
     onClearSelection: () -> Unit,
     onSaveClick: () -> Unit,
     onShareClick: () -> Unit,
@@ -285,15 +297,55 @@ private fun StudioTopBar(
             )
         }
         Box(
-            modifier = Modifier.weight(1f),
+            modifier =
+                if (selectedCount > 0) {
+                    Modifier.weight(1f)
+                } else {
+                    Modifier
+                        .weight(1f)
+                        .clickable(onClick = onMediaTypeClick)
+                },
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = if (selectedCount > 0) "$selectedCount Selected" else "Studio",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
+            if (selectedCount > 0) {
+                Text(
+                    text = "$selectedCount Selected",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            } else {
+                val chevronRotation by animateFloatAsState(
+                    targetValue = if (isSettingsOpen) 180f else 0f,
+                    label = "studioTopBarMediaTypeChevron",
+                )
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            text = mediaType.displayName,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowDown,
+                            contentDescription = "Change media type",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.rotate(chevronRotation),
+                        )
+                    }
+                    activeModelDisplayName?.takeIf { it.isNotBlank() }?.let { modelName ->
+                        Text(
+                            text = modelName,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
         }
         if (selectedCount > 0) {
             Row(horizontalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing)) {
