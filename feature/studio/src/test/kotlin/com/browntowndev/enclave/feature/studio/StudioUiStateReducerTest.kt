@@ -190,6 +190,23 @@ class StudioUiStateReducerTest {
         assertFalse(state.templates.any { it.id == "1" })
     }
 
+    @Test
+    fun reduce_exposesActiveModelDisplayName() {
+        val state =
+            reducer.reduce(
+                baseParams(activeModelDisplayName = "SDXL Turbo"),
+            )
+
+        assertEquals("SDXL Turbo", state.activeModelDisplayName)
+    }
+
+    @Test
+    fun reduce_defaultsActiveModelDisplayNameToNull() {
+        val state = reducer.reduce(baseParams())
+
+        assertEquals(null, state.activeModelDisplayName)
+    }
+
     private fun baseParams(
         prompt: String = "",
         isGenerating: Boolean = false,
@@ -200,6 +217,7 @@ class StudioUiStateReducerTest {
         selectedMediaItemIds: Set<String> = emptySet(),
         albums: List<GalleryAlbumUi> = emptyList(),
         generationProgressLabel: String? = null,
+        activeModelDisplayName: String? = null,
     ): StudioUiStateReducer.ReduceParams =
         StudioUiStateReducer.ReduceParams(
             prompt = prompt,
@@ -228,5 +246,6 @@ class StudioUiStateReducerTest {
             referenceMediaType = null,
             hasImageEditModel = false,
             hasImageToVideoModel = false,
+            activeModelDisplayName = activeModelDisplayName,
         )
 }

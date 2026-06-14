@@ -43,6 +43,7 @@ class StudioUiStateReducer
             val referenceMediaType: MediaCapability?,
             val hasImageEditModel: Boolean,
             val hasImageToVideoModel: Boolean,
+            val activeModelDisplayName: String? = null,
         )
 
         fun reduce(params: ReduceParams): StudioUiState {
@@ -95,6 +96,7 @@ class StudioUiStateReducer
                 isPlayingTts = params.isPlayingTts,
                 hasImageEditModel = params.hasImageEditModel,
                 hasImageToVideoModel = params.hasImageToVideoModel,
+                activeModelDisplayName = params.activeModelDisplayName,
             )
         }
 

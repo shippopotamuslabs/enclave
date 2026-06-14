@@ -4,17 +4,12 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Movie
-import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,7 +19,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.browntowndev.enclave.core.ui.component.StandardTrailingAction
 import com.browntowndev.enclave.core.ui.component.UniversalImageAttachment
 import com.browntowndev.enclave.core.ui.component.UniversalInputBar
 import com.browntowndev.enclave.core.ui.component.UniversalPromptTextField
@@ -49,7 +43,6 @@ internal fun StudioInputDock(
     onPromptChange: (String) -> Unit,
     onReferenceImageClick: () -> Unit,
     onClearReferenceImage: () -> Unit,
-    onSettingsClick: () -> Unit,
     onMicClick: () -> Unit,
     onGenerateClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -106,22 +99,6 @@ internal fun StudioInputDock(
                     }
                 },
             trailingAction = {
-                if (!speechState.isActiveVoiceInput) {
-                    StandardTrailingAction(
-                        icon =
-                            when (mediaType) {
-                                MediaCapability.IMAGE -> Icons.Default.Image
-                                MediaCapability.VIDEO -> Icons.Default.Movie
-                                MediaCapability.MUSIC -> Icons.Default.MusicNote
-                            },
-                        onClick = onSettingsClick,
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        description = "Studio Options",
-                    )
-                    Spacer(Modifier.width(8.dp))
-                }
-
                 UniversalVoiceTrailingAction(
                     inputText = prompt,
                     speechState = speechState,

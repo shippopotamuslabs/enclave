@@ -92,6 +92,11 @@ class MultimodalViewModel
                 defaults.find { it.modelType == modelType }
             }
 
+        private val activeModelDisplayNameFlow =
+            activeModelFlow
+                .map { it?.displayName }
+                .distinctUntilChanged()
+
         private val activeProviderFlow =
             activeModelFlow.flatMapLatest { assignment ->
                 if (assignment?.mediaProviderId != null) {
@@ -257,12 +262,14 @@ class MultimodalViewModel
                 _capabilities,
                 _isCapabilitiesLoading,
                 activeProviderFlow,
-            ) { capabilities, isCapabilitiesLoading, activeProvider ->
+                activeModelDisplayNameFlow,
+            ) { capabilities, isCapabilitiesLoading, activeProvider, activeModelDisplayName ->
                 CapabilitiesPlaybackInputs(
                     capabilities = capabilities,
                     isCapabilitiesLoading =
                         isCapabilitiesLoading &&
                             remoteCapabilitiesCoordinator.requiresRemoteCapabilitiesLoading(activeProvider),
+                    activeModelDisplayName = activeModelDisplayName,
                 )
             }
 
@@ -281,6 +288,7 @@ class MultimodalViewModel
                     isPlayingTts = isPlayingTts,
                     hasImageEditModel = hasImageEdit,
                     hasImageToVideoModel = hasImageToVideo,
+                    activeModelDisplayName = capabilitiesPlayback.activeModelDisplayName,
                 )
             }
 
@@ -447,6 +455,7 @@ class MultimodalViewModel
                         referenceMediaType = promptInputs.referenceMediaType,
                         hasImageEditModel = playbackInputs.hasImageEditModel,
                         hasImageToVideoModel = playbackInputs.hasImageToVideoModel,
+                        activeModelDisplayName = playbackInputs.activeModelDisplayName,
                     ),
                 )
             }.stateIn(

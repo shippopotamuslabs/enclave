@@ -53,6 +53,7 @@ internal data class SelectionInputs(
 internal data class CapabilitiesPlaybackInputs(
     val capabilities: ProviderCapabilities?,
     val isCapabilitiesLoading: Boolean,
+    val activeModelDisplayName: String? = null,
 )
 
 internal data class PlaybackInputs(
@@ -62,4 +63,5 @@ internal data class PlaybackInputs(
     val isPlayingTts: Boolean,
     val hasImageEditModel: Boolean,
     val hasImageToVideoModel: Boolean,
+    val activeModelDisplayName: String? = null,
 )
