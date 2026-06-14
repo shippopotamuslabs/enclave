@@ -37,6 +37,7 @@ fun AssistantResponse(
     onNavigateToStudio: (ids: List<String>, uris: List<String>, types: List<String>, prompts: List<String>) -> Unit = { _, _, _, _ -> },
     onShareClick: (MessageId) -> Unit = {},
     onStatsClick: (MessageId) -> Unit = {},
+    onReportClick: (MessageId) -> Unit = {},
 ) {
     val contentText = message.content.text
     val pipelineStep = message.content.pipelineStep
@@ -106,6 +107,7 @@ fun AssistantResponse(
                 onNavigateToStudio = onNavigateToStudio,
                 onShareClick = onShareClick,
                 onStatsClick = onStatsClick,
+                onReportClick = onReportClick,
                 onShowSources = { showSources = true },
             )
         }

@@ -598,9 +598,11 @@ class ChatViewModel
             }
         }
 
-        fun reportUnblockedPrompt(prompt: String) {
+        fun reportResponse(messageId: MessageId) {
+            val responseText = uiState.value.messages.firstOrNull { it.id == messageId }?.content?.text
+            if (responseText.isNullOrBlank()) return
             viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to submit report")) {
-                submitModerationReportUseCase(prompt, "allowed")
+                submitModerationReportUseCase(responseText, "allowed")
                 _moderationMessages.send(R.string.chat_moderation_feedback_submitted)
             }
         }

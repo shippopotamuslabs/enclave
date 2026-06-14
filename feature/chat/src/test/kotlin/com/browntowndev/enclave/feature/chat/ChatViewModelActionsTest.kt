@@ -7,6 +7,12 @@ import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
+import com.browntowndev.enclave.domain.model.chat.ChatId
+import com.browntowndev.enclave.domain.model.chat.Content
+import com.browntowndev.enclave.domain.model.chat.Message
+import com.browntowndev.enclave.domain.model.chat.MessageId
+import com.browntowndev.enclave.domain.model.chat.MessageState
+import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnSnapshotPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
@@ -572,7 +578,64 @@ class ChatViewModelActionsTest {
         }
 
     @Test
-    fun `reportUnblockedPrompt submits allowed outcome report and emits feedback message`() =
+    fun `reportResponse submits response text when message exists in uiState`() =
+        runTest {
+            val submitModerationReportUseCase = mockk<SubmitModerationReportUseCase>(relaxed = true)
+            val testChatId = ChatId("test-chat")
+            val testMessageId = MessageId("msg-assistant-1")
+            val assistantMessage =
+                Message(
+                    id = testMessageId,
+                    chatId = testChatId,
+                    content = Content("Harmful response that should be blocked"),
+                    role = Role.ASSISTANT,
+                    messageState = MessageState.COMPLETE,
+                    createdAt = 1L,
+                )
+            val chatUseCasesWithMessage = mockk<ChatUseCases>(relaxed = true)
+            val listenToSpeechUseCase = mockk<ListenToSpeechUseCase>(relaxed = true)
+            every { listenToSpeechUseCase.invoke(any(), any()) } returns MutableSharedFlow()
+            every { chatUseCasesWithMessage.listenToSpeechUseCase } returns listenToSpeechUseCase
+            every { chatUseCasesWithMessage.processFileAttachmentUseCase } returns processFileAttachmentUseCase
+            every { chatUseCasesWithMessage.mergeMessagesUseCase } returns MergeMessagesUseCase()
+            coEvery { chatUseCasesWithMessage.getChat(any()) } returns flowOf(listOf(assistantMessage))
+            val customViewModel =
+                ChatViewModelTestSupport.createViewModel(
+                    settingsUseCases = settingsUseCases,
+                    chatUseCases = chatUseCasesWithMessage,
+                    savedStateHandle = SavedStateHandle(mapOf("chatId" to testChatId.value)),
+                    cancelInferenceUseCase = cancelInferenceUseCase,
+                    inferenceLockManager = inferenceLockManager,
+                    modelDisplayNamesUseCase = modelDisplayNamesUseCase,
+                    activeModelProvider = activeModelProvider,
+                    toolExecutionEventPort = toolExecutionEventPort,
+                    errorHandler = errorHandler,
+                    loggingPort = loggingPort,
+                    activeChatTurnSnapshotPort = activeChatTurnStore,
+                    playbackController = playbackController,
+                    studioRepository = studioRepository,
+                    shareChatUseCase = shareChatUseCase,
+                    chatRepository = mockk(relaxed = true),
+                    exportArtifactDocumentsUseCase = mockk(relaxed = true),
+                    stageImageAttachmentUseCase = stageImageAttachmentUseCase,
+                    submitModerationReportUseCase = submitModerationReportUseCase,
+                )
+
+            // Collect uiState so messages flow through the reducer
+            val collectJob = backgroundScope.launch { customViewModel.uiState.collect {} }
+            runCurrent()
+
+            customViewModel.moderationMessages.test {
+                customViewModel.reportResponse(testMessageId)
+                assertEquals(R.string.chat_moderation_feedback_submitted, awaitItem())
+            }
+
+            coVerify { submitModerationReportUseCase("Harmful response that should be blocked", "allowed") }
+            collectJob.cancel()
+        }
+
+    @Test
+    fun `reportResponse does nothing when message not found`() =
         runTest {
             val submitModerationReportUseCase = mockk<SubmitModerationReportUseCase>(relaxed = true)
             val customViewModel =
@@ -597,11 +660,8 @@ class ChatViewModelActionsTest {
                     submitModerationReportUseCase = submitModerationReportUseCase,
                 )
 
-            customViewModel.moderationMessages.test {
-                customViewModel.reportUnblockedPrompt("Test unblocked prompt")
-                assertEquals(R.string.chat_moderation_feedback_submitted, awaitItem())
-            }
+            customViewModel.reportResponse(MessageId("nonexistent"))
 
-            coVerify { submitModerationReportUseCase("Test unblocked prompt", "allowed") }
+            coVerify(exactly = 0) { submitModerationReportUseCase(any(), any()) }
         }
 }

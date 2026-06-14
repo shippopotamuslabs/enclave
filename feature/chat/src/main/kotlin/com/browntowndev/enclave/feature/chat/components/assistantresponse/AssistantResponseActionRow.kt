@@ -19,14 +19,21 @@ import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ClipEntry
@@ -53,9 +60,36 @@ internal fun AssistantResponseActionRow(
     onShareClick: (MessageId) -> Unit,
     onShowSources: () -> Unit,
     onStatsClick: (MessageId) -> Unit = {},
+    onReportClick: (MessageId) -> Unit = {},
 ) {
     val clipboardManager = LocalClipboard.current
     val coroutineScope = rememberCoroutineScope()
+    var showReportDialog by remember { mutableStateOf(false) }
+
+    if (showReportDialog) {
+        AlertDialog(
+            onDismissRequest = { showReportDialog = false },
+            title = { Text("Report Response") },
+            text = {
+                Text("Submit feedback that this response should have been blocked by moderation?")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onReportClick(message.id)
+                        showReportDialog = false
+                    },
+                ) {
+                    Text("Report")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showReportDialog = false }) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
 
     Row(
         modifier =
@@ -177,6 +211,23 @@ internal fun AssistantResponseActionRow(
                         Icon(
                             imageVector = Icons.Outlined.BarChart,
                             contentDescription = "Response statistics",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                }
+
+                if (isComplete) {
+                    IconButton(
+                        onClick = { showReportDialog = true },
+                        modifier =
+                            Modifier
+                                .offset(x = (-8).dp)
+                                .size(32.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = "Report response",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(18.dp),
                         )

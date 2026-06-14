@@ -125,8 +125,8 @@ fun ChatRoute(
                 onNewChat()
             },
             onSendMessage = { viewModel.onSendMessage() },
-            onReportMessage = { prompt ->
-                viewModel.reportUnblockedPrompt(prompt)
+            onReportResponse = { messageId ->
+                viewModel.reportResponse(messageId)
             },
             onStopGenerating = viewModel::stopGeneration,
             onModeChange = viewModel::onModeChange,
