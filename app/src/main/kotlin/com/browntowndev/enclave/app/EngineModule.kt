@@ -1,10 +1,10 @@
 package com.browntowndev.enclave.app
 
 import android.content.Context
+import com.browntowndev.enclave.domain.port.config.DistributionConfigurationPort
 import com.browntowndev.enclave.domain.port.inference.ChatTitleGeneratorPort
 import com.browntowndev.enclave.domain.port.inference.CompactionSummarizerPort
 import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
-import com.browntowndev.enclave.domain.port.inference.CriminalIntentModerationPort
 import com.browntowndev.enclave.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.OnDeviceInferenceCancellationPort
@@ -20,7 +20,7 @@ import com.browntowndev.enclave.feature.inference.ConversationManagerImpl
 import com.browntowndev.enclave.feature.inference.InferenceFactoryImpl
 import com.browntowndev.enclave.feature.inference.OnDeviceInferenceCancellationImpl
 import com.browntowndev.enclave.feature.inference.ProfileAnalysisInferenceAdapter
-import com.browntowndev.enclave.feature.inference.moderation.OnnxCriminalIntentClassifier
+import com.browntowndev.enclave.feature.inference.moderation.NoOpPromptModerationPort
 import com.browntowndev.enclave.feature.inference.moderation.OnnxPromptModerationClassifier
 import com.browntowndev.enclave.feature.inference.compaction.OnnxCompactionSummarizer
 import com.browntowndev.enclave.feature.inference.titlegen.OnnxChatTitleGenerator
@@ -50,14 +50,6 @@ abstract class EngineModule {
 
     @Binds
     @Singleton
-    abstract fun bindPromptModerationPort(impl: OnnxPromptModerationClassifier): PromptModerationPort
-
-    @Binds
-    @Singleton
-    abstract fun bindCriminalIntentModerationPort(impl: OnnxCriminalIntentClassifier): CriminalIntentModerationPort
-
-    @Binds
-    @Singleton
     abstract fun bindChatTitleGeneratorPort(impl: OnnxChatTitleGenerator): ChatTitleGeneratorPort
 
     @Binds
@@ -70,9 +62,25 @@ abstract class EngineModule {
         impl: OnDeviceInferenceCancellationImpl,
     ): OnDeviceInferenceCancellationPort
 
+    @Binds
+    @Singleton
+    abstract fun bindDistributionConfiguration(impl: DistributionConfigurationImpl): DistributionConfigurationPort
+
     companion object {
         // Consolidated ConversationManager provider - resolve models lazily via ModelRegistry
         // Each InferenceService gets its own manager instance to isolate Engine lifecycle per model file
+        @Provides
+        @Singleton
+        fun providePromptModerationPort(
+            @ApplicationContext context: Context,
+            distributionConfig: DistributionConfigurationPort,
+        ): PromptModerationPort =
+            if (distributionConfig.isPlayStoreFlavor) {
+                OnnxPromptModerationClassifier(context)
+            } else {
+                NoOpPromptModerationPort
+            }
+
         @Provides
         fun provideConversationManager(
             @ApplicationContext context: Context,

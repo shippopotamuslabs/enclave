@@ -10,6 +10,7 @@ import com.browntowndev.enclave.domain.port.repository.SettingsData
 import com.browntowndev.enclave.domain.usecase.chat.ChatTurnTiming
 import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
 import com.browntowndev.enclave.domain.usecase.inference.CancelInferenceUseCase
+import com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase
 import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.enclave.feature.chat.delegates.InferenceOrchestrator
 import com.browntowndev.enclave.feature.inference.ActiveChatTurnStore
@@ -77,10 +78,12 @@ class InferenceOrchestratorStopTest {
                 errorHandler = errorHandler,
                 savedStateHandle = SavedStateHandle(),
                 pipelineExecutor = mockk(relaxed = true),
+                moderatePromptUseCase = mockk<ModeratePromptUseCase>(relaxed = true),
+                loggingPort = mockk(relaxed = true),
                 applicationScope = applicationScope,
             )
 
-        mockAllowedSafetyGate(
+        mockSubmitPrompt(
             chatUseCases = chatUseCases,
             userMessageId = MessageId("user-stop-1"),
             chatId = ChatId("chat-stop-1"),
@@ -112,9 +115,9 @@ class InferenceOrchestratorStopTest {
                     selectedImageUris = emptyList(),
                     fileAttachments = emptyList(),
                     initialChatId = null,
-                    shouldModerate = true,
+                    shouldModerateResponse = true,
                     onInputCleared = {},
-                    onModerationBlocked = {},
+                    onResponseBlocked = {},
                 )
             }
             advanceTimeBy(ChatTurnTiming.ASSISTANT_PLACEHOLDER_DELAY_MS)

@@ -226,7 +226,7 @@ class MultimodalViewModelTest {
         return MultimodalViewModel(
             defaultModelRepository = defaultModelRepository,
             mediaProviderRepository = mediaProviderRepository,
-            moderatePromptUseCase = ModeratePromptUseCase(moderationPort),
+            moderatePromptUseCase = ModeratePromptUseCase(moderationPort, NoOpLoggingPort),
             shouldModeratePromptUseCase = allowShouldModeratePromptUseCase(),
             resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase(),
             getImageGenerationCapabilitiesUseCase = getImageGenerationCapabilitiesUseCase,
@@ -313,7 +313,7 @@ class MultimodalViewModelTest {
                 MultimodalViewModel(
                     defaultModelRepository = defaultModelRepository,
                     mediaProviderRepository = mediaProviderRepository,
-                    moderatePromptUseCase = ModeratePromptUseCase(moderationPort),
+                    moderatePromptUseCase = ModeratePromptUseCase(moderationPort, NoOpLoggingPort),
                     shouldModeratePromptUseCase = shouldModerateMock,
                     resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase(),
                     getImageGenerationCapabilitiesUseCase = getImageGenerationCapabilitiesUseCase,
