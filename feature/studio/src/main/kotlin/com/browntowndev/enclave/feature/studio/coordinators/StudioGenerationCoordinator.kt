@@ -12,16 +12,21 @@ import com.browntowndev.enclave.domain.port.media.StudioGenerationDispatcherPort
 import com.browntowndev.enclave.domain.port.repository.ActiveStudioGeneration
 import com.browntowndev.enclave.domain.port.repository.StudioMediaAsset
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
+import com.browntowndev.enclave.feature.studio.MODERATION_REJECTED_MESSAGE
+import com.browntowndev.enclave.feature.studio.ModerationEvent
 import com.browntowndev.enclave.feature.studio.STUDIO_ANIMATE_I2V_UNAVAILABLE
 import com.browntowndev.enclave.feature.studio.StudioGenerationErrorMessages
 import com.browntowndev.enclave.feature.studio.VideoGenerationState
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import java.util.UUID
 import javax.inject.Inject
@@ -58,6 +63,9 @@ class StudioGenerationCoordinator
         private val _videoGenerationState = MutableStateFlow<VideoGenerationState>(VideoGenerationState.Idle)
         val videoGenerationState: StateFlow<VideoGenerationState> = _videoGenerationState.asStateFlow()
 
+        private val _moderationEvents = Channel<ModerationEvent>(Channel.BUFFERED)
+        val moderationEvents: Flow<ModerationEvent> = _moderationEvents.receiveAsFlow()
+
         private val consumedScrollAnchors = mutableSetOf<String>()
 
         var lastProcessedEditAssetId: String? = null
@@ -93,18 +101,37 @@ class StudioGenerationCoordinator
                 .observeGenerationError()
                 .onEach { generationError ->
                     if (generationError != null) {
-                        val snackbarMessage = StudioGenerationErrorMessages.toSnackbarMessage(generationError)
-                        _error.value = snackbarMessage
-                        _isGenerating.value = false
-                        _isContinualGenerationActive.value = false
-                        _generationProgressLabel.value = null
-                        pendingDetailVideoSourceAssetId?.let { sourceAssetId ->
-                            _videoGenerationState.value =
-                                VideoGenerationState.Error(
-                                    sourceAssetId = sourceAssetId,
-                                    message = snackbarMessage,
-                                )
-                            clearPendingDetailVideoGeneration()
+                        if (StudioGenerationErrorMessages.isModerationError(generationError)) {
+                            _moderationEvents.send(
+                                ModerationEvent.Blocked(
+                                    prompt = _lastSubmittedPrompt.value.orEmpty(),
+                                ),
+                            )
+                            _isGenerating.value = false
+                            _isContinualGenerationActive.value = false
+                            _generationProgressLabel.value = null
+                            pendingDetailVideoSourceAssetId?.let { sourceAssetId ->
+                                _videoGenerationState.value =
+                                    VideoGenerationState.Error(
+                                        sourceAssetId = sourceAssetId,
+                                        message = MODERATION_REJECTED_MESSAGE,
+                                    )
+                                clearPendingDetailVideoGeneration()
+                            }
+                        } else {
+                            val snackbarMessage = StudioGenerationErrorMessages.toSnackbarMessage(generationError)
+                            _error.value = snackbarMessage
+                            _isGenerating.value = false
+                            _isContinualGenerationActive.value = false
+                            _generationProgressLabel.value = null
+                            pendingDetailVideoSourceAssetId?.let { sourceAssetId ->
+                                _videoGenerationState.value =
+                                    VideoGenerationState.Error(
+                                        sourceAssetId = sourceAssetId,
+                                        message = snackbarMessage,
+                                    )
+                                clearPendingDetailVideoGeneration()
+                            }
                         }
                     }
                 }.launchIn(scope)
@@ -298,6 +325,17 @@ class StudioGenerationCoordinator
             _error.value = message
             _isGenerating.value = false
             _isContinualGenerationActive.value = false
+        }
+
+        /**
+         * Resets generation flags without polluting [_error] and emits a [ModerationEvent.Blocked]
+         * so the UI can show a dedicated moderation snackbar with a "GOT IT WRONG?" action.
+         */
+        fun rejectPromptAsModerated(prompt: String) {
+            _isGenerating.value = false
+            _isContinualGenerationActive.value = false
+            _generationProgressLabel.value = null
+            _moderationEvents.trySend(ModerationEvent.Blocked(prompt))
         }
 
         fun resetGeneratingFlags() {

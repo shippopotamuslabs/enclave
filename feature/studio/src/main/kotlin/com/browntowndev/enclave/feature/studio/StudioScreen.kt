@@ -44,7 +44,7 @@ fun StudioScreen(
     onNavigateToHistory: () -> Unit,
     onNavigateToGallery: () -> Unit,
     onMediaClick: (String) -> Unit,
-    onShowSnackbar: (String, String?) -> Unit,
+    onShowSnackbar: (String, String?, (() -> Unit)?) -> Unit,
     viewModel: MultimodalViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -80,8 +80,23 @@ fun StudioScreen(
 
     LaunchedEffect(uiState.error) {
         uiState.error?.let {
-            onShowSnackbar(it, null)
+            onShowSnackbar(it, null, null)
             viewModel.clearError()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.moderationEvents.collect { event ->
+            when (event) {
+                is ModerationEvent.Blocked ->
+                    onShowSnackbar(
+                        MODERATION_REJECTED_MESSAGE,
+                        STUDIO_MODERATION_REPORT_ACTION,
+                    ) { viewModel.reportBlockedPrompt(event.prompt) }
+
+                ModerationEvent.ReportSubmitted ->
+                    onShowSnackbar(STUDIO_MODERATION_FEEDBACK_SUBMITTED, null, null)
+            }
         }
     }
 
@@ -201,7 +216,7 @@ fun StudioScreen(
                             else -> ""
                         }
                         if (message.isNotEmpty()) {
-                            onShowSnackbar(message, "DISMISS")
+                            onShowSnackbar(message, "DISMISS", null)
                         }
                     }
                 },

@@ -12,6 +12,7 @@ import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPor
 import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
 import com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase
 import com.browntowndev.enclave.domain.usecase.inference.ShouldModeratePromptUseCase
+import com.browntowndev.enclave.domain.usecase.inference.SubmitModerationReportUseCase
 import com.browntowndev.enclave.domain.usecase.media.GetImageGenerationCapabilitiesUseCase
 import com.browntowndev.enclave.domain.usecase.media.ResolveMediaModelTypeUseCase
 import com.browntowndev.enclave.feature.studio.coordinators.CapabilitiesPlaybackInputs
@@ -32,6 +33,8 @@ import com.browntowndev.enclave.feature.studio.coordinators.StudioSpeechCoordina
 import com.browntowndev.enclave.feature.studio.coordinators.StudioUiStateReducer
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -44,6 +47,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -59,6 +63,7 @@ class MultimodalViewModel
         private val mediaProviderRepository: MediaProviderRepositoryPort,
         private val moderatePromptUseCase: ModeratePromptUseCase,
         private val shouldModeratePromptUseCase: ShouldModeratePromptUseCase,
+        private val submitModerationReportUseCase: SubmitModerationReportUseCase,
         private val resolveMediaModelTypeUseCase: ResolveMediaModelTypeUseCase,
         private val getImageGenerationCapabilitiesUseCase: GetImageGenerationCapabilitiesUseCase,
         private val generationCoordinator: StudioGenerationCoordinator,
@@ -73,6 +78,9 @@ class MultimodalViewModel
     ) : ViewModel() {
         private val generationAttemptInFlight = AtomicBoolean(false)
         private val sessionMedia = albumSelectionCoordinator.sessionMediaFlow(viewModelScope)
+
+        private val _moderationEvents = Channel<ModerationEvent>(Channel.BUFFERED)
+        val moderationEvents: Flow<ModerationEvent> = _moderationEvents.receiveAsFlow()
 
         private val activeModelFlow =
             combine(
@@ -281,6 +289,9 @@ class MultimodalViewModel
                 scope = viewModelScope,
                 onActiveGeneration = promptCoordinator::restoreActiveGeneration,
             )
+            generationCoordinator.moderationEvents
+                .onEach { event -> _moderationEvents.send(event) }
+                .launchIn(viewModelScope)
             speechCoordinator.observeResults(viewModelScope) { text ->
                 promptCoordinator.prompt.value = text
             }
@@ -478,6 +489,17 @@ class MultimodalViewModel
             generationCoordinator.clearError(viewModelScope)
         }
 
+        /**
+         * Submits the moderated prompt as a false-positive report to Firestore so the moderation
+         * thresholds can be tuned. Called when the user taps "GOT IT WRONG?" on the snackbar.
+         */
+        fun reportBlockedPrompt(prompt: String) {
+            viewModelScope.launch {
+                submitModerationReportUseCase(prompt, "blocked")
+                _moderationEvents.send(ModerationEvent.ReportSubmitted)
+            }
+        }
+
         fun generate() {
             if (generationCoordinator.isGenerating.value || generationCoordinator.isContinualGenerationActive.value) {
                 generationAttemptInFlight.set(false)
@@ -503,7 +525,7 @@ class MultimodalViewModel
                     if (shouldModerate) {
                         val moderationResult = moderatePromptUseCase(submittedPrompt)
                         if (moderationResult.blocked) {
-                            generationCoordinator.rejectPrompt(PROMPT_REJECTED_MESSAGE)
+                            generationCoordinator.rejectPromptAsModerated(submittedPrompt)
                             return@launch
                         }
                     }
@@ -546,6 +568,5 @@ class MultimodalViewModel
 
         private companion object {
             private const val SUBSCRIBE_TIMEOUT_MS = 5_000L
-            private const val PROMPT_REJECTED_MESSAGE = "Prompt rejected due to moderation"
         }
     }

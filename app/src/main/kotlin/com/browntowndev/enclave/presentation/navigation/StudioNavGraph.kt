@@ -213,7 +213,7 @@ private fun StudioRoute(
         onNavigateToHistory = actions.onNavigateToHistory,
         onNavigateToGallery = actions.onNavigateToGallery,
         onMediaClick = actions.onNavigateToStudioDetail,
-        onShowSnackbar = { msg, act -> actions.onShowSnackbar(msg, act, null) },
+        onShowSnackbar = actions.onShowSnackbar,
     )
 }
 

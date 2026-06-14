@@ -9,8 +9,10 @@ import com.browntowndev.enclave.domain.port.media.StudioGenerationDispatcherPort
 import com.browntowndev.enclave.domain.port.repository.ActiveStudioGeneration
 import com.browntowndev.enclave.domain.port.repository.StudioMediaAsset
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
+import com.browntowndev.enclave.feature.studio.ModerationEvent
 import com.browntowndev.enclave.feature.studio.StudioGenerationErrorMessages
 import com.browntowndev.enclave.feature.studio.VideoGenerationState
+import app.cash.turbine.test
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -24,6 +26,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -124,6 +127,35 @@ class StudioGenerationCoordinatorTest {
     }
 
     @Test
+    fun rejectPromptAsModerated_resetsFlagsAndEmitsEventWithoutError() =
+        runTest {
+            coordinator.startObservers(this)
+            coordinator.beginGenerationAttempt(
+                submittedPrompt = "test prompt",
+                mediaType = MediaCapability.IMAGE,
+                continualMode = true,
+                settings = ImageGenerationSettings(),
+            )
+            advanceUntilIdle()
+            assertTrue(coordinator.isGenerating.value)
+
+            coordinator.moderationEvents.test {
+                coordinator.rejectPromptAsModerated("test prompt")
+
+                val event = awaitItem()
+                assertTrue(event is ModerationEvent.Blocked)
+                assertEquals("test prompt", (event as ModerationEvent.Blocked).prompt)
+                cancelAndIgnoreRemainingEvents()
+            }
+
+            assertFalse(coordinator.isGenerating.value)
+            assertFalse(coordinator.isContinualGenerationActive.value)
+            assertNull(coordinator.error.value)
+
+            coroutineContext[Job]?.cancelChildren(CancellationException("test complete"))
+        }
+
+    @Test
     fun stopGeneration_resetsContinualGenerationActive() {
         coordinator.beginGenerationAttempt("prompt", MediaCapability.IMAGE, continualMode = true, settings = ImageGenerationSettings())
         coordinator.stopGeneration()
@@ -201,7 +233,7 @@ class StudioGenerationCoordinatorTest {
         }
 
     @Test
-    fun observeGenerationError_mapsFalPolicyFailureForSnackbar() =
+    fun observeGenerationError_mapsFalPolicyFailureAsModerationEvent() =
         runTest {
             coordinator.startObservers(this)
             coordinator.startDetailVideoGeneration(
@@ -214,16 +246,35 @@ class StudioGenerationCoordinatorTest {
                 ),
             )
 
-            generationErrorFlow.value =
-                "fal video generation failed: could not fetch queue result from " +
-                "https://queue.fal.run/requests/1 " +
-                "(fal queue result failed: 422 Output video has sensitive content.)"
+            coordinator.moderationEvents.test {
+                generationErrorFlow.value =
+                    "fal video generation failed: could not fetch queue result from " +
+                    "https://queue.fal.run/requests/1 " +
+                    "(fal queue result failed: 422 Output video has sensitive content.)"
+                advanceUntilIdle()
+
+                val event = awaitItem()
+                assertTrue(event is ModerationEvent.Blocked)
+                cancelAndIgnoreRemainingEvents()
+            }
+
+            assertNull(coordinator.error.value)
+            val videoError = coordinator.videoGenerationState.value as VideoGenerationState.Error
+            assertEquals("Media failed moderation.", videoError.message)
+
+            coroutineContext[Job]?.cancelChildren(CancellationException("test complete"))
+        }
+
+    @Test
+    fun observeGenerationError_mapsNonModerationFailureAsError() =
+        runTest {
+            coordinator.startObservers(this)
+
+            generationErrorFlow.value = "fal image generation failed: timeout"
             advanceUntilIdle()
 
-            val expected = StudioGenerationErrorMessages.toSnackbarMessage(generationErrorFlow.value)
+            val expected = StudioGenerationErrorMessages.toSnackbarMessage("fal image generation failed: timeout")
             assertEquals(expected, coordinator.error.value)
-            val videoError = coordinator.videoGenerationState.value as VideoGenerationState.Error
-            assertEquals(expected, videoError.message)
 
             coroutineContext[Job]?.cancelChildren(CancellationException("test complete"))
         }

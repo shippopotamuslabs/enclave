@@ -30,6 +30,7 @@ import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
 import com.browntowndev.enclave.domain.usecase.chat.ListenToSpeechUseCase
 import com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase
+import com.browntowndev.enclave.domain.usecase.inference.SubmitModerationReportUseCase
 import com.browntowndev.enclave.domain.usecase.media.GetImageGenerationCapabilitiesUseCase
 import com.browntowndev.enclave.domain.usecase.media.ResolveMediaModelTypeUseCase
 import com.browntowndev.enclave.domain.usecase.media.ResolveMediaProviderCapabilitiesUseCase
@@ -96,6 +97,7 @@ class MultimodalViewModelTest {
     private val activeGenerationFlow = MutableStateFlow<ActiveStudioGeneration?>(null)
     private val speechEvents = MutableSharedFlow<SpeechState>(extraBufferCapacity = 8)
     private val moderationPort = MutablePromptModerationPort()
+    private val submitModerationReportUseCase = mockk<SubmitModerationReportUseCase>(relaxed = true)
 
     private lateinit var app: android.app.Application
     private lateinit var viewModel: MultimodalViewModel
@@ -228,6 +230,7 @@ class MultimodalViewModelTest {
             mediaProviderRepository = mediaProviderRepository,
             moderatePromptUseCase = ModeratePromptUseCase(moderationPort, NoOpLoggingPort),
             shouldModeratePromptUseCase = allowShouldModeratePromptUseCase(),
+            submitModerationReportUseCase = submitModerationReportUseCase,
             resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase(),
             getImageGenerationCapabilitiesUseCase = getImageGenerationCapabilitiesUseCase,
             generationCoordinator = generationCoordinator,
@@ -296,12 +299,40 @@ class MultimodalViewModelTest {
                     viewModel.uiState.collect {}
                 }
 
-            viewModel.generate()
-            advanceUntilIdle()
+            viewModel.moderationEvents.test {
+                viewModel.generate()
+                advanceUntilIdle()
+
+                val event = awaitItem()
+                assertTrue(event is ModerationEvent.Blocked)
+                assertEquals("blocked studio prompt", (event as ModerationEvent.Blocked).prompt)
+                cancelAndIgnoreRemainingEvents()
+            }
 
             assertFalse(viewModel.uiState.value.isGenerating)
-            assertEquals("Prompt rejected due to moderation", viewModel.uiState.value.error)
+            assertNull(viewModel.uiState.value.error)
             verify(exactly = 0) { dispatcher.startGeneration(any(), any(), any(), any()) }
+            job.cancel()
+        }
+
+    @Test
+    fun `reportBlockedPrompt submits report and emits confirmation event`() =
+        runTest {
+            val job =
+                backgroundScope.launch(testDispatcher) {
+                    viewModel.uiState.collect {}
+                }
+
+            viewModel.moderationEvents.test {
+                viewModel.reportBlockedPrompt("false positive prompt")
+                advanceUntilIdle()
+
+                coVerify { submitModerationReportUseCase("false positive prompt", "blocked") }
+                val event = awaitItem()
+                assertEquals(ModerationEvent.ReportSubmitted, event)
+                cancelAndIgnoreRemainingEvents()
+            }
+
             job.cancel()
         }
 
@@ -315,6 +346,7 @@ class MultimodalViewModelTest {
                     mediaProviderRepository = mediaProviderRepository,
                     moderatePromptUseCase = ModeratePromptUseCase(moderationPort, NoOpLoggingPort),
                     shouldModeratePromptUseCase = shouldModerateMock,
+                    submitModerationReportUseCase = submitModerationReportUseCase,
                     resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase(),
                     getImageGenerationCapabilitiesUseCase = getImageGenerationCapabilitiesUseCase,
                     generationCoordinator = generationCoordinator,
@@ -518,7 +550,7 @@ class MultimodalViewModelTest {
         }
 
     @Test
-    fun `generate exposes fal content policy failure as snackbar message`() =
+    fun `generate exposes fal content policy failure as moderation event`() =
         runTest {
             val job =
                 backgroundScope.launch(testDispatcher) {
@@ -527,16 +559,21 @@ class MultimodalViewModelTest {
 
             viewModel.onPromptChange("mock microsoft")
             viewModel.generate()
-
-            generationErrorFlow.value =
-                "fal video generation failed: could not fetch queue result from " +
-                "https://queue.fal.run/bytedance/seedance-2.0/requests/test " +
-                "(fal queue result failed: 422 Output video has sensitive content.)"
             advanceUntilIdle()
 
-            val error = viewModel.uiState.value.error
-            assertTrue(error?.contains("sensitive content", ignoreCase = true) == true)
-            assertTrue(error?.contains("blocked", ignoreCase = true) == true)
+            viewModel.moderationEvents.test {
+                generationErrorFlow.value =
+                    "fal video generation failed: could not fetch queue result from " +
+                    "https://queue.fal.run/bytedance/seedance-2.0/requests/test " +
+                    "(fal queue result failed: 422 Output video has sensitive content.)"
+                advanceUntilIdle()
+
+                val event = awaitItem()
+                assertTrue(event is ModerationEvent.Blocked)
+                cancelAndIgnoreRemainingEvents()
+            }
+
+            assertNull(viewModel.uiState.value.error)
             job.cancel()
         }
 
