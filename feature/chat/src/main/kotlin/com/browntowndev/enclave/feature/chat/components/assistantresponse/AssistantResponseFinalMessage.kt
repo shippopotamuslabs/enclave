@@ -43,6 +43,7 @@ internal fun AssistantResponseFinalMessage(
     onNavigateToStudio: (ids: List<String>, uris: List<String>, types: List<String>, prompts: List<String>) -> Unit,
     onShareClick: (MessageId) -> Unit,
     onStatsClick: (MessageId) -> Unit = {},
+    onReportClick: (MessageId) -> Unit = {},
     onShowSources: () -> Unit,
 ) {
     var transcriptSheetVisible by remember { mutableStateOf(false) }
@@ -141,6 +142,7 @@ internal fun AssistantResponseFinalMessage(
         onPauseAudio = onPauseAudio,
         onShareClick = onShareClick,
         onStatsClick = onStatsClick,
+        onReportClick = onReportClick,
         onShowSources = onShowSources,
     )
 }
