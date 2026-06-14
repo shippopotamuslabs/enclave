@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -16,12 +15,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -46,6 +48,9 @@ import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.feature.chat.ChatMessage
 import kotlinx.coroutines.launch
 
+private val ActionIconButtonSize = 32.dp
+private val ActionIconSize = 18.dp
+
 @Composable
 internal fun AssistantResponseActionRow(
     message: ChatMessage,
@@ -65,6 +70,7 @@ internal fun AssistantResponseActionRow(
     val clipboardManager = LocalClipboard.current
     val coroutineScope = rememberCoroutineScope()
     var showReportDialog by remember { mutableStateOf(false) }
+    var overflowExpanded by remember { mutableStateOf(false) }
 
     if (showReportDialog) {
         AlertDialog(
@@ -99,19 +105,20 @@ internal fun AssistantResponseActionRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.weight(1f),
-        ) {
-            if (isComplete) {
+        if (isComplete) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(0.dp),
+            ) {
                 IconButton(
                     onClick = { onShareClick(message.id) },
+                    modifier = Modifier.size(ActionIconButtonSize),
                 ) {
                     Icon(
                         imageVector = Icons.Default.Share,
                         contentDescription = "Share",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                        modifier = Modifier.size(18.dp),
+                        modifier = Modifier.size(ActionIconSize),
                     )
                 }
 
@@ -123,10 +130,7 @@ internal fun AssistantResponseActionRow(
                             )
                         }
                     },
-                    modifier =
-                        Modifier
-                            .offset(x = (-8).dp)
-                            .size(32.dp),
+                    modifier = Modifier.size(ActionIconButtonSize),
                 ) {
                     Icon(
                         imageVector = Icons.Filled.ContentCopy,
@@ -140,14 +144,11 @@ internal fun AssistantResponseActionRow(
                     when {
                         isLoadingTts -> {
                             Box(
-                                modifier =
-                                    Modifier
-                                        .offset(x = (-8).dp)
-                                        .size(32.dp),
+                                modifier = Modifier.size(ActionIconButtonSize),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 NeoCircularProgressIndicator(
-                                    modifier = Modifier.size(18.dp),
+                                    modifier = Modifier.size(ActionIconSize),
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
@@ -155,82 +156,42 @@ internal fun AssistantResponseActionRow(
                         isPlayingTts -> {
                             IconButton(
                                 onClick = onPauseAudio,
-                                modifier =
-                                    Modifier
-                                        .offset(x = (-8).dp)
-                                        .size(32.dp),
+                                modifier = Modifier.size(ActionIconButtonSize),
                             ) {
                                 Icon(
                                     imageVector = Icons.Filled.Pause,
                                     contentDescription = "Pause audio",
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(18.dp),
+                                    modifier = Modifier.size(ActionIconSize),
                                 )
                             }
                         }
                         isPausedTts -> {
                             IconButton(
                                 onClick = { onPlayAudio(contentText) },
-                                modifier =
-                                    Modifier
-                                        .offset(x = (-8).dp)
-                                        .size(32.dp),
+                                modifier = Modifier.size(ActionIconButtonSize),
                             ) {
                                 Icon(
                                     imageVector = Icons.Filled.PlayArrow,
                                     contentDescription = "Resume audio",
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(18.dp),
+                                    modifier = Modifier.size(ActionIconSize),
                                 )
                             }
                         }
                         else -> {
                             IconButton(
                                 onClick = { onPlayAudio(contentText) },
-                                modifier =
-                                    Modifier
-                                        .offset(x = (-8).dp)
-                                        .size(32.dp),
+                                modifier = Modifier.size(ActionIconButtonSize),
                             ) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.VolumeUp,
                                     contentDescription = "Read aloud",
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(18.dp),
+                                    modifier = Modifier.size(ActionIconSize),
                                 )
                             }
                         }
-                    }
-                }
-
-                if (isComplete) {
-                    IconButton(
-                        onClick = { onStatsClick(message.id) },
-                        modifier = Modifier.size(32.dp),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.BarChart,
-                            contentDescription = "Response statistics",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(18.dp),
-                        )
-                    }
-                }
-
-                if (isComplete) {
-                    IconButton(
-                        onClick = { showReportDialog = true },
-                        modifier =
-                            Modifier
-                                .offset(x = (-8).dp)
-                                .size(32.dp),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Warning,
-                            contentDescription = "Report response",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(18.dp),
-                        )
                     }
                 }
 
@@ -265,9 +226,54 @@ internal fun AssistantResponseActionRow(
                         }
                     }
                 }
-            } else {
-                Spacer(modifier = Modifier.size(32.dp).offset(x = (-8).dp))
+
+                Box {
+                    IconButton(
+                        onClick = { overflowExpanded = true },
+                        modifier = Modifier.size(ActionIconButtonSize),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "More response actions",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(ActionIconSize),
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = overflowExpanded,
+                        onDismissRequest = { overflowExpanded = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Stats") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Outlined.BarChart,
+                                    contentDescription = null,
+                                )
+                            },
+                            onClick = {
+                                overflowExpanded = false
+                                onStatsClick(message.id)
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Report") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Warning,
+                                    contentDescription = null,
+                                )
+                            },
+                            onClick = {
+                                overflowExpanded = false
+                                showReportDialog = true
+                            },
+                        )
+                    }
+                }
             }
+        } else {
+            Spacer(modifier = Modifier.size(ActionIconButtonSize))
         }
 
         if (isComplete && message.formattedTimestamp.isNotBlank()) {
