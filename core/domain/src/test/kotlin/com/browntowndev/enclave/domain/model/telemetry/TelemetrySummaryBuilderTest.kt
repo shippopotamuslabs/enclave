@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.domain.model.telemetry
 
+import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.telemetry.TelemetryTestFixtures
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -62,5 +63,42 @@ class TelemetrySummaryBuilderTest {
             )
 
         assertEquals(19.0, summary.cacheHitRatePercent)
+    }
+
+    @Test
+    fun `buildChatSummary totalCacheWriteInputTokens falls back to cacheCreationInputTokens for Anthropic rows`() {
+        val anthropicRow =
+            TelemetryTestFixtures.telAnthropic1.copy(
+                messageId = MessageId("m-anthropic-write"),
+                chatId = ChatId("chat-anthropic-write"),
+                cacheWriteInputTokens = null,
+                cacheCreationInputTokens = 500,
+            )
+        val summary =
+            TelemetrySummaryBuilder.buildChatSummary(
+                chatId = ChatId("chat-anthropic-write"),
+                rows = listOf(anthropicRow),
+            )
+
+        // cacheWriteInputTokens is null for Anthropic, should fall back to cacheCreationInputTokens
+        assertEquals(500, summary.totalCacheWriteInputTokens)
+    }
+
+    @Test
+    fun `buildChatSummary totalCacheReadInputTokens sums Anthropic cache read tokens`() {
+        val row =
+            TelemetryTestFixtures.telAnthropic1.copy(
+                messageId = MessageId("m-anthropic-read"),
+                chatId = ChatId("chat-anthropic-read"),
+                cacheReadInputTokens = 8000,
+                cacheCreationInputTokens = 200,
+            )
+        val summary =
+            TelemetrySummaryBuilder.buildChatSummary(
+                chatId = ChatId("chat-anthropic-read"),
+                rows = listOf(row),
+            )
+
+        assertEquals(8000, summary.totalCacheReadInputTokens)
     }
 }

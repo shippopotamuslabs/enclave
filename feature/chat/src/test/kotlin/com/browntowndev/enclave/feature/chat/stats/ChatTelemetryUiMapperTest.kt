@@ -54,4 +54,36 @@ class ChatTelemetryUiMapperTest {
         assertEquals(1, openAiRow.turnCount)
         assertEquals(2, openAiRow.requestCount)
     }
+
+    @Test
+    fun `chat stats summary rows include cache read and cache write tokens`() {
+        val row =
+            TelemetryTestFixtures.telAnthropic1.copy(
+                cacheWriteInputTokens = null,
+                cacheReadInputTokens = 8000,
+                cacheCreationInputTokens = 500,
+            )
+        val summary =
+            TelemetrySummaryBuilder.buildChatSummary(
+                chatId = TelemetryTestFixtures.chat1,
+                rows = listOf(row),
+            )
+        val sheet = mapper.mapChatStats(summary)
+
+        assertEquals("8000", sheet.summaryRows.first { it.label == "Cache read tokens" }.value)
+        assertEquals("500", sheet.summaryRows.first { it.label == "Cache write tokens" }.value)
+    }
+
+    @Test
+    fun `chat stats cache rows show 0 when no cache telemetry exists`() {
+        val summary =
+            TelemetrySummaryBuilder.buildChatSummary(
+                chatId = TelemetryTestFixtures.chat1,
+                rows = listOf(TelemetryTestFixtures.telAgent1),
+            )
+        val sheet = mapper.mapChatStats(summary)
+
+        assertEquals("0", sheet.summaryRows.first { it.label == "Cache read tokens" }.value)
+        assertEquals("0", sheet.summaryRows.first { it.label == "Cache write tokens" }.value)
+    }
 }

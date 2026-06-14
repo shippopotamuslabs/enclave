@@ -46,6 +46,8 @@ class ChatTelemetryUiMapper
                         summaryMetric("Average output speed", formatSpeed(summary.averageOutputTokensPerSecond)),
                         summaryMetric("Output tokens", summary.totalOutputTokens.toString()),
                         summaryMetric("Reasoning tokens", summary.totalReasoningTokens.toString()),
+                        summaryMetric("Cache read tokens", formatInt(summary.totalCacheReadInputTokens)),
+                        summaryMetric("Cache write tokens", formatInt(summary.totalCacheWriteInputTokens)),
                         summaryMetric("Cache hit rate", formatPercent(summary.cacheHitRatePercent)),
                     ),
                 providerBreakdownRows =

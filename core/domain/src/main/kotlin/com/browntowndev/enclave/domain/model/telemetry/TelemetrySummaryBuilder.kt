@@ -84,7 +84,7 @@ object TelemetrySummaryBuilder {
             totalOutputTokens = rows.mapNotNull { it.outputTokens }.sum(),
             totalReasoningTokens = rows.mapNotNull { it.reasoningTokens }.sum(),
             totalCacheReadInputTokens = rows.mapNotNull { it.cacheReadInputTokens }.sum(),
-            totalCacheWriteInputTokens = rows.mapNotNull { it.cacheWriteInputTokens }.sum(),
+            totalCacheWriteInputTokens = rows.mapNotNull { it.cacheWriteInputTokens ?: it.cacheCreationInputTokens }.sum(),
             cacheHitRatePercent = cacheHitRate(rows),
             providerBreakdown = providerBreakdown(rows),
             modelBreakdown = modelBreakdown(rows),
