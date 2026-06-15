@@ -5,6 +5,7 @@ import androidx.lifecycle.SavedStateHandle
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.chat.AccumulatedMessages
 import com.browntowndev.enclave.domain.model.chat.ChatId
+import com.browntowndev.enclave.domain.model.chat.ChatResponseMode
 import com.browntowndev.enclave.domain.model.chat.Content
 import com.browntowndev.enclave.domain.model.chat.FileAttachment
 import com.browntowndev.enclave.domain.model.chat.Message
@@ -25,7 +26,6 @@ import com.browntowndev.enclave.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase
 import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.enclave.feature.chat.BuildConfig
-import com.browntowndev.enclave.feature.chat.ChatModeMapper.toDomain
 import com.browntowndev.enclave.feature.chat.ChatModeUi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -86,7 +86,7 @@ class InferenceOrchestrator
         fun sendMessage(
             scope: CoroutineScope,
             input: String,
-            selectedMode: ChatModeUi,
+            responseMode: ChatResponseMode,
             selectedImageUris: List<String>,
             fileAttachments: List<FileAttachment>,
             initialChatId: ChatId?,
@@ -190,7 +190,7 @@ class InferenceOrchestrator
                                     userMessageId = userResult.userMessageId,
                                     assistantMessageId = assistantMessageId,
                                     chatId = userResult.chatId,
-                                    mode = selectedMode.toDomain(),
+                                    responseMode = responseMode,
                                     backgroundInferenceEnabled = settings.backgroundInferenceEnabled,
                                 ).catch { cause ->
                                     val userMessage =

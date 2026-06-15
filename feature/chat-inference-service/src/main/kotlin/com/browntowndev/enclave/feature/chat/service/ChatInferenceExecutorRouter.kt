@@ -1,8 +1,10 @@
 package com.browntowndev.enclave.feature.chat.service
 
 import com.browntowndev.enclave.domain.model.chat.ChatId
+import com.browntowndev.enclave.domain.model.chat.ChatModelOverride
 import com.browntowndev.enclave.domain.model.chat.MessageGenerationState
 import com.browntowndev.enclave.domain.model.chat.MessageId
+import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.ChatInferenceExecutorPort
 import com.browntowndev.enclave.domain.usecase.chat.DirectChatInferenceExecutor
@@ -50,6 +52,27 @@ class ChatInferenceExecutorRouter
                     backgroundInferenceEnabled = false,
                 )
             }
+
+        override fun executeWithOverride(
+            prompt: String,
+            userMessageId: MessageId,
+            assistantMessageId: MessageId,
+            chatId: ChatId,
+            userHasImage: Boolean,
+            modelOverride: ChatModelOverride,
+            resolvedConfiguration: ActiveModelConfiguration,
+            backgroundInferenceEnabled: Boolean,
+        ): Flow<MessageGenerationState> =
+            directExecutor.executeWithOverride(
+                prompt = prompt,
+                userMessageId = userMessageId,
+                assistantMessageId = assistantMessageId,
+                chatId = chatId,
+                userHasImage = userHasImage,
+                modelOverride = modelOverride,
+                resolvedConfiguration = resolvedConfiguration,
+                backgroundInferenceEnabled = backgroundInferenceEnabled,
+            )
 
         override fun stop() {
             // Stop both executors — the direct executor's stop() is a no-op,

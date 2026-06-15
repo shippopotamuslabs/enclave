@@ -1,6 +1,7 @@
 package com.browntowndev.enclave.domain.usecase.chat
 
 import com.browntowndev.enclave.domain.model.chat.ChatId
+import com.browntowndev.enclave.domain.model.chat.ChatResponseMode
 import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.Mode
@@ -138,7 +139,7 @@ class GenerateChatResponseUseCaseSearchToolTest {
                 userMessageId = MessageId("1"),
                 assistantMessageId = MessageId("2"),
                 chatId = ChatId("3"),
-                mode = Mode.FAST,
+                responseMode = ChatResponseMode.Fast,
                 backgroundInferenceEnabled = false,
             ).toList()
 
@@ -213,7 +214,7 @@ class GenerateChatResponseUseCaseSearchToolTest {
                 userMessageId = MessageId("1"),
                 assistantMessageId = MessageId("2"),
                 chatId = ChatId("3"),
-                mode = Mode.FAST,
+                responseMode = ChatResponseMode.Fast,
                 backgroundInferenceEnabled = false,
             ).toList()
 

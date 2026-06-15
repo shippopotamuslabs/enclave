@@ -2,11 +2,20 @@ package com.browntowndev.enclave.domain.usecase.chat
 
 import com.browntowndev.enclave.domain.model.chat.AccumulatedMessages
 import com.browntowndev.enclave.domain.model.chat.ChatId
+import com.browntowndev.enclave.domain.model.chat.ChatModelOverride
+import com.browntowndev.enclave.domain.model.chat.ChatResponseMode
 import com.browntowndev.enclave.domain.model.chat.MessageGenerationState
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.Mode
 import com.browntowndev.enclave.domain.model.error.InferenceIOException
 import com.browntowndev.enclave.domain.model.inference.ModelType
+import com.browntowndev.enclave.domain.model.telemetry.TelemetryClientBuild
+import com.browntowndev.enclave.domain.model.telemetry.TelemetryCostSource
+import com.browntowndev.enclave.domain.model.telemetry.TelemetryCostStatus
+import com.browntowndev.enclave.domain.model.telemetry.TelemetryProviderKey
+import com.browntowndev.enclave.domain.model.telemetry.TelemetrySourceKind
+import com.browntowndev.enclave.domain.model.telemetry.TurnTelemetry
+import com.browntowndev.enclave.domain.model.telemetry.TurnTelemetryId
 import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnKey
 import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnSnapshotPort
 import com.browntowndev.enclave.domain.port.inference.ChatInferenceExecutorPort
@@ -67,7 +76,7 @@ class GenerateChatResponseUseCase
             userMessageId: MessageId,
             assistantMessageId: MessageId,
             chatId: ChatId,
-            mode: Mode,
+            responseMode: ChatResponseMode,
             backgroundInferenceEnabled: Boolean,
         ): Flow<AccumulatedMessages> =
             flow {
@@ -75,9 +84,11 @@ class GenerateChatResponseUseCase
                     messageRepository.getMessageById(userMessageId)
                         ?: throw IllegalStateException("User message $userMessageId was not found")
 
+                val mode = responseModeToMode(responseMode)
+
                 val baseFlow =
-                    executeMode(
-                        mode = mode,
+                    executeResponseMode(
+                        responseMode = responseMode,
                         prompt = prompt,
                         userMessageId = userMessageId,
                         assistantMessageId = assistantMessageId,
@@ -207,8 +218,16 @@ class GenerateChatResponseUseCase
                 }
             }.buffer(FLOW_BUFFER_SIZE).flowOn(Dispatchers.Default)
 
-        private fun executeMode(
-            mode: Mode,
+        private fun responseModeToMode(responseMode: ChatResponseMode): Mode =
+            when (responseMode) {
+                ChatResponseMode.Fast -> Mode.FAST
+                ChatResponseMode.Thinking -> Mode.THINKING
+                ChatResponseMode.Council -> Mode.COUNCIL
+                is ChatResponseMode.Other -> Mode.OTHER
+            }
+
+        private fun executeResponseMode(
+            responseMode: ChatResponseMode,
             prompt: String,
             userMessageId: MessageId,
             assistantMessageId: MessageId,
@@ -217,8 +236,8 @@ class GenerateChatResponseUseCase
             fileAttachments: List<com.browntowndev.enclave.domain.model.chat.FileAttachment>,
             backgroundInferenceEnabled: Boolean,
         ): Flow<MessageGenerationState> =
-            when (mode) {
-                Mode.FAST ->
+            when (responseMode) {
+                ChatResponseMode.Fast ->
                     executeSingleModelMode(
                         prompt = prompt,
                         userMessageId = userMessageId,
@@ -229,7 +248,7 @@ class GenerateChatResponseUseCase
                         backgroundInferenceEnabled = backgroundInferenceEnabled,
                     )
 
-                Mode.THINKING ->
+                ChatResponseMode.Thinking ->
                     executeSingleModelMode(
                         prompt = prompt,
                         userMessageId = userMessageId,
@@ -240,7 +259,7 @@ class GenerateChatResponseUseCase
                         backgroundInferenceEnabled = backgroundInferenceEnabled,
                     )
 
-                Mode.COUNCIL ->
+                ChatResponseMode.Council ->
                     executeCrewMode(
                         prompt = prompt,
                         chatId = chatId,
@@ -249,6 +268,90 @@ class GenerateChatResponseUseCase
                         userHasImage = userHasImage,
                         fileAttachments = fileAttachments,
                     )
+
+                is ChatResponseMode.Other ->
+                    executeOverrideMode(
+                        modelOverride = responseMode.modelOverride,
+                        prompt = prompt,
+                        userMessageId = userMessageId,
+                        assistantMessageId = assistantMessageId,
+                        chatId = chatId,
+                        userHasImage = userHasImage,
+                        backgroundInferenceEnabled = backgroundInferenceEnabled,
+                    )
+            }
+
+        private fun executeOverrideMode(
+            modelOverride: ChatModelOverride,
+            prompt: String,
+            userMessageId: MessageId,
+            assistantMessageId: MessageId,
+            chatId: ChatId,
+            userHasImage: Boolean,
+            backgroundInferenceEnabled: Boolean,
+        ): Flow<MessageGenerationState> =
+            flow {
+                val config =
+                    activeModelProvider.getActiveConfigurationByOverride(modelOverride)
+                        ?: run {
+                            emit(
+                                MessageGenerationState.Failed(
+                                    IllegalStateException(
+                                        "Override configuration not found for ${modelOverride.displayName}",
+                                    ),
+                                    ModelType.FAST,
+                                ),
+                            )
+                            return@flow
+                        }
+                emit(
+                    MessageGenerationState.TelemetryCaptured(
+                        telemetry =
+                            TurnTelemetry(
+                                id = TurnTelemetryId("override-${config.id.value}"),
+                                messageId = assistantMessageId,
+                                chatId = chatId,
+                                sequenceIndex = 0,
+                                providerKey = TelemetryProviderKey.OTHER,
+                                providerLabel = config.name,
+                                modelId = config.modelId,
+                                modelLabel = config.name,
+                                sourceKind =
+                                    if (config.isLocal) {
+                                        TelemetrySourceKind.LOCAL
+                                    } else {
+                                        TelemetrySourceKind.REMOTE
+                                    },
+                                requestStartedAtMs = 0L,
+                                firstOutputTokenAtMs = null,
+                                completedAtMs = null,
+                                inputTokens = null,
+                                outputTokens = null,
+                                reasoningTokens = null,
+                                cachedInputTokens = null,
+                                cacheReadInputTokens = null,
+                                cacheWriteInputTokens = null,
+                                cacheCreationInputTokens = null,
+                                costUsd = null,
+                                costStatus = TelemetryCostStatus.UNAVAILABLE,
+                                costSource = TelemetryCostSource.NOT_AVAILABLE,
+                                clientBuild = TelemetryClientBuild("", 0L, 1),
+                            ),
+                        modelType = ModelType.FAST,
+                    ),
+                )
+                emitAll(
+                    chatInferenceExecutor.executeWithOverride(
+                        prompt = prompt,
+                        userMessageId = userMessageId,
+                        assistantMessageId = assistantMessageId,
+                        chatId = chatId,
+                        userHasImage = userHasImage,
+                        modelOverride = modelOverride,
+                        resolvedConfiguration = config,
+                        backgroundInferenceEnabled = backgroundInferenceEnabled,
+                    ),
+                )
             }
 
         private fun executeSingleModelMode(

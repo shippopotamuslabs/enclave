@@ -1,8 +1,13 @@
 package com.browntowndev.enclave.feature.chat
 
 import androidx.lifecycle.SavedStateHandle
+import com.browntowndev.enclave.core.ui.component.assignment.ApiModelAssetUiMapper
+import com.browntowndev.enclave.core.ui.component.assignment.LocalModelAssetUiMapper
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
+import com.browntowndev.enclave.domain.usecase.chat.ChatCapablePresets
+import com.browntowndev.enclave.domain.usecase.chat.GetChatCapablePresetsUseCase
 import com.browntowndev.enclave.domain.model.chat.Mode
+import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnSnapshotPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.PromptModerationPort
@@ -56,6 +61,7 @@ object ChatViewModelTestSupport {
     data class Harness(
         val viewModel: ChatViewModel,
         val inferenceOrchestrator: InferenceOrchestrator,
+        val chatInputCoordinator: ChatInputCoordinator,
     )
 
     fun createViewModel(
@@ -79,7 +85,7 @@ object ChatViewModelTestSupport {
         stageImageAttachmentUseCase: StageImageAttachmentUseCase,
         shouldModeratePromptUseCase: ShouldModeratePromptUseCase =
             mockk(relaxed = true) {
-                coEvery { this@mockk.invoke(any()) } returns true
+                coEvery { this@mockk.invoke(any<ModelType>()) } returns true
             },
         submitModerationReportUseCase: SubmitModerationReportUseCase = mockk(relaxed = true),
         uiSelectionRepository: UiSelectionRepository =
@@ -132,7 +138,7 @@ object ChatViewModelTestSupport {
         stageImageAttachmentUseCase: StageImageAttachmentUseCase,
         shouldModeratePromptUseCase: ShouldModeratePromptUseCase =
             mockk(relaxed = true) {
-                coEvery { this@mockk.invoke(any()) } returns true
+                coEvery { this@mockk.invoke(any<ModelType>()) } returns true
             },
         submitModerationReportUseCase: SubmitModerationReportUseCase = mockk(relaxed = true),
         uiSelectionRepository: UiSelectionRepository =
@@ -203,6 +209,11 @@ object ChatViewModelTestSupport {
         val chatUiStateReducer = ChatUiStateReducer(chatMessageUiMapper = chatMessageUiMapper)
         val photoAttachmentPolicyResolver =
             PhotoAttachmentPolicyResolver(activeModelProvider = activeModelProvider)
+        val getChatCapablePresetsUseCase = mockk<GetChatCapablePresetsUseCase>()
+        every { getChatCapablePresetsUseCase.invoke() } returns
+            flowOf(ChatCapablePresets(localAssets = emptyList(), apiAssets = emptyList()))
+        every { chatUseCases.getChatCapablePresetsUseCase } returns getChatCapablePresetsUseCase
+
         val liveVoiceCoordinator =
             LiveVoiceCoordinator(
                 liveVoiceSessionUseCase = mockk(relaxed = true),
@@ -217,6 +228,7 @@ object ChatViewModelTestSupport {
 
         return Harness(
             inferenceOrchestrator = inferenceOrchestrator,
+            chatInputCoordinator = chatInputCoordinator,
             viewModel =
                 ChatViewModel(
                     settingsUseCases = settingsUseCases,
@@ -243,6 +255,8 @@ object ChatViewModelTestSupport {
                     photoAttachmentPolicyResolver = photoAttachmentPolicyResolver,
                     liveVoiceCoordinator = liveVoiceCoordinator,
                     uiSelectionRepository = uiSelectionRepository,
+                    localModelAssetUiMapper = LocalModelAssetUiMapper(),
+                    apiModelAssetUiMapper = ApiModelAssetUiMapper(),
                 ),
         )
     }

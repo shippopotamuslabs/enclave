@@ -1695,7 +1695,17 @@ class RustLoopInferenceServiceTest {
             return block(service)
         }
 
+        override suspend fun <T> withInferenceServiceForLocalConfig(
+            configId: com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId,
+            block: suspend (LlmInferencePort) -> T,
+        ): T = block(service)
+
         override suspend fun <T> withRawApiServiceForConfig(
+            configId: ApiModelConfigurationId,
+            block: suspend (LlmInferencePort) -> T,
+        ): T = block(service)
+
+        override suspend fun <T> withApiServiceForConfig(
             configId: ApiModelConfigurationId,
             block: suspend (LlmInferencePort) -> T,
         ): T = block(service)

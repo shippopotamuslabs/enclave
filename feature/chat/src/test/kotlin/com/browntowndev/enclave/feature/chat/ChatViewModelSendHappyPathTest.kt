@@ -5,6 +5,7 @@ import com.browntowndev.enclave.core.testing.MainDispatcherRule
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.chat.AccumulatedMessages
 import com.browntowndev.enclave.domain.model.chat.ChatId
+import com.browntowndev.enclave.domain.model.chat.ChatResponseMode
 import com.browntowndev.enclave.domain.model.chat.Content
 import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.chat.MessageId
@@ -144,7 +145,7 @@ class ChatViewModelSendHappyPathTest {
                 userMessageId = any(),
                 assistantMessageId = any(),
                 chatId = any(),
-                mode = any(),
+                responseMode = any(),
                 backgroundInferenceEnabled = any(),
             )
         } returns
@@ -196,7 +197,7 @@ class ChatViewModelSendHappyPathTest {
                 harness.inferenceOrchestrator.sendMessage(
                     scope = any(),
                     input = "Hello crew",
-                    selectedMode = any(),
+                    responseMode = any(),
                     selectedImageUris = any(),
                     fileAttachments = any(),
                     initialChatId = any(),
@@ -250,7 +251,7 @@ class ChatViewModelSendHappyPathTest {
                     userMessageId = MessageId("user-send-1"),
                     assistantMessageId = any(),
                     chatId = ChatId("chat-send-1"),
-                    mode = Mode.THINKING,
+                    responseMode = ChatResponseMode.Thinking,
                     backgroundInferenceEnabled = any(),
                 )
             }
@@ -296,7 +297,7 @@ class ChatViewModelSendHappyPathTest {
                     userMessageId = any(),
                     assistantMessageId = any(),
                     chatId = any(),
-                    mode = any(),
+                    responseMode = any(),
                     backgroundInferenceEnabled = any(),
                 )
             } returns
@@ -336,7 +337,7 @@ class ChatViewModelSendHappyPathTest {
         runTest {
             val shouldModerateMock =
                 mockk<ShouldModeratePromptUseCase> {
-                    coEvery { this@mockk.invoke(any()) } returns false
+                    coEvery { this@mockk.invoke(any<ModelType>()) } returns false
                 }
             harness =
                 ChatViewModelTestSupport.createHarness(
@@ -370,7 +371,7 @@ class ChatViewModelSendHappyPathTest {
                 harness.inferenceOrchestrator.sendMessage(
                     scope = any(),
                     input = "blocked input but trusted",
-                    selectedMode = any(),
+                    responseMode = any(),
                     selectedImageUris = any(),
                     fileAttachments = any(),
                     initialChatId = any(),

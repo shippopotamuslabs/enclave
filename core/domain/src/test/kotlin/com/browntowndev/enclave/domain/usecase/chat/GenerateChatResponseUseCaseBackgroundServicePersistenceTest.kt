@@ -2,6 +2,7 @@ package com.browntowndev.enclave.domain.usecase.chat
 
 import com.browntowndev.enclave.domain.model.chat.AccumulatedMessages
 import com.browntowndev.enclave.domain.model.chat.ChatId
+import com.browntowndev.enclave.domain.model.chat.ChatResponseMode
 import com.browntowndev.enclave.domain.model.chat.Content
 import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.chat.MessageGenerationState
@@ -59,7 +60,7 @@ class GenerateChatResponseUseCaseBackgroundServicePersistenceTest {
                     userMessageId = userMessageId,
                     assistantMessageId = assistantMessageId,
                     chatId = chatId,
-                    mode = Mode.FAST,
+                    responseMode = ChatResponseMode.Fast,
                     backgroundInferenceEnabled = false,
                 ).toList()
 
@@ -112,7 +113,7 @@ class GenerateChatResponseUseCaseBackgroundServicePersistenceTest {
                 userMessageId = userMessageId,
                 assistantMessageId = assistantMessageId,
                 chatId = chatId,
-                mode = Mode.FAST,
+                responseMode = ChatResponseMode.Fast,
                 backgroundInferenceEnabled = true,
             ).toList()
 
@@ -181,7 +182,7 @@ class GenerateChatResponseUseCaseBackgroundServicePersistenceTest {
                 userMessageId = userMessageId,
                 assistantMessageId = assistantMessageId,
                 chatId = chatId,
-                mode = Mode.FAST,
+                responseMode = ChatResponseMode.Fast,
                 backgroundInferenceEnabled = true,
             ).toList()
 
@@ -261,7 +262,7 @@ class GenerateChatResponseUseCaseBackgroundServicePersistenceTest {
                 userMessageId = userMessageId,
                 assistantMessageId = assistantMessageId,
                 chatId = chatId,
-                mode = Mode.FAST,
+                responseMode = ChatResponseMode.Fast,
                 backgroundInferenceEnabled = true,
             ).first()
 

@@ -4,7 +4,10 @@ import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.browntowndev.enclave.core.ui.component.assignment.ApiModelAssetUiMapper
+import com.browntowndev.enclave.core.ui.component.assignment.LocalModelAssetUiMapper
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
+import com.browntowndev.enclave.domain.model.chat.ChatModelOverride
 import com.browntowndev.enclave.domain.model.chat.AccumulatedMessages
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.FileAttachment
@@ -71,6 +74,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -108,6 +112,8 @@ class ChatViewModel
         private val photoAttachmentPolicyResolver: PhotoAttachmentPolicyResolver,
         private val liveVoiceCoordinator: LiveVoiceCoordinator,
         private val uiSelectionRepository: UiSelectionRepository,
+        private val localModelAssetUiMapper: LocalModelAssetUiMapper,
+        private val apiModelAssetUiMapper: ApiModelAssetUiMapper,
     ) : ViewModel() {
         private val mergeDbMessagesWithOptimisticUseCase = MergeDbMessagesWithOptimisticUseCase()
 
@@ -136,14 +142,30 @@ class ChatViewModel
                 initialValue = emptyMap(),
             )
 
+        private val _isModelOverrideSheetVisible = MutableStateFlow(false)
+
+        private val modelOverrideSheetAssetsFlow =
+            chatUseCases.getChatCapablePresetsUseCase()
+                .map { presets ->
+                    ModelOverrideSheetAssets(
+                        localAssets = presets.localAssets.map(localModelAssetUiMapper::map),
+                        apiAssets = presets.apiAssets.map(apiModelAssetUiMapper::map),
+                    )
+                }.stateIn(
+                    scope = viewModelScope,
+                    started = SharingStarted.WhileSubscribed(SUBSCRIBE_TIMEOUT_MS),
+                    initialValue = ModelOverrideSheetAssets(),
+                )
+
         private val photoAttachmentPolicyFlow =
             combine(
                 settingsUseCases.getSettings(),
                 chatInputCoordinator.selectedMode,
-            ) { _, selectedMode ->
-                selectedMode
-            }.mapLatest { selectedMode ->
-                photoAttachmentPolicyResolver.resolve(selectedMode)
+                chatInputCoordinator.selectedModelOverride,
+            ) { _, selectedMode, modelOverride ->
+                selectedMode to modelOverride
+            }.mapLatest { (selectedMode, modelOverride) ->
+                photoAttachmentPolicyResolver.resolve(selectedMode, modelOverride)
             }
 
         private val hasTtsProviderAssignedFlow =
@@ -336,6 +358,7 @@ class ChatViewModel
                 settingsUseCases.getSettings(),
                 chatInputCoordinator.inputText,
                 chatInputCoordinator.selectedMode,
+                chatInputCoordinator.selectedModelOverride,
                 chatInputCoordinator.selectedImageUris,
                 chatInputCoordinator.selectedFileName,
                 speechInputCoordinator.speechState,
@@ -344,9 +367,10 @@ class ChatViewModel
                     settings = args[0] as SettingsData,
                     inputText = args[1] as String,
                     selectedMode = args[2] as ChatModeUi,
-                    selectedImageUris = args[3] as List<String>,
-                    selectedFileName = args[4] as String?,
-                    speechState = args[5] as SpeechState,
+                    selectedModelOverride = args[3] as ChatModelOverride?,
+                    selectedImageUris = args[4] as List<String>,
+                    selectedFileName = args[5] as String?,
+                    speechState = args[6] as SpeechState,
                 )
             }
 
@@ -444,10 +468,15 @@ class ChatViewModel
                 reduceResultFlow,
                 chatTelemetryCoordinator.responseStatsSheet,
                 chatTelemetryCoordinator.chatStatsSheet,
-            ) { reduceResult, responseStatsSheet, chatStatsSheet ->
+                _isModelOverrideSheetVisible,
+                modelOverrideSheetAssetsFlow,
+            ) { reduceResult, responseStatsSheet, chatStatsSheet, isSheetVisible, sheetAssets ->
                 reduceResult.uiState.copy(
                     responseStatsSheet = responseStatsSheet,
                     chatStatsSheet = chatStatsSheet,
+                    isModelOverrideSheetVisible = isSheetVisible,
+                    modelOverrideSheetLocalAssets = sheetAssets.localAssets,
+                    modelOverrideSheetApiAssets = sheetAssets.apiAssets,
                 )
             }.stateIn(
                 scope = viewModelScope,
@@ -636,16 +665,77 @@ class ChatViewModel
                     "Could not update the selected mode.",
                 ),
             ) {
-                val policy = photoAttachmentPolicyResolver.resolve(mode)
+                val policy =
+                    photoAttachmentPolicyResolver.resolve(
+                        mode,
+                        chatInputCoordinator.selectedModelOverride.value,
+                    )
                 if (!policy.isEnabled) {
                     chatInputCoordinator.clearSelectedImages()
                 } else if (chatInputCoordinator.selectedImageUris.value.size > policy.maxItems) {
                     chatInputCoordinator.trimSelectedImages(policy.maxItems)
                 }
             }
-            viewModelScope.launch {
-                uiSelectionRepository.setChatMode(ChatModeMapper.run { mode.toDomain() })
+            if (mode != ChatModeUi.OTHER) {
+                viewModelScope.launch {
+                    uiSelectionRepository.setChatMode(ChatModeMapper.run { mode.toDomain() })
+                }
             }
+        }
+
+        fun onOtherClick() {
+            _isModelOverrideSheetVisible.value = true
+        }
+
+        fun onDismissModelOverrideSheet() {
+            _isModelOverrideSheetVisible.value = false
+        }
+
+        fun onModelOverrideSelected(
+            localId: com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId?,
+            apiId: com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId?,
+            @Suppress("UnusedParameter") ttsId: com.browntowndev.enclave.domain.model.config.TtsProviderId?,
+            @Suppress("UnusedParameter") mediaId: com.browntowndev.enclave.domain.model.config.MediaProviderId?,
+            @Suppress("UnusedParameter") liveVoiceId: com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId?,
+        ) {
+            val sheetAssets = modelOverrideSheetAssetsFlow.value
+            when {
+                localId != null -> {
+                    val displayName =
+                        sheetAssets.localAssets
+                            .flatMap { it.configurations }
+                            .firstOrNull { it.id == localId }
+                            ?.displayName
+                            ?: sheetAssets.localAssets
+                                .firstOrNull { asset -> asset.configurations.any { it.id == localId } }
+                                ?.friendlyName
+                            ?: "Local model"
+                    chatInputCoordinator.onModelOverrideSelected(
+                        ChatModelOverride.Local(
+                            configId = localId,
+                            displayName = displayName,
+                        ),
+                    )
+                }
+                apiId != null -> {
+                    val displayName =
+                        sheetAssets.apiAssets
+                            .flatMap { it.configurations }
+                            .firstOrNull { it.id == apiId }
+                            ?.let { it.displayName.ifBlank { it.modelId } }
+                            ?: sheetAssets.apiAssets
+                                .firstOrNull { asset -> asset.configurations.any { it.id == apiId } }
+                                ?.displayName
+                            ?: "API model"
+                    chatInputCoordinator.onModelOverrideSelected(
+                        ChatModelOverride.Api(
+                            configId = apiId,
+                            displayName = displayName,
+                        ),
+                    )
+                }
+            }
+            _isModelOverrideSheetVisible.value = false
         }
 
         fun onImagesSelected(uris: List<String>) {
@@ -656,7 +746,11 @@ class ChatViewModel
                     "Could not attach the selected images. Please try again.",
                 ),
             ) {
-                val policy = photoAttachmentPolicyResolver.resolve(chatInputCoordinator.selectedMode.value)
+                val policy =
+                    photoAttachmentPolicyResolver.resolve(
+                        chatInputCoordinator.selectedMode.value,
+                        chatInputCoordinator.selectedModelOverride.value,
+                    )
                 if (!policy.isEnabled) {
                     chatInputCoordinator.clearSelectedImages()
                     return@launch
@@ -719,6 +813,12 @@ class ChatViewModel
             }
             inferenceOrchestrator.createNewChat()
             chatInputCoordinator.clearInput()
+            chatInputCoordinator.clearModelOverride()
+            _isModelOverrideSheetVisible.value = false
+            viewModelScope.launch(start = CoroutineStart.UNDISPATCHED) {
+                val persistedMode = uiSelectionRepository.selectedChatMode.first()
+                chatInputCoordinator.onModeChange(ChatModeMapper.run { persistedMode.toUi() })
+            }
             toolExecutionBannerCoordinator.clearBanner()
         }
 
@@ -747,9 +847,19 @@ class ChatViewModel
                                     async { shouldModeratePromptUseCase(ModelType.FINAL_SYNTHESIS) },
                                 ).any { it }
                             }
+                        ChatModeUi.OTHER ->
+                            chatInputCoordinator.selectedModelOverride.value
+                                ?.let { shouldModeratePromptUseCase(it) }
+                                ?: true
                     }
                 val selectedImageUris =
-                    if (photoAttachmentPolicyResolver.resolve(chatInputCoordinator.selectedMode.value).isEnabled) {
+                    if (
+                        photoAttachmentPolicyResolver
+                            .resolve(
+                                chatInputCoordinator.selectedMode.value,
+                                chatInputCoordinator.selectedModelOverride.value,
+                            ).isEnabled
+                    ) {
                         chatInputCoordinator.selectedImageUris.value
                     } else {
                         emptyList()
@@ -760,10 +870,15 @@ class ChatViewModel
                     } else {
                         emptyList()
                     }
+                val responseMode =
+                    ChatResponseModeMapper.fromSelection(
+                        chatInputCoordinator.selectedMode.value,
+                        chatInputCoordinator.selectedModelOverride.value,
+                    )
                 inferenceOrchestrator.sendMessage(
                     scope = viewModelScope,
                     input = input,
-                    selectedMode = chatInputCoordinator.selectedMode.value,
+                    responseMode = responseMode,
                     selectedImageUris = selectedImageUris,
                     fileAttachments = fileAttachments,
                     initialChatId = initialChatId,
@@ -918,6 +1033,7 @@ private fun buildReduceParams(
         settings = uiInputs.settings,
         inputText = uiInputs.inputText,
         selectedMode = uiInputs.selectedMode,
+        selectedModelOverride = uiInputs.selectedModelOverride,
         selectedImageUris = uiInputs.selectedImageUris,
         selectedFileName = uiInputs.selectedFileName,
         speechState = uiInputs.speechState,
@@ -948,9 +1064,15 @@ private data class UiInputs(
     val settings: SettingsData,
     val inputText: String,
     val selectedMode: ChatModeUi,
+    val selectedModelOverride: ChatModelOverride?,
     val selectedImageUris: List<String>,
     val selectedFileName: String?,
     val speechState: SpeechState,
+)
+
+private data class ModelOverrideSheetAssets(
+    val localAssets: List<com.browntowndev.enclave.core.ui.component.assignment.LocalModelAssetUi> = emptyList(),
+    val apiAssets: List<com.browntowndev.enclave.core.ui.component.assignment.ApiModelAssetUi> = emptyList(),
 )
 
 private data class UiInputsWithPolicy(

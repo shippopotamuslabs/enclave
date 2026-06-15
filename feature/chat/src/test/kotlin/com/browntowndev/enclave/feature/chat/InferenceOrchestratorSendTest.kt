@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.chat.ChatId
+import com.browntowndev.enclave.domain.model.chat.ChatResponseMode
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.Mode
 import com.browntowndev.enclave.domain.port.repository.SettingsData
@@ -100,7 +101,7 @@ class InferenceOrchestratorSendTest {
                 orchestrator.sendMessage(
                     scope = this,
                     input = "Hi",
-                    selectedMode = ChatModeUi.FAST,
+                    responseMode = ChatResponseMode.Fast,
                     selectedImageUris = emptyList(),
                     fileAttachments = emptyList(),
                     initialChatId = null,
@@ -132,7 +133,7 @@ class InferenceOrchestratorSendTest {
                     userMessageId = any(),
                     assistantMessageId = any(),
                     chatId = any(),
-                    mode = any(),
+                    responseMode = any(),
                     backgroundInferenceEnabled = any(),
                 )
             } returns flowOf()
@@ -141,7 +142,7 @@ class InferenceOrchestratorSendTest {
                 orchestrator.sendMessage(
                     scope = this,
                     input = "Hi",
-                    selectedMode = ChatModeUi.FAST,
+                    responseMode = ChatResponseMode.Fast,
                     selectedImageUris = emptyList(),
                     fileAttachments = emptyList(),
                     initialChatId = null,
@@ -158,7 +159,7 @@ class InferenceOrchestratorSendTest {
                     userMessageId = any(),
                     assistantMessageId = any(),
                     chatId = any(),
-                    mode = any(),
+                    responseMode = any(),
                     backgroundInferenceEnabled = any(),
                 )
             }
@@ -170,7 +171,7 @@ class InferenceOrchestratorSendTest {
                     userMessageId = any(),
                     assistantMessageId = any(),
                     chatId = any(),
-                    mode = any(),
+                    responseMode = any(),
                     backgroundInferenceEnabled = any(),
                 )
             }
@@ -187,7 +188,7 @@ class InferenceOrchestratorSendTest {
                     userMessageId = any(),
                     assistantMessageId = any(),
                     chatId = any(),
-                    mode = any(),
+                    responseMode = any(),
                     backgroundInferenceEnabled = any(),
                 )
             } returns flowOf()
@@ -196,7 +197,7 @@ class InferenceOrchestratorSendTest {
                 orchestrator.sendMessage(
                     scope = this,
                     input = "Hi",
-                    selectedMode = ChatModeUi.FAST,
+                    responseMode = ChatResponseMode.Fast,
                     selectedImageUris = emptyList(),
                     fileAttachments = emptyList(),
                     initialChatId = null,
@@ -228,7 +229,7 @@ class InferenceOrchestratorSendTest {
                 orchestrator.sendMessage(
                     scope = this,
                     input = "Hi",
-                    selectedMode = ChatModeUi.FAST,
+                    responseMode = ChatResponseMode.Fast,
                     selectedImageUris = emptyList(),
                     fileAttachments = emptyList(),
                     initialChatId = null,
@@ -254,7 +255,7 @@ class InferenceOrchestratorSendTest {
                     userMessageId = any(),
                     assistantMessageId = any(),
                     chatId = any(),
-                    mode = any(),
+                    responseMode = any(),
                     backgroundInferenceEnabled = any(),
                 )
             }
@@ -299,7 +300,7 @@ class InferenceOrchestratorSendTest {
                     userMessageId = any(),
                     assistantMessageId = any(),
                     chatId = any(),
-                    mode = any(),
+                    responseMode = any(),
                     backgroundInferenceEnabled = any(),
                 )
             } returns flowOf()
@@ -308,7 +309,7 @@ class InferenceOrchestratorSendTest {
                 orchestrator.sendMessage(
                     scope = this,
                     input = "Hi",
-                    selectedMode = ChatModeUi.FAST,
+                    responseMode = ChatResponseMode.Fast,
                     selectedImageUris = emptyList(),
                     fileAttachments = emptyList(),
                     initialChatId = null,
@@ -330,7 +331,7 @@ class InferenceOrchestratorSendTest {
                     userMessageId = MessageId("user-orch-1"),
                     assistantMessageId = orchestratorAssistantId,
                     chatId = ChatId("chat-1"),
-                    mode = Mode.FAST,
+                    responseMode = ChatResponseMode.Fast,
                     backgroundInferenceEnabled = any(),
                 )
             }
@@ -374,7 +375,7 @@ class InferenceOrchestratorSendTest {
                     userMessageId = any(),
                     assistantMessageId = any(),
                     chatId = any(),
-                    mode = any(),
+                    responseMode = any(),
                     backgroundInferenceEnabled = any(),
                 )
             } returns
@@ -405,7 +406,7 @@ class InferenceOrchestratorSendTest {
                 orchestratorWithModeration.sendMessage(
                     scope = this,
                     input = "Hi",
-                    selectedMode = ChatModeUi.FAST,
+                    responseMode = ChatResponseMode.Fast,
                     selectedImageUris = emptyList(),
                     fileAttachments = emptyList(),
                     initialChatId = null,
@@ -436,7 +437,7 @@ class InferenceOrchestratorSendTest {
                     userMessageId = any(),
                     assistantMessageId = any(),
                     chatId = any(),
-                    mode = any(),
+                    responseMode = any(),
                     backgroundInferenceEnabled = any(),
                 )
             } returns flowOf()
@@ -445,7 +446,7 @@ class InferenceOrchestratorSendTest {
                 orchestrator.sendMessage(
                     scope = this,
                     input = "Hello crew",
-                    selectedMode = ChatModeUi.FAST,
+                    responseMode = ChatResponseMode.Fast,
                     selectedImageUris = emptyList(),
                     fileAttachments = emptyList(),
                     initialChatId = null,
@@ -468,7 +469,7 @@ class InferenceOrchestratorSendTest {
                 orchestrator.sendMessage(
                     scope = this,
                     input = "   ",
-                    selectedMode = ChatModeUi.FAST,
+                    responseMode = ChatResponseMode.Fast,
                     selectedImageUris = emptyList(),
                     fileAttachments = emptyList(),
                     initialChatId = null,
@@ -491,7 +492,7 @@ class InferenceOrchestratorSendTest {
                 orchestrator.sendMessage(
                     scope = this,
                     input = "Hello crew",
-                    selectedMode = ChatModeUi.FAST,
+                    responseMode = ChatResponseMode.Fast,
                     selectedImageUris = emptyList(),
                     fileAttachments = emptyList(),
                     initialChatId = ChatId("chat-existing-title"),
@@ -533,7 +534,7 @@ class InferenceOrchestratorSendTest {
                     userMessageId = any(),
                     assistantMessageId = any(),
                     chatId = any(),
-                    mode = any(),
+                    responseMode = any(),
                     backgroundInferenceEnabled = any(),
                 )
             } returns flowOf()
@@ -542,7 +543,7 @@ class InferenceOrchestratorSendTest {
                 orchestrator.sendMessage(
                     scope = this,
                     input = "first",
-                    selectedMode = ChatModeUi.FAST,
+                    responseMode = ChatResponseMode.Fast,
                     selectedImageUris = emptyList(),
                     fileAttachments = emptyList(),
                     initialChatId = null,
@@ -557,7 +558,7 @@ class InferenceOrchestratorSendTest {
                 orchestrator.sendMessage(
                     scope = this,
                     input = "second",
-                    selectedMode = ChatModeUi.FAST,
+                    responseMode = ChatResponseMode.Fast,
                     selectedImageUris = emptyList(),
                     fileAttachments = emptyList(),
                     initialChatId = null,
@@ -576,7 +577,7 @@ class InferenceOrchestratorSendTest {
                     userMessageId = any(),
                     assistantMessageId = any(),
                     chatId = any(),
-                    mode = any(),
+                    responseMode = any(),
                     backgroundInferenceEnabled = any(),
                 )
             }

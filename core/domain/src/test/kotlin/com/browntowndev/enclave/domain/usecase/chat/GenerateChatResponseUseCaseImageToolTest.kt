@@ -1,6 +1,7 @@
 package com.browntowndev.enclave.domain.usecase.chat
 
 import com.browntowndev.enclave.domain.model.chat.ChatId
+import com.browntowndev.enclave.domain.model.chat.ChatResponseMode
 import com.browntowndev.enclave.domain.model.chat.Content
 import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.chat.MessageId
@@ -84,7 +85,7 @@ class GenerateChatResponseUseCaseImageToolTest {
                 userMessageId = MessageId("1"),
                 assistantMessageId = MessageId("2"),
                 chatId = ChatId("chat"),
-                mode = Mode.FAST,
+                responseMode = ChatResponseMode.Fast,
                 backgroundInferenceEnabled = false,
             ).toList()
 
@@ -140,7 +141,7 @@ class GenerateChatResponseUseCaseImageToolTest {
                 userMessageId = MessageId("2"),
                 assistantMessageId = MessageId("3"),
                 chatId = ChatId("chat"),
-                mode = Mode.FAST,
+                responseMode = ChatResponseMode.Fast,
                 backgroundInferenceEnabled = false,
             ).toList()
 
@@ -190,7 +191,7 @@ class GenerateChatResponseUseCaseImageToolTest {
                 userMessageId = MessageId("1"),
                 assistantMessageId = MessageId("2"),
                 chatId = ChatId("chat"),
-                mode = Mode.COUNCIL,
+                responseMode = ChatResponseMode.Council,
                 backgroundInferenceEnabled = false,
             ).toList()
 
@@ -241,7 +242,7 @@ class GenerateChatResponseUseCaseImageToolTest {
                 userMessageId = MessageId("1"),
                 assistantMessageId = MessageId("2"),
                 chatId = ChatId("chat"),
-                mode = Mode.FAST,
+                responseMode = ChatResponseMode.Fast,
                 backgroundInferenceEnabled = false,
             ).toList()
 
@@ -330,7 +331,7 @@ class GenerateChatResponseUseCaseImageToolTest {
                 userMessageId = MessageId("1"),
                 assistantMessageId = MessageId("2"),
                 chatId = ChatId("chat"),
-                mode = Mode.FAST,
+                responseMode = ChatResponseMode.Fast,
                 backgroundInferenceEnabled = false,
             ).toList()
 
@@ -401,7 +402,7 @@ class GenerateChatResponseUseCaseImageToolTest {
                 userMessageId = MessageId("1"),
                 assistantMessageId = MessageId("2"),
                 chatId = ChatId("chat"),
-                mode = Mode.FAST,
+                responseMode = ChatResponseMode.Fast,
                 backgroundInferenceEnabled = false,
             ).toList()
 

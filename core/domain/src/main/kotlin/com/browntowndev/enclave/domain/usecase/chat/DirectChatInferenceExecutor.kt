@@ -1,8 +1,11 @@
 package com.browntowndev.enclave.domain.usecase.chat
 
 import com.browntowndev.enclave.domain.model.chat.ChatId
+import com.browntowndev.enclave.domain.model.chat.ChatModelOverride
 import com.browntowndev.enclave.domain.model.chat.MessageGenerationState
 import com.browntowndev.enclave.domain.model.chat.MessageId
+import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
+import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.error.ActiveModelConfigurationDecryptException
 import com.browntowndev.enclave.domain.model.error.InferenceIOException
 import com.browntowndev.enclave.domain.model.inference.ModelType
@@ -134,6 +137,81 @@ class DirectChatInferenceExecutor
                 }
             }.flowOn(Dispatchers.Default)
 
+        override fun executeWithOverride(
+            prompt: String,
+            userMessageId: MessageId,
+            assistantMessageId: MessageId,
+            chatId: ChatId,
+            userHasImage: Boolean,
+            modelOverride: ChatModelOverride,
+            resolvedConfiguration: ActiveModelConfiguration,
+            backgroundInferenceEnabled: Boolean,
+        ): Flow<MessageGenerationState> =
+            flow {
+                val modelType = ModelType.FAST
+                try {
+                    if (userHasImage) {
+                        emit(MessageGenerationState.Processing(modelType))
+                    }
+                    if (resolvedConfiguration.isLocal) {
+                        val localConfigId = resolvedConfiguration.id
+                            as? com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
+                            ?: throw IllegalStateException(
+                                "Local override configuration must carry a LocalModelConfigurationId " +
+                                    "(got ${resolvedConfiguration.id::class.simpleName})",
+                            )
+                        inferenceFactory.withInferenceServiceForLocalConfig(localConfigId) { service ->
+                            emitAll(
+                                generateWithService(
+                                    prompt = prompt,
+                                    userMessageId = userMessageId,
+                                    assistantMessageId = assistantMessageId,
+                                    chatId = chatId,
+                                    service = service,
+                                    modelType = modelType,
+                                    explicitConfiguration = resolvedConfiguration,
+                                ),
+                            )
+                        }
+                    } else {
+                        val configId = resolvedConfiguration.id as ApiModelConfigurationId
+                        inferenceFactory.withApiServiceForConfig(configId) { service ->
+                            emitAll(
+                                generateWithService(
+                                    prompt = prompt,
+                                    userMessageId = userMessageId,
+                                    assistantMessageId = assistantMessageId,
+                                    chatId = chatId,
+                                    service = service,
+                                    modelType = modelType,
+                                    explicitConfiguration = resolvedConfiguration,
+                                ),
+                            )
+                        }
+                    }
+                } catch (e: InferenceBusyException) {
+                    emit(MessageGenerationState.Failed(error = e, modelType = modelType))
+                } catch (e: ActiveModelConfigurationDecryptException) {
+                    emit(MessageGenerationState.Failed(e, modelType))
+                } catch (e: IllegalStateException) {
+                    emit(MessageGenerationState.Failed(e, modelType))
+                } catch (e: InferenceIOException) {
+                    emit(MessageGenerationState.Failed(e, modelType))
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    loggingPort.error(TAG, "Unexpected error in override mode for ${modelOverride.displayName}", e)
+                    emit(MessageGenerationState.Failed(error = e, modelType = modelType))
+                } catch (e: Throwable) {
+                    loggingPort.error(
+                        TAG,
+                        "Unexpected error in override mode for ${modelOverride.displayName} due to system error",
+                        e,
+                    )
+                    emit(MessageGenerationState.Failed(error = RuntimeException(e), modelType = modelType))
+                }
+            }.flowOn(Dispatchers.Default)
+
         override fun stop() {
             onDeviceInferenceCancellation.cancelActiveGeneration()
         }
@@ -145,6 +223,7 @@ class DirectChatInferenceExecutor
             chatId: ChatId,
             service: LlmInferencePort,
             modelType: ModelType,
+            explicitConfiguration: ActiveModelConfiguration? = null,
         ): Flow<MessageGenerationState> =
             flow {
                 val preparedRequest =
@@ -154,6 +233,7 @@ class DirectChatInferenceExecutor
                         userMessageId = userMessageId,
                         assistantMessageId = assistantMessageId,
                         modelType = modelType,
+                        explicitConfiguration = explicitConfiguration,
                     )
 
                 if (preparedRequest.preRetrievalSources.isNotEmpty()) {

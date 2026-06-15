@@ -148,6 +148,14 @@ target_compile_definitions(enclave_diffusion_engine PRIVATE ENCLAVE_DIFFUSION_EN
 if(TARGET MNN)
     target_compile_definitions(enclave_diffusion_engine PRIVATE ENCLAVE_DIFFUSION_HAS_MNN=1)
     target_link_libraries(enclave_diffusion_engine PRIVATE MNN)
+    # MNN suppresses these conversion warnings for MSVC (/wd4244 /wd4146) but not
+    # for clang. CPUDequantize.cpp computes dequant scale factors using
+    # std::numeric_limits<int>::max(), which clang flags as
+    # -Wimplicit-const-int-float-conversion (2147483647 -> 2147483648f). The 1-ULP
+    # float rounding is irrelevant to the scale math, so silence it on the MNN
+    # target only. Matches MNN's own MSVC warning-suppression intent.
+    target_compile_options(MNN PRIVATE
+        $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>>:-Wno-implicit-const-int-float-conversion>)
 endif()
 
 if(TARGET tokenizers_cpp)

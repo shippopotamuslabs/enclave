@@ -2,8 +2,10 @@ package com.browntowndev.enclave.feature.chat.service
 
 import android.app.ForegroundServiceStartNotAllowedException
 import com.browntowndev.enclave.domain.model.chat.ChatId
+import com.browntowndev.enclave.domain.model.chat.ChatModelOverride
 import com.browntowndev.enclave.domain.model.chat.MessageGenerationState
 import com.browntowndev.enclave.domain.model.chat.MessageId
+import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.ChatInferenceExecutorPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
@@ -77,6 +79,27 @@ class ChatInferenceServiceExecutor
                     loggingPort.error(TAG, "Failed to start ChatInferenceService for chat=${chatId.value} due to system error", e)
                     emit(MessageGenerationState.Failed(RuntimeException(e), modelType))
                 }
+            }
+
+        override fun executeWithOverride(
+            prompt: String,
+            userMessageId: MessageId,
+            assistantMessageId: MessageId,
+            chatId: ChatId,
+            userHasImage: Boolean,
+            modelOverride: ChatModelOverride,
+            resolvedConfiguration: ActiveModelConfiguration,
+            backgroundInferenceEnabled: Boolean,
+        ): Flow<MessageGenerationState> =
+            flow {
+                emit(
+                    MessageGenerationState.Failed(
+                        UnsupportedOperationException(
+                            "executeWithOverride is not implemented for ${modelOverride.displayName}",
+                        ),
+                        ModelType.FAST,
+                    ),
+                )
             }
 
         override fun stop() {
