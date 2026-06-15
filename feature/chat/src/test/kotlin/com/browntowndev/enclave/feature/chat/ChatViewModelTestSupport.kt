@@ -2,6 +2,7 @@ package com.browntowndev.enclave.feature.chat
 
 import androidx.lifecycle.SavedStateHandle
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
+import com.browntowndev.enclave.domain.model.chat.Mode
 import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnSnapshotPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.PromptModerationPort
@@ -10,6 +11,7 @@ import com.browntowndev.enclave.domain.port.inference.ToolExecutionEventPort
 import com.browntowndev.enclave.domain.port.media.TtsPlaybackControllerPort
 import com.browntowndev.enclave.domain.port.repository.ChatRepository
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
+import com.browntowndev.enclave.domain.port.repository.UiSelectionRepository
 import com.browntowndev.enclave.domain.usecase.artifact.ExportArtifactDocumentsUseCase
 import com.browntowndev.enclave.domain.port.media.RealtimeAudioCapturePort
 import com.browntowndev.enclave.domain.port.media.StreamingAudioPlayerPort
@@ -42,6 +44,7 @@ import com.browntowndev.enclave.feature.chat.mapping.ChatMessageUiMapper
 import com.browntowndev.enclave.feature.chat.mapping.PhotoAttachmentPolicyResolver
 import com.browntowndev.enclave.feature.chat.stats.ChatTelemetryUiMapper
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
 import io.mockk.spyk
 import kotlinx.coroutines.CoroutineScope
@@ -79,6 +82,10 @@ object ChatViewModelTestSupport {
                 coEvery { this@mockk.invoke(any()) } returns true
             },
         submitModerationReportUseCase: SubmitModerationReportUseCase = mockk(relaxed = true),
+        uiSelectionRepository: UiSelectionRepository =
+            mockk(relaxed = true) {
+                every { selectedChatMode } returns flowOf(Mode.FAST)
+            },
     ): ChatViewModel =
         createHarness(
             settingsUseCases = settingsUseCases,
@@ -101,6 +108,7 @@ object ChatViewModelTestSupport {
             stageImageAttachmentUseCase = stageImageAttachmentUseCase,
             shouldModeratePromptUseCase = shouldModeratePromptUseCase,
             submitModerationReportUseCase = submitModerationReportUseCase,
+            uiSelectionRepository = uiSelectionRepository,
         ).viewModel
 
     fun createHarness(
@@ -127,6 +135,10 @@ object ChatViewModelTestSupport {
                 coEvery { this@mockk.invoke(any()) } returns true
             },
         submitModerationReportUseCase: SubmitModerationReportUseCase = mockk(relaxed = true),
+        uiSelectionRepository: UiSelectionRepository =
+            mockk(relaxed = true) {
+                every { selectedChatMode } returns flowOf(Mode.FAST)
+            },
     ): Harness {
         val chatMessageUiMapper = ChatMessageUiMapper()
         val inferenceOrchestrator =
@@ -180,8 +192,8 @@ object ChatViewModelTestSupport {
             ChatShareCoordinator(shareChatUseCase = shareChatUseCase, importSharedChatUseCase = importSharedChatUseCase)
         val observeMessageTelemetryUseCase = mockk<ObserveMessageTelemetryUseCase>()
         val observeChatTelemetryUseCase = mockk<ObserveChatTelemetryUseCase>()
-        io.mockk.every { observeMessageTelemetryUseCase.invoke(any()) } returns flowOf()
-        io.mockk.every { observeChatTelemetryUseCase.invoke(any()) } returns flowOf()
+        every { observeMessageTelemetryUseCase.invoke(any()) } returns flowOf()
+        every { observeChatTelemetryUseCase.invoke(any()) } returns flowOf()
         val chatTelemetryCoordinator =
             ChatTelemetryCoordinator(
                 observeMessageTelemetryUseCase = observeMessageTelemetryUseCase,
@@ -230,6 +242,7 @@ object ChatViewModelTestSupport {
                     chatMessageUiMapper = chatMessageUiMapper,
                     photoAttachmentPolicyResolver = photoAttachmentPolicyResolver,
                     liveVoiceCoordinator = liveVoiceCoordinator,
+                    uiSelectionRepository = uiSelectionRepository,
                 ),
         )
     }

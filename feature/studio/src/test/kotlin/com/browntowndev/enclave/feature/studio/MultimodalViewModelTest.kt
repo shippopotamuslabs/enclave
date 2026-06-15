@@ -27,6 +27,7 @@ import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPo
 import com.browntowndev.enclave.domain.port.repository.StudioAlbumAsset
 import com.browntowndev.enclave.domain.port.repository.StudioMediaAsset
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
+import com.browntowndev.enclave.domain.port.repository.UiSelectionRepository
 import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
 import com.browntowndev.enclave.domain.usecase.chat.ListenToSpeechUseCase
 import com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase
@@ -88,6 +89,7 @@ class MultimodalViewModelTest {
     private lateinit var speechCoordinator: StudioSpeechCoordinator
     private lateinit var playbackCoordinator: StudioPlaybackCoordinator
     private lateinit var studioUiStateReducer: StudioUiStateReducer
+    private lateinit var promptCoordinator: StudioPromptCoordinator
 
     private val allMediaFlow = MutableStateFlow<List<StudioMediaAsset>>(emptyList())
     private val ephemeralMediaFlow = MutableStateFlow<List<StudioMediaAsset>>(emptyList())
@@ -98,6 +100,7 @@ class MultimodalViewModelTest {
     private val speechEvents = MutableSharedFlow<SpeechState>(extraBufferCapacity = 8)
     private val moderationPort = MutablePromptModerationPort()
     private val submitModerationReportUseCase = mockk<SubmitModerationReportUseCase>(relaxed = true)
+    private val uiSelectionRepository = mockk<UiSelectionRepository>(relaxed = true)
 
     private lateinit var app: android.app.Application
     private lateinit var viewModel: MultimodalViewModel
@@ -106,6 +109,8 @@ class MultimodalViewModelTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         app = mockk<android.app.Application>(relaxed = true)
+
+        every { uiSelectionRepository.selectedStudioMediaType } returns flowOf(MediaCapability.IMAGE)
 
         val mediaProviderId = MediaProviderId("test-provider")
         val assignment =
@@ -222,7 +227,7 @@ class MultimodalViewModelTest {
         val capabilitiesCoordinator = StudioCapabilitiesCoordinator()
         val remoteCapabilitiesCoordinator =
             StudioRemoteCapabilitiesCoordinator(resolveMediaProviderCapabilitiesUseCase)
-        val promptCoordinator = StudioPromptCoordinator(generationCoordinator, studioRepository)
+        promptCoordinator = StudioPromptCoordinator(generationCoordinator, studioRepository)
         val mediaActionsCoordinator =
             StudioMediaActionsCoordinator(shareMediaPort, studioRepository, generationCoordinator)
         return MultimodalViewModel(
@@ -242,6 +247,7 @@ class MultimodalViewModelTest {
             remoteCapabilitiesCoordinator = remoteCapabilitiesCoordinator,
             promptCoordinator = promptCoordinator,
             mediaActionsCoordinator = mediaActionsCoordinator,
+            uiSelectionRepository = uiSelectionRepository,
         )
     }
 
@@ -358,6 +364,7 @@ class MultimodalViewModelTest {
                     remoteCapabilitiesCoordinator = StudioRemoteCapabilitiesCoordinator(resolveMediaProviderCapabilitiesUseCase),
                     promptCoordinator = StudioPromptCoordinator(generationCoordinator, studioRepository),
                     mediaActionsCoordinator = StudioMediaActionsCoordinator(shareMediaPort, studioRepository, generationCoordinator),
+                    uiSelectionRepository = uiSelectionRepository,
                 )
 
             moderationPort.scores =
@@ -1267,5 +1274,24 @@ class MultimodalViewModelTest {
             assertEquals(listOf(20, 22, 24, 26, 28, 30), state.capabilities?.supportedImageSteps)
             assertEquals(24, state.capabilities?.defaultImageStep)
             job.cancel()
+        }
+
+    @Test
+    fun `init restores persisted non-default media type`() =
+        runTest {
+            every { uiSelectionRepository.selectedStudioMediaType } returns flowOf(MediaCapability.VIDEO)
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            assertEquals(MediaCapability.VIDEO, promptCoordinator.mediaType.value)
+        }
+
+    @Test
+    fun `onMediaTypeChange persists the media type`() =
+        runTest {
+            viewModel.onMediaTypeChange(MediaCapability.MUSIC)
+            advanceUntilIdle()
+
+            coVerify { uiSelectionRepository.setStudioMediaType(MediaCapability.MUSIC) }
         }
 }

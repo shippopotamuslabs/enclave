@@ -12,5 +12,9 @@ enum class Mode {
     THINKING,
 
     /** Council mode - uses multi-model pipeline */
-    COUNCIL,
+    COUNCIL;
+
+    companion object {
+        val DEFAULT = Mode.FAST
+    }
 }

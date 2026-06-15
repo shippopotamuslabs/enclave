@@ -94,6 +94,7 @@ import com.browntowndev.enclave.core.data.repository.TelemetryEventRepositoryImp
 import com.browntowndev.enclave.core.data.repository.ToolExecutionEventBus
 import com.browntowndev.enclave.core.data.repository.TrustedDomainRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.TtsProviderRepositoryImpl
+import com.browntowndev.enclave.core.data.repository.UiSelectionRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.UtilityModelRepositoryImpl
 import com.browntowndev.enclave.core.data.security.ApiKeyProviderImpl
 import com.browntowndev.enclave.core.data.security.CryptoAtRestEncryptionService
@@ -149,6 +150,7 @@ import com.browntowndev.enclave.domain.port.repository.SyncOrchestrator
 import com.browntowndev.enclave.domain.port.repository.TransactionProvider
 import com.browntowndev.enclave.domain.port.repository.TrustedDomainRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.TtsProviderRepositoryPort
+import com.browntowndev.enclave.domain.port.repository.UiSelectionRepository
 import com.browntowndev.enclave.domain.port.repository.UtilityModelFilePort
 import com.browntowndev.enclave.domain.port.repository.UtilityModelRepositoryPort
 import com.browntowndev.enclave.domain.port.security.ApiKeyProviderPort
@@ -704,4 +706,8 @@ abstract class DataRepositoryModule {
     @Binds
     @Singleton
     abstract fun bindSyncOrchestrator(impl: SyncOrchestratorImpl): SyncOrchestrator
+
+    @Binds
+    @Singleton
+    abstract fun bindUiSelectionRepository(impl: UiSelectionRepositoryImpl): UiSelectionRepository
 }
