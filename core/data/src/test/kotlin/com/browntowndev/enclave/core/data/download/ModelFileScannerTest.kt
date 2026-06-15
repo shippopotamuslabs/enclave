@@ -319,4 +319,83 @@ class ModelFileScannerTest {
             configurations = emptyList(),
         )
     }
+
+    @Test
+    fun `scan accepts both safety classifiers when stored at disambiguated paths`() =
+        kotlinx.coroutines.test.runTest {
+            val imageAsset = createSafetyClassifierAsset(
+                localFileName = "image_safety_classifier_model_quantized.onnx",
+                sizeBytes = 4L,
+            )
+            val promptAsset = createSafetyClassifierAsset(
+                localFileName = "nsfw_text_classifier_model_quantized.onnx",
+                sizeBytes = 8L,
+                utilityType = UtilityType.PROMPT_SAFETY_CLASSIFIER,
+            )
+            File(modelsDir, imageAsset.metadata.localFileName).writeBytes(ByteArray(4))
+            File(modelsDir, promptAsset.metadata.localFileName).writeBytes(ByteArray(8))
+
+            val result =
+                scanner.scanAndCreateDirIfNotExist(
+                    expectedModels = emptyMap(),
+                    utilityAssets = listOf(imageAsset, promptAsset),
+                )
+
+            assertTrue(result.missingModels.isEmpty())
+            assertTrue(result.invalidModels.isEmpty())
+            assertTrue(result.allValid)
+        }
+
+    @Test
+    fun `scan removes orphaned legacy collision file before validating assets`() =
+        kotlinx.coroutines.test.runTest {
+            val imageAsset = createSafetyClassifierAsset(
+                localFileName = "image_safety_classifier_model_quantized.onnx",
+                sizeBytes = 4L,
+            )
+            val promptAsset = createSafetyClassifierAsset(
+                localFileName = "nsfw_text_classifier_model_quantized.onnx",
+                sizeBytes = 8L,
+                utilityType = UtilityType.PROMPT_SAFETY_CLASSIFIER,
+            )
+            File(modelsDir, "model_quantized.onnx").writeBytes(ByteArray(16))
+            File(modelsDir, imageAsset.metadata.localFileName).writeBytes(ByteArray(4))
+            File(modelsDir, promptAsset.metadata.localFileName).writeBytes(ByteArray(8))
+
+            val result =
+                scanner.scanAndCreateDirIfNotExist(
+                    expectedModels = emptyMap(),
+                    utilityAssets = listOf(imageAsset, promptAsset),
+                )
+
+            assertFalse(File(modelsDir, "model_quantized.onnx").exists())
+            assertTrue(result.missingModels.isEmpty())
+            assertTrue(result.allValid)
+        }
+
+    private fun createSafetyClassifierAsset(
+        localFileName: String,
+        sizeBytes: Long,
+        utilityType: UtilityType = UtilityType.IMAGE_SAFETY_CLASSIFIER,
+    ): LocalModelAsset =
+        LocalModelAsset(
+            metadata =
+                LocalModelMetadata(
+                    id = LocalModelId("safety-$localFileName"),
+                    huggingFaceModelName = "",
+                    huggingFacePath =
+                        when (utilityType) {
+                            UtilityType.PROMPT_SAFETY_CLASSIFIER -> "nsfw_text_classifier"
+                            else -> "image_safety_classifier"
+                        },
+                    remoteFileName = "model_quantized.onnx",
+                    localFileName = localFileName,
+                    sha256 = "sha-$localFileName",
+                    sizeInBytes = sizeBytes,
+                    modelFileFormat = ModelFileFormat.ONNX,
+                    source = DownloadSource.CLOUDFLARE_R2,
+                    utilityType = utilityType,
+                ),
+            configurations = emptyList(),
+        )
 }
