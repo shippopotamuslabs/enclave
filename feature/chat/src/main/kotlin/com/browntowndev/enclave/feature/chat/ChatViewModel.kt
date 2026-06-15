@@ -20,6 +20,7 @@ import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.media.SpeechState
 import com.browntowndev.enclave.domain.port.repository.SettingsData
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
+import com.browntowndev.enclave.domain.port.repository.UiSelectionRepository
 import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
 import com.browntowndev.enclave.domain.usecase.chat.GetModelDisplayNameUseCase
 import com.browntowndev.enclave.domain.usecase.chat.MergeDbMessagesWithOptimisticUseCase
@@ -59,6 +60,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.distinctUntilChangedBy
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -105,6 +107,7 @@ class ChatViewModel
         private val chatMessageUiMapper: ChatMessageUiMapper,
         private val photoAttachmentPolicyResolver: PhotoAttachmentPolicyResolver,
         private val liveVoiceCoordinator: LiveVoiceCoordinator,
+        private val uiSelectionRepository: UiSelectionRepository,
     ) : ViewModel() {
         private val mergeDbMessagesWithOptimisticUseCase = MergeDbMessagesWithOptimisticUseCase()
 
@@ -458,6 +461,11 @@ class ChatViewModel
             }
 
             viewModelScope.launch {
+                val persistedMode = uiSelectionRepository.selectedChatMode.first()
+                chatInputCoordinator.onModeChange(ChatModeMapper.run { persistedMode.toUi() })
+            }
+
+            viewModelScope.launch {
                 activeChatIdFlow.collect { chatId ->
                     chatShareCoordinator.onActiveChatChanged(chatId)
                 }
@@ -634,6 +642,9 @@ class ChatViewModel
                 } else if (chatInputCoordinator.selectedImageUris.value.size > policy.maxItems) {
                     chatInputCoordinator.trimSelectedImages(policy.maxItems)
                 }
+            }
+            viewModelScope.launch {
+                uiSelectionRepository.setChatMode(ChatModeMapper.run { mode.toDomain() })
             }
         }
 

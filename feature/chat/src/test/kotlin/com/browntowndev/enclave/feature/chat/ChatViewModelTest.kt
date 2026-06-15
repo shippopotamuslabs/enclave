@@ -14,6 +14,7 @@ import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.MessageState
 import com.browntowndev.enclave.domain.model.chat.Role
+import com.browntowndev.enclave.domain.model.chat.Mode
 import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
@@ -30,6 +31,7 @@ import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.SettingsData
 import com.browntowndev.enclave.domain.port.repository.StudioMediaAsset
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
+import com.browntowndev.enclave.domain.port.repository.UiSelectionRepository
 import com.browntowndev.enclave.domain.usecase.artifact.ExportArtifactDocumentsUseCase
 import com.browntowndev.enclave.domain.usecase.byok.GetDefaultModelsUseCase
 import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
@@ -93,6 +95,7 @@ class ChatViewModelTest {
     private val shareChatUseCase: ShareChatUseCase = mockk(relaxed = true)
     private val chatRepository: com.browntowndev.enclave.domain.port.repository.ChatRepository = mockk(relaxed = true)
     private val exportArtifactDocumentsUseCase: ExportArtifactDocumentsUseCase = mockk(relaxed = true)
+    private val activeModelProvider: ActiveModelProviderPort = mockk()
     private lateinit var chatViewModel: ChatViewModel
     private lateinit var savedStateHandle: SavedStateHandle
     private lateinit var defaultModelsFlow: MutableStateFlow<List<DefaultModelAssignment>>
@@ -102,7 +105,6 @@ class ChatViewModelTest {
 
     @BeforeEach
     fun setUp() {
-        val activeModelProvider: ActiveModelProviderPort = mockk()
         val visionConfig =
             ActiveModelConfiguration(
                 modelId = "test-model",
@@ -173,6 +175,28 @@ class ChatViewModelTest {
                 stageImageAttachmentUseCase = stageImageAttachmentUseCase,
             )
     }
+
+    private fun createChatViewModel(uiSelectionRepository: UiSelectionRepository): ChatViewModel =
+        ChatViewModelTestSupport.createViewModel(
+            settingsUseCases = settingsUseCases,
+            chatUseCases = chatUseCases,
+            savedStateHandle = savedStateHandle,
+            cancelInferenceUseCase = cancelInferenceUseCase,
+            inferenceLockManager = inferenceLockManager,
+            modelDisplayNamesUseCase = modelDisplayNamesUseCase,
+            activeModelProvider = activeModelProvider,
+            toolExecutionEventPort = toolExecutionEventPort,
+            errorHandler = errorHandler,
+            loggingPort = loggingPort,
+            activeChatTurnSnapshotPort = activeChatTurnStore,
+            playbackController = playbackController,
+            studioRepository = studioRepository,
+            shareChatUseCase = shareChatUseCase,
+            chatRepository = chatRepository,
+            exportArtifactDocumentsUseCase = exportArtifactDocumentsUseCase,
+            stageImageAttachmentUseCase = stageImageAttachmentUseCase,
+            uiSelectionRepository = uiSelectionRepository,
+        )
 
     @Test
     fun `onSendMessage error invokes errorHandler`() =
@@ -1072,5 +1096,30 @@ class ChatViewModelTest {
 
             safetyGate.complete(Unit)
             collectJob.cancel()
+        }
+
+    @Test
+    fun `init seeds coordinator with persisted non-default chat mode`() =
+        runTest {
+            val uiSelectionRepository = mockk<UiSelectionRepository>(relaxed = true)
+            every { uiSelectionRepository.selectedChatMode } returns flowOf(Mode.THINKING)
+            val vm = createChatViewModel(uiSelectionRepository = uiSelectionRepository)
+            val collectJob = backgroundScope.launch { vm.uiState.collect() }
+            advanceUntilIdle()
+
+            assertEquals(ChatModeUi.THINKING, vm.uiState.value.selectedMode)
+            collectJob.cancel()
+        }
+
+    @Test
+    fun `onModeChange persists the selected mode`() =
+        runTest {
+            val uiSelectionRepository = mockk<UiSelectionRepository>(relaxed = true)
+            every { uiSelectionRepository.selectedChatMode } returns flowOf(Mode.FAST)
+            val vm = createChatViewModel(uiSelectionRepository = uiSelectionRepository)
+            vm.onModeChange(ChatModeUi.THINKING)
+            advanceUntilIdle()
+
+            coVerify { uiSelectionRepository.setChatMode(Mode.THINKING) }
         }
 }

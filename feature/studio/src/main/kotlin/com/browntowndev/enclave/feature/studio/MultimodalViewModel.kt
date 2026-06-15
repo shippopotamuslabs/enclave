@@ -10,6 +10,7 @@ import com.browntowndev.enclave.domain.model.media.ProviderCapabilities
 import com.browntowndev.enclave.domain.model.media.StudioTemplate
 import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
+import com.browntowndev.enclave.domain.port.repository.UiSelectionRepository
 import com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase
 import com.browntowndev.enclave.domain.usecase.inference.ShouldModeratePromptUseCase
 import com.browntowndev.enclave.domain.usecase.inference.SubmitModerationReportUseCase
@@ -75,6 +76,7 @@ class MultimodalViewModel
         private val remoteCapabilitiesCoordinator: StudioRemoteCapabilitiesCoordinator,
         private val promptCoordinator: StudioPromptCoordinator,
         private val mediaActionsCoordinator: StudioMediaActionsCoordinator,
+        private val uiSelectionRepository: UiSelectionRepository,
     ) : ViewModel() {
         private val generationAttemptInFlight = AtomicBoolean(false)
         private val sessionMedia = albumSelectionCoordinator.sessionMediaFlow(viewModelScope)
@@ -297,6 +299,10 @@ class MultimodalViewModel
                 scope = viewModelScope,
                 onActiveGeneration = promptCoordinator::restoreActiveGeneration,
             )
+            viewModelScope.launch {
+                val persistedMediaType = uiSelectionRepository.selectedStudioMediaType.first()
+                promptCoordinator.restoreLastMediaType(persistedMediaType)
+            }
             generationCoordinator.moderationEvents
                 .onEach { event -> _moderationEvents.send(event) }
                 .launchIn(viewModelScope)
@@ -370,6 +376,9 @@ class MultimodalViewModel
 
         fun onMediaTypeChange(type: MediaCapability) {
             promptCoordinator.onMediaTypeChange(type)
+            viewModelScope.launch {
+                uiSelectionRepository.setStudioMediaType(type)
+            }
         }
 
         fun onTemplateSelected(template: StudioTemplate) {

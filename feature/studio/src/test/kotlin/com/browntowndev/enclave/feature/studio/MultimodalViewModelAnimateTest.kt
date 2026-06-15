@@ -22,6 +22,7 @@ import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPor
 import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.StudioMediaAsset
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
+import com.browntowndev.enclave.domain.port.repository.UiSelectionRepository
 import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
 import com.browntowndev.enclave.domain.usecase.media.GenerateMusicUseCase
 import com.browntowndev.enclave.domain.usecase.media.GetImageGenerationCapabilitiesUseCase
@@ -145,6 +146,10 @@ class MultimodalViewModelAnimateTest {
         val promptCoordinator = StudioPromptCoordinator(generationCoordinator, studioRepository)
         val mediaActionsCoordinator =
             StudioMediaActionsCoordinator(shareMediaPort, studioRepository, generationCoordinator)
+        val uiSelectionRepository =
+            mockk<UiSelectionRepository>(relaxed = true) {
+                every { selectedStudioMediaType } returns flowOf(MediaCapability.IMAGE)
+            }
 
         viewModel =
             MultimodalViewModel(
@@ -164,6 +169,7 @@ class MultimodalViewModelAnimateTest {
                 remoteCapabilitiesCoordinator = remoteCapabilitiesCoordinator,
                 promptCoordinator = promptCoordinator,
                 mediaActionsCoordinator = mediaActionsCoordinator,
+                uiSelectionRepository = uiSelectionRepository,
             )
     }
 
