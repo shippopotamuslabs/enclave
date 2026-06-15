@@ -162,7 +162,7 @@ class DownloadViewModelUiModelTest {
                 metadata =
                     LocalModelMetadata(
                         id = LocalModelId("image-safety"),
-                        huggingFaceModelName = null,
+                        huggingFaceModelName = "",
                         remoteFileName = "model_quantized.onnx",
                         localFileName = "model_quantized.onnx",
                         sha256 = classifierSha,
