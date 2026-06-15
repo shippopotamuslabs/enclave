@@ -214,34 +214,62 @@ class OssLicensesBottomSheetTest {
         @Test
         fun `OssLicenses contains all mandatory attributed libraries`() {
             val names = OssLicenses.entries.map { it.name }.toSet()
-            listOf(
-                "OkHttp",
-                "Kotlin",
-                "JNA (Java Native Access)",
-                "CommonMark Java",
-                "jtokkit",
+            val expected = setOf(
+                "Android Jetpack Activity",
+                "Android Jetpack Biometric",
+                "Android Jetpack Compose",
+                "Android Jetpack Core KTX",
+                "Android Jetpack Core SplashScreen",
+                "Android Jetpack Credentials",
+                "Android Jetpack DataStore Preferences",
+                "Android Jetpack Hilt Navigation Compose",
+                "Android Jetpack Hilt Work",
+                "Android Jetpack Lifecycle",
+                "Android Jetpack Media3",
+                "Android Jetpack Navigation Compose",
+                "Android Jetpack Room",
+                "Android Jetpack WorkManager",
                 "Anthropic Java SDK",
-                "Firebase Android SDK",
-                "llama.cpp",
+                "Coil 3",
+                "CommonMark Java",
                 "Enclave diffusion engine",
+                "Firebase Android SDK",
+                "Google GenAI SDK",
+                "Google Identity (googleid)",
+                "gRPC",
+                "Haze",
+                "Hilt (Dagger)",
+                "javax.inject",
+                "JNA (Java Native Access)",
+                "jtokkit",
+                "Kotlin",
+                "kotlinx-serialization",
+                "LiteRT (TFLite)",
+                "llama.cpp",
+                "markdown-parser & markdown-renderer",
+                "Model: Falconsai NSFW Image Detection",
+                "Model: Gemma 4 E4B",
+                "Model: Jamba Reasoning 3B",
+                "Model: KoalaAI Text-Moderation",
+                "Model: MiniCPM-V-4.6",
+                "Model: Qwen 3.5 2B",
+                "Model: Sentence Transformers (all-MiniLM-L6-v2)",
+                "Model: Stable Diffusion 1.5",
+                "Model: Stable Diffusion 1.5 NPU pack",
+                "Model: Stable Diffusion XL NPU pack",
+                "Model: Whisper (ggml-base.en)",
+                "OkHttp",
+                "OpenAI Java SDK",
                 "Qualcomm AI Runtime (QNN)",
                 "stb_image_write",
+                "Telephoto",
+                "uniffi-kotlin-runtime",
                 "whisper.cpp",
-                "Model: Stable Diffusion 1.5",
-                "Model: Stable Diffusion XL NPU pack",
-                "Dataset: AdvBench",
-                "Dataset: ClearHarm",
-                "Dataset: CLINC150",
-                "Dataset: Gretel Safety Alignment",
-                "Dataset: HarmBench",
-                "Dataset: JailbreakBench JBB-Behaviors",
-                "Dataset: Natural Questions Open",
-                "Dataset: OpenAI Moderation",
-                "Dataset: OpenAssistant OASST1",
-                "Dataset: Project-Generated Safety Prompts",
-            ).forEach { expected ->
-                assertTrue(expected in names, "Missing required library: $expected")
-            }
+            )
+            val missing = expected - names
+            assertTrue(missing.isEmpty(), "OssLicenses is missing required attributions: $missing")
+            val unregistered = names - expected
+            assertTrue(unregistered.isEmpty(), "OssLicenses has entries not registered in the test: $unregistered")
         }
 
         // S4-06
