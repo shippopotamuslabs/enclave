@@ -11,6 +11,8 @@ import com.browntowndev.enclave.domain.model.config.RemoteModelPack
 import com.browntowndev.enclave.domain.model.config.RemoteModelPackMember
 import com.browntowndev.enclave.domain.model.config.effectiveDisplayName
 import com.browntowndev.enclave.domain.model.config.resolvedModelFileFormat
+import com.browntowndev.enclave.domain.model.download.CatalogFileIdentity
+import com.browntowndev.enclave.domain.model.download.LocalFileNameDisambiguator
 import com.browntowndev.enclave.domain.model.download.ModelPack
 import com.browntowndev.enclave.domain.model.download.ModelPackMember
 import com.browntowndev.enclave.domain.model.download.ModelPackRole
@@ -295,13 +297,33 @@ class ModelConfigFetcherImpl
          * Converts RemoteModelAsset list to a list of LocalModelAsset.
          * Each asset naturally contains its configurations; no deduplication needed.
          */
-        override fun toLocalModelAssets(assets: List<RemoteModelAsset>): List<LocalModelAsset> =
-            assets.map { asset ->
+        override fun toLocalModelAssets(assets: List<RemoteModelAsset>): List<LocalModelAsset> {
+            val catalogIdentities =
+                assets.map { asset ->
+                    CatalogFileIdentity(
+                        fileName = asset.fileName,
+                        sha256 = asset.sha256,
+                        huggingFacePath = asset.huggingFacePath,
+                        utilityType = asset.utilityType,
+                    )
+                }
+            return assets.map { asset ->
                 Log.d(TAG, "Model Asset File: ${asset.fileName}, configs: ${asset.configurations.size}")
 
                 validateAsset(asset)
 
                 val assetDisplayName = asset.effectiveDisplayName()
+                val localFileName =
+                    LocalFileNameDisambiguator.resolveLocalFileName(
+                        identity =
+                            CatalogFileIdentity(
+                                fileName = asset.fileName,
+                                sha256 = asset.sha256,
+                                huggingFacePath = asset.huggingFacePath,
+                                utilityType = asset.utilityType,
+                            ),
+                        catalog = catalogIdentities,
+                    )
 
                 val metadata =
                     LocalModelMetadata(
@@ -310,7 +332,7 @@ class ModelConfigFetcherImpl
                         huggingFaceModelName = asset.huggingFaceModelName,
                         huggingFacePath = asset.huggingFacePath,
                         remoteFileName = asset.fileName,
-                        localFileName = asset.fileName,
+                        localFileName = localFileName,
                         sha256 = asset.sha256,
                         sizeInBytes = asset.sizeInBytes,
                         modelFileFormat = asset.resolvedModelFileFormat(),
@@ -351,6 +373,7 @@ class ModelConfigFetcherImpl
                     configurations = configurations,
                 )
             }
+        }
 
         private fun validateAsset(asset: RemoteModelAsset) {
             if (asset.utilityType != null) {

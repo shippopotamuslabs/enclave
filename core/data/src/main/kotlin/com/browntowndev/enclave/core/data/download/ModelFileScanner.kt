@@ -8,7 +8,9 @@ import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.config.UtilityType
 import com.browntowndev.enclave.domain.model.config.requiredArtifacts
+import com.browntowndev.enclave.domain.model.download.CatalogFileIdentity
 import com.browntowndev.enclave.domain.model.download.JuggernautXlQnnPackCatalog
+import com.browntowndev.enclave.domain.model.download.LocalFileNameDisambiguator
 import com.browntowndev.enclave.domain.model.download.ModelConfig
 import com.browntowndev.enclave.domain.model.download.ModelScanResult
 import com.browntowndev.enclave.domain.model.download.Sd15QnnPackCatalog
@@ -90,6 +92,8 @@ class ModelFileScanner
                 val missingModels = mutableListOf<LocalModelAsset>()
                 val partialDownloads = mutableMapOf<String, Long>()
                 val invalidModels = mutableListOf<LocalModelAsset>()
+
+                removeOrphanedLegacyCollisionFiles(modelsDir, expectedAssets)
 
                 // Iterate over expected assets (what we want to have)
                 for (expectedAsset in expectedAssets) {
@@ -344,6 +348,31 @@ class ModelFileScanner
                 invalid = assetInvalid,
                 partialBytes = partialBytes,
             )
+        }
+
+        private fun removeOrphanedLegacyCollisionFiles(
+            modelsDir: File,
+            expectedAssets: List<LocalModelAsset>,
+        ) {
+            val catalogIdentities =
+                expectedAssets.map { asset ->
+                    CatalogFileIdentity(
+                        fileName = asset.metadata.remoteFileName,
+                        sha256 = asset.metadata.sha256,
+                        huggingFacePath = asset.metadata.huggingFacePath,
+                        utilityType = asset.metadata.utilityType,
+                    )
+                }
+            LocalFileNameDisambiguator.orphanedLegacyFilenames(catalogIdentities).forEach { legacyFileName ->
+                val legacyFile = getSafeFile(modelsDir, legacyFileName)
+                if (!legacyFile.exists()) {
+                    return@forEach
+                }
+                Log.i(TAG, "Removing orphaned legacy collision file: $legacyFileName")
+                legacyFile.delete()
+                getSafeFile(modelsDir, "${legacyFileName}${ModelConfig.TEMP_EXTENSION}").delete()
+                getSafeFile(modelsDir, "${legacyFileName}${ModelConfig.TEMP_META_EXTENSION}").delete()
+            }
         }
 
         private fun isValidPartialDownload(

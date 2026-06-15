@@ -1130,6 +1130,53 @@ class ModelConfigFetcherImplTest {
             assertEquals("realvis_xl_v5_dmd2_qnn2.28_8gen3.zip", sdxlAsset.metadata.localFileName)
             assertTrue(cacheFile.readText().contains("realvis_xl_v5_dmd2_qnn2.28_8gen3.zip"))
         }
+
+    @Test
+    fun toLocalModelAssets_disambiguatesCollidingSafetyClassifierFilenames() =
+        runTest {
+            val remoteAssets =
+                listOf(
+                    RemoteModelAsset(
+                        displayName = "Image Safety Classifier",
+                        huggingFacePath = "image_safety_classifier",
+                        fileName = "model_quantized.onnx",
+                        sha256 = "image-sha",
+                        sizeInBytes = 87_018_507L,
+                        modelFileFormat = ModelFileFormat.ONNX,
+                        source = DownloadSource.CLOUDFLARE_R2,
+                        utilityType = UtilityType.IMAGE_SAFETY_CLASSIFIER,
+                        configurations = emptyList(),
+                    ),
+                    RemoteModelAsset(
+                        displayName = "Prompt Safety Classifier",
+                        huggingFaceModelName = "KoalaAI/Text-Moderation",
+                        huggingFacePath = "nsfw_text_classifier",
+                        fileName = "model_quantized.onnx",
+                        sha256 = "prompt-sha",
+                        sizeInBytes = 142_975_672L,
+                        modelFileFormat = ModelFileFormat.ONNX,
+                        source = DownloadSource.CLOUDFLARE_R2,
+                        utilityType = UtilityType.PROMPT_SAFETY_CLASSIFIER,
+                        configurations = emptyList(),
+                    ),
+                )
+
+            val modelAssets = fetcher.toLocalModelAssets(remoteAssets)
+
+            assertEquals(
+                "image_safety_classifier_model_quantized.onnx",
+                modelAssets.first { it.metadata.utilityType == UtilityType.IMAGE_SAFETY_CLASSIFIER }
+                    .metadata.localFileName,
+            )
+            assertEquals(
+                "nsfw_text_classifier_model_quantized.onnx",
+                modelAssets.first { it.metadata.utilityType == UtilityType.PROMPT_SAFETY_CLASSIFIER }
+                    .metadata.localFileName,
+            )
+            modelAssets.forEach { asset ->
+                assertEquals("model_quantized.onnx", asset.metadata.remoteFileName)
+            }
+        }
 }
 
 private fun assertFalse(condition: Boolean) {
