@@ -330,8 +330,12 @@ class ChatInferenceRequestPreparerTest {
                     modelType = ModelType.FAST,
                 )
 
-            // SDK_NATIVE strategy should result in no tool instructions in system prompt
-            assertFalse(request.options.systemPrompt?.contains("web_search") == true)
+            // SDK_NATIVE: capability-based discovery, no envelope syntax, no catalog enumeration
+            val systemPrompt = requireNotNull(request.options.systemPrompt)
+            assertTrue(systemPrompt.contains("# CONTEXT RETRIEVAL ROUTING:"))
+            assertTrue(systemPrompt.contains("# TOOL DISCOVERY:"))
+            assertFalse(systemPrompt.contains("# TOOL GROUPS:"))
+            assertFalse(systemPrompt.contains("<tool_call>"))
             assertTrue(request.options.activeTools.contains(ToolDefinition.WEB_SEARCH))
         }
 

@@ -219,12 +219,16 @@ data class ToolDefinition(
                 supportsLazyDisclosure = false,
             )
 
+        @Suppress("MaxLineLength")
         val READ_CONTEXT_REFERENCE =
             ToolDefinition(
                 name = "read_context_reference",
                 description =
-                    "Retrieve the full content of a context reference by its ID. " +
-                        "Use when context sidecars list references with truncated previews that you need to read in full.",
+                    "[RARE] Fetch exact content for a context reference ID only when a spill envelope or context sidecar " +
+                        "explicitly names that ID. Never use for discovery, search, or browsing references. " +
+                        "IDs starting with tool-schema- return the full deferred tool registry (all tools)—use " +
+                        "tool_discovery_tool instead. Route retrieval needs: past conversations → search_chat_history; " +
+                        "web/current facts → web_search; hidden executable tools → tool_discovery_tool.",
                 parametersClass = ReadContextReferenceParams::class,
                 disclosureMode = ToolDisclosureMode.DISCLOSE_ON_DEMAND,
                 supportsLazyDisclosure = true,

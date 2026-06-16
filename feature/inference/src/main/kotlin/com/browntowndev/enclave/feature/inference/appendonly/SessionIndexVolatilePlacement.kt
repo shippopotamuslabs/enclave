@@ -2,6 +2,7 @@ package com.browntowndev.enclave.feature.inference.appendonly
 
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.AgentLoopMessage
+import com.browntowndev.enclave.feature.inference.EngineInternalMessageMapper
 import com.browntowndev.enclave.feature.inference.openai.PreRetrievalContextSidecar
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -25,8 +26,7 @@ internal object SessionIndexVolatilePlacement {
     fun resolveTailInsertIndex(sessionMessages: List<AgentLoopMessage>): Int {
         if (sessionMessages.isEmpty()) return 0
         return sessionMessages.indices.lastOrNull { index ->
-            val metadata = sessionMessages[index].metadataJson.toMetadataJsonObject()
-            !metadata.isEngineInternalToolSidecar()
+            !EngineInternalMessageMapper.isEngineInternalMessage(sessionMessages[index].metadataJson)
         } ?: 0
     }
 
@@ -58,14 +58,6 @@ internal object SessionIndexVolatilePlacement {
         val metadata = toMetadataJsonObject() ?: return false
         return metadata["call_id"]?.jsonPrimitive?.contentOrNull != null
     }
-
-    private fun JsonObject?.isEngineInternalToolSidecar(): Boolean =
-        this != null &&
-            (
-                containsKey("agent_tool_budget") ||
-                    containsKey("tools_blocked_nudge") ||
-                    containsKey("envelope_parse_failure")
-            )
 
     private fun String.toMetadataJsonObject(): JsonObject? =
         if (isBlank() || this == "null") {

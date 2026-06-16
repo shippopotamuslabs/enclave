@@ -725,7 +725,8 @@ class AppendOnlyOpenAiSidecarPlacementTest {
                         AgentLoopMessage(
                             id = "budget",
                             role = Role.USER,
-                            content = """{"_agent":{"tool_calls_remaining":1}}""",
+                            content =
+                                "<system_context>\nTool budget: 1/35 used (34 remaining). Tools enabled.\n</system_context>",
                             metadataJson = """{"agent_tool_budget":true}""",
                         ),
                     ),

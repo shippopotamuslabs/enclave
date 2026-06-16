@@ -76,10 +76,13 @@ internal object AgentLoopOpenAiResponseMapper {
         modelId: String,
     ): List<MappedResponseWireSegment> {
         val metadata = metadataJson.toMetadataJsonObject()
-        if (metadata.isEngineInternalToolSidecar()) {
+        if (EngineInternalMessageMapper.isEngineInternalMessage(metadataJson)) {
             return listOf(
                 MappedResponseWireSegment(
-                    segment = ResponseWireSegment.SystemText("[Agent]\n${content.ifBlank { "{}" }}"),
+                    segment =
+                        ResponseWireSegment.SystemText(
+                            EngineInternalMessageMapper.formatForProviderWire(content),
+                        ),
                 ),
             )
         }
@@ -266,13 +269,6 @@ internal object AgentLoopOpenAiResponseMapper {
             null
         }
 
-    private fun JsonObject?.isEngineInternalToolSidecar(): Boolean =
-        this != null &&
-            (
-                containsKey("agent_tool_budget") ||
-                    containsKey("tools_blocked_nudge") ||
-                    containsKey("envelope_parse_failure")
-            )
 }
 
 internal sealed class ResponseWireSegment {

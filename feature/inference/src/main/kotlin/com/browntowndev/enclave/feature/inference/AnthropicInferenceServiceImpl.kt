@@ -244,6 +244,24 @@ class AnthropicInferenceServiceImpl(
                         msg.content
                     }
 
+                if (EngineInternalMessageMapper.isEngineInternalMessage(msg.metadataJson)) {
+                    val wireText = EngineInternalMessageMapper.formatForProviderWire(msg.content)
+                    if (wireText.isNotBlank()) {
+                        val textBlockBuilder = TextBlockParam.builder().text(wireText)
+                        if (attachCacheBreakpoint) {
+                            textBlockBuilder.cacheControl(AnthropicPromptCacheSupport.ephemeralCacheControl())
+                        }
+                        builder.addMessage(
+                            MessageParam
+                                .builder()
+                                .role(MessageParam.Role.USER)
+                                .contentOfBlockParams(listOf(ContentBlockParam.ofText(textBlockBuilder.build())))
+                                .build(),
+                        )
+                    }
+                    return@forEachIndexed
+                }
+
                 when (msg.role) {
                     Role.SYSTEM -> {} // systemPrompt mapped above
                     Role.USER -> {

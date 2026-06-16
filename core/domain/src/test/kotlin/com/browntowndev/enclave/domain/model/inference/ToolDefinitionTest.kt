@@ -79,6 +79,11 @@ class ToolDefinitionTest {
         assertEquals(ToolDisclosureMode.DISCLOSE_ON_DEMAND, tool.disclosureMode)
         assertTrue(tool.supportsLazyDisclosure)
         assertEquals(ToolDisclosureMode.DISCLOSE_ON_DEMAND, tool.catalogEntry().disclosureMode)
+        assertTrue(tool.description.startsWith("[RARE]"))
+        assertTrue(tool.description.contains("tool-schema-"))
+        assertTrue(tool.description.contains("search_chat_history"))
+        assertTrue(tool.description.contains("web_search"))
+        assertTrue(tool.description.contains("tool_discovery_tool"))
     }
 
     @Test

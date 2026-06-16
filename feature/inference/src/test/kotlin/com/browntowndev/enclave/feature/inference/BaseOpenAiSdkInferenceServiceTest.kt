@@ -728,7 +728,8 @@ class BaseOpenAiSdkInferenceServiceTest {
                         AgentLoopMessage(
                             id = "budget",
                             role = Role.ASSISTANT,
-                            content = """{"_agent":{"tool_calls_remaining":1}}""",
+                            content =
+                                "<system_context>\nTool budget: 3/50 used (47 remaining). Tools enabled.\n</system_context>",
                             metadataJson = """{"agent_tool_budget":true}""",
                         ),
                     ),
@@ -745,13 +746,15 @@ class BaseOpenAiSdkInferenceServiceTest {
             assertTrue(messages[0].isAssistant())
             assertTrue(messages[1].isTool())
             assertTrue(messages[2].isSystem())
-            assertTrue(
+            val budgetWireText =
                 messages[2]
                     .asSystem()
                     .content()
                     .asText()
-                    .contains("[Agent]"),
-            )
+            assertTrue(budgetWireText.contains("<system_context>"))
+            assertTrue(budgetWireText.contains("Tool budget: 3/50 used (47 remaining). Tools enabled."))
+            assertEquals(false, budgetWireText.contains("[Agent]"))
+            assertEquals(false, budgetWireText.contains(""""_agent""""))
         }
 
     @Test

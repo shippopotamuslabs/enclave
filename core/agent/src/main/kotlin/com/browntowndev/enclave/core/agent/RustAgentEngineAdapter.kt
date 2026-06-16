@@ -5,6 +5,7 @@ package com.browntowndev.enclave.core.agent
 import com.browntowndev.enclave.domain.model.chat.ChatMessage
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.AgentContextReference
+import com.browntowndev.enclave.domain.model.inference.ContextReferenceNotFoundException
 import com.browntowndev.enclave.domain.model.inference.AgentFinishReason
 import com.browntowndev.enclave.domain.model.inference.AgentLoopCompactionTrigger
 import com.browntowndev.enclave.domain.model.inference.AgentLoopConfig
@@ -312,7 +313,11 @@ class RustAgentEngineAdapter
         override suspend fun readContextReference(referenceId: String): String {
             val engine = requireNotNull(activeEngine) { "No active Rust agent session" }
             val session = requireNotNull(activeSession) { "No active Rust agent session" }
-            return engine.readContextReference(session, referenceId)
+            return try {
+                engine.readContextReference(session, referenceId)
+            } catch (e: AgentException.ContextReferenceNotFound) {
+                throw ContextReferenceNotFoundException(e.referenceId, e)
+            }
         }
 
         override suspend fun searchContextReferences(

@@ -1,6 +1,5 @@
 package com.browntowndev.enclave.domain.usecase.chat
 
-import com.browntowndev.enclave.domain.model.inference.AgentContextReference
 import com.browntowndev.enclave.domain.model.inference.AgentToolResult
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -23,11 +22,6 @@ object RetrievalHintActivation {
         } else {
             emptyList()
         }
-
-    fun toolsFromContextReferences(references: List<AgentContextReference>): List<String> =
-        references
-            .flatMap { toolsFromRetrievalHint(it.retrievalHint) }
-            .distinct()
 
     fun toolsFromToolResults(
         results: List<AgentToolResult>,

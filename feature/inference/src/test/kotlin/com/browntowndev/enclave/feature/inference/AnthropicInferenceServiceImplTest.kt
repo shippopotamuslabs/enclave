@@ -3,6 +3,7 @@ package com.browntowndev.enclave.feature.inference
 import com.anthropic.client.AnthropicClient
 import com.anthropic.core.http.StreamResponse
 import com.anthropic.models.messages.MessageCreateParams
+import com.anthropic.models.messages.MessageParam
 import com.anthropic.models.messages.RawContentBlockDelta
 import com.anthropic.models.messages.RawContentBlockDeltaEvent
 import com.anthropic.models.messages.RawMessageStreamEvent
@@ -106,6 +107,54 @@ class AnthropicInferenceServiceImplTest {
                     )
                 }
             assertTrue(error.message!!.contains("stream ended unexpectedly without finish signal"))
+        }
+
+    @Test
+    fun `completeSingleTurn maps agent tool budget sidecar to user infrastructure not assistant`() =
+        runTest {
+            val paramsSlot = slot<MessageCreateParams>()
+            every { client.messages() } returns messageService
+            every { messageService.createStreaming(capture(paramsSlot)) } returns streamResponse
+            every { streamResponse.stream() } returns Stream.of(anthropicMessageStopEvent())
+            every { streamResponse.close() } returns Unit
+
+            val service = createService()
+            val budgetContent =
+                "<system_context>\nTool budget: 3/50 used (47 remaining). Tools enabled.\n</system_context>"
+
+            service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        AgentLoopMessage(id = "user-live", role = Role.USER, content = "Hello"),
+                        AgentLoopMessage(
+                            id = "budget",
+                            role = Role.ASSISTANT,
+                            content = budgetContent,
+                            metadataJson = """{"agent_tool_budget":true}""",
+                        ),
+                    ),
+                systemPrompt = "",
+                contextSidecars = null,
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+
+            val messages = paramsSlot.captured.messages()
+            assertEquals(2, messages.size)
+            assertEquals(MessageParam.Role.USER, messages[0].role())
+            assertEquals(MessageParam.Role.USER, messages[1].role())
+            val budgetWireText =
+                messages[1]
+                    .content()
+                    .asBlockParams()
+                    .single()
+                    .asText()
+                    .text()
+            assertEquals(budgetContent, budgetWireText)
+            assertEquals(false, budgetWireText.contains(""""_agent""""))
         }
 
     @Test
