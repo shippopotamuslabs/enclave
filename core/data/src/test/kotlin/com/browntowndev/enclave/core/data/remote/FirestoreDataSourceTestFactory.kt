@@ -14,6 +14,7 @@ import com.browntowndev.enclave.core.data.local.MediaProviderDao
 import com.browntowndev.enclave.core.data.local.MemoriesDao
 import com.browntowndev.enclave.core.data.local.MessageDao
 import com.browntowndev.enclave.core.data.local.MessageFileDao
+import com.browntowndev.enclave.core.data.local.MessageInferenceTelemetryDao
 import com.browntowndev.enclave.core.data.local.MessageTranscriptSegmentDao
 import com.browntowndev.enclave.core.data.local.MessageVisionAnalysisDao
 import com.browntowndev.enclave.core.data.local.StudioAlbumDao
@@ -232,6 +233,7 @@ internal fun testFirestoreSyncDaos(
     chatDao: ChatDao = mockk(relaxed = true),
     messageDao: MessageDao = mockk(relaxed = true),
     messageTranscriptSegmentDao: MessageTranscriptSegmentDao = mockk(relaxed = true),
+    messageInferenceTelemetryDao: MessageInferenceTelemetryDao = mockk(relaxed = true),
     memoriesDao: MemoriesDao = mockk(relaxed = true),
     webSearchSourceDao: WebSearchSourceDao = mockk(relaxed = true),
     ttsProviderDao: TtsProviderDao = mockk(relaxed = true),
@@ -260,7 +262,7 @@ internal fun testFirestoreSyncDaos(
                 messageFileDao = messageFileDao,
                 messageVisionAnalysisDao = messageVisionAnalysisDao,
                 messageTranscriptSegmentDao = messageTranscriptSegmentDao,
-                messageInferenceTelemetryDao = mockk(relaxed = true),
+                messageInferenceTelemetryDao = messageInferenceTelemetryDao,
                 webSearchSourceDao = webSearchSourceDao,
                 documentDao = documentDao,
                 embeddingDao = embeddingDao,

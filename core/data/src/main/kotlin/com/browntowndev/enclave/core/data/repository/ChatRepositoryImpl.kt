@@ -440,9 +440,10 @@ class ChatRepositoryImpl
                     }
                 messageTranscriptSegmentDao.replaceSegmentsForMessage(messageId, segmentEntities)
 
-                if (telemetry.isNotEmpty()) {
-                    messageInferenceTelemetryDao.insertAll(telemetry.map(TurnTelemetry::toEntity))
-                }
+                messageInferenceTelemetryDao.replaceTelemetryForMessage(
+                    messageId = messageId.value,
+                    rows = telemetry.map(TurnTelemetry::toEntity),
+                )
             }
             triggerSync()
         }
