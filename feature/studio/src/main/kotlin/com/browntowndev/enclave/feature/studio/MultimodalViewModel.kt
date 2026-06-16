@@ -4,10 +4,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.MediaCapability
+import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.media.GenerationSettings
 import com.browntowndev.enclave.domain.model.media.ProviderCapabilities
+import com.browntowndev.enclave.domain.model.media.StudioModelOverride
 import com.browntowndev.enclave.domain.model.media.StudioTemplate
+
 import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.UiSelectionRepository
@@ -15,9 +18,11 @@ import com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase
 import com.browntowndev.enclave.domain.usecase.inference.ShouldModeratePromptUseCase
 import com.browntowndev.enclave.domain.usecase.inference.SubmitModerationReportUseCase
 import com.browntowndev.enclave.domain.usecase.media.GetImageGenerationCapabilitiesUseCase
-import com.browntowndev.enclave.domain.usecase.media.ResolveMediaModelTypeUseCase
+import com.browntowndev.enclave.domain.usecase.media.GetStudioCapablePresetsUseCase
+
 import com.browntowndev.enclave.feature.studio.coordinators.CapabilitiesPlaybackInputs
 import com.browntowndev.enclave.feature.studio.coordinators.GenerationInputs
+import com.browntowndev.enclave.feature.studio.coordinators.OverrideInputs
 import com.browntowndev.enclave.feature.studio.coordinators.PlaybackInputs
 import com.browntowndev.enclave.feature.studio.coordinators.PromptCoreInputs
 import com.browntowndev.enclave.feature.studio.coordinators.PromptInputs
@@ -27,11 +32,15 @@ import com.browntowndev.enclave.feature.studio.coordinators.StudioAlbumSelection
 import com.browntowndev.enclave.feature.studio.coordinators.StudioCapabilitiesCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioGenerationCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioMediaActionsCoordinator
+import com.browntowndev.enclave.feature.studio.coordinators.StudioModelOverrideCoordinator
+import com.browntowndev.enclave.feature.studio.coordinators.StudioResolvedModelCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioPlaybackCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioPromptCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioRemoteCapabilitiesCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioSpeechCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioUiStateReducer
+import com.browntowndev.enclave.feature.studio.StudioCapablePresetsUi
+import com.browntowndev.enclave.feature.studio.StudioModelOptionUi
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
@@ -57,6 +66,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 @OptIn(ExperimentalCoroutinesApi::class)
+@Suppress("TooManyFunctions")
 class MultimodalViewModel
     @Inject
     constructor(
@@ -65,7 +75,6 @@ class MultimodalViewModel
         private val moderatePromptUseCase: ModeratePromptUseCase,
         private val shouldModeratePromptUseCase: ShouldModeratePromptUseCase,
         private val submitModerationReportUseCase: SubmitModerationReportUseCase,
-        private val resolveMediaModelTypeUseCase: ResolveMediaModelTypeUseCase,
         private val getImageGenerationCapabilitiesUseCase: GetImageGenerationCapabilitiesUseCase,
         private val generationCoordinator: StudioGenerationCoordinator,
         private val albumSelectionCoordinator: StudioAlbumSelectionCoordinator,
@@ -77,6 +86,9 @@ class MultimodalViewModel
         private val promptCoordinator: StudioPromptCoordinator,
         private val mediaActionsCoordinator: StudioMediaActionsCoordinator,
         private val uiSelectionRepository: UiSelectionRepository,
+        private val overrideCoordinator: StudioModelOverrideCoordinator,
+        private val resolvedModelCoordinator: StudioResolvedModelCoordinator,
+        private val getStudioCapablePresetsUseCase: GetStudioCapablePresetsUseCase,
     ) : ViewModel() {
         private val generationAttemptInFlight = AtomicBoolean(false)
         private val sessionMedia = albumSelectionCoordinator.sessionMediaFlow(viewModelScope)
@@ -84,26 +96,25 @@ class MultimodalViewModel
         private val _moderationEvents = Channel<ModerationEvent>(Channel.BUFFERED)
         val moderationEvents: Flow<ModerationEvent> = _moderationEvents.receiveAsFlow()
 
-        private val activeModelFlow =
-            combine(
-                promptCoordinator.mediaType,
-                promptCoordinator.settings,
-                defaultModelRepository.observeDefaults(),
-            ) { type, settings, defaults ->
-                val modelType = resolveMediaModelTypeUseCase(type, settings)
-                defaults.find { it.modelType == modelType }
-            }
+        private val resolvedStudioModelFlow =
+            resolvedModelCoordinator.observeResolvedModel(
+                overrideState = overrideCoordinator.state,
+                mediaType = promptCoordinator.mediaType,
+                settings = promptCoordinator.settings,
+                defaults = defaultModelRepository.observeDefaults(),
+            )
 
         private val activeModelDisplayNameFlow =
-            activeModelFlow
-                .map { it?.displayName }
+            resolvedStudioModelFlow
+                .map { it.displayName }
                 .distinctUntilChanged()
 
         private val activeProviderFlow =
-            activeModelFlow.flatMapLatest { assignment ->
-                if (assignment?.mediaProviderId != null) {
+            resolvedStudioModelFlow.flatMapLatest { resolved ->
+                val providerId = resolved.mediaProviderId
+                if (providerId != null) {
                     mediaProviderRepository.getMediaProviders().map { providers ->
-                        providers.find { it.id == assignment.mediaProviderId }
+                        providers.find { it.id == providerId }
                     }
                 } else {
                     flowOf(null)
@@ -119,11 +130,9 @@ class MultimodalViewModel
          * its pickers from the same capability shape as remote providers.
          */
         private val localImageCapabilitiesFlow =
-            activeModelFlow
-                .map { assignment ->
-                    assignment
-                        ?.takeIf { it.localConfigId != null && it.mediaProviderId == null }
-                        ?.localConfigId
+            resolvedStudioModelFlow
+                .map { resolved ->
+                    resolved.localConfigId?.takeIf { resolved.mediaProviderId == null }
                 }.distinctUntilChanged()
                 .flatMapLatest { localConfigId: LocalModelConfigurationId? ->
                     if (localConfigId == null) {
@@ -294,6 +303,31 @@ class MultimodalViewModel
                 )
             }
 
+        private val modelPickerAssetsFlow: Flow<StudioCapablePresetsUi> =
+            overrideCoordinator.state
+                .map { it.picker.modelType }
+                .distinctUntilChanged()
+                .flatMapLatest { modelType ->
+                    if (modelType != null) {
+                        getStudioCapablePresetsUseCase(modelType).map { it.toPickerUi() }
+                    } else {
+                        flowOf(StudioCapablePresetsUi.EMPTY)
+                    }
+                }
+
+        private val overrideInputsFlow: Flow<OverrideInputs> =
+            combine(
+                overrideCoordinator.state,
+                modelPickerAssetsFlow,
+            ) { overrideState, pickerAssets ->
+                OverrideInputs(
+                    modelPickerAssets = pickerAssets,
+                    isModelPickerVisible = overrideState.picker.isVisible,
+                    selectedModelIdInPicker = overrideState.picker.pendingSelection?.optionId(),
+                    resolvedModelTypeLabel = overrideState.picker.modelType?.displayName(),
+                )
+            }
+
         init {
             generationCoordinator.startObservers(
                 scope = viewModelScope,
@@ -336,6 +370,7 @@ class MultimodalViewModel
                 sessionMedia = sessionMedia,
                 hasImageToVideoModel = hasImageToVideoModelFlow,
             )
+            resolvedModelCoordinator.attachProviderCache(viewModelScope)
         }
 
         fun onMicClick() {
@@ -359,7 +394,15 @@ class MultimodalViewModel
         }
 
         fun onUpdateReferenceImage(uri: String?) {
+            val previousModelType = currentResolvedModelType()
             promptCoordinator.onUpdateReferenceImage(uri)
+            resolvedModelCoordinator.revalidateOverrideIfModelTypeChanged(
+                overrideCoordinator = overrideCoordinator,
+                previousModelType = previousModelType,
+                mediaType = promptCoordinator.mediaType.value,
+                settings = promptCoordinator.settings.value,
+                scope = viewModelScope,
+            )
         }
 
         fun onSettingsToggle() {
@@ -367,7 +410,15 @@ class MultimodalViewModel
         }
 
         fun onUpdateSettings(newSettings: GenerationSettings) {
+            val previousModelType = currentResolvedModelType()
             promptCoordinator.onUpdateSettings(newSettings)
+            resolvedModelCoordinator.revalidateOverrideIfModelTypeChanged(
+                overrideCoordinator = overrideCoordinator,
+                previousModelType = previousModelType,
+                mediaType = promptCoordinator.mediaType.value,
+                settings = promptCoordinator.settings.value,
+                scope = viewModelScope,
+            )
         }
 
         fun onContinualModeToggle(enabled: Boolean) {
@@ -375,6 +426,7 @@ class MultimodalViewModel
         }
 
         fun onMediaTypeChange(type: MediaCapability) {
+            overrideCoordinator.clearForCapabilityChange()
             promptCoordinator.onMediaTypeChange(type)
             viewModelScope.launch {
                 uiSelectionRepository.setStudioMediaType(type)
@@ -383,6 +435,26 @@ class MultimodalViewModel
 
         fun onTemplateSelected(template: StudioTemplate) {
             promptCoordinator.onTemplateSelected(template)
+        }
+
+        fun onOpenModelPicker() {
+            val modelType = currentResolvedModelType()
+            overrideCoordinator.openPicker(
+                modelType = modelType,
+                current = overrideCoordinator.state.value.committedOverride,
+            )
+        }
+
+        fun onStageModelSelection(option: StudioModelOptionUi) {
+            overrideCoordinator.stageSelection(option.toDomainOverride())
+        }
+
+        fun onConfirmModelSelection() {
+            overrideCoordinator.confirmSelection()
+        }
+
+        fun onCancelModelPicker() {
+            overrideCoordinator.cancelPicker()
         }
 
         fun shareMedia(assetIds: Set<String>) {
@@ -435,7 +507,8 @@ class MultimodalViewModel
                 generationInputsFlow,
                 selectionInputsFlow,
                 playbackInputsFlow,
-            ) { promptInputs, generationInputs, selectionInputs, playbackInputs ->
+                overrideInputsFlow,
+            ) { promptInputs, generationInputs, selectionInputs, playbackInputs, overrideInputs ->
                 studioUiStateReducer.reduce(
                     StudioUiStateReducer.ReduceParams(
                         prompt = promptInputs.prompt,
@@ -465,6 +538,10 @@ class MultimodalViewModel
                         hasImageEditModel = playbackInputs.hasImageEditModel,
                         hasImageToVideoModel = playbackInputs.hasImageToVideoModel,
                         activeModelDisplayName = playbackInputs.activeModelDisplayName,
+                        modelPickerAssets = overrideInputs.modelPickerAssets,
+                        isModelPickerVisible = overrideInputs.isModelPickerVisible,
+                        selectedModelIdInPicker = overrideInputs.selectedModelIdInPicker,
+                        resolvedModelTypeLabel = overrideInputs.resolvedModelTypeLabel,
                     ),
                 )
             }.stateIn(
@@ -494,6 +571,7 @@ class MultimodalViewModel
         }
 
         fun clearSession() {
+            overrideCoordinator.clearSession()
             promptCoordinator.clearSession(viewModelScope, albumSelectionCoordinator)
         }
 
@@ -560,6 +638,7 @@ class MultimodalViewModel
                         continualMode = promptCoordinator.continualMode.value,
                         settings = promptCoordinator.settings.value,
                         baselineMediaCountForPrompt = baselineMediaCountForPrompt,
+                        override = overrideCoordinator.state.value.committedOverride,
                     )
                     promptCoordinator.prompt.update { "" }
                 } catch (e: Exception) {
@@ -580,9 +659,16 @@ class MultimodalViewModel
 
         override fun onCleared() {
             super.onCleared()
+            overrideCoordinator.clearSession()
             speechCoordinator.onCleared()
             playbackCoordinator.onCleared()
         }
+
+        private fun currentResolvedModelType(): ModelType =
+            resolvedModelCoordinator.resolveModelType(
+                promptCoordinator.mediaType.value,
+                promptCoordinator.settings.value,
+            )
 
         private companion object {
             private const val SUBSCRIBE_TIMEOUT_MS = 5_000L

@@ -1,9 +1,11 @@
 package com.browntowndev.enclave.feature.studio.coordinators
 
 import com.browntowndev.enclave.domain.model.config.MediaCapability
+import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.media.GenerationSettings
 import com.browntowndev.enclave.domain.model.media.ImageGenerationProgress
 import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
+import com.browntowndev.enclave.domain.model.media.StudioModelOverride
 import com.browntowndev.enclave.domain.model.media.VideoGenerationSettings
 import com.browntowndev.enclave.domain.port.media.StudioGenerationDispatcherPort
 import com.browntowndev.enclave.domain.port.repository.ActiveStudioGeneration
@@ -12,6 +14,7 @@ import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.feature.studio.ModerationEvent
 import com.browntowndev.enclave.feature.studio.StudioGenerationErrorMessages
 import com.browntowndev.enclave.feature.studio.VideoGenerationState
+import com.browntowndev.enclave.feature.studio.test.FakeStudioGenerationDispatcher
 import app.cash.turbine.test
 import io.mockk.every
 import io.mockk.mockk
@@ -228,6 +231,45 @@ class StudioGenerationCoordinatorTest {
 
             coordinator.onGenerativeScrollThresholdVisible("anchor-3", MediaCapability.IMAGE)
             verify(exactly = 3) { dispatcher.startGeneration(any(), any(), any(), any()) }
+
+            coroutineContext[Job]?.cancelChildren(CancellationException("test complete"))
+        }
+
+    @Test
+    fun `continual re-generation forwards the stored override to the dispatcher`() =
+        runTest {
+            // Use the real coordinator with a recording fake dispatcher (Fakes preferred over MockK).
+            val fakeContinualDispatcher = FakeStudioGenerationDispatcher()
+            val continualCoordinator = StudioGenerationCoordinator(studioRepository, fakeContinualDispatcher)
+            continualCoordinator.startObservers(this)
+
+            val override = StudioModelOverride.MediaProvider(MediaProviderId("fal-1"), "Fal Aura")
+            continualCoordinator.beginGenerationAttempt(
+                submittedPrompt = "continual prompt",
+                mediaType = MediaCapability.IMAGE,
+                continualMode = true,
+                settings = ImageGenerationSettings(),
+                override = override,
+            )
+            advanceUntilIdle()
+            // Sanity: the initial attempt forwarded the override and armed continual mode.
+            assertEquals(override, fakeContinualDispatcher.lastStarted?.override)
+            assertTrue(continualCoordinator.isContinualGenerationActive.value)
+            assertTrue(continualCoordinator.isGenerating.value)
+
+            // Simulate the first generation completing so the continual _isGenerating guard clears.
+            activeGenerationFlow.value = null
+            advanceUntilIdle()
+            assertFalse(continualCoordinator.isGenerating.value)
+            assertTrue(continualCoordinator.isContinualGenerationActive.value)
+
+            // Trigger the continual re-generation path (spec §5 task #14).
+            continualCoordinator.onGenerativeScrollThresholdVisible("anchor-1", MediaCapability.IMAGE)
+            advanceUntilIdle()
+
+            // The continual re-generation must forward the stored override (not null).
+            // If the continual path dropped the override, lastStarted.override would be null and this fails.
+            assertEquals(override, fakeContinualDispatcher.lastStarted?.override)
 
             coroutineContext[Job]?.cancelChildren(CancellationException("test complete"))
         }

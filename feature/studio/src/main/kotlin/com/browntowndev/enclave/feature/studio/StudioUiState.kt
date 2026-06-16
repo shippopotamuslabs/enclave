@@ -56,4 +56,8 @@ data class StudioUiState(
     val hasImageEditModel: Boolean = false,
     val hasImageToVideoModel: Boolean = false,
     val activeModelDisplayName: String? = null,
+    val modelPickerAssets: StudioCapablePresetsUi = StudioCapablePresetsUi(),
+    val isModelPickerVisible: Boolean = false,
+    val selectedModelIdInPicker: String? = null,
+    val resolvedModelTypeLabel: String? = null,
 )

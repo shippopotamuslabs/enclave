@@ -255,6 +255,10 @@ fun StudioScreen(
             onContinualModeChange = viewModel::onContinualModeToggle,
             onMediaTypeChange = viewModel::onMediaTypeChange,
             onTemplateSelected = viewModel::onTemplateSelected,
+            onOpenModelPicker = viewModel::onOpenModelPicker,
+            onStageModelSelection = viewModel::onStageModelSelection,
+            onConfirmModelSelection = viewModel::onConfirmModelSelection,
+            onCancelModelPicker = viewModel::onCancelModelPicker,
         )
     }
 

@@ -7,4 +7,5 @@ data class MediaGenerationRequest(
     val capability: MediaCapability,
     val settings: GenerationSettings,
     val origin: MediaGenerationOrigin,
+    val override: StudioModelOverride? = null,
 )

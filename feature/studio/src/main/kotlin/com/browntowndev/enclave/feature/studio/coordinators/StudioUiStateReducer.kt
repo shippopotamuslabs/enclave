@@ -6,6 +6,7 @@ import com.browntowndev.enclave.domain.model.media.ProviderCapabilities
 import com.browntowndev.enclave.domain.model.media.StudioTemplate
 import com.browntowndev.enclave.domain.port.media.SpeechState
 import com.browntowndev.enclave.feature.studio.GalleryAlbumUi
+import com.browntowndev.enclave.feature.studio.StudioCapablePresetsUi
 import com.browntowndev.enclave.feature.studio.StudioGalleryGroup
 import com.browntowndev.enclave.feature.studio.computeStudioActiveGenerationRemainingPlaceholders
 import com.browntowndev.enclave.feature.studio.StudioMediaUi
@@ -44,6 +45,10 @@ class StudioUiStateReducer
             val hasImageEditModel: Boolean,
             val hasImageToVideoModel: Boolean,
             val activeModelDisplayName: String? = null,
+            val modelPickerAssets: StudioCapablePresetsUi = StudioCapablePresetsUi(),
+            val isModelPickerVisible: Boolean = false,
+            val selectedModelIdInPicker: String? = null,
+            val resolvedModelTypeLabel: String? = null,
         )
 
         fun reduce(params: ReduceParams): StudioUiState {
@@ -97,6 +102,10 @@ class StudioUiStateReducer
                 hasImageEditModel = params.hasImageEditModel,
                 hasImageToVideoModel = params.hasImageToVideoModel,
                 activeModelDisplayName = params.activeModelDisplayName,
+                modelPickerAssets = params.modelPickerAssets,
+                isModelPickerVisible = params.isModelPickerVisible,
+                selectedModelIdInPicker = params.selectedModelIdInPicker,
+                resolvedModelTypeLabel = params.resolvedModelTypeLabel,
             )
         }
 

@@ -3,6 +3,7 @@ package com.browntowndev.enclave.domain.usecase.media
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.media.GenerationSettings
 import com.browntowndev.enclave.domain.model.media.ImageGenerationProgress
+import com.browntowndev.enclave.domain.model.media.StudioModelOverride
 import com.browntowndev.enclave.domain.port.media.ImageGenerationPort
 import javax.inject.Inject
 
@@ -24,10 +25,11 @@ class GenerateImageUseCase
             prompt: String,
             settings: GenerationSettings,
             onProgress: (ImageGenerationProgress) -> Unit = {},
+            override: StudioModelOverride? = null,
         ): Result<List<ByteArray>> {
             val modelType = resolveMediaModelTypeUseCase(MediaCapability.IMAGE, settings)
             val target =
-                resolveAssignedImageGenerationTargetUseCase(modelType).getOrElse { error ->
+                resolveAssignedImageGenerationTargetUseCase(modelType, override).getOrElse { error ->
                     return Result.failure(error)
                 }
             return imageGenerationPort.generateImage(prompt, target, settings, onProgress)

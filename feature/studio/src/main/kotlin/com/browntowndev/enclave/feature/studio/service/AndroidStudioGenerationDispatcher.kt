@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.media.GenerationSettings
+import com.browntowndev.enclave.domain.model.media.StudioModelOverride
 import com.browntowndev.enclave.domain.port.media.StudioGenerationDispatcherPort
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -19,6 +20,7 @@ class AndroidStudioGenerationDispatcher
             mediaType: MediaCapability,
             settings: GenerationSettings,
             generationId: String,
+            override: StudioModelOverride?,
         ) {
             val intent =
                 Intent(context, MultimediaGenerationService::class.java).apply {
@@ -27,6 +29,9 @@ class AndroidStudioGenerationDispatcher
                     putExtra(MultimediaGenerationService.EXTRA_MEDIA_TYPE, mediaType.name)
                     putExtra(MultimediaGenerationService.EXTRA_GENERATION_ID, generationId)
                     StudioGenerationIntentCodec.writeSettings(this, settings)
+                    if (override != null) {
+                        StudioGenerationIntentCodec.writeOverride(this, override)
+                    }
                 }
             try {
                 context.startForegroundService(intent)

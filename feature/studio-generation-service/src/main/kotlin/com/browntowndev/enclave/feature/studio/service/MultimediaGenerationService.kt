@@ -124,6 +124,7 @@ class MultimediaGenerationService : Service() {
                                 prompt = prompt,
                                 capability = mediaType,
                                 settings = settings,
+                                override = StudioGenerationIntentCodec.readOverride(intent),
                             )
                         generateMediaUseCase(
                             request = mediaRequest,
