@@ -689,7 +689,7 @@ abstract class BaseOpenAiSdkInferenceService(
         val anchorSessionIndex =
             sessionMessages.indices.lastOrNull { index ->
                 val metadata = sessionMessages[index].metadataJson.toMetadataJsonObject()
-                !metadata.isEngineInternalToolSidecar()
+                !EngineInternalMessageMapper.isEngineInternalMessage(sessionMessages[index].metadataJson)
             } ?: 0
         val mappedIndex = sessionIndexToMappedIndex.getOrNull(anchorSessionIndex) ?: -1
         if (mappedIndex >= 0) {
@@ -709,13 +709,13 @@ abstract class BaseOpenAiSdkInferenceService(
         useCacheControl: Boolean = false,
     ): MappedChatMessage? {
         val metadata = metadataJson.toMetadataJsonObject()
-        if (metadata.isEngineInternalToolSidecar()) {
+        if (EngineInternalMessageMapper.isEngineInternalMessage(metadataJson)) {
             return MappedChatMessage(
                 param =
                     ChatCompletionMessageParam.ofSystem(
                         ChatCompletionSystemMessageParam
                             .builder()
-                            .content("[Agent]\n${content.ifBlank { "{}" }}")
+                            .content(EngineInternalMessageMapper.formatForProviderWire(content))
                             .build(),
                     ),
             )
@@ -820,7 +820,7 @@ abstract class BaseOpenAiSdkInferenceService(
             text.startsWith("Tool context index JSON:") ||
             text.startsWith("File context index JSON:") ||
             text.startsWith("Cache hints:") ||
-            text.startsWith("[Agent]") ||
+            EngineInternalMessageMapper.isEngineInternalWireText(text) ||
             text.startsWith("[Conversation summary]")
     }
 
@@ -828,15 +828,6 @@ abstract class BaseOpenAiSdkInferenceService(
         val metadata = toMetadataJsonObject() ?: return false
         return metadata["call_id"]?.jsonPrimitive?.contentOrNull != null
     }
-
-    /** Engine-injected payloads without a provider `tool_call_id` (budget, nudges, parse errors). */
-    private fun JsonObject?.isEngineInternalToolSidecar(): Boolean =
-        this != null &&
-            (
-                containsKey("agent_tool_budget") ||
-                    containsKey("tools_blocked_nudge") ||
-                    containsKey("envelope_parse_failure")
-            )
 
     private fun AgentLoopMessage.toToolResultChatParam(
         toolCallId: String,

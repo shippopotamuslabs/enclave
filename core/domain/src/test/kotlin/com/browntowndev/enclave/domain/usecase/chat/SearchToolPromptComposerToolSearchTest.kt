@@ -41,7 +41,7 @@ class SearchToolPromptComposerToolSearchTest {
     }
 
     @Test
-    fun `TSD-03 SDK_NATIVE composer returns no local tool contract`() {
+    fun `TSD-03 SDK_NATIVE composer routes via discovery without enumerating the catalog`() {
         val prompt =
             composer.compose(
                 baseSystemPrompt = "Be concise.",
@@ -51,8 +51,19 @@ class SearchToolPromptComposerToolSearchTest {
             )
 
         assertAll(
-            { assertFalse(prompt.contains("# TOOL DISCOVERY:")) },
+            { assertTrue(prompt.contains("Anti-leak:")) },
+            { assertTrue(prompt.contains("# CONTEXT RETRIEVAL ROUTING:")) },
+            { assertTrue(prompt.contains("Past conversations")) },
+            { assertTrue(prompt.contains("search_chat_history")) },
+            { assertTrue(prompt.contains("web_search")) },
+            { assertTrue(prompt.contains("tool_discovery_tool")) },
+            { assertTrue(prompt.contains("# TOOL DISCOVERY:")) },
+            // Discovery is real: the deferred catalog tool must not be listed up front.
+            { assertFalse(prompt.contains("append_blocks")) },
+            { assertFalse(prompt.contains("# TOOL GROUPS:")) },
             { assertFalse(prompt.contains("# TOOL CATALOG:")) },
+            // SDK-native uses provider-native tool calls, never the envelope syntax.
+            { assertFalse(prompt.contains("<tool_call>")) },
         )
     }
 

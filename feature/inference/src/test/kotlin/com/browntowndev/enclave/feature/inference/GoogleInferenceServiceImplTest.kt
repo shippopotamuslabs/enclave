@@ -78,6 +78,67 @@ class GoogleInferenceServiceImplTest {
         }
 
     @Test
+    fun `completeSingleTurn maps agent tool budget sidecar to user infrastructure not model`() =
+        runTest {
+            val sdkClient = mockk<GoogleGenAiSdkClient>()
+            val contentsSlot = slot<List<Content>>()
+            coEvery {
+                sdkClient.generateContentStream(any(), capture(contentsSlot), any(), any(), any())
+            } returns
+                GoogleSdkResult(
+                    emittedAny = true,
+                    functionCall = null,
+                    assistantContent = null,
+                    finishReason = "STOP",
+                )
+
+            val service =
+                GoogleInferenceServiceImpl(
+                    sdkClient = sdkClient,
+                    modelId = "gemini-2.5-flash",
+                    modelType = ModelType.MAIN,
+                    loggingPort = loggingPort,
+                    toolEnvelopeParserPort = FakeToolEnvelopeParserPort(),
+                    toolStreamGatePort = FakeToolStreamGatePort(),
+                )
+            val budgetContent =
+                "<system_context>\nTool budget: 3/50 used (47 remaining). Tools enabled.\n</system_context>"
+
+            service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        AgentLoopMessage(id = "user-live", role = Role.USER, content = "Hello"),
+                        AgentLoopMessage(
+                            id = "budget",
+                            role = Role.ASSISTANT,
+                            content = budgetContent,
+                            metadataJson = """{"agent_tool_budget":true}""",
+                        ),
+                    ),
+                systemPrompt = "",
+                contextSidecars = null,
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+
+            assertEquals(2, contentsSlot.captured.size)
+            assertEquals("user", contentsSlot.captured[0].role().orElse(null))
+            assertEquals("user", contentsSlot.captured[1].role().orElse(null))
+            val budgetWireText =
+                contentsSlot.captured[1]
+                    .parts()
+                    .orElse(emptyList())
+                    .single()
+                    .text()
+                    .orElse("")
+            assertEquals(budgetContent, budgetWireText)
+            assertEquals(false, budgetWireText.contains(""""_agent""""))
+        }
+
+    @Test
     fun `completeSingleTurn maps call_id metadata to function response part`() =
         runTest {
             val sdkClient = mockk<GoogleGenAiSdkClient>()

@@ -295,6 +295,46 @@ class LlamaInferenceServiceImplTest {
         }
 
     @Test
+    fun `completeSingleTurn maps agent tool budget sidecar to system role not assistant`() =
+        runTest {
+            every { sessionManager.streamAssistantResponseWithOptions(any()) } returns
+                flowOf(
+                    GenerationEvent.Completed("Assistant text"),
+                )
+            val capturedHistories = mutableListOf<List<ChatMessage>>()
+            val service = createService(ModelType.FAST)
+            val budgetContent =
+                "<system_context>\nTool budget: 3/50 used (47 remaining). Tools enabled.\n</system_context>"
+
+            service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        AgentLoopMessage(id = "u1", role = Role.USER, content = "Question", metadataJson = "null"),
+                        AgentLoopMessage(
+                            id = "budget",
+                            role = Role.ASSISTANT,
+                            content = budgetContent,
+                            metadataJson = """{"agent_tool_budget":true}""",
+                        ),
+                    ),
+                systemPrompt = "System",
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0, modelType = ModelType.FAST),
+            )
+
+            coVerify(atLeast = 1) { sessionManager.setHistory(capture(capturedHistories)) }
+            val history = capturedHistories.last()
+            assertEquals(2, history.size)
+            assertEquals(Role.USER, history[0].role)
+            assertEquals(Role.SYSTEM, history[1].role)
+            assertEquals(budgetContent, history[1].content)
+            assertEquals(false, history[1].content.contains(""""_agent""""))
+        }
+
+    @Test
     fun `completeSingleTurn rebuilds session history from Rust messages`() =
         runTest {
             every { sessionManager.streamAssistantResponseWithOptions(any()) } returns

@@ -1,29 +1,29 @@
 package com.browntowndev.enclave.domain.model.inference
 
 object ToolCategoryTags {
-    val byToolName: Map<String, List<String>> =
+    val byToolName: Map<String, List<ToolCategory>> =
         mapOf(
-            "tool_discovery_tool" to listOf("discovery"),
-            "web_search" to listOf("web"),
-            "web_extract" to listOf("web"),
-            "search_chat_history" to listOf("memory"),
-            "search_chat" to listOf("memory"),
-            "get_message_context" to listOf("memory"),
-            "manage_memories" to listOf("memory"),
-            "read_context_reference" to listOf("context"),
-            "start_artifact" to listOf("artifact"),
-            "append_blocks" to listOf("artifact"),
-            "search_current_artifact" to listOf("artifact"),
-            "search_x_recent" to listOf("x"),
-            "x_get_thread" to listOf("x"),
-            "x_trending" to listOf("x"),
-            "x_user_tweets" to listOf("x"),
-            "x_mention_search" to listOf("x"),
-            "attached_image_inspect" to listOf("vision"),
-            "generate_image" to listOf("media"),
-            "generate_video" to listOf("media"),
-            "generate_music" to listOf("media"),
+            "tool_discovery_tool" to listOf(ToolCategory.DISCOVERY),
+            "web_search" to listOf(ToolCategory.WEB),
+            "web_extract" to listOf(ToolCategory.WEB),
+            "search_chat_history" to listOf(ToolCategory.MEMORY),
+            "search_chat" to listOf(ToolCategory.MEMORY),
+            "get_message_context" to listOf(ToolCategory.MEMORY),
+            "manage_memories" to listOf(ToolCategory.MEMORY),
+            "read_context_reference" to listOf(ToolCategory.CONTEXT),
+            "start_artifact" to listOf(ToolCategory.ARTIFACT),
+            "append_blocks" to listOf(ToolCategory.ARTIFACT),
+            "search_current_artifact" to listOf(ToolCategory.ARTIFACT),
+            "search_x_recent" to listOf(ToolCategory.X),
+            "x_get_thread" to listOf(ToolCategory.X),
+            "x_trending" to listOf(ToolCategory.X),
+            "x_user_tweets" to listOf(ToolCategory.X),
+            "x_mention_search" to listOf(ToolCategory.X),
+            "attached_image_inspect" to listOf(ToolCategory.VISION),
+            "generate_image" to listOf(ToolCategory.MEDIA),
+            "generate_video" to listOf(ToolCategory.MEDIA),
+            "generate_music" to listOf(ToolCategory.MEDIA),
         )
 
-    fun forTool(name: String): List<String> = byToolName[name].orEmpty()
+    fun forTool(name: String): List<String> = byToolName[name].orEmpty().map { it.tag }
 }

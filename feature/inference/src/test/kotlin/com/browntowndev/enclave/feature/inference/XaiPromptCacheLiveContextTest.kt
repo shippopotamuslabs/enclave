@@ -479,8 +479,9 @@ class XaiPromptCacheLiveContextTest {
             agentBudgetMessage =
                 AgentLoopMessage(
                     id = "tool-agent-budget-0-0",
-                    role = Role.USER,
-                    content = """{"_agent":{"tool_calls_used":1,"tool_calls_limit":35,"allow_tool_call":true}}""",
+                    role = Role.ASSISTANT,
+                    content =
+                        "<system_context>\nTool budget: 1/35 used (34 remaining). Tools enabled.\n</system_context>",
                     metadataJson = """{"agent_tool_budget":true}""",
                 ),
             assistantSummary =

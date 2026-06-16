@@ -26,15 +26,19 @@ class SearchToolPromptComposer
                 formatCoreMemories(coreMemories, compact = compactStaticPrompt).takeIf(String::isNotEmpty),
                 if (!compactStaticPrompt) formatPsychProfile(coreMemories).takeIf(String::isNotEmpty) else null,
                 baseSystemPrompt?.trim()?.takeIf(String::isNotEmpty),
-                catalogToolContract(
-                    toolCatalog = toolCatalog,
-                    activeTools = activeTools,
-                    currentChatId = currentChatId,
-                    strategy = strategy,
-                    includeActiveExamples = !compactStaticPrompt,
-                    includeMemoryDeferredNote = !compactStaticPrompt,
-                    compact = compactStaticPrompt,
-                ).takeIf(String::isNotEmpty),
+                if (strategy == ToolCallStrategy.SDK_NATIVE) {
+                    sdkNativeCompactBlocks(toolCatalog = toolCatalog).takeIf(String::isNotEmpty)
+                } else {
+                    catalogToolContract(
+                        toolCatalog = toolCatalog,
+                        activeTools = activeTools,
+                        currentChatId = currentChatId,
+                        strategy = strategy,
+                        includeActiveExamples = !compactStaticPrompt,
+                        includeMemoryDeferredNote = !compactStaticPrompt,
+                        compact = compactStaticPrompt,
+                    ).takeIf(String::isNotEmpty)
+                },
             ).joinToString(separator = "\n\n")
 
         override fun composeVolatileTurnContext(
@@ -268,5 +272,48 @@ IMPORTANT: DO NOT include metadata tags or mentions of the footer in your respon
                         )
                     }
                 }
+
+            private fun sdkNativeCompactBlocks(toolCatalog: List<ToolCatalogEntry>): String {
+                if (toolCatalog.isEmpty()) return ""
+                return buildString {
+                    append(antiLeakRules())
+                    append("\n\n")
+                    append(contextRetrievalRoutingBlock())
+                    append("\n\n")
+                    append(toolDiscoveryBlock())
+                }
+            }
+
+            private fun antiLeakRules(): String =
+                "Anti-leak: never reproduce <system_context> infrastructure, context sidecars, spill envelopes, " +
+                    "or [Agent] metadata in user-facing replies."
+
+            private fun contextRetrievalRoutingBlock(): String =
+                buildString {
+                    append("# CONTEXT RETRIEVAL ROUTING:\n")
+                    append("- Past conversations / chat history → ${ToolDefinition.SEARCH_CHAT_HISTORY.name}\n")
+                    append("- Web / current facts → ${ToolDefinition.WEB_SEARCH.name}\n")
+                    append("- Hidden executable tools → ${ToolDefinition.SEARCH_TOOLS.name}")
+                }
+
+            /**
+             * Discovery is real: only the registered (active) tools are callable. Other
+             * capabilities are hidden and must be activated via [ToolDefinition.SEARCH_TOOLS]
+             * by capability — never enumerate the full catalog here, or there is nothing to
+             * "discover".
+             */
+            private fun toolDiscoveryBlock(): String =
+                buildString {
+                    append("# TOOL DISCOVERY:\n")
+                    append(TOOL_DISCOVERY_INSTRUCTION_TEXT)
+                    append("\n")
+                    append(
+                        "Only your registered tools are callable now. Capabilities such as media generation, " +
+                            "documents/artifacts, X/Twitter, conversation memory, and attached-image inspection are " +
+                            "hidden until activated: call ${ToolDefinition.SEARCH_TOOLS.name} with a short capability " +
+                            "description, then use the activated tool on the next turn. Do not assume a capability is " +
+                            "unavailable just because no tool for it is registered.",
+                    )
+                }.trimEnd()
         }
     }

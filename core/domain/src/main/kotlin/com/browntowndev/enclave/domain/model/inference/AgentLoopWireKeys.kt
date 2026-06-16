@@ -7,4 +7,6 @@ package com.browntowndev.enclave.domain.model.inference
  */
 object AgentLoopWireKeys {
     const val ENGINE_PAYLOAD_JSON_KEY: String = "_agent"
+    const val SYSTEM_CONTEXT_PREFIX: String = "<system_context>"
+    const val CONTEXT_REFERENCE_TURN_SUFFIX: String = "@turn:"
 }

@@ -630,6 +630,12 @@ class LlamaInferenceServiceImpl
         }
 
         private fun toLlamaDomainMessage(message: AgentLoopMessage): DomainChatMessage {
+            if (EngineInternalMessageMapper.isEngineInternalMessage(message.metadataJson)) {
+                return DomainChatMessage(
+                    role = Role.SYSTEM,
+                    content = EngineInternalMessageMapper.formatForProviderWire(message.content),
+                )
+            }
             val metadata =
                 if (message.metadataJson != "null" && message.metadataJson.isNotBlank()) {
                     runCatching { Json.parseToJsonElement(message.metadataJson).jsonObject }.getOrNull()

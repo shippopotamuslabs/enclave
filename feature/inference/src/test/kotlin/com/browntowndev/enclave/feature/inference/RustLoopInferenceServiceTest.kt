@@ -8,6 +8,7 @@ import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.inference.AgentContextReference
+import com.browntowndev.enclave.domain.model.inference.ContextReferenceNotFoundException
 import com.browntowndev.enclave.domain.model.inference.AgentFinishReason
 import com.browntowndev.enclave.domain.model.inference.AgentIncludedFile
 import com.browntowndev.enclave.domain.model.inference.AgentLoopConfig
@@ -668,6 +669,7 @@ class RustLoopInferenceServiceTest {
             val inner = RecordingRustCompatibleService()
             val port =
                 CapturingAgentLoopPort { host ->
+                    send(AgentLoopEvent.TurnStarted(index = 1))
                     host.completeModelTurn(
                         sessionMessages = emptyList(),
                         systemPrompt = "base system",
@@ -678,7 +680,7 @@ class RustLoopInferenceServiceTest {
                                 AgentContextReference(
                                     id = "file-outline-src/Main.kt",
                                     kind = "FILE_OUTLINE",
-                                    title = "outline:src/Main.kt",
+                                    title = "outline:src/Main.kt @turn:1",
                                     byteLen = 10u,
                                     tokenEstimate = 2u,
                                     preview = "fun main",
@@ -693,9 +695,269 @@ class RustLoopInferenceServiceTest {
 
             service.sendPrompt("sidecars").toList()
 
-            assertTrue(requireNotNull(inner.lastContextSidecars).contains("Context management sidecars"))
-            assertTrue(requireNotNull(inner.lastContextSidecars).contains("file-outline-src/Main.kt"))
-            assertTrue(requireNotNull(inner.lastContextSidecars).contains("File context index JSON"))
+            val sidecars = requireNotNull(inner.lastContextSidecars)
+            assertAll(
+                { assertTrue(sidecars.contains("Context management sidecars")) },
+                {
+                    assertTrue(
+                        sidecars.contains(
+                            "Reference policy: IDs are exact lookups only—never browse. " +
+                                "For conversation history use search_chat_history.",
+                        ),
+                    )
+                },
+                { assertTrue(sidecars.contains("[FILE_OUTLINE|turn:1|fresh] file-outline-src/Main.kt (10b):")) },
+                { assertTrue(sidecars.contains("""preview: "fun main"""")) },
+                { assertTrue(sidecars.contains("read_context_reference(\"file-outline-src/Main.kt\")")) },
+                { assertTrue(sidecars.contains("File context index JSON")) },
+            )
+        }
+
+    @Test
+    fun completeModelTurn_marksStaleContextReferencesInSidecars() =
+        runTest {
+            val inner = RecordingRustCompatibleService()
+            val port =
+                CapturingAgentLoopPort { host ->
+                    send(AgentLoopEvent.TurnStarted(index = 3))
+                    host.completeModelTurn(
+                        sessionMessages = emptyList(),
+                        systemPrompt = "base system",
+                        toolsSchemaJson = "[]",
+                        allowToolCall = false,
+                        contextReferences =
+                            listOf(
+                                AgentContextReference(
+                                    id = "tool-output-call-1",
+                                    kind = "TOOL_OUTPUT",
+                                    title = "tool_output:call-1 @turn:2",
+                                    byteLen = 200u,
+                                    tokenEstimate = 50u,
+                                    preview = "BEGIN_RAW",
+                                    retrievalHint = "read_context_reference(\"tool-output-call-1\")",
+                                ),
+                            ),
+                    )
+                    send(AgentLoopEvent.Finished)
+                }
+            val service = createService(agentLoopPort = port, inner = inner)
+
+            service.sendPrompt("stale refs").toList()
+
+            assertTrue(
+                requireNotNull(inner.lastContextSidecars).contains(
+                    "[TOOL_OUTPUT|turn:2|stale] tool-output-call-1 (200b):",
+                ),
+            )
+        }
+
+    @Test
+    fun completeModelTurn_doesNotActivateReadContextReferenceFromSidecarHints() =
+        runTest {
+            val inner = RecordingRustCompatibleService()
+            val port =
+                CapturingAgentLoopPort { host ->
+                    host.completeModelTurn(
+                        sessionMessages = emptyList(),
+                        systemPrompt = "system",
+                        toolsSchemaJson = "[]",
+                        allowToolCall = true,
+                        contextReferences =
+                            listOf(
+                                AgentContextReference(
+                                    id = "tool-output-call-1",
+                                    kind = "TOOL_OUTPUT",
+                                    title = "tool_output:call-1 @turn:0",
+                                    byteLen = 200u,
+                                    tokenEstimate = 50u,
+                                    preview = "payload",
+                                    retrievalHint = "read_context_reference(\"tool-output-call-1\")",
+                                ),
+                            ),
+                    )
+                    send(AgentLoopEvent.Finished)
+                }
+            val service =
+                createService(
+                    agentLoopPort = port,
+                    inner = inner,
+                )
+
+            service
+                .sendPrompt(
+                    prompt = "refs only",
+                    options =
+                        GenerationOptions(
+                            reasoningBudget = 0,
+                            activeTools = listOf(ToolDefinition.WEB_SEARCH),
+                        ),
+                ).toList()
+
+            assertFalse(inner.lastAvailableTools.map { it.name }.contains("read_context_reference"))
+        }
+
+    @Test
+    fun executeTools_readContextReferenceReturnsContractErrorWhenMissing() =
+        runTest {
+            lateinit var result: AgentToolResult
+            val port =
+                CapturingAgentLoopPort { host ->
+                    result =
+                        host
+                            .executeTools(
+                                listOf(
+                                    AgentToolCall(
+                                        callId = "call-missing",
+                                        name = ToolDefinition.READ_CONTEXT_REFERENCE.name,
+                                        argumentsJson = "{}",
+                                    ),
+                                ),
+                            ).single()
+                    send(AgentLoopEvent.Finished)
+                }
+            val service = createService(agentLoopPort = port)
+
+            service.sendPrompt("missing ref").toList()
+
+            assertAll(
+                { assertTrue(result.softFailure) },
+                { assertTrue(result.resultJson.contains("context_reference_not_found")) },
+                {
+                    assertTrue(
+                        result.resultJson.contains("search_chat_history"),
+                    )
+                },
+            )
+        }
+
+    @Test
+    fun executeTools_readContextReferenceReturnsContractErrorWhenNotFound() =
+        runTest {
+            lateinit var result: AgentToolResult
+            val port =
+                NotFoundContextReferencePort { host ->
+                    result =
+                        host
+                            .executeTools(
+                                listOf(
+                                    AgentToolCall(
+                                        callId = "call-not-found",
+                                        name = ToolDefinition.READ_CONTEXT_REFERENCE.name,
+                                        argumentsJson = """{"reference_id":"missing-ref"}""",
+                                    ),
+                                ),
+                            ).single()
+                    send(AgentLoopEvent.Finished)
+                }
+            val service = createService(agentLoopPort = port)
+
+            service.sendPrompt("not found ref").toList()
+
+            assertAll(
+                { assertTrue(result.softFailure) },
+                { assertTrue(result.resultJson.contains("context_reference_not_found")) },
+                { assertTrue(result.resultJson.contains("tool_discovery_tool")) },
+            )
+        }
+
+    @Test
+    fun completeModelTurn_forwardsSanitizedTokensWithoutStrippingLeadingSpaces() =
+        runTest {
+            val streamedTokens = mutableListOf<String>()
+            val inner =
+                object : RustCompatibleInferenceService {
+                    override val baseUrl: String? = null
+
+                    override fun sendPrompt(
+                        prompt: String,
+                        closeConversation: Boolean,
+                    ) = flowOf(InferenceEvent.Finished(ModelType.THINKING))
+
+                    override fun sendPrompt(
+                        prompt: String,
+                        options: GenerationOptions,
+                        closeConversation: Boolean,
+                    ) = flowOf(InferenceEvent.Finished(ModelType.THINKING))
+
+                    override suspend fun setHistory(messages: List<ChatMessage>) {}
+
+                    override suspend fun closeSession() {}
+
+                    override suspend fun completeSingleTurn(
+                        sessionMessages: List<AgentLoopMessage>,
+                        systemPrompt: String,
+                        contextSidecars: String?,
+                        availableTools: List<ToolDefinition>,
+                        allowToolCall: Boolean,
+                        onTextToken: suspend (String) -> Unit,
+                        onThinkingToken: suspend (String) -> Unit,
+                        options: GenerationOptions,
+                        onLifecycleEvent: suspend (InferenceEvent) -> Unit,
+                    ): AgentModelTurnResult {
+                        onTextToken("Hello")
+                        onTextToken(" world")
+                        return AgentModelTurnResult(
+                            assistantText = "Hello world",
+                            toolCalls = emptyList(),
+                            finishReason = AgentFinishReason.Stop,
+                        )
+                    }
+                }
+            val port =
+                CapturingAgentLoopPort { host ->
+                    send(AgentLoopEvent.TurnStarted(index = 1))
+                    host.completeModelTurn(
+                        sessionMessages = emptyList(),
+                        systemPrompt = "system",
+                        toolsSchemaJson = "[]",
+                        allowToolCall = false,
+                        onTextToken = { streamedTokens.add(it) },
+                    )
+                    send(AgentLoopEvent.Finished)
+                }
+            val service = createService(agentLoopPort = port, inner = inner)
+
+            service.sendPrompt("stream").toList()
+
+            assertEquals(listOf("Hello", " world"), streamedTokens)
+        }
+
+    @Test
+    fun sendPrompt_preservesLeadingSpacesInStreamedPartialResponses() =
+        runTest {
+            val port =
+                CapturingAgentLoopPort { _ ->
+                    send(AgentLoopEvent.TurnStarted(index = 1))
+                    send(AgentLoopEvent.TextToken("Hello"))
+                    send(AgentLoopEvent.TextToken(" world"))
+                    send(AgentLoopEvent.Finished)
+                }
+            val service = createService(agentLoopPort = port)
+
+            val events = service.sendPrompt("spacing").toList()
+
+            assertEquals(
+                listOf("Hello", " world"),
+                events.filterIsInstance<InferenceEvent.PartialResponse>().map { it.chunk },
+            )
+        }
+
+    @Test
+    fun sendPrompt_sanitizesHarnessPayloadsBeforePartialResponseEmission() =
+        runTest {
+            val port =
+                CapturingAgentLoopPort { _ ->
+                    send(AgentLoopEvent.TextToken("Visible {\"_agent\":{\"tool_calls_used\":1}} text"))
+                    send(AgentLoopEvent.Finished)
+                }
+            val service = createService(agentLoopPort = port)
+
+            val events = service.sendPrompt("sanitize").toList()
+
+            assertEquals(
+                listOf("Visible  text"),
+                events.filterIsInstance<InferenceEvent.PartialResponse>().map { it.chunk },
+            )
         }
 
     @Test
@@ -1736,6 +1998,22 @@ class RustLoopInferenceServiceTest {
         override suspend fun setHistory(messages: List<ChatMessage>) {}
 
         override suspend fun closeSession() {}
+    }
+
+    private class NotFoundContextReferencePort(
+        behavior: suspend ProducerScope<AgentLoopEvent>.(AgentLoopHostCallbacks) -> Unit,
+    ) : AgentLoopPort {
+        private val delegate = CapturingAgentLoopPort(behavior)
+
+        override fun execute(
+            initialMessages: List<ChatMessage>,
+            config: AgentLoopConfig,
+            sessionContext: Map<String, String>,
+            host: AgentLoopHostCallbacks,
+        ): Flow<AgentLoopEvent> = delegate.execute(initialMessages, config, sessionContext, host)
+
+        override suspend fun readContextReference(referenceId: String): String =
+            throw ContextReferenceNotFoundException(referenceId)
     }
 
     private class RecordingLogger : LoggingPort {

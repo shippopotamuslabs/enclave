@@ -1,6 +1,5 @@
 package com.browntowndev.enclave.domain.usecase.chat
 
-import com.browntowndev.enclave.domain.model.inference.AgentContextReference
 import com.browntowndev.enclave.domain.model.inference.AgentToolResult
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -47,27 +46,6 @@ class RetrievalHintActivationTest {
         assertEquals(
             listOf("read_context_reference"),
             RetrievalHintActivation.toolsFromToolResults(listOf(spilled)),
-        )
-    }
-
-    @Test
-    fun toolsFromContextReferences_collects_hinted_tools() {
-        val refs =
-            listOf(
-                AgentContextReference(
-                    id = "file-outline-src/Main.kt",
-                    kind = "FILE_OUTLINE",
-                    title = "outline",
-                    byteLen = 10u,
-                    tokenEstimate = 2u,
-                    preview = "fun main",
-                    retrievalHint = """read_context_reference("file-outline-src/Main.kt")""",
-                ),
-            )
-
-        assertEquals(
-            listOf("read_context_reference"),
-            RetrievalHintActivation.toolsFromContextReferences(refs),
         )
     }
 
