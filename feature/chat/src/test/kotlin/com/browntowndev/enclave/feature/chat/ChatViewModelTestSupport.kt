@@ -32,6 +32,7 @@ import com.browntowndev.enclave.domain.usecase.inference.SubmitModerationReportU
 import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.enclave.domain.usecase.share.ImportSharedChatUseCase
 import com.browntowndev.enclave.domain.usecase.share.ShareChatUseCase
+import com.browntowndev.enclave.domain.telemetry.FakeInferenceTelemetryRepositoryPort
 import com.browntowndev.enclave.domain.usecase.telemetry.ObserveChatTelemetryUseCase
 import com.browntowndev.enclave.domain.usecase.telemetry.ObserveMessageTelemetryUseCase
 import com.browntowndev.enclave.domain.util.SystemClock
@@ -92,6 +93,7 @@ object ChatViewModelTestSupport {
             mockk(relaxed = true) {
                 every { selectedChatMode } returns flowOf(Mode.FAST)
             },
+        inferenceTelemetryRepositoryPort: FakeInferenceTelemetryRepositoryPort = FakeInferenceTelemetryRepositoryPort(),
     ): ChatViewModel =
         createHarness(
             settingsUseCases = settingsUseCases,
@@ -115,6 +117,7 @@ object ChatViewModelTestSupport {
             shouldModeratePromptUseCase = shouldModeratePromptUseCase,
             submitModerationReportUseCase = submitModerationReportUseCase,
             uiSelectionRepository = uiSelectionRepository,
+            inferenceTelemetryRepositoryPort = inferenceTelemetryRepositoryPort,
         ).viewModel
 
     fun createHarness(
@@ -145,6 +148,7 @@ object ChatViewModelTestSupport {
             mockk(relaxed = true) {
                 every { selectedChatMode } returns flowOf(Mode.FAST)
             },
+        inferenceTelemetryRepositoryPort: FakeInferenceTelemetryRepositoryPort = FakeInferenceTelemetryRepositoryPort(),
     ): Harness {
         val chatMessageUiMapper = ChatMessageUiMapper()
         val inferenceOrchestrator =
@@ -196,14 +200,12 @@ object ChatViewModelTestSupport {
             )
         val chatShareCoordinator =
             ChatShareCoordinator(shareChatUseCase = shareChatUseCase, importSharedChatUseCase = importSharedChatUseCase)
-        val observeMessageTelemetryUseCase = mockk<ObserveMessageTelemetryUseCase>()
-        val observeChatTelemetryUseCase = mockk<ObserveChatTelemetryUseCase>()
-        every { observeMessageTelemetryUseCase.invoke(any()) } returns flowOf()
-        every { observeChatTelemetryUseCase.invoke(any()) } returns flowOf()
         val chatTelemetryCoordinator =
             ChatTelemetryCoordinator(
-                observeMessageTelemetryUseCase = observeMessageTelemetryUseCase,
-                observeChatTelemetryUseCase = observeChatTelemetryUseCase,
+                observeMessageTelemetryUseCase =
+                    ObserveMessageTelemetryUseCase(inferenceTelemetryRepositoryPort),
+                observeChatTelemetryUseCase =
+                    ObserveChatTelemetryUseCase(inferenceTelemetryRepositoryPort),
                 mapper = ChatTelemetryUiMapper(),
             )
         val chatUiStateReducer = ChatUiStateReducer(chatMessageUiMapper = chatMessageUiMapper)

@@ -2,6 +2,7 @@ package com.browntowndev.enclave.domain.usecase.chat
 
 import com.browntowndev.enclave.domain.model.artifact.ArtifactGenerationRequest
 import com.browntowndev.enclave.domain.model.artifact.MimeType
+import com.browntowndev.enclave.domain.model.chat.AccumulatedMessages
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageGenerationState
 import com.browntowndev.enclave.domain.model.chat.MessageId
@@ -79,6 +80,87 @@ class ChatGenerationAccumulatorManagerTest {
             assertEquals("", snapshot.thinkingRaw)
             assertEquals(MessageState.PROCESSING, snapshot.messageState)
             assertTrue(snapshot.transcriptSegments.isEmpty())
+            assertTrue(snapshot.telemetryRows.isEmpty())
+        }
+
+    @Test
+    fun `model api retry clears telemetry captured before retry`() =
+        runTest {
+            val manager =
+                ChatGenerationAccumulatorManager(
+                    mode = Mode.FAST,
+                    chatId = ChatId("chat"),
+                    userMessageId = MessageId("user"),
+                    defaultAssistantMessageId = MessageId("assistant"),
+                    chatRepository = mockk(relaxed = true),
+                )
+
+            manager.reduce(MessageGenerationState.GeneratingText("partial", ModelType.FAST))
+            manager.reduce(
+                MessageGenerationState.TelemetryCaptured(
+                    telemetry = TelemetryTestFixtures.telOpenAi1,
+                    modelType = ModelType.FAST,
+                ),
+            )
+            val cleared =
+                manager.reduce(
+                    MessageGenerationState.ModelApiRetryScheduled(
+                        attempt = 1,
+                        maxAttempts = 3,
+                        delayMs = 1_000L,
+                        modelType = ModelType.FAST,
+                    ),
+                )
+
+            assertTrue(cleared.messages.getValue(MessageId("assistant")).telemetryRows.isEmpty())
+        }
+
+    @Test
+    fun `reconcileWithSnapshot merges snapshot telemetry without duplicating event-captured rows`() =
+        runTest {
+            val manager =
+                ChatGenerationAccumulatorManager(
+                    mode = Mode.FAST,
+                    chatId = ChatId("chat"),
+                    userMessageId = MessageId("user"),
+                    defaultAssistantMessageId = MessageId("assistant"),
+                    chatRepository = mockk(relaxed = true),
+                )
+
+            manager.reduce(MessageGenerationState.GeneratingText("answer", ModelType.FAST))
+            manager.reduce(
+                MessageGenerationState.TelemetryCaptured(
+                    telemetry = TelemetryTestFixtures.telOpenAi1,
+                    modelType = ModelType.FAST,
+                ),
+            )
+
+            val snapshotFromPort =
+                manager.toMessagesState().messages.getValue(MessageId("assistant"))
+            val portOnlyRow =
+                TelemetryTestFixtures.telAgent2.copy(
+                    id = com.browntowndev.enclave.domain.model.telemetry.TurnTelemetryId("tel-port-only"),
+                )
+            val snapshotWithExtraRow =
+                AccumulatedMessages(
+                    messages =
+                        mapOf(
+                            MessageId("assistant") to
+                                snapshotFromPort.copy(
+                                    telemetryRows =
+                                        snapshotFromPort.telemetryRows + listOf(portOnlyRow),
+                                ),
+                        ),
+                )
+
+            manager.reconcileWithSnapshot(snapshotWithExtraRow)
+
+            val telemetryRows = manager.toMessagesState().messages.getValue(MessageId("assistant")).telemetryRows
+            assertEquals(2, telemetryRows.size)
+            assertEquals(
+                listOf(TelemetryTestFixtures.telOpenAi1.id, portOnlyRow.id),
+                telemetryRows.map { it.id },
+            )
         }
 
     @Test

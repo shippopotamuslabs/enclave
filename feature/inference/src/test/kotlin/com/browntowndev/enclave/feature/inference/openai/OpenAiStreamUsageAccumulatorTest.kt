@@ -86,6 +86,53 @@ class OpenAiStreamUsageAccumulatorTest {
     }
 
     @Test
+    fun accumulateOpenAiStreamUsage_keepsLargerInputTokensAcrossTwoUsageChunks() {
+        val state = OpenAiStreamUsageAccumulator()
+        val chunk1 = mockCompletionChunk(promptTokens = 1_000L, completionTokens = 400L)
+        val chunk2 = mockCompletionChunk(promptTokens = 500L, completionTokens = 0L)
+
+        accumulateOpenAiStreamUsage(chunk1, state)
+        accumulateOpenAiStreamUsage(chunk2, state)
+
+        assertEquals(1_000, state.inputTokens)
+    }
+
+    @Test
+    fun accumulateOpenAiStreamUsage_doesNotClobberOutputTokensWithTrailingZeroChunk() {
+        val state = OpenAiStreamUsageAccumulator()
+        val chunk1 = mockCompletionChunk(promptTokens = 1_000L, completionTokens = 400L)
+        val chunk2 = mockCompletionChunk(promptTokens = 500L, completionTokens = 0L)
+
+        accumulateOpenAiStreamUsage(chunk1, state)
+        accumulateOpenAiStreamUsage(chunk2, state)
+
+        assertEquals(400, state.outputTokens)
+    }
+
+    @Test
+    fun accumulateOpenAiStreamUsage_stillAppliesFinalUsageOnEmptyChoicesChunk() {
+        val state = OpenAiStreamUsageAccumulator()
+        val event = mockk<ChatCompletionChunk>()
+        val usage = mockk<CompletionUsage>()
+        val promptDetails = mockk<PromptTokensDetails>()
+
+        every { event.usage() } returns Optional.of(usage)
+        every { usage.promptTokens() } returns 12_000L
+        every { usage.completionTokens() } returns 50L
+        every { usage.completionTokensDetails() } returns Optional.empty()
+        every { usage.promptTokensDetails() } returns Optional.of(promptDetails)
+        every { usage._additionalProperties() } returns emptyMap()
+        every { promptDetails.cachedTokens() } returns Optional.of(9_500L)
+        every { event.choices() } returns emptyList()
+
+        accumulateOpenAiStreamUsage(event, state)
+
+        assertEquals(12_000, state.inputTokens)
+        assertEquals(50, state.outputTokens)
+        assertEquals(9_500, state.cacheReadInputTokens)
+    }
+
+    @Test
     fun accumulateOpenAiStreamUsage_parsesOpenRouterExactCost() {
         val state = OpenAiStreamUsageAccumulator()
         val event = mockk<ChatCompletionChunk>()
@@ -102,5 +149,21 @@ class OpenAiStreamUsageAccumulatorTest {
         accumulateOpenAiStreamUsage(event, state)
 
         assertEquals(BigDecimal("0.001200"), state.costUsd)
+    }
+
+    private fun mockCompletionChunk(
+        promptTokens: Long,
+        completionTokens: Long,
+    ): ChatCompletionChunk {
+        val event = mockk<ChatCompletionChunk>()
+        val usage = mockk<CompletionUsage>()
+        every { event.usage() } returns Optional.of(usage)
+        every { usage.promptTokens() } returns promptTokens
+        every { usage.completionTokens() } returns completionTokens
+        every { usage.completionTokensDetails() } returns Optional.empty()
+        every { usage.promptTokensDetails() } returns Optional.empty()
+        every { usage._additionalProperties() } returns emptyMap()
+        every { event.choices() } returns emptyList()
+        return event
     }
 }

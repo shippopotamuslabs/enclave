@@ -23,24 +23,31 @@ internal data class OpenAiStreamUsageAccumulator(
     var costUsd: BigDecimal? = null,
 )
 
+private fun coalesceMax(
+    existing: Int?,
+    incoming: Int,
+): Int? = if (existing == null) incoming else maxOf(existing, incoming)
+
 internal fun accumulateOpenAiStreamUsage(
     event: ChatCompletionChunk,
     state: OpenAiStreamUsageAccumulator,
 ) {
     if (!event.usage().isPresent) return
     val usage = event.usage().get()
-    state.inputTokens = usage.promptTokens().toInt()
-    state.outputTokens = usage.completionTokens().toInt()
+    state.inputTokens = coalesceMax(state.inputTokens, usage.promptTokens().toInt())
+    state.outputTokens = coalesceMax(state.outputTokens, usage.completionTokens().toInt())
     if (usage.completionTokensDetails().isPresent) {
         val details = usage.completionTokensDetails().get()
         if (details.reasoningTokens().isPresent) {
-            state.reasoningTokens = details.reasoningTokens().get().toInt()
+            state.reasoningTokens =
+                coalesceMax(state.reasoningTokens, details.reasoningTokens().get().toInt())
         }
     }
     if (usage.promptTokensDetails().isPresent) {
         val details = usage.promptTokensDetails().get()
         if (details.cachedTokens().isPresent) {
-            state.cacheReadInputTokens = details.cachedTokens().get().toInt()
+            state.cacheReadInputTokens =
+                coalesceMax(state.cacheReadInputTokens, details.cachedTokens().get().toInt())
         }
     }
     parseOpenRouterUsageCost(usage)?.let { state.costUsd = it }
@@ -58,13 +65,14 @@ internal fun accumulateResponseStreamUsage(
     usage: ResponseUsage,
     state: OpenAiStreamUsageAccumulator,
 ) {
-    state.inputTokens = usage.inputTokens().toInt()
-    state.outputTokens = usage.outputTokens().toInt()
+    state.inputTokens = coalesceMax(state.inputTokens, usage.inputTokens().toInt())
+    state.outputTokens = coalesceMax(state.outputTokens, usage.outputTokens().toInt())
     val reasoning = usage.outputTokensDetails().reasoningTokens()
     if (reasoning > 0L) {
-        state.reasoningTokens = reasoning.toInt()
+        state.reasoningTokens = coalesceMax(state.reasoningTokens, reasoning.toInt())
     }
-    state.cacheReadInputTokens = usage.inputTokensDetails().cachedTokens().toInt()
+    state.cacheReadInputTokens =
+        coalesceMax(state.cacheReadInputTokens, usage.inputTokensDetails().cachedTokens().toInt())
     parseOpenRouterUsageCost(usage)?.let { state.costUsd = it }
 }
 
