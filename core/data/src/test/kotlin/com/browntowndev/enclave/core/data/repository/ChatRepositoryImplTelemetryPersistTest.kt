@@ -26,8 +26,13 @@ class ChatRepositoryImplTelemetryPersistTest {
     fun `persistAllMessageData inserts telemetry rows atomically with assistant message`() =
         runTest {
             val telemetryDao = mockk<MessageInferenceTelemetryDao>(relaxed = true)
-            val inserted = slot<List<MessageInferenceTelemetryEntity>>()
-            coEvery { telemetryDao.insertAll(capture(inserted)) } returns Unit
+            val replaced = slot<List<MessageInferenceTelemetryEntity>>()
+            coEvery {
+                telemetryDao.replaceTelemetryForMessage(
+                    messageId = TelemetryTestFixtures.mOpenAi1.value,
+                    rows = capture(replaced),
+                )
+            } returns Unit
 
             val repository = repository(telemetryDao)
             val telemetry = listOf(TelemetryTestFixtures.telOpenAi1)
@@ -52,8 +57,13 @@ class ChatRepositoryImplTelemetryPersistTest {
                 telemetry = telemetry,
             )
 
-            coVerify(exactly = 1) { telemetryDao.insertAll(any()) }
-            val entity = inserted.captured.single()
+            coVerify(exactly = 1) {
+                telemetryDao.replaceTelemetryForMessage(
+                    messageId = TelemetryTestFixtures.mOpenAi1.value,
+                    rows = any(),
+                )
+            }
+            val entity = replaced.captured.single()
             assertEquals("tel-openai-1", entity.id)
             assertEquals("m-openai-1", entity.messageId)
             assertEquals("chat-1", entity.chatId)

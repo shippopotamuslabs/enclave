@@ -2,6 +2,7 @@ package com.browntowndev.enclave.domain.usecase.chat
 
 import com.browntowndev.enclave.domain.model.chat.AccumulatedMessages
 import com.browntowndev.enclave.domain.model.chat.ChatId
+import com.browntowndev.enclave.domain.model.chat.ChatModelOverride
 import com.browntowndev.enclave.domain.model.chat.ChatResponseMode
 import com.browntowndev.enclave.domain.model.chat.Content
 import com.browntowndev.enclave.domain.model.chat.Message
@@ -10,6 +11,8 @@ import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.MessageState
 import com.browntowndev.enclave.domain.model.chat.Mode
 import com.browntowndev.enclave.domain.model.chat.Role
+import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
+import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnKey
 import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnSnapshotPort
@@ -88,6 +91,60 @@ class GenerateChatResponseUseCaseBackgroundServicePersistenceTest {
                     .getValue(assistantMessageId)
                     .isComplete,
             )
+        }
+
+    @Test
+    fun `model override with background inference enabled does not publish snapshots from use case`() =
+        runTest {
+            val userMessageId = MessageId("user")
+            val assistantMessageId = MessageId("assistant")
+            val chatId = ChatId("chat")
+            val activeChatTurnSnapshotPort = RecordingActiveChatTurnSnapshotPort()
+            val overrideConfig = activeApiConfig(name = "Claude Sonnet", id = ApiModelConfigurationId("api-claude"))
+            val override =
+                ChatModelOverride.Api(
+                    configId = ApiModelConfigurationId("api-claude"),
+                    displayName = "Claude Sonnet",
+                )
+            val activeModelProvider =
+                mockk<ActiveModelProviderPort> {
+                    coEvery { getActiveConfigurationByOverride(override) } returns overrideConfig
+                }
+            val chatInferenceExecutor =
+                mockk<ChatInferenceExecutorPort> {
+                    every { stop() } returns Unit
+                    every {
+                        executeWithOverride(
+                            prompt = any(),
+                            userMessageId = any(),
+                            assistantMessageId = any(),
+                            chatId = any(),
+                            userHasImage = any(),
+                            modelOverride = any(),
+                            resolvedConfiguration = any(),
+                            backgroundInferenceEnabled = any(),
+                        )
+                    } returns emptyFlow()
+                }
+            val useCase =
+                createUseCase(
+                    userMessageId = userMessageId,
+                    chatId = chatId,
+                    chatInferenceExecutor = chatInferenceExecutor,
+                    activeChatTurnSnapshotPort = activeChatTurnSnapshotPort,
+                    activeModelProvider = activeModelProvider,
+                )
+
+            useCase(
+                prompt = "hello",
+                userMessageId = userMessageId,
+                assistantMessageId = assistantMessageId,
+                chatId = chatId,
+                responseMode = ChatResponseMode.Other(modelOverride = override),
+                backgroundInferenceEnabled = true,
+            ).toList()
+
+            assertTrue(activeChatTurnSnapshotPort.published.isEmpty())
         }
 
     @Test
@@ -294,6 +351,7 @@ class GenerateChatResponseUseCaseBackgroundServicePersistenceTest {
         chatInferenceExecutor: ChatInferenceExecutorPort,
         activeChatTurnSnapshotPort: ActiveChatTurnSnapshotPort,
         chatRepository: ChatRepository = mockk(relaxed = true),
+        activeModelProvider: ActiveModelProviderPort = mockk(relaxed = true),
     ): GenerateChatResponseUseCase {
         val messageRepository =
             mockk<MessageRepository> {
@@ -310,7 +368,7 @@ class GenerateChatResponseUseCaseBackgroundServicePersistenceTest {
             chatRepository = chatRepository,
             messageRepository = messageRepository,
             loggingPort = mockk<LoggingPort>(relaxed = true),
-            activeModelProvider = mockk<ActiveModelProviderPort>(),
+            activeModelProvider = activeModelProvider,
             extractedUrlTracker = noOpExtractedUrlTracker(),
             chatInferenceExecutor = chatInferenceExecutor,
             embeddingEngine = mockk(relaxed = true),
@@ -361,6 +419,27 @@ class GenerateChatResponseUseCaseBackgroundServicePersistenceTest {
             coEvery { stopPipeline(any()) } returns Unit
             coEvery { resumeFromState(any(), any(), any(), any()) } returns emptyFlow()
         }
+
+    private fun activeApiConfig(
+        name: String,
+        id: ApiModelConfigurationId,
+    ): ActiveModelConfiguration =
+        ActiveModelConfiguration(
+            modelId = name.lowercase().replace(" ", "-"),
+            id = id,
+            isLocal = false,
+            name = name,
+            systemPrompt = null,
+            reasoningEffort = null,
+            temperature = 0.7,
+            topK = 40,
+            topP = 0.95,
+            maxTokens = 512,
+            minP = 0.0,
+            repetitionPenalty = 1.1,
+            contextWindow = 4096,
+            thinkingEnabled = true,
+        )
 
     private fun noOpExtractedUrlTracker(): ExtractedUrlTrackerPort =
         object : ExtractedUrlTrackerPort {

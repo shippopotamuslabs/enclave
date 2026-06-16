@@ -92,14 +92,49 @@ class ChatInferenceServiceExecutor
             backgroundInferenceEnabled: Boolean,
         ): Flow<MessageGenerationState> =
             flow {
-                emit(
-                    MessageGenerationState.Failed(
-                        UnsupportedOperationException(
-                            "executeWithOverride is not implemented for ${modelOverride.displayName}",
-                        ),
-                        ModelType.FAST,
-                    ),
+                loggingPort.info(
+                    TAG,
+                    "executeWithOverride() requested chat=${chatId.value} " +
+                        "assistantMessageId=${assistantMessageId.value} " +
+                        "override=${modelOverride.displayName} " +
+                        "resolvedConfig=${resolvedConfiguration.name} " +
+                        "backgroundInferenceEnabled=$backgroundInferenceEnabled",
                 )
+                try {
+                    loggingPort.debug(
+                        TAG,
+                        "starting ChatInferenceService override chat=${chatId.value} " +
+                            "assistantMessageId=${assistantMessageId.value}",
+                    )
+                    serviceStarter.startServiceWithOverride(
+                        prompt = prompt,
+                        userMessageId = userMessageId,
+                        assistantMessageId = assistantMessageId,
+                        chatId = chatId,
+                        userHasImage = userHasImage,
+                        modelOverride = modelOverride,
+                    )
+                    loggingPort.info(
+                        TAG,
+                        "override service start accepted chat=${chatId.value} " +
+                            "assistantMessageId=${assistantMessageId.value}",
+                    )
+                } catch (e: ForegroundServiceStartNotAllowedException) {
+                    loggingPort.error(TAG, "Foreground service start was rejected for chat=${chatId.value}", e)
+                    emit(MessageGenerationState.Failed(e, ModelType.FAST))
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    loggingPort.error(TAG, "Failed to start ChatInferenceService for chat=${chatId.value}", e)
+                    emit(MessageGenerationState.Failed(e, ModelType.FAST))
+                } catch (e: Throwable) {
+                    loggingPort.error(
+                        TAG,
+                        "Failed to start ChatInferenceService for chat=${chatId.value} due to system error",
+                        e,
+                    )
+                    emit(MessageGenerationState.Failed(RuntimeException(e), ModelType.FAST))
+                }
             }
 
         override fun stop() {

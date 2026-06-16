@@ -63,16 +63,29 @@ class ChatInferenceExecutorRouter
             resolvedConfiguration: ActiveModelConfiguration,
             backgroundInferenceEnabled: Boolean,
         ): Flow<MessageGenerationState> =
-            directExecutor.executeWithOverride(
-                prompt = prompt,
-                userMessageId = userMessageId,
-                assistantMessageId = assistantMessageId,
-                chatId = chatId,
-                userHasImage = userHasImage,
-                modelOverride = modelOverride,
-                resolvedConfiguration = resolvedConfiguration,
-                backgroundInferenceEnabled = backgroundInferenceEnabled,
-            )
+            if (backgroundInferenceEnabled) {
+                serviceExecutor.executeWithOverride(
+                    prompt = prompt,
+                    userMessageId = userMessageId,
+                    assistantMessageId = assistantMessageId,
+                    chatId = chatId,
+                    userHasImage = userHasImage,
+                    modelOverride = modelOverride,
+                    resolvedConfiguration = resolvedConfiguration,
+                    backgroundInferenceEnabled = true,
+                )
+            } else {
+                directExecutor.executeWithOverride(
+                    prompt = prompt,
+                    userMessageId = userMessageId,
+                    assistantMessageId = assistantMessageId,
+                    chatId = chatId,
+                    userHasImage = userHasImage,
+                    modelOverride = modelOverride,
+                    resolvedConfiguration = resolvedConfiguration,
+                    backgroundInferenceEnabled = false,
+                )
+            }
 
         override fun stop() {
             // Stop both executors — the direct executor's stop() is a no-op,

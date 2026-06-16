@@ -14,9 +14,13 @@ import androidx.core.app.NotificationCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.browntowndev.enclave.domain.model.chat.ChatId
+import com.browntowndev.enclave.domain.model.chat.ChatModelOverride
 import com.browntowndev.enclave.domain.model.chat.MessageGenerationState
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.Mode
+import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
+
+
 import com.browntowndev.enclave.domain.model.error.ActiveModelConfigurationDecryptException
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnKey
@@ -208,12 +212,14 @@ class ChatInferenceService : Service() {
                 val assistantMessageId = MessageId(intent.getStringExtra(EXTRA_ASSISTANT_MESSAGE_ID) ?: "")
                 val chatId = ChatId(intent.getStringExtra(EXTRA_CHAT_ID) ?: "")
                 val userHasImage = intent.getBooleanExtra(EXTRA_USER_HAS_IMAGE, false)
+                val modelOverride = ChatInferenceServiceIntentCodec.getModelOverride(intent)
                 val modelType = ModelType.valueOf(intent.getStringExtra(EXTRA_MODEL_TYPE) ?: ModelType.FAST.name)
                 loggingPort.info(
                     TAG,
                     "ACTION_START chat=${chatId.value} " +
                         "assistantMessageId=${assistantMessageId.value} " +
-                        "modelType=${modelType.name} userHasImage=$userHasImage",
+                        "modelType=${modelType.name} override=${modelOverride?.displayName} " +
+                        "userHasImage=$userHasImage",
                 )
 
                 startInference(
@@ -223,6 +229,7 @@ class ChatInferenceService : Service() {
                     chatId = chatId,
                     userHasImage = userHasImage,
                     modelType = modelType,
+                    modelOverride = modelOverride,
                     serviceStartId = startId,
                 )
             }
@@ -252,17 +259,20 @@ class ChatInferenceService : Service() {
         chatId: ChatId,
         userHasImage: Boolean,
         modelType: ModelType,
+        modelOverride: ChatModelOverride? = null,
         serviceStartId: Int,
     ) {
         currentJob?.cancel()
         currentChatId = chatId
         currentAssistantMessageId = assistantMessageId
         isStopping = false
+        val effectiveModelType = if (modelOverride != null) ModelType.FAST else modelType
         loggingPort.info(
             TAG,
             "startInference chat=${chatId.value} " +
                 "assistantMessageId=${assistantMessageId.value} " +
-                "modelType=${modelType.name} userHasImage=$userHasImage",
+                "modelType=${effectiveModelType.name} override=${modelOverride?.displayName} " +
+                "userHasImage=$userHasImage",
         )
         startForeground(ONGOING_NOTIFICATION_ID, createOngoingNotification(chatId))
         loggingPort.debug(TAG, "foreground service started chat=${chatId.value}")
@@ -271,7 +281,12 @@ class ChatInferenceService : Service() {
             serviceScope.launch {
                 val persistenceSession =
                     chatGenerationProgressPersister.startSession(
-                        mode = modelType.toSingleModelMode(),
+                        mode =
+                            if (modelOverride != null) {
+                                Mode.OTHER
+                            } else {
+                                modelType.toSingleModelMode()
+                            },
                         chatId = chatId,
                         userMessageId = userMessageId,
                         assistantMessageId = assistantMessageId,
@@ -291,25 +306,31 @@ class ChatInferenceService : Service() {
                         publishState(
                             chatId = chatId,
                             assistantMessageId = assistantMessageId,
-                            state = MessageGenerationState.Processing(modelType),
+                            state = MessageGenerationState.Processing(effectiveModelType),
                             persistenceSession = persistenceSession,
                         )
                     }
-                    inferenceFactory.withInferenceService(modelType) { service ->
-                        loggingPort.debug(
-                            TAG,
-                            "withInferenceService entered chat=${chatId.value} assistantMessageId=${assistantMessageId.value}",
-                        )
-                        generateWithService(
-                            prompt = prompt,
-                            userMessageId = userMessageId,
-                            assistantMessageId = assistantMessageId,
-                            chatId = chatId,
-                            service = service,
-                            modelType = modelType,
-                            persistenceSession = persistenceSession,
-                        )
-                    }
+                    runChatInferenceWithService(
+                        inferenceFactory = inferenceFactory,
+                        activeModelProvider = activeModelProvider,
+                        loggingPort = loggingPort,
+                        assistantMessageId = assistantMessageId,
+                        chatId = chatId,
+                        modelType = effectiveModelType,
+                        modelOverride = modelOverride,
+                        generateWithService = { service, explicitConfiguration ->
+                            generateWithService(
+                                prompt = prompt,
+                                userMessageId = userMessageId,
+                                assistantMessageId = assistantMessageId,
+                                chatId = chatId,
+                                service = service,
+                                modelType = effectiveModelType,
+                                persistenceSession = persistenceSession,
+                                explicitConfiguration = explicitConfiguration,
+                            )
+                        },
+                    )
                 } catch (e: CancellationException) {
                     loggingPort.info(
                         TAG,
@@ -331,7 +352,7 @@ class ChatInferenceService : Service() {
                     publishState(
                         chatId = chatId,
                         assistantMessageId = assistantMessageId,
-                        state = ChatInferenceDecryptFailureMapper.toFailedState(e, modelType),
+                        state = ChatInferenceDecryptFailureMapper.toFailedState(e, effectiveModelType),
                         persistenceSession = persistenceSession,
                     )
                 } catch (e: Exception) {
@@ -339,7 +360,7 @@ class ChatInferenceService : Service() {
                     publishState(
                         chatId = chatId,
                         assistantMessageId = assistantMessageId,
-                        state = MessageGenerationState.Failed(e, modelType),
+                        state = MessageGenerationState.Failed(e, effectiveModelType),
                         persistenceSession = persistenceSession,
                     )
                 } catch (e: Throwable) {
@@ -347,7 +368,7 @@ class ChatInferenceService : Service() {
                     publishState(
                         chatId = chatId,
                         assistantMessageId = assistantMessageId,
-                        state = MessageGenerationState.Failed(RuntimeException(e), modelType),
+                        state = MessageGenerationState.Failed(RuntimeException(e), effectiveModelType),
                         persistenceSession = persistenceSession,
                     )
                 } finally {
@@ -370,8 +391,9 @@ class ChatInferenceService : Service() {
         service: LlmInferencePort,
         modelType: ModelType,
         persistenceSession: ChatGenerationProgressSession,
+        explicitConfiguration: ActiveModelConfiguration? = null,
     ) {
-        val config = activeModelProvider.getActiveConfiguration(modelType)
+        val config = explicitConfiguration ?: activeModelProvider.getActiveConfiguration(modelType)
         loggingPort.info(
             TAG,
             "generateWithService start chat=${chatId.value} " +
@@ -385,6 +407,7 @@ class ChatInferenceService : Service() {
                 userMessageId = userMessageId,
                 assistantMessageId = assistantMessageId,
                 modelType = modelType,
+                explicitConfiguration = explicitConfiguration,
             )
 
         if (preparedRequest.preRetrievalSources.isNotEmpty()) {

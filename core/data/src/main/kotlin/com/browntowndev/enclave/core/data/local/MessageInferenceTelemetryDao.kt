@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 
@@ -47,4 +48,36 @@ abstract class MessageInferenceTelemetryDao {
         id: String,
         timestamp: Long = System.currentTimeMillis(),
     )
+
+    @Query(
+        """
+        UPDATE message_inference_telemetry
+        SET deleted = 1, pending_sync = 1, updated_at = :timestamp
+        WHERE message_id = :messageId AND deleted = 0
+        """,
+    )
+    abstract suspend fun softDeleteAllActiveForMessage(
+        messageId: String,
+        timestamp: Long,
+    )
+
+    @Transaction
+    open suspend fun replaceTelemetryForMessage(
+        messageId: String,
+        rows: List<MessageInferenceTelemetryEntity>,
+    ) {
+        val ts = System.currentTimeMillis()
+        softDeleteAllActiveForMessage(messageId, ts)
+        if (rows.isNotEmpty()) {
+            insertAll(
+                rows.map { row ->
+                    row.copy(
+                        pendingSync = 1,
+                        updatedAt = ts,
+                        deleted = false,
+                    )
+                },
+            )
+        }
+    }
 }
