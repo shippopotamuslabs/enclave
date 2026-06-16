@@ -86,4 +86,72 @@ class ChatTelemetryUiMapperTest {
         assertEquals("0", sheet.summaryRows.first { it.label == "Cache read tokens" }.value)
         assertEquals("0", sheet.summaryRows.first { it.label == "Cache write tokens" }.value)
     }
+
+    @Test
+    fun `chat stats summary includes normalized input tokens row`() {
+        val summary =
+            TelemetrySummaryBuilder.buildChatSummary(
+                chatId = TelemetryTestFixtures.chat1,
+                rows = listOf(TelemetryTestFixtures.telOpenAi1),
+            )
+        val sheet = mapper.mapChatStats(summary)
+
+        // The chat-level sheet must surface input tokens (previously omitted entirely).
+        val inputRow = sheet.summaryRows.first { it.label == "Input tokens" }
+        // OpenAI fixture: inputTokens=1000, cache read is a subset — normalized stays 1000.
+        assertEquals("1000", inputRow.value)
+    }
+
+    @Test
+    fun `chat stats normalized input tokens add Anthropic cache read and creation`() {
+        val row =
+            TelemetryTestFixtures.telAnthropic1.copy(
+                chatId = TelemetryTestFixtures.chat1,
+                inputTokens = 800,
+                cacheReadInputTokens = 16_000,
+                cacheCreationInputTokens = 3_000,
+            )
+        val summary =
+            TelemetrySummaryBuilder.buildChatSummary(
+                chatId = TelemetryTestFixtures.chat1,
+                rows = listOf(row),
+            )
+        val sheet = mapper.mapChatStats(summary)
+
+        // Anthropic reports non-cached input only; normalized adds cache read + creation for display.
+        assertEquals((800 + 16_000 + 3_000).toString(),
+            sheet.summaryRows.first { it.label == "Input tokens" }.value)
+    }
+
+    @Test
+    fun `response stats Input tokens row normalizes Anthropic cache tokens`() {
+        val row =
+            TelemetryTestFixtures.telAnthropic1.copy(
+                inputTokens = 7_787,
+                cacheReadInputTokens = 16_000,
+                cacheCreationInputTokens = 3_000,
+            )
+        val summary =
+            TelemetrySummaryBuilder.buildMessageSummary(
+                messageId = TelemetryTestFixtures.mAnthropic1,
+                rows = listOf(row),
+            )
+        val sheet = mapper.mapResponseStats(summary)
+
+        assertEquals((7_787 + 16_000 + 3_000).toString(),
+            sheet.metricRows.first { it.label == "Input tokens" }.value)
+    }
+
+    @Test
+    fun `response stats Input tokens row stays raw for OpenAI compatible providers`() {
+        val summary =
+            TelemetrySummaryBuilder.buildMessageSummary(
+                messageId = TelemetryTestFixtures.mOpenAi1,
+                rows = listOf(TelemetryTestFixtures.telOpenAi1),
+            )
+        val sheet = mapper.mapResponseStats(summary)
+
+        // OpenAI: cache read is a subset of input; normalized equals raw input.
+        assertEquals("1000", sheet.metricRows.first { it.label == "Input tokens" }.value)
+    }
 }

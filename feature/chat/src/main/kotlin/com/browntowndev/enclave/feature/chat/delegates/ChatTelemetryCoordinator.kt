@@ -2,7 +2,7 @@ package com.browntowndev.enclave.feature.chat.delegates
 
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageId
-import com.browntowndev.enclave.domain.model.telemetry.TelemetrySummaryBuilder
+import com.browntowndev.enclave.domain.model.telemetry.TelemetrySummaryMerger
 import com.browntowndev.enclave.domain.model.telemetry.TurnTelemetry
 import com.browntowndev.enclave.domain.usecase.telemetry.ObserveChatTelemetryUseCase
 import com.browntowndev.enclave.domain.usecase.telemetry.ObserveMessageTelemetryUseCase
@@ -44,16 +44,11 @@ class ChatTelemetryCoordinator
                 scope.launch {
                     observeMessageTelemetryUseCase(messageId).collect { persisted ->
                         val summary =
-                            if (persisted.requestCount > 0) {
-                                persisted
-                            } else if (inMemoryTelemetryRows.isNotEmpty()) {
-                                TelemetrySummaryBuilder.buildMessageSummary(
-                                    messageId = messageId,
-                                    rows = inMemoryTelemetryRows,
-                                )
-                            } else {
-                                persisted
-                            }
+                            TelemetrySummaryMerger.mergeMessageSummary(
+                                persisted = persisted,
+                                messageId = messageId,
+                                inMemoryRows = inMemoryTelemetryRows,
+                            )
                         _responseStatsSheet.value =
                             mapper.mapResponseStats(summary).copy(
                                 isVisible = true,
@@ -65,13 +60,19 @@ class ChatTelemetryCoordinator
 
         fun onChatStatsClick(
             chatId: ChatId,
+            inMemoryTelemetryRows: List<TurnTelemetry> = emptyList(),
             scope: CoroutineScope,
         ) {
             chatStatsJob?.cancel()
             chatStatsJob =
                 scope.launch {
                     observeChatTelemetryUseCase(chatId).collect { summary ->
-                        _chatStatsSheet.value = mapper.mapChatStats(summary).copy(isVisible = true)
+                        val mergedSummary =
+                            TelemetrySummaryMerger.mergeChatSummary(
+                                persisted = summary,
+                                inMemoryRows = inMemoryTelemetryRows,
+                            )
+                        _chatStatsSheet.value = mapper.mapChatStats(mergedSummary).copy(isVisible = true)
                     }
                 }
         }

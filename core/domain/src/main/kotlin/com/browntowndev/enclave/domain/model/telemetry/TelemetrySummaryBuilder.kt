@@ -29,6 +29,7 @@ object TelemetrySummaryBuilder {
                 averageTtftMs = null,
                 averageOutputTokensPerSecond = null,
                 totalInputTokens = null,
+                totalInputTokensNormalized = null,
                 totalOutputTokens = null,
                 totalReasoningTokens = null,
                 totalCacheReadInputTokens = null,
@@ -53,6 +54,7 @@ object TelemetrySummaryBuilder {
             averageTtftMs = averageTtft(rows),
             averageOutputTokensPerSecond = weightedOutputSpeed(rows),
             totalInputTokens = sumOrNull(rows) { it.inputTokens },
+            totalInputTokensNormalized = sumNormalizedInputTokens(rows),
             totalOutputTokens = sumOrNull(rows) { it.outputTokens },
             totalReasoningTokens = sumOrNull(rows) { it.reasoningTokens },
             totalCacheReadInputTokens = sumOrNull(rows) { it.cacheReadInputTokens },
@@ -81,6 +83,7 @@ object TelemetrySummaryBuilder {
             averageTtftMs = averageTtft(rows),
             averageOutputTokensPerSecond = weightedOutputSpeed(rows),
             totalInputTokens = rows.mapNotNull { it.inputTokens }.sum(),
+            totalInputTokensNormalized = rows.mapNotNull { normalizedInputTokens(it) }.sum(),
             totalOutputTokens = rows.mapNotNull { it.outputTokens }.sum(),
             totalReasoningTokens = rows.mapNotNull { it.reasoningTokens }.sum(),
             totalCacheReadInputTokens = rows.mapNotNull { it.cacheReadInputTokens }.sum(),
@@ -88,6 +91,7 @@ object TelemetrySummaryBuilder {
             cacheHitRatePercent = cacheHitRate(rows),
             providerBreakdown = providerBreakdown(rows),
             modelBreakdown = modelBreakdown(rows),
+            rows = rows,
         )
     }
 
@@ -273,6 +277,35 @@ object TelemetrySummaryBuilder {
             TelemetryProviderKey.ANTHROPIC -> input + cacheRead + (row.cacheCreationInputTokens ?: 0)
             else -> input
         }
+    }
+
+    /**
+     * Provider-normalized total prompt tokens for a single row.
+     *
+     * OpenAI/Google/xAI/OpenRouter report [TurnTelemetry.inputTokens] as the full prompt size, with
+     * [TurnTelemetry.cacheReadInputTokens] a subset of it. Anthropic reports [TurnTelemetry.inputTokens]
+     * as the non-cached portion only; cache read and cache creation are billed/counted separately.
+     *
+     * For display we want one comparable "Input tokens" figure across providers, so for Anthropic we add
+     * cache read + cache creation back into the raw input value. Returns `null` when the provider did not
+     * report input tokens at all.
+     */
+    fun normalizedInputTokens(row: TurnTelemetry): Int? {
+        val input = row.inputTokens ?: return null
+        return when (row.providerKey) {
+            TelemetryProviderKey.ANTHROPIC ->
+                input + (row.cacheReadInputTokens ?: 0) + (row.cacheCreationInputTokens ?: 0)
+            else -> input
+        }
+    }
+
+    /**
+     * Provider-normalized total prompt tokens across a set of rows. Sums [normalizedInputTokens] per row,
+     * returning `null` only when every row lacks input tokens.
+     */
+    internal fun sumNormalizedInputTokens(rows: List<TurnTelemetry>): Int? {
+        if (rows.none { it.inputTokens != null }) return null
+        return rows.mapNotNull { normalizedInputTokens(it) }.sum()
     }
 
     private fun cacheHitRate(rows: List<TurnTelemetry>): Double? {

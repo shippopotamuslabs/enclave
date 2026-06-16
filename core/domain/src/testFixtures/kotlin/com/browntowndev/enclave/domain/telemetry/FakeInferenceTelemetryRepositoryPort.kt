@@ -18,6 +18,7 @@ import java.time.ZoneId
 class FakeInferenceTelemetryRepositoryPort(
     private val messageRows: Map<MessageId, List<TurnTelemetry>> = emptyMap(),
     private val chatRows: Map<ChatId, List<TurnTelemetry>> = emptyMap(),
+    private val chatAssistantTurnCounts: Map<ChatId, Int> = emptyMap(),
     private val usageLifetime: UsageSpendSummary? = null,
     private val usageCurrentMonth: UsageSpendSummary? = null,
     private val currentDefaultProviderLabel: String = "xAI",
@@ -50,7 +51,11 @@ class FakeInferenceTelemetryRepositoryPort(
                         ),
                 )
             } else {
-                TelemetrySummaryBuilder.buildChatSummary(chatId = chatId, rows = rows)
+                TelemetrySummaryBuilder.buildChatSummary(
+                    chatId = chatId,
+                    rows = rows,
+                    assistantTurnCount = chatAssistantTurnCounts[chatId] ?: rows.map { it.messageId }.distinct().size,
+                )
             }
         return flowOf(summary)
     }

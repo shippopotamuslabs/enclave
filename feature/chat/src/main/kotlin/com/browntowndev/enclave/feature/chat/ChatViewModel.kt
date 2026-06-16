@@ -919,17 +919,16 @@ class ChatViewModel
 
         fun onResponseStatsClick(messageId: MessageId) {
             val snapshot = activeTurnSnapshotStateFlow.value.snapshot
+            // Only use in-memory telemetry rows that belong to the clicked message. Previously this fell
+            // back to every message's rows in the active snapshot when the clicked message had none, which
+            // inflated the displayed input total with unrelated rows and then "dropped" once persistence
+            // replaced the in-memory data with the correct per-message rows.
             val inMemoryRows =
                 snapshot
                     ?.messages
                     ?.get(messageId)
                     ?.telemetryRows
-                    ?.takeIf { it.isNotEmpty() }
-                    ?: snapshot
-                        ?.messages
-                        ?.values
-                        ?.flatMap { it.telemetryRows }
-                        .orEmpty()
+                    .orEmpty()
             chatTelemetryCoordinator.onResponseStatsClick(
                 messageId = messageId,
                 inMemoryTelemetryRows = inMemoryRows,
@@ -939,7 +938,14 @@ class ChatViewModel
 
         fun onChatStatsClick() {
             val chatId = inferenceOrchestrator.currentChatId.value ?: initialChatId ?: return
-            chatTelemetryCoordinator.onChatStatsClick(chatId, viewModelScope)
+            val snapshot = activeTurnSnapshotStateFlow.value.snapshot
+            val inMemoryRows =
+                snapshot?.messages?.values?.flatMap { it.telemetryRows }.orEmpty()
+            chatTelemetryCoordinator.onChatStatsClick(
+                chatId = chatId,
+                inMemoryTelemetryRows = inMemoryRows,
+                scope = viewModelScope,
+            )
         }
 
         fun dismissResponseStatsSheet() = chatTelemetryCoordinator.dismissResponseStats()

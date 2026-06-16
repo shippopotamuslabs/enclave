@@ -216,6 +216,10 @@ internal class ChatGenerationAccumulatorManager(
                     }
                 }
             }
+
+            messageSnapshot.telemetryRows.forEach { row ->
+                accumulator.addTelemetryIfAbsent(row)
+            }
         }
     }
 
@@ -513,10 +517,12 @@ internal class MessageAccumulator(
         thinkingStartTime = null
         thinkingEndTime = null
         transcriptSegmentsMutable.clear()
+        telemetryRows.clear()
         pendingAnswerStreamBoundary = false
         currentState = MessageState.PROCESSING
         markTranscriptSegmentsDirty()
         markScalarDirty()
+        telemetryRowsVersion += 1
     }
 
     private fun hasNonEmptyAssistantText(): Boolean {
@@ -534,6 +540,13 @@ internal class MessageAccumulator(
     fun addTelemetry(row: TurnTelemetry) {
         telemetryRows.add(row)
         telemetryRowsVersion += 1
+    }
+
+    fun addTelemetryIfAbsent(row: TurnTelemetry) {
+        if (telemetryRows.none { it.id == row.id }) {
+            telemetryRows.add(row)
+            telemetryRowsVersion += 1
+        }
     }
 
     private fun finalizeOpenThinkingSegment(now: Long = System.currentTimeMillis()) {
