@@ -53,7 +53,7 @@ class GenerateMediaUseCase
                                 onImageProgress = onImageProgress,
                             )
                         }
-                        generateImageUseCase(request.prompt, normalizedSettings, onImageProgress)
+                        generateImageUseCase(request.prompt, normalizedSettings, onImageProgress, request.override)
                     }
                     MediaCapability.VIDEO -> {
                         val settings = request.settings
@@ -64,7 +64,7 @@ class GenerateMediaUseCase
                                 ),
                             )
                         }
-                        generateVideoUseCase(request.prompt, settings).map { listOf(it) }
+                        generateVideoUseCase(request.prompt, settings, request.override).map { listOf(it) }
                     }
                     MediaCapability.MUSIC -> {
                         val settings = request.settings
@@ -75,7 +75,7 @@ class GenerateMediaUseCase
                                 ),
                             )
                         }
-                        generateMusicUseCase(request.prompt, settings).map { listOf(it) }
+                        generateMusicUseCase(request.prompt, settings, request.override).map { listOf(it) }
                     }
                 }
 
@@ -102,7 +102,7 @@ class GenerateMediaUseCase
             }
             val modelType = resolveMediaModelTypeUseCase(MediaCapability.IMAGE, settings)
             val target =
-                resolveAssignedImageGenerationTargetUseCase(modelType).getOrElse {
+                resolveAssignedImageGenerationTargetUseCase(modelType, request.override).getOrElse {
                     return false
                 }
             return target is ImageGenerationTarget.LocalStableDiffusion
@@ -120,7 +120,7 @@ class GenerateMediaUseCase
             repeat(settings.generationCount) { index ->
                 val iterationSettings = imageSettingsForSequentialIteration(settings, index)
                 val bytesList =
-                    generateImageUseCase(request.prompt, iterationSettings, onImageProgress)
+                    generateImageUseCase(request.prompt, iterationSettings, onImageProgress, request.override)
                         .getOrElse { return Result.failure(it) }
                 val bytes =
                     bytesList.singleOrNull()

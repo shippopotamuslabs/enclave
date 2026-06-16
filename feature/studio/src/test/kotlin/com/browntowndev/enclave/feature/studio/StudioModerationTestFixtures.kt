@@ -18,8 +18,8 @@ internal fun allowPromptModerationUseCase(): ModeratePromptUseCase =
     )
 
 internal fun allowShouldModeratePromptUseCase(shouldModerate: Boolean = true): ShouldModeratePromptUseCase =
-    mockk(relaxed = true) {
-        coEvery { this@mockk.invoke(any()) } returns shouldModerate
+    mockk<ShouldModeratePromptUseCase>(relaxed = true) {
+        coEvery { this@mockk.invoke(any<com.browntowndev.enclave.domain.model.inference.ModelType>()) } returns shouldModerate
     }
 
 internal object NoOpLoggingPort : LoggingPort {

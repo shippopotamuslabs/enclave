@@ -6,6 +6,7 @@ import com.browntowndev.enclave.domain.model.media.GenerationQuality
 import com.browntowndev.enclave.domain.model.media.GenerationSettings
 import com.browntowndev.enclave.domain.model.media.ImageGenerationProgress
 import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
+import com.browntowndev.enclave.domain.model.media.StudioModelOverride
 import com.browntowndev.enclave.domain.model.media.VideoGenerationSettings
 import com.browntowndev.enclave.domain.model.media.withClampedGenerationCount
 import com.browntowndev.enclave.domain.port.media.StudioGenerationDispatcherPort
@@ -47,6 +48,8 @@ class StudioGenerationCoordinator
         val lastSubmittedPrompt: StateFlow<String?> = _lastSubmittedPrompt.asStateFlow()
 
         private val _lastSubmittedSettings = MutableStateFlow<GenerationSettings?>(null)
+
+        private var lastOverride: StudioModelOverride? = null
 
         private val _error = MutableStateFlow<String?>(null)
         val error: StateFlow<String?> = _error.asStateFlow()
@@ -157,6 +160,7 @@ class StudioGenerationCoordinator
             prompt: String,
             mediaType: MediaCapability,
             settings: GenerationSettings,
+            override: StudioModelOverride? = null,
         ) {
             _generationProgressLabel.value = null
             val generationId = UUID.randomUUID().toString()
@@ -167,6 +171,7 @@ class StudioGenerationCoordinator
                         prompt = prompt,
                         mediaType = mediaType,
                         settings = settings,
+                        override = override,
                     ),
                 )
             if (!claimedGeneration) {
@@ -175,7 +180,7 @@ class StudioGenerationCoordinator
                 return
             }
             try {
-                dispatcher.startGeneration(prompt, mediaType, settings, generationId)
+                dispatcher.startGeneration(prompt, mediaType, settings, generationId, override)
             } catch (error: IllegalStateException) {
                 studioRepository.clearActiveGenerationIfOwned(generationId)
                 _error.value = error.message ?: GENERATION_ALREADY_ACTIVE_MESSAGE
@@ -230,11 +235,13 @@ class StudioGenerationCoordinator
             continualMode: Boolean,
             settings: GenerationSettings,
             baselineMediaCountForPrompt: Int = 0,
+            override: StudioModelOverride? = null,
         ) {
             lastProcessedEditAssetId = null
             lastProcessedAnimateAssetId = null
             _lastSubmittedPrompt.value = submittedPrompt
             _lastSubmittedSettings.value = settings
+            lastOverride = override
             _activeGenerationExpectedCount.value =
                 (settings as? ImageGenerationSettings)
                     ?.withClampedGenerationCount()
@@ -244,7 +251,7 @@ class StudioGenerationCoordinator
             if (continualMode && mediaType == MediaCapability.IMAGE) {
                 _isContinualGenerationActive.value = true
             }
-            startGeneration(submittedPrompt, mediaType, settings)
+            startGeneration(submittedPrompt, mediaType, settings, override)
         }
 
         fun onContinualModeDisabled() {
@@ -307,6 +314,7 @@ class StudioGenerationCoordinator
                 requireNotNull(_lastSubmittedPrompt.value),
                 mediaType,
                 requireNotNull(_lastSubmittedSettings.value),
+                lastOverride,
             )
         }
 

@@ -32,6 +32,8 @@ import com.browntowndev.enclave.feature.studio.coordinators.StudioAlbumSelection
 import com.browntowndev.enclave.feature.studio.coordinators.StudioCapabilitiesCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioGenerationCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioMediaActionsCoordinator
+import com.browntowndev.enclave.feature.studio.coordinators.StudioModelOverrideCoordinator
+import com.browntowndev.enclave.feature.studio.coordinators.StudioResolvedModelCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioPlaybackCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioPromptCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioRemoteCapabilitiesCoordinator
@@ -158,7 +160,6 @@ class MultimodalViewModelAnimateTest {
                 moderatePromptUseCase = allowPromptModerationUseCase(),
                 shouldModeratePromptUseCase = allowShouldModeratePromptUseCase(),
                 submitModerationReportUseCase = mockk(relaxed = true),
-                resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase(),
                 getImageGenerationCapabilitiesUseCase = mockk(relaxed = true),
                 generationCoordinator = generationCoordinator,
                 albumSelectionCoordinator = albumSelectionCoordinator,
@@ -170,6 +171,13 @@ class MultimodalViewModelAnimateTest {
                 promptCoordinator = promptCoordinator,
                 mediaActionsCoordinator = mediaActionsCoordinator,
                 uiSelectionRepository = uiSelectionRepository,
+                overrideCoordinator = StudioModelOverrideCoordinator(),
+                resolvedModelCoordinator =
+                    StudioResolvedModelCoordinator(
+                        resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase(),
+                        mediaProviderRepository = mediaProviderRepository,
+                    ),
+                getStudioCapablePresetsUseCase = mockk(relaxed = true),
             )
     }
 

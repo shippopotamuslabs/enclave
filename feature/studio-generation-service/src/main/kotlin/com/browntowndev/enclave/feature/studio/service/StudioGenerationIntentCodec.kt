@@ -1,11 +1,15 @@
 package com.browntowndev.enclave.feature.studio.service
 
 import android.content.Intent
+import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.media.AspectRatio
 import com.browntowndev.enclave.domain.model.media.GenerationQuality
 import com.browntowndev.enclave.domain.model.media.GenerationSettings
 import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
 import com.browntowndev.enclave.domain.model.media.MusicGenerationSettings
+import com.browntowndev.enclave.domain.model.media.StudioModelOverride
 import com.browntowndev.enclave.domain.model.media.VideoGenerationSettings
 
 object StudioGenerationIntentCodec {
@@ -106,4 +110,61 @@ object StudioGenerationIntentCodec {
 
     private fun String.toGenerationQuality(): GenerationQuality =
         runCatching { GenerationQuality.valueOf(this) }.getOrDefault(GenerationQuality.SPEED)
+
+    const val EXTRA_OVERRIDE_KIND = "OVERRIDE_KIND"
+    const val EXTRA_OVERRIDE_ID = "OVERRIDE_ID"
+    const val EXTRA_OVERRIDE_DISPLAY_NAME = "OVERRIDE_DISPLAY_NAME"
+
+    private const val KIND_OVERRIDE_LOCAL = "local"
+    private const val KIND_OVERRIDE_API = "api"
+    private const val KIND_OVERRIDE_MEDIA_PROVIDER = "media_provider"
+
+    fun writeOverride(
+        intent: Intent,
+        override: StudioModelOverride,
+    ) {
+        intent.putExtra(EXTRA_OVERRIDE_DISPLAY_NAME, override.displayName)
+        when (override) {
+            is StudioModelOverride.Local -> {
+                intent.putExtra(EXTRA_OVERRIDE_KIND, KIND_OVERRIDE_LOCAL)
+                intent.putExtra(EXTRA_OVERRIDE_ID, override.configId.value)
+            }
+            is StudioModelOverride.Api -> {
+                intent.putExtra(EXTRA_OVERRIDE_KIND, KIND_OVERRIDE_API)
+                intent.putExtra(EXTRA_OVERRIDE_ID, override.configId.value)
+            }
+            is StudioModelOverride.MediaProvider -> {
+                intent.putExtra(EXTRA_OVERRIDE_KIND, KIND_OVERRIDE_MEDIA_PROVIDER)
+                intent.putExtra(EXTRA_OVERRIDE_ID, override.providerId.value)
+            }
+        }
+    }
+
+    /**
+     * Backward-compatible read: an intent without [EXTRA_OVERRIDE_KIND] (older versions)
+     * yields `null` rather than throwing.
+     */
+    fun readOverride(intent: Intent): StudioModelOverride? {
+        val kind = intent.getStringExtra(EXTRA_OVERRIDE_KIND) ?: return null
+        val id = intent.getStringExtra(EXTRA_OVERRIDE_ID).orEmpty()
+        val displayName = intent.getStringExtra(EXTRA_OVERRIDE_DISPLAY_NAME).orEmpty()
+        return when (kind) {
+            KIND_OVERRIDE_LOCAL ->
+                StudioModelOverride.Local(
+                    configId = LocalModelConfigurationId(id),
+                    displayName = displayName,
+                )
+            KIND_OVERRIDE_API ->
+                StudioModelOverride.Api(
+                    configId = ApiModelConfigurationId(id),
+                    displayName = displayName,
+                )
+            KIND_OVERRIDE_MEDIA_PROVIDER ->
+                StudioModelOverride.MediaProvider(
+                    providerId = MediaProviderId(id),
+                    displayName = displayName,
+                )
+            else -> null
+        }
+    }
 }

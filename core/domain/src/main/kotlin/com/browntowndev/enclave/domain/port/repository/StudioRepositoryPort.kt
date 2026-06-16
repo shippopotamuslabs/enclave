@@ -3,6 +3,7 @@ package com.browntowndev.enclave.domain.port.repository
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.media.GenerationSettings
 import com.browntowndev.enclave.domain.model.media.ImageGenerationProgress
+import com.browntowndev.enclave.domain.model.media.StudioModelOverride
 import kotlinx.coroutines.flow.Flow
 
 interface StudioMediaId {
@@ -31,6 +32,7 @@ data class ActiveStudioGeneration(
     val prompt: String,
     val mediaType: MediaCapability,
     val settings: GenerationSettings,
+    val override: StudioModelOverride? = null,
 )
 
 @Suppress("TooManyFunctions")

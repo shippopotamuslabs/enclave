@@ -33,12 +33,15 @@ import com.browntowndev.enclave.domain.usecase.chat.ListenToSpeechUseCase
 import com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase
 import com.browntowndev.enclave.domain.usecase.inference.SubmitModerationReportUseCase
 import com.browntowndev.enclave.domain.usecase.media.GetImageGenerationCapabilitiesUseCase
+import com.browntowndev.enclave.domain.usecase.media.GetStudioCapablePresetsUseCase
 import com.browntowndev.enclave.domain.usecase.media.ResolveMediaModelTypeUseCase
 import com.browntowndev.enclave.domain.usecase.media.ResolveMediaProviderCapabilitiesUseCase
 import com.browntowndev.enclave.feature.studio.coordinators.StudioAlbumSelectionCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioCapabilitiesCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioGenerationCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioMediaActionsCoordinator
+import com.browntowndev.enclave.feature.studio.coordinators.StudioModelOverrideCoordinator
+import com.browntowndev.enclave.feature.studio.coordinators.StudioResolvedModelCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioPlaybackCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioPromptCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioRemoteCapabilitiesCoordinator
@@ -236,7 +239,6 @@ class MultimodalViewModelTest {
             moderatePromptUseCase = ModeratePromptUseCase(moderationPort, NoOpLoggingPort),
             shouldModeratePromptUseCase = allowShouldModeratePromptUseCase(),
             submitModerationReportUseCase = submitModerationReportUseCase,
-            resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase(),
             getImageGenerationCapabilitiesUseCase = getImageGenerationCapabilitiesUseCase,
             generationCoordinator = generationCoordinator,
             albumSelectionCoordinator = albumSelectionCoordinator,
@@ -248,6 +250,13 @@ class MultimodalViewModelTest {
             promptCoordinator = promptCoordinator,
             mediaActionsCoordinator = mediaActionsCoordinator,
             uiSelectionRepository = uiSelectionRepository,
+            overrideCoordinator = StudioModelOverrideCoordinator(),
+            resolvedModelCoordinator =
+                StudioResolvedModelCoordinator(
+                    resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase(),
+                    mediaProviderRepository = mediaProviderRepository,
+                ),
+            getStudioCapablePresetsUseCase = mockk<GetStudioCapablePresetsUseCase>(relaxed = true),
         )
     }
 
@@ -353,7 +362,6 @@ class MultimodalViewModelTest {
                     moderatePromptUseCase = ModeratePromptUseCase(moderationPort, NoOpLoggingPort),
                     shouldModeratePromptUseCase = shouldModerateMock,
                     submitModerationReportUseCase = submitModerationReportUseCase,
-                    resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase(),
                     getImageGenerationCapabilitiesUseCase = getImageGenerationCapabilitiesUseCase,
                     generationCoordinator = generationCoordinator,
                     albumSelectionCoordinator = albumSelectionCoordinator,
@@ -365,6 +373,13 @@ class MultimodalViewModelTest {
                     promptCoordinator = StudioPromptCoordinator(generationCoordinator, studioRepository),
                     mediaActionsCoordinator = StudioMediaActionsCoordinator(shareMediaPort, studioRepository, generationCoordinator),
                     uiSelectionRepository = uiSelectionRepository,
+                    overrideCoordinator = StudioModelOverrideCoordinator(),
+                    resolvedModelCoordinator =
+                        StudioResolvedModelCoordinator(
+                            resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase(),
+                            mediaProviderRepository = mediaProviderRepository,
+                        ),
+                    getStudioCapablePresetsUseCase = mockk<GetStudioCapablePresetsUseCase>(relaxed = true),
                 )
 
             moderationPort.scores =

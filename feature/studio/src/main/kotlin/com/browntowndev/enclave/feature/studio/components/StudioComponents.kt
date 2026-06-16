@@ -1,11 +1,16 @@
 package com.browntowndev.enclave.feature.studio.components
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -30,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.browntowndev.enclave.core.ui.component.PersistentTooltip
 import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.neo.NeoNavRow
 import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
 import com.browntowndev.enclave.core.ui.component.neo.NeoSegmentedControl
 import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
@@ -41,7 +47,12 @@ import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.media.*
+import com.browntowndev.enclave.feature.studio.ModelPickerPane
 import com.browntowndev.enclave.feature.studio.R
+import com.browntowndev.enclave.feature.studio.StudioCapablePresetsUi
+import com.browntowndev.enclave.feature.studio.StudioModelOptionUi
+import com.browntowndev.enclave.feature.studio.StudioOverrideKind
+import com.browntowndev.enclave.feature.studio.StudioSheetView
 import com.browntowndev.enclave.feature.studio.StudioUiState
 import kotlin.math.roundToInt
 
@@ -199,6 +210,10 @@ fun StudioOptionsBottomSheet(
     onContinualModeChange: (Boolean) -> Unit,
     onMediaTypeChange: (MediaCapability) -> Unit,
     onTemplateSelected: (StudioTemplate) -> Unit,
+    onOpenModelPicker: () -> Unit = {},
+    onStageModelSelection: (StudioModelOptionUi) -> Unit = {},
+    onConfirmModelSelection: () -> Unit = {},
+    onCancelModelPicker: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     NeoModalBottomSheet(
@@ -213,6 +228,10 @@ fun StudioOptionsBottomSheet(
             onContinualModeChange = onContinualModeChange,
             onMediaTypeChange = onMediaTypeChange,
             onTemplateSelected = onTemplateSelected,
+            onOpenModelPicker = onOpenModelPicker,
+            onStageModelSelection = onStageModelSelection,
+            onConfirmModelSelection = onConfirmModelSelection,
+            onCancelModelPicker = onCancelModelPicker,
         )
     }
 }
@@ -441,14 +460,17 @@ fun StudioOptionsSheetContent(
     onContinualModeChange: (Boolean) -> Unit,
     onMediaTypeChange: (MediaCapability) -> Unit,
     onTemplateSelected: (StudioTemplate) -> Unit,
+    onOpenModelPicker: () -> Unit = {},
+    onStageModelSelection: (StudioModelOptionUi) -> Unit = {},
+    onConfirmModelSelection: () -> Unit = {},
+    onCancelModelPicker: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    val scrollState = rememberScrollState()
+    val sheetView = if (state.isModelPickerVisible) StudioSheetView.ModelPicker else StudioSheetView.Settings
     Column(
         modifier =
             modifier
                 .fillMaxWidth()
-                .verticalScroll(scrollState)
                 .navigationBarsPadding(),
         horizontalAlignment = Alignment.Start,
     ) {
@@ -457,6 +479,70 @@ fun StudioOptionsSheetContent(
             onDismiss = onDismiss,
         )
 
+        NeoNavRow(
+            title = state.activeModelDisplayName ?: "Default",
+            subtitle = state.resolvedModelTypeLabel,
+            onClick = onOpenModelPicker,
+            modifier = Modifier.padding(horizontal = 8.dp),
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        AnimatedContent(
+            targetState = sheetView,
+            transitionSpec = {
+                if (targetState == StudioSheetView.ModelPicker) {
+                    // Settings out to the left, picker in from the right.
+                    (slideInHorizontally { it } togetherWith slideOutHorizontally { -it })
+                } else {
+                    // Picker out to the right, settings in from the left.
+                    (slideInHorizontally { -it } togetherWith slideOutHorizontally { it })
+                } using SizeTransform(clip = false)
+            },
+            contentKey = { it },
+            label = "studioSheetView",
+        ) { view ->
+            when (view) {
+                StudioSheetView.Settings ->
+                    SettingsPane(
+                        state = state,
+                        onUpdateSettings = onUpdateSettings,
+                        onContinualModeChange = onContinualModeChange,
+                        onMediaTypeChange = onMediaTypeChange,
+                        onTemplateSelected = onTemplateSelected,
+                    )
+                StudioSheetView.ModelPicker ->
+                    ModelPickerPane(
+                        assets = state.modelPickerAssets,
+                        selectedId = state.selectedModelIdInPicker,
+                        modelTypeLabel = state.resolvedModelTypeLabel,
+                        onStageSelection = onStageModelSelection,
+                        onConfirm = onConfirmModelSelection,
+                        onCancel = onCancelModelPicker,
+                    )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(32.dp))
+    }
+}
+
+@Composable
+private fun SettingsPane(
+    state: StudioUiState,
+    onUpdateSettings: (GenerationSettings) -> Unit,
+    onContinualModeChange: (Boolean) -> Unit,
+    onMediaTypeChange: (MediaCapability) -> Unit,
+    onTemplateSelected: (StudioTemplate) -> Unit,
+) {
+    val scrollState = rememberScrollState()
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .verticalScroll(scrollState),
+        horizontalAlignment = Alignment.Start,
+    ) {
         NeoSegmentedControl(
             options =
                 listOf(
@@ -505,8 +591,6 @@ fun StudioOptionsSheetContent(
                 )
             }
         }
-
-        Spacer(modifier = Modifier.height(32.dp))
     }
 }
 
@@ -1108,7 +1192,16 @@ private val previewStudioCapabilities =
         supportsVideo = true,
     )
 
-@Preview(showBackground = true, name = "Studio Options - Image", heightDp = 920)
+private val previewPickerAssets =
+    StudioCapablePresetsUi(
+        mediaAssets =
+            listOf(
+                StudioModelOptionUi("fal-1", "Fal Aura", "Image", StudioOverrideKind.MEDIA_PROVIDER, "Fal Aura"),
+                StudioModelOptionUi("fal-2", "Fal Flux", "Image", StudioOverrideKind.MEDIA_PROVIDER, "Fal Flux"),
+            ),
+    )
+
+@Preview(showBackground = true, name = "Studio Options - Image (Light)", heightDp = 920)
 @Composable
 fun PreviewStudioOptionsImage() {
     val state =
@@ -1119,8 +1212,9 @@ fun PreviewStudioOptionsImage() {
             settings = ImageGenerationSettings(),
             capabilities = previewStudioCapabilities,
             continualMode = false,
+            resolvedModelTypeLabel = "Image Generation",
         )
-    EnclaveTheme {
+    EnclaveTheme(darkTheme = false) {
         Surface(color = MaterialTheme.colorScheme.surface) {
             StudioOptionsSheetContent(
                 state = state,
@@ -1129,6 +1223,41 @@ fun PreviewStudioOptionsImage() {
                 onContinualModeChange = {},
                 onMediaTypeChange = {},
                 onTemplateSelected = {},
+                onOpenModelPicker = {},
+                onStageModelSelection = {},
+                onConfirmModelSelection = {},
+                onCancelModelPicker = {},
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true, name = "Studio Options - Image (Dark)", heightDp = 920)
+@Composable
+fun PreviewStudioOptionsImageDark() {
+    val state =
+        StudioUiState(
+            mediaType = MediaCapability.IMAGE,
+            templates = previewImageTemplates,
+            selectedTemplateId = "1",
+            settings = ImageGenerationSettings(),
+            capabilities = previewStudioCapabilities,
+            continualMode = false,
+            resolvedModelTypeLabel = "Image Generation",
+        )
+    EnclaveTheme(darkTheme = true) {
+        Surface(color = MaterialTheme.colorScheme.surface) {
+            StudioOptionsSheetContent(
+                state = state,
+                onDismiss = {},
+                onUpdateSettings = {},
+                onContinualModeChange = {},
+                onMediaTypeChange = {},
+                onTemplateSelected = {},
+                onOpenModelPicker = {},
+                onStageModelSelection = {},
+                onConfirmModelSelection = {},
+                onCancelModelPicker = {},
             )
         }
     }
@@ -1150,6 +1279,69 @@ fun PreviewStudioOptionsMusic() {
                 onContinualModeChange = {},
                 onMediaTypeChange = {},
                 onTemplateSelected = {},
+                onOpenModelPicker = {},
+                onStageModelSelection = {},
+                onConfirmModelSelection = {},
+                onCancelModelPicker = {},
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true, name = "Studio Options - Model Picker", heightDp = 920)
+@Composable
+fun PreviewStudioOptionsModelPicker() {
+    val state =
+        StudioUiState(
+            mediaType = MediaCapability.IMAGE,
+            isModelPickerVisible = true,
+            selectedModelIdInPicker = "fal-2",
+            modelPickerAssets = previewPickerAssets,
+            activeModelDisplayName = "Default Image",
+            resolvedModelTypeLabel = "Image Generation",
+        )
+    EnclaveTheme {
+        Surface(color = MaterialTheme.colorScheme.surface) {
+            StudioOptionsSheetContent(
+                state = state,
+                onDismiss = {},
+                onUpdateSettings = {},
+                onContinualModeChange = {},
+                onMediaTypeChange = {},
+                onTemplateSelected = {},
+                onOpenModelPicker = {},
+                onStageModelSelection = {},
+                onConfirmModelSelection = {},
+                onCancelModelPicker = {},
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true, name = "Studio Options - Empty Catalog", heightDp = 760)
+@Composable
+fun PreviewStudioOptionsEmptyCatalog() {
+    val state =
+        StudioUiState(
+            mediaType = MediaCapability.IMAGE,
+            isModelPickerVisible = true,
+            selectedModelIdInPicker = null,
+            modelPickerAssets = StudioCapablePresetsUi.EMPTY,
+            resolvedModelTypeLabel = "Image Generation",
+        )
+    EnclaveTheme {
+        Surface(color = MaterialTheme.colorScheme.surface) {
+            StudioOptionsSheetContent(
+                state = state,
+                onDismiss = {},
+                onUpdateSettings = {},
+                onContinualModeChange = {},
+                onMediaTypeChange = {},
+                onTemplateSelected = {},
+                onOpenModelPicker = {},
+                onStageModelSelection = {},
+                onConfirmModelSelection = {},
+                onCancelModelPicker = {},
             )
         }
     }
