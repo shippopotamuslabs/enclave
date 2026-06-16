@@ -2,6 +2,7 @@ package com.browntowndev.enclave.feature.chat.delegates
 
 import com.browntowndev.enclave.domain.model.chat.AccumulatedMessages
 import com.browntowndev.enclave.domain.model.chat.ChatId
+import com.browntowndev.enclave.domain.model.chat.ChatModelOverride
 import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.inference.ModelType
@@ -65,6 +66,7 @@ class ChatUiStateReducer
             val liveVoiceState: LiveVoiceUiState = LiveVoiceUiState.Idle,
             val hasLiveVoiceProviderAssigned: Boolean = false,
             val hapticState: HapticReducerState = HapticReducerState(),
+            val selectedModelOverride: ChatModelOverride? = null,
         )
 
         data class ReduceResult(
@@ -171,11 +173,18 @@ class ChatUiStateReducer
                         resolveModelNameForMode(
                             mode = params.selectedMode,
                             modelDisplayNames = params.modelDisplayNames,
+                            selectedModelOverride = params.selectedModelOverride,
                         ),
                     modeModelNames =
-                        ChatModeUi.entries.associateWith { mode ->
-                            resolveModelNameForMode(mode, params.modelDisplayNames)
-                        },
+                        ChatModeUi.entries
+                            .filter { it != ChatModeUi.OTHER }
+                            .associateWith { mode ->
+                                resolveModelNameForMode(
+                                    mode = mode,
+                                    modelDisplayNames = params.modelDisplayNames,
+                                    selectedModelOverride = null,
+                                )
+                            },
                     isGlobalInferenceBlocked = params.isGlobalInferenceBlocked,
                     hapticResponse = params.settings.hapticResponse,
                     responseHapticPhase = hapticResolution.phase,
@@ -295,6 +304,7 @@ class ChatUiStateReducer
         private fun resolveModelNameForMode(
             mode: ChatModeUi,
             modelDisplayNames: Map<ModelType, String>,
+            selectedModelOverride: ChatModelOverride?,
         ): String? {
             val modelType =
                 when (mode) {
@@ -302,6 +312,7 @@ class ChatUiStateReducer
                     ChatModeUi.THINKING -> ModelType.THINKING
                     // Council fans out to up to 4 models; there is no single name to show.
                     ChatModeUi.COUNCIL -> return null
+                    ChatModeUi.OTHER -> return selectedModelOverride?.displayName
                 }
             return modelDisplayNames[modelType]?.takeIf { it.isNotEmpty() }
         }

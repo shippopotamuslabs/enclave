@@ -231,6 +231,7 @@ internal class ChatGenerationAccumulatorManager(
                     Mode.FAST -> ModelType.FAST
                     Mode.THINKING -> ModelType.THINKING
                     Mode.COUNCIL -> ModelType.DRAFT_ONE
+                    Mode.OTHER -> ModelType.FAST
                 }
             getOrCreateAccumulator(defaultModelType)
         }

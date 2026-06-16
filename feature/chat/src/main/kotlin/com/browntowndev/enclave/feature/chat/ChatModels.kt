@@ -18,6 +18,7 @@ enum class ChatModeUi(
     FAST(R.string.mode_fast, R.drawable.bolt),
     THINKING(R.string.mode_thinking, R.drawable.lightbulb),
     COUNCIL(R.string.mode_council, R.drawable.merge),
+    OTHER(R.string.mode_other, R.drawable.robot),
     ;
 
     fun getDisplayName(context: Context): String = context.getString(displayNameRes)
@@ -121,6 +122,9 @@ data class ChatUiState(
     val shareState: ShareState = ShareState.Idle,
     val isReadOnly: Boolean = false,
     val artifactExportSheet: ArtifactExportSheetState = ArtifactExportSheetState.Hidden,
+    val isModelOverrideSheetVisible: Boolean = false,
+    val modelOverrideSheetLocalAssets: List<com.browntowndev.enclave.core.ui.component.assignment.LocalModelAssetUi> = emptyList(),
+    val modelOverrideSheetApiAssets: List<com.browntowndev.enclave.core.ui.component.assignment.ApiModelAssetUi> = emptyList(),
     val responseStatsSheet: ResponseStatsSheetUiState = ResponseStatsSheetUiState(),
     val chatStatsSheet: ChatStatsSheetUiState = ChatStatsSheetUiState(),
 )

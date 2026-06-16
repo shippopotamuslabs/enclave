@@ -1,5 +1,7 @@
 package com.browntowndev.enclave.domain.usecase.inference
 
+import com.browntowndev.enclave.domain.model.chat.ChatModelOverride
+import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.config.DistributionConfigurationPort
@@ -24,8 +26,35 @@ class ShouldModeratePromptUseCase
             }
 
             val config = activeModelProvider.getActiveConfiguration(modelType)
+            return shouldModerateResolvedConfig(config, "modelType=$modelType")
+        }
+
+        /**
+         * Moderation resolution for an explicit chat-model override (OTHER mode).
+         *
+         * Resolves the [ActiveModelConfiguration] from [override] via
+         * [ActiveModelProviderPort.getActiveConfigurationByOverride] — the same
+         * override seam used by inference dispatch and photo-attachment policy —
+         * instead of reading the FAST slot. This ensures an untrusted API or local
+         * override is moderated on its own merits rather than inheriting the
+         * moderation posture of whatever model happens to occupy the FAST slot.
+         */
+        suspend operator fun invoke(override: ChatModelOverride): Boolean {
+            if (!distributionConfig.isPlayStoreFlavor) {
+                loggingPort.debug(TAG, "Skipping moderation: not playStore flavor")
+                return false
+            }
+
+            val config = activeModelProvider.getActiveConfigurationByOverride(override)
+            return shouldModerateResolvedConfig(config, "override=$override")
+        }
+
+        private suspend fun shouldModerateResolvedConfig(
+            config: ActiveModelConfiguration?,
+            contextLabel: String,
+        ): Boolean {
             if (config == null || config.isLocal) {
-                loggingPort.debug(TAG, "Should moderate ($modelType): config=$config, isLocal=${config?.isLocal}")
+                loggingPort.debug(TAG, "Should moderate ($contextLabel): config=$config, isLocal=${config?.isLocal}")
                 return true
             }
             val url = config.apiBaseUrl ?: config.apiProvider?.defaultBaseUrl() ?: return true
@@ -39,7 +68,7 @@ class ShouldModeratePromptUseCase
                         host == normalizedWildcard.removePrefix(".") || host.endsWith(dotPrefixed)
                     }
 
-            loggingPort.debug(TAG, "Should moderate ($modelType): host=$host, isTrusted=$isTrusted, result=${!isTrusted}")
+            loggingPort.debug(TAG, "Should moderate ($contextLabel): host=$host, isTrusted=$isTrusted, result=${!isTrusted}")
             return !isTrusted
         }
 

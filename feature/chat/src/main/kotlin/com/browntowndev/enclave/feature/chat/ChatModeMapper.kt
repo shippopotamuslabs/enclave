@@ -11,6 +11,7 @@ object ChatModeMapper {
             ChatModeUi.FAST -> Mode.FAST
             ChatModeUi.THINKING -> Mode.THINKING
             ChatModeUi.COUNCIL -> Mode.COUNCIL
+            ChatModeUi.OTHER -> Mode.OTHER
         }
 
     fun Mode.toUi(): ChatModeUi =
@@ -18,5 +19,6 @@ object ChatModeMapper {
             Mode.FAST -> ChatModeUi.FAST
             Mode.THINKING -> ChatModeUi.THINKING
             Mode.COUNCIL -> ChatModeUi.COUNCIL
+            Mode.OTHER -> ChatModeUi.OTHER
         }
 }

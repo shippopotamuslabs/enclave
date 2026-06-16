@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.browntowndev.enclave.domain.model.chat.MessageId
+import com.browntowndev.enclave.core.ui.component.assignment.AssignmentSelectionBottomSheet
 import com.browntowndev.enclave.feature.chat.components.InputBar
 import com.browntowndev.enclave.feature.chat.LiveVoiceUiState
 import com.browntowndev.enclave.feature.chat.components.LiveVoiceOverlay
@@ -35,6 +36,15 @@ fun ChatScreen(
     onSendMessage: (String) -> Unit,
     onStopGenerating: () -> Unit,
     onModeChange: (ChatModeUi) -> Unit,
+    onOtherClick: () -> Unit = {},
+    onDismissModelOverrideSheet: () -> Unit = {},
+    onModelOverrideSelected: (
+        localId: com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId?,
+        apiId: com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId?,
+        ttsId: com.browntowndev.enclave.domain.model.config.TtsProviderId?,
+        mediaId: com.browntowndev.enclave.domain.model.config.MediaProviderId?,
+        liveVoiceId: com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId?,
+    ) -> Unit = { _, _, _, _, _ -> },
     onStartLiveVoice: () -> Unit = {},
     onEndLiveVoice: () -> Unit = {},
     onToggleLiveVoiceMute: () -> Unit = {},
@@ -106,6 +116,7 @@ fun ChatScreen(
                         selectedModeModelName = uiState.selectedModeModelName,
                         modeModelNames = uiState.modeModelNames,
                         onModeChange = onModeChange,
+                        onOtherClick = onOtherClick,
                         onMenuClick = onNavigateToHistory,
                         onNewChatClick = onNewChat,
                         onViewChatStatsClick = onViewChatStatsClick,
@@ -119,6 +130,19 @@ fun ChatScreen(
                     onShareFullChat = onShareFullChat,
                     onDismiss = onDismissShareSheet,
                 )
+
+                if (uiState.isModelOverrideSheetVisible) {
+                    AssignmentSelectionBottomSheet(
+                        slotLabel = "Other",
+                        localAssets = uiState.modelOverrideSheetLocalAssets,
+                        apiAssets = uiState.modelOverrideSheetApiAssets,
+                        ttsAssets = emptyList(),
+                        liveVoiceAssets = emptyList(),
+                        mediaAssets = emptyList(),
+                        onDismiss = onDismissModelOverrideSheet,
+                        onSelect = onModelOverrideSelected,
+                    )
+                }
 
                 Column(
                     modifier =

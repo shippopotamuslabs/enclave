@@ -1,8 +1,10 @@
 package com.browntowndev.enclave.domain.port.inference
 
 import com.browntowndev.enclave.domain.model.chat.ChatId
+import com.browntowndev.enclave.domain.model.chat.ChatModelOverride
 import com.browntowndev.enclave.domain.model.chat.MessageGenerationState
 import com.browntowndev.enclave.domain.model.chat.MessageId
+import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import kotlinx.coroutines.flow.Flow
 
@@ -31,6 +33,20 @@ interface ChatInferenceExecutorPort {
         chatId: ChatId,
         userHasImage: Boolean,
         modelType: ModelType,
+        backgroundInferenceEnabled: Boolean,
+    ): Flow<MessageGenerationState>
+
+    /**
+     * Execute single-model inference using an explicit preset override instead of a slot assignment.
+     */
+    fun executeWithOverride(
+        prompt: String,
+        userMessageId: MessageId,
+        assistantMessageId: MessageId,
+        chatId: ChatId,
+        userHasImage: Boolean,
+        modelOverride: ChatModelOverride,
+        resolvedConfiguration: ActiveModelConfiguration,
         backgroundInferenceEnabled: Boolean,
     ): Flow<MessageGenerationState>
 

@@ -1,9 +1,9 @@
 package com.browntowndev.enclave.domain.usecase.chat
 
 import com.browntowndev.enclave.domain.model.chat.ChatId
+import com.browntowndev.enclave.domain.model.chat.ChatResponseMode
 import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.chat.MessageId
-import com.browntowndev.enclave.domain.model.chat.Mode
 import kotlinx.coroutines.flow.Flow
 
 interface ChatUseCases {
@@ -26,6 +26,11 @@ interface ChatUseCases {
      * Generates a chat response for the given prompt.
      */
     val generateChatResponseUseCase: GenerateChatResponseUseCase
+
+    /**
+     * Observes chat-capable local and API presets for the Other-model picker.
+     */
+    val getChatCapablePresetsUseCase: GetChatCapablePresetsUseCase
 
     /**
      * Generates and applies an on-device chat title (upgrades the truncated default).
@@ -78,17 +83,17 @@ interface ChatUseCases {
      * @param userMessageId The ID of the user message being sent
      * @param assistantMessageId The ID of the assistant message to populate
      * @param chatId The chat ID for loading conversation history
-     * @param mode The execution mode (FAST, THINKING, or COUNCIL)
-     * @return Flow of MessageGenerationState for UI updates
+     * @param responseMode The execution mode (Fast, Thinking, Council, or Other with override)
+     * @return Flow of AccumulatedMessages for UI updates
      */
     suspend fun generateChatResponse(
         prompt: String,
         userMessageId: MessageId,
         assistantMessageId: MessageId,
         chatId: ChatId,
-        mode: Mode,
+        responseMode: ChatResponseMode,
         backgroundInferenceEnabled: Boolean,
-    ) = generateChatResponseUseCase(prompt, userMessageId, assistantMessageId, chatId, mode, backgroundInferenceEnabled)
+    ) = generateChatResponseUseCase(prompt, userMessageId, assistantMessageId, chatId, responseMode, backgroundInferenceEnabled)
 
     /**
      * Generates an on-device chat title and applies it to the chat.

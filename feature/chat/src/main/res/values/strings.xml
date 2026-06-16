@@ -3,6 +3,7 @@
     <string name="mode_fast">Fast</string>
     <string name="mode_council">Council</string>
     <string name="mode_thinking">Thinking</string>
+    <string name="mode_other">Other</string>
     <string name="use_the_council">Use the Council</string>
     <string name="use_the_council_subtitle">Get a better response</string>
     <string name="artifact_export_sheet_title">Export document</string>

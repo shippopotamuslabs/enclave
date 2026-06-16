@@ -1,8 +1,10 @@
 package com.browntowndev.enclave.feature.chat.delegates
 
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
+import com.browntowndev.enclave.domain.model.chat.ChatModelOverride
 import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
 import com.browntowndev.enclave.domain.usecase.chat.StageImageAttachmentUseCase
+import com.browntowndev.enclave.feature.chat.ChatModeUi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -30,15 +32,30 @@ class ChatInputCoordinator
         private val _selectedFileText = MutableStateFlow<String?>(null)
         val selectedFileText: StateFlow<String?> = _selectedFileText.asStateFlow()
 
-        private val _selectedMode = MutableStateFlow(com.browntowndev.enclave.feature.chat.ChatModeUi.FAST)
-        val selectedMode: StateFlow<com.browntowndev.enclave.feature.chat.ChatModeUi> = _selectedMode.asStateFlow()
+        private val _selectedMode = MutableStateFlow(ChatModeUi.FAST)
+        val selectedMode: StateFlow<ChatModeUi> = _selectedMode.asStateFlow()
+
+        private val _selectedModelOverride = MutableStateFlow<ChatModelOverride?>(null)
+        val selectedModelOverride: StateFlow<ChatModelOverride?> = _selectedModelOverride.asStateFlow()
 
         fun onInputChange(text: String) {
             _inputText.value = text
         }
 
-        fun onModeChange(mode: com.browntowndev.enclave.feature.chat.ChatModeUi) {
+        fun onModeChange(mode: ChatModeUi) {
+            if (mode != ChatModeUi.OTHER) {
+                clearModelOverride()
+            }
             _selectedMode.value = mode
+        }
+
+        fun onModelOverrideSelected(override: ChatModelOverride) {
+            _selectedModelOverride.value = override
+            _selectedMode.value = ChatModeUi.OTHER
+        }
+
+        fun clearModelOverride() {
+            _selectedModelOverride.value = null
         }
 
         fun onImagesSelected(

@@ -641,7 +641,17 @@ class RustLoopVolatileTurnContextCommitTest {
                             block: suspend (com.browntowndev.enclave.domain.port.inference.LlmInferencePort) -> T,
                         ): T = throw UnsupportedOperationException("Not needed in CSPC tests")
 
+                        override suspend fun <T> withInferenceServiceForLocalConfig(
+                            configId: com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId,
+                            block: suspend (com.browntowndev.enclave.domain.port.inference.LlmInferencePort) -> T,
+                        ): T = throw UnsupportedOperationException("Not needed in CSPC tests")
+
                         override suspend fun <T> withRawApiServiceForConfig(
+                            configId: ApiModelConfigurationId,
+                            block: suspend (com.browntowndev.enclave.domain.port.inference.LlmInferencePort) -> T,
+                        ): T = throw UnsupportedOperationException("Not needed in CSPC tests")
+
+                        override suspend fun <T> withApiServiceForConfig(
                             configId: ApiModelConfigurationId,
                             block: suspend (com.browntowndev.enclave.domain.port.inference.LlmInferencePort) -> T,
                         ): T = throw UnsupportedOperationException("Not needed in CSPC tests")

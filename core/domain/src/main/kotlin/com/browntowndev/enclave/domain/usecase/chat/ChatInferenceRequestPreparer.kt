@@ -75,9 +75,10 @@ class ChatInferenceRequestPreparer(
         userMessageId: MessageId,
         assistantMessageId: MessageId,
         modelType: ModelType,
+        explicitConfiguration: ActiveModelConfiguration? = null,
     ): PreparedChatInferenceRequest {
         val settings = settingsRepository.settingsFlow.first()
-        val config = activeModelProvider.getActiveConfiguration(modelType)
+        val config = explicitConfiguration ?: activeModelProvider.getActiveConfiguration(modelType)
         val visionConfig = activeModelProvider.getActiveConfiguration(ModelType.VISION)
         val userMessage = messageRepository.getMessageById(userMessageId)
         val resolvedImageTarget = messageRepository.resolveLatestImageBearingUserMessage(chatId, userMessageId)

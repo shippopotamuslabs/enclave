@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.domain.usecase.inference
 
+import com.browntowndev.enclave.domain.model.chat.ChatModelOverride
 import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
@@ -11,6 +12,7 @@ import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.TrustedDomainRepositoryPort
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
@@ -239,6 +241,136 @@ class ShouldModeratePromptUseCaseTest {
             coEvery { activeModelProvider.getActiveConfiguration(ModelType.FAST) } returns config
 
             assertTrue(useCase(ModelType.FAST))
+        }
+
+    // --- Override resolution (OTHER mode) — must resolve config from override, NOT FAST slot ---
+
+    @Test
+    fun invoke_override_usesOverrideConfig_notFastSlot() =
+        runTest {
+            val override =
+                ChatModelOverride.Api(
+                    configId = ApiModelConfigurationId("api-untrusted-override"),
+                    displayName = "Custom Untrusted",
+                )
+            // FAST slot is trusted (OpenAI); override is NOT (untrusted host).
+            // Moderation must reflect the override config, not the FAST slot.
+            val fastSlotConfig =
+                createActiveConfig(
+                    id = ApiModelConfigurationId("api-fast-slot"),
+                    isLocal = false,
+                    name = "Fast Slot (Trusted)",
+                    modelId = "gpt-4o",
+                    apiProvider = ApiProvider.OPENAI,
+                    apiBaseUrl = "https://api.openai.com/v1",
+                )
+            val overrideConfig =
+                createActiveConfig(
+                    id = ApiModelConfigurationId("api-untrusted-override"),
+                    isLocal = false,
+                    name = "Custom Untrusted",
+                    modelId = "dolphin-llama3",
+                    apiProvider = ApiProvider.OPENROUTER,
+                    apiBaseUrl = "https://api.untrusted-model-host.com/v1",
+                )
+            coEvery { activeModelProvider.getActiveConfiguration(ModelType.FAST) } returns fastSlotConfig
+            coEvery { activeModelProvider.getActiveConfigurationByOverride(override) } returns overrideConfig
+
+            assertTrue(useCase(override))
+
+            // Mutation defense: the FAST slot must never be consulted for an override.
+            coVerify(exactly = 0) { activeModelProvider.getActiveConfiguration(any()) }
+            coVerify(exactly = 1) { activeModelProvider.getActiveConfigurationByOverride(override) }
+        }
+
+    @Test
+    fun invoke_override_returnsTrue_whenOverrideResolvesToLocalConfig() =
+        runTest {
+            val override =
+                ChatModelOverride.Local(
+                    configId = LocalModelConfigurationId("local-override"),
+                    displayName = "Local Override",
+                )
+            val localConfig =
+                createActiveConfig(
+                    id = LocalModelConfigurationId("local-override"),
+                    isLocal = true,
+                    name = "Local Override",
+                    modelId = "gemma.gguf",
+                )
+            coEvery { activeModelProvider.getActiveConfigurationByOverride(override) } returns localConfig
+
+            assertTrue(useCase(override))
+        }
+
+    @Test
+    fun invoke_override_returnsFalse_whenOverrideResolvesToTrustedApiConfig() =
+        runTest {
+            val override =
+                ChatModelOverride.Api(
+                    configId = ApiModelConfigurationId("api-trusted"),
+                    displayName = "Trusted Override",
+                )
+            val trustedConfig =
+                createActiveConfig(
+                    id = ApiModelConfigurationId("api-trusted"),
+                    isLocal = false,
+                    name = "Trusted Override",
+                    modelId = "gpt-4o",
+                    apiProvider = ApiProvider.OPENAI,
+                    apiBaseUrl = "https://api.openai.com/v1",
+                )
+            coEvery { activeModelProvider.getActiveConfigurationByOverride(override) } returns trustedConfig
+
+            assertFalse(useCase(override))
+        }
+
+    @Test
+    fun invoke_override_returnsTrue_whenOverrideResolvesToUntrustedApiConfig() =
+        runTest {
+            val override =
+                ChatModelOverride.Api(
+                    configId = ApiModelConfigurationId("api-untrusted"),
+                    displayName = "Untrusted Override",
+                )
+            val untrustedConfig =
+                createActiveConfig(
+                    id = ApiModelConfigurationId("api-untrusted"),
+                    isLocal = false,
+                    name = "Untrusted Override",
+                    modelId = "dolphin-llama3",
+                    apiProvider = ApiProvider.OPENROUTER,
+                    apiBaseUrl = "https://api.untrusted-model-host.com/v1",
+                )
+            coEvery { activeModelProvider.getActiveConfigurationByOverride(override) } returns untrustedConfig
+
+            assertTrue(useCase(override))
+        }
+
+    @Test
+    fun invoke_override_returnsTrue_whenOverrideResolvesToNullConfig() =
+        runTest {
+            val override =
+                ChatModelOverride.Api(
+                    configId = ApiModelConfigurationId("api-missing"),
+                    displayName = "Missing",
+                )
+            coEvery { activeModelProvider.getActiveConfigurationByOverride(override) } returns null
+
+            assertTrue(useCase(override))
+        }
+
+    @Test
+    fun invoke_override_normalFlavor_returnsFalse() =
+        runTest {
+            every { distributionConfig.isPlayStoreFlavor } returns false
+            val override =
+                ChatModelOverride.Api(
+                    configId = ApiModelConfigurationId("api-any"),
+                    displayName = "Any",
+                )
+
+            assertFalse(useCase(override))
         }
 
     private object NoOpLoggingPort : LoggingPort {

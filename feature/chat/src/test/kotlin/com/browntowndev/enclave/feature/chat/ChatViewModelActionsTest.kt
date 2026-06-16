@@ -8,6 +8,7 @@ import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
 import com.browntowndev.enclave.domain.model.chat.ChatId
+import com.browntowndev.enclave.domain.model.chat.ChatModelOverride
 import com.browntowndev.enclave.domain.model.chat.Content
 import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.chat.MessageId
@@ -22,6 +23,7 @@ import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.SettingsData
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.domain.usecase.byok.GetDefaultModelsUseCase
+import com.browntowndev.enclave.domain.usecase.byok.SetDefaultModelUseCase
 import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
 import com.browntowndev.enclave.domain.usecase.chat.GetModelDisplayNameUseCase
 import com.browntowndev.enclave.domain.usecase.chat.ListenToSpeechUseCase
@@ -52,6 +54,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
@@ -101,6 +104,7 @@ class ChatViewModelActionsTest {
                 isMultimodal = true,
             )
         coEvery { activeModelProvider.getActiveConfiguration(any()) } returns visionConfig
+        coEvery { activeModelProvider.getActiveConfigurationByOverride(any()) } returns null
 
         every { errorHandler.coroutineExceptionHandler(any(), any(), any()) } returns CoroutineExceptionHandler { _, _ -> }
 
@@ -118,11 +122,22 @@ class ChatViewModelActionsTest {
         every { settingsUseCases.assignments } returns assignmentUseCases
         every { assignmentUseCases.getDefaultModels } returns getDefaultModelsUseCase
         every { getDefaultModelsUseCase() } returns defaultModelsFlow
+        val setDefaultModelUseCase = mockk<SetDefaultModelUseCase>(relaxed = true)
+        every { assignmentUseCases.setDefaultModel } returns setDefaultModelUseCase
         every { inferenceLockManager.isInferenceBlocked } returns MutableStateFlow(false)
         coEvery { modelDisplayNamesUseCase.invoke(any()) } returns "Test Model"
         every { toolExecutionEventPort.events } returns MutableSharedFlow()
         every { studioRepository.observeAllMedia() } returns flowOf(emptyList())
         every { studioRepository.observeEphemeralMedia() } returns flowOf(emptyList())
+        val getChatCapablePresetsUseCase = mockk<com.browntowndev.enclave.domain.usecase.chat.GetChatCapablePresetsUseCase>()
+        every { getChatCapablePresetsUseCase.invoke() } returns
+            flowOf(
+                com.browntowndev.enclave.domain.usecase.chat.ChatCapablePresets(
+                    localAssets = emptyList(),
+                    apiAssets = emptyList(),
+                ),
+            )
+        every { chatUseCases.getChatCapablePresetsUseCase } returns getChatCapablePresetsUseCase
 
         chatViewModel =
             ChatViewModelTestSupport.createViewModel(
@@ -663,5 +678,177 @@ class ChatViewModelActionsTest {
             customViewModel.reportResponse(MessageId("nonexistent"))
 
             coVerify(exactly = 0) { submitModerationReportUseCase(any(), any()) }
+        }
+
+    @Test
+    fun `S08 — createNewChat clears model override`() =
+        runTest {
+            val harness =
+                ChatViewModelTestSupport.createHarness(
+                    settingsUseCases = settingsUseCases,
+                    chatUseCases = chatUseCases,
+                    savedStateHandle = SavedStateHandle(),
+                    cancelInferenceUseCase = cancelInferenceUseCase,
+                    inferenceLockManager = inferenceLockManager,
+                    modelDisplayNamesUseCase = modelDisplayNamesUseCase,
+                    activeModelProvider = activeModelProvider,
+                    toolExecutionEventPort = toolExecutionEventPort,
+                    errorHandler = errorHandler,
+                    loggingPort = loggingPort,
+                    activeChatTurnSnapshotPort = activeChatTurnStore,
+                    playbackController = playbackController,
+                    studioRepository = studioRepository,
+                    shareChatUseCase = shareChatUseCase,
+                    chatRepository = mockk(relaxed = true),
+                    exportArtifactDocumentsUseCase = mockk(relaxed = true),
+                    stageImageAttachmentUseCase = stageImageAttachmentUseCase,
+                )
+            val coordinator = harness.chatInputCoordinator
+            val override =
+                ChatModelOverride.Api(
+                    configId = ApiModelConfigurationId("api-grok-beta"),
+                    displayName = "Grok Beta",
+                )
+            coordinator.onModelOverrideSelected(override)
+            coordinator.onModeChange(ChatModeUi.OTHER)
+
+            val collectJob = backgroundScope.launch { harness.viewModel.uiState.collect { } }
+            runCurrent()
+
+            harness.viewModel.createNewChat()
+            runCurrent()
+
+            assertNull(coordinator.selectedModelOverride.value)
+            assertNotEquals(ChatModeUi.OTHER, coordinator.selectedMode.value)
+            collectJob.cancel()
+        }
+
+    @Test
+    fun `S09 — onModeChange to FAST clears model override`() =
+        runTest {
+            val harness =
+                ChatViewModelTestSupport.createHarness(
+                    settingsUseCases = settingsUseCases,
+                    chatUseCases = chatUseCases,
+                    savedStateHandle = SavedStateHandle(),
+                    cancelInferenceUseCase = cancelInferenceUseCase,
+                    inferenceLockManager = inferenceLockManager,
+                    modelDisplayNamesUseCase = modelDisplayNamesUseCase,
+                    activeModelProvider = activeModelProvider,
+                    toolExecutionEventPort = toolExecutionEventPort,
+                    errorHandler = errorHandler,
+                    loggingPort = loggingPort,
+                    activeChatTurnSnapshotPort = activeChatTurnStore,
+                    playbackController = playbackController,
+                    studioRepository = studioRepository,
+                    shareChatUseCase = shareChatUseCase,
+                    chatRepository = mockk(relaxed = true),
+                    exportArtifactDocumentsUseCase = mockk(relaxed = true),
+                    stageImageAttachmentUseCase = stageImageAttachmentUseCase,
+                )
+            val coordinator = harness.chatInputCoordinator
+            val override =
+                ChatModelOverride.Api(
+                    configId = ApiModelConfigurationId("api-grok-beta"),
+                    displayName = "Grok Beta",
+                )
+            coordinator.onModelOverrideSelected(override)
+            coordinator.onModeChange(ChatModeUi.OTHER)
+
+            val collectJob = backgroundScope.launch { harness.viewModel.uiState.collect { } }
+            runCurrent()
+
+            harness.viewModel.onModeChange(ChatModeUi.FAST)
+            runCurrent()
+
+            assertNull(coordinator.selectedModelOverride.value)
+            assertEquals(ChatModeUi.FAST, coordinator.selectedMode.value)
+            collectJob.cancel()
+        }
+
+    @Test
+    fun `S02 — onOtherClick sets isModelOverrideSheetVisible to true`() =
+        runTest {
+            val harness =
+                ChatViewModelTestSupport.createHarness(
+                    settingsUseCases = settingsUseCases,
+                    chatUseCases = chatUseCases,
+                    savedStateHandle = SavedStateHandle(),
+                    cancelInferenceUseCase = cancelInferenceUseCase,
+                    inferenceLockManager = inferenceLockManager,
+                    modelDisplayNamesUseCase = modelDisplayNamesUseCase,
+                    activeModelProvider = activeModelProvider,
+                    toolExecutionEventPort = toolExecutionEventPort,
+                    errorHandler = errorHandler,
+                    loggingPort = loggingPort,
+                    activeChatTurnSnapshotPort = activeChatTurnStore,
+                    playbackController = playbackController,
+                    studioRepository = studioRepository,
+                    shareChatUseCase = shareChatUseCase,
+                    chatRepository = mockk(relaxed = true),
+                    exportArtifactDocumentsUseCase = mockk(relaxed = true),
+                    stageImageAttachmentUseCase = stageImageAttachmentUseCase,
+                )
+
+            val collectJob = backgroundScope.launch { harness.viewModel.uiState.collect { } }
+            runCurrent()
+
+            assertFalse(harness.viewModel.uiState.value.isModelOverrideSheetVisible)
+
+            harness.viewModel.onOtherClick()
+            runCurrent()
+
+            assertTrue(harness.viewModel.uiState.value.isModelOverrideSheetVisible)
+            collectJob.cancel()
+        }
+
+    @Test
+    fun `S07 — setDefaultModel is never called when override is selected`() =
+        runTest {
+            val setDefaultModelUseCase = mockk<SetDefaultModelUseCase>(relaxed = true)
+            val customAssignmentUseCases = mockk<SettingsAssignmentUseCases>()
+            val customGetDefaultModelsUseCase = mockk<GetDefaultModelsUseCase>()
+            every { settingsUseCases.assignments } returns customAssignmentUseCases
+            every { customAssignmentUseCases.getDefaultModels } returns customGetDefaultModelsUseCase
+            every { customGetDefaultModelsUseCase() } returns defaultModelsFlow
+            every { customAssignmentUseCases.setDefaultModel } returns setDefaultModelUseCase
+
+            val harness =
+                ChatViewModelTestSupport.createHarness(
+                    settingsUseCases = settingsUseCases,
+                    chatUseCases = chatUseCases,
+                    savedStateHandle = SavedStateHandle(),
+                    cancelInferenceUseCase = cancelInferenceUseCase,
+                    inferenceLockManager = inferenceLockManager,
+                    modelDisplayNamesUseCase = modelDisplayNamesUseCase,
+                    activeModelProvider = activeModelProvider,
+                    toolExecutionEventPort = toolExecutionEventPort,
+                    errorHandler = errorHandler,
+                    loggingPort = loggingPort,
+                    activeChatTurnSnapshotPort = activeChatTurnStore,
+                    playbackController = playbackController,
+                    studioRepository = studioRepository,
+                    shareChatUseCase = shareChatUseCase,
+                    chatRepository = mockk(relaxed = true),
+                    exportArtifactDocumentsUseCase = mockk(relaxed = true),
+                    stageImageAttachmentUseCase = stageImageAttachmentUseCase,
+                )
+
+            val collectJob = backgroundScope.launch { harness.viewModel.uiState.collect { } }
+            runCurrent()
+
+            harness.viewModel.onModelOverrideSelected(
+                localId = null,
+                apiId = ApiModelConfigurationId("api-grok-beta"),
+                ttsId = null,
+                mediaId = null,
+                liveVoiceId = null,
+            )
+            runCurrent()
+
+            coVerify(exactly = 0) {
+                setDefaultModelUseCase(any(), any(), any(), any(), any(), any())
+            }
+            collectJob.cancel()
         }
 }

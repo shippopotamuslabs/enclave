@@ -149,6 +149,20 @@ class InferenceFactoryImpl
                 throw InferenceIOException(message = e.message, cause = e)
             }
 
+        override suspend fun <T> withInferenceServiceForLocalConfig(
+            configId: com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId,
+            block: suspend (LlmInferencePort) -> T,
+        ): T =
+            try {
+                withInferenceServiceForLocalConfigImpl(configId, block)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: InferenceIOException) {
+                throw e
+            } catch (e: java.io.IOException) {
+                throw InferenceIOException(message = e.message, cause = e)
+            }
+
         private suspend fun <T> withInferenceServiceImpl(
             modelType: ModelType,
             block: suspend (LlmInferencePort) -> T,
@@ -182,6 +196,36 @@ class InferenceFactoryImpl
             }
         }
 
+        private suspend fun <T> withInferenceServiceForLocalConfigImpl(
+            configId: com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId,
+            block: suspend (LlmInferencePort) -> T,
+        ): T {
+            // Override presets use the on-device lock since they load local weights.
+            val lockType = InferenceType.ON_DEVICE
+
+            if (!inferenceLockManager.acquireLock(lockType)) {
+                throw InferenceBusyException()
+            }
+
+            loggingPort.info(TAG, "AgentLoop: [agent_core] localOverrideConfigId=$configId")
+
+            val service =
+                try {
+                    withContext(Dispatchers.IO) {
+                        resolveLocalServiceForConfigId(configId)
+                    }
+                } catch (e: Exception) {
+                    inferenceLockManager.releaseLock(lockType)
+                    throw e
+                }
+
+            return try {
+                block(service)
+            } finally {
+                inferenceLockManager.releaseLock(lockType)
+            }
+        }
+
         private fun resolveLockType(
             modelType: ModelType,
             defaultAssignment: DefaultModelAssignment?,
@@ -191,6 +235,113 @@ class InferenceFactoryImpl
                 defaultAssignment?.apiConfigId != null -> InferenceType.BYOK
                 else -> InferenceType.ON_DEVICE
             }
+
+        /**
+         * Resolves a local inference service for an explicit override config id,
+         * bypassing slot assignment. Keys the active-service cache on the override
+         * config id so the override preset's model weights are loaded.
+         */
+        @Suppress("ReturnCount", "CyclomaticComplexMethod", "LongMethod")
+        private suspend fun resolveLocalServiceForConfigId(
+            configId: com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId,
+        ): LlmInferencePort {
+            // Use a synthetic ModelType.MAIN key for the override slot so it never
+            // collides with the FAST/THINKING slot caches and gets its own lifecycle.
+            val overrideSlot = ModelType.MAIN
+
+            val asset =
+                try {
+                    localModelRepository.getAssetByConfigId(configId)
+                } catch (e: Exception) {
+                    loggingPort.error(TAG, "Failed to fetch override asset for config $configId.", e)
+                    null
+                }
+            if (asset == null) {
+                loggingPort.warning(TAG, "No override asset found for config $configId, using NoOpInferenceService")
+                return NoOpInferenceService(overrideSlot)
+            }
+
+            val filename = asset.metadata.localFileName
+            val extension = filename.substringAfterLast('.', "")
+            val requestedIdentity =
+                ServiceIdentity.Local(
+                    modelSha256 = asset.metadata.sha256,
+                    extension = extension,
+                )
+
+            return mutex.withLock {
+                if (activeIdentities[overrideSlot] == requestedIdentity) {
+                    return@withLock activeServices[overrideSlot]!!
+                }
+
+                // Check if ANY other modelType is already using this exact local identity
+                val existingEntry = activeIdentities.entries.find { it.value == requestedIdentity }
+                if (existingEntry != null) {
+                    val existingService = activeServices[existingEntry.key]!!
+                    removeServiceFor(overrideSlot)
+                    activeServices[overrideSlot] = existingService
+                    activeIdentities[overrideSlot] = requestedIdentity
+                    return@withLock existingService
+                }
+
+                // Enforce single local engine constraint to prevent OOM
+                val localIdentitiesToClose =
+                    activeIdentities
+                        .filterValues { it is ServiceIdentity.Local }
+                        .keys
+                        .toList()
+                localIdentitiesToClose.forEach { key ->
+                    removeServiceFor(key)
+                }
+
+                removeServiceFor(overrideSlot)
+
+                val newService =
+                    when (extension) {
+                        "gguf" -> {
+                            wrapWithRustLoop(
+                                service =
+                                    LlamaInferenceServiceImpl(
+                                        sessionManager = llamaChatSessionManagerProvider.get(),
+                                        processThinkingTokens = processThinkingTokens,
+                                        loggingPort = loggingPort,
+                                        localModelRepository = localModelRepository,
+                                        activeModelProvider = activeModelProvider,
+                                        context = context,
+                                        modelType = overrideSlot,
+                                        toolEnvelopeParserPort = toolEnvelopeParserPort,
+                                        toolStreamGatePort = toolStreamGatePort,
+                                        telemetrySupport = telemetrySupport,
+                                    ),
+                                provider = "LLAMA",
+                                modelType = overrideSlot,
+                            )
+                        }
+                        "litertlm" -> {
+                            LiteRtInferenceServiceImpl(
+                                conversationManager = conversationManagerProvider.get(),
+                                processThinkingTokens = processThinkingTokens,
+                                toolExecutionEventPort = toolExecutionEventPort,
+                                modelType = overrideSlot,
+                                telemetrySupport = telemetrySupport,
+                            )
+                        }
+                        else -> {
+                            LiteRtInferenceServiceImpl(
+                                conversationManager = conversationManagerProvider.get(),
+                                processThinkingTokens = processThinkingTokens,
+                                toolExecutionEventPort = toolExecutionEventPort,
+                                modelType = overrideSlot,
+                                telemetrySupport = telemetrySupport,
+                            )
+                        }
+                    }
+
+                activeServices[overrideSlot] = newService
+                activeIdentities[overrideSlot] = requestedIdentity
+                return newService
+            }
+        }
 
         @Suppress("ReturnCount", "CyclomaticComplexMethod", "LongMethod")
         private suspend fun resolveService(
@@ -415,7 +566,44 @@ class InferenceFactoryImpl
             }
         }
 
-        private suspend fun resolveRawServiceForApiConfig(configId: ApiModelConfigurationId): RustCompatibleInferenceService {
+        override suspend fun <T> withApiServiceForConfig(
+            configId: ApiModelConfigurationId,
+            block: suspend (LlmInferencePort) -> T,
+        ): T {
+            val service = withContext(Dispatchers.IO) { resolveWrappedApiServiceForConfig(configId) }
+            return try {
+                block(service)
+            } finally {
+                service.closeSession()
+            }
+        }
+
+        private data class ResolvedApiService(
+            val service: RustCompatibleInferenceService,
+            val providerName: String,
+        )
+
+        private suspend fun resolveRawServiceForApiConfig(configId: ApiModelConfigurationId): RustCompatibleInferenceService =
+            resolveRawApiServiceForConfig(configId).service
+
+        private suspend fun resolveWrappedApiServiceForConfig(configId: ApiModelConfigurationId): LlmInferencePort {
+            // Chat override ("Other") drives the service via sendPrompt, so it needs the
+            // RustLoopInferenceService wrapper (the raw SDK services intentionally throw on
+            // sendPrompt). This mirrors the wrap applied by the slot resolution paths.
+            val resolved = resolveRawApiServiceForConfig(configId)
+            return wrapWithRustLoop(
+                service = resolved.service,
+                provider = resolved.providerName,
+                modelType = ModelType.MAIN,
+            )
+        }
+
+        /**
+         * Shared resolution for both by-config entry points: looks up the config, its
+         * credentials, and the API key, then builds the raw SDK service. Callers decide
+         * whether to wrap it in [wrapWithRustLoop] based on how they drive inference.
+         */
+        private suspend fun resolveRawApiServiceForConfig(configId: ApiModelConfigurationId): ResolvedApiService {
             val apiConfig =
                 apiModelRepository.getConfigurationById(configId)
                     ?: throw IllegalStateException("No model configuration found for id=$configId")
@@ -428,16 +616,17 @@ class InferenceFactoryImpl
 
             val requestHeaders = buildRequestHeaders(apiCreds.provider, apiConfig.customHeaders)
             val resolvedBaseUrl = apiCreds.baseUrl?.takeIf { it.isNotBlank() } ?: apiCreds.provider.defaultBaseUrl()
-            val modelType = ModelType.MAIN
 
-            return buildUncachedApiService(
-                apiConfig = apiConfig,
-                apiCreds = apiCreds,
-                apiKey = apiKey,
-                requestHeaders = requestHeaders,
-                resolvedBaseUrl = resolvedBaseUrl,
-                modelType = modelType,
-            ) as RustCompatibleInferenceService
+            val service =
+                buildUncachedApiService(
+                    apiConfig = apiConfig,
+                    apiCreds = apiCreds,
+                    apiKey = apiKey,
+                    requestHeaders = requestHeaders,
+                    resolvedBaseUrl = resolvedBaseUrl,
+                    modelType = ModelType.MAIN,
+                ) as RustCompatibleInferenceService
+            return ResolvedApiService(service = service, providerName = apiCreds.provider.name)
         }
 
         private fun buildUncachedApiService(

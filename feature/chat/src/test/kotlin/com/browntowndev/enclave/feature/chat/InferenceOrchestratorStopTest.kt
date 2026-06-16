@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.chat.ChatId
+import com.browntowndev.enclave.domain.model.chat.ChatResponseMode
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.MessageState
 import com.browntowndev.enclave.domain.port.repository.SettingsData
@@ -94,7 +95,7 @@ class InferenceOrchestratorStopTest {
                 userMessageId = any(),
                 assistantMessageId = any(),
                 chatId = any(),
-                mode = any(),
+                    responseMode = any(),
                 backgroundInferenceEnabled = any(),
             )
         } returns
@@ -111,7 +112,7 @@ class InferenceOrchestratorStopTest {
                 orchestrator.sendMessage(
                     scope = this,
                     input = "Hello",
-                    selectedMode = ChatModeUi.THINKING,
+                    responseMode = ChatResponseMode.Thinking,
                     selectedImageUris = emptyList(),
                     fileAttachments = emptyList(),
                     initialChatId = null,

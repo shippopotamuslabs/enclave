@@ -9,6 +9,7 @@ class ChatUseCasesImpl
         override val submitPromptUseCase: SubmitPromptUseCase,
         override val mergeDbMessagesWithOptimisticUseCase: MergeDbMessagesWithOptimisticUseCase,
         override val generateChatResponseUseCase: GenerateChatResponseUseCase,
+        override val getChatCapablePresetsUseCase: GetChatCapablePresetsUseCase,
         override val generateChatTitleUseCase: GenerateChatTitleUseCase,
         override val getChatUseCase: GetChatUseCase,
         override val mergeMessagesUseCase: MergeMessagesUseCase,

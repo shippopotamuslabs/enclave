@@ -40,6 +40,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.browntowndev.enclave.core.ui.component.assignment.AssignmentSelectionContent
 import com.browntowndev.enclave.core.ui.component.PersistentTooltip
 import com.browntowndev.enclave.core.ui.component.neo.NeoBackScreenHeader
 import com.browntowndev.enclave.core.ui.component.neo.NeoOutlinedTextField

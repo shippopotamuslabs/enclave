@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
@@ -45,6 +46,7 @@ fun ChatTopBar(
     selectedModeModelName: String? = null,
     modeModelNames: Map<ChatModeUi, String?> = emptyMap(),
     onModeChange: (ChatModeUi) -> Unit = {},
+    onOtherClick: () -> Unit = {},
     onMenuClick: () -> Unit,
     onNewChatClick: () -> Unit,
     onViewChatStatsClick: () -> Unit = {},
@@ -113,7 +115,7 @@ fun ChatTopBar(
                             shape = EnclaveNeoTokens.shape,
                         ),
             ) {
-                ChatModeUi.entries.forEach { mode ->
+                ChatModeUi.entries.filter { it != ChatModeUi.OTHER }.forEach { mode ->
                     DropdownMenuItem(
                         text = {
                             Column {
@@ -145,6 +147,34 @@ fun ChatTopBar(
                         },
                     )
                 }
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = context.getString(R.string.mode_other),
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    },
+                    onClick = {
+                        onOtherClick()
+                        modeExpanded = false
+                    },
+                    leadingIcon = {
+                        Icon(
+                            painter = painterResource(R.drawable.network_intelligence),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    },
+                    trailingIcon = {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    },
+                )
             }
         }
         Box {

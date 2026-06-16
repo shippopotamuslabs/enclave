@@ -968,7 +968,7 @@ class ChatViewModelTest {
                     userMessageId = any(),
                     assistantMessageId = any(),
                     chatId = any(),
-                    mode = any(),
+                    responseMode = any(),
                     backgroundInferenceEnabled = any(),
                 )
             } returns flowOf()
