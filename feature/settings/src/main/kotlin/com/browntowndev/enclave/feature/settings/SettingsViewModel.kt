@@ -14,6 +14,8 @@ import com.browntowndev.enclave.domain.model.settings.AppTheme
 import com.browntowndev.enclave.domain.model.settings.SearchProvider
 import com.browntowndev.enclave.domain.model.settings.SystemPromptOption
 import com.browntowndev.enclave.domain.model.telemetry.UsagePeriod
+import com.browntowndev.enclave.core.data.repository.DownloadWorkRepository
+import com.browntowndev.enclave.core.data.download.DownloadWorkChainObserver
 import com.browntowndev.enclave.domain.port.repository.EmbeddingProgressPort
 import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.enclave.domain.usecase.telemetry.ObserveUsageSpendSummaryUseCase
@@ -24,13 +26,17 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-@Suppress("TooManyFunctions")
+@Suppress("TooManyFunctions", "LargeClass")
 @HiltViewModel
 internal class SettingsViewModel
     @Inject
@@ -48,6 +54,7 @@ internal class SettingsViewModel
         private val observeUsageSpendSummaryUseCase: ObserveUsageSpendSummaryUseCase,
         private val errorHandler: ViewModelErrorHandler,
         private val embeddingProgressPort: EmbeddingProgressPort,
+        private val downloadWorkRepository: DownloadWorkRepository,
     ) : ViewModel() {
         companion object {
             private const val TAG = "SettingsViewModel"
@@ -60,6 +67,7 @@ internal class SettingsViewModel
         private val _apiState = MutableStateFlow(ApiProvidersTransientState())
         private val _searchSkillState = MutableStateFlow(SearchSkillTransientState())
         private val _ttsState = MutableStateFlow(TtsProvidersTransientState())
+        private val _liveVoiceState = MutableStateFlow(LiveVoiceProvidersTransientState())
         private val _mediaState = MutableStateFlow(MediaProvidersTransientState())
         private val _assignmentState = MutableStateFlow(AssignmentDialogTransientState())
         private val _deletionState = MutableStateFlow(DeletionTransientState())
@@ -84,6 +92,25 @@ internal class SettingsViewModel
         private val memoriesUseCases = settingsUseCases.memories
 
         private val localModelAssetsFlow = localModelUseCases.getLocalModelAssets()
+        private val utilityModelsFlow = localModelUseCases.observeActiveUtilityModels()
+        private val downloadTerminalEventsFlow =
+            downloadWorkRepository
+                .observeDownloadProgress()
+                .map { workInfo ->
+                    workInfo != null &&
+                        (
+                            DownloadWorkChainObserver.isTerminalSuccess(workInfo) ||
+                                DownloadWorkChainObserver.isTerminalFailure(workInfo)
+                        )
+                }.distinctUntilChanged()
+
+        @OptIn(ExperimentalCoroutinesApi::class)
+        private val modelPackRowsFlow =
+            combine(localModelAssetsFlow, utilityModelsFlow, downloadTerminalEventsFlow) { _, _, _ ->
+                Unit
+            }.flatMapLatest {
+                flow { emit(localModelUseCases.getModelPacksForSettings()) }
+            }
         private val memoriesFlow =
             memoriesUseCases.getAllMemoriesFlow().map { memories ->
                 memories.map { StoredMemory(it.id, it.content, it.category) }
@@ -102,6 +129,7 @@ internal class SettingsViewModel
                         localAssets = localModelAssetsFlow,
                         apiAssets = settingsUseCases.apiProviders.getApiModelAssets(),
                         ttsAssets = settingsUseCases.tts.getTtsProviders(),
+                        liveVoiceAssets = settingsUseCases.liveVoice.getLiveVoiceProviders(),
                         mediaAssets = settingsUseCases.media.getMediaProviders(),
                         defaultModels = assignmentUseCases.getDefaultModels(),
                         authState = settingsUseCases.auth.getAuthState(),
@@ -111,6 +139,7 @@ internal class SettingsViewModel
                         localModelsState = _localModelsState,
                         apiState = _apiState,
                         ttsState = _ttsState,
+                        liveVoiceState = _liveVoiceState,
                         mediaState = _mediaState,
                         searchSkillState = _searchSkillState,
                         assignmentsState = _assignmentState,
@@ -125,6 +154,7 @@ internal class SettingsViewModel
                         reindexProgress = embeddingProgressPort.progress,
                         vaultReauthSheet = _vaultReauthSheet,
                         usageSpendSummary = usageSpendSummaryFlow,
+                        modelPackRows = modelPackRowsFlow,
                     ),
                 ).stateIn(
                     scope = viewModelScope,
@@ -264,6 +294,12 @@ internal class SettingsViewModel
         fun onReDownloadLocalModel(id: com.browntowndev.enclave.domain.model.config.LocalModelId) =
             localModelsDelegate.onReDownloadLocalModel(viewModelScope, TAG, id)
 
+        fun onDownloadModelPack(packId: String) = localModelsDelegate.onDownloadModelPack(viewModelScope, TAG, packId)
+
+        fun onReDownloadModelPack(packId: String) = localModelsDelegate.onReDownloadModelPack(viewModelScope, TAG, packId)
+
+        fun onDeleteModelPack(packId: String) = localModelsDelegate.onDeleteModelPack(viewModelScope, _deletionState, TAG, packId)
+
         fun onClearSelectedLocalModel() {
             _localModelsState.value = _localModelsState.value.copy(selectedAsset = null, configDraft = null)
         }
@@ -300,9 +336,18 @@ internal class SettingsViewModel
 
         fun onShowTtsProvidersSheet(show: Boolean) = apiProvidersDelegate.onShowTtsProvidersSheet(_ttsState, show)
 
+        fun onShowLiveVoiceProvidersSheet(show: Boolean) =
+            apiProvidersDelegate.onShowLiveVoiceProvidersSheet(_liveVoiceState, show)
+
         fun onFetchTtsModels() = apiProvidersDelegate.onFetchTtsModels(viewModelScope, TAG, _ttsState, _currentApiKey)
 
+        fun onFetchLiveVoiceModels() =
+            apiProvidersDelegate.onFetchLiveVoiceModels(viewModelScope, TAG, _liveVoiceState, _currentApiKey)
+
         fun onStartCreateTtsProviderAsset() = apiProvidersDelegate.onStartCreateTtsProviderAsset(_ttsState)
+
+        fun onStartCreateLiveVoiceProviderAsset() =
+            apiProvidersDelegate.onStartCreateLiveVoiceProviderAsset(_liveVoiceState)
 
         fun onTtsAssetFieldChange(asset: TtsProviderAssetUi) =
             apiProvidersDelegate.onTtsAssetFieldChange(
@@ -326,6 +371,32 @@ internal class SettingsViewModel
 
         fun onSelectTtsProviderAsset(asset: TtsProviderAssetUi?) =
             apiProvidersDelegate.onSelectTtsProviderAsset(viewModelScope, TAG, _ttsState, _currentApiKey, asset)
+
+        fun onLiveVoiceAssetFieldChange(asset: LiveVoiceProviderAssetUi) =
+            apiProvidersDelegate.onLiveVoiceAssetFieldChange(
+                viewModelScope,
+                TAG,
+                _liveVoiceState,
+                _currentApiKey,
+                assignmentsUseCases = assignmentUseCases,
+                asset = asset,
+            )
+
+        fun onSaveLiveVoiceProvider(onSuccess: () -> Unit) =
+            apiProvidersDelegate.onSaveLiveVoiceProvider(
+                viewModelScope,
+                TAG,
+                _liveVoiceState,
+                _currentApiKey,
+                assignmentsUseCases = assignmentUseCases,
+                onSuccess = onSuccess,
+            )
+
+        fun onSelectLiveVoiceProviderAsset(asset: LiveVoiceProviderAssetUi?) =
+            apiProvidersDelegate.onSelectLiveVoiceProviderAsset(viewModelScope, TAG, _liveVoiceState, _currentApiKey, asset)
+
+        fun onDeleteLiveVoiceProviderAsset(id: com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId) =
+            apiProvidersDelegate.onDeleteLiveVoiceProviderAsset(viewModelScope, TAG, id, assignmentUseCases)
 
         fun onShowMediaProvidersSheet(show: Boolean) = apiProvidersDelegate.onShowMediaProvidersSheet(_mediaState, show)
 
@@ -390,6 +461,26 @@ internal class SettingsViewModel
                 )
         }
 
+        fun onSelectReusableLiveVoiceApiCredential(credentialAlias: String?) {
+            val provider =
+                _liveVoiceState.value.assetDraft?.provider
+                    ?: _liveVoiceState.value.selectedAsset?.provider
+                    ?: return
+            val reusableCredential = findReusableCredential(provider, credentialAlias)
+            _currentApiKey.value = ""
+            _liveVoiceState.value =
+                _liveVoiceState.value.copy(
+                    selectedReusableApiCredentialAlias = reusableCredential?.credentialAlias,
+                    selectedReusableApiCredentialName = reusableCredential?.displayName,
+                    discoveredApiModels = emptyList(),
+                    discoveredApiModelScope = null,
+                    isDiscoveringApiModels = false,
+                    modelSearchQuery = "",
+                    modelProviderFilters = emptySet(),
+                    modelSortOption = ModelSortOption.A_TO_Z,
+                )
+        }
+
         fun onSelectReusableTtsApiCredential(credentialAlias: String?) {
             val provider =
                 _ttsState.value.assetDraft?.provider
@@ -444,6 +535,7 @@ internal class SettingsViewModel
             excludeApiCredentialsId: com.browntowndev.enclave.domain.model.config.ApiCredentialsId? = null,
             excludeMediaProviderId: com.browntowndev.enclave.domain.model.config.MediaProviderId? = null,
             excludeTtsProviderId: com.browntowndev.enclave.domain.model.config.TtsProviderId? = null,
+            excludeLiveVoiceProviderId: com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId? = null,
         ): ReusableApiCredentialUi? {
             if (credentialAlias.isNullOrBlank()) return null
             val state = uiState.value
@@ -452,9 +544,11 @@ internal class SettingsViewModel
                 apiAssets = state.apiProvidersSheet.assets,
                 mediaAssets = state.mediaProvidersSheet.assets,
                 ttsAssets = state.ttsProvidersSheet.assets,
+                liveVoiceAssets = state.liveVoiceProvidersSheet.assets,
                 excludeApiCredentialsId = excludeApiCredentialsId,
                 excludeMediaProviderId = excludeMediaProviderId,
                 excludeTtsProviderId = excludeTtsProviderId,
+                excludeLiveVoiceProviderId = excludeLiveVoiceProviderId,
             ).find { it.credentialAlias == credentialAlias }
         }
 
@@ -464,6 +558,10 @@ internal class SettingsViewModel
 
         fun onUpdateTtsModelSearchQuery(query: String) {
             _ttsState.value = _ttsState.value.copy(modelSearchQuery = query)
+        }
+
+        fun onUpdateLiveVoiceModelSearchQuery(query: String) {
+            _liveVoiceState.value = _liveVoiceState.value.copy(modelSearchQuery = query)
         }
 
         fun onUpdateMediaModelSearchQuery(query: String) {
@@ -486,6 +584,14 @@ internal class SettingsViewModel
                 )
         }
 
+        fun onToggleLiveVoiceModelProviderFilter(provider: String) {
+            val filters = _liveVoiceState.value.modelProviderFilters
+            _liveVoiceState.value =
+                _liveVoiceState.value.copy(
+                    modelProviderFilters = if (filters.contains(provider)) filters - provider else filters + provider,
+                )
+        }
+
         fun onToggleMediaModelProviderFilter(provider: String) {
             val filters = _mediaState.value.modelProviderFilters
             _mediaState.value =
@@ -502,6 +608,10 @@ internal class SettingsViewModel
             _ttsState.value = _ttsState.value.copy(modelProviderFilters = emptySet())
         }
 
+        fun onClearLiveVoiceModelProviderFilters() {
+            _liveVoiceState.value = _liveVoiceState.value.copy(modelProviderFilters = emptySet())
+        }
+
         fun onClearMediaModelProviderFilters() {
             _mediaState.value = _mediaState.value.copy(modelProviderFilters = emptySet())
         }
@@ -512,6 +622,10 @@ internal class SettingsViewModel
 
         fun onUpdateTtsModelSortOption(option: ModelSortOption) {
             _ttsState.value = _ttsState.value.copy(modelSortOption = option)
+        }
+
+        fun onUpdateLiveVoiceModelSortOption(option: ModelSortOption) {
+            _liveVoiceState.value = _liveVoiceState.value.copy(modelSortOption = option)
         }
 
         fun onUpdateMediaModelSortOption(option: ModelSortOption) {
@@ -632,6 +746,7 @@ internal class SettingsViewModel
             apiConfigId: ApiModelConfigurationId?,
             ttsProviderId: TtsProviderId? = null,
             mediaProviderId: MediaProviderId? = null,
+            liveVoiceProviderId: com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId? = null,
         ) = assignmentsDelegate.onSetDefaultModel(
             viewModelScope,
             TAG,
@@ -641,6 +756,7 @@ internal class SettingsViewModel
             apiConfigId,
             ttsProviderId,
             mediaProviderId,
+            liveVoiceProviderId,
         )
 
         fun onShowAssignmentDialog(
@@ -652,12 +768,14 @@ internal class SettingsViewModel
         fun onConfirmDeletionWithReassignment(
             replacementLocalConfigId: LocalModelConfigurationId?,
             replacementApiConfigId: ApiModelConfigurationId?,
+            replacementMediaProviderId: MediaProviderId? = null,
         ) = deletionHelper.onConfirmDeletionWithReassignment(
             viewModelScope,
             TAG,
             _deletionState,
             replacementLocalConfigId,
             replacementApiConfigId,
+            replacementMediaProviderId,
         )
 
         fun onDismissDeletionSafety() = deletionHelper.onDismissDeletionSafety(_deletionState)
@@ -678,6 +796,11 @@ internal class SettingsViewModel
         fun onBackToTtsList() {
             _currentApiKey.value = ""
             _ttsState.value = TtsProvidersTransientState()
+        }
+
+        fun onBackToLiveVoiceList() {
+            _currentApiKey.value = ""
+            _liveVoiceState.value = LiveVoiceProvidersTransientState()
         }
     }
 

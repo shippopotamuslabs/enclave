@@ -17,6 +17,8 @@ enum class DownloadKey(
     SPEED_MBPS("speed_mbps"),
     ETA_SECONDS("eta_seconds"),
     FILES_PROGRESS("files_progress"),
+    POST_PROCESS_BYTES("post_process_bytes"),
+    POST_PROCESS_TOTAL("post_process_total"),
     ;
 
     companion object {

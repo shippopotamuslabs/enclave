@@ -73,6 +73,7 @@ class ChatRepositoryImplTest {
                 transactionProvider,
                 cleanupDao,
                 messageInferenceTelemetryDao = mockk(relaxed = true),
+                messageFileDao = mockk(relaxed = true),
                 healer,
                 readRepairApplier,
             )

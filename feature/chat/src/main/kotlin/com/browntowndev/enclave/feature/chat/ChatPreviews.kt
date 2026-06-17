@@ -15,7 +15,13 @@ import com.browntowndev.enclave.feature.chat.components.InputBar
 @Composable
 fun PreviewChatTopBarDark() {
     EnclaveTheme(darkTheme = true) {
-        ChatTopBar(onMenuClick = {}, onNewChatClick = {})
+        ChatTopBar(
+            selectedMode = ChatModeUi.FAST,
+            selectedModeModelName = "GPT-4o",
+            onModeChange = {},
+            onMenuClick = {},
+            onNewChatClick = {},
+        )
     }
 }
 
@@ -58,12 +64,11 @@ fun PreviewChatInputBarDark() {
                 isPhotoAttachmentEnabled = true,
                 photoAttachmentMaxItems = 1,
                 photoAttachmentDisabledReason = null,
-                selectedMode = ChatModeUi.FAST,
                 isGenerating = false,
                 canStop = true,
                 isGlobalInferenceBlocked = false,
+                isLiveVoiceEnabled = true,
                 onInputChange = {},
-                onModeChange = {},
                 onSend = {},
                 onStopGenerating = {},
                 onImageAttach = {},
@@ -71,6 +76,7 @@ fun PreviewChatInputBarDark() {
                 onClearImage = {},
                 onClearFile = {},
                 onMicClick = {},
+                onLiveVoiceClick = {},
             )
         }
     }

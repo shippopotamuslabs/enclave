@@ -16,6 +16,7 @@ import com.browntowndev.enclave.domain.model.download.ModelScanResult
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.download.ModelDownloadOrchestratorPort
+import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
@@ -36,6 +37,7 @@ import org.junit.jupiter.api.extension.ExtendWith
 @OptIn(ExperimentalCoroutinesApi::class)
 class DownloadViewModelActionsTest {
     private val orchestrator = mockk<ModelDownloadOrchestratorPort>(relaxed = true)
+    private val refreshDownloadPlan = mockk<DownloadPlanRefresher>(relaxed = true)
     private val workRepo = mockk<DownloadWorkRepository>(relaxed = true)
     private val parser = mockk<WorkProgressParser>(relaxed = true)
     private val errorHandler = mockk<ViewModelErrorHandler>(relaxed = true)
@@ -81,6 +83,7 @@ class DownloadViewModelActionsTest {
         modelsResult: DownloadModelsResult = testModelsResult,
         initialErrorMessage: String? = null,
         autoStartDownloads: Boolean = false,
+        refreshPlan: DownloadPlanRefresher? = refreshDownloadPlan,
     ): DownloadViewModel =
         DownloadViewModel(
             modelDownloadOrchestrator = orchestrator,
@@ -90,6 +93,7 @@ class DownloadViewModelActionsTest {
             modelsResult = modelsResult,
             initialErrorMessage = initialErrorMessage,
             autoStartDownloads = autoStartDownloads,
+            refreshDownloadPlan = refreshPlan,
         )
 
     @Test
@@ -156,7 +160,7 @@ class DownloadViewModelActionsTest {
         }
 
     @Test
-    fun `retryFailed calls orchestrator and resets downloadsStarted`() =
+    fun `retryFailed refreshes catalog then calls orchestrator and resets downloadsStarted`() =
         runTest {
             val viewModel = createViewModel(autoStartDownloads = false)
             advanceUntilIdle()
@@ -164,6 +168,8 @@ class DownloadViewModelActionsTest {
             viewModel.retryFailed()
             advanceUntilIdle()
 
+            coVerify { refreshDownloadPlan.refresh() }
+            verify { orchestrator.pauseDownloads() }
             coVerify { orchestrator.retryFailed() }
         }
 

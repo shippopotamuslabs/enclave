@@ -1,6 +1,7 @@
 package com.browntowndev.enclave.core.data.remote.firestore.handlers
 
 import com.browntowndev.enclave.core.data.local.MessageInferenceTelemetryEntity
+import com.browntowndev.enclave.core.data.mapper.telemetry.coalesceTokenFieldsWith
 import com.browntowndev.enclave.core.data.remote.EntitySyncAdapter
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncContext
 import com.browntowndev.enclave.core.data.remote.messageInferenceTelemetryFromFirestore
@@ -37,7 +38,7 @@ internal class MessageInferenceTelemetrySyncHandler(
         if (existing == null || entity.updatedAt > existing.updatedAt) {
             ctx.daos.messageInferenceTelemetryDao.upsert(entity.copy(pendingSync = 0))
         } else if (entity.updatedAt == existing.updatedAt) {
-            val merged = entity.copy(pendingSync = 0)
+            val merged = entity.coalesceTokenFieldsWith(existing)
             if (merged != existing.copy(pendingSync = 0)) {
                 ctx.daos.messageInferenceTelemetryDao.upsert(merged)
             }

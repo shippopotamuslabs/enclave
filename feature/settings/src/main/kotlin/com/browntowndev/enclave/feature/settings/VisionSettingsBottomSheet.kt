@@ -13,6 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import com.browntowndev.enclave.core.ui.component.assignment.AssignmentSelectionContent
 import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
 import com.browntowndev.enclave.core.ui.component.neo.NeoNavRow
 import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
@@ -32,6 +33,7 @@ fun VisionSettingsBottomSheet(
         ApiModelConfigurationId?,
         TtsProviderId?,
         com.browntowndev.enclave.domain.model.config.MediaProviderId?,
+        com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId?,
     ) -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -52,11 +54,12 @@ fun VisionSettingsBottomSheet(
                     localAssets = emptyList(),
                     apiAssets = uiState.apiProvidersSheet.assets.filter { asset -> asset.configurations.any { it.isMultimodal } },
                     ttsAssets = emptyList(),
+                    liveVoiceAssets = emptyList(),
                     mediaAssets = emptyList(),
                     onDismiss = onDismiss,
                     onBack = { isDrilledDown = false },
-                    onSelect = { localId, apiId, ttsId, mediaId ->
-                        onSetDefaultModel(ModelType.VISION, localId, apiId, ttsId, mediaId)
+                    onSelect = { localId, apiId, ttsId, mediaId, liveVoiceId ->
+                        onSetDefaultModel(ModelType.VISION, localId, apiId, ttsId, mediaId, liveVoiceId)
                         isDrilledDown = false
                     },
                 )

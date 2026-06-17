@@ -5,6 +5,7 @@ import com.browntowndev.enclave.domain.model.media.GenerationSettings
 import com.browntowndev.enclave.domain.model.media.ProviderCapabilities
 import com.browntowndev.enclave.domain.port.media.SpeechState
 import com.browntowndev.enclave.feature.studio.GalleryAlbumUi
+import com.browntowndev.enclave.feature.studio.StudioCapablePresetsUi
 import com.browntowndev.enclave.feature.studio.StudioMediaUi
 import com.browntowndev.enclave.feature.studio.VideoGenerationState
 
@@ -36,6 +37,9 @@ internal data class GenerationInputs(
     val lastSubmittedPrompt: String?,
     val isContinualGenerationActive: Boolean,
     val error: String?,
+    val generationProgressLabel: String?,
+    val activeGenerationExpectedCount: Int,
+    val activeGenerationBaselineMediaCount: Int,
     val videoGenerationState: VideoGenerationState,
 )
 
@@ -50,6 +54,7 @@ internal data class SelectionInputs(
 internal data class CapabilitiesPlaybackInputs(
     val capabilities: ProviderCapabilities?,
     val isCapabilitiesLoading: Boolean,
+    val activeModelDisplayName: String? = null,
 )
 
 internal data class PlaybackInputs(
@@ -59,4 +64,12 @@ internal data class PlaybackInputs(
     val isPlayingTts: Boolean,
     val hasImageEditModel: Boolean,
     val hasImageToVideoModel: Boolean,
+    val activeModelDisplayName: String? = null,
+)
+
+internal data class OverrideInputs(
+    val modelPickerAssets: StudioCapablePresetsUi = StudioCapablePresetsUi(),
+    val isModelPickerVisible: Boolean = false,
+    val selectedModelIdInPicker: String? = null,
+    val resolvedModelTypeLabel: String? = null,
 )

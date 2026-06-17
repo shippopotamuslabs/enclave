@@ -4,6 +4,7 @@ import com.browntowndev.enclave.domain.model.telemetry.ChatTelemetrySummary
 import com.browntowndev.enclave.domain.model.telemetry.MessageTelemetrySummary
 import com.browntowndev.enclave.domain.model.telemetry.TelemetryCostSource
 import com.browntowndev.enclave.domain.model.telemetry.TelemetryCostStatus
+import com.browntowndev.enclave.domain.model.telemetry.TelemetrySummaryBuilder
 import com.browntowndev.enclave.domain.model.telemetry.TurnTelemetry
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -44,8 +45,11 @@ class ChatTelemetryUiMapper
                         summaryMetric("Total cost", formatCost(summary.totalCostUsd, hasAnyCost = summary.totalCostUsd > BigDecimal.ZERO)),
                         summaryMetric("Average TTFT", formatTtft(summary.averageTtftMs)),
                         summaryMetric("Average output speed", formatSpeed(summary.averageOutputTokensPerSecond)),
+                        summaryMetric("Input tokens", formatInt(summary.totalInputTokensNormalized)),
                         summaryMetric("Output tokens", summary.totalOutputTokens.toString()),
                         summaryMetric("Reasoning tokens", summary.totalReasoningTokens.toString()),
+                        summaryMetric("Cache read tokens", formatInt(summary.totalCacheReadInputTokens)),
+                        summaryMetric("Cache write tokens", formatInt(summary.totalCacheWriteInputTokens)),
                         summaryMetric("Cache hit rate", formatPercent(summary.cacheHitRatePercent)),
                     ),
                 providerBreakdownRows =
@@ -87,10 +91,20 @@ class ChatTelemetryUiMapper
                     responseMetric("Output speed", formatSpeed(summary.averageOutputTokensPerSecond ?: single?.outputTokensPerSecond())),
                     responseMetric("Output tokens", formatInt(summary.totalOutputTokens ?: single?.outputTokens)),
                     responseMetric("Reasoning tokens", formatInt(summary.totalReasoningTokens ?: single?.reasoningTokens)),
-                    responseMetric("Input tokens", formatInt(summary.totalInputTokens ?: single?.inputTokens)),
+                    responseMetric(
+                        "Input tokens",
+                        formatInt(
+                            summary.totalInputTokensNormalized
+                                ?: single?.let { TelemetrySummaryBuilder.normalizedInputTokens(it) },
+                        ),
+                    ),
                     responseMetric(
                         "Cache read input tokens",
                         formatInt(summary.totalCacheReadInputTokens ?: single?.cacheReadInputTokens),
+                    ),
+                    responseMetric(
+                        "Cache write input tokens",
+                        formatInt(summary.totalCacheWriteInputTokens ?: single?.cacheCreationInputTokens),
                     ),
                     responseMetric("Cache hit rate", formatPercent(summary.cacheHitRatePercent)),
                     responseMetric("Cost", formatCost(summary.totalCostUsd, summary.costStatus)),

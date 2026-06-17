@@ -57,7 +57,12 @@ class DownloadProgressTracker(
         const val TRACE_LOG_INTERVAL_MS = 5000L
     }
 
+    @Volatile
     private var fileStates = ConcurrentHashMap<String, FileDownloadState>()
+
+    @Volatile
+    private var activeSessionId: String? = null
+
     private var lastProgressUpdateTime = 0L
     private var lastTraceLogTime = 0L
 
@@ -66,18 +71,31 @@ class DownloadProgressTracker(
      * Deduplicates by SHA256 hash internally. Model types are left empty
      * since the download worker does not have model type information.
      */
-    fun initialize(specs: List<DownloadFileSpec>) {
+    fun initialize(
+        sessionId: String,
+        specs: List<DownloadFileSpec>,
+        preserveFailedStates: Boolean = false,
+    ) {
+        activeSessionId = sessionId
+        val preservedFailures =
+            if (preserveFailedStates) {
+                fileStates.filterValues { it.status == FileStatus.FAILED }
+            } else {
+                emptyMap()
+            }
+
         val initialStates =
             specs
                 .distinctBy { it.sha256 }
                 .map { spec ->
+                    val preserved = preservedFailures[spec.sha256]
                     spec.sha256 to
                         FileDownloadState(
                             spec = spec,
-                            status = FileStatus.QUEUED,
-                            bytesDownloaded = 0L,
+                            status = preserved?.status ?: FileStatus.QUEUED,
+                            bytesDownloaded = preserved?.bytesDownloaded ?: 0L,
                             totalBytes = spec.totalArtifactSizeInBytes(),
-                            error = null,
+                            error = preserved?.error,
                             allModelTypesForFile = emptyList(),
                         )
                 }.toMap()
@@ -92,9 +110,13 @@ class DownloadProgressTracker(
      * @throws IllegalStateException if the file is not found in the tracker (must call initialize() first)
      */
     fun updateFileState(
+        sessionId: String,
         sha256: String,
         update: (FileDownloadState) -> FileDownloadState,
     ) {
+        if (sessionId != activeSessionId) {
+            return
+        }
         val currentState =
             fileStates[sha256]
                 ?: throw IllegalStateException(
@@ -241,8 +263,14 @@ class DownloadProgressTracker(
                         } else {
                             0.0
                         }
-                    // Use SHA256 as the identifier for re-mapping roles in the UI layer
-                    "$trackingFilename|${state.bytesDownloaded}|${state.totalBytes}|${state.status}|$fileSpeed|${state.spec.sha256}"
+                    listOf(
+                        escapeProgressField(trackingFilename),
+                        state.bytesDownloaded.toString(),
+                        state.totalBytes.toString(),
+                        state.status.name,
+                        fileSpeed.toString(),
+                        state.spec.sha256,
+                    ).joinToString("|")
                 }.toTypedArray()
 
         return workDataOf(
@@ -324,4 +352,6 @@ class DownloadProgressTracker(
             .find { it.status == FileStatus.DOWNLOADING }
             ?.spec
             ?.remoteFileName
+
+    internal fun escapeProgressField(value: String): String = value.replace("|", "%7C")
 }

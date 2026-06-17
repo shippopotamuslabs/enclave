@@ -3,11 +3,15 @@ package com.browntowndev.enclave.core.data.media
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.media.StreamingAudioConfig
 import io.mockk.mockk
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.extension.ExtendWith
@@ -37,11 +41,11 @@ class AndroidStreamingAudioPlayerTest {
         }
 
     @Test
-    fun `enqueueChunk throws when player not initialized`(): Unit =
+    @DisplayName("SAP-STOP-004: enqueueChunk before initialize is a no-op")
+    fun sapStop004_enqueueBeforeInitializeIsNoOp(): Unit =
         runBlocking {
-            assertThrows<IllegalStateException> {
-                player.enqueueChunk(byteArrayOf(1, 2, 3))
-            }
+            player.enqueueChunk(byteArrayOf(1, 2, 3))
+            assertFalse(player.isInitialized())
         }
 
     @Test
@@ -181,7 +185,8 @@ class AndroidStreamingAudioPlayerTest {
         }
 
     @Test
-    fun `enqueueChunk after stop without re-initialize throws`(): Unit =
+    @DisplayName("SAP-STOP-005: enqueueChunk after stop without re-initialize is a no-op")
+    fun sapStop005_enqueueAfterStopIsNoOp(): Unit =
         runBlocking {
             val config = StreamingAudioConfig.PCM_16_24KHZ_MONO
             player.initialize(config)
@@ -189,14 +194,8 @@ class AndroidStreamingAudioPlayerTest {
             player.enqueueChunk(byteArrayOf(0, 1, 0, 1))
             player.stop()
 
-            // Should throw because player is no longer initialized
-            var threw = false
-            try {
-                player.enqueueChunk(byteArrayOf(0, 1, 0, 1))
-            } catch (e: IllegalStateException) {
-                threw = true
-            }
-            assertTrue(threw, "Expected IllegalStateException after stop without re-initialize")
+            player.enqueueChunk(byteArrayOf(0, 1, 0, 1))
+            assertFalse(player.isInitialized())
         }
 
     @Test
@@ -222,6 +221,64 @@ class AndroidStreamingAudioPlayerTest {
             // Large chunk (48KB = 1 second of 24kHz 16-bit mono PCM)
             val largeChunk = ByteArray(48000) { (it % 256).toByte() }
             player.enqueueChunk(largeChunk)
+        }
+
+    @Test
+    @DisplayName("SAP-STOP-001: stop during large enqueueChunk write does not throw")
+    fun sapStop001_stopDuringLargeEnqueueDoesNotThrow(): Unit =
+        runBlocking {
+            val config = StreamingAudioConfig.PCM_16_24KHZ_MONO
+            player.initialize(config)
+            player.startPlayback()
+
+            val enqueueJob =
+                launch(Dispatchers.IO) {
+                    player.enqueueChunk(ByteArray(48_000) { (it % 256).toByte() })
+                }
+            delay(1)
+            player.stop()
+            enqueueJob.join()
+            assertFalse(player.isInitialized())
+        }
+
+    @Test
+    @DisplayName("SAP-STOP-002: stop during concurrent enqueueChunk jobs does not throw")
+    fun sapStop002_stopDuringConcurrentEnqueuesDoesNotThrow(): Unit =
+        runBlocking {
+            val config = StreamingAudioConfig.PCM_16_24KHZ_MONO
+            player.initialize(config)
+            player.startPlayback()
+
+            val jobs =
+                List(4) {
+                    launch(Dispatchers.IO) {
+                        player.enqueueChunk(ByteArray(24_000) { (it % 256).toByte() })
+                    }
+                }
+            delay(1)
+            player.stop()
+            jobs.forEach { it.join() }
+            assertFalse(player.isInitialized())
+        }
+
+    @Test
+    @DisplayName("SAP-STOP-003: stop while streaming small chunks does not throw")
+    fun sapStop003_stopMidStreamSmallChunksDoesNotThrow(): Unit =
+        runBlocking {
+            val config = StreamingAudioConfig.PCM_16_24KHZ_MONO
+            player.initialize(config)
+            player.startPlayback()
+
+            val streamJob =
+                launch(Dispatchers.IO) {
+                    repeat(20) { index ->
+                        player.enqueueChunk(byteArrayOf(index.toByte(), (index + 1).toByte()))
+                    }
+                }
+            delay(1)
+            player.stop()
+            streamJob.join()
+            assertFalse(player.isInitialized())
         }
 
     @Test

@@ -22,6 +22,13 @@ internal fun resolveTtsCredentialAlias(
     state.selectedReusableApiCredentialAlias?.takeIf { it.isNotBlank() }
         ?: asset.credentialAlias.takeIf { it.isNotBlank() }
 
+internal fun resolveLiveVoiceCredentialAlias(
+    state: LiveVoiceProvidersTransientState,
+    asset: LiveVoiceProviderAssetUi,
+): String? =
+    state.selectedReusableApiCredentialAlias?.takeIf { it.isNotBlank() }
+        ?: asset.credentialAlias.takeIf { it.isNotBlank() }
+
 internal fun resolveMediaCredentialAlias(
     state: MediaProvidersTransientState,
     asset: MediaProviderAssetUi,
@@ -73,6 +80,16 @@ internal fun List<DiscoveredApiModel>.mergeSelectedModel(preset: ApiModelConfigU
         preset == null || preset.modelId.isBlank() -> this
         any { it.id == preset.modelId } -> this
         else -> listOf(DiscoveredApiModel(id = preset.modelId)) + this
+    }
+
+internal fun List<DiscoveredApiModel>.filterLiveVoiceModels(provider: ApiProvider): List<DiscoveredApiModel> =
+    filter { model ->
+        when (provider) {
+            ApiProvider.OPENAI -> model.id.contains("realtime", ignoreCase = true)
+            ApiProvider.XAI -> model.id.contains("voice", ignoreCase = true) || model.isAudioGenerationCapable
+            ApiProvider.GOOGLE -> model.id.contains("live", ignoreCase = true) || model.isAudioGenerationCapable
+            else -> false
+        }
     }
 
 internal fun List<DiscoveredApiModel>.filterTtsModels(provider: ApiProvider): List<DiscoveredApiModel> =

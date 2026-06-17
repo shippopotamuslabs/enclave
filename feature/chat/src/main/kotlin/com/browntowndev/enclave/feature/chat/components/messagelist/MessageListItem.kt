@@ -74,6 +74,7 @@ internal fun MessageListItem(
             MessageListItemIndicators(
                 modelDisplayName = message.modelDisplayName,
                 indicatorState = message.indicatorState,
+                transcriptSegments = message.transcriptSegments,
                 activeToolCallBanner = activeToolCallBanner,
                 chatMode = chatMode,
                 suppressDuplicateThoughtForHeader = false,
@@ -89,7 +90,6 @@ internal fun MessageListItem(
             MessageBubble(
                 message = message,
                 onEditClick = callbacks.onEditMessage,
-                onReportClick = callbacks.onReportMessage,
             )
         } else {
             AssistantResponse(
@@ -106,6 +106,7 @@ internal fun MessageListItem(
                             MessageListItemIndicators(
                                 modelDisplayName = message.modelDisplayName,
                                 indicatorState = message.indicatorState,
+                                transcriptSegments = message.transcriptSegments,
                                 activeToolCallBanner = activeToolCallBanner,
                                 chatMode = chatMode,
                                 suppressDuplicateThoughtForHeader = true,
@@ -125,6 +126,7 @@ internal fun MessageListItem(
                 onNavigateToStudio = callbacks.onNavigateToStudio,
                 onShareClick = callbacks.onShareClick,
                 onStatsClick = callbacks.onStatsClick,
+                onReportClick = callbacks.onReportResponse,
             )
         }
     }
@@ -134,6 +136,7 @@ internal fun MessageListItem(
 private fun MessageListItemIndicators(
     modelDisplayName: String,
     indicatorState: IndicatorState?,
+    transcriptSegments: List<TranscriptSegmentUi>,
     activeToolCallBanner: ToolCallBannerUi?,
     chatMode: ChatModeUi,
     suppressDuplicateThoughtForHeader: Boolean,
@@ -185,7 +188,7 @@ private fun MessageListItemIndicators(
     if (isThinkingSheetVisible && (indicatorState != null)) {
         ThinkingDetailsBottomSheet(
             isVisible = true,
-            thinkingRaw = indicatorThinkingRawForSheet(indicatorState),
+            thinkingRaw = liveThinkingTextForSheet(transcriptSegments, indicatorState),
             thinkingDurationSeconds = indicatorThinkingDurationForSheet(indicatorState),
             elapsedSeconds = elapsedSeconds,
             isStreaming = isIndicatorStreaming(indicatorState),

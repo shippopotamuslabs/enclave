@@ -3,6 +3,7 @@ package com.browntowndev.enclave.core.data.local
 import androidx.room.ColumnInfo
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
@@ -49,4 +50,12 @@ data class DefaultModelAssignmentView(
     val mediaModelName: String?,
     @ColumnInfo(name = "mediaCapability")
     val mediaCapability: MediaCapability?,
+    @ColumnInfo(name = "liveVoiceProviderId")
+    val liveVoiceProviderId: LiveVoiceProviderId? = null,
+    @ColumnInfo(name = "liveVoiceAssetName")
+    val liveVoiceAssetName: String? = null,
+    @ColumnInfo(name = "liveVoiceProviderName")
+    val liveVoiceProviderName: ApiProvider? = null,
+    @ColumnInfo(name = "liveVoiceVoiceName")
+    val liveVoiceVoiceName: String? = null,
 )

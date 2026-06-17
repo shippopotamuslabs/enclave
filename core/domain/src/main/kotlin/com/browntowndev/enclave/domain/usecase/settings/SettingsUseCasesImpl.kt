@@ -32,8 +32,13 @@ import com.browntowndev.enclave.domain.usecase.byok.SetDefaultModelUseCase
 import com.browntowndev.enclave.domain.usecase.media.DeleteMediaProviderUseCase
 import com.browntowndev.enclave.domain.usecase.media.GetMediaProvidersUseCase
 import com.browntowndev.enclave.domain.usecase.media.SaveMediaProviderUseCase
+import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderAsset
+import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId
+import com.browntowndev.enclave.domain.port.repository.LiveVoiceProviderRepositoryPort
 import com.browntowndev.enclave.domain.usecase.modelconfig.GetLocalModelAssetsUseCase
 import com.browntowndev.enclave.domain.usecase.modelconfig.ReDownloadModelUseCase
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 import javax.inject.Inject
 
 class SettingsPreferencesUseCasesImpl
@@ -67,6 +72,10 @@ class SettingsLocalModelUseCasesImpl
         override val getRestorableLocalModels: GetRestorableLocalModelsUseCase,
         override val saveLocalModelPreset: SaveLocalModelPresetUseCase,
         override val reDownloadModel: ReDownloadModelUseCase,
+        override val getModelPacksForSettings: com.browntowndev.enclave.domain.usecase.modelconfig.GetModelPacksForSettingsUseCase,
+        override val observeActiveUtilityModels: com.browntowndev.enclave.domain.usecase.modelconfig.ObserveActiveUtilityModelsUseCase,
+        override val reDownloadModelPack: com.browntowndev.enclave.domain.usecase.modelconfig.ReDownloadModelPackUseCase,
+        override val deleteModelPack: com.browntowndev.enclave.domain.usecase.modelconfig.DeleteModelPackUseCase,
     ) : SettingsLocalModelUseCases
 
 class SettingsApiProviderUseCasesImpl
@@ -103,6 +112,14 @@ class SettingsTtsUseCasesImpl
         override val saveTtsProvider: SaveTtsProviderUseCase,
         override val deleteTtsProvider: DeleteTtsProviderUseCase,
     ) : SettingsTtsUseCases
+
+class SettingsLiveVoiceUseCasesImpl
+    @Inject
+    constructor(
+        override val getLiveVoiceProviders: GetLiveVoiceProvidersUseCase,
+        override val saveLiveVoiceProvider: SaveLiveVoiceProviderUseCase,
+        override val deleteLiveVoiceProvider: DeleteLiveVoiceProviderUseCase,
+    ) : SettingsLiveVoiceUseCases
 
 class SettingsMediaUseCasesImpl
     @Inject
@@ -151,6 +168,28 @@ class SettingsMemoriesUseCasesImpl
         override suspend fun deleteMemory(id: String) = memoriesRepository.deleteMemory(id)
     }
 
+object EmptySettingsLiveVoiceUseCases : SettingsLiveVoiceUseCases {
+    private val repository =
+        object : LiveVoiceProviderRepositoryPort {
+            override fun getLiveVoiceProviders(): Flow<List<LiveVoiceProviderAsset>> = flowOf(emptyList())
+
+            override suspend fun getLiveVoiceProvidersSync(): List<LiveVoiceProviderAsset> = emptyList()
+
+            override suspend fun getLiveVoiceProvider(id: LiveVoiceProviderId): LiveVoiceProviderAsset? = null
+
+            override suspend fun saveLiveVoiceProvider(
+                asset: LiveVoiceProviderAsset,
+                apiKey: String?,
+            ): LiveVoiceProviderId = asset.id
+
+            override suspend fun deleteLiveVoiceProvider(id: LiveVoiceProviderId) = Unit
+        }
+
+    override val getLiveVoiceProviders = GetLiveVoiceProvidersUseCase(repository)
+    override val saveLiveVoiceProvider = SaveLiveVoiceProviderUseCase(repository)
+    override val deleteLiveVoiceProvider = DeleteLiveVoiceProviderUseCase(repository)
+}
+
 class SettingsUseCasesImpl
     @Inject
     constructor(
@@ -160,8 +199,34 @@ class SettingsUseCasesImpl
         override val assignments: SettingsAssignmentUseCases,
         override val deletion: SettingsDeletionUseCases,
         override val tts: SettingsTtsUseCases,
+        override val liveVoice: SettingsLiveVoiceUseCases,
         override val media: SettingsMediaUseCases,
         override val auth: SettingsAuthUseCases,
         override val memories: SettingsMemoriesUseCases,
         override val dataControls: SettingsDataControlsUseCases,
-    ) : SettingsUseCases
+    ) : SettingsUseCases {
+        constructor(
+            preferences: SettingsPreferencesUseCases,
+            localModels: SettingsLocalModelUseCases,
+            apiProviders: SettingsApiProviderUseCases,
+            assignments: SettingsAssignmentUseCases,
+            deletion: SettingsDeletionUseCases,
+            tts: SettingsTtsUseCases,
+            media: SettingsMediaUseCases,
+            auth: SettingsAuthUseCases,
+            memories: SettingsMemoriesUseCases,
+            dataControls: SettingsDataControlsUseCases,
+        ) : this(
+            preferences = preferences,
+            localModels = localModels,
+            apiProviders = apiProviders,
+            assignments = assignments,
+            deletion = deletion,
+            tts = tts,
+            liveVoice = EmptySettingsLiveVoiceUseCases,
+            media = media,
+            auth = auth,
+            memories = memories,
+            dataControls = dataControls,
+        )
+    }

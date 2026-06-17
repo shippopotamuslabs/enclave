@@ -3,6 +3,7 @@ package com.browntowndev.enclave.domain.usecase
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.config.TtsProviderId
 import com.browntowndev.enclave.domain.model.inference.ModelType
@@ -25,6 +26,7 @@ class FakeDefaultModelRepository : DefaultModelRepositoryPort {
         apiConfigId: ApiModelConfigurationId?,
         ttsProviderId: TtsProviderId?,
         mediaProviderId: MediaProviderId?,
+        liveVoiceProviderId: LiveVoiceProviderId?,
     ) {
         val current = _defaults.value.toMutableMap()
         current[modelType] =
@@ -34,6 +36,7 @@ class FakeDefaultModelRepository : DefaultModelRepositoryPort {
                 apiConfigId = apiConfigId,
                 ttsProviderId = ttsProviderId,
                 mediaProviderId = mediaProviderId,
+                liveVoiceProviderId = liveVoiceProviderId,
             )
         _defaults.value = current
     }

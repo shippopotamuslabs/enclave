@@ -8,6 +8,7 @@ import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.inference.AgentContextReference
+import com.browntowndev.enclave.domain.model.inference.ContextReferenceNotFoundException
 import com.browntowndev.enclave.domain.model.inference.AgentFinishReason
 import com.browntowndev.enclave.domain.model.inference.AgentIncludedFile
 import com.browntowndev.enclave.domain.model.inference.AgentLoopConfig
@@ -26,7 +27,9 @@ import com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.model.inference.ToolDisclosureMode
 import com.browntowndev.enclave.domain.model.inference.ToolExecutionResult
+import com.browntowndev.enclave.domain.port.device.DeviceMemoryProbePort
 import com.browntowndev.enclave.domain.port.inference.AgentLoopEvent
+import com.browntowndev.enclave.domain.port.inference.CompactionSummarizerPort
 import com.browntowndev.enclave.domain.port.inference.AgentLoopPort
 import com.browntowndev.enclave.domain.port.inference.InferenceEvent
 import com.browntowndev.enclave.domain.port.inference.InferenceFactoryPort
@@ -89,8 +92,8 @@ class RustLoopInferenceServiceTest {
                                 listOf(
                                     AgentToolCall(
                                         callId = "call-1",
-                                        name = "disclose_tool_schemas",
-                                        argumentsJson = """{"tool_names":["append_blocks"]}""",
+                                        name = "tool_discovery_tool",
+                                        argumentsJson = """{"capability":"append_blocks"}""",
                                     ),
                                 ),
                             ).single()
@@ -100,7 +103,7 @@ class RustLoopInferenceServiceTest {
                         toolsSchemaJson =
                             serializeToolNames(
                                 listOf(
-                                    "disclose_tool_schemas",
+                                    "tool_discovery_tool",
                                     "web_search",
                                     "web_extract",
                                     "append_blocks",
@@ -119,10 +122,10 @@ class RustLoopInferenceServiceTest {
                     options =
                         GenerationOptions(
                             reasoningBudget = 0,
-                            toolCatalog = listOf(catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND)),
+                            toolCatalog = lazyDisclosureCatalog(),
                             activeTools =
                                 listOf(
-                                    ToolDefinition.DISCLOSE_TOOL_SCHEMAS,
+                                    ToolDefinition.SEARCH_TOOLS,
                                     ToolDefinition.WEB_SEARCH,
                                     ToolDefinition.WEB_EXTRACT,
                                 ),
@@ -141,7 +144,7 @@ class RustLoopInferenceServiceTest {
                     assertEquals(
                         listOf(
                             "append_blocks",
-                            "disclose_tool_schemas",
+                            "tool_discovery_tool",
                             "web_extract",
                             "web_search",
                         ),
@@ -171,8 +174,8 @@ class RustLoopInferenceServiceTest {
                                 listOf(
                                     AgentToolCall(
                                         callId = "call-1",
-                                        name = "disclose_tool_schemas",
-                                        argumentsJson = """{"tool_names":["append_blocks"]}""",
+                                        name = "tool_discovery_tool",
+                                        argumentsJson = """{"capability":"append_blocks"}""",
                                     ),
                                 ),
                             ).single()
@@ -180,23 +183,35 @@ class RustLoopInferenceServiceTest {
                 }
             val service = createService(agentLoopPort = port, toolExecutor = executor)
             val cache = ConversationSignatureCache()
+            val cancellationGate = ConversationCancellationGate()
+            cancellationGate.beginRequest()
             val liteRtLoop =
                 LiteRtToolCallLoop(
                     cache = cache,
                     toolExecutor = executor,
                     loggingPort = logger,
                     agentPolicyPort = NoopAgentPolicyPort,
-                    cancellationGate = ConversationCancellationGate(),
+                    cancellationGate = cancellationGate,
+                    searchToolsHostCoordinator =
+                        com.browntowndev.enclave.domain.usecase.chat.SearchToolsHostCoordinator(
+                            embeddingEngine = com.browntowndev.enclave.domain.port.inference.Bm25OnlyEmbeddingEnginePort,
+                        ),
                 )
 
             val disclosureCatalog =
                 listOf(
-                    catalogEntry("disclose_tool_schemas", ToolDisclosureMode.PRELOADED),
+                    catalogEntry("tool_discovery_tool", ToolDisclosureMode.PRELOADED),
                     catalogEntry("web_search", ToolDisclosureMode.PRELOADED),
                     catalogEntry("web_extract", ToolDisclosureMode.PRELOADED),
                     catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND),
                 )
             cache.toolCatalog = disclosureCatalog
+            cache.toolActivationRegistry =
+                com.browntowndev.enclave.domain.usecase.chat.ToolSessionActivationRegistry(
+                    onActiveNamesUpdated = { names -> cache.activeToolNames = names },
+                )
+            cache.toolActivationRegistry.seedTurn(listOf("tool_discovery_tool", "web_search", "web_extract"))
+            cache.toolCallStrategy = com.browntowndev.enclave.domain.usecase.chat.ToolCallStrategy.LITE_RT_NATIVE
             service
                 .sendPrompt(
                     prompt = "disclose",
@@ -206,20 +221,41 @@ class RustLoopInferenceServiceTest {
                             toolCatalog = disclosureCatalog,
                             activeTools =
                                 listOf(
-                                    ToolDefinition.DISCLOSE_TOOL_SCHEMAS,
+                                    ToolDefinition.SEARCH_TOOLS,
                                     ToolDefinition.WEB_SEARCH,
                                     ToolDefinition.WEB_EXTRACT,
                                 ),
                         ),
                 ).toList()
+            val liteRtTurnContext =
+                com.browntowndev.enclave.feature.inference.conversation.LiteRtToolContext(
+                    modelType = ModelType.FAST,
+                    chatId = null,
+                    userMessageId = null,
+                    toolLoop = liteRtLoop,
+                    turn =
+                        com.browntowndev.enclave.feature.inference.conversation.LiteRtTurnSnapshot(
+                            requestId = cancellationGate.currentRequestId(),
+                            systemPrompt = cache.currentSystemPrompt,
+                            contextWindow = cache.currentContextWindow,
+                            history = cache.history,
+                            modelPath = cache.currentModelPath,
+                            latestAssistantMessageId = cache.latestAssistantMessageId,
+                            toolCatalog = cache.toolCatalog,
+                            toolSearchIndex = cache.toolSearchIndex,
+                            toolCallStrategy = cache.toolCallStrategy,
+                            transientToolResultTokens = cache.transientToolResultTokens.get(),
+                        ),
+                )
             val liteRtResult =
                 liteRtLoop.executeToolSafely(
                     ToolCallRequest(
-                        toolName = "disclose_tool_schemas",
-                        argumentsJson = """{"tool_names":["append_blocks"]}""",
+                        toolName = "tool_discovery_tool",
+                        argumentsJson = """{"capability":"append_blocks"}""",
                         provider = "LITERT",
                         modelType = ModelType.FAST,
                     ),
+                    turnContext = liteRtTurnContext,
                 )
 
             assertAll(
@@ -229,6 +265,124 @@ class RustLoopInferenceServiceTest {
                 { assertEquals(0, callCount.get()) },
             )
         }
+
+    @Test
+    fun `start_artifact success activates append_blocks for next model turn`() =
+        runTest {
+            lateinit var result: AgentToolResult
+            val nextTurnCompleted = CompletableDeferred<Unit>()
+            val innerService = RecordingRustCompatibleService()
+            val artifactId = "hbWxQYaTV7WyJ39rLRiq9to9LCu2"
+            val port =
+                CapturingAgentLoopPort { host ->
+                    result =
+                        host
+                            .executeTools(
+                                listOf(
+                                    AgentToolCall(
+                                        callId = "call-artifact-1",
+                                        name = "start_artifact",
+                                        argumentsJson =
+                                            """{"author":"aether_oracle xAI","title":"MiniMax M3 - Complete Technical Overview"}""",
+                                    ),
+                                ),
+                            ).single()
+                    host.completeModelTurn(
+                        sessionMessages = emptyList(),
+                        systemPrompt = "",
+                        toolsSchemaJson =
+                            serializeToolNames(
+                                listOf(
+                                    "tool_discovery_tool",
+                                    "web_search",
+                                    "web_extract",
+                                    "start_artifact",
+                                    "append_blocks",
+                                    "search_current_artifact",
+                                ),
+                            ),
+                        allowToolCall = true,
+                    )
+                    nextTurnCompleted.complete(Unit)
+                    send(AgentLoopEvent.Finished)
+                }
+            val executor =
+                object : ToolExecutorPort {
+                    override suspend fun execute(request: ToolCallRequest): ToolExecutionResult =
+                        ToolExecutionResult(
+                            toolName = request.toolName,
+                            resultJson =
+                                """{"status":"success","artifactId":"$artifactId","message":"Artifact initialized."}""",
+                        )
+                }
+            val service =
+                createService(
+                    agentLoopPort = port,
+                    inner = innerService,
+                    toolExecutor = executor,
+                )
+
+            service
+                .sendPrompt(
+                    prompt = "write overview",
+                    options =
+                        GenerationOptions(
+                            reasoningBudget = 0,
+                            toolCatalog =
+                                listOf(
+                                    catalogEntry("tool_discovery_tool", ToolDisclosureMode.PRELOADED),
+                                    catalogEntry("web_search", ToolDisclosureMode.PRELOADED),
+                                    catalogEntry("web_extract", ToolDisclosureMode.PRELOADED),
+                                    catalogEntry("start_artifact", ToolDisclosureMode.DISCLOSE_ON_DEMAND),
+                                    catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND),
+                                    catalogEntry("search_current_artifact", ToolDisclosureMode.DISCLOSE_ON_DEMAND),
+                                ),
+                            activeTools =
+                                listOf(
+                                    ToolDefinition.SEARCH_TOOLS,
+                                    ToolDefinition.WEB_SEARCH,
+                                    ToolDefinition.WEB_EXTRACT,
+                                    ToolDefinition.START_ARTIFACT,
+                                ),
+                        ),
+                ).toList()
+            withTimeout(1_000) { nextTurnCompleted.await() }
+
+            val nextTurnToolNames = innerService.lastAvailableTools.map { it.name }.sorted()
+
+            assertAll(
+                {
+                    assertEquals(
+                        listOf(
+                            ToolDefinition.APPEND_BLOCKS.name,
+                            ToolDefinition.SEARCH_CURRENT_ARTIFACT.name,
+                        ),
+                        result.activatedToolNames.sorted(),
+                    )
+                },
+                {
+                    assertEquals(
+                        listOf(
+                            "append_blocks",
+                            "search_current_artifact",
+                            "start_artifact",
+                            "tool_discovery_tool",
+                            "web_extract",
+                            "web_search",
+                        ),
+                        nextTurnToolNames,
+                    )
+                },
+            )
+        }
+
+    private fun lazyDisclosureCatalog(): List<ToolCatalogEntry> =
+        listOf(
+            catalogEntry("tool_discovery_tool", ToolDisclosureMode.PRELOADED),
+            catalogEntry("web_search", ToolDisclosureMode.PRELOADED),
+            catalogEntry("web_extract", ToolDisclosureMode.PRELOADED),
+            catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND),
+        )
 
     private fun catalogEntry(
         name: String,
@@ -278,11 +432,13 @@ class RustLoopInferenceServiceTest {
             val config = requireNotNull(port.capturedConfig)
             assertEquals(4096u, config.io.contextWindowTokens)
             assertEquals("system once", config.io.systemPrompt)
-            assertEquals(2u, config.agent.maxModelRequestsPerTurn)
+            assertEquals(6u, config.agent.maxModelRequestsPerTurn)
             assertTrue(config.agent.enableLoopHooks)
             assertTrue(config.agent.enablePendingWorkGuard)
-            assertFalse(config.capabilities.summarizationAllowed)
+            assertFalse(config.capabilities.summarizationAllowed, "default dummy summarizer is not installed")
             assertTrue(config.capabilities.kvFixed)
+            assertTrue(config.capabilities.toolSchemaDeferralSupported)
+            assertEquals(AgentLoopContextPolicyTier.SMALL_CONTEXT, config.capabilities.contextPolicyTier)
             assertTrue(config.capabilities.lifecycleHooksSupported)
             assertEquals(
                 mapOf(
@@ -292,6 +448,28 @@ class RustLoopInferenceServiceTest {
                 ),
                 port.capturedSessionContext,
             )
+        }
+
+    @Test
+    fun sendPrompt_usesFixedKvPolicyForLargeLocalWindows() =
+        runTest {
+            val port = CapturingAgentLoopPort { _ -> send(AgentLoopEvent.Finished) }
+            val service = createService(agentLoopPort = port, provider = "LLAMA")
+
+            service
+                .sendPrompt(
+                    prompt = "hello",
+                    options =
+                        GenerationOptions(
+                            reasoningBudget = 0,
+                            contextWindow = 32_768,
+                            systemPrompt = "system once",
+                        ),
+                ).toList()
+
+            val config = requireNotNull(port.capturedConfig)
+            assertEquals(AgentLoopContextPolicyTier.FIXED_KV, config.capabilities.contextPolicyTier)
+            assertTrue(config.capabilities.toolSchemaDeferralSupported)
         }
 
     @Test
@@ -491,6 +669,7 @@ class RustLoopInferenceServiceTest {
             val inner = RecordingRustCompatibleService()
             val port =
                 CapturingAgentLoopPort { host ->
+                    send(AgentLoopEvent.TurnStarted(index = 1))
                     host.completeModelTurn(
                         sessionMessages = emptyList(),
                         systemPrompt = "base system",
@@ -501,7 +680,7 @@ class RustLoopInferenceServiceTest {
                                 AgentContextReference(
                                     id = "file-outline-src/Main.kt",
                                     kind = "FILE_OUTLINE",
-                                    title = "outline:src/Main.kt",
+                                    title = "outline:src/Main.kt @turn:1",
                                     byteLen = 10u,
                                     tokenEstimate = 2u,
                                     preview = "fun main",
@@ -516,9 +695,269 @@ class RustLoopInferenceServiceTest {
 
             service.sendPrompt("sidecars").toList()
 
-            assertTrue(requireNotNull(inner.lastContextSidecars).contains("Context management sidecars"))
-            assertTrue(requireNotNull(inner.lastContextSidecars).contains("file-outline-src/Main.kt"))
-            assertTrue(requireNotNull(inner.lastContextSidecars).contains("File context index JSON"))
+            val sidecars = requireNotNull(inner.lastContextSidecars)
+            assertAll(
+                { assertTrue(sidecars.contains("Context management sidecars")) },
+                {
+                    assertTrue(
+                        sidecars.contains(
+                            "Reference policy: IDs are exact lookups only—never browse. " +
+                                "For conversation history use search_chat_history.",
+                        ),
+                    )
+                },
+                { assertTrue(sidecars.contains("[FILE_OUTLINE|turn:1|fresh] file-outline-src/Main.kt (10b):")) },
+                { assertTrue(sidecars.contains("""preview: "fun main"""")) },
+                { assertTrue(sidecars.contains("read_context_reference(\"file-outline-src/Main.kt\")")) },
+                { assertTrue(sidecars.contains("File context index JSON")) },
+            )
+        }
+
+    @Test
+    fun completeModelTurn_marksStaleContextReferencesInSidecars() =
+        runTest {
+            val inner = RecordingRustCompatibleService()
+            val port =
+                CapturingAgentLoopPort { host ->
+                    send(AgentLoopEvent.TurnStarted(index = 3))
+                    host.completeModelTurn(
+                        sessionMessages = emptyList(),
+                        systemPrompt = "base system",
+                        toolsSchemaJson = "[]",
+                        allowToolCall = false,
+                        contextReferences =
+                            listOf(
+                                AgentContextReference(
+                                    id = "tool-output-call-1",
+                                    kind = "TOOL_OUTPUT",
+                                    title = "tool_output:call-1 @turn:2",
+                                    byteLen = 200u,
+                                    tokenEstimate = 50u,
+                                    preview = "BEGIN_RAW",
+                                    retrievalHint = "read_context_reference(\"tool-output-call-1\")",
+                                ),
+                            ),
+                    )
+                    send(AgentLoopEvent.Finished)
+                }
+            val service = createService(agentLoopPort = port, inner = inner)
+
+            service.sendPrompt("stale refs").toList()
+
+            assertTrue(
+                requireNotNull(inner.lastContextSidecars).contains(
+                    "[TOOL_OUTPUT|turn:2|stale] tool-output-call-1 (200b):",
+                ),
+            )
+        }
+
+    @Test
+    fun completeModelTurn_doesNotActivateReadContextReferenceFromSidecarHints() =
+        runTest {
+            val inner = RecordingRustCompatibleService()
+            val port =
+                CapturingAgentLoopPort { host ->
+                    host.completeModelTurn(
+                        sessionMessages = emptyList(),
+                        systemPrompt = "system",
+                        toolsSchemaJson = "[]",
+                        allowToolCall = true,
+                        contextReferences =
+                            listOf(
+                                AgentContextReference(
+                                    id = "tool-output-call-1",
+                                    kind = "TOOL_OUTPUT",
+                                    title = "tool_output:call-1 @turn:0",
+                                    byteLen = 200u,
+                                    tokenEstimate = 50u,
+                                    preview = "payload",
+                                    retrievalHint = "read_context_reference(\"tool-output-call-1\")",
+                                ),
+                            ),
+                    )
+                    send(AgentLoopEvent.Finished)
+                }
+            val service =
+                createService(
+                    agentLoopPort = port,
+                    inner = inner,
+                )
+
+            service
+                .sendPrompt(
+                    prompt = "refs only",
+                    options =
+                        GenerationOptions(
+                            reasoningBudget = 0,
+                            activeTools = listOf(ToolDefinition.WEB_SEARCH),
+                        ),
+                ).toList()
+
+            assertFalse(inner.lastAvailableTools.map { it.name }.contains("read_context_reference"))
+        }
+
+    @Test
+    fun executeTools_readContextReferenceReturnsContractErrorWhenMissing() =
+        runTest {
+            lateinit var result: AgentToolResult
+            val port =
+                CapturingAgentLoopPort { host ->
+                    result =
+                        host
+                            .executeTools(
+                                listOf(
+                                    AgentToolCall(
+                                        callId = "call-missing",
+                                        name = ToolDefinition.READ_CONTEXT_REFERENCE.name,
+                                        argumentsJson = "{}",
+                                    ),
+                                ),
+                            ).single()
+                    send(AgentLoopEvent.Finished)
+                }
+            val service = createService(agentLoopPort = port)
+
+            service.sendPrompt("missing ref").toList()
+
+            assertAll(
+                { assertTrue(result.softFailure) },
+                { assertTrue(result.resultJson.contains("context_reference_not_found")) },
+                {
+                    assertTrue(
+                        result.resultJson.contains("search_chat_history"),
+                    )
+                },
+            )
+        }
+
+    @Test
+    fun executeTools_readContextReferenceReturnsContractErrorWhenNotFound() =
+        runTest {
+            lateinit var result: AgentToolResult
+            val port =
+                NotFoundContextReferencePort { host ->
+                    result =
+                        host
+                            .executeTools(
+                                listOf(
+                                    AgentToolCall(
+                                        callId = "call-not-found",
+                                        name = ToolDefinition.READ_CONTEXT_REFERENCE.name,
+                                        argumentsJson = """{"reference_id":"missing-ref"}""",
+                                    ),
+                                ),
+                            ).single()
+                    send(AgentLoopEvent.Finished)
+                }
+            val service = createService(agentLoopPort = port)
+
+            service.sendPrompt("not found ref").toList()
+
+            assertAll(
+                { assertTrue(result.softFailure) },
+                { assertTrue(result.resultJson.contains("context_reference_not_found")) },
+                { assertTrue(result.resultJson.contains("tool_discovery_tool")) },
+            )
+        }
+
+    @Test
+    fun completeModelTurn_forwardsSanitizedTokensWithoutStrippingLeadingSpaces() =
+        runTest {
+            val streamedTokens = mutableListOf<String>()
+            val inner =
+                object : RustCompatibleInferenceService {
+                    override val baseUrl: String? = null
+
+                    override fun sendPrompt(
+                        prompt: String,
+                        closeConversation: Boolean,
+                    ) = flowOf(InferenceEvent.Finished(ModelType.THINKING))
+
+                    override fun sendPrompt(
+                        prompt: String,
+                        options: GenerationOptions,
+                        closeConversation: Boolean,
+                    ) = flowOf(InferenceEvent.Finished(ModelType.THINKING))
+
+                    override suspend fun setHistory(messages: List<ChatMessage>) {}
+
+                    override suspend fun closeSession() {}
+
+                    override suspend fun completeSingleTurn(
+                        sessionMessages: List<AgentLoopMessage>,
+                        systemPrompt: String,
+                        contextSidecars: String?,
+                        availableTools: List<ToolDefinition>,
+                        allowToolCall: Boolean,
+                        onTextToken: suspend (String) -> Unit,
+                        onThinkingToken: suspend (String) -> Unit,
+                        options: GenerationOptions,
+                        onLifecycleEvent: suspend (InferenceEvent) -> Unit,
+                    ): AgentModelTurnResult {
+                        onTextToken("Hello")
+                        onTextToken(" world")
+                        return AgentModelTurnResult(
+                            assistantText = "Hello world",
+                            toolCalls = emptyList(),
+                            finishReason = AgentFinishReason.Stop,
+                        )
+                    }
+                }
+            val port =
+                CapturingAgentLoopPort { host ->
+                    send(AgentLoopEvent.TurnStarted(index = 1))
+                    host.completeModelTurn(
+                        sessionMessages = emptyList(),
+                        systemPrompt = "system",
+                        toolsSchemaJson = "[]",
+                        allowToolCall = false,
+                        onTextToken = { streamedTokens.add(it) },
+                    )
+                    send(AgentLoopEvent.Finished)
+                }
+            val service = createService(agentLoopPort = port, inner = inner)
+
+            service.sendPrompt("stream").toList()
+
+            assertEquals(listOf("Hello", " world"), streamedTokens)
+        }
+
+    @Test
+    fun sendPrompt_preservesLeadingSpacesInStreamedPartialResponses() =
+        runTest {
+            val port =
+                CapturingAgentLoopPort { _ ->
+                    send(AgentLoopEvent.TurnStarted(index = 1))
+                    send(AgentLoopEvent.TextToken("Hello"))
+                    send(AgentLoopEvent.TextToken(" world"))
+                    send(AgentLoopEvent.Finished)
+                }
+            val service = createService(agentLoopPort = port)
+
+            val events = service.sendPrompt("spacing").toList()
+
+            assertEquals(
+                listOf("Hello", " world"),
+                events.filterIsInstance<InferenceEvent.PartialResponse>().map { it.chunk },
+            )
+        }
+
+    @Test
+    fun sendPrompt_sanitizesHarnessPayloadsBeforePartialResponseEmission() =
+        runTest {
+            val port =
+                CapturingAgentLoopPort { _ ->
+                    send(AgentLoopEvent.TextToken("Visible {\"_agent\":{\"tool_calls_used\":1}} text"))
+                    send(AgentLoopEvent.Finished)
+                }
+            val service = createService(agentLoopPort = port)
+
+            val events = service.sendPrompt("sanitize").toList()
+
+            assertEquals(
+                listOf("Visible  text"),
+                events.filterIsInstance<InferenceEvent.PartialResponse>().map { it.chunk },
+            )
         }
 
     @Test
@@ -584,6 +1023,143 @@ class RustLoopInferenceServiceTest {
             assertTrue(result.softFailure)
             assertTrue(result.resultJson.contains("tool_execution_failed"))
             assertTrue(result.resultJson.contains("boom"))
+        }
+
+    @Test
+    fun sendPrompt_enablesSummarizationWhenUtilityModelInstalled() =
+        runTest {
+            val port = CapturingAgentLoopPort { _ -> send(AgentLoopEvent.Finished) }
+            val summarizer =
+                object : CompactionSummarizerPort {
+                    override suspend fun isModelInstalled(): Boolean = true
+
+                    override suspend fun summarize(prompt: String): String? = null
+                }
+            val service =
+                createService(
+                    agentLoopPort = port,
+                    provider = "LLAMA",
+                    compactionSummarizer = summarizer,
+                )
+
+            service
+                .sendPrompt(
+                    prompt = "hello",
+                    options = GenerationOptions(reasoningBudget = 0, contextWindow = 4096),
+                ).toList()
+
+            assertTrue(requireNotNull(port.capturedConfig).capabilities.summarizationAllowed)
+        }
+
+    @Test
+    fun summarize_usesUtilityOnnxForLocalWhenMemoryAllows() =
+        runTest {
+            val summarizer =
+                object : CompactionSummarizerPort {
+                    override suspend fun isModelInstalled(): Boolean = true
+
+                    override suspend fun summarize(prompt: String): String? = "utility summary"
+                }
+            lateinit var summary: AgentSummaryResult
+            val port =
+                CapturingAgentLoopPort { host ->
+                    summary =
+                        host.summarize(
+                            AgentSummaryRequest(
+                                messagesToSummarize =
+                                    listOf(
+                                        AgentLoopMessage("u1", Role.USER, "Question one"),
+                                        AgentLoopMessage("a1", Role.ASSISTANT, "Answer one"),
+                                    ),
+                                instruction = "summarize",
+                                lastMessageId = "a1",
+                            ),
+                        )
+                    send(AgentLoopEvent.Finished)
+                }
+            val factory = RecordingInferenceFactory(RecordingInferenceService())
+            val service =
+                createService(
+                    agentLoopPort = port,
+                    provider = "LLAMA",
+                    inferenceFactoryProvider = Provider { factory },
+                    compactionSummarizer = summarizer,
+                    deviceMemoryProbe = DeviceMemoryProbePort.Permissive,
+                )
+
+            service.sendPrompt("summarize").toList()
+
+            assertEquals("utility summary", summary.summaryText)
+            assertNull(factory.requestedModelType)
+        }
+
+    @Test
+    fun sendPrompt_disablesSummarizationWhenUtilityInstalledButMemoryConstrained() =
+        runTest {
+            val port = CapturingAgentLoopPort { _ -> send(AgentLoopEvent.Finished) }
+            val summarizer =
+                object : CompactionSummarizerPort {
+                    override suspend fun isModelInstalled(): Boolean = true
+
+                    override suspend fun summarize(prompt: String): String? = error("should not run")
+                }
+            val service =
+                createService(
+                    agentLoopPort = port,
+                    provider = "LLAMA",
+                    compactionSummarizer = summarizer,
+                    deviceMemoryProbe = DeviceMemoryProbePort.Constrained,
+                )
+
+            service
+                .sendPrompt(
+                    prompt = "hello",
+                    options = GenerationOptions(reasoningBudget = 0, contextWindow = 4096),
+                ).toList()
+
+            assertFalse(requireNotNull(port.capturedConfig).capabilities.summarizationAllowed)
+        }
+
+    @Test
+    fun summarize_skipsUtilityOnnxWhenMemoryConstrainedWithoutMainModelFallback() =
+        runTest {
+            val summarizer =
+                object : CompactionSummarizerPort {
+                    override suspend fun isModelInstalled(): Boolean = true
+
+                    override suspend fun summarize(prompt: String): String? = error("should not run utility lane")
+                }
+            val factory = RecordingInferenceFactory(RecordingInferenceService())
+            lateinit var summary: AgentSummaryResult
+            val port =
+                CapturingAgentLoopPort { host ->
+                    summary =
+                        host.summarize(
+                            AgentSummaryRequest(
+                                messagesToSummarize =
+                                    listOf(
+                                        AgentLoopMessage("u1", Role.USER, "Question one"),
+                                        AgentLoopMessage("a1", Role.ASSISTANT, "Answer one"),
+                                    ),
+                                instruction = "summarize",
+                                lastMessageId = "a1",
+                            ),
+                        )
+                    send(AgentLoopEvent.Finished)
+                }
+            val service =
+                createService(
+                    agentLoopPort = port,
+                    provider = "LLAMA",
+                    inferenceFactoryProvider = Provider { factory },
+                    compactionSummarizer = summarizer,
+                    deviceMemoryProbe = DeviceMemoryProbePort.Constrained,
+                )
+
+            service.sendPrompt("summarize").toList()
+
+            assertEquals("", summary.summaryText)
+            assertNull(factory.requestedModelType)
         }
 
     @Test
@@ -1179,6 +1755,7 @@ class RustLoopInferenceServiceTest {
                         onTextToken: suspend (String) -> Unit,
                         onThinkingToken: suspend (String) -> Unit,
                         options: GenerationOptions,
+                        onLifecycleEvent: suspend (InferenceEvent) -> Unit,
                     ): AgentModelTurnResult {
                         sidecarsList.add(contextSidecars)
                         return AgentModelTurnResult(
@@ -1250,6 +1827,8 @@ class RustLoopInferenceServiceTest {
         committedInferenceTranscripts: InMemoryCommittedInferenceTranscriptStore =
             InMemoryCommittedInferenceTranscriptStore(),
         deviceEnvironmentRepository: DeviceEnvironmentRepositoryPort = NoopDeviceEnvironmentRepository,
+        compactionSummarizer: CompactionSummarizerPort = CompactionSummarizerPort.Dummy,
+        deviceMemoryProbe: DeviceMemoryProbePort = DeviceMemoryProbePort.Permissive,
     ): RustLoopInferenceService =
         RustLoopInferenceService(
             inner = inner,
@@ -1263,6 +1842,9 @@ class RustLoopInferenceServiceTest {
             resolveCompactionSummaryModel = resolveCompactionSummaryModel,
             committedInferenceTranscripts = committedInferenceTranscripts,
             deviceEnvironmentRepository = deviceEnvironmentRepository,
+            embeddingEnginePort = com.browntowndev.enclave.domain.port.inference.Bm25OnlyEmbeddingEnginePort,
+            compactionSummarizer = compactionSummarizer,
+            deviceMemoryProbe = deviceMemoryProbe,
         )
 
     private fun resolveCompactionSummaryModel(fastConfig: ActiveModelConfiguration?): ResolveCompactionSummaryModelUseCase {
@@ -1344,6 +1926,7 @@ class RustLoopInferenceServiceTest {
             onTextToken: suspend (String) -> Unit,
             onThinkingToken: suspend (String) -> Unit,
             options: GenerationOptions,
+            onLifecycleEvent: suspend (InferenceEvent) -> Unit,
         ): AgentModelTurnResult {
             completeSingleTurnCallCount += 1
             sessionMessagesByCall.add(sessionMessages)
@@ -1374,7 +1957,17 @@ class RustLoopInferenceServiceTest {
             return block(service)
         }
 
+        override suspend fun <T> withInferenceServiceForLocalConfig(
+            configId: com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId,
+            block: suspend (LlmInferencePort) -> T,
+        ): T = block(service)
+
         override suspend fun <T> withRawApiServiceForConfig(
+            configId: ApiModelConfigurationId,
+            block: suspend (LlmInferencePort) -> T,
+        ): T = block(service)
+
+        override suspend fun <T> withApiServiceForConfig(
             configId: ApiModelConfigurationId,
             block: suspend (LlmInferencePort) -> T,
         ): T = block(service)
@@ -1405,6 +1998,22 @@ class RustLoopInferenceServiceTest {
         override suspend fun setHistory(messages: List<ChatMessage>) {}
 
         override suspend fun closeSession() {}
+    }
+
+    private class NotFoundContextReferencePort(
+        behavior: suspend ProducerScope<AgentLoopEvent>.(AgentLoopHostCallbacks) -> Unit,
+    ) : AgentLoopPort {
+        private val delegate = CapturingAgentLoopPort(behavior)
+
+        override fun execute(
+            initialMessages: List<ChatMessage>,
+            config: AgentLoopConfig,
+            sessionContext: Map<String, String>,
+            host: AgentLoopHostCallbacks,
+        ): Flow<AgentLoopEvent> = delegate.execute(initialMessages, config, sessionContext, host)
+
+        override suspend fun readContextReference(referenceId: String): String =
+            throw ContextReferenceNotFoundException(referenceId)
     }
 
     private class RecordingLogger : LoggingPort {

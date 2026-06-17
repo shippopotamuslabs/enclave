@@ -39,7 +39,7 @@ data class ToolDefinition(
         when (strategy) {
             ToolCallStrategy.JSON_XML_ENVELOPE -> {
                 val arguments = buildExampleJsonMap()
-                "ActionResult{\"name\":\"$name\",\"arguments\":$arguments}ActionResult"
+                "<tool_call>{\"name\":\"$name\",\"arguments\":$arguments}</tool_call>"
             }
             ToolCallStrategy.LITE_RT_NATIVE -> {
                 val args = buildExampleLiteRtArgs()
@@ -56,6 +56,7 @@ data class ToolDefinition(
             disclosureMode = disclosureMode,
             requiredArguments = required,
             optionalArguments = optional,
+            categoryTags = ToolCategoryTags.forTool(name),
         )
     }
 
@@ -177,7 +178,9 @@ data class ToolDefinition(
         val WEB_SEARCH =
             ToolDefinition(
                 name = "web_search",
-                description = "Search the web and return ranked results.",
+                description =
+                    "Search the public web for current or explicitly requested online information. " +
+                        "Use directly without tool_discovery_tool when a web lookup is needed.",
                 parametersClass = WebSearchParams::class,
                 displayName = "Searching the web...",
                 disclosureMode = ToolDisclosureMode.PRELOADED,
@@ -204,24 +207,31 @@ data class ToolDefinition(
                 disclosureMode = ToolDisclosureMode.PRELOADED,
             )
 
-        val DISCLOSE_TOOL_SCHEMAS =
+        val SEARCH_TOOLS =
             ToolDefinition(
-                name = "disclose_tool_schemas",
-                description = "Disclose full schemas for deferred tools before calling them.",
-                parametersClass = DiscloseToolSchemasParams::class,
+                name = "tool_discovery_tool",
+                description =
+                    "Search hidden tool metadata and activate matching executable tools. Use only when the task requires " +
+                        "an action unavailable in the active tool set. Never use to look up facts, research a question, " +
+                        "or decide whether web_search is needed.",
+                parametersClass = SearchToolsParams::class,
                 disclosureMode = ToolDisclosureMode.PRELOADED,
                 supportsLazyDisclosure = false,
             )
 
+        @Suppress("MaxLineLength")
         val READ_CONTEXT_REFERENCE =
             ToolDefinition(
                 name = "read_context_reference",
                 description =
-                    "Retrieve the full content of a context reference by its ID. " +
-                        "Use when context sidecars list references with truncated previews that you need to read in full.",
+                    "[RARE] Fetch exact content for a context reference ID only when a spill envelope or context sidecar " +
+                        "explicitly names that ID. Never use for discovery, search, or browsing references. " +
+                        "IDs starting with tool-schema- return the full deferred tool registry (all tools)—use " +
+                        "tool_discovery_tool instead. Route retrieval needs: past conversations → search_chat_history; " +
+                        "web/current facts → web_search; hidden executable tools → tool_discovery_tool.",
                 parametersClass = ReadContextReferenceParams::class,
-                disclosureMode = ToolDisclosureMode.PRELOADED,
-                supportsLazyDisclosure = false,
+                disclosureMode = ToolDisclosureMode.DISCLOSE_ON_DEMAND,
+                supportsLazyDisclosure = true,
             )
 
         @Suppress("MaxLineLength")
@@ -383,7 +393,7 @@ data class ToolDefinition(
 
         val ALL_TOOLS =
             listOf(
-                DISCLOSE_TOOL_SCHEMAS,
+                SEARCH_TOOLS,
                 READ_CONTEXT_REFERENCE,
                 WEB_SEARCH,
                 WEB_EXTRACT,

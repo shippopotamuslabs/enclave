@@ -49,6 +49,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
@@ -58,7 +59,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -73,6 +76,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.browntowndev.enclave.core.data.util.formatBytes
+import com.browntowndev.enclave.core.ui.component.ShimmerText
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.core.ui.util.FeatureFlags
 import com.browntowndev.enclave.domain.model.download.DownloadModelsResult
@@ -93,6 +97,7 @@ fun ModelDownloadScreen(
     modelsResult: DownloadModelsResult?,
     errorMessage: String? = null,
     onReady: () -> Unit = {},
+    refreshDownloadPlan: DownloadPlanRefresher? = null,
     viewModel: DownloadViewModel =
         hiltViewModel<DownloadViewModel, DownloadViewModel.Factory>(
             key = (modelsResult?.modelsToDownload ?: emptyList()).hashCode().toString(),
@@ -108,7 +113,12 @@ fun ModelDownloadScreen(
                                 allValid = true,
                             ),
                     )
-                factory.create(safeModelsResult, errorMessage, autoStartDownloads = true)
+                factory.create(
+                    safeModelsResult,
+                    errorMessage,
+                    autoStartDownloads = true,
+                    refreshDownloadPlan = refreshDownloadPlan,
+                )
             },
         ),
 ) {
@@ -119,22 +129,22 @@ fun ModelDownloadScreen(
     val fileProgressList by viewModel.fileProgressList.collectAsStateWithLifecycle()
 
     // Track lifecycle for foreground state to prevent race condition with WorkManager foreground service
-    LaunchedEffect(lifecycleOwner) {
-        // Check current state immediately to handle case where activity is already in ON_RESUME
-        // when this LaunchedEffect runs (observer would miss the event if we only listen for future events)
-        if (lifecycleOwner.lifecycle.currentState == Lifecycle.State.RESUMED) {
-            viewModel.onAppForegrounded()
-        }
-
-        lifecycleOwner.lifecycle.addObserver(
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val observer =
             LifecycleEventObserver { _, event ->
                 when (event) {
                     Lifecycle.Event.ON_RESUME -> viewModel.onAppForegrounded()
                     Lifecycle.Event.ON_PAUSE -> viewModel.onAppBackgrounded()
                     else -> {}
                 }
-            },
-        )
+            }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        if (lifecycleOwner.lifecycle.currentState == Lifecycle.State.RESUMED) {
+            viewModel.onAppForegrounded()
+        }
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
     }
 
     // Permission state for POST_NOTIFICATIONS (Android 13+)
@@ -236,6 +246,7 @@ fun ModelDownloadScreen(
             DownloadHeader(
                 status = downloadState.status,
                 progress = { downloadState.overallProgress },
+                postProcessProgress = downloadState.postProcessProgress,
                 modelsComplete = downloadState.modelsComplete,
                 modelsTotal = downloadState.modelsTotal,
                 speedMBs = downloadState.currentSpeedMBs,
@@ -247,6 +258,8 @@ fun ModelDownloadScreen(
             // File list
             FileProgressList(
                 files = fileProgressList,
+                downloadStatus = downloadState.status,
+                postProcessProgress = downloadState.postProcessProgress,
                 modifier = Modifier.weight(1f),
             )
 
@@ -285,6 +298,7 @@ private fun Context.findActivity(): Activity? {
 private fun DownloadHeader(
     status: DownloadStatus,
     progress: () -> Float,
+    postProcessProgress: Float?,
     modelsComplete: Int,
     modelsTotal: Int,
     speedMBs: Double?,
@@ -311,6 +325,7 @@ private fun DownloadHeader(
                     DownloadStatus.CHECKING -> "Checking on the crew..."
                     DownloadStatus.WIFI_BLOCKED -> "Waiting for Wi-Fi..."
                     DownloadStatus.DOWNLOADING -> "Downloading Models"
+                    DownloadStatus.FINALIZING -> "Installing Models"
                     DownloadStatus.PAUSED -> "Downloads Paused"
                     DownloadStatus.ERROR -> "Download Error"
                     else -> "Crew"
@@ -320,6 +335,13 @@ private fun DownloadHeader(
         )
 
         Spacer(modifier = Modifier.height(8.dp))
+
+        val headerProgress =
+            if (status == DownloadStatus.FINALIZING) {
+                postProcessProgress ?: progress()
+            } else {
+                progress()
+            }
 
         // Progress
         if (status == DownloadStatus.CHECKING || status == DownloadStatus.WIFI_BLOCKED) {
@@ -333,7 +355,7 @@ private fun DownloadHeader(
             )
         } else {
             val animatedProgress by animateFloatAsState(
-                targetValue = progress(),
+                targetValue = headerProgress,
                 animationSpec = tween(durationMillis = 200, easing = LinearEasing),
                 label = "progress",
             )
@@ -367,7 +389,7 @@ private fun DownloadHeader(
             )
 
             Text(
-                text = "${(progress() * 100).toInt()}%",
+                text = "${(headerProgress * 100).toInt()}%",
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
@@ -411,6 +433,8 @@ private fun DownloadHeader(
 @Composable
 private fun FileProgressList(
     files: List<FileProgressUiModel>,
+    downloadStatus: DownloadStatus,
+    postProcessProgress: Float?,
     modifier: Modifier = Modifier,
 ) {
     if (files.isEmpty()) {
@@ -437,6 +461,8 @@ private fun FileProgressList(
                 FileProgressItem(
                     file = file,
                     progress = { file.progress },
+                    downloadStatus = downloadStatus,
+                    postProcessProgress = postProcessProgress,
                 )
             }
         }
@@ -447,16 +473,14 @@ private fun FileProgressList(
 private fun FileProgressItem(
     file: FileProgressUiModel,
     progress: () -> Float,
+    downloadStatus: DownloadStatus,
+    postProcessProgress: Float?,
 ) {
+    val isPostProcessing =
+        downloadStatus == DownloadStatus.FINALIZING &&
+            file.filename.endsWith(".zip", ignoreCase = true)
     val statusColor by animateColorAsState(
-        targetValue =
-            when (file.status) {
-                FileStatus.COMPLETE -> MaterialTheme.colorScheme.primary
-                FileStatus.FAILED -> MaterialTheme.colorScheme.error
-                FileStatus.DOWNLOADING -> MaterialTheme.colorScheme.primary
-                FileStatus.PAUSED -> MaterialTheme.colorScheme.surfaceVariant
-                FileStatus.QUEUED -> MaterialTheme.colorScheme.outline
-            },
+        targetValue = fileProgressStatusColor(file.status),
         label = "statusColor",
     )
 
@@ -473,94 +497,209 @@ private fun FileProgressItem(
                     .fillMaxWidth()
                     .padding(12.dp),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                // Status icon
-                Icon(
-                    imageVector =
-                        when (file.status) {
-                            FileStatus.COMPLETE -> Icons.Default.CheckCircle
-                            FileStatus.FAILED -> Icons.Default.Error
-                            FileStatus.DOWNLOADING -> Icons.Default.CloudDownload
-                            FileStatus.PAUSED -> Icons.Default.Pause
-                            FileStatus.QUEUED -> Icons.Default.CloudDownload
-                        },
-                    contentDescription =
-                        when (file.status) {
-                            FileStatus.COMPLETE -> "Download complete"
-                            FileStatus.FAILED -> "Download failed"
-                            FileStatus.DOWNLOADING -> "Currently downloading"
-                            FileStatus.PAUSED -> "Download paused"
-                            FileStatus.QUEUED -> "Queued for download"
-                        },
-                    tint = statusColor,
-                    modifier = Modifier.size(24.dp),
+            FileProgressItemHeader(
+                file = file,
+                isPostProcessing = isPostProcessing,
+                statusColor = statusColor,
+            )
+            if (isPostProcessing) {
+                FileProgressPostProcessingSection(
+                    file = file,
+                    postProcessProgress = postProcessProgress,
                 )
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                // Display name with anthropomorphized model roles
-                Text(
-                    text = file.displayName,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-
-                // Status text
-                Text(
-                    text =
-                        when (file.status) {
-                            FileStatus.COMPLETE -> "Complete"
-                            FileStatus.FAILED -> "Failed"
-                            FileStatus.DOWNLOADING ->
-                                file.speedMBs?.let {
-                                    String.format(Locale.US, "%.1f MB/s", it)
-                                } ?: "Downloading..."
-                            FileStatus.PAUSED -> "Paused"
-                            FileStatus.QUEUED -> "Waiting..."
-                        },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = statusColor,
-                )
-            }
-
-            // Progress bar
-            if (file.status == FileStatus.DOWNLOADING || file.status == FileStatus.PAUSED) {
-                Spacer(modifier = Modifier.height(8.dp))
-
-                val animatedProgress by animateFloatAsState(
-                    targetValue = progress(),
-                    animationSpec = tween(durationMillis = 200, easing = LinearEasing),
-                    label = "fileProgress",
-                )
-
-                LinearProgressIndicator(
-                    progress = { animatedProgress },
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(50)),
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                    strokeCap = StrokeCap.Butt,
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                // Size text
-                Text(
-                    text = "${formatBytes(file.bytesDownloaded)} / ${formatBytes(file.totalBytes)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+            } else {
+                FileProgressDownloadSection(
+                    file = file,
+                    progress = progress,
                 )
             }
         }
     }
 }
+
+@Composable
+private fun FileProgressItemHeader(
+    file: FileProgressUiModel,
+    isPostProcessing: Boolean,
+    statusColor: Color,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = fileProgressIcon(file.status, isPostProcessing),
+            contentDescription = fileProgressContentDescription(file.status, isPostProcessing),
+            tint =
+                if (isPostProcessing) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    statusColor
+                },
+            modifier = Modifier.size(24.dp),
+        )
+
+        Spacer(modifier = Modifier.width(12.dp))
+
+        Text(
+            text = file.displayName,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+
+        if (isPostProcessing) {
+            ShimmerText(
+                text = "Processing...",
+                baseColor = MaterialTheme.colorScheme.primary,
+                highlightColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
+                style = MaterialTheme.typography.bodySmall,
+            )
+        } else {
+            Text(
+                text = fileProgressHeaderLabel(file),
+                style = MaterialTheme.typography.bodySmall,
+                color = statusColor,
+            )
+        }
+    }
+}
+
+@Composable
+private fun FileProgressPostProcessingSection(
+    file: FileProgressUiModel,
+    postProcessProgress: Float?,
+) {
+    Spacer(modifier = Modifier.height(8.dp))
+    ShimmerText(
+        text = "Unzipping...",
+        baseColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        highlightColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
+        style = MaterialTheme.typography.bodySmall,
+    )
+    postProcessProgress?.let { extractedProgress ->
+        Spacer(modifier = Modifier.height(8.dp))
+        val animatedExtractProgress by animateFloatAsState(
+            targetValue = extractedProgress,
+            animationSpec = tween(durationMillis = 200, easing = LinearEasing),
+            label = "extractProgress",
+        )
+        LinearProgressIndicator(
+            progress = { animatedExtractProgress },
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(50)),
+            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+            strokeCap = StrokeCap.Butt,
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text =
+                "${formatBytes((file.totalBytes * extractedProgress).toLong())} / ${formatBytes(file.totalBytes)}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun FileProgressDownloadSection(
+    file: FileProgressUiModel,
+    progress: () -> Float,
+) {
+    if (file.status != FileStatus.DOWNLOADING &&
+        file.status != FileStatus.PAUSED &&
+        file.status != FileStatus.FAILED
+    ) {
+        return
+    }
+
+    if (file.status == FileStatus.FAILED) {
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = "Download failed. Use Retry below or check your connection.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+        )
+    }
+
+    if (file.status != FileStatus.FAILED) {
+        Spacer(modifier = Modifier.height(8.dp))
+
+        val animatedProgress by animateFloatAsState(
+            targetValue = progress(),
+            animationSpec = tween(durationMillis = 200, easing = LinearEasing),
+            label = "fileProgress",
+        )
+
+        LinearProgressIndicator(
+            progress = { animatedProgress },
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(50)),
+            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+            strokeCap = StrokeCap.Butt,
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Text(
+            text = "${formatBytes(file.bytesDownloaded)} / ${formatBytes(file.totalBytes)}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun fileProgressStatusColor(status: FileStatus): Color =
+    when (status) {
+        FileStatus.COMPLETE -> MaterialTheme.colorScheme.primary
+        FileStatus.FAILED -> MaterialTheme.colorScheme.error
+        FileStatus.DOWNLOADING -> MaterialTheme.colorScheme.primary
+        FileStatus.PAUSED -> MaterialTheme.colorScheme.surfaceVariant
+        FileStatus.QUEUED -> MaterialTheme.colorScheme.outline
+    }
+
+private fun fileProgressIcon(
+    status: FileStatus,
+    isPostProcessing: Boolean,
+): ImageVector =
+    when {
+        isPostProcessing -> Icons.Default.CloudDownload
+        status == FileStatus.COMPLETE -> Icons.Default.CheckCircle
+        status == FileStatus.FAILED -> Icons.Default.Error
+        status == FileStatus.DOWNLOADING -> Icons.Default.CloudDownload
+        status == FileStatus.PAUSED -> Icons.Default.Pause
+        else -> Icons.Default.CloudDownload
+    }
+
+private fun fileProgressContentDescription(
+    status: FileStatus,
+    isPostProcessing: Boolean,
+): String =
+    when {
+        isPostProcessing -> "Unzipping model pack"
+        status == FileStatus.COMPLETE -> "Download complete"
+        status == FileStatus.FAILED -> "Download failed"
+        status == FileStatus.DOWNLOADING -> "Currently downloading"
+        status == FileStatus.PAUSED -> "Download paused"
+        else -> "Queued for download"
+    }
+
+private fun fileProgressHeaderLabel(file: FileProgressUiModel): String =
+    when (file.status) {
+        FileStatus.COMPLETE -> "Complete"
+        FileStatus.FAILED -> "Failed"
+        FileStatus.DOWNLOADING ->
+            file.speedMBs?.let { String.format(Locale.US, "%.1f MB/s", it) } ?: "Downloading..."
+        FileStatus.PAUSED -> "Paused"
+        FileStatus.QUEUED -> "Waiting..."
+    }
 
 @Composable
 private fun DownloadControls(
@@ -613,7 +752,9 @@ private fun DownloadControls(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             when (status) {
-                DownloadStatus.DOWNLOADING -> {
+                DownloadStatus.DOWNLOADING,
+                DownloadStatus.FINALIZING,
+                -> {
                     if (allowCancel) {
                         OutlinedButton(
                             onClick = onCancel,
@@ -705,7 +846,10 @@ private fun DownloadControls(
                     }
                 }
                 else -> {
-                    if (status != DownloadStatus.READY && allowCancel) {
+                    if (status != DownloadStatus.READY &&
+                        status != DownloadStatus.FINALIZING &&
+                        allowCancel
+                    ) {
                         OutlinedButton(
                             onClick = onCancel,
                             modifier = Modifier.fillMaxWidth(),
@@ -963,6 +1107,7 @@ private fun PreviewDownloadHeaderDownloading() {
                 DownloadHeader(
                     status = DownloadStatus.DOWNLOADING,
                     progress = { 0.65f },
+                    postProcessProgress = null,
                     modelsComplete = 1,
                     modelsTotal = 3,
                     speedMBs = 12.4,
@@ -971,6 +1116,8 @@ private fun PreviewDownloadHeaderDownloading() {
                 Spacer(modifier = Modifier.height(24.dp))
                 FileProgressList(
                     files = fakeFilesAllDownloading,
+                    downloadStatus = DownloadStatus.DOWNLOADING,
+                    postProcessProgress = null,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -994,6 +1141,7 @@ private fun PreviewDownloadMixedStates() {
                 DownloadHeader(
                     status = DownloadStatus.DOWNLOADING,
                     progress = { 0.72f },
+                    postProcessProgress = null,
                     modelsComplete = 1,
                     modelsTotal = 4,
                     speedMBs = 15.7,
@@ -1002,6 +1150,8 @@ private fun PreviewDownloadMixedStates() {
                 Spacer(modifier = Modifier.height(24.dp))
                 FileProgressList(
                     files = fakeFilesMixedStates,
+                    downloadStatus = DownloadStatus.DOWNLOADING,
+                    postProcessProgress = null,
                     modifier = Modifier.weight(1f),
                 )
                 ErrorBanner(
@@ -1029,6 +1179,7 @@ private fun PreviewDownloadChecking() {
                 DownloadHeader(
                     status = DownloadStatus.CHECKING,
                     progress = { 0f },
+                    postProcessProgress = null,
                     modelsComplete = 0,
                     modelsTotal = 3,
                     speedMBs = null,
@@ -1055,6 +1206,7 @@ private fun PreviewDownloadPaused() {
                 DownloadHeader(
                     status = DownloadStatus.PAUSED,
                     progress = { 0.42f },
+                    postProcessProgress = null,
                     modelsComplete = 1,
                     modelsTotal = 3,
                     speedMBs = null,
@@ -1063,6 +1215,8 @@ private fun PreviewDownloadPaused() {
                 Spacer(modifier = Modifier.height(24.dp))
                 FileProgressList(
                     files = fakeFilesMixedStates,
+                    downloadStatus = DownloadStatus.DOWNLOADING,
+                    postProcessProgress = null,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -1086,6 +1240,7 @@ private fun PreviewDownloadError() {
                 DownloadHeader(
                     status = DownloadStatus.ERROR,
                     progress = { 0.35f },
+                    postProcessProgress = null,
                     modelsComplete = 0,
                     modelsTotal = 3,
                     speedMBs = null,
@@ -1094,6 +1249,8 @@ private fun PreviewDownloadError() {
                 Spacer(modifier = Modifier.height(24.dp))
                 FileProgressList(
                     files = fakeFilesMixedStates,
+                    downloadStatus = DownloadStatus.DOWNLOADING,
+                    postProcessProgress = null,
                     modifier = Modifier.weight(1f),
                 )
                 ErrorBanner(
@@ -1121,6 +1278,7 @@ private fun PreviewDownloadComplete() {
                 DownloadHeader(
                     status = DownloadStatus.READY,
                     progress = { 1f },
+                    postProcessProgress = 1f,
                     modelsComplete = 3,
                     modelsTotal = 3,
                     speedMBs = null,
@@ -1129,6 +1287,8 @@ private fun PreviewDownloadComplete() {
                 Spacer(modifier = Modifier.height(24.dp))
                 FileProgressList(
                     files = fakeFilesAllComplete,
+                    downloadStatus = DownloadStatus.READY,
+                    postProcessProgress = 1f,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -1161,6 +1321,8 @@ private fun PreviewFileProgressItems() {
                         speedMBs = 12.4,
                     ),
                 progress = { 0.5f },
+                downloadStatus = DownloadStatus.DOWNLOADING,
+                postProcessProgress = null,
             )
 
             Text("Complete", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -1176,15 +1338,15 @@ private fun PreviewFileProgressItems() {
                         speedMBs = null,
                     ),
                 progress = { 1f },
+                downloadStatus = DownloadStatus.READY,
+                postProcessProgress = null,
             )
-
-            Text("Failed", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             FileProgressItem(
                 file = FileProgressUiModel("model.gguf", "sha256-3", "Tokenizer", 150_000_000L, 500_000_000L, FileStatus.FAILED, null),
                 progress = { 0.3f },
+                downloadStatus = DownloadStatus.DOWNLOADING,
+                postProcessProgress = null,
             )
-
-            Text("Paused", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             FileProgressItem(
                 file =
                     FileProgressUiModel(
@@ -1197,12 +1359,14 @@ private fun PreviewFileProgressItems() {
                         speedMBs = null,
                     ),
                 progress = { 0.33f },
+                downloadStatus = DownloadStatus.DOWNLOADING,
+                postProcessProgress = null,
             )
-
-            Text("Queued", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             FileProgressItem(
                 file = FileProgressUiModel("model.gguf", "sha256-5", "Large Model", 0L, 8_000_000_000L, FileStatus.QUEUED, null),
                 progress = { 0f },
+                downloadStatus = DownloadStatus.DOWNLOADING,
+                postProcessProgress = null,
             )
         }
     }
@@ -1224,6 +1388,7 @@ private fun PreviewDownloadLongETA() {
                 DownloadHeader(
                     status = DownloadStatus.DOWNLOADING,
                     progress = { 0.15f },
+                    postProcessProgress = null,
                     modelsComplete = 0,
                     modelsTotal = 5,
                     speedMBs = 2.3,

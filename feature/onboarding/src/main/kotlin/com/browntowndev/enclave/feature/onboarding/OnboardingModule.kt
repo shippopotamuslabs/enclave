@@ -19,7 +19,5 @@ abstract class OnboardingModule {
 
     @Binds
     @Singleton
-    abstract fun bindResolveOnboardingFlowModeUseCase(
-        impl: ResolveOnboardingFlowModeUseCaseImpl,
-    ): ResolveOnboardingFlowModeUseCase
+    abstract fun bindResolveOnboardingFlowModeUseCase(impl: ResolveOnboardingFlowModeUseCaseImpl): ResolveOnboardingFlowModeUseCase
 }

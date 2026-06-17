@@ -4,14 +4,14 @@ import androidx.lifecycle.SavedStateHandle
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.chat.ChatId
+import com.browntowndev.enclave.domain.model.chat.ChatResponseMode
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.MessageState
 import com.browntowndev.enclave.domain.port.repository.SettingsData
-import com.browntowndev.enclave.domain.usecase.chat.AssistantPlaceholderResult
 import com.browntowndev.enclave.domain.usecase.chat.ChatTurnTiming
 import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
-import com.browntowndev.enclave.domain.usecase.chat.UserPromptResult
 import com.browntowndev.enclave.domain.usecase.inference.CancelInferenceUseCase
+import com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase
 import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.enclave.feature.chat.delegates.InferenceOrchestrator
 import com.browntowndev.enclave.feature.inference.ActiveChatTurnStore
@@ -21,7 +21,9 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
@@ -51,9 +53,11 @@ class InferenceOrchestratorStopTest {
     private lateinit var chatRepository: com.browntowndev.enclave.domain.port.repository.ChatRepository
     private lateinit var turnStore: ActiveChatTurnStore
     private lateinit var orchestrator: InferenceOrchestrator
+    private lateinit var applicationScope: CoroutineScope
 
     @BeforeEach
     fun setUp() {
+        applicationScope = CoroutineScope(SupervisorJob() + testDispatcher)
         chatUseCases = mockk(relaxed = true)
         settingsUseCases = mockk()
         cancelInferenceUseCase = mockk(relaxed = true)
@@ -74,28 +78,24 @@ class InferenceOrchestratorStopTest {
                 chatRepository = chatRepository,
                 errorHandler = errorHandler,
                 savedStateHandle = SavedStateHandle(),
+                pipelineExecutor = mockk(relaxed = true),
+                moderatePromptUseCase = mockk<ModeratePromptUseCase>(relaxed = true),
+                loggingPort = mockk(relaxed = true),
+                applicationScope = applicationScope,
             )
 
-        coEvery { chatUseCases.processPrompt(any()) } returns
-            UserPromptResult(
-                userMessageId = MessageId("user-stop-1"),
-                chatId = ChatId("chat-stop-1"),
-                userMessageCreatedAtMillis = 100L,
-            )
-        coEvery {
-            chatUseCases.createAssistantPlaceholder(
-                chatId = any(),
-                userMessageCreatedAtMillis = any(),
-                assistantMessageId = any(),
-            )
-        } returns AssistantPlaceholderResult(assistantMessageId = MessageId("placeholder-unused"))
+        mockSubmitPrompt(
+            chatUseCases = chatUseCases,
+            userMessageId = MessageId("user-stop-1"),
+            chatId = ChatId("chat-stop-1"),
+        )
         coEvery {
             chatUseCases.generateChatResponse(
                 prompt = any(),
                 userMessageId = any(),
                 assistantMessageId = any(),
                 chatId = any(),
-                mode = any(),
+                    responseMode = any(),
                 backgroundInferenceEnabled = any(),
             )
         } returns
@@ -112,11 +112,13 @@ class InferenceOrchestratorStopTest {
                 orchestrator.sendMessage(
                     scope = this,
                     input = "Hello",
-                    selectedMode = ChatModeUi.THINKING,
+                    responseMode = ChatResponseMode.Thinking,
                     selectedImageUris = emptyList(),
                     fileAttachments = emptyList(),
                     initialChatId = null,
+                    shouldModerateResponse = true,
                     onInputCleared = {},
+                    onResponseBlocked = {},
                 )
             }
             advanceTimeBy(ChatTurnTiming.ASSISTANT_PLACEHOLDER_DELAY_MS)
@@ -155,7 +157,7 @@ class InferenceOrchestratorStopTest {
             )
             advanceUntilIdle()
 
-            verify(exactly = 1) { cancelInferenceUseCase() }
+            verify(exactly = 2) { cancelInferenceUseCase() }
             coVerify {
                 chatRepository.updateMessageContent(
                     turnKey.assistantMessageId,

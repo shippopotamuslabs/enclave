@@ -64,7 +64,7 @@ class StudioScreenScrollThresholdTest {
     }
 
     @Test
-    fun thresholdVisible_whenSingleGalleryRowIsVisible_returnsTrue() {
+    fun thresholdVisible_whenSingleGalleryRowIsVisible_returnsFalse() {
         val galleryRowKeys = listOf("row-1")
         val visibleItemKeys = listOf("row-1")
 
@@ -74,7 +74,47 @@ class StudioScreenScrollThresholdTest {
                 visibleItemKeys = visibleItemKeys,
             )
 
-        assertTrue(result)
+        assertFalse(result)
+    }
+
+    @Test
+    fun remainingPlaceholders_whenOneOfThreeImagesCompleted_returnsTwo() {
+        val remaining =
+            computeStudioActiveGenerationRemainingPlaceholders(
+                isGenerating = true,
+                lastSubmittedPrompt = "prompt",
+                groupedGallery =
+                    listOf(
+                        StudioGalleryGroup(
+                            prompt = "prompt",
+                            mediaItems = listOf(studioMedia("asset-1")),
+                        ),
+                    ),
+                expectedCount = 3,
+                baselineMediaCount = 0,
+            )
+
+        assertEquals(2, remaining)
+    }
+
+    @Test
+    fun remainingPlaceholders_whenGenerationInactive_returnsZero() {
+        val remaining =
+            computeStudioActiveGenerationRemainingPlaceholders(
+                isGenerating = false,
+                lastSubmittedPrompt = "prompt",
+                groupedGallery =
+                    listOf(
+                        StudioGalleryGroup(
+                            prompt = "prompt",
+                            mediaItems = listOf(studioMedia("asset-1")),
+                        ),
+                    ),
+                expectedCount = 3,
+                baselineMediaCount = 0,
+            )
+
+        assertEquals(0, remaining)
     }
 
     @Test
@@ -173,6 +213,85 @@ class StudioScreenScrollThresholdTest {
             ),
             headers,
         )
+    }
+
+    @Test
+    fun promptHeaders_whenRegeneratingExistingPrompt_reusesExistingGroupHeader() {
+        val headers =
+            buildStudioPromptHeaderInfo(
+                groupedGallery =
+                    listOf(
+                        StudioGalleryGroup(
+                            prompt = "Turtles",
+                            mediaItems = listOf(studioMedia("asset-1")),
+                        ),
+                        StudioGalleryGroup(
+                            prompt = "Squirrels",
+                            mediaItems = listOf(studioMedia("asset-2")),
+                        ),
+                    ),
+                isGenerating = true,
+                activeGenerationPrompt = "Turtles",
+                generationPlaceholderCount = 1,
+            )
+
+        assertEquals(
+            listOf(
+                StudioPromptHeaderInfo(
+                    key = "studio_header_0_Turtles",
+                    prompt = "Turtles",
+                    itemIndex = 0,
+                ),
+                StudioPromptHeaderInfo(
+                    key = "studio_header_1_Squirrels",
+                    prompt = "Squirrels",
+                    itemIndex = 2,
+                ),
+            ),
+            headers,
+        )
+    }
+
+    @Test
+    fun placeholderScrollIndex_whenRegeneratingExistingPrompt_pointsToExistingGroupPlaceholder() {
+        val scrollIndex =
+            computeStudioGenerationPlaceholderScrollIndex(
+                groupedGallery =
+                    listOf(
+                        StudioGalleryGroup(
+                            prompt = "Turtles",
+                            mediaItems = listOf(studioMedia("asset-1")),
+                        ),
+                        StudioGalleryGroup(
+                            prompt = "Squirrels",
+                            mediaItems = listOf(studioMedia("asset-2")),
+                        ),
+                    ),
+                isGenerating = true,
+                activeGenerationPrompt = "Turtles",
+                generationPlaceholderCount = 1,
+            )
+
+        assertEquals(1, scrollIndex)
+    }
+
+    @Test
+    fun placeholderScrollIndex_whenGeneratingNewPrompt_pointsToTrailingPlaceholderRow() {
+        val scrollIndex =
+            computeStudioGenerationPlaceholderScrollIndex(
+                groupedGallery =
+                    listOf(
+                        StudioGalleryGroup(
+                            prompt = "first",
+                            mediaItems = listOf(studioMedia("asset-1")),
+                        ),
+                    ),
+                isGenerating = true,
+                activeGenerationPrompt = "second",
+                generationPlaceholderCount = 2,
+            )
+
+        assertEquals(3, scrollIndex)
     }
 
     @Test

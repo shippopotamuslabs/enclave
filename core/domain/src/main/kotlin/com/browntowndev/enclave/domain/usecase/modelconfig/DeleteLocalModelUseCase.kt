@@ -3,6 +3,7 @@ package com.browntowndev.enclave.domain.usecase.modelconfig
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelId
+import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.download.ModelFileScannerPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
@@ -39,13 +40,15 @@ class DeleteLocalModelUseCase
          *
          * @param modelId The LocalModelEntity ID to soft-delete
          * @param replacementLocalConfigId Replacement local config ID (from a different model), or null
-         * @param replacementApiConfigId Replacement API config ID, or null (mutually exclusive with localConfigId)
+         * @param replacementApiConfigId Replacement API config ID, or null
+         * @param replacementMediaProviderId Replacement media provider for slots such as IMAGE_GENERATION, or null
          * @return Result.success(Unit) on success, Result.failure if it's the last model or error occurs
          */
         suspend operator fun invoke(
             modelId: LocalModelId,
             replacementLocalConfigId: LocalModelConfigurationId? = null,
             replacementApiConfigId: ApiModelConfigurationId? = null,
+            replacementMediaProviderId: MediaProviderId? = null,
         ): Result<Unit> =
             Result
                 .runCatching {
@@ -63,7 +66,11 @@ class DeleteLocalModelUseCase
                     if (needingReassignment.isNotEmpty()) {
                         // Reassignment required but no replacement given - this is a precondition failure
                         // The UI should have called getModelTypesNeedingReassignment first and shown dialog
-                        require(replacementLocalConfigId != null || replacementApiConfigId != null) {
+                        require(
+                            replacementLocalConfigId != null ||
+                                replacementApiConfigId != null ||
+                                replacementMediaProviderId != null,
+                        ) {
                             "Reassignment is required but no replacement was provided"
                         }
 
@@ -73,6 +80,7 @@ class DeleteLocalModelUseCase
                                 modelType = modelType,
                                 localConfigId = replacementLocalConfigId,
                                 apiConfigId = replacementApiConfigId,
+                                mediaProviderId = replacementMediaProviderId,
                             )
                             loggingPort.info(
                                 TAG,

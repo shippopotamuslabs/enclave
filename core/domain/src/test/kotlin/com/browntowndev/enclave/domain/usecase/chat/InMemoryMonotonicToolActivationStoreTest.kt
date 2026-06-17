@@ -7,53 +7,47 @@ import org.junit.jupiter.api.Test
 
 class InMemoryMonotonicToolActivationStoreTest {
     @Test
-    fun union_empty_newNames_returns_empty_for_fresh_chatId() {
+    fun activatedNames_returns_empty_for_fresh_chatId() {
         val store = InMemoryMonotonicToolActivationStore()
-        val result = store.union(ChatId("chat-1"), emptySet())
-        assertTrue(result.isEmpty())
+        assertTrue(store.activatedNames(ChatId("chat-1")).isEmpty())
     }
 
     @Test
-    fun union_adds_names_and_returns_union() {
+    fun recordActivation_merges_names() {
         val store = InMemoryMonotonicToolActivationStore()
-        val result1 = store.union(ChatId("chat-1"), setOf("tool_a"))
-        assertEquals(setOf("tool_a"), result1)
-        val result2 = store.union(ChatId("chat-1"), setOf("tool_b"))
-        assertEquals(setOf("tool_a", "tool_b"), result2)
+        store.recordActivation(ChatId("chat-1"), setOf("tool_a"))
+        store.recordActivation(ChatId("chat-1"), setOf("tool_b"))
+        assertEquals(setOf("tool_a", "tool_b"), store.activatedNames(ChatId("chat-1")))
     }
 
     @Test
-    fun union_names_never_removed_across_turns() {
+    fun activated_names_never_removed_across_turns() {
         val store = InMemoryMonotonicToolActivationStore()
-        store.union(ChatId("chat-1"), setOf("tool_a", "tool_b"))
-        val result = store.union(ChatId("chat-1"), emptySet())
-        assertEquals(setOf("tool_a", "tool_b"), result)
+        store.recordActivation(ChatId("chat-1"), setOf("tool_a", "tool_b"))
+        assertEquals(setOf("tool_a", "tool_b"), store.activatedNames(ChatId("chat-1")))
     }
 
     @Test
-    fun union_isolated_across_chat_ids() {
+    fun activations_isolated_across_chat_ids() {
         val store = InMemoryMonotonicToolActivationStore()
-        store.union(ChatId("chat-1"), setOf("tool_a"))
-        val result = store.union(ChatId("chat-2"), emptySet())
-        assertTrue(result.isEmpty())
+        store.recordActivation(ChatId("chat-1"), setOf("tool_a"))
+        assertTrue(store.activatedNames(ChatId("chat-2")).isEmpty())
     }
 
     @Test
     fun clearSession_removes_record_for_chatId() {
         val store = InMemoryMonotonicToolActivationStore()
-        store.union(ChatId("chat-1"), setOf("tool_a"))
+        store.recordActivation(ChatId("chat-1"), setOf("tool_a"))
         store.clearSession(ChatId("chat-1"))
-        val result = store.union(ChatId("chat-1"), emptySet())
-        assertTrue(result.isEmpty())
+        assertTrue(store.activatedNames(ChatId("chat-1")).isEmpty())
     }
 
     @Test
     fun clearSession_does_not_affect_other_chatIds() {
         val store = InMemoryMonotonicToolActivationStore()
-        store.union(ChatId("chat-1"), setOf("tool_a"))
-        store.union(ChatId("chat-2"), setOf("tool_b"))
+        store.recordActivation(ChatId("chat-1"), setOf("tool_a"))
+        store.recordActivation(ChatId("chat-2"), setOf("tool_b"))
         store.clearSession(ChatId("chat-1"))
-        val result = store.union(ChatId("chat-2"), emptySet())
-        assertEquals(setOf("tool_b"), result)
+        assertEquals(setOf("tool_b"), store.activatedNames(ChatId("chat-2")))
     }
 }

@@ -24,10 +24,8 @@ class FirestoreSyncDependencyGraphTest {
                 .toSet()
         val graphPaths = FirestoreSyncDependencyGraph.collectionPaths()
 
-        // 22 = production total after `SearchToolSettingsSyncHandler` is registered
-        // (21 prior + 1 new). See `FirestoreSyncAdapterRegistryTest` for the matching
-        // assertion on the registry side.
-        assertEquals(22, registryPaths.size)
+        // 23 = production total after `LiveVoiceProviderSyncHandler` is registered.
+        assertEquals(23, registryPaths.size)
         assertEquals(0, registryPaths.minus(graphPaths).size)
         assertEquals(0, graphPaths.minus(registryPaths).size)
     }
@@ -42,6 +40,7 @@ class FirestoreSyncDependencyGraphTest {
                         "local_config_id" to "local-preset-1",
                         "api_config_id" to "api-preset-1",
                         "tts_provider_id" to "tts-1",
+                        "live_voice_provider_id" to "live-voice-1",
                         "media_provider_id" to "media-1",
                     ),
             )
@@ -51,6 +50,7 @@ class FirestoreSyncDependencyGraphTest {
                 FirestoreSyncDependencyGraph.ParentRef("local_model_configs", "local-preset-1"),
                 FirestoreSyncDependencyGraph.ParentRef("api_model_configs", "api-preset-1"),
                 FirestoreSyncDependencyGraph.ParentRef("tts_providers", "tts-1"),
+                FirestoreSyncDependencyGraph.ParentRef("live_voice_providers", "live-voice-1"),
                 FirestoreSyncDependencyGraph.ParentRef("media_providers", "media-1"),
             ),
             parents,

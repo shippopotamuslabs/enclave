@@ -10,6 +10,8 @@ import com.browntowndev.enclave.domain.model.inference.AgentLoopConfig
 import com.browntowndev.enclave.domain.model.inference.AgentLoopContextPolicyTier
 import com.browntowndev.enclave.domain.model.inference.AgentLoopHostCallbacks
 import com.browntowndev.enclave.domain.model.inference.AgentLoopMessage
+import com.browntowndev.enclave.domain.model.inference.AgentLoopWireKeys
+import com.browntowndev.enclave.domain.model.inference.ContextReferenceNotFoundException
 import com.browntowndev.enclave.domain.model.inference.AgentLoopSessionCapabilities
 import com.browntowndev.enclave.domain.model.inference.AgentLoopSessionIoParams
 import com.browntowndev.enclave.domain.model.inference.AgentModelTurnResult
@@ -18,12 +20,15 @@ import com.browntowndev.enclave.domain.model.inference.AgentSummaryResult
 import com.browntowndev.enclave.domain.model.inference.AgentToolCall
 import com.browntowndev.enclave.domain.model.inference.AgentToolResult
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
+import com.browntowndev.enclave.domain.model.inference.UtilityOnnxRuntimeRequirements
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.port.inference.AgentLoopEvent
 import com.browntowndev.enclave.domain.port.inference.AgentLoopPort
+import com.browntowndev.enclave.domain.port.device.DeviceMemoryProbePort
+import com.browntowndev.enclave.domain.port.inference.CompactionSummarizerPort
 import com.browntowndev.enclave.domain.port.inference.CommittedInferencePromptPort
 import com.browntowndev.enclave.domain.port.inference.CommittedInferenceTranscriptPort
 import com.browntowndev.enclave.domain.port.inference.InferenceEvent
@@ -36,9 +41,18 @@ import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
 import com.browntowndev.enclave.domain.port.repository.DeviceEnvironmentRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.NoopDeviceEnvironmentRepository
 import com.browntowndev.enclave.domain.port.telemetry.TelemetryEventPort
+import com.browntowndev.enclave.domain.util.ContextWindowPlanner
+import com.browntowndev.enclave.domain.util.HarnessOutputSanitizer
 import com.browntowndev.enclave.domain.usecase.chat.InferencePromptContentBuilder
 import com.browntowndev.enclave.domain.usecase.chat.RollingSummarizer
-import com.browntowndev.enclave.domain.usecase.chat.ToolSchemaDisclosureResolver
+import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
+import com.browntowndev.enclave.domain.port.inference.MonotonicToolActivationPort
+import com.browntowndev.enclave.domain.port.inference.NoopToolSearchEmbeddingCachePort
+import com.browntowndev.enclave.domain.port.inference.ToolSearchEmbeddingCachePort
+import com.browntowndev.enclave.domain.port.inference.NoopMonotonicToolActivationPort
+import com.browntowndev.enclave.domain.usecase.chat.RetrievalHintActivation
+import com.browntowndev.enclave.domain.usecase.chat.SearchToolsHostCoordinator
+import com.browntowndev.enclave.domain.usecase.chat.ToolSessionActivationRegistry
 import com.browntowndev.enclave.domain.usecase.inference.ResolveCompactionSummaryModelUseCase
 import com.browntowndev.enclave.domain.util.AppendBlocksToolResultParser
 import com.browntowndev.enclave.domain.util.MediaResultParser
@@ -62,11 +76,25 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Provider
 
 private const val TAG = "RustLoopInferenceService"
 private const val DEFAULT_CONTEXT_WINDOW = 128_000
 private const val HIGH_CONTEXT_WINDOW_THRESHOLD = 128_000
+/** Matches agent_core [`DEFAULT_TOOL_OUTPUT_TTL_TURNS`]. */
+private const val CONTEXT_REFERENCE_TTL_TURNS = 2
+private const val CONTEXT_REFERENCE_POLICY_PREAMBLE =
+    "Reference policy: IDs are exact lookups only—never browse. " +
+        "For conversation history use search_chat_history."
+private const val CONTEXT_REFERENCE_NOT_FOUND_JSON =
+    """{"error":"context_reference_not_found","hint":"This tool is not a search tool. """ +
+        """Use search_chat_history for past conversations, web_search for web facts, """ +
+        """or tool_discovery_tool for hidden tools."}"""
+
+private val contextReferenceTurnSuffix =
+    Regex("""${Regex.escape(AgentLoopWireKeys.CONTEXT_REFERENCE_TURN_SUFFIX)}(\d+)\s*$""")
 
 private val INTERNET_DEPENDENT_TOOL_NAMES =
     setOf(
@@ -86,7 +114,7 @@ private val INTERNET_DEPENDENT_TOOL_NAMES =
  * History, compaction, tool retry, and KV-cache tracking are all delegated to the Rust
  * engine. Kotlin handles model I/O and tool execution at each callback boundary.
  */
-@Suppress("LargeClass")
+@Suppress("LargeClass", "TooManyFunctions")
 class RustLoopInferenceService(
     private val inner: RustCompatibleInferenceService,
     private val agentLoopPort: AgentLoopPort,
@@ -97,16 +125,26 @@ class RustLoopInferenceService(
     private val inferenceFactoryProvider: Provider<InferenceFactoryPort>,
     private val rollingSummarizer: RollingSummarizer,
     private val resolveCompactionSummaryModel: ResolveCompactionSummaryModelUseCase,
+    private val compactionSummarizer: CompactionSummarizerPort = CompactionSummarizerPort.Dummy,
+    private val deviceMemoryProbe: DeviceMemoryProbePort = DeviceMemoryProbePort.Permissive,
     private val committedInferencePrompts: CommittedInferencePromptPort = NoopCommittedInferencePromptPort,
     private val committedInferenceTranscripts: CommittedInferenceTranscriptPort = NoopCommittedInferenceTranscriptPort,
     private val telemetryEventPort: TelemetryEventPort? = null,
     private val deviceEnvironmentRepository: DeviceEnvironmentRepositoryPort = NoopDeviceEnvironmentRepository,
+    private val embeddingEnginePort: EmbeddingEnginePort,
+    private val monotonicToolActivation: MonotonicToolActivationPort = NoopMonotonicToolActivationPort,
+    private val toolSearchEmbeddingCache: ToolSearchEmbeddingCachePort = NoopToolSearchEmbeddingCachePort,
 ) : RustCompatibleInferenceService {
     override val baseUrl: String?
         get() = inner.baseUrl
 
     private val conversationHistory = mutableListOf<ChatMessage>()
-    private val disclosureResolver = ToolSchemaDisclosureResolver()
+    private val toolActivationRegistry = ToolSessionActivationRegistry(monotonicToolActivation)
+    private val searchToolsHostCoordinator =
+        SearchToolsHostCoordinator(
+            embeddingEngine = embeddingEnginePort,
+            embeddingCache = toolSearchEmbeddingCache,
+        )
     private var lastSeenRevision = 0L
     private var latestProviderTranscript: List<ChatMessage> = emptyList()
     private var hasBeenOfflineInSession = false
@@ -125,11 +163,15 @@ class RustLoopInferenceService(
             val startedAtMs = System.currentTimeMillis()
             try {
                 inner.resetAppendOnlyForNewPrompt()
+                toolActivationRegistry.seedTurn(options.activeTools.map { it.name })
                 val history = buildHistory(options.chatId)
                 val userContent = buildUserContent(prompt, options)
                 val initialMessages = history + listOf(ChatMessage(Role.USER, userContent))
-                val config = buildAgentLoopConfig(options)
+                val config = buildAgentLoopConfig(options, resolveUtilitySummarizerCapability())
                 val assistantText = StringBuilder()
+                val sessionTurnIndex = AtomicInteger(0)
+                val harnessOutputBuffer = HarnessOutputSanitizer.StreamBuffer()
+                val modelTurnInProgress = AtomicBoolean(false)
 
                 var telemetrySequenceIndex = 0
                 val host =
@@ -148,6 +190,8 @@ class RustLoopInferenceService(
                             onTextToken: suspend (String) -> Unit,
                             onThinkingToken: suspend (String) -> Unit,
                         ): AgentModelTurnResult {
+                            modelTurnInProgress.set(true)
+                            val currentTurnIndex = sessionTurnIndex.get()
                             val turnOptions =
                                 options.copy(
                                     assistantMessageId = options.assistantMessageId,
@@ -156,30 +200,42 @@ class RustLoopInferenceService(
                                     transcriptRevision = transcriptRevision,
                                 )
                             val result =
-                                inner.completeSingleTurn(
-                                    sessionMessages = sessionMessages,
-                                    systemPrompt = systemPrompt,
-                                    contextSidecars =
-                                        buildContextSidecars(
-                                            contextReferences = contextReferences,
-                                            stateLedgerJson = stateLedgerJson,
-                                            toolContextIndexJson = toolContextIndexJson,
-                                            fileContextIndexJson = fileContextIndexJson,
-                                            cacheHints = cacheHints,
-                                        ),
-                                    // Full eligible tool pool on the wire for prefix-cache stability;
-                                    // Rust active subset is conveyed via sidecar tool context index.
-                                    // Outer allowToolCall still drives provider toolChoice NONE.
-                                    availableTools =
-                                        wireToolsForRequest(
-                                            options = options,
-                                            toolContextIndexJson = toolContextIndexJson,
-                                        ),
-                                    allowToolCall = allowToolCall,
-                                    onTextToken = onTextToken,
-                                    onThinkingToken = onThinkingToken,
-                                    options = turnOptions,
-                                )
+                                try {
+                                    inner.completeSingleTurn(
+                                        sessionMessages = sessionMessages,
+                                        systemPrompt = systemPrompt,
+                                        contextSidecars =
+                                            buildContextSidecars(
+                                                contextReferences = contextReferences,
+                                                stateLedgerJson = stateLedgerJson,
+                                                toolContextIndexJson = toolContextIndexJson,
+                                                fileContextIndexJson = fileContextIndexJson,
+                                                cacheHints = cacheHints,
+                                                currentTurnIndex = currentTurnIndex,
+                                            ),
+                                        availableTools =
+                                            wireToolsForRequest(
+                                                options = options,
+                                                toolContextIndexJson = toolContextIndexJson,
+                                            ),
+                                        allowToolCall = allowToolCall,
+                                        onTextToken = { token ->
+                                            val cleaned = harnessOutputBuffer.append(token)
+                                            if (cleaned.isNotEmpty()) {
+                                                onTextToken(cleaned)
+                                            }
+                                        },
+                                        onThinkingToken = onThinkingToken,
+                                        options = turnOptions,
+                                        onLifecycleEvent = { event -> send(event) },
+                                    )
+                                } finally {
+                                    val trailingHarnessText = harnessOutputBuffer.flush()
+                                    if (trailingHarnessText.isNotEmpty()) {
+                                        onTextToken(trailingHarnessText)
+                                    }
+                                    modelTurnInProgress.set(false)
+                                }
                             latestProviderTranscript = buildProviderTranscript(sessionMessages, result)
                             result.telemetry?.let { telemetry ->
                                 send(InferenceEvent.TelemetryCaptured(telemetry, modelType))
@@ -190,10 +246,13 @@ class RustLoopInferenceService(
 
                         override suspend fun executeTools(calls: List<AgentToolCall>): List<AgentToolResult> =
                             coroutineScope {
-                                calls
-                                    .map { call ->
-                                        async(Dispatchers.IO) { executeOneTool(call, options) }
-                                    }.awaitAll()
+                                val results =
+                                    calls
+                                        .map { call ->
+                                            async(Dispatchers.IO) { executeOneTool(call, options) }
+                                        }.awaitAll()
+                                applyHintActivationsFromToolResults(results, options)
+                                results
                             }
 
                         override suspend fun onToolResult(
@@ -206,54 +265,41 @@ class RustLoopInferenceService(
 
                         override suspend fun summarize(request: AgentSummaryRequest): AgentSummaryResult {
                             val messages = request.messagesToSummarize.map { it.toChatMessage() }
-                            val summaryModelType =
-                                resolveCompactionSummaryModel.invoke(
-                                    activeTurnModelType = modelType,
-                                    messagesToSummarize = messages,
+                            val prompt =
+                                rollingSummarizer.buildAgentSummaryPrompt(
+                                    messages = messages,
+                                    instruction = request.instruction,
+                                    focusInstruction = request.focusInstruction,
+                                    historyRef = request.historyRef,
+                                    stateLedgerSnapshotJson = request.stateLedgerSnapshotJson,
+                                    trigger = request.trigger,
                                 )
-                            loggingPort.debug(
-                                TAG,
-                                "compaction_summary provider=$provider activeTurn=$modelType " +
-                                    "selectedModel=$summaryModelType messageCount=${messages.size} " +
-                                    "trigger=${request.trigger.name}",
-                            )
                             val summaryText =
-                                inferenceFactoryProvider.get().withInferenceService(summaryModelType) { summaryService ->
-                                    if (summaryService is RustCompatibleInferenceService) {
-                                        val prompt =
-                                            rollingSummarizer.buildAgentSummaryPrompt(
-                                                messages = messages,
-                                                instruction = request.instruction,
-                                                focusInstruction = request.focusInstruction,
-                                                historyRef = request.historyRef,
-                                                stateLedgerSnapshotJson = request.stateLedgerSnapshotJson,
-                                                trigger = request.trigger,
-                                            )
-                                        summaryService
-                                            .completeSingleTurn(
-                                                sessionMessages = listOf(AgentLoopMessage("summary-request", Role.USER, prompt)),
-                                                systemPrompt = "",
-                                                contextSidecars = null,
-                                                availableTools = emptyList(),
-                                                allowToolCall = false,
-                                                onTextToken = {},
-                                                onThinkingToken = {},
-                                                options = GenerationOptions(reasoningBudget = 0, maxTokens = 1024),
-                                            ).assistantText
-                                    } else {
-                                        rollingSummarizer.summarizeAgentRequest(
-                                            messages = messages,
-                                            service = summaryService,
-                                            instruction = request.instruction,
-                                            focusInstruction = request.focusInstruction,
-                                            historyRef = request.historyRef,
-                                            stateLedgerSnapshotJson = request.stateLedgerSnapshotJson,
-                                            trigger = request.trigger,
+                                when {
+                                    provider == "LLAMA" && shouldUseUtilityCompactionSummarizer() -> {
+                                        loggingPort.debug(
+                                            TAG,
+                                            "compaction_summary lane=utility_onnx messageCount=${messages.size} " +
+                                                "trigger=${request.trigger.name}",
                                         )
+                                        compactionSummarizer.summarize(prompt)
+                                    }
+                                    provider != "LLAMA" ->
+                                        runHostedCompactionSummary(
+                                            messages = messages,
+                                            request = request,
+                                        )
+                                    else -> {
+                                        loggingPort.debug(
+                                            TAG,
+                                            "compaction_summary lane=skipped provider=$provider " +
+                                                "messageCount=${messages.size} trigger=${request.trigger.name}",
+                                        )
+                                        null
                                     }
                                 }
                             return AgentSummaryResult(
-                                summaryText = summaryText ?: "Summary unavailable.",
+                                summaryText = summaryText.orEmpty(),
                                 lastMessageId = request.lastMessageId,
                             )
                         }
@@ -268,13 +314,23 @@ class RustLoopInferenceService(
                         host = host,
                     ).collect { event ->
                         when (event) {
+                            is AgentLoopEvent.TurnStarted -> {
+                                sessionTurnIndex.set(event.index)
+                                harnessOutputBuffer.reset()
+                                send(InferenceEvent.AnswerStreamBoundary(modelType))
+                            }
                             is AgentLoopEvent.TextToken -> {
-                                assistantText.append(event.text)
-                                send(InferenceEvent.PartialResponse(event.text, modelType))
+                                val text =
+                                    if (modelTurnInProgress.get()) {
+                                        event.text
+                                    } else {
+                                        HarnessOutputSanitizer.sanitize(event.text)
+                                    }
+                                assistantText.append(text)
+                                send(InferenceEvent.PartialResponse(text, modelType))
                             }
                             is AgentLoopEvent.ThinkingToken -> send(InferenceEvent.Thinking(event.text, modelType))
                             is AgentLoopEvent.ToolCallExecuted -> {}
-                            is AgentLoopEvent.TurnStarted -> {}
                             is AgentLoopEvent.TurnCompleted -> {}
                             is AgentLoopEvent.CompactionApplied ->
                                 send(
@@ -288,8 +344,10 @@ class RustLoopInferenceService(
                                 )
                             is AgentLoopEvent.ToolRepaired ->
                                 send(InferenceEvent.ToolRepaired(event.originalName, event.resolvedName, event.confidence, modelType))
-                            is AgentLoopEvent.KvCacheInvalidated ->
+                            is AgentLoopEvent.KvCacheInvalidated -> {
+                                inner.clearAppendOnlyOnRustCompactionBoundary()
                                 loggingPort.info(TAG, "KV cache invalidated reason=${event.reason}")
+                            }
                             is AgentLoopEvent.PreCompact ->
                                 send(InferenceEvent.PreCompact(event.trigger, modelType)).also {
                                     loggingPort.debug(TAG, "pre_compact trigger=${event.trigger}")
@@ -349,6 +407,19 @@ class RustLoopInferenceService(
                                 if (closeConversation) closeSession()
                                 send(InferenceEvent.Finished(modelType))
                             }
+                            is AgentLoopEvent.ModelApiRetryScheduled -> {
+                                assistantText.clear()
+                                harnessOutputBuffer.reset()
+                                send(
+                                    InferenceEvent.ModelApiRetryScheduled(
+                                        attempt = event.attempt,
+                                        maxAttempts = event.maxAttempts,
+                                        delayMs = event.delayMs,
+                                        reason = event.reason,
+                                        modelType = modelType,
+                                    ),
+                                )
+                            }
                             is AgentLoopEvent.Failed -> {
                                 telemetryEventPort.emitInferenceExecutionOutcome(
                                     startedAtMs = startedAtMs,
@@ -381,6 +452,7 @@ class RustLoopInferenceService(
         onTextToken: suspend (String) -> Unit,
         onThinkingToken: suspend (String) -> Unit,
         options: GenerationOptions,
+        onLifecycleEvent: suspend (InferenceEvent) -> Unit,
     ): AgentModelTurnResult =
         inner.completeSingleTurn(
             sessionMessages = sessionMessages,
@@ -391,6 +463,7 @@ class RustLoopInferenceService(
             onTextToken = onTextToken,
             onThinkingToken = onThinkingToken,
             options = options,
+            onLifecycleEvent = onLifecycleEvent,
         )
 
     override suspend fun setHistory(messages: List<ChatMessage>) {
@@ -430,29 +503,15 @@ class RustLoopInferenceService(
         }
 
     private fun AgentLoopMessage.isEngineInternalSidecar(): Boolean {
-        val metadata =
-            runCatching {
-                if (metadataJson != "null" && metadataJson.isNotBlank()) {
-                    Json.parseToJsonElement(metadataJson).jsonObject
-                } else {
-                    null
-                }
-            }.getOrNull()
-
-        if (metadata != null) {
-            if (metadata.containsKey("agent_tool_budget") ||
-                metadata.containsKey("tools_blocked_nudge") ||
-                metadata.containsKey("envelope_parse_failure")
-            ) {
-                return true
-            }
+        if (EngineInternalMessageMapper.isEngineInternalMessage(metadataJson)) {
+            return true
         }
 
         val contentObj =
             runCatching {
                 Json.parseToJsonElement(content).jsonObject
             }.getOrNull()
-        if (contentObj != null && contentObj.size == 1 && contentObj.containsKey("_agent")) {
+        if (contentObj != null && contentObj.size == 1 && contentObj.containsKey(AgentLoopWireKeys.ENGINE_PAYLOAD_JSON_KEY)) {
             return true
         }
 
@@ -515,24 +574,75 @@ class RustLoopInferenceService(
         }.toString()
     }
 
-    private fun buildAgentLoopConfig(options: GenerationOptions): AgentLoopConfig =
+    private suspend fun resolveUtilitySummarizerCapability(): Boolean =
+        provider == "LLAMA" &&
+            compactionSummarizer.isModelInstalled() &&
+            deviceMemoryProbe.hasHeadroom(
+                UtilityOnnxRuntimeRequirements.requiredHeadroomBytes(chatModelLoaded = true),
+            )
+
+    private suspend fun shouldUseUtilityCompactionSummarizer(): Boolean = resolveUtilitySummarizerCapability()
+
+    private suspend fun runHostedCompactionSummary(
+        messages: List<ChatMessage>,
+        request: AgentSummaryRequest,
+    ): String? {
+        val summaryModelType =
+            resolveCompactionSummaryModel.invoke(
+                activeTurnModelType = modelType,
+                messagesToSummarize = messages,
+            )
+        loggingPort.debug(
+            TAG,
+            "compaction_summary lane=hosted provider=$provider activeTurn=$modelType " +
+                "selectedModel=$summaryModelType messageCount=${messages.size} " +
+                "trigger=${request.trigger.name}",
+        )
+        return inferenceFactoryProvider.get().withInferenceService(summaryModelType) { summaryService ->
+            rollingSummarizer.summarizeAgentRequest(
+                messages = messages,
+                service = summaryService,
+                instruction = request.instruction,
+                focusInstruction = request.focusInstruction,
+                historyRef = request.historyRef,
+                stateLedgerSnapshotJson = request.stateLedgerSnapshotJson,
+                trigger = request.trigger,
+            )
+        }
+    }
+
+    private fun buildAgentLoopConfig(
+        options: GenerationOptions,
+        summarizationAllowed: Boolean,
+    ): AgentLoopConfig =
         AgentLoopConfig(
             agent =
                 AgentLoopAgentConfig(
-                    maxModelRequestsPerTurn = 2u,
+                    // Each tool round consumes one model request; 2 allowed only a single
+                    // tool round before tools were force-blocked, which made multi-step
+                    // tool turns end in the tools-blocked fallback message.
+                    maxModelRequestsPerTurn = 6u,
                     enableLoopHooks = true,
                     enablePendingWorkGuard = true,
                 ),
             capabilities =
                 when (provider) {
-                    "LLAMA" ->
+                    "LLAMA" -> {
+                        val contextWindow = options.contextWindow ?: DEFAULT_CONTEXT_WINDOW
                         AgentLoopSessionCapabilities(
-                            summarizationAllowed = false,
+                            summarizationAllowed = summarizationAllowed,
                             kvFixed = true,
-                            contextPolicyTier = AgentLoopContextPolicyTier.FIXED_KV,
+                            contextPolicyTier =
+                                if (contextWindow < ContextWindowPlanner.LOCAL_FIXED_KV_CONTEXT_THRESHOLD) {
+                                    AgentLoopContextPolicyTier.SMALL_CONTEXT
+                                } else {
+                                    AgentLoopContextPolicyTier.FIXED_KV
+                                },
+                            toolSchemaDeferralSupported = true,
                             historyRewriteSupported = true,
                             lifecycleHooksSupported = true,
                         )
+                    }
                     else ->
                         AgentLoopSessionCapabilities(
                             contextPolicyTier =
@@ -605,7 +715,7 @@ class RustLoopInferenceService(
     }
 
     /** Full eligible tool set for mapping Rust-emitted active names back to [ToolDefinition]. */
-    private fun eligibleToolPool(options: GenerationOptions): List<ToolDefinition> {
+    private fun toolDefinitionLookupPool(options: GenerationOptions): List<ToolDefinition> {
         val byName = LinkedHashMap<String, ToolDefinition>()
         options.toolCatalog.forEach { entry ->
             ToolDefinition.fromName(entry.name)?.let { byName[it.name] = it }
@@ -615,9 +725,7 @@ class RustLoopInferenceService(
     }
 
     /**
-     * Stable superset of tools for the provider wire payload. Rust may shrink the active
-     * schema in [toolsSchemaJson]; deferral and activation are conveyed via sidecars instead
-     * of mutating the tools array (prompt-cache prefix stability).
+     * Session append-only wire registry: preload ∪ tools activated via [tool_discovery_tool] this prompt.
      */
     private fun wireToolsForRequest(
         options: GenerationOptions,
@@ -626,7 +734,8 @@ class RustLoopInferenceService(
         if (toolContextIndexJson != null && toolNamesFromContextIndex(toolContextIndexJson) == null) {
             return emptyList()
         }
-        return eligibleToolPool(options)
+        val poolByName = toolDefinitionLookupPool(options).associateBy { it.name }
+        return toolActivationRegistry.orderedActiveNames().mapNotNull { poolByName[it] }
     }
 
     private fun toolNamesFromContextIndex(toolContextIndexJson: String): List<String>? =
@@ -642,10 +751,14 @@ class RustLoopInferenceService(
         call: AgentToolCall,
         options: GenerationOptions,
     ): AgentToolResult {
-        if (call.name == ToolDefinition.DISCLOSE_TOOL_SCHEMAS.name) {
-            return handleDisclosureCall(call, options)
+        if (call.name == ToolDefinition.SEARCH_TOOLS.name) {
+            return handleToolSearchCall(call, options)
         }
         if (call.name == ToolDefinition.READ_CONTEXT_REFERENCE.name) {
+            toolActivationRegistry.applySearchActivations(
+                activatedNames = listOf(ToolDefinition.READ_CONTEXT_REFERENCE.name),
+                chatId = options.chatId,
+            )
             return handleReadContextReference(call)
         }
         if (call.name in INTERNET_DEPENDENT_TOOL_NAMES && !deviceEnvironmentRepository.isNetworkAvailable()) {
@@ -678,6 +791,7 @@ class RustLoopInferenceService(
                 resultJson = result.resultJson,
                 truncated = false,
                 softFailure = false,
+                activatedToolNames = artifactCompanionActivations(call.name, result.resultJson),
             )
         } catch (e: CancellationException) {
             throw e
@@ -692,27 +806,56 @@ class RustLoopInferenceService(
         }
     }
 
-    private fun handleDisclosureCall(
+    /**
+     * Successful [ToolDefinition.START_ARTIFACT] must unlock the append/search trio so the next
+     * provider turn registers [ToolDefinition.APPEND_BLOCKS] on the wire (Rust merges
+     * [AgentToolResult.activatedToolNames] into its active set as well).
+     */
+    private fun artifactCompanionActivations(
+        toolName: String,
+        resultJson: String,
+    ): List<String> {
+        if (toolName != ToolDefinition.START_ARTIFACT.name) return emptyList()
+        val status =
+            runCatching {
+                Json.parseToJsonElement(resultJson).jsonObject["status"]?.jsonPrimitive?.content
+            }.getOrNull()
+        if (status != "success") return emptyList()
+        return listOf(
+            ToolDefinition.APPEND_BLOCKS.name,
+            ToolDefinition.SEARCH_CURRENT_ARTIFACT.name,
+        )
+    }
+
+    private fun applyHintActivationsFromToolResults(
+        results: List<AgentToolResult>,
+        options: GenerationOptions,
+    ) {
+        val hinted =
+            RetrievalHintActivation.toolsFromToolResults(results) +
+                results.flatMap { it.activatedToolNames }
+        toolActivationRegistry.applySearchActivations(
+            activatedNames = hinted,
+            chatId = options.chatId,
+        )
+    }
+
+    private suspend fun handleToolSearchCall(
         call: AgentToolCall,
         options: GenerationOptions,
     ): AgentToolResult {
-        val requestedNames =
-            runCatching {
-                val args = Json.parseToJsonElement(call.argumentsJson).jsonObject
-                args["tool_names"]?.jsonArray?.mapNotNull { it.jsonPrimitive.content } ?: emptyList()
-            }.getOrDefault(emptyList())
-        val effectiveActive = options.activeTools
-        val activeNames = effectiveActive.map { it.name }.toSet()
-        val deferredCatalog =
-            options.toolCatalog.filter { entry ->
-                entry.name !in activeNames
+        val searchCatalog =
+            options.toolCatalog.ifEmpty {
+                toolDefinitionLookupPool(options).map { it.catalogEntry() }
             }
         val resolution =
-            disclosureResolver.resolve(
-                toolNames = requestedNames,
-                toolCatalog = deferredCatalog,
-                activeTools = effectiveActive,
+            searchToolsHostCoordinator.executeFromArguments(
+                argumentsJson = call.argumentsJson,
+                toolCatalog = searchCatalog,
+                activationRegistry = toolActivationRegistry,
+                providedIndex = options.toolSearchIndex,
                 strategy = options.toolCallStrategy,
+                chatId = options.chatId,
             )
         return AgentToolResult(
             callId = call.callId,
@@ -734,7 +877,7 @@ class RustLoopInferenceService(
             }.getOrNull()
                 ?: return AgentToolResult(
                     callId = call.callId,
-                    resultJson = """{"error":"missing_reference_id"}""",
+                    resultJson = CONTEXT_REFERENCE_NOT_FOUND_JSON,
                     truncated = false,
                     softFailure = true,
                 )
@@ -748,6 +891,14 @@ class RustLoopInferenceService(
             )
         } catch (e: CancellationException) {
             throw e
+        } catch (@Suppress("SwallowedException") e: ContextReferenceNotFoundException) {
+            loggingPort.debug(TAG, "read_context_reference missing id=$referenceId")
+            return AgentToolResult(
+                callId = call.callId,
+                resultJson = CONTEXT_REFERENCE_NOT_FOUND_JSON,
+                truncated = false,
+                softFailure = true,
+            )
         } catch (t: Throwable) {
             loggingPort.error(TAG, "read_context_reference failed id=$referenceId", t)
             AgentToolResult(
@@ -788,6 +939,7 @@ class RustLoopInferenceService(
         toolContextIndexJson: String?,
         fileContextIndexJson: String?,
         cacheHints: List<String>,
+        currentTurnIndex: Int,
     ): String? {
         val compactLedger = stateLedgerJson?.let(ContextSidecarCompaction::compactStateLedgerJson)
         val compactToolIndex =
@@ -818,16 +970,14 @@ class RustLoopInferenceService(
 
         return buildString {
             appendLine("Context management sidecars:")
+            appendLine(CONTEXT_REFERENCE_POLICY_PREAMBLE)
             if (networkStatus.isNotBlank()) {
                 appendLine(networkStatus)
             }
             if (contextReferences.isNotEmpty()) {
                 appendLine("References:")
                 contextReferences.forEach { reference ->
-                    appendLine(
-                        "- ${reference.kind} ${reference.id}: " +
-                            "${reference.title}. ${reference.retrievalHint}",
-                    )
+                    append(formatContextReferenceLine(reference, currentTurnIndex))
                 }
             }
             compactLedger?.let { appendLine("State ledger JSON: $it") }
@@ -866,6 +1016,46 @@ class RustLoopInferenceService(
             content = content,
             metadataJson = metadataJson,
         )
+
+    private fun formatContextReferenceLine(
+        reference: AgentContextReference,
+        currentTurnIndex: Int,
+    ): String {
+        val referenceTurn = parseTurnFromTitle(reference.title)
+        val freshness =
+            if (isStaleContextReference(reference.kind, referenceTurn, currentTurnIndex)) {
+                "stale"
+            } else {
+                "fresh"
+            }
+        return buildString {
+            appendLine(
+                "- [${reference.kind}|turn:${referenceTurn ?: "unknown"}|$freshness] " +
+                    "${reference.id} (${reference.byteLen}b): ${reference.title}",
+            )
+            appendLine("""  preview: "${reference.preview}"""")
+            appendLine("  ${reference.retrievalHint}")
+        }
+    }
+
+    private fun parseTurnFromTitle(title: String): Int? =
+        contextReferenceTurnSuffix
+            .find(title.trim())
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.toIntOrNull()
+
+    private fun isStaleContextReference(
+        kind: String,
+        referenceTurn: Int?,
+        currentTurnIndex: Int,
+    ): Boolean {
+        if (kind != "TOOL_OUTPUT" || referenceTurn == null) {
+            return false
+        }
+        val age = currentTurnIndex - referenceTurn
+        return age >= CONTEXT_REFERENCE_TTL_TURNS - 1 && age < CONTEXT_REFERENCE_TTL_TURNS
+    }
 
     private fun errorJson(
         call: AgentToolCall,

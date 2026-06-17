@@ -22,7 +22,7 @@ class GoogleRequestMapperTest {
                     GenerationOptions(
                         reasoningBudget = 0,
                         toolingEnabled = true,
-                        activeTools = listOf(ToolDefinition.DISCLOSE_TOOL_SCHEMAS, ToolDefinition.WEB_SEARCH),
+                        activeTools = listOf(ToolDefinition.SEARCH_TOOLS, ToolDefinition.WEB_SEARCH),
                         apiProvider = com.browntowndev.enclave.domain.model.inference.ApiProvider.GOOGLE,
                         modelId = "gemini-1.5-flash",
                     ),
@@ -35,7 +35,7 @@ class GoogleRequestMapperTest {
                 .flatMap { it.functionDeclarations().orElseThrow() }
                 .map { it.name().orElseThrow() }
 
-        assertEquals(listOf("disclose_tool_schemas", "web_search"), declaredFunctionNames)
+        assertEquals(listOf("tool_discovery_tool", "web_search"), declaredFunctionNames)
         assertFalse(declaredFunctionNames.contains("append_blocks"))
     }
 

@@ -2,7 +2,6 @@ package com.browntowndev.enclave.feature.moa.service
 
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -29,12 +28,16 @@ class InferenceServiceStarter
             chatId: String,
             userMessage: String,
             stateJson: String? = null,
+            userMessageId: String? = null,
+            assistantMessageId: String? = null,
         ): Intent =
             Intent(context, InferenceService::class.java).apply {
                 action = InferenceService.ACTION_START
                 putExtra(InferenceService.EXTRA_CHAT_ID, chatId)
                 putExtra(InferenceService.EXTRA_USER_MESSAGE, userMessage)
                 stateJson?.let { putExtra(InferenceService.EXTRA_STATE_JSON, it) }
+                userMessageId?.let { putExtra(InferenceService.EXTRA_USER_MESSAGE_ID, it) }
+                assistantMessageId?.let { putExtra(InferenceService.EXTRA_ASSISTANT_MESSAGE_ID, it) }
             }
 
         /**
@@ -61,14 +64,18 @@ class InferenceServiceStarter
             chatId: String,
             userMessage: String,
             stateJson: String? = null,
+            userMessageId: String? = null,
+            assistantMessageId: String? = null,
         ) {
-            val intent = createStartIntent(chatId, userMessage, stateJson)
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
+            val intent =
+                createStartIntent(
+                    chatId = chatId,
+                    userMessage = userMessage,
+                    stateJson = stateJson,
+                    userMessageId = userMessageId,
+                    assistantMessageId = assistantMessageId,
+                )
+            context.startForegroundService(intent)
         }
 
         /**
@@ -77,7 +84,11 @@ class InferenceServiceStarter
          */
         fun stopService() {
             val intent = createStopIntent()
-            context.startService(intent)
+            try {
+                context.startService(intent)
+            } catch (_: IllegalStateException) {
+                // Service already stopped while app is backgrounded.
+            }
         }
 
         /**
@@ -108,11 +119,6 @@ class InferenceServiceStarter
             stateJson: String,
         ) {
             val intent = createResumeIntent(chatId, stateJson)
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
+            context.startForegroundService(intent)
         }
     }

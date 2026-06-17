@@ -67,6 +67,10 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
+        ndk {
+            abiFilters += listOf("arm64-v8a")
+        }
+
         buildConfigField("boolean", "ALLOW_CANCEL_DOWNLOAD", "false")
         buildConfigField(
             "String",
@@ -115,6 +119,17 @@ android {
             enableUnitTestCoverage = true
         }
     }
+    flavorDimensions += "distribution"
+    productFlavors {
+        create("normal") {
+            dimension = "distribution"
+            buildConfigField("boolean", "IS_PLAY_STORE_FLAVOR", "false")
+        }
+        create("playStore") {
+            dimension = "distribution"
+            buildConfigField("boolean", "IS_PLAY_STORE_FLAVOR", "true")
+        }
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -125,6 +140,9 @@ android {
     }
 
     packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
         resources {
             excludes += "META-INF/DEPENDENCIES"
             excludes += "META-INF/INDEX.LIST"
@@ -219,6 +237,7 @@ dependencies {
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.hilt.android.testing)
+    androidTestImplementation(project(":local-image-gen-android"))
     kspAndroidTest(libs.hilt.compiler)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)

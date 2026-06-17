@@ -5,6 +5,7 @@ import com.browntowndev.enclave.feature.inference.fal.FalOutputSchemaResolver
 import com.browntowndev.enclave.feature.inference.fal.FalRequest
 import com.browntowndev.enclave.feature.inference.fal.FalService
 import com.browntowndev.enclave.feature.inference.media.FalVideoGenerationAdapter
+import io.mockk.clearMocks
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -21,7 +22,6 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
 import okhttp3.OkHttpClient
-import io.mockk.clearMocks
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue

@@ -73,6 +73,16 @@ interface StudioMediaDao {
     @Query("SELECT * FROM studio_gallery WHERE syncStatus = 'PENDING_UPLOAD' AND deleted = 0")
     suspend fun getPendingUploads(): List<StudioMediaEntity>
 
+    /**
+     * Rows whose bytes already live in cloud storage. On a freshly installed device these have
+     * been synced down with [StudioMediaEntity.mediaUri] pointing at the remote (encrypted) URL
+     * and no local file yet. The caller decrypts each row to decide which ones still need their
+     * bytes downloaded and materialized locally. [mediaUri]/[remoteUrl] are encrypted at rest, so
+     * the local-file check cannot be expressed in SQL.
+     */
+    @Query("SELECT * FROM studio_gallery WHERE syncStatus = 'UPLOADED' AND deleted = 0")
+    suspend fun getUploaded(): List<StudioMediaEntity>
+
     @Query("SELECT * FROM studio_gallery WHERE deleted = 1 AND syncStatus != 'DELETED'")
     suspend fun getPendingDeletions(): List<StudioMediaEntity>
 

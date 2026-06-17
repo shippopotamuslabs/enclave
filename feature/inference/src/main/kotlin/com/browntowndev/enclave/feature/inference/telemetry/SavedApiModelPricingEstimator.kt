@@ -38,12 +38,12 @@ class SavedApiModelPricingEstimator
                 } else {
                     (input - cacheRead).coerceAtLeast(0)
                 }
+            // completion_tokens already includes reasoning tokens on OpenAI-compatible providers.
             val dollars =
                 billableInput * inputRatePerToken +
                     cacheRead * cacheReadRatePerToken +
                     output * outputRatePerToken +
-                    reasoning * outputRatePerToken +
-                    cacheCreate * inputRatePerToken
+                    cacheCreate * inputRatePerToken * ANTHROPIC_CACHE_WRITE_MULTIPLIER
             return BigDecimal.valueOf(dollars).setScale(COST_SCALE, java.math.RoundingMode.HALF_UP)
         }
 
@@ -52,5 +52,7 @@ class SavedApiModelPricingEstimator
         private companion object {
             private const val TOKENS_PER_MILLION = 1_000_000.0
             private const val COST_SCALE = 6
+            /** Anthropic cache creation is billed at 1.25× the input token rate. */
+            private const val ANTHROPIC_CACHE_WRITE_MULTIPLIER = 1.25
         }
     }

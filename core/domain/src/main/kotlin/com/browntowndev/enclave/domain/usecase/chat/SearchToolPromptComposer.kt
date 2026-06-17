@@ -2,7 +2,6 @@ package com.browntowndev.enclave.domain.usecase.chat
 
 import com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
-import com.browntowndev.enclave.domain.model.inference.ToolDisclosureMode
 import com.browntowndev.enclave.domain.model.memory.Memory
 import com.browntowndev.enclave.domain.model.memory.MemoryCategory
 import com.browntowndev.enclave.domain.port.inference.PromptComposerPort
@@ -21,18 +20,25 @@ class SearchToolPromptComposer
             retrievedMemories: List<Memory>,
             retrievedSearchResults: String?,
             retrievedXSearchResults: String?,
+            compactStaticPrompt: Boolean,
         ): String =
             listOfNotNull(
-                formatCoreMemories(coreMemories).takeIf(String::isNotEmpty),
-                formatPsychProfile(coreMemories).takeIf(String::isNotEmpty),
+                formatCoreMemories(coreMemories, compact = compactStaticPrompt).takeIf(String::isNotEmpty),
+                if (!compactStaticPrompt) formatPsychProfile(coreMemories).takeIf(String::isNotEmpty) else null,
                 baseSystemPrompt?.trim()?.takeIf(String::isNotEmpty),
-                catalogToolContract(
-                    toolCatalog = toolCatalog,
-                    activeTools = activeTools,
-                    currentChatId = currentChatId,
-                    strategy = strategy,
-                    includeActiveExamples = true,
-                ).takeIf(String::isNotEmpty),
+                if (strategy == ToolCallStrategy.SDK_NATIVE) {
+                    sdkNativeCompactBlocks(toolCatalog = toolCatalog).takeIf(String::isNotEmpty)
+                } else {
+                    catalogToolContract(
+                        toolCatalog = toolCatalog,
+                        activeTools = activeTools,
+                        currentChatId = currentChatId,
+                        strategy = strategy,
+                        includeActiveExamples = !compactStaticPrompt,
+                        includeMemoryDeferredNote = !compactStaticPrompt,
+                        compact = compactStaticPrompt,
+                    ).takeIf(String::isNotEmpty)
+                },
             ).joinToString(separator = "\n\n")
 
         override fun composeVolatileTurnContext(
@@ -47,7 +53,18 @@ class SearchToolPromptComposer
             ).joinToString(separator = "\n\n").takeIf { it.isNotBlank() }
 
         companion object {
-            private fun formatCoreMemories(memories: List<Memory>): String {
+            const val TOOL_DISCOVERY_INSTRUCTION_TEXT =
+                "Tool routing: answer stable facts and ordinary questions directly. For current information or an explicit " +
+                    "web lookup, call web_search directly. Call tool_discovery_tool only to activate a hidden executable tool " +
+                    "needed for an action that no active tool can perform. It searches tool metadata, never facts or the web."
+
+            private const val MAX_COMPACT_CORE_MEMORY_ITEMS = 4
+            private const val MAX_COMPACT_MEMORY_LINE_CHARS = 120
+
+            private fun formatCoreMemories(
+                memories: List<Memory>,
+                compact: Boolean,
+            ): String {
                 if (memories.isEmpty()) return ""
 
                 val identity = memories.filter { it.category == MemoryCategory.CORE_IDENTITY }
@@ -57,14 +74,34 @@ class SearchToolPromptComposer
                     append("# ABOUT THE USER:\n")
                     if (identity.isNotEmpty()) {
                         append("## Identity & Background:\n")
-                        identity.forEach { append("- ${it.content}\n") }
+                        identity
+                            .take(if (compact) MAX_COMPACT_CORE_MEMORY_ITEMS else identity.size)
+                            .forEach { append("- ${formatMemoryLine(it.content, compact)}\n") }
                     }
                     if (preferences.isNotEmpty()) {
                         if (identity.isNotEmpty()) append("\n")
                         append("## Preferences & Style:\n")
-                        preferences.forEach { append("- ${it.content}\n") }
+                        val remaining =
+                            if (compact) {
+                                (MAX_COMPACT_CORE_MEMORY_ITEMS - identity.size).coerceAtLeast(0)
+                            } else {
+                                preferences.size
+                            }
+                        preferences
+                            .take(remaining)
+                            .forEach { append("- ${formatMemoryLine(it.content, compact)}\n") }
                     }
                 }.trim()
+            }
+
+            private fun formatMemoryLine(
+                content: String,
+                compact: Boolean,
+            ): String {
+                if (!compact || content.length <= MAX_COMPACT_MEMORY_LINE_CHARS) {
+                    return content
+                }
+                return content.take(MAX_COMPACT_MEMORY_LINE_CHARS).trimEnd() + "…"
             }
 
             private fun formatPsychProfile(memories: List<Memory>): String {
@@ -108,30 +145,37 @@ $results
             }
 
             @Suppress("MaxLineLength")
-            private fun metadataRules(): String =
-                """
+            private fun metadataRules(compact: Boolean): String =
+                if (compact) {
+                    "Use message metadata timestamps for time context; never mention metadata in replies."
+                } else {
+                    """
 # TEMPORAL CONTEXT:
 User messages include a `[Metadata: Sent at ...]` or `[Metadata: Current Time: ...]` footer. Use this to understand the current time and the timeline of the conversation.
 IMPORTANT: DO NOT include metadata tags or mentions of the footer in your responses. Respond naturally as if the metadata were invisible context.
-                """.trimIndent()
+                    """.trimIndent()
+                }
 
             private fun strictRules(strategy: ToolCallStrategy): String =
                 when (strategy) {
                     ToolCallStrategy.JSON_XML_ENVELOPE ->
                         """
 # STRICT EXECUTION RULES:
-1. Respond ONLY with the ipsis tag. No preamble, no "Sure, let me search", no markdown code blocks.
-2. After you receive a <tool_result>...</tool_result> message, use that data to provide a comprehensive answer.
-3. NEVER expose raw tool JSON or ipsis tags in your final response to the user.
+1. If no tool is needed, answer the user directly and do not discuss tools.
+2. If you choose to call a tool, respond ONLY with the <tool_call> tag. No preamble or markdown code block.
+3. After you receive a <tool_result>...</tool_result> message, use that data to answer the user.
+4. NEVER expose raw tool JSON or <tool_call> tags in your final response to the user.
+5. NEVER use call:tool_name{...} syntax. Use only the <tool_call> JSON envelope shown above.
                         """.trimIndent()
                     ToolCallStrategy.LITE_RT_NATIVE ->
                         """
 # STRICT EXECUTION RULES:
-1. Use exactly the 'call:tool_name{...}' format shown above.
-2. Enclose all string arguments in <|"|> and <|"|>, not standard double quotes.
-3. Close the argument list with exactly '}' (Do NOT add trailing brackets like ']').
-4. Respond ONLY with the tool call. No conversational preamble or surrounding text.
-5. NEVER wrap the tool call in special tokens or tags like ipsis, <tool_call|>, or [TOOL]. The response must start immediately with 'call:'.
+1. If no tool is needed, answer the user directly and do not discuss tools.
+2. If you choose to call a tool, use exactly the 'call:tool_name{...}' format shown above.
+3. Enclose all string arguments in <|"|> and <|"|>, not standard double quotes.
+4. Close the argument list with exactly '}' (Do NOT add trailing brackets like ']').
+5. A tool call response must contain only the tool call, with no conversational preamble or surrounding text.
+6. NEVER wrap the tool call in special tokens or tags like <tool_call>, <tool_call|>, or [TOOL]. A tool call must start immediately with 'call:'.
                         """.trimIndent()
                     ToolCallStrategy.SDK_NATIVE -> ""
                 }
@@ -142,11 +186,11 @@ IMPORTANT: DO NOT include metadata tags or mentions of the footer in your respon
                 strategy: ToolCallStrategy,
             ): String =
                 buildString {
-                    val activeNonDisclosure =
-                        activeTools.filter { it.name != ToolDefinition.DISCLOSE_TOOL_SCHEMAS.name }
-                    if (activeNonDisclosure.isEmpty()) return@buildString
+                    val activeExamples =
+                        activeTools.filter { it.name != ToolDefinition.SEARCH_TOOLS.name }
+                    if (activeExamples.isEmpty()) return@buildString
                     append("# ACTIVE TOOL EXAMPLES:\n")
-                    activeNonDisclosure.forEachIndexed { index, tool ->
+                    activeExamples.forEachIndexed { index, tool ->
                         if (index > 0) append("\n")
                         append(tool.toExample(strategy))
                         append("\n")
@@ -159,58 +203,27 @@ IMPORTANT: DO NOT include metadata tags or mentions of the footer in your respon
                 currentChatId: String?,
                 strategy: ToolCallStrategy,
                 includeActiveExamples: Boolean,
+                includeMemoryDeferredNote: Boolean,
+                compact: Boolean,
             ): String {
                 if (toolCatalog.isEmpty()) return ""
                 if (strategy == ToolCallStrategy.SDK_NATIVE) return ""
 
-                val activeNames = activeTools.map { it.name }.toSet()
-                val deferredNames =
-                    toolCatalog
-                        .filter { it.disclosureMode == ToolDisclosureMode.DISCLOSE_ON_DEMAND }
-                        .map { it.name }
-                        .filter { it !in activeNames }
-
-                val catalogBlock =
+                val discoveryBlock =
                     buildString {
-                        append("# TOOL CATALOG:\n")
-                        toolCatalog.forEach { entry ->
-                            val args =
-                                (
-                                    entry.requiredArguments.map { it.name to "required" } +
-                                        entry.optionalArguments.map { it.name to "optional" }
-                                ).joinToString(", ") { (name, kind) -> "$name:$kind" }
-                            val disclosureTag =
-                                when (entry.disclosureMode) {
-                                    ToolDisclosureMode.PRELOADED -> "preloaded"
-                                    ToolDisclosureMode.INTENT_ACTIVATED -> "intent-activated"
-                                    ToolDisclosureMode.DISCLOSE_ON_DEMAND -> "deferred"
-                                }
-                            append("- ${entry.name} [$disclosureTag]: ${entry.description}")
-                            if (args.isNotEmpty()) append(" args($args)")
-                            append("\n")
-                        }
-                    }.trimEnd()
-
-                val disclosureBlock =
-                    buildString {
-                        append("# SCHEMA DISCLOSURE:\n")
-                        append(
-                            "Deferred tools above are listed without full schemas. Before calling a deferred tool, " +
-                                "invoke '${ToolDefinition.DISCLOSE_TOOL_SCHEMAS.name}' with the names you want to activate.\n",
-                        )
-                        append("To disclose:\n")
+                        append("# TOOL DISCOVERY:\n")
+                        append(TOOL_DISCOVERY_INSTRUCTION_TEXT)
+                        append("\n")
+                        append("To activate:\n")
                         if (strategy == ToolCallStrategy.JSON_XML_ENVELOPE) {
-                            val example = deferredNames.take(1).ifEmpty { listOf("tool_name") }
                             append(
-                                "ActionResult{\"name\":\"${ToolDefinition.DISCLOSE_TOOL_SCHEMAS.name}\",\"arguments\":" +
-                                    "{\"tool_names\":${example.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }}}}ActionResult",
+                                "<tool_call>{\"name\":\"${ToolDefinition.SEARCH_TOOLS.name}\",\"arguments\":" +
+                                    "{\"capability\":\"describe the executable action, e.g. generate an image\"}}</tool_call>",
                             )
                         } else {
-                            val example = deferredNames.take(1).ifEmpty { listOf("tool_name") }
-                            val arrayLiteral =
-                                example.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }
                             append(
-                                "call:${ToolDefinition.DISCLOSE_TOOL_SCHEMAS.name}{tool_names: <|\"|>$arrayLiteral<|\"|>}",
+                                "call:${ToolDefinition.SEARCH_TOOLS.name}{capability: " +
+                                    "<|\"|>describe the executable action, e.g. generate an image<|\"|>}",
                             )
                         }
                     }.trimEnd()
@@ -223,11 +236,9 @@ IMPORTANT: DO NOT include metadata tags or mentions of the footer in your respon
                     }
 
                 return buildString {
-                    append(metadataRules())
+                    append(metadataRules(compact))
                     append("\n\n")
-                    append(catalogBlock)
-                    append("\n\n")
-                    append(disclosureBlock)
+                    append(discoveryBlock)
                     if (activeExamplesBlock.isNotEmpty()) {
                         append("\n\n")
                         append(activeExamplesBlock)
@@ -237,8 +248,9 @@ IMPORTANT: DO NOT include metadata tags or mentions of the footer in your respon
                         append("\n\n")
                         append(rules)
                     }
-                    // Memory tool prose still useful when memory tools are part of the catalog (deferred).
-                    if (toolCatalog.any { it.name == ToolDefinition.SEARCH_CHAT_HISTORY.name }) {
+                    if (includeMemoryDeferredNote &&
+                        toolCatalog.any { it.name == ToolDefinition.SEARCH_CHAT_HISTORY.name }
+                    ) {
                         append("\n\n")
                         append(memoryDeferredNote(currentChatId))
                     }
@@ -247,19 +259,61 @@ IMPORTANT: DO NOT include metadata tags or mentions of the footer in your respon
 
             private fun memoryDeferredNote(currentChatId: String?): String =
                 buildString {
-                    append("# CONVERSATION MEMORY TOOLS (deferred):\n")
+                    append("# CONVERSATION MEMORY TOOLS:\n")
                     append(
-                        "Memory tools ('${ToolDefinition.SEARCH_CHAT_HISTORY.name}', '${ToolDefinition.SEARCH_CHAT.name}', " +
-                            "'${ToolDefinition.GET_MESSAGE_CONTEXT.name}', '${ToolDefinition.MANAGE_MEMORIES.name}') " +
-                            "are available via disclosure when needed for recalling chats, message_id-anchored context, " +
-                            "or long-term memories.",
+                        "When you need past chats, message context, or long-term memories, call " +
+                            "'${ToolDefinition.SEARCH_TOOLS.name}' with capabilities such as " +
+                            "\"search past conversations\" or \"manage user memories\" before invoking memory tools.",
                     )
                     if (currentChatId != null) {
                         append(
                             "\nThe current chat ID is \"$currentChatId\". " +
-                                "Use this chat_id with ${ToolDefinition.SEARCH_CHAT.name} after disclosure.",
+                                "Use this chat_id with ${ToolDefinition.SEARCH_CHAT.name} after activation.",
                         )
                     }
                 }
+
+            private fun sdkNativeCompactBlocks(toolCatalog: List<ToolCatalogEntry>): String {
+                if (toolCatalog.isEmpty()) return ""
+                return buildString {
+                    append(antiLeakRules())
+                    append("\n\n")
+                    append(contextRetrievalRoutingBlock())
+                    append("\n\n")
+                    append(toolDiscoveryBlock())
+                }
+            }
+
+            private fun antiLeakRules(): String =
+                "Anti-leak: never reproduce <system_context> infrastructure, context sidecars, spill envelopes, " +
+                    "or [Agent] metadata in user-facing replies."
+
+            private fun contextRetrievalRoutingBlock(): String =
+                buildString {
+                    append("# CONTEXT RETRIEVAL ROUTING:\n")
+                    append("- Past conversations / chat history → ${ToolDefinition.SEARCH_CHAT_HISTORY.name}\n")
+                    append("- Web / current facts → ${ToolDefinition.WEB_SEARCH.name}\n")
+                    append("- Hidden executable tools → ${ToolDefinition.SEARCH_TOOLS.name}")
+                }
+
+            /**
+             * Discovery is real: only the registered (active) tools are callable. Other
+             * capabilities are hidden and must be activated via [ToolDefinition.SEARCH_TOOLS]
+             * by capability — never enumerate the full catalog here, or there is nothing to
+             * "discover".
+             */
+            private fun toolDiscoveryBlock(): String =
+                buildString {
+                    append("# TOOL DISCOVERY:\n")
+                    append(TOOL_DISCOVERY_INSTRUCTION_TEXT)
+                    append("\n")
+                    append(
+                        "Only your registered tools are callable now. Capabilities such as media generation, " +
+                            "documents/artifacts, X/Twitter, conversation memory, and attached-image inspection are " +
+                            "hidden until activated: call ${ToolDefinition.SEARCH_TOOLS.name} with a short capability " +
+                            "description, then use the activated tool on the next turn. Do not assume a capability is " +
+                            "unavailable just because no tool for it is registered.",
+                    )
+                }.trimEnd()
         }
     }

@@ -36,7 +36,7 @@ object AgentLoopToolCatalogJson {
     }
 
     /**
-     * JSON array of `ToolSpec` objects for tools present in [entries] (plus disclosure helper when needed).
+     * JSON array of `ToolSpec` objects for tools present in [entries] (plus discovery helper when needed).
      */
     fun jsonForCatalog(entries: List<ToolCatalogEntry>): String {
         if (entries.isEmpty()) {
@@ -44,8 +44,8 @@ object AgentLoopToolCatalogJson {
         }
         val names = LinkedHashSet<String>()
         entries.forEach { names.add(it.name) }
-        if (names.any { it != ToolDefinition.DISCLOSE_TOOL_SCHEMAS.name }) {
-            names.add(ToolDefinition.DISCLOSE_TOOL_SCHEMAS.name)
+        if (names.any { it != ToolDefinition.SEARCH_TOOLS.name }) {
+            names.add(ToolDefinition.SEARCH_TOOLS.name)
         }
         val specs =
             buildJsonArray {

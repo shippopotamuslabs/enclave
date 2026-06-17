@@ -2,7 +2,11 @@ package com.browntowndev.enclave.feature.inference.conversation
 
 import android.util.Log
 import com.browntowndev.enclave.domain.model.chat.ChatMessage
+import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.Role
+import com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry
+import com.browntowndev.enclave.domain.model.inference.ToolSearchIndexSnapshot
+import com.browntowndev.enclave.domain.usecase.chat.ToolCallStrategy
 import com.google.ai.edge.litertlm.Contents
 import com.google.ai.edge.litertlm.ConversationConfig
 import com.browntowndev.enclave.domain.model.chat.ChatMessage as DomainChatMessage
@@ -89,10 +93,27 @@ internal fun buildConversationConfig(
         tools = LiteRtNativeToolsets.buildToolProviders(activeToolNames, toolContext),
     )
 
-internal data class LiteRtToolContext(
+internal data class LiteRtTurnSnapshot(
+    val requestId: Int,
+    val systemPrompt: String,
+    val contextWindow: Int,
+    val history: List<DomainChatMessage>,
+    val modelPath: String?,
+    val latestAssistantMessageId: MessageId?,
+    val toolCatalog: List<ToolCatalogEntry>,
+    val toolSearchIndex: ToolSearchIndexSnapshot?,
+    val toolCallStrategy: ToolCallStrategy,
+    val transientToolResultTokens: Int,
+)
+
+internal class LiteRtToolContext(
     val modelType: com.browntowndev.enclave.domain.model.inference.ModelType,
     val modelId: String? = null,
     val chatId: com.browntowndev.enclave.domain.model.chat.ChatId?,
     val userMessageId: com.browntowndev.enclave.domain.model.chat.MessageId?,
     val toolLoop: LiteRtToolCallLoop,
-)
+    val turn: LiteRtTurnSnapshot,
+) {
+    val turnTransientToolResultTokens =
+        java.util.concurrent.atomic.AtomicInteger(turn.transientToolResultTokens)
+}

@@ -5,6 +5,7 @@ package com.browntowndev.enclave.core.agent
 import com.browntowndev.enclave.domain.model.chat.ChatMessage
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.AgentContextReference
+import com.browntowndev.enclave.domain.model.inference.ContextReferenceNotFoundException
 import com.browntowndev.enclave.domain.model.inference.AgentFinishReason
 import com.browntowndev.enclave.domain.model.inference.AgentLoopCompactionTrigger
 import com.browntowndev.enclave.domain.model.inference.AgentLoopConfig
@@ -26,6 +27,7 @@ import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.ToolStreamGatePort
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.withContext
@@ -53,8 +55,13 @@ class RustAgentEngineAdapter
             private const val TAG = "RustAgentEngineAdapter"
         }
 
+        @Volatile
         private var activeEngine: FfiAgentEngine? = null
+
+        @Volatile
         private var activeSession: FfiSession? = null
+
+        @Volatile
         private var activeHost: AgentLoopHostCallbacks? = null
 
         override fun execute(
@@ -93,6 +100,13 @@ class RustAgentEngineAdapter
                         sessionContextJson = sessionContextJson(sessionContext),
                         io = config.io.toFfi(),
                     )
+                if (activeSession != null) {
+                    loggingPort.warning(
+                        TAG,
+                        "execute() superseding a live agent session; manual compact and " +
+                            "context reads now target the new session",
+                    )
+                }
                 activeEngine = engine
                 activeSession = session
                 activeHost = host
@@ -105,6 +119,14 @@ class RustAgentEngineAdapter
                         }
                         when (val action = engine.nextAction(session)) {
                             is FfiAgentAction.CallModel -> {
+                                action.request.retryAfterMs?.takeIf { it > 0uL }?.let { backoffMs ->
+                                    loggingPort.info(
+                                        TAG,
+                                        "model api retry backoff ${backoffMs}ms " +
+                                            "(attempt ${action.request.modelRetryAttempt ?: 0})",
+                                    )
+                                    delay(backoffMs.toLong())
+                                }
                                 val textGate =
                                     ModelTurnStreamGate(
                                         toolStreamGatePort,
@@ -140,9 +162,19 @@ class RustAgentEngineAdapter
                                     } catch (e: CancellationException) {
                                         throw e
                                     } catch (e: Throwable) {
-                                        loggingPort.error(TAG, "model turn failed: ${e.message}", e)
-                                        send(AgentLoopEvent.Failed("model turn failed: ${e.message}"))
-                                        return@channelFlow
+                                        val partialChars = safeBufferedTextLength(textGate)
+                                        val report =
+                                            ModelTurnFailureClassifier.classify(
+                                                error = e,
+                                                partialOutputChars = partialChars,
+                                            )
+                                        loggingPort.error(
+                                            TAG,
+                                            "model turn failed (${report.errorClass}): ${report.message}",
+                                            e,
+                                        )
+                                        engine.submitModelTurnFailure(session, report)
+                                        continue
                                     }
                                 val bufferedText =
                                     textGate.finish(resp.toolCalls.isNotEmpty()) { trailing ->
@@ -150,6 +182,10 @@ class RustAgentEngineAdapter
                                             channel.send(AgentLoopEvent.TextToken(trailing))
                                         }
                                     }
+                                loggingPort.debug(TAG, "model turn raw text (${bufferedText.length} chars)")
+                                bufferedText.chunked(3000).forEachIndexed { i, part ->
+                                    loggingPort.debug(TAG, "model turn raw[$i]: $part")
+                                }
                                 engine.submitModelResponse(
                                     session,
                                     resp.copy(assistantText = bufferedText.takeIf { it.isNotBlank() }).toFfi(loggingPort),
@@ -213,9 +249,15 @@ class RustAgentEngineAdapter
                         }
                     }
                 } finally {
-                    activeEngine = null
-                    activeSession = null
-                    activeHost = null
+                    // A newer execute() may have replaced the active references while this
+                    // session was still draining; only clear them if they are still ours,
+                    // otherwise a finishing background session would break manual compact
+                    // and context-reference reads for the newer session.
+                    if (activeSession === session) {
+                        activeEngine = null
+                        activeSession = null
+                        activeHost = null
+                    }
                 }
             }
 
@@ -271,7 +313,11 @@ class RustAgentEngineAdapter
         override suspend fun readContextReference(referenceId: String): String {
             val engine = requireNotNull(activeEngine) { "No active Rust agent session" }
             val session = requireNotNull(activeSession) { "No active Rust agent session" }
-            return engine.readContextReference(session, referenceId)
+            return try {
+                engine.readContextReference(session, referenceId)
+            } catch (e: AgentException.ContextReferenceNotFound) {
+                throw ContextReferenceNotFoundException(e.referenceId, e)
+            }
         }
 
         override suspend fun searchContextReferences(
@@ -317,6 +363,9 @@ class RustAgentEngineAdapter
         }
     }
 
+internal fun safeBufferedTextLength(textGate: ModelTurnStreamGate): Int =
+    runCatching { textGate.bufferedText().length }.getOrElse { 0 }
+
 private fun Role.toFfi(): FfiAgentRole =
     when (this) {
         Role.USER -> FfiAgentRole.USER
@@ -324,14 +373,13 @@ private fun Role.toFfi(): FfiAgentRole =
         Role.SYSTEM -> FfiAgentRole.SYSTEM
     }
 
-private fun FfiAgentRole.toDomain(): Role =
+internal fun FfiAgentRole.toDomainRole(): Role =
     when (this) {
         FfiAgentRole.USER -> Role.USER
         FfiAgentRole.ASSISTANT -> Role.ASSISTANT
         FfiAgentRole.SYSTEM -> Role.SYSTEM
-        FfiAgentRole.TOOL,
-        FfiAgentRole.COMPACT_SUMMARY,
-        -> Role.ASSISTANT
+        FfiAgentRole.TOOL -> Role.ASSISTANT
+        FfiAgentRole.COMPACT_SUMMARY -> Role.USER
     }
 
 private fun AgentLoopMessage.toFfi(): FfiAgentMessage =
@@ -345,7 +393,7 @@ private fun AgentLoopMessage.toFfi(): FfiAgentMessage =
 private fun FfiAgentMessage.toDomain(): AgentLoopMessage =
     AgentLoopMessage(
         id = id,
-        role = role.toDomain(),
+        role = role.toDomainRole(),
         content = content,
         metadataJson = metadataJson,
     )
@@ -376,6 +424,8 @@ internal fun com.browntowndev.enclave.domain.model.inference.AgentLoopAgentConfi
         thresholdRatio = thresholdRatio,
         microKeepRecent = microKeepRecent,
         toolRetryLimit = toolRetryLimit,
+        modelApiRetryLimit = modelApiRetryLimit,
+        modelApiRetryBaseDelayMs = modelApiRetryBaseDelayMs,
         toolSemanticsJson = toolSemanticsJson,
         toolResultBudgetCloudBytes = toolResultBudgetCloudBytes,
         toolResultBudgetRelaxedBytes = toolResultBudgetRelaxedBytes,

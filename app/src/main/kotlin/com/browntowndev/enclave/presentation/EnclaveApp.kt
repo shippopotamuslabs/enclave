@@ -19,6 +19,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.compose.rememberNavController
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.download.DownloadModelsResult
+import com.browntowndev.enclave.feature.download.DownloadPlanRefresher
 import com.browntowndev.enclave.presentation.navigation.EnclaveNavGraph
 import com.browntowndev.enclave.presentation.navigation.Routes
 import kotlinx.coroutines.launch
@@ -30,6 +31,7 @@ fun EnclaveApp(
     modelsResult: DownloadModelsResult?,
     errorMessage: String? = null,
     navigationIntent: Intent? = null,
+    refreshDownloadPlan: DownloadPlanRefresher? = null,
 ) {
     val themeUiState by viewModel.themeUiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -61,13 +63,15 @@ fun EnclaveApp(
                 startDestination = initialRoute,
                 modelsResult = modelsResult,
                 errorMessage = errorMessage,
+                refreshDownloadPlan = refreshDownloadPlan,
                 onShowSnackbar = { message, actionLabel, onActionClick ->
                     scope.launch {
-                        val result = snackbarHostState.showSnackbar(
-                            message = message,
-                            actionLabel = actionLabel,
-                            withDismissAction = actionLabel != null,
-                        )
+                        val result =
+                            snackbarHostState.showSnackbar(
+                                message = message,
+                                actionLabel = actionLabel,
+                                withDismissAction = actionLabel != null,
+                            )
                         if (result == SnackbarResult.ActionPerformed) {
                             onActionClick?.invoke()
                         }

@@ -19,6 +19,7 @@ import androidx.room.TypeConverters
         MessageVisionAnalysisEntity::class,
         EmbeddingEntity::class,
         TtsProviderEntity::class,
+        LiveVoiceProviderEntity::class,
         MemoriesEntity::class,
         MediaProviderEntity::class,
         StudioMediaEntity::class,
@@ -34,7 +35,7 @@ import androidx.room.TypeConverters
         ProfileFindingsEntity::class,
         ProfileAnalysisRunEntity::class,
     ],
-    version = 1,
+    version = 3,
 )
 @TypeConverters(ModelTypeConverters::class)
 @Suppress("TooManyFunctions")
@@ -66,6 +67,8 @@ abstract class EnclaveDatabase : RoomDatabase() {
     abstract fun embeddingDao(): EmbeddingDao
 
     abstract fun ttsProviderDao(): TtsProviderDao
+
+    abstract fun liveVoiceProviderDao(): LiveVoiceProviderDao
 
     abstract fun memoriesDao(): MemoriesDao
 

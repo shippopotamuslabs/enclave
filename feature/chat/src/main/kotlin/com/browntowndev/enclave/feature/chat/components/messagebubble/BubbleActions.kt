@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -29,7 +28,6 @@ internal fun BubbleActions(
     visible: Boolean,
     onEditClick: () -> Unit,
     onCopyClick: () -> Unit,
-    onReportClick: () -> Unit,
 ) {
     AnimatedVisibility(
         visible = visible,
@@ -59,18 +57,6 @@ internal fun BubbleActions(
                 Icon(
                     painter = painterResource(R.drawable.content_copy),
                     contentDescription = "Copy message",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(16.dp),
-                )
-            }
-
-            IconButton(
-                onClick = onReportClick,
-                modifier = Modifier.size(32.dp),
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Warning,
-                    contentDescription = "Report message",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(16.dp),
                 )

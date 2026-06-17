@@ -17,19 +17,20 @@ package com.browntowndev.enclave.core.agent
 // compile the Rust component. The easiest way to ensure this is to bundle the Kotlin
 // helpers directly inline like we're doing here.
 
-import com.sun.jna.Callback
 import com.sun.jna.Library
+import com.sun.jna.IntegerType
 import com.sun.jna.Native
 import com.sun.jna.Pointer
 import com.sun.jna.Structure
+import com.sun.jna.Callback
 import com.sun.jna.ptr.*
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.CharBuffer
 import java.nio.charset.CodingErrorAction
+import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicLong
 
 // This is a helper for safely working with byte buffers returned from the Rust code.
 // A rust-owned buffer is represented by its capacity, its current length, and a
@@ -43,41 +44,29 @@ open class RustBuffer : Structure() {
     // Note: `capacity` and `len` are actually `ULong` values, but JVM only supports signed values.
     // When dealing with these fields, make sure to call `toULong()`.
     @JvmField var capacity: Long = 0
-
     @JvmField var len: Long = 0
-
     @JvmField var data: Pointer? = null
 
-    class ByValue :
-        RustBuffer(),
-        Structure.ByValue
+    class ByValue: RustBuffer(), Structure.ByValue
+    class ByReference: RustBuffer(), Structure.ByReference
 
-    class ByReference :
-        RustBuffer(),
-        Structure.ByReference
-
-    internal fun setValue(other: RustBuffer) {
+   internal fun setValue(other: RustBuffer) {
         capacity = other.capacity
         len = other.len
         data = other.data
     }
 
     companion object {
-        internal fun alloc(size: ULong = 0UL) =
-            uniffiRustCall { status ->
-                // Note: need to convert the size to a `Long` value to make this work with JVM.
-                UniffiLib.INSTANCE.ffi_agent_core_rustbuffer_alloc(size.toLong(), status)
-            }.also {
-                if (it.data == null) {
-                    throw RuntimeException("RustBuffer.alloc() returned null data pointer (size=$size)")
-                }
-            }
+        internal fun alloc(size: ULong = 0UL) = uniffiRustCall() { status ->
+            // Note: need to convert the size to a `Long` value to make this work with JVM.
+            UniffiLib.INSTANCE.ffi_agent_core_rustbuffer_alloc(size.toLong(), status)
+        }.also {
+            if(it.data == null) {
+               throw RuntimeException("RustBuffer.alloc() returned null data pointer (size=${size})")
+           }
+        }
 
-        internal fun create(
-            capacity: ULong,
-            len: ULong,
-            data: Pointer?,
-        ): RustBuffer.ByValue {
+        internal fun create(capacity: ULong, len: ULong, data: Pointer?): RustBuffer.ByValue {
             var buf = RustBuffer.ByValue()
             buf.capacity = capacity.toLong()
             buf.len = len.toLong()
@@ -85,10 +74,9 @@ open class RustBuffer : Structure() {
             return buf
         }
 
-        internal fun free(buf: RustBuffer.ByValue) =
-            uniffiRustCall { status ->
-                UniffiLib.INSTANCE.ffi_agent_core_rustbuffer_free(buf, status)
-            }
+        internal fun free(buf: RustBuffer.ByValue) = uniffiRustCall() { status ->
+            UniffiLib.INSTANCE.ffi_agent_core_rustbuffer_free(buf, status)
+        }
     }
 
     @Suppress("TooGenericExceptionThrown")
@@ -141,14 +129,10 @@ class RustBufferByReference : ByReference(16) {
 @Structure.FieldOrder("len", "data")
 internal open class ForeignBytes : Structure() {
     @JvmField var len: Int = 0
-
     @JvmField var data: Pointer? = null
 
-    class ByValue :
-        ForeignBytes(),
-        Structure.ByValue
+    class ByValue : ForeignBytes(), Structure.ByValue
 }
-
 /**
  * The FfiConverter interface handles converter types to and from the FFI
  *
@@ -178,10 +162,7 @@ public interface FfiConverter<KotlinType, FfiType> {
     fun allocationSize(value: KotlinType): ULong
 
     // Write a Kotlin type to a `ByteBuffer`
-    fun write(
-        value: KotlinType,
-        buf: ByteBuffer,
-    )
+    fun write(value: KotlinType, buf: ByteBuffer)
 
     // Lower a value into a `RustBuffer`
     //
@@ -192,10 +173,9 @@ public interface FfiConverter<KotlinType, FfiType> {
     fun lowerIntoRustBuffer(value: KotlinType): RustBuffer.ByValue {
         val rbuf = RustBuffer.alloc(allocationSize(value))
         try {
-            val bbuf =
-                rbuf.data!!.getByteBuffer(0, rbuf.capacity).also {
-                    it.order(ByteOrder.BIG_ENDIAN)
-                }
+            val bbuf = rbuf.data!!.getByteBuffer(0, rbuf.capacity).also {
+                it.order(ByteOrder.BIG_ENDIAN)
+            }
             write(value, bbuf)
             rbuf.writeField("len", bbuf.position().toLong())
             return rbuf
@@ -212,11 +192,11 @@ public interface FfiConverter<KotlinType, FfiType> {
     fun liftFromRustBuffer(rbuf: RustBuffer.ByValue): KotlinType {
         val byteBuf = rbuf.asByteBuffer()!!
         try {
-            val item = read(byteBuf)
-            if (byteBuf.hasRemaining()) {
-                throw RuntimeException("junk remaining in buffer after lifting, something is very wrong!!")
-            }
-            return item
+           val item = read(byteBuf)
+           if (byteBuf.hasRemaining()) {
+               throw RuntimeException("junk remaining in buffer after lifting, something is very wrong!!")
+           }
+           return item
         } finally {
             RustBuffer.free(rbuf)
         }
@@ -228,9 +208,8 @@ public interface FfiConverter<KotlinType, FfiType> {
  *
  * @suppress
  */
-public interface FfiConverterRustBuffer<KotlinType> : FfiConverter<KotlinType, RustBuffer.ByValue> {
+public interface FfiConverterRustBuffer<KotlinType>: FfiConverter<KotlinType, RustBuffer.ByValue> {
     override fun lift(value: RustBuffer.ByValue) = liftFromRustBuffer(value)
-
     override fun lower(value: KotlinType) = lowerIntoRustBuffer(value)
 }
 // A handful of classes and functions to support the generated data structures.
@@ -243,24 +222,24 @@ internal const val UNIFFI_CALL_UNEXPECTED_ERROR = 2.toByte()
 @Structure.FieldOrder("code", "error_buf")
 internal open class UniffiRustCallStatus : Structure() {
     @JvmField var code: Byte = 0
-
     @JvmField var error_buf: RustBuffer.ByValue = RustBuffer.ByValue()
 
-    class ByValue :
-        UniffiRustCallStatus(),
-        Structure.ByValue
+    class ByValue: UniffiRustCallStatus(), Structure.ByValue
 
-    fun isSuccess(): Boolean = code == UNIFFI_CALL_SUCCESS
+    fun isSuccess(): Boolean {
+        return code == UNIFFI_CALL_SUCCESS
+    }
 
-    fun isError(): Boolean = code == UNIFFI_CALL_ERROR
+    fun isError(): Boolean {
+        return code == UNIFFI_CALL_ERROR
+    }
 
-    fun isPanic(): Boolean = code == UNIFFI_CALL_UNEXPECTED_ERROR
+    fun isPanic(): Boolean {
+        return code == UNIFFI_CALL_UNEXPECTED_ERROR
+    }
 
     companion object {
-        fun create(
-            code: Byte,
-            errorBuf: RustBuffer.ByValue,
-        ): UniffiRustCallStatus.ByValue {
+        fun create(code: Byte, errorBuf: RustBuffer.ByValue): UniffiRustCallStatus.ByValue {
             val callStatus = UniffiRustCallStatus.ByValue()
             callStatus.code = code
             callStatus.error_buf = errorBuf
@@ -269,9 +248,7 @@ internal open class UniffiRustCallStatus : Structure() {
     }
 }
 
-class InternalException(
-    message: String,
-) : kotlin.Exception(message)
+class InternalException(message: String) : kotlin.Exception(message)
 
 /**
  * Each top-level error class has a companion object that can lift the error from the call status's rust buffer
@@ -279,7 +256,7 @@ class InternalException(
  * @suppress
  */
 interface UniffiRustCallStatusErrorHandler<E> {
-    fun lift(error_buf: RustBuffer.ByValue): E
+    fun lift(error_buf: RustBuffer.ByValue): E;
 }
 
 // Helpers for calling Rust
@@ -287,10 +264,7 @@ interface UniffiRustCallStatusErrorHandler<E> {
 // synchronize itself
 
 // Call a rust function that returns a Result<>.  Pass in the Error class companion that corresponds to the Err
-private inline fun <U, E : kotlin.Exception> uniffiRustCallWithError(
-    errorHandler: UniffiRustCallStatusErrorHandler<E>,
-    callback: (UniffiRustCallStatus) -> U,
-): U {
+private inline fun <U, E: kotlin.Exception> uniffiRustCallWithError(errorHandler: UniffiRustCallStatusErrorHandler<E>, callback: (UniffiRustCallStatus) -> U): U {
     var status = UniffiRustCallStatus()
     val return_value = callback(status)
     uniffiCheckCallStatus(errorHandler, status)
@@ -298,10 +272,7 @@ private inline fun <U, E : kotlin.Exception> uniffiRustCallWithError(
 }
 
 // Check UniffiRustCallStatus and throw an error if the call wasn't successful
-private fun <E : kotlin.Exception> uniffiCheckCallStatus(
-    errorHandler: UniffiRustCallStatusErrorHandler<E>,
-    status: UniffiRustCallStatus,
-) {
+private fun<E: kotlin.Exception> uniffiCheckCallStatus(errorHandler: UniffiRustCallStatusErrorHandler<E>, status: UniffiRustCallStatus) {
     if (status.isSuccess()) {
         return
     } else if (status.isError()) {
@@ -325,7 +296,7 @@ private fun <E : kotlin.Exception> uniffiCheckCallStatus(
  *
  * @suppress
  */
-object UniffiNullRustCallStatusErrorHandler : UniffiRustCallStatusErrorHandler<InternalException> {
+object UniffiNullRustCallStatusErrorHandler: UniffiRustCallStatusErrorHandler<InternalException> {
     override fun lift(error_buf: RustBuffer.ByValue): InternalException {
         RustBuffer.free(error_buf)
         return InternalException("Unexpected CALL_ERROR")
@@ -333,31 +304,32 @@ object UniffiNullRustCallStatusErrorHandler : UniffiRustCallStatusErrorHandler<I
 }
 
 // Call a rust function that returns a plain value
-private inline fun <U> uniffiRustCall(callback: (UniffiRustCallStatus) -> U): U =
-    uniffiRustCallWithError(UniffiNullRustCallStatusErrorHandler, callback)
+private inline fun <U> uniffiRustCall(callback: (UniffiRustCallStatus) -> U): U {
+    return uniffiRustCallWithError(UniffiNullRustCallStatusErrorHandler, callback)
+}
 
-internal inline fun <T> uniffiTraitInterfaceCall(
+internal inline fun<T> uniffiTraitInterfaceCall(
     callStatus: UniffiRustCallStatus,
     makeCall: () -> T,
     writeReturn: (T) -> Unit,
 ) {
     try {
         writeReturn(makeCall())
-    } catch (e: kotlin.Exception) {
+    } catch(e: kotlin.Exception) {
         callStatus.code = UNIFFI_CALL_UNEXPECTED_ERROR
         callStatus.error_buf = FfiConverterString.lower(e.toString())
     }
 }
 
-internal inline fun <T, reified E : Throwable> uniffiTraitInterfaceCallWithError(
+internal inline fun<T, reified E: Throwable> uniffiTraitInterfaceCallWithError(
     callStatus: UniffiRustCallStatus,
     makeCall: () -> T,
     writeReturn: (T) -> Unit,
-    lowerError: (E) -> RustBuffer.ByValue,
+    lowerError: (E) -> RustBuffer.ByValue
 ) {
     try {
         writeReturn(makeCall())
-    } catch (e: kotlin.Exception) {
+    } catch(e: kotlin.Exception) {
         if (e is E) {
             callStatus.code = UNIFFI_CALL_ERROR
             callStatus.error_buf = lowerError(e)
@@ -367,15 +339,12 @@ internal inline fun <T, reified E : Throwable> uniffiTraitInterfaceCallWithError
         }
     }
 }
-
 // Map handles to objects
 //
 // This is used pass an opaque 64-bit handle representing a foreign object to the Rust code.
-internal class UniffiHandleMap<T : Any> {
+internal class UniffiHandleMap<T: Any> {
     private val map = ConcurrentHashMap<Long, T>()
-    private val counter =
-        java.util.concurrent.atomic
-            .AtomicLong(0)
+    private val counter = java.util.concurrent.atomic.AtomicLong(0)
 
     val size: Int
         get() = map.size
@@ -388,10 +357,14 @@ internal class UniffiHandleMap<T : Any> {
     }
 
     // Get an object from the handle map
-    fun get(handle: Long): T = map.get(handle) ?: throw InternalException("UniffiHandleMap.get: Invalid handle")
+    fun get(handle: Long): T {
+        return map.get(handle) ?: throw InternalException("UniffiHandleMap.get: Invalid handle")
+    }
 
     // Remove an entry from the handlemap and get the Kotlin object back
-    fun remove(handle: Long): T = map.remove(handle) ?: throw InternalException("UniffiHandleMap: Invalid handle")
+    fun remove(handle: Long): T {
+        return map.remove(handle) ?: throw InternalException("UniffiHandleMap: Invalid handle")
+    }
 }
 
 // Contains loading, initialization code,
@@ -405,25 +378,22 @@ private fun findLibraryName(componentName: String): String {
     return "agent_core"
 }
 
-private inline fun <reified Lib : Library> loadIndirect(componentName: String): Lib =
-    Native.load<Lib>(findLibraryName(componentName), Lib::class.java)
+private inline fun <reified Lib : Library> loadIndirect(
+    componentName: String
+): Lib {
+    return Native.load<Lib>(findLibraryName(componentName), Lib::class.java)
+}
 
 // Define FFI callback types
 internal interface UniffiRustFutureContinuationCallback : com.sun.jna.Callback {
-    fun callback(
-        `data`: Long,
-        `pollResult`: Byte,
-    )
+    fun callback(`data`: Long,`pollResult`: Byte,)
 }
-
 internal interface UniffiForeignFutureFree : com.sun.jna.Callback {
-    fun callback(`handle`: Long)
+    fun callback(`handle`: Long,)
 }
-
 internal interface UniffiCallbackInterfaceFree : com.sun.jna.Callback {
-    fun callback(`handle`: Long)
+    fun callback(`handle`: Long,)
 }
-
 @Structure.FieldOrder("handle", "free")
 internal open class UniffiForeignFuture(
     @JvmField internal var `handle`: Long = 0.toLong(),
@@ -432,15 +402,14 @@ internal open class UniffiForeignFuture(
     class UniffiByValue(
         `handle`: Long = 0.toLong(),
         `free`: UniffiForeignFutureFree? = null,
-    ) : UniffiForeignFuture(`handle`, `free`),
-        Structure.ByValue
+    ): UniffiForeignFuture(`handle`,`free`,), Structure.ByValue
 
-    internal fun uniffiSetValue(other: UniffiForeignFuture) {
+   internal fun uniffiSetValue(other: UniffiForeignFuture) {
         `handle` = other.`handle`
         `free` = other.`free`
     }
-}
 
+}
 @Structure.FieldOrder("returnValue", "callStatus")
 internal open class UniffiForeignFutureStructU8(
     @JvmField internal var `returnValue`: Byte = 0.toByte(),
@@ -449,22 +418,17 @@ internal open class UniffiForeignFutureStructU8(
     class UniffiByValue(
         `returnValue`: Byte = 0.toByte(),
         `callStatus`: UniffiRustCallStatus.ByValue = UniffiRustCallStatus.ByValue(),
-    ) : UniffiForeignFutureStructU8(`returnValue`, `callStatus`),
-        Structure.ByValue
+    ): UniffiForeignFutureStructU8(`returnValue`,`callStatus`,), Structure.ByValue
 
-    internal fun uniffiSetValue(other: UniffiForeignFutureStructU8) {
+   internal fun uniffiSetValue(other: UniffiForeignFutureStructU8) {
         `returnValue` = other.`returnValue`
         `callStatus` = other.`callStatus`
     }
-}
 
+}
 internal interface UniffiForeignFutureCompleteU8 : com.sun.jna.Callback {
-    fun callback(
-        `callbackData`: Long,
-        `result`: UniffiForeignFutureStructU8.UniffiByValue,
-    )
+    fun callback(`callbackData`: Long,`result`: UniffiForeignFutureStructU8.UniffiByValue,)
 }
-
 @Structure.FieldOrder("returnValue", "callStatus")
 internal open class UniffiForeignFutureStructI8(
     @JvmField internal var `returnValue`: Byte = 0.toByte(),
@@ -473,22 +437,17 @@ internal open class UniffiForeignFutureStructI8(
     class UniffiByValue(
         `returnValue`: Byte = 0.toByte(),
         `callStatus`: UniffiRustCallStatus.ByValue = UniffiRustCallStatus.ByValue(),
-    ) : UniffiForeignFutureStructI8(`returnValue`, `callStatus`),
-        Structure.ByValue
+    ): UniffiForeignFutureStructI8(`returnValue`,`callStatus`,), Structure.ByValue
 
-    internal fun uniffiSetValue(other: UniffiForeignFutureStructI8) {
+   internal fun uniffiSetValue(other: UniffiForeignFutureStructI8) {
         `returnValue` = other.`returnValue`
         `callStatus` = other.`callStatus`
     }
-}
 
+}
 internal interface UniffiForeignFutureCompleteI8 : com.sun.jna.Callback {
-    fun callback(
-        `callbackData`: Long,
-        `result`: UniffiForeignFutureStructI8.UniffiByValue,
-    )
+    fun callback(`callbackData`: Long,`result`: UniffiForeignFutureStructI8.UniffiByValue,)
 }
-
 @Structure.FieldOrder("returnValue", "callStatus")
 internal open class UniffiForeignFutureStructU16(
     @JvmField internal var `returnValue`: Short = 0.toShort(),
@@ -497,22 +456,17 @@ internal open class UniffiForeignFutureStructU16(
     class UniffiByValue(
         `returnValue`: Short = 0.toShort(),
         `callStatus`: UniffiRustCallStatus.ByValue = UniffiRustCallStatus.ByValue(),
-    ) : UniffiForeignFutureStructU16(`returnValue`, `callStatus`),
-        Structure.ByValue
+    ): UniffiForeignFutureStructU16(`returnValue`,`callStatus`,), Structure.ByValue
 
-    internal fun uniffiSetValue(other: UniffiForeignFutureStructU16) {
+   internal fun uniffiSetValue(other: UniffiForeignFutureStructU16) {
         `returnValue` = other.`returnValue`
         `callStatus` = other.`callStatus`
     }
-}
 
+}
 internal interface UniffiForeignFutureCompleteU16 : com.sun.jna.Callback {
-    fun callback(
-        `callbackData`: Long,
-        `result`: UniffiForeignFutureStructU16.UniffiByValue,
-    )
+    fun callback(`callbackData`: Long,`result`: UniffiForeignFutureStructU16.UniffiByValue,)
 }
-
 @Structure.FieldOrder("returnValue", "callStatus")
 internal open class UniffiForeignFutureStructI16(
     @JvmField internal var `returnValue`: Short = 0.toShort(),
@@ -521,22 +475,17 @@ internal open class UniffiForeignFutureStructI16(
     class UniffiByValue(
         `returnValue`: Short = 0.toShort(),
         `callStatus`: UniffiRustCallStatus.ByValue = UniffiRustCallStatus.ByValue(),
-    ) : UniffiForeignFutureStructI16(`returnValue`, `callStatus`),
-        Structure.ByValue
+    ): UniffiForeignFutureStructI16(`returnValue`,`callStatus`,), Structure.ByValue
 
-    internal fun uniffiSetValue(other: UniffiForeignFutureStructI16) {
+   internal fun uniffiSetValue(other: UniffiForeignFutureStructI16) {
         `returnValue` = other.`returnValue`
         `callStatus` = other.`callStatus`
     }
-}
 
+}
 internal interface UniffiForeignFutureCompleteI16 : com.sun.jna.Callback {
-    fun callback(
-        `callbackData`: Long,
-        `result`: UniffiForeignFutureStructI16.UniffiByValue,
-    )
+    fun callback(`callbackData`: Long,`result`: UniffiForeignFutureStructI16.UniffiByValue,)
 }
-
 @Structure.FieldOrder("returnValue", "callStatus")
 internal open class UniffiForeignFutureStructU32(
     @JvmField internal var `returnValue`: Int = 0,
@@ -545,22 +494,17 @@ internal open class UniffiForeignFutureStructU32(
     class UniffiByValue(
         `returnValue`: Int = 0,
         `callStatus`: UniffiRustCallStatus.ByValue = UniffiRustCallStatus.ByValue(),
-    ) : UniffiForeignFutureStructU32(`returnValue`, `callStatus`),
-        Structure.ByValue
+    ): UniffiForeignFutureStructU32(`returnValue`,`callStatus`,), Structure.ByValue
 
-    internal fun uniffiSetValue(other: UniffiForeignFutureStructU32) {
+   internal fun uniffiSetValue(other: UniffiForeignFutureStructU32) {
         `returnValue` = other.`returnValue`
         `callStatus` = other.`callStatus`
     }
-}
 
+}
 internal interface UniffiForeignFutureCompleteU32 : com.sun.jna.Callback {
-    fun callback(
-        `callbackData`: Long,
-        `result`: UniffiForeignFutureStructU32.UniffiByValue,
-    )
+    fun callback(`callbackData`: Long,`result`: UniffiForeignFutureStructU32.UniffiByValue,)
 }
-
 @Structure.FieldOrder("returnValue", "callStatus")
 internal open class UniffiForeignFutureStructI32(
     @JvmField internal var `returnValue`: Int = 0,
@@ -569,22 +513,17 @@ internal open class UniffiForeignFutureStructI32(
     class UniffiByValue(
         `returnValue`: Int = 0,
         `callStatus`: UniffiRustCallStatus.ByValue = UniffiRustCallStatus.ByValue(),
-    ) : UniffiForeignFutureStructI32(`returnValue`, `callStatus`),
-        Structure.ByValue
+    ): UniffiForeignFutureStructI32(`returnValue`,`callStatus`,), Structure.ByValue
 
-    internal fun uniffiSetValue(other: UniffiForeignFutureStructI32) {
+   internal fun uniffiSetValue(other: UniffiForeignFutureStructI32) {
         `returnValue` = other.`returnValue`
         `callStatus` = other.`callStatus`
     }
-}
 
+}
 internal interface UniffiForeignFutureCompleteI32 : com.sun.jna.Callback {
-    fun callback(
-        `callbackData`: Long,
-        `result`: UniffiForeignFutureStructI32.UniffiByValue,
-    )
+    fun callback(`callbackData`: Long,`result`: UniffiForeignFutureStructI32.UniffiByValue,)
 }
-
 @Structure.FieldOrder("returnValue", "callStatus")
 internal open class UniffiForeignFutureStructU64(
     @JvmField internal var `returnValue`: Long = 0.toLong(),
@@ -593,22 +532,17 @@ internal open class UniffiForeignFutureStructU64(
     class UniffiByValue(
         `returnValue`: Long = 0.toLong(),
         `callStatus`: UniffiRustCallStatus.ByValue = UniffiRustCallStatus.ByValue(),
-    ) : UniffiForeignFutureStructU64(`returnValue`, `callStatus`),
-        Structure.ByValue
+    ): UniffiForeignFutureStructU64(`returnValue`,`callStatus`,), Structure.ByValue
 
-    internal fun uniffiSetValue(other: UniffiForeignFutureStructU64) {
+   internal fun uniffiSetValue(other: UniffiForeignFutureStructU64) {
         `returnValue` = other.`returnValue`
         `callStatus` = other.`callStatus`
     }
-}
 
+}
 internal interface UniffiForeignFutureCompleteU64 : com.sun.jna.Callback {
-    fun callback(
-        `callbackData`: Long,
-        `result`: UniffiForeignFutureStructU64.UniffiByValue,
-    )
+    fun callback(`callbackData`: Long,`result`: UniffiForeignFutureStructU64.UniffiByValue,)
 }
-
 @Structure.FieldOrder("returnValue", "callStatus")
 internal open class UniffiForeignFutureStructI64(
     @JvmField internal var `returnValue`: Long = 0.toLong(),
@@ -617,22 +551,17 @@ internal open class UniffiForeignFutureStructI64(
     class UniffiByValue(
         `returnValue`: Long = 0.toLong(),
         `callStatus`: UniffiRustCallStatus.ByValue = UniffiRustCallStatus.ByValue(),
-    ) : UniffiForeignFutureStructI64(`returnValue`, `callStatus`),
-        Structure.ByValue
+    ): UniffiForeignFutureStructI64(`returnValue`,`callStatus`,), Structure.ByValue
 
-    internal fun uniffiSetValue(other: UniffiForeignFutureStructI64) {
+   internal fun uniffiSetValue(other: UniffiForeignFutureStructI64) {
         `returnValue` = other.`returnValue`
         `callStatus` = other.`callStatus`
     }
-}
 
+}
 internal interface UniffiForeignFutureCompleteI64 : com.sun.jna.Callback {
-    fun callback(
-        `callbackData`: Long,
-        `result`: UniffiForeignFutureStructI64.UniffiByValue,
-    )
+    fun callback(`callbackData`: Long,`result`: UniffiForeignFutureStructI64.UniffiByValue,)
 }
-
 @Structure.FieldOrder("returnValue", "callStatus")
 internal open class UniffiForeignFutureStructF32(
     @JvmField internal var `returnValue`: Float = 0.0f,
@@ -641,22 +570,17 @@ internal open class UniffiForeignFutureStructF32(
     class UniffiByValue(
         `returnValue`: Float = 0.0f,
         `callStatus`: UniffiRustCallStatus.ByValue = UniffiRustCallStatus.ByValue(),
-    ) : UniffiForeignFutureStructF32(`returnValue`, `callStatus`),
-        Structure.ByValue
+    ): UniffiForeignFutureStructF32(`returnValue`,`callStatus`,), Structure.ByValue
 
-    internal fun uniffiSetValue(other: UniffiForeignFutureStructF32) {
+   internal fun uniffiSetValue(other: UniffiForeignFutureStructF32) {
         `returnValue` = other.`returnValue`
         `callStatus` = other.`callStatus`
     }
-}
 
+}
 internal interface UniffiForeignFutureCompleteF32 : com.sun.jna.Callback {
-    fun callback(
-        `callbackData`: Long,
-        `result`: UniffiForeignFutureStructF32.UniffiByValue,
-    )
+    fun callback(`callbackData`: Long,`result`: UniffiForeignFutureStructF32.UniffiByValue,)
 }
-
 @Structure.FieldOrder("returnValue", "callStatus")
 internal open class UniffiForeignFutureStructF64(
     @JvmField internal var `returnValue`: Double = 0.0,
@@ -665,22 +589,17 @@ internal open class UniffiForeignFutureStructF64(
     class UniffiByValue(
         `returnValue`: Double = 0.0,
         `callStatus`: UniffiRustCallStatus.ByValue = UniffiRustCallStatus.ByValue(),
-    ) : UniffiForeignFutureStructF64(`returnValue`, `callStatus`),
-        Structure.ByValue
+    ): UniffiForeignFutureStructF64(`returnValue`,`callStatus`,), Structure.ByValue
 
-    internal fun uniffiSetValue(other: UniffiForeignFutureStructF64) {
+   internal fun uniffiSetValue(other: UniffiForeignFutureStructF64) {
         `returnValue` = other.`returnValue`
         `callStatus` = other.`callStatus`
     }
-}
 
+}
 internal interface UniffiForeignFutureCompleteF64 : com.sun.jna.Callback {
-    fun callback(
-        `callbackData`: Long,
-        `result`: UniffiForeignFutureStructF64.UniffiByValue,
-    )
+    fun callback(`callbackData`: Long,`result`: UniffiForeignFutureStructF64.UniffiByValue,)
 }
-
 @Structure.FieldOrder("returnValue", "callStatus")
 internal open class UniffiForeignFutureStructPointer(
     @JvmField internal var `returnValue`: Pointer = Pointer.NULL,
@@ -689,22 +608,17 @@ internal open class UniffiForeignFutureStructPointer(
     class UniffiByValue(
         `returnValue`: Pointer = Pointer.NULL,
         `callStatus`: UniffiRustCallStatus.ByValue = UniffiRustCallStatus.ByValue(),
-    ) : UniffiForeignFutureStructPointer(`returnValue`, `callStatus`),
-        Structure.ByValue
+    ): UniffiForeignFutureStructPointer(`returnValue`,`callStatus`,), Structure.ByValue
 
-    internal fun uniffiSetValue(other: UniffiForeignFutureStructPointer) {
+   internal fun uniffiSetValue(other: UniffiForeignFutureStructPointer) {
         `returnValue` = other.`returnValue`
         `callStatus` = other.`callStatus`
     }
-}
 
+}
 internal interface UniffiForeignFutureCompletePointer : com.sun.jna.Callback {
-    fun callback(
-        `callbackData`: Long,
-        `result`: UniffiForeignFutureStructPointer.UniffiByValue,
-    )
+    fun callback(`callbackData`: Long,`result`: UniffiForeignFutureStructPointer.UniffiByValue,)
 }
-
 @Structure.FieldOrder("returnValue", "callStatus")
 internal open class UniffiForeignFutureStructRustBuffer(
     @JvmField internal var `returnValue`: RustBuffer.ByValue = RustBuffer.ByValue(),
@@ -713,70 +627,42 @@ internal open class UniffiForeignFutureStructRustBuffer(
     class UniffiByValue(
         `returnValue`: RustBuffer.ByValue = RustBuffer.ByValue(),
         `callStatus`: UniffiRustCallStatus.ByValue = UniffiRustCallStatus.ByValue(),
-    ) : UniffiForeignFutureStructRustBuffer(`returnValue`, `callStatus`),
-        Structure.ByValue
+    ): UniffiForeignFutureStructRustBuffer(`returnValue`,`callStatus`,), Structure.ByValue
 
-    internal fun uniffiSetValue(other: UniffiForeignFutureStructRustBuffer) {
+   internal fun uniffiSetValue(other: UniffiForeignFutureStructRustBuffer) {
         `returnValue` = other.`returnValue`
         `callStatus` = other.`callStatus`
     }
-}
 
+}
 internal interface UniffiForeignFutureCompleteRustBuffer : com.sun.jna.Callback {
-    fun callback(
-        `callbackData`: Long,
-        `result`: UniffiForeignFutureStructRustBuffer.UniffiByValue,
-    )
+    fun callback(`callbackData`: Long,`result`: UniffiForeignFutureStructRustBuffer.UniffiByValue,)
 }
-
 @Structure.FieldOrder("callStatus")
 internal open class UniffiForeignFutureStructVoid(
     @JvmField internal var `callStatus`: UniffiRustCallStatus.ByValue = UniffiRustCallStatus.ByValue(),
 ) : Structure() {
     class UniffiByValue(
         `callStatus`: UniffiRustCallStatus.ByValue = UniffiRustCallStatus.ByValue(),
-    ) : UniffiForeignFutureStructVoid(`callStatus`),
-        Structure.ByValue
+    ): UniffiForeignFutureStructVoid(`callStatus`,), Structure.ByValue
 
-    internal fun uniffiSetValue(other: UniffiForeignFutureStructVoid) {
+   internal fun uniffiSetValue(other: UniffiForeignFutureStructVoid) {
         `callStatus` = other.`callStatus`
     }
-}
 
+}
 internal interface UniffiForeignFutureCompleteVoid : com.sun.jna.Callback {
-    fun callback(
-        `callbackData`: Long,
-        `result`: UniffiForeignFutureStructVoid.UniffiByValue,
-    )
+    fun callback(`callbackData`: Long,`result`: UniffiForeignFutureStructVoid.UniffiByValue,)
 }
-
 internal interface UniffiCallbackInterfaceAgentSummarizerCallbackMethod0 : com.sun.jna.Callback {
-    fun callback(
-        `uniffiHandle`: Long,
-        `request`: RustBuffer.ByValue,
-        `uniffiOutReturn`: RustBuffer,
-        uniffiCallStatus: UniffiRustCallStatus,
-    )
+    fun callback(`uniffiHandle`: Long,`request`: RustBuffer.ByValue,`uniffiOutReturn`: RustBuffer,uniffiCallStatus: UniffiRustCallStatus,)
 }
-
 internal interface UniffiCallbackInterfaceAgentToolExecutorCallbackMethod0 : com.sun.jna.Callback {
-    fun callback(
-        `uniffiHandle`: Long,
-        `calls`: RustBuffer.ByValue,
-        `uniffiOutReturn`: RustBuffer,
-        uniffiCallStatus: UniffiRustCallStatus,
-    )
+    fun callback(`uniffiHandle`: Long,`calls`: RustBuffer.ByValue,`uniffiOutReturn`: RustBuffer,uniffiCallStatus: UniffiRustCallStatus,)
 }
-
 internal interface UniffiCallbackInterfaceAgentTransportCallbackMethod0 : com.sun.jna.Callback {
-    fun callback(
-        `uniffiHandle`: Long,
-        `request`: RustBuffer.ByValue,
-        `uniffiOutReturn`: RustBuffer,
-        uniffiCallStatus: UniffiRustCallStatus,
-    )
+    fun callback(`uniffiHandle`: Long,`request`: RustBuffer.ByValue,`uniffiOutReturn`: RustBuffer,uniffiCallStatus: UniffiRustCallStatus,)
 }
-
 @Structure.FieldOrder("summarize", "uniffiFree")
 internal open class UniffiVTableCallbackInterfaceAgentSummarizerCallback(
     @JvmField internal var `summarize`: UniffiCallbackInterfaceAgentSummarizerCallbackMethod0? = null,
@@ -785,15 +671,14 @@ internal open class UniffiVTableCallbackInterfaceAgentSummarizerCallback(
     class UniffiByValue(
         `summarize`: UniffiCallbackInterfaceAgentSummarizerCallbackMethod0? = null,
         `uniffiFree`: UniffiCallbackInterfaceFree? = null,
-    ) : UniffiVTableCallbackInterfaceAgentSummarizerCallback(`summarize`, `uniffiFree`),
-        Structure.ByValue
+    ): UniffiVTableCallbackInterfaceAgentSummarizerCallback(`summarize`,`uniffiFree`,), Structure.ByValue
 
-    internal fun uniffiSetValue(other: UniffiVTableCallbackInterfaceAgentSummarizerCallback) {
+   internal fun uniffiSetValue(other: UniffiVTableCallbackInterfaceAgentSummarizerCallback) {
         `summarize` = other.`summarize`
         `uniffiFree` = other.`uniffiFree`
     }
-}
 
+}
 @Structure.FieldOrder("executeTools", "uniffiFree")
 internal open class UniffiVTableCallbackInterfaceAgentToolExecutorCallback(
     @JvmField internal var `executeTools`: UniffiCallbackInterfaceAgentToolExecutorCallbackMethod0? = null,
@@ -802,15 +687,14 @@ internal open class UniffiVTableCallbackInterfaceAgentToolExecutorCallback(
     class UniffiByValue(
         `executeTools`: UniffiCallbackInterfaceAgentToolExecutorCallbackMethod0? = null,
         `uniffiFree`: UniffiCallbackInterfaceFree? = null,
-    ) : UniffiVTableCallbackInterfaceAgentToolExecutorCallback(`executeTools`, `uniffiFree`),
-        Structure.ByValue
+    ): UniffiVTableCallbackInterfaceAgentToolExecutorCallback(`executeTools`,`uniffiFree`,), Structure.ByValue
 
-    internal fun uniffiSetValue(other: UniffiVTableCallbackInterfaceAgentToolExecutorCallback) {
+   internal fun uniffiSetValue(other: UniffiVTableCallbackInterfaceAgentToolExecutorCallback) {
         `executeTools` = other.`executeTools`
         `uniffiFree` = other.`uniffiFree`
     }
-}
 
+}
 @Structure.FieldOrder("completeModelTurn", "uniffiFree")
 internal open class UniffiVTableCallbackInterfaceAgentTransportCallback(
     @JvmField internal var `completeModelTurn`: UniffiCallbackInterfaceAgentTransportCallbackMethod0? = null,
@@ -819,85 +703,212 @@ internal open class UniffiVTableCallbackInterfaceAgentTransportCallback(
     class UniffiByValue(
         `completeModelTurn`: UniffiCallbackInterfaceAgentTransportCallbackMethod0? = null,
         `uniffiFree`: UniffiCallbackInterfaceFree? = null,
-    ) : UniffiVTableCallbackInterfaceAgentTransportCallback(`completeModelTurn`, `uniffiFree`),
-        Structure.ByValue
+    ): UniffiVTableCallbackInterfaceAgentTransportCallback(`completeModelTurn`,`uniffiFree`,), Structure.ByValue
 
-    internal fun uniffiSetValue(other: UniffiVTableCallbackInterfaceAgentTransportCallback) {
+   internal fun uniffiSetValue(other: UniffiVTableCallbackInterfaceAgentTransportCallback) {
         `completeModelTurn` = other.`completeModelTurn`
         `uniffiFree` = other.`uniffiFree`
     }
+
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // For large crates we prevent `MethodTooLargeException` (see #2340)
-// N.B. the name of the extension is very misleading, since it is
-// rather `InterfaceTooLargeException`, caused by too many methods
+// N.B. the name of the extension is very misleading, since it is 
+// rather `InterfaceTooLargeException`, caused by too many methods 
 // in the interface for large crates.
 //
 // By splitting the otherwise huge interface into two parts
-// * UniffiLib
+// * UniffiLib 
 // * IntegrityCheckingUniffiLib (this)
 // we allow for ~2x as many methods in the UniffiLib interface.
-//
-// The `ffi_uniffi_contract_version` method and all checksum methods are put
+// 
+// The `ffi_uniffi_contract_version` method and all checksum methods are put 
 // into `IntegrityCheckingUniffiLib` and these methods are called only once,
 // when the library is loaded.
 internal interface IntegrityCheckingUniffiLib : Library {
     // Integrity check functions only
-    fun uniffi_agent_core_checksum_func_coerce_provider_arguments(): Short
+    fun uniffi_agent_core_checksum_func_coerce_provider_arguments(
+): Short
+fun uniffi_agent_core_checksum_func_create_agent_engine(
+): Short
+fun uniffi_agent_core_checksum_func_create_tool_stream_gate(
+): Short
+fun uniffi_agent_core_checksum_func_has_local_tool_contract(
+): Short
+fun uniffi_agent_core_checksum_func_parse_tool_calls(
+): Short
+fun uniffi_agent_core_checksum_func_repair_tool(
+): Short
+fun uniffi_agent_core_checksum_func_result_json_looks_soft_failure(
+): Short
+fun uniffi_agent_core_checksum_func_should_allow_tool(
+): Short
+fun uniffi_agent_core_checksum_func_truncate_result(
+): Short
+fun uniffi_agent_core_checksum_method_ffiagentengine_cancel(
+): Short
+fun uniffi_agent_core_checksum_method_ffiagentengine_create_session(
+): Short
+fun uniffi_agent_core_checksum_method_ffiagentengine_drain_events(
+): Short
+fun uniffi_agent_core_checksum_method_ffiagentengine_insert_terminal_output(
+): Short
+fun uniffi_agent_core_checksum_method_ffiagentengine_next_action(
+): Short
+fun uniffi_agent_core_checksum_method_ffiagentengine_read_context_reference(
+): Short
+fun uniffi_agent_core_checksum_method_ffiagentengine_request_manual_compact(
+): Short
+fun uniffi_agent_core_checksum_method_ffiagentengine_search_context_references(
+): Short
+fun uniffi_agent_core_checksum_method_ffiagentengine_submit_model_response(
+): Short
+fun uniffi_agent_core_checksum_method_ffiagentengine_submit_model_turn_failure(
+): Short
+fun uniffi_agent_core_checksum_method_ffiagentengine_submit_summary(
+): Short
+fun uniffi_agent_core_checksum_method_ffiagentengine_submit_tool_results(
+): Short
+fun uniffi_agent_core_checksum_method_ffitoolstreamgate_buffered_text(
+): Short
+fun uniffi_agent_core_checksum_method_ffitoolstreamgate_finish(
+): Short
+fun uniffi_agent_core_checksum_method_ffitoolstreamgate_has_tool_markup(
+): Short
+fun uniffi_agent_core_checksum_method_ffitoolstreamgate_push(
+): Short
+fun uniffi_agent_core_checksum_method_ffitoolstreamgate_reset(
+): Short
+fun uniffi_agent_core_checksum_method_agentsummarizercallback_summarize(
+): Short
+fun uniffi_agent_core_checksum_method_agenttoolexecutorcallback_execute_tools(
+): Short
+fun uniffi_agent_core_checksum_method_agenttransportcallback_complete_model_turn(
+): Short
+fun ffi_agent_core_uniffi_contract_version(
+): Int
 
-    fun uniffi_agent_core_checksum_func_create_agent_engine(): Short
-
-    fun uniffi_agent_core_checksum_func_create_tool_stream_gate(): Short
-
-    fun uniffi_agent_core_checksum_func_has_local_tool_contract(): Short
-
-    fun uniffi_agent_core_checksum_func_parse_tool_calls(): Short
-
-    fun uniffi_agent_core_checksum_func_repair_tool(): Short
-
-    fun uniffi_agent_core_checksum_func_result_json_looks_soft_failure(): Short
-
-    fun uniffi_agent_core_checksum_func_should_allow_tool(): Short
-
-    fun uniffi_agent_core_checksum_func_truncate_result(): Short
-
-    fun uniffi_agent_core_checksum_method_ffiagentengine_cancel(): Short
-
-    fun uniffi_agent_core_checksum_method_ffiagentengine_create_session(): Short
-
-    fun uniffi_agent_core_checksum_method_ffiagentengine_drain_events(): Short
-
-    fun uniffi_agent_core_checksum_method_ffiagentengine_insert_terminal_output(): Short
-
-    fun uniffi_agent_core_checksum_method_ffiagentengine_next_action(): Short
-
-    fun uniffi_agent_core_checksum_method_ffiagentengine_read_context_reference(): Short
-
-    fun uniffi_agent_core_checksum_method_ffiagentengine_request_manual_compact(): Short
-
-    fun uniffi_agent_core_checksum_method_ffiagentengine_search_context_references(): Short
-
-    fun uniffi_agent_core_checksum_method_ffiagentengine_submit_model_response(): Short
-
-    fun uniffi_agent_core_checksum_method_ffiagentengine_submit_summary(): Short
-
-    fun uniffi_agent_core_checksum_method_ffiagentengine_submit_tool_results(): Short
-
-    fun uniffi_agent_core_checksum_method_ffitoolstreamgate_buffered_text(): Short
-
-    fun uniffi_agent_core_checksum_method_ffitoolstreamgate_finish(): Short
-
-    fun uniffi_agent_core_checksum_method_ffitoolstreamgate_push(): Short
-
-    fun uniffi_agent_core_checksum_method_ffitoolstreamgate_reset(): Short
-
-    fun uniffi_agent_core_checksum_method_agentsummarizercallback_summarize(): Short
-
-    fun uniffi_agent_core_checksum_method_agenttoolexecutorcallback_execute_tools(): Short
-
-    fun uniffi_agent_core_checksum_method_agenttransportcallback_complete_model_turn(): Short
-
-    fun ffi_agent_core_uniffi_contract_version(): Int
 }
 
 // A JNA Library to expose the extern-C FFI definitions.
@@ -907,8 +918,8 @@ internal interface UniffiLib : Library {
         internal val INSTANCE: UniffiLib by lazy {
             val componentName = "agent_core"
             // For large crates we prevent `MethodTooLargeException` (see #2340)
-            // N.B. the name of the extension is very misleading, since it is
-            // rather `InterfaceTooLargeException`, caused by too many methods
+            // N.B. the name of the extension is very misleading, since it is 
+            // rather `InterfaceTooLargeException`, caused by too many methods 
             // in the interface for large crates.
             //
             // By splitting the otherwise huge interface into two parts
@@ -916,7 +927,7 @@ internal interface UniffiLib : Library {
             // * IntegrityCheckingUniffiLib
             // And all checksum methods are put into `IntegrityCheckingUniffiLib`
             // we allow for ~2x as many methods in the UniffiLib interface.
-            //
+            // 
             // Thus we first load the library with `loadIndirect` as `IntegrityCheckingUniffiLib`
             // so that we can (optionally!) call `uniffiCheckApiChecksums`...
             loadIndirect<IntegrityCheckingUniffiLib>(componentName)
@@ -931,7 +942,7 @@ internal interface UniffiLib : Library {
             // to trigger this issue, the performance impact is negligible, running on
             // a macOS M1 machine the `loadIndirect` call takes ~50ms.
             val lib = loadIndirect<UniffiLib>(componentName)
-            // No need to check the contract version and checksums, since
+            // No need to check the contract version and checksums, since 
             // we already did that with `IntegrityCheckingUniffiLib` above.
             uniffiCallbackInterfaceAgentSummarizerCallback.register(lib)
             uniffiCallbackInterfaceAgentToolExecutorCallback.register(lib)
@@ -939,7 +950,7 @@ internal interface UniffiLib : Library {
             // Loading of library with integrity check done.
             lib
         }
-
+        
         // The Cleaner for the whole library
         internal val CLEANER: UniffiCleaner by lazy {
             UniffiCleaner.create()
@@ -947,423 +958,189 @@ internal interface UniffiLib : Library {
     }
 
     // FFI functions
-    fun uniffi_agent_core_fn_clone_ffiagentengine(
-        `ptr`: Pointer,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Pointer
+    fun uniffi_agent_core_fn_clone_ffiagentengine(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+): Pointer
+fun uniffi_agent_core_fn_free_ffiagentengine(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+): Unit
+fun uniffi_agent_core_fn_method_ffiagentengine_cancel(`ptr`: Pointer,`session`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+): Unit
+fun uniffi_agent_core_fn_method_ffiagentengine_create_session(`ptr`: Pointer,`initialMessages`: RustBuffer.ByValue,`config`: RustBuffer.ByValue,`capabilities`: RustBuffer.ByValue,`sessionContextJson`: RustBuffer.ByValue,`io`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): Pointer
+fun uniffi_agent_core_fn_method_ffiagentengine_drain_events(`ptr`: Pointer,`session`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_agent_core_fn_method_ffiagentengine_insert_terminal_output(`ptr`: Pointer,`session`: Pointer,`id`: RustBuffer.ByValue,`title`: RustBuffer.ByValue,`content`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_agent_core_fn_method_ffiagentengine_next_action(`ptr`: Pointer,`session`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_agent_core_fn_method_ffiagentengine_read_context_reference(`ptr`: Pointer,`session`: Pointer,`referenceId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_agent_core_fn_method_ffiagentengine_request_manual_compact(`ptr`: Pointer,`session`: Pointer,`request`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_agent_core_fn_method_ffiagentengine_search_context_references(`ptr`: Pointer,`session`: Pointer,`query`: RustBuffer.ByValue,`limit`: Int,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_agent_core_fn_method_ffiagentengine_submit_model_response(`ptr`: Pointer,`session`: Pointer,`response`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): Unit
+fun uniffi_agent_core_fn_method_ffiagentengine_submit_model_turn_failure(`ptr`: Pointer,`session`: Pointer,`report`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): Unit
+fun uniffi_agent_core_fn_method_ffiagentengine_submit_summary(`ptr`: Pointer,`session`: Pointer,`summary`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): Unit
+fun uniffi_agent_core_fn_method_ffiagentengine_submit_tool_results(`ptr`: Pointer,`session`: Pointer,`results`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): Unit
+fun uniffi_agent_core_fn_clone_ffisession(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+): Pointer
+fun uniffi_agent_core_fn_free_ffisession(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+): Unit
+fun uniffi_agent_core_fn_clone_ffitoolstreamgate(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+): Pointer
+fun uniffi_agent_core_fn_free_ffitoolstreamgate(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+): Unit
+fun uniffi_agent_core_fn_method_ffitoolstreamgate_buffered_text(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_agent_core_fn_method_ffitoolstreamgate_finish(`ptr`: Pointer,`hasNativeToolCalls`: Byte,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_agent_core_fn_method_ffitoolstreamgate_has_tool_markup(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+): Byte
+fun uniffi_agent_core_fn_method_ffitoolstreamgate_push(`ptr`: Pointer,`chunk`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_agent_core_fn_method_ffitoolstreamgate_reset(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+): Unit
+fun uniffi_agent_core_fn_init_callback_vtable_agentsummarizercallback(`vtable`: UniffiVTableCallbackInterfaceAgentSummarizerCallback,
+): Unit
+fun uniffi_agent_core_fn_init_callback_vtable_agenttoolexecutorcallback(`vtable`: UniffiVTableCallbackInterfaceAgentToolExecutorCallback,
+): Unit
+fun uniffi_agent_core_fn_init_callback_vtable_agenttransportcallback(`vtable`: UniffiVTableCallbackInterfaceAgentTransportCallback,
+): Unit
+fun uniffi_agent_core_fn_func_coerce_provider_arguments(`toolName`: RustBuffer.ByValue,`argsJson`: RustBuffer.ByValue,`toolSemanticsJson`: RustBuffer.ByValue,`toolCatalogJson`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_agent_core_fn_func_create_agent_engine(`transport`: Long,`executor`: Long,`summarizer`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): Pointer
+fun uniffi_agent_core_fn_func_create_tool_stream_gate(`allowToolCall`: Byte,uniffi_out_err: UniffiRustCallStatus, 
+): Pointer
+fun uniffi_agent_core_fn_func_has_local_tool_contract(`systemPrompt`: RustBuffer.ByValue,`toolCatalogJson`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): Byte
+fun uniffi_agent_core_fn_func_parse_tool_calls(`raw`: RustBuffer.ByValue,`toolSemanticsJson`: RustBuffer.ByValue,`toolCatalogJson`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_agent_core_fn_func_repair_tool(`name`: RustBuffer.ByValue,`argsJson`: RustBuffer.ByValue,`toolSemanticsJson`: RustBuffer.ByValue,`toolCatalogJson`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_agent_core_fn_func_result_json_looks_soft_failure(`json`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): Byte
+fun uniffi_agent_core_fn_func_should_allow_tool(`softFailureStreak`: Int,`maxStreak`: Int,uniffi_out_err: UniffiRustCallStatus, 
+): Byte
+fun uniffi_agent_core_fn_func_truncate_result(`json`: RustBuffer.ByValue,`budgetBytes`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun ffi_agent_core_rustbuffer_alloc(`size`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun ffi_agent_core_rustbuffer_from_bytes(`bytes`: ForeignBytes.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun ffi_agent_core_rustbuffer_free(`buf`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): Unit
+fun ffi_agent_core_rustbuffer_reserve(`buf`: RustBuffer.ByValue,`additional`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun ffi_agent_core_rust_future_poll_u8(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
+): Unit
+fun ffi_agent_core_rust_future_cancel_u8(`handle`: Long,
+): Unit
+fun ffi_agent_core_rust_future_free_u8(`handle`: Long,
+): Unit
+fun ffi_agent_core_rust_future_complete_u8(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): Byte
+fun ffi_agent_core_rust_future_poll_i8(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
+): Unit
+fun ffi_agent_core_rust_future_cancel_i8(`handle`: Long,
+): Unit
+fun ffi_agent_core_rust_future_free_i8(`handle`: Long,
+): Unit
+fun ffi_agent_core_rust_future_complete_i8(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): Byte
+fun ffi_agent_core_rust_future_poll_u16(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
+): Unit
+fun ffi_agent_core_rust_future_cancel_u16(`handle`: Long,
+): Unit
+fun ffi_agent_core_rust_future_free_u16(`handle`: Long,
+): Unit
+fun ffi_agent_core_rust_future_complete_u16(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): Short
+fun ffi_agent_core_rust_future_poll_i16(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
+): Unit
+fun ffi_agent_core_rust_future_cancel_i16(`handle`: Long,
+): Unit
+fun ffi_agent_core_rust_future_free_i16(`handle`: Long,
+): Unit
+fun ffi_agent_core_rust_future_complete_i16(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): Short
+fun ffi_agent_core_rust_future_poll_u32(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
+): Unit
+fun ffi_agent_core_rust_future_cancel_u32(`handle`: Long,
+): Unit
+fun ffi_agent_core_rust_future_free_u32(`handle`: Long,
+): Unit
+fun ffi_agent_core_rust_future_complete_u32(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): Int
+fun ffi_agent_core_rust_future_poll_i32(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
+): Unit
+fun ffi_agent_core_rust_future_cancel_i32(`handle`: Long,
+): Unit
+fun ffi_agent_core_rust_future_free_i32(`handle`: Long,
+): Unit
+fun ffi_agent_core_rust_future_complete_i32(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): Int
+fun ffi_agent_core_rust_future_poll_u64(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
+): Unit
+fun ffi_agent_core_rust_future_cancel_u64(`handle`: Long,
+): Unit
+fun ffi_agent_core_rust_future_free_u64(`handle`: Long,
+): Unit
+fun ffi_agent_core_rust_future_complete_u64(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): Long
+fun ffi_agent_core_rust_future_poll_i64(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
+): Unit
+fun ffi_agent_core_rust_future_cancel_i64(`handle`: Long,
+): Unit
+fun ffi_agent_core_rust_future_free_i64(`handle`: Long,
+): Unit
+fun ffi_agent_core_rust_future_complete_i64(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): Long
+fun ffi_agent_core_rust_future_poll_f32(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
+): Unit
+fun ffi_agent_core_rust_future_cancel_f32(`handle`: Long,
+): Unit
+fun ffi_agent_core_rust_future_free_f32(`handle`: Long,
+): Unit
+fun ffi_agent_core_rust_future_complete_f32(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): Float
+fun ffi_agent_core_rust_future_poll_f64(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
+): Unit
+fun ffi_agent_core_rust_future_cancel_f64(`handle`: Long,
+): Unit
+fun ffi_agent_core_rust_future_free_f64(`handle`: Long,
+): Unit
+fun ffi_agent_core_rust_future_complete_f64(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): Double
+fun ffi_agent_core_rust_future_poll_pointer(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
+): Unit
+fun ffi_agent_core_rust_future_cancel_pointer(`handle`: Long,
+): Unit
+fun ffi_agent_core_rust_future_free_pointer(`handle`: Long,
+): Unit
+fun ffi_agent_core_rust_future_complete_pointer(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): Pointer
+fun ffi_agent_core_rust_future_poll_rust_buffer(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
+): Unit
+fun ffi_agent_core_rust_future_cancel_rust_buffer(`handle`: Long,
+): Unit
+fun ffi_agent_core_rust_future_free_rust_buffer(`handle`: Long,
+): Unit
+fun ffi_agent_core_rust_future_complete_rust_buffer(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun ffi_agent_core_rust_future_poll_void(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
+): Unit
+fun ffi_agent_core_rust_future_cancel_void(`handle`: Long,
+): Unit
+fun ffi_agent_core_rust_future_free_void(`handle`: Long,
+): Unit
+fun ffi_agent_core_rust_future_complete_void(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+): Unit
 
-    fun uniffi_agent_core_fn_free_ffiagentengine(
-        `ptr`: Pointer,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Unit
-
-    fun uniffi_agent_core_fn_method_ffiagentengine_cancel(
-        `ptr`: Pointer,
-        `session`: Pointer,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Unit
-
-    fun uniffi_agent_core_fn_method_ffiagentengine_create_session(
-        `ptr`: Pointer,
-        `initialMessages`: RustBuffer.ByValue,
-        `config`: RustBuffer.ByValue,
-        `capabilities`: RustBuffer.ByValue,
-        `sessionContextJson`: RustBuffer.ByValue,
-        `io`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Pointer
-
-    fun uniffi_agent_core_fn_method_ffiagentengine_drain_events(
-        `ptr`: Pointer,
-        `session`: Pointer,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): RustBuffer.ByValue
-
-    fun uniffi_agent_core_fn_method_ffiagentengine_insert_terminal_output(
-        `ptr`: Pointer,
-        `session`: Pointer,
-        `id`: RustBuffer.ByValue,
-        `title`: RustBuffer.ByValue,
-        `content`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): RustBuffer.ByValue
-
-    fun uniffi_agent_core_fn_method_ffiagentengine_next_action(
-        `ptr`: Pointer,
-        `session`: Pointer,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): RustBuffer.ByValue
-
-    fun uniffi_agent_core_fn_method_ffiagentengine_read_context_reference(
-        `ptr`: Pointer,
-        `session`: Pointer,
-        `referenceId`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): RustBuffer.ByValue
-
-    fun uniffi_agent_core_fn_method_ffiagentengine_request_manual_compact(
-        `ptr`: Pointer,
-        `session`: Pointer,
-        `request`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): RustBuffer.ByValue
-
-    fun uniffi_agent_core_fn_method_ffiagentengine_search_context_references(
-        `ptr`: Pointer,
-        `session`: Pointer,
-        `query`: RustBuffer.ByValue,
-        `limit`: Int,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): RustBuffer.ByValue
-
-    fun uniffi_agent_core_fn_method_ffiagentengine_submit_model_response(
-        `ptr`: Pointer,
-        `session`: Pointer,
-        `response`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Unit
-
-    fun uniffi_agent_core_fn_method_ffiagentengine_submit_summary(
-        `ptr`: Pointer,
-        `session`: Pointer,
-        `summary`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Unit
-
-    fun uniffi_agent_core_fn_method_ffiagentengine_submit_tool_results(
-        `ptr`: Pointer,
-        `session`: Pointer,
-        `results`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Unit
-
-    fun uniffi_agent_core_fn_clone_ffisession(
-        `ptr`: Pointer,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Pointer
-
-    fun uniffi_agent_core_fn_free_ffisession(
-        `ptr`: Pointer,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Unit
-
-    fun uniffi_agent_core_fn_clone_ffitoolstreamgate(
-        `ptr`: Pointer,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Pointer
-
-    fun uniffi_agent_core_fn_free_ffitoolstreamgate(
-        `ptr`: Pointer,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Unit
-
-    fun uniffi_agent_core_fn_method_ffitoolstreamgate_buffered_text(
-        `ptr`: Pointer,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): RustBuffer.ByValue
-
-    fun uniffi_agent_core_fn_method_ffitoolstreamgate_finish(
-        `ptr`: Pointer,
-        `hasNativeToolCalls`: Byte,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): RustBuffer.ByValue
-
-    fun uniffi_agent_core_fn_method_ffitoolstreamgate_push(
-        `ptr`: Pointer,
-        `chunk`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): RustBuffer.ByValue
-
-    fun uniffi_agent_core_fn_method_ffitoolstreamgate_reset(
-        `ptr`: Pointer,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Unit
-
-    fun uniffi_agent_core_fn_init_callback_vtable_agentsummarizercallback(
-        `vtable`: UniffiVTableCallbackInterfaceAgentSummarizerCallback,
-    ): Unit
-
-    fun uniffi_agent_core_fn_init_callback_vtable_agenttoolexecutorcallback(
-        `vtable`: UniffiVTableCallbackInterfaceAgentToolExecutorCallback,
-    ): Unit
-
-    fun uniffi_agent_core_fn_init_callback_vtable_agenttransportcallback(
-        `vtable`: UniffiVTableCallbackInterfaceAgentTransportCallback,
-    ): Unit
-
-    fun uniffi_agent_core_fn_func_coerce_provider_arguments(
-        `toolName`: RustBuffer.ByValue,
-        `argsJson`: RustBuffer.ByValue,
-        `toolSemanticsJson`: RustBuffer.ByValue,
-        `toolCatalogJson`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): RustBuffer.ByValue
-
-    fun uniffi_agent_core_fn_func_create_agent_engine(
-        `transport`: Long,
-        `executor`: Long,
-        `summarizer`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Pointer
-
-    fun uniffi_agent_core_fn_func_create_tool_stream_gate(
-        `allowToolCall`: Byte,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Pointer
-
-    fun uniffi_agent_core_fn_func_has_local_tool_contract(
-        `systemPrompt`: RustBuffer.ByValue,
-        `toolCatalogJson`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Byte
-
-    fun uniffi_agent_core_fn_func_parse_tool_calls(
-        `raw`: RustBuffer.ByValue,
-        `toolSemanticsJson`: RustBuffer.ByValue,
-        `toolCatalogJson`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): RustBuffer.ByValue
-
-    fun uniffi_agent_core_fn_func_repair_tool(
-        `name`: RustBuffer.ByValue,
-        `argsJson`: RustBuffer.ByValue,
-        `toolSemanticsJson`: RustBuffer.ByValue,
-        `toolCatalogJson`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): RustBuffer.ByValue
-
-    fun uniffi_agent_core_fn_func_result_json_looks_soft_failure(
-        `json`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Byte
-
-    fun uniffi_agent_core_fn_func_should_allow_tool(
-        `softFailureStreak`: Int,
-        `maxStreak`: Int,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Byte
-
-    fun uniffi_agent_core_fn_func_truncate_result(
-        `json`: RustBuffer.ByValue,
-        `budgetBytes`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): RustBuffer.ByValue
-
-    fun ffi_agent_core_rustbuffer_alloc(
-        `size`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): RustBuffer.ByValue
-
-    fun ffi_agent_core_rustbuffer_from_bytes(
-        `bytes`: ForeignBytes.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): RustBuffer.ByValue
-
-    fun ffi_agent_core_rustbuffer_free(
-        `buf`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Unit
-
-    fun ffi_agent_core_rustbuffer_reserve(
-        `buf`: RustBuffer.ByValue,
-        `additional`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): RustBuffer.ByValue
-
-    fun ffi_agent_core_rust_future_poll_u8(
-        `handle`: Long,
-        `callback`: UniffiRustFutureContinuationCallback,
-        `callbackData`: Long,
-    ): Unit
-
-    fun ffi_agent_core_rust_future_cancel_u8(`handle`: Long): Unit
-
-    fun ffi_agent_core_rust_future_free_u8(`handle`: Long): Unit
-
-    fun ffi_agent_core_rust_future_complete_u8(
-        `handle`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Byte
-
-    fun ffi_agent_core_rust_future_poll_i8(
-        `handle`: Long,
-        `callback`: UniffiRustFutureContinuationCallback,
-        `callbackData`: Long,
-    ): Unit
-
-    fun ffi_agent_core_rust_future_cancel_i8(`handle`: Long): Unit
-
-    fun ffi_agent_core_rust_future_free_i8(`handle`: Long): Unit
-
-    fun ffi_agent_core_rust_future_complete_i8(
-        `handle`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Byte
-
-    fun ffi_agent_core_rust_future_poll_u16(
-        `handle`: Long,
-        `callback`: UniffiRustFutureContinuationCallback,
-        `callbackData`: Long,
-    ): Unit
-
-    fun ffi_agent_core_rust_future_cancel_u16(`handle`: Long): Unit
-
-    fun ffi_agent_core_rust_future_free_u16(`handle`: Long): Unit
-
-    fun ffi_agent_core_rust_future_complete_u16(
-        `handle`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Short
-
-    fun ffi_agent_core_rust_future_poll_i16(
-        `handle`: Long,
-        `callback`: UniffiRustFutureContinuationCallback,
-        `callbackData`: Long,
-    ): Unit
-
-    fun ffi_agent_core_rust_future_cancel_i16(`handle`: Long): Unit
-
-    fun ffi_agent_core_rust_future_free_i16(`handle`: Long): Unit
-
-    fun ffi_agent_core_rust_future_complete_i16(
-        `handle`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Short
-
-    fun ffi_agent_core_rust_future_poll_u32(
-        `handle`: Long,
-        `callback`: UniffiRustFutureContinuationCallback,
-        `callbackData`: Long,
-    ): Unit
-
-    fun ffi_agent_core_rust_future_cancel_u32(`handle`: Long): Unit
-
-    fun ffi_agent_core_rust_future_free_u32(`handle`: Long): Unit
-
-    fun ffi_agent_core_rust_future_complete_u32(
-        `handle`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Int
-
-    fun ffi_agent_core_rust_future_poll_i32(
-        `handle`: Long,
-        `callback`: UniffiRustFutureContinuationCallback,
-        `callbackData`: Long,
-    ): Unit
-
-    fun ffi_agent_core_rust_future_cancel_i32(`handle`: Long): Unit
-
-    fun ffi_agent_core_rust_future_free_i32(`handle`: Long): Unit
-
-    fun ffi_agent_core_rust_future_complete_i32(
-        `handle`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Int
-
-    fun ffi_agent_core_rust_future_poll_u64(
-        `handle`: Long,
-        `callback`: UniffiRustFutureContinuationCallback,
-        `callbackData`: Long,
-    ): Unit
-
-    fun ffi_agent_core_rust_future_cancel_u64(`handle`: Long): Unit
-
-    fun ffi_agent_core_rust_future_free_u64(`handle`: Long): Unit
-
-    fun ffi_agent_core_rust_future_complete_u64(
-        `handle`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    fun ffi_agent_core_rust_future_poll_i64(
-        `handle`: Long,
-        `callback`: UniffiRustFutureContinuationCallback,
-        `callbackData`: Long,
-    ): Unit
-
-    fun ffi_agent_core_rust_future_cancel_i64(`handle`: Long): Unit
-
-    fun ffi_agent_core_rust_future_free_i64(`handle`: Long): Unit
-
-    fun ffi_agent_core_rust_future_complete_i64(
-        `handle`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    fun ffi_agent_core_rust_future_poll_f32(
-        `handle`: Long,
-        `callback`: UniffiRustFutureContinuationCallback,
-        `callbackData`: Long,
-    ): Unit
-
-    fun ffi_agent_core_rust_future_cancel_f32(`handle`: Long): Unit
-
-    fun ffi_agent_core_rust_future_free_f32(`handle`: Long): Unit
-
-    fun ffi_agent_core_rust_future_complete_f32(
-        `handle`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Float
-
-    fun ffi_agent_core_rust_future_poll_f64(
-        `handle`: Long,
-        `callback`: UniffiRustFutureContinuationCallback,
-        `callbackData`: Long,
-    ): Unit
-
-    fun ffi_agent_core_rust_future_cancel_f64(`handle`: Long): Unit
-
-    fun ffi_agent_core_rust_future_free_f64(`handle`: Long): Unit
-
-    fun ffi_agent_core_rust_future_complete_f64(
-        `handle`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Double
-
-    fun ffi_agent_core_rust_future_poll_pointer(
-        `handle`: Long,
-        `callback`: UniffiRustFutureContinuationCallback,
-        `callbackData`: Long,
-    ): Unit
-
-    fun ffi_agent_core_rust_future_cancel_pointer(`handle`: Long): Unit
-
-    fun ffi_agent_core_rust_future_free_pointer(`handle`: Long): Unit
-
-    fun ffi_agent_core_rust_future_complete_pointer(
-        `handle`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Pointer
-
-    fun ffi_agent_core_rust_future_poll_rust_buffer(
-        `handle`: Long,
-        `callback`: UniffiRustFutureContinuationCallback,
-        `callbackData`: Long,
-    ): Unit
-
-    fun ffi_agent_core_rust_future_cancel_rust_buffer(`handle`: Long): Unit
-
-    fun ffi_agent_core_rust_future_free_rust_buffer(`handle`: Long): Unit
-
-    fun ffi_agent_core_rust_future_complete_rust_buffer(
-        `handle`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): RustBuffer.ByValue
-
-    fun ffi_agent_core_rust_future_poll_void(
-        `handle`: Long,
-        `callback`: UniffiRustFutureContinuationCallback,
-        `callbackData`: Long,
-    ): Unit
-
-    fun ffi_agent_core_rust_future_cancel_void(`handle`: Long): Unit
-
-    fun ffi_agent_core_rust_future_free_void(`handle`: Long): Unit
-
-    fun ffi_agent_core_rust_future_complete_void(
-        `handle`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Unit
 }
 
 private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
@@ -1375,7 +1152,6 @@ private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI contract version mismatch: try cleaning and rebuilding your project")
     }
 }
-
 @Suppress("UNUSED_PARAMETER")
 private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_agent_core_checksum_func_coerce_provider_arguments() != 17171.toShort()) {
@@ -1432,6 +1208,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_agent_core_checksum_method_ffiagentengine_submit_model_response() != 16488.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_agent_core_checksum_method_ffiagentengine_submit_model_turn_failure() != 20769.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_agent_core_checksum_method_ffiagentengine_submit_summary() != 17750.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1442,6 +1221,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_agent_core_checksum_method_ffitoolstreamgate_finish() != 41900.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_agent_core_checksum_method_ffitoolstreamgate_has_tool_markup() != 6418.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_agent_core_checksum_method_ffitoolstreamgate_push() != 30234.toShort()) {
@@ -1472,6 +1254,7 @@ public fun uniffiEnsureInitialized() {
 
 // Public interface members begin here.
 
+
 // Interface implemented by anything that can contain an object reference.
 //
 // Such types expose a `destroy()` method that must be called to cleanly
@@ -1482,7 +1265,6 @@ public fun uniffiEnsureInitialized() {
 // helper method to execute a block and destroy the object at the end.
 interface Disposable {
     fun destroy()
-
     companion object {
         fun destroy(vararg args: Any?) {
             for (arg in args) {
@@ -1531,16 +1313,14 @@ inline fun <T : Disposable?, R> T.use(block: (T) -> R) =
         }
     }
 
-/**
+/** 
  * Used to instantiate an interface without an actual pointer, for fakes in tests, mostly.
  *
  * @suppress
  * */
-object NoPointer // Magic number for the Rust proxy to call using the same mechanism as every other method,
-
+object NoPointer// Magic number for the Rust proxy to call using the same mechanism as every other method,
 // to free the callback once it's dropped by Rust.
 internal const val IDX_CALLBACK_FREE = 0
-
 // Callback return codes
 internal const val UNIFFI_CALLBACK_SUCCESS = 0
 internal const val UNIFFI_CALLBACK_ERROR = 1
@@ -1549,14 +1329,16 @@ internal const val UNIFFI_CALLBACK_UNEXPECTED_ERROR = 2
 /**
  * @suppress
  */
-public abstract class FfiConverterCallbackInterface<CallbackInterface : Any> : FfiConverter<CallbackInterface, Long> {
+public abstract class FfiConverterCallbackInterface<CallbackInterface: Any>: FfiConverter<CallbackInterface, Long> {
     internal val handleMap = UniffiHandleMap<CallbackInterface>()
 
     internal fun drop(handle: Long) {
         handleMap.remove(handle)
     }
 
-    override fun lift(value: Long): CallbackInterface = handleMap.get(value)
+    override fun lift(value: Long): CallbackInterface {
+        return handleMap.get(value)
+    }
 
     override fun read(buf: ByteBuffer) = lift(buf.getLong())
 
@@ -1564,14 +1346,10 @@ public abstract class FfiConverterCallbackInterface<CallbackInterface : Any> : F
 
     override fun allocationSize(value: CallbackInterface) = 8UL
 
-    override fun write(
-        value: CallbackInterface,
-        buf: ByteBuffer,
-    ) {
+    override fun write(value: CallbackInterface, buf: ByteBuffer) {
         buf.putLong(lower(value))
     }
 }
-
 /**
  * The cleaner interface for Object finalization code to run.
  * This is the entry point to any implementation that we're using.
@@ -1587,24 +1365,17 @@ interface UniffiCleaner {
         fun clean()
     }
 
-    fun register(
-        value: Any,
-        cleanUpTask: Runnable,
-    ): UniffiCleaner.Cleanable
+    fun register(value: Any, cleanUpTask: Runnable): UniffiCleaner.Cleanable
 
     companion object
 }
 
 // The fallback Jna cleaner, which is available for both Android, and the JVM.
 private class UniffiJnaCleaner : UniffiCleaner {
-    private val cleaner =
-        com.sun.jna.internal.Cleaner
-            .getCleaner()
+    private val cleaner = com.sun.jna.internal.Cleaner.getCleaner()
 
-    override fun register(
-        value: Any,
-        cleanUpTask: Runnable,
-    ): UniffiCleaner.Cleanable = UniffiJnaCleanable(cleaner.register(value, cleanUpTask))
+    override fun register(value: Any, cleanUpTask: Runnable): UniffiCleaner.Cleanable =
+        UniffiJnaCleanable(cleaner.register(value, cleanUpTask))
 }
 
 private class UniffiJnaCleanable(
@@ -1612,6 +1383,7 @@ private class UniffiJnaCleanable(
 ) : UniffiCleaner.Cleanable {
     override fun clean() = cleanable.clean()
 }
+
 
 // We decide at uniffi binding generation time whether we were
 // using Android or not.
@@ -1631,18 +1403,14 @@ private fun UniffiCleaner.Companion.create(): UniffiCleaner =
     }
 
 private class JavaLangRefCleaner : UniffiCleaner {
-    val cleaner =
-        java.lang.ref.Cleaner
-            .create()
+    val cleaner = java.lang.ref.Cleaner.create()
 
-    override fun register(
-        value: Any,
-        cleanUpTask: Runnable,
-    ): UniffiCleaner.Cleanable = JavaLangRefCleanable(cleaner.register(value, cleanUpTask))
+    override fun register(value: Any, cleanUpTask: Runnable): UniffiCleaner.Cleanable =
+        JavaLangRefCleanable(cleaner.register(value, cleanUpTask))
 }
 
 private class JavaLangRefCleanable(
-    val cleanable: java.lang.ref.Cleaner.Cleanable,
+    val cleanable: java.lang.ref.Cleaner.Cleanable
 ) : UniffiCleaner.Cleanable {
     override fun clean() = cleanable.clean()
 }
@@ -1650,19 +1418,45 @@ private class JavaLangRefCleanable(
 /**
  * @suppress
  */
-public object FfiConverterUInt : FfiConverter<UInt, Int> {
-    override fun lift(value: Int): UInt = value.toUInt()
+public object FfiConverterUShort: FfiConverter<UShort, Short> {
+    override fun lift(value: Short): UShort {
+        return value.toUShort()
+    }
 
-    override fun read(buf: ByteBuffer): UInt = lift(buf.getInt())
+    override fun read(buf: ByteBuffer): UShort {
+        return lift(buf.getShort())
+    }
 
-    override fun lower(value: UInt): Int = value.toInt()
+    override fun lower(value: UShort): Short {
+        return value.toShort()
+    }
+
+    override fun allocationSize(value: UShort) = 2UL
+
+    override fun write(value: UShort, buf: ByteBuffer) {
+        buf.putShort(value.toShort())
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterUInt: FfiConverter<UInt, Int> {
+    override fun lift(value: Int): UInt {
+        return value.toUInt()
+    }
+
+    override fun read(buf: ByteBuffer): UInt {
+        return lift(buf.getInt())
+    }
+
+    override fun lower(value: UInt): Int {
+        return value.toInt()
+    }
 
     override fun allocationSize(value: UInt) = 4UL
 
-    override fun write(
-        value: UInt,
-        buf: ByteBuffer,
-    ) {
+    override fun write(value: UInt, buf: ByteBuffer) {
         buf.putInt(value.toInt())
     }
 }
@@ -1670,19 +1464,22 @@ public object FfiConverterUInt : FfiConverter<UInt, Int> {
 /**
  * @suppress
  */
-public object FfiConverterULong : FfiConverter<ULong, Long> {
-    override fun lift(value: Long): ULong = value.toULong()
+public object FfiConverterULong: FfiConverter<ULong, Long> {
+    override fun lift(value: Long): ULong {
+        return value.toULong()
+    }
 
-    override fun read(buf: ByteBuffer): ULong = lift(buf.getLong())
+    override fun read(buf: ByteBuffer): ULong {
+        return lift(buf.getLong())
+    }
 
-    override fun lower(value: ULong): Long = value.toLong()
+    override fun lower(value: ULong): Long {
+        return value.toLong()
+    }
 
     override fun allocationSize(value: ULong) = 8UL
 
-    override fun write(
-        value: ULong,
-        buf: ByteBuffer,
-    ) {
+    override fun write(value: ULong, buf: ByteBuffer) {
         buf.putLong(value.toLong())
     }
 }
@@ -1690,19 +1487,22 @@ public object FfiConverterULong : FfiConverter<ULong, Long> {
 /**
  * @suppress
  */
-public object FfiConverterFloat : FfiConverter<Float, Float> {
-    override fun lift(value: Float): Float = value
+public object FfiConverterFloat: FfiConverter<Float, Float> {
+    override fun lift(value: Float): Float {
+        return value
+    }
 
-    override fun read(buf: ByteBuffer): Float = buf.getFloat()
+    override fun read(buf: ByteBuffer): Float {
+        return buf.getFloat()
+    }
 
-    override fun lower(value: Float): Float = value
+    override fun lower(value: Float): Float {
+        return value
+    }
 
     override fun allocationSize(value: Float) = 4UL
 
-    override fun write(
-        value: Float,
-        buf: ByteBuffer,
-    ) {
+    override fun write(value: Float, buf: ByteBuffer) {
         buf.putFloat(value)
     }
 }
@@ -1710,19 +1510,22 @@ public object FfiConverterFloat : FfiConverter<Float, Float> {
 /**
  * @suppress
  */
-public object FfiConverterBoolean : FfiConverter<Boolean, Byte> {
-    override fun lift(value: Byte): Boolean = value.toInt() != 0
+public object FfiConverterBoolean: FfiConverter<Boolean, Byte> {
+    override fun lift(value: Byte): Boolean {
+        return value.toInt() != 0
+    }
 
-    override fun read(buf: ByteBuffer): Boolean = lift(buf.get())
+    override fun read(buf: ByteBuffer): Boolean {
+        return lift(buf.get())
+    }
 
-    override fun lower(value: Boolean): Byte = if (value) 1.toByte() else 0.toByte()
+    override fun lower(value: Boolean): Byte {
+        return if (value) 1.toByte() else 0.toByte()
+    }
 
     override fun allocationSize(value: Boolean) = 1UL
 
-    override fun write(
-        value: Boolean,
-        buf: ByteBuffer,
-    ) {
+    override fun write(value: Boolean, buf: ByteBuffer) {
         buf.put(lower(value))
     }
 }
@@ -1730,7 +1533,7 @@ public object FfiConverterBoolean : FfiConverter<Boolean, Byte> {
 /**
  * @suppress
  */
-public object FfiConverterString : FfiConverter<String, RustBuffer.ByValue> {
+public object FfiConverterString: FfiConverter<String, RustBuffer.ByValue> {
     // Note: we don't inherit from FfiConverterRustBuffer, because we use a
     // special encoding when lowering/lifting.  We can use `RustBuffer.len` to
     // store our length and avoid writing it out to the buffer.
@@ -1777,15 +1580,13 @@ public object FfiConverterString : FfiConverter<String, RustBuffer.ByValue> {
         return sizeForLength + sizeForString
     }
 
-    override fun write(
-        value: String,
-        buf: ByteBuffer,
-    ) {
+    override fun write(value: String, buf: ByteBuffer) {
         val byteBuf = toUtf8(value)
         buf.putInt(byteBuf.limit())
         buf.put(byteBuf)
     }
 }
+
 
 // This template implements a class for working with a Rust struct via a Pointer/Arc<T>
 // to the live Rust struct on the other side of the FFI.
@@ -1884,66 +1685,39 @@ public object FfiConverterString : FfiConverter<String, RustBuffer.ByValue> {
 // [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
 //
 
+
 public interface FfiAgentEngineInterface {
+    
     fun `cancel`(`session`: FfiSession)
-
-    fun `createSession`(
-        `initialMessages`: List<FfiAgentMessage>,
-        `config`: FfiAgentConfig,
-        `capabilities`: FfiSessionCapabilities,
-        `sessionContextJson`: kotlin.String,
-        `io`: FfiSessionIoParams,
-    ): FfiSession
-
+    
+    fun `createSession`(`initialMessages`: List<FfiAgentMessage>, `config`: FfiAgentConfig, `capabilities`: FfiSessionCapabilities, `sessionContextJson`: kotlin.String, `io`: FfiSessionIoParams): FfiSession
+    
     fun `drainEvents`(`session`: FfiSession): List<FfiAgentEvent>
-
-    fun `insertTerminalOutput`(
-        `session`: FfiSession,
-        `id`: kotlin.String,
-        `title`: kotlin.String,
-        `content`: kotlin.String,
-    ): FfiContextReference
-
+    
+    fun `insertTerminalOutput`(`session`: FfiSession, `id`: kotlin.String, `title`: kotlin.String, `content`: kotlin.String): FfiContextReference
+    
     fun `nextAction`(`session`: FfiSession): FfiAgentAction
-
-    fun `readContextReference`(
-        `session`: FfiSession,
-        `referenceId`: kotlin.String,
-    ): kotlin.String
-
-    fun `requestManualCompact`(
-        `session`: FfiSession,
-        `request`: FfiManualCompactRequest,
-    ): FfiAgentAction
-
-    fun `searchContextReferences`(
-        `session`: FfiSession,
-        `query`: kotlin.String,
-        `limit`: kotlin.UInt,
-    ): List<FfiContextReference>
-
-    fun `submitModelResponse`(
-        `session`: FfiSession,
-        `response`: FfiModelResponse,
-    )
-
-    fun `submitSummary`(
-        `session`: FfiSession,
-        `summary`: FfiSummaryResult,
-    )
-
-    fun `submitToolResults`(
-        `session`: FfiSession,
-        `results`: List<FfiToolResultRecord>,
-    )
-
+    
+    fun `readContextReference`(`session`: FfiSession, `referenceId`: kotlin.String): kotlin.String
+    
+    fun `requestManualCompact`(`session`: FfiSession, `request`: FfiManualCompactRequest): FfiAgentAction
+    
+    fun `searchContextReferences`(`session`: FfiSession, `query`: kotlin.String, `limit`: kotlin.UInt): List<FfiContextReference>
+    
+    fun `submitModelResponse`(`session`: FfiSession, `response`: FfiModelResponse)
+    
+    fun `submitModelTurnFailure`(`session`: FfiSession, `report`: FfiModelTurnFailureReport)
+    
+    fun `submitSummary`(`session`: FfiSession, `summary`: FfiSummaryResult)
+    
+    fun `submitToolResults`(`session`: FfiSession, `results`: List<FfiToolResultRecord>)
+    
     companion object
 }
 
-open class FfiAgentEngine :
-    Disposable,
-    AutoCloseable,
-    FfiAgentEngineInterface {
+open class FfiAgentEngine: Disposable, AutoCloseable, FfiAgentEngineInterface
+{
+
     constructor(pointer: Pointer) {
         this.pointer = pointer
         this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(pointer))
@@ -1993,7 +1767,7 @@ open class FfiAgentEngine :
             if (c == Long.MAX_VALUE) {
                 throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
             }
-        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        } while (! this.callCounter.compareAndSet(c, c + 1L))
         // Now we can safely do the method call without the pointer being freed concurrently.
         try {
             return block(this.uniffiClonePointer())
@@ -2007,9 +1781,7 @@ open class FfiAgentEngine :
 
     // Use a static inner class instead of a closure so as not to accidentally
     // capture `this` as part of the cleanable's action.
-    private class UniffiCleanAction(
-        private val pointer: Pointer?,
-    ) : Runnable {
+    private class UniffiCleanAction(private val pointer: Pointer?) : Runnable {
         override fun run() {
             pointer?.let { ptr ->
                 uniffiRustCall { status ->
@@ -2019,198 +1791,172 @@ open class FfiAgentEngine :
         }
     }
 
-    fun uniffiClonePointer(): Pointer =
-        uniffiRustCall { status ->
+    fun uniffiClonePointer(): Pointer {
+        return uniffiRustCall() { status ->
             UniffiLib.INSTANCE.uniffi_agent_core_fn_clone_ffiagentengine(pointer!!, status)
         }
-
-    override fun `cancel`(`session`: FfiSession) =
-        callWithPointer {
-            uniffiRustCall { _status ->
-                UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffiagentengine_cancel(
-                    it,
-                    FfiConverterTypeFfiSession.lower(`session`),
-                    _status,
-                )
-            }
-        }
-
-    override fun `createSession`(
-        `initialMessages`: List<FfiAgentMessage>,
-        `config`: FfiAgentConfig,
-        `capabilities`: FfiSessionCapabilities,
-        `sessionContextJson`: kotlin.String,
-        `io`: FfiSessionIoParams,
-    ): FfiSession =
-        FfiConverterTypeFfiSession.lift(
-            callWithPointer {
-                uniffiRustCall { _status ->
-                    UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffiagentengine_create_session(
-                        it,
-                        FfiConverterSequenceTypeFfiAgentMessage.lower(`initialMessages`),
-                        FfiConverterTypeFfiAgentConfig.lower(`config`),
-                        FfiConverterTypeFfiSessionCapabilities.lower(`capabilities`),
-                        FfiConverterString.lower(`sessionContextJson`),
-                        FfiConverterTypeFfiSessionIoParams.lower(`io`),
-                        _status,
-                    )
-                }
-            },
-        )
-
-    override fun `drainEvents`(`session`: FfiSession): List<FfiAgentEvent> =
-        FfiConverterSequenceTypeFfiAgentEvent.lift(
-            callWithPointer {
-                uniffiRustCall { _status ->
-                    UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffiagentengine_drain_events(
-                        it,
-                        FfiConverterTypeFfiSession.lower(`session`),
-                        _status,
-                    )
-                }
-            },
-        )
-
-    override fun `insertTerminalOutput`(
-        `session`: FfiSession,
-        `id`: kotlin.String,
-        `title`: kotlin.String,
-        `content`: kotlin.String,
-    ): FfiContextReference =
-        FfiConverterTypeFfiContextReference.lift(
-            callWithPointer {
-                uniffiRustCall { _status ->
-                    UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffiagentengine_insert_terminal_output(
-                        it,
-                        FfiConverterTypeFfiSession.lower(`session`),
-                        FfiConverterString.lower(`id`),
-                        FfiConverterString.lower(`title`),
-                        FfiConverterString.lower(`content`),
-                        _status,
-                    )
-                }
-            },
-        )
-
-    override fun `nextAction`(`session`: FfiSession): FfiAgentAction =
-        FfiConverterTypeFfiAgentAction.lift(
-            callWithPointer {
-                uniffiRustCall { _status ->
-                    UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffiagentengine_next_action(
-                        it,
-                        FfiConverterTypeFfiSession.lower(`session`),
-                        _status,
-                    )
-                }
-            },
-        )
-
-    @Throws(AgentException::class)
-    override fun `readContextReference`(
-        `session`: FfiSession,
-        `referenceId`: kotlin.String,
-    ): kotlin.String =
-        FfiConverterString.lift(
-            callWithPointer {
-                uniffiRustCallWithError(AgentException) { _status ->
-                    UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffiagentengine_read_context_reference(
-                        it,
-                        FfiConverterTypeFfiSession.lower(`session`),
-                        FfiConverterString.lower(`referenceId`),
-                        _status,
-                    )
-                }
-            },
-        )
-
-    override fun `requestManualCompact`(
-        `session`: FfiSession,
-        `request`: FfiManualCompactRequest,
-    ): FfiAgentAction =
-        FfiConverterTypeFfiAgentAction.lift(
-            callWithPointer {
-                uniffiRustCall { _status ->
-                    UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffiagentengine_request_manual_compact(
-                        it,
-                        FfiConverterTypeFfiSession.lower(`session`),
-                        FfiConverterTypeFfiManualCompactRequest.lower(`request`),
-                        _status,
-                    )
-                }
-            },
-        )
-
-    override fun `searchContextReferences`(
-        `session`: FfiSession,
-        `query`: kotlin.String,
-        `limit`: kotlin.UInt,
-    ): List<FfiContextReference> =
-        FfiConverterSequenceTypeFfiContextReference.lift(
-            callWithPointer {
-                uniffiRustCall { _status ->
-                    UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffiagentengine_search_context_references(
-                        it,
-                        FfiConverterTypeFfiSession.lower(`session`),
-                        FfiConverterString.lower(`query`),
-                        FfiConverterUInt.lower(`limit`),
-                        _status,
-                    )
-                }
-            },
-        )
-
-    override fun `submitModelResponse`(
-        `session`: FfiSession,
-        `response`: FfiModelResponse,
-    ) = callWithPointer {
-        uniffiRustCall { _status ->
-            UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffiagentengine_submit_model_response(
-                it,
-                FfiConverterTypeFfiSession.lower(`session`),
-                FfiConverterTypeFfiModelResponse.lower(`response`),
-                _status,
-            )
-        }
     }
 
-    override fun `submitSummary`(
-        `session`: FfiSession,
-        `summary`: FfiSummaryResult,
-    ) = callWithPointer {
-        uniffiRustCall { _status ->
-            UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffiagentengine_submit_summary(
-                it,
-                FfiConverterTypeFfiSession.lower(`session`),
-                FfiConverterTypeFfiSummaryResult.lower(`summary`),
-                _status,
-            )
-        }
+    override fun `cancel`(`session`: FfiSession)
+        = 
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffiagentengine_cancel(
+        it, FfiConverterTypeFfiSession.lower(`session`),_status)
+}
     }
+    
+    
 
-    override fun `submitToolResults`(
-        `session`: FfiSession,
-        `results`: List<FfiToolResultRecord>,
-    ) = callWithPointer {
-        uniffiRustCall { _status ->
-            UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffiagentengine_submit_tool_results(
-                it,
-                FfiConverterTypeFfiSession.lower(`session`),
-                FfiConverterSequenceTypeFfiToolResultRecord.lower(`results`),
-                _status,
-            )
-        }
+    override fun `createSession`(`initialMessages`: List<FfiAgentMessage>, `config`: FfiAgentConfig, `capabilities`: FfiSessionCapabilities, `sessionContextJson`: kotlin.String, `io`: FfiSessionIoParams): FfiSession {
+            return FfiConverterTypeFfiSession.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffiagentengine_create_session(
+        it, FfiConverterSequenceTypeFfiAgentMessage.lower(`initialMessages`),FfiConverterTypeFfiAgentConfig.lower(`config`),FfiConverterTypeFfiSessionCapabilities.lower(`capabilities`),FfiConverterString.lower(`sessionContextJson`),FfiConverterTypeFfiSessionIoParams.lower(`io`),_status)
+}
     }
+    )
+    }
+    
 
+    override fun `drainEvents`(`session`: FfiSession): List<FfiAgentEvent> {
+            return FfiConverterSequenceTypeFfiAgentEvent.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffiagentengine_drain_events(
+        it, FfiConverterTypeFfiSession.lower(`session`),_status)
+}
+    }
+    )
+    }
+    
+
+    override fun `insertTerminalOutput`(`session`: FfiSession, `id`: kotlin.String, `title`: kotlin.String, `content`: kotlin.String): FfiContextReference {
+            return FfiConverterTypeFfiContextReference.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffiagentengine_insert_terminal_output(
+        it, FfiConverterTypeFfiSession.lower(`session`),FfiConverterString.lower(`id`),FfiConverterString.lower(`title`),FfiConverterString.lower(`content`),_status)
+}
+    }
+    )
+    }
+    
+
+    override fun `nextAction`(`session`: FfiSession): FfiAgentAction {
+            return FfiConverterTypeFfiAgentAction.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffiagentengine_next_action(
+        it, FfiConverterTypeFfiSession.lower(`session`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    @Throws(AgentException::class)override fun `readContextReference`(`session`: FfiSession, `referenceId`: kotlin.String): kotlin.String {
+            return FfiConverterString.lift(
+    callWithPointer {
+    uniffiRustCallWithError(AgentException) { _status ->
+    UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffiagentengine_read_context_reference(
+        it, FfiConverterTypeFfiSession.lower(`session`),FfiConverterString.lower(`referenceId`),_status)
+}
+    }
+    )
+    }
+    
+
+    override fun `requestManualCompact`(`session`: FfiSession, `request`: FfiManualCompactRequest): FfiAgentAction {
+            return FfiConverterTypeFfiAgentAction.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffiagentengine_request_manual_compact(
+        it, FfiConverterTypeFfiSession.lower(`session`),FfiConverterTypeFfiManualCompactRequest.lower(`request`),_status)
+}
+    }
+    )
+    }
+    
+
+    override fun `searchContextReferences`(`session`: FfiSession, `query`: kotlin.String, `limit`: kotlin.UInt): List<FfiContextReference> {
+            return FfiConverterSequenceTypeFfiContextReference.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffiagentengine_search_context_references(
+        it, FfiConverterTypeFfiSession.lower(`session`),FfiConverterString.lower(`query`),FfiConverterUInt.lower(`limit`),_status)
+}
+    }
+    )
+    }
+    
+
+    override fun `submitModelResponse`(`session`: FfiSession, `response`: FfiModelResponse)
+        = 
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffiagentengine_submit_model_response(
+        it, FfiConverterTypeFfiSession.lower(`session`),FfiConverterTypeFfiModelResponse.lower(`response`),_status)
+}
+    }
+    
+    
+
+    override fun `submitModelTurnFailure`(`session`: FfiSession, `report`: FfiModelTurnFailureReport)
+        = 
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffiagentengine_submit_model_turn_failure(
+        it, FfiConverterTypeFfiSession.lower(`session`),FfiConverterTypeFfiModelTurnFailureReport.lower(`report`),_status)
+}
+    }
+    
+    
+
+    override fun `submitSummary`(`session`: FfiSession, `summary`: FfiSummaryResult)
+        = 
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffiagentengine_submit_summary(
+        it, FfiConverterTypeFfiSession.lower(`session`),FfiConverterTypeFfiSummaryResult.lower(`summary`),_status)
+}
+    }
+    
+    
+
+    override fun `submitToolResults`(`session`: FfiSession, `results`: List<FfiToolResultRecord>)
+        = 
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffiagentengine_submit_tool_results(
+        it, FfiConverterTypeFfiSession.lower(`session`),FfiConverterSequenceTypeFfiToolResultRecord.lower(`results`),_status)
+}
+    }
+    
+    
+
+    
+
+    
+    
     companion object
+    
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeFfiAgentEngine : FfiConverter<FfiAgentEngine, Pointer> {
-    override fun lower(value: FfiAgentEngine): Pointer = value.uniffiClonePointer()
+public object FfiConverterTypeFfiAgentEngine: FfiConverter<FfiAgentEngine, Pointer> {
 
-    override fun lift(value: Pointer): FfiAgentEngine = FfiAgentEngine(value)
+    override fun lower(value: FfiAgentEngine): Pointer {
+        return value.uniffiClonePointer()
+    }
+
+    override fun lift(value: Pointer): FfiAgentEngine {
+        return FfiAgentEngine(value)
+    }
 
     override fun read(buf: ByteBuffer): FfiAgentEngine {
         // The Rust code always writes pointers as 8 bytes, and will
@@ -2220,15 +1966,13 @@ public object FfiConverterTypeFfiAgentEngine : FfiConverter<FfiAgentEngine, Poin
 
     override fun allocationSize(value: FfiAgentEngine) = 8UL
 
-    override fun write(
-        value: FfiAgentEngine,
-        buf: ByteBuffer,
-    ) {
+    override fun write(value: FfiAgentEngine, buf: ByteBuffer) {
         // The Rust code always expects pointers written as 8 bytes,
         // and will fail to compile if they don't fit.
         buf.putLong(Pointer.nativeValue(lower(value)))
     }
 }
+
 
 // This template implements a class for working with a Rust struct via a Pointer/Arc<T>
 // to the live Rust struct on the other side of the FFI.
@@ -2327,14 +2071,15 @@ public object FfiConverterTypeFfiAgentEngine : FfiConverter<FfiAgentEngine, Poin
 // [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
 //
 
+
 public interface FfiSessionInterface {
+    
     companion object
 }
 
-open class FfiSession :
-    Disposable,
-    AutoCloseable,
-    FfiSessionInterface {
+open class FfiSession: Disposable, AutoCloseable, FfiSessionInterface
+{
+
     constructor(pointer: Pointer) {
         this.pointer = pointer
         this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(pointer))
@@ -2384,7 +2129,7 @@ open class FfiSession :
             if (c == Long.MAX_VALUE) {
                 throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
             }
-        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        } while (! this.callCounter.compareAndSet(c, c + 1L))
         // Now we can safely do the method call without the pointer being freed concurrently.
         try {
             return block(this.uniffiClonePointer())
@@ -2398,9 +2143,7 @@ open class FfiSession :
 
     // Use a static inner class instead of a closure so as not to accidentally
     // capture `this` as part of the cleanable's action.
-    private class UniffiCleanAction(
-        private val pointer: Pointer?,
-    ) : Runnable {
+    private class UniffiCleanAction(private val pointer: Pointer?) : Runnable {
         override fun run() {
             pointer?.let { ptr ->
                 uniffiRustCall { status ->
@@ -2410,21 +2153,32 @@ open class FfiSession :
         }
     }
 
-    fun uniffiClonePointer(): Pointer =
-        uniffiRustCall { status ->
+    fun uniffiClonePointer(): Pointer {
+        return uniffiRustCall() { status ->
             UniffiLib.INSTANCE.uniffi_agent_core_fn_clone_ffisession(pointer!!, status)
         }
+    }
 
+    
+
+    
+    
     companion object
+    
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeFfiSession : FfiConverter<FfiSession, Pointer> {
-    override fun lower(value: FfiSession): Pointer = value.uniffiClonePointer()
+public object FfiConverterTypeFfiSession: FfiConverter<FfiSession, Pointer> {
 
-    override fun lift(value: Pointer): FfiSession = FfiSession(value)
+    override fun lower(value: FfiSession): Pointer {
+        return value.uniffiClonePointer()
+    }
+
+    override fun lift(value: Pointer): FfiSession {
+        return FfiSession(value)
+    }
 
     override fun read(buf: ByteBuffer): FfiSession {
         // The Rust code always writes pointers as 8 bytes, and will
@@ -2434,15 +2188,13 @@ public object FfiConverterTypeFfiSession : FfiConverter<FfiSession, Pointer> {
 
     override fun allocationSize(value: FfiSession) = 8UL
 
-    override fun write(
-        value: FfiSession,
-        buf: ByteBuffer,
-    ) {
+    override fun write(value: FfiSession, buf: ByteBuffer) {
         // The Rust code always expects pointers written as 8 bytes,
         // and will fail to compile if they don't fit.
         buf.putLong(Pointer.nativeValue(lower(value)))
     }
 }
+
 
 // This template implements a class for working with a Rust struct via a Pointer/Arc<T>
 // to the live Rust struct on the other side of the FFI.
@@ -2541,22 +2293,25 @@ public object FfiConverterTypeFfiSession : FfiConverter<FfiSession, Pointer> {
 // [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
 //
 
+
 public interface FfiToolStreamGateInterface {
+    
     fun `bufferedText`(): kotlin.String
-
+    
     fun `finish`(`hasNativeToolCalls`: kotlin.Boolean): FfiStreamGateFinish
-
+    
+    fun `hasToolMarkup`(): kotlin.Boolean
+    
     fun `push`(`chunk`: kotlin.String): FfiStreamGatePushResult
-
+    
     fun `reset`()
-
+    
     companion object
 }
 
-open class FfiToolStreamGate :
-    Disposable,
-    AutoCloseable,
-    FfiToolStreamGateInterface {
+open class FfiToolStreamGate: Disposable, AutoCloseable, FfiToolStreamGateInterface
+{
+
     constructor(pointer: Pointer) {
         this.pointer = pointer
         this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(pointer))
@@ -2606,7 +2361,7 @@ open class FfiToolStreamGate :
             if (c == Long.MAX_VALUE) {
                 throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
             }
-        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        } while (! this.callCounter.compareAndSet(c, c + 1L))
         // Now we can safely do the method call without the pointer being freed concurrently.
         try {
             return block(this.uniffiClonePointer())
@@ -2620,9 +2375,7 @@ open class FfiToolStreamGate :
 
     // Use a static inner class instead of a closure so as not to accidentally
     // capture `this` as part of the cleanable's action.
-    private class UniffiCleanAction(
-        private val pointer: Pointer?,
-    ) : Runnable {
+    private class UniffiCleanAction(private val pointer: Pointer?) : Runnable {
         override fun run() {
             pointer?.let { ptr ->
                 uniffiRustCall { status ->
@@ -2632,69 +2385,91 @@ open class FfiToolStreamGate :
         }
     }
 
-    fun uniffiClonePointer(): Pointer =
-        uniffiRustCall { status ->
+    fun uniffiClonePointer(): Pointer {
+        return uniffiRustCall() { status ->
             UniffiLib.INSTANCE.uniffi_agent_core_fn_clone_ffitoolstreamgate(pointer!!, status)
         }
+    }
 
-    override fun `bufferedText`(): kotlin.String =
-        FfiConverterString.lift(
-            callWithPointer {
-                uniffiRustCall { _status ->
-                    UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffitoolstreamgate_buffered_text(
-                        it,
-                        _status,
-                    )
-                }
-            },
-        )
+    override fun `bufferedText`(): kotlin.String {
+            return FfiConverterString.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffitoolstreamgate_buffered_text(
+        it, _status)
+}
+    }
+    )
+    }
+    
 
-    override fun `finish`(`hasNativeToolCalls`: kotlin.Boolean): FfiStreamGateFinish =
-        FfiConverterTypeFfiStreamGateFinish.lift(
-            callWithPointer {
-                uniffiRustCall { _status ->
-                    UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffitoolstreamgate_finish(
-                        it,
-                        FfiConverterBoolean.lower(`hasNativeToolCalls`),
-                        _status,
-                    )
-                }
-            },
-        )
+    override fun `finish`(`hasNativeToolCalls`: kotlin.Boolean): FfiStreamGateFinish {
+            return FfiConverterTypeFfiStreamGateFinish.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffitoolstreamgate_finish(
+        it, FfiConverterBoolean.lower(`hasNativeToolCalls`),_status)
+}
+    }
+    )
+    }
+    
 
-    override fun `push`(`chunk`: kotlin.String): FfiStreamGatePushResult =
-        FfiConverterTypeFfiStreamGatePushResult.lift(
-            callWithPointer {
-                uniffiRustCall { _status ->
-                    UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffitoolstreamgate_push(
-                        it,
-                        FfiConverterString.lower(`chunk`),
-                        _status,
-                    )
-                }
-            },
-        )
+    override fun `hasToolMarkup`(): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffitoolstreamgate_has_tool_markup(
+        it, _status)
+}
+    }
+    )
+    }
+    
 
-    override fun `reset`() =
-        callWithPointer {
-            uniffiRustCall { _status ->
-                UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffitoolstreamgate_reset(
-                    it,
-                    _status,
-                )
-            }
-        }
+    override fun `push`(`chunk`: kotlin.String): FfiStreamGatePushResult {
+            return FfiConverterTypeFfiStreamGatePushResult.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffitoolstreamgate_push(
+        it, FfiConverterString.lower(`chunk`),_status)
+}
+    }
+    )
+    }
+    
 
+    override fun `reset`()
+        = 
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_agent_core_fn_method_ffitoolstreamgate_reset(
+        it, _status)
+}
+    }
+    
+    
+
+    
+
+    
+    
     companion object
+    
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeFfiToolStreamGate : FfiConverter<FfiToolStreamGate, Pointer> {
-    override fun lower(value: FfiToolStreamGate): Pointer = value.uniffiClonePointer()
+public object FfiConverterTypeFfiToolStreamGate: FfiConverter<FfiToolStreamGate, Pointer> {
 
-    override fun lift(value: Pointer): FfiToolStreamGate = FfiToolStreamGate(value)
+    override fun lower(value: FfiToolStreamGate): Pointer {
+        return value.uniffiClonePointer()
+    }
+
+    override fun lift(value: Pointer): FfiToolStreamGate {
+        return FfiToolStreamGate(value)
+    }
 
     override fun read(buf: ByteBuffer): FfiToolStreamGate {
         // The Rust code always writes pointers as 8 bytes, and will
@@ -2704,71 +2479,75 @@ public object FfiConverterTypeFfiToolStreamGate : FfiConverter<FfiToolStreamGate
 
     override fun allocationSize(value: FfiToolStreamGate) = 8UL
 
-    override fun write(
-        value: FfiToolStreamGate,
-        buf: ByteBuffer,
-    ) {
+    override fun write(value: FfiToolStreamGate, buf: ByteBuffer) {
         // The Rust code always expects pointers written as 8 bytes,
         // and will fail to compile if they don't fit.
         buf.putLong(Pointer.nativeValue(lower(value)))
     }
 }
 
-data class FfiAgentConfig(
-    var `maxTurns`: kotlin.UInt,
-    var `thresholdRatio`: kotlin.Float,
-    var `microKeepRecent`: kotlin.UInt,
-    var `toolRetryLimit`: kotlin.UInt,
+
+
+data class FfiAgentConfig (
+    var `maxTurns`: kotlin.UInt, 
+    var `thresholdRatio`: kotlin.Float, 
+    var `microKeepRecent`: kotlin.UInt, 
+    var `toolRetryLimit`: kotlin.UInt, 
+    var `modelApiRetryLimit`: kotlin.UInt, 
+    var `modelApiRetryBaseDelayMs`: kotlin.ULong, 
     /**
      * JSON-serialized [`crate::tool_semantics::ToolSemanticsConfig`]; catalog tools may be empty and merged from session IO.
      */
-    var `toolSemanticsJson`: kotlin.String,
-    var `toolResultBudgetCloudBytes`: kotlin.ULong,
-    var `toolResultBudgetRelaxedBytes`: kotlin.ULong,
-    var `toolResultTruncationPressureRatio`: kotlin.Float,
-    var `midTurnThresholdRatio`: kotlin.Float,
-    var `postToolResultThresholdRatio`: kotlin.Float,
-    var `manualCompactThresholdRatio`: kotlin.Float,
-    var `allowFifoOnPreflight`: kotlin.Boolean,
-    var `allowFifoOnMidTurn`: kotlin.Boolean,
-    var `allowFifoOnPostToolResult`: kotlin.Boolean,
-    var `requireSnapshotBeforeFifo`: kotlin.Boolean,
-    var `enableContextStore`: kotlin.Boolean,
-    var `enableStateLedger`: kotlin.Boolean,
-    var `enableToolSchemaDeferral`: kotlin.Boolean,
-    var `enableFileCondensation`: kotlin.Boolean,
-    var `enableManualCompact`: kotlin.Boolean,
-    var `toolSpillThresholdBytes`: kotlin.ULong,
-    var `terminalSpillThresholdBytes`: kotlin.ULong,
-    var `historySnapshotThresholdTokens`: kotlin.UInt,
-    var `fileOutlineThresholdTokens`: kotlin.UInt,
-    var `promptCacheAnchorThresholdTokens`: kotlin.UInt,
-    var `outputReserveRatio`: kotlin.Float,
-    var `outputReserveFloorTokens`: kotlin.UInt,
-    var `outputReserveMaxTokens`: kotlin.UInt,
-    var `preflightTokenThreshold`: kotlin.UInt?,
-    var `midTurnTokenThreshold`: kotlin.UInt?,
-    var `postToolResultTokenThreshold`: kotlin.UInt?,
-    var `messageThreshold`: kotlin.UInt?,
-    var `retentionWindowTokens`: kotlin.UInt,
-    var `maxModelRequestsPerTurn`: kotlin.UInt,
-    var `enableLoopHooks`: kotlin.Boolean,
-    var `enablePendingWorkGuard`: kotlin.Boolean,
-    var `longLoop`: FfiLongLoopPolicy,
+    var `toolSemanticsJson`: kotlin.String, 
+    var `toolResultBudgetCloudBytes`: kotlin.ULong, 
+    var `toolResultBudgetRelaxedBytes`: kotlin.ULong, 
+    var `toolResultTruncationPressureRatio`: kotlin.Float, 
+    var `midTurnThresholdRatio`: kotlin.Float, 
+    var `postToolResultThresholdRatio`: kotlin.Float, 
+    var `manualCompactThresholdRatio`: kotlin.Float, 
+    var `allowFifoOnPreflight`: kotlin.Boolean, 
+    var `allowFifoOnMidTurn`: kotlin.Boolean, 
+    var `allowFifoOnPostToolResult`: kotlin.Boolean, 
+    var `requireSnapshotBeforeFifo`: kotlin.Boolean, 
+    var `enableContextStore`: kotlin.Boolean, 
+    var `enableStateLedger`: kotlin.Boolean, 
+    var `enableToolSchemaDeferral`: kotlin.Boolean, 
+    var `enableFileCondensation`: kotlin.Boolean, 
+    var `enableManualCompact`: kotlin.Boolean, 
+    var `toolSpillThresholdBytes`: kotlin.ULong, 
+    var `terminalSpillThresholdBytes`: kotlin.ULong, 
+    var `historySnapshotThresholdTokens`: kotlin.UInt, 
+    var `fileOutlineThresholdTokens`: kotlin.UInt, 
+    var `promptCacheAnchorThresholdTokens`: kotlin.UInt, 
+    var `outputReserveRatio`: kotlin.Float, 
+    var `outputReserveFloorTokens`: kotlin.UInt, 
+    var `outputReserveMaxTokens`: kotlin.UInt, 
+    var `preflightTokenThreshold`: kotlin.UInt?, 
+    var `midTurnTokenThreshold`: kotlin.UInt?, 
+    var `postToolResultTokenThreshold`: kotlin.UInt?, 
+    var `messageThreshold`: kotlin.UInt?, 
+    var `retentionWindowTokens`: kotlin.UInt, 
+    var `maxModelRequestsPerTurn`: kotlin.UInt, 
+    var `enableLoopHooks`: kotlin.Boolean, 
+    var `enablePendingWorkGuard`: kotlin.Boolean, 
+    var `longLoop`: FfiLongLoopPolicy
 ) {
+    
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeFfiAgentConfig : FfiConverterRustBuffer<FfiAgentConfig> {
-    override fun read(buf: ByteBuffer): FfiAgentConfig =
-        FfiAgentConfig(
+public object FfiConverterTypeFfiAgentConfig: FfiConverterRustBuffer<FfiAgentConfig> {
+    override fun read(buf: ByteBuffer): FfiAgentConfig {
+        return FfiAgentConfig(
             FfiConverterUInt.read(buf),
             FfiConverterFloat.read(buf),
             FfiConverterUInt.read(buf),
             FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterULong.read(buf),
             FfiConverterString.read(buf),
             FfiConverterULong.read(buf),
             FfiConverterULong.read(buf),
@@ -2803,157 +2582,161 @@ public object FfiConverterTypeFfiAgentConfig : FfiConverterRustBuffer<FfiAgentCo
             FfiConverterBoolean.read(buf),
             FfiConverterTypeFfiLongLoopPolicy.read(buf),
         )
+    }
 
-    override fun allocationSize(value: FfiAgentConfig) =
-        (
+    override fun allocationSize(value: FfiAgentConfig) = (
             FfiConverterUInt.allocationSize(value.`maxTurns`) +
-                FfiConverterFloat.allocationSize(value.`thresholdRatio`) +
-                FfiConverterUInt.allocationSize(value.`microKeepRecent`) +
-                FfiConverterUInt.allocationSize(value.`toolRetryLimit`) +
-                FfiConverterString.allocationSize(value.`toolSemanticsJson`) +
-                FfiConverterULong.allocationSize(value.`toolResultBudgetCloudBytes`) +
-                FfiConverterULong.allocationSize(value.`toolResultBudgetRelaxedBytes`) +
-                FfiConverterFloat.allocationSize(value.`toolResultTruncationPressureRatio`) +
-                FfiConverterFloat.allocationSize(value.`midTurnThresholdRatio`) +
-                FfiConverterFloat.allocationSize(value.`postToolResultThresholdRatio`) +
-                FfiConverterFloat.allocationSize(value.`manualCompactThresholdRatio`) +
-                FfiConverterBoolean.allocationSize(value.`allowFifoOnPreflight`) +
-                FfiConverterBoolean.allocationSize(value.`allowFifoOnMidTurn`) +
-                FfiConverterBoolean.allocationSize(value.`allowFifoOnPostToolResult`) +
-                FfiConverterBoolean.allocationSize(value.`requireSnapshotBeforeFifo`) +
-                FfiConverterBoolean.allocationSize(value.`enableContextStore`) +
-                FfiConverterBoolean.allocationSize(value.`enableStateLedger`) +
-                FfiConverterBoolean.allocationSize(value.`enableToolSchemaDeferral`) +
-                FfiConverterBoolean.allocationSize(value.`enableFileCondensation`) +
-                FfiConverterBoolean.allocationSize(value.`enableManualCompact`) +
-                FfiConverterULong.allocationSize(value.`toolSpillThresholdBytes`) +
-                FfiConverterULong.allocationSize(value.`terminalSpillThresholdBytes`) +
-                FfiConverterUInt.allocationSize(value.`historySnapshotThresholdTokens`) +
-                FfiConverterUInt.allocationSize(value.`fileOutlineThresholdTokens`) +
-                FfiConverterUInt.allocationSize(value.`promptCacheAnchorThresholdTokens`) +
-                FfiConverterFloat.allocationSize(value.`outputReserveRatio`) +
-                FfiConverterUInt.allocationSize(value.`outputReserveFloorTokens`) +
-                FfiConverterUInt.allocationSize(value.`outputReserveMaxTokens`) +
-                FfiConverterOptionalUInt.allocationSize(value.`preflightTokenThreshold`) +
-                FfiConverterOptionalUInt.allocationSize(value.`midTurnTokenThreshold`) +
-                FfiConverterOptionalUInt.allocationSize(value.`postToolResultTokenThreshold`) +
-                FfiConverterOptionalUInt.allocationSize(value.`messageThreshold`) +
-                FfiConverterUInt.allocationSize(value.`retentionWindowTokens`) +
-                FfiConverterUInt.allocationSize(value.`maxModelRequestsPerTurn`) +
-                FfiConverterBoolean.allocationSize(value.`enableLoopHooks`) +
-                FfiConverterBoolean.allocationSize(value.`enablePendingWorkGuard`) +
-                FfiConverterTypeFfiLongLoopPolicy.allocationSize(value.`longLoop`)
-        )
+            FfiConverterFloat.allocationSize(value.`thresholdRatio`) +
+            FfiConverterUInt.allocationSize(value.`microKeepRecent`) +
+            FfiConverterUInt.allocationSize(value.`toolRetryLimit`) +
+            FfiConverterUInt.allocationSize(value.`modelApiRetryLimit`) +
+            FfiConverterULong.allocationSize(value.`modelApiRetryBaseDelayMs`) +
+            FfiConverterString.allocationSize(value.`toolSemanticsJson`) +
+            FfiConverterULong.allocationSize(value.`toolResultBudgetCloudBytes`) +
+            FfiConverterULong.allocationSize(value.`toolResultBudgetRelaxedBytes`) +
+            FfiConverterFloat.allocationSize(value.`toolResultTruncationPressureRatio`) +
+            FfiConverterFloat.allocationSize(value.`midTurnThresholdRatio`) +
+            FfiConverterFloat.allocationSize(value.`postToolResultThresholdRatio`) +
+            FfiConverterFloat.allocationSize(value.`manualCompactThresholdRatio`) +
+            FfiConverterBoolean.allocationSize(value.`allowFifoOnPreflight`) +
+            FfiConverterBoolean.allocationSize(value.`allowFifoOnMidTurn`) +
+            FfiConverterBoolean.allocationSize(value.`allowFifoOnPostToolResult`) +
+            FfiConverterBoolean.allocationSize(value.`requireSnapshotBeforeFifo`) +
+            FfiConverterBoolean.allocationSize(value.`enableContextStore`) +
+            FfiConverterBoolean.allocationSize(value.`enableStateLedger`) +
+            FfiConverterBoolean.allocationSize(value.`enableToolSchemaDeferral`) +
+            FfiConverterBoolean.allocationSize(value.`enableFileCondensation`) +
+            FfiConverterBoolean.allocationSize(value.`enableManualCompact`) +
+            FfiConverterULong.allocationSize(value.`toolSpillThresholdBytes`) +
+            FfiConverterULong.allocationSize(value.`terminalSpillThresholdBytes`) +
+            FfiConverterUInt.allocationSize(value.`historySnapshotThresholdTokens`) +
+            FfiConverterUInt.allocationSize(value.`fileOutlineThresholdTokens`) +
+            FfiConverterUInt.allocationSize(value.`promptCacheAnchorThresholdTokens`) +
+            FfiConverterFloat.allocationSize(value.`outputReserveRatio`) +
+            FfiConverterUInt.allocationSize(value.`outputReserveFloorTokens`) +
+            FfiConverterUInt.allocationSize(value.`outputReserveMaxTokens`) +
+            FfiConverterOptionalUInt.allocationSize(value.`preflightTokenThreshold`) +
+            FfiConverterOptionalUInt.allocationSize(value.`midTurnTokenThreshold`) +
+            FfiConverterOptionalUInt.allocationSize(value.`postToolResultTokenThreshold`) +
+            FfiConverterOptionalUInt.allocationSize(value.`messageThreshold`) +
+            FfiConverterUInt.allocationSize(value.`retentionWindowTokens`) +
+            FfiConverterUInt.allocationSize(value.`maxModelRequestsPerTurn`) +
+            FfiConverterBoolean.allocationSize(value.`enableLoopHooks`) +
+            FfiConverterBoolean.allocationSize(value.`enablePendingWorkGuard`) +
+            FfiConverterTypeFfiLongLoopPolicy.allocationSize(value.`longLoop`)
+    )
 
-    override fun write(
-        value: FfiAgentConfig,
-        buf: ByteBuffer,
-    ) {
-        FfiConverterUInt.write(value.`maxTurns`, buf)
-        FfiConverterFloat.write(value.`thresholdRatio`, buf)
-        FfiConverterUInt.write(value.`microKeepRecent`, buf)
-        FfiConverterUInt.write(value.`toolRetryLimit`, buf)
-        FfiConverterString.write(value.`toolSemanticsJson`, buf)
-        FfiConverterULong.write(value.`toolResultBudgetCloudBytes`, buf)
-        FfiConverterULong.write(value.`toolResultBudgetRelaxedBytes`, buf)
-        FfiConverterFloat.write(value.`toolResultTruncationPressureRatio`, buf)
-        FfiConverterFloat.write(value.`midTurnThresholdRatio`, buf)
-        FfiConverterFloat.write(value.`postToolResultThresholdRatio`, buf)
-        FfiConverterFloat.write(value.`manualCompactThresholdRatio`, buf)
-        FfiConverterBoolean.write(value.`allowFifoOnPreflight`, buf)
-        FfiConverterBoolean.write(value.`allowFifoOnMidTurn`, buf)
-        FfiConverterBoolean.write(value.`allowFifoOnPostToolResult`, buf)
-        FfiConverterBoolean.write(value.`requireSnapshotBeforeFifo`, buf)
-        FfiConverterBoolean.write(value.`enableContextStore`, buf)
-        FfiConverterBoolean.write(value.`enableStateLedger`, buf)
-        FfiConverterBoolean.write(value.`enableToolSchemaDeferral`, buf)
-        FfiConverterBoolean.write(value.`enableFileCondensation`, buf)
-        FfiConverterBoolean.write(value.`enableManualCompact`, buf)
-        FfiConverterULong.write(value.`toolSpillThresholdBytes`, buf)
-        FfiConverterULong.write(value.`terminalSpillThresholdBytes`, buf)
-        FfiConverterUInt.write(value.`historySnapshotThresholdTokens`, buf)
-        FfiConverterUInt.write(value.`fileOutlineThresholdTokens`, buf)
-        FfiConverterUInt.write(value.`promptCacheAnchorThresholdTokens`, buf)
-        FfiConverterFloat.write(value.`outputReserveRatio`, buf)
-        FfiConverterUInt.write(value.`outputReserveFloorTokens`, buf)
-        FfiConverterUInt.write(value.`outputReserveMaxTokens`, buf)
-        FfiConverterOptionalUInt.write(value.`preflightTokenThreshold`, buf)
-        FfiConverterOptionalUInt.write(value.`midTurnTokenThreshold`, buf)
-        FfiConverterOptionalUInt.write(value.`postToolResultTokenThreshold`, buf)
-        FfiConverterOptionalUInt.write(value.`messageThreshold`, buf)
-        FfiConverterUInt.write(value.`retentionWindowTokens`, buf)
-        FfiConverterUInt.write(value.`maxModelRequestsPerTurn`, buf)
-        FfiConverterBoolean.write(value.`enableLoopHooks`, buf)
-        FfiConverterBoolean.write(value.`enablePendingWorkGuard`, buf)
-        FfiConverterTypeFfiLongLoopPolicy.write(value.`longLoop`, buf)
+    override fun write(value: FfiAgentConfig, buf: ByteBuffer) {
+            FfiConverterUInt.write(value.`maxTurns`, buf)
+            FfiConverterFloat.write(value.`thresholdRatio`, buf)
+            FfiConverterUInt.write(value.`microKeepRecent`, buf)
+            FfiConverterUInt.write(value.`toolRetryLimit`, buf)
+            FfiConverterUInt.write(value.`modelApiRetryLimit`, buf)
+            FfiConverterULong.write(value.`modelApiRetryBaseDelayMs`, buf)
+            FfiConverterString.write(value.`toolSemanticsJson`, buf)
+            FfiConverterULong.write(value.`toolResultBudgetCloudBytes`, buf)
+            FfiConverterULong.write(value.`toolResultBudgetRelaxedBytes`, buf)
+            FfiConverterFloat.write(value.`toolResultTruncationPressureRatio`, buf)
+            FfiConverterFloat.write(value.`midTurnThresholdRatio`, buf)
+            FfiConverterFloat.write(value.`postToolResultThresholdRatio`, buf)
+            FfiConverterFloat.write(value.`manualCompactThresholdRatio`, buf)
+            FfiConverterBoolean.write(value.`allowFifoOnPreflight`, buf)
+            FfiConverterBoolean.write(value.`allowFifoOnMidTurn`, buf)
+            FfiConverterBoolean.write(value.`allowFifoOnPostToolResult`, buf)
+            FfiConverterBoolean.write(value.`requireSnapshotBeforeFifo`, buf)
+            FfiConverterBoolean.write(value.`enableContextStore`, buf)
+            FfiConverterBoolean.write(value.`enableStateLedger`, buf)
+            FfiConverterBoolean.write(value.`enableToolSchemaDeferral`, buf)
+            FfiConverterBoolean.write(value.`enableFileCondensation`, buf)
+            FfiConverterBoolean.write(value.`enableManualCompact`, buf)
+            FfiConverterULong.write(value.`toolSpillThresholdBytes`, buf)
+            FfiConverterULong.write(value.`terminalSpillThresholdBytes`, buf)
+            FfiConverterUInt.write(value.`historySnapshotThresholdTokens`, buf)
+            FfiConverterUInt.write(value.`fileOutlineThresholdTokens`, buf)
+            FfiConverterUInt.write(value.`promptCacheAnchorThresholdTokens`, buf)
+            FfiConverterFloat.write(value.`outputReserveRatio`, buf)
+            FfiConverterUInt.write(value.`outputReserveFloorTokens`, buf)
+            FfiConverterUInt.write(value.`outputReserveMaxTokens`, buf)
+            FfiConverterOptionalUInt.write(value.`preflightTokenThreshold`, buf)
+            FfiConverterOptionalUInt.write(value.`midTurnTokenThreshold`, buf)
+            FfiConverterOptionalUInt.write(value.`postToolResultTokenThreshold`, buf)
+            FfiConverterOptionalUInt.write(value.`messageThreshold`, buf)
+            FfiConverterUInt.write(value.`retentionWindowTokens`, buf)
+            FfiConverterUInt.write(value.`maxModelRequestsPerTurn`, buf)
+            FfiConverterBoolean.write(value.`enableLoopHooks`, buf)
+            FfiConverterBoolean.write(value.`enablePendingWorkGuard`, buf)
+            FfiConverterTypeFfiLongLoopPolicy.write(value.`longLoop`, buf)
     }
 }
 
-data class FfiAgentMessage(
-    var `id`: kotlin.String,
-    var `role`: FfiAgentRole,
-    var `content`: kotlin.String,
+
+
+data class FfiAgentMessage (
+    var `id`: kotlin.String, 
+    var `role`: FfiAgentRole, 
+    var `content`: kotlin.String, 
     /**
      * JSON object or array as a string (e.g. `"{}"` or `"null"`).
      */
-    var `metadataJson`: kotlin.String,
+    var `metadataJson`: kotlin.String
 ) {
+    
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeFfiAgentMessage : FfiConverterRustBuffer<FfiAgentMessage> {
-    override fun read(buf: ByteBuffer): FfiAgentMessage =
-        FfiAgentMessage(
+public object FfiConverterTypeFfiAgentMessage: FfiConverterRustBuffer<FfiAgentMessage> {
+    override fun read(buf: ByteBuffer): FfiAgentMessage {
+        return FfiAgentMessage(
             FfiConverterString.read(buf),
             FfiConverterTypeFfiAgentRole.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
         )
+    }
 
-    override fun allocationSize(value: FfiAgentMessage) =
-        (
+    override fun allocationSize(value: FfiAgentMessage) = (
             FfiConverterString.allocationSize(value.`id`) +
-                FfiConverterTypeFfiAgentRole.allocationSize(value.`role`) +
-                FfiConverterString.allocationSize(value.`content`) +
-                FfiConverterString.allocationSize(value.`metadataJson`)
-        )
+            FfiConverterTypeFfiAgentRole.allocationSize(value.`role`) +
+            FfiConverterString.allocationSize(value.`content`) +
+            FfiConverterString.allocationSize(value.`metadataJson`)
+    )
 
-    override fun write(
-        value: FfiAgentMessage,
-        buf: ByteBuffer,
-    ) {
-        FfiConverterString.write(value.`id`, buf)
-        FfiConverterTypeFfiAgentRole.write(value.`role`, buf)
-        FfiConverterString.write(value.`content`, buf)
-        FfiConverterString.write(value.`metadataJson`, buf)
+    override fun write(value: FfiAgentMessage, buf: ByteBuffer) {
+            FfiConverterString.write(value.`id`, buf)
+            FfiConverterTypeFfiAgentRole.write(value.`role`, buf)
+            FfiConverterString.write(value.`content`, buf)
+            FfiConverterString.write(value.`metadataJson`, buf)
     }
 }
+
+
 
 /**
  * UniFFI mirror of [`crate::transcript_revision::CompactionBoundary`].
  */
-data class FfiCompactionBoundary(
-    var `boundaryId`: kotlin.String,
-    var `revisionBefore`: kotlin.ULong,
-    var `revisionAfter`: kotlin.ULong,
-    var `trigger`: FfiCompactionTrigger,
-    var `tiersApplied`: List<FfiCompactionTier>,
-    var `messageCountBefore`: kotlin.UInt,
-    var `messageCountAfter`: kotlin.UInt,
-    var `destructive`: kotlin.Boolean,
+data class FfiCompactionBoundary (
+    var `boundaryId`: kotlin.String, 
+    var `revisionBefore`: kotlin.ULong, 
+    var `revisionAfter`: kotlin.ULong, 
+    var `trigger`: FfiCompactionTrigger, 
+    var `tiersApplied`: List<FfiCompactionTier>, 
+    var `messageCountBefore`: kotlin.UInt, 
+    var `messageCountAfter`: kotlin.UInt, 
+    var `destructive`: kotlin.Boolean
 ) {
+    
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeFfiCompactionBoundary : FfiConverterRustBuffer<FfiCompactionBoundary> {
-    override fun read(buf: ByteBuffer): FfiCompactionBoundary =
-        FfiCompactionBoundary(
+public object FfiConverterTypeFfiCompactionBoundary: FfiConverterRustBuffer<FfiCompactionBoundary> {
+    override fun read(buf: ByteBuffer): FfiCompactionBoundary {
+        return FfiCompactionBoundary(
             FfiConverterString.read(buf),
             FfiConverterULong.read(buf),
             FfiConverterULong.read(buf),
@@ -2963,92 +2746,92 @@ public object FfiConverterTypeFfiCompactionBoundary : FfiConverterRustBuffer<Ffi
             FfiConverterUInt.read(buf),
             FfiConverterBoolean.read(buf),
         )
+    }
 
-    override fun allocationSize(value: FfiCompactionBoundary) =
-        (
+    override fun allocationSize(value: FfiCompactionBoundary) = (
             FfiConverterString.allocationSize(value.`boundaryId`) +
-                FfiConverterULong.allocationSize(value.`revisionBefore`) +
-                FfiConverterULong.allocationSize(value.`revisionAfter`) +
-                FfiConverterTypeFfiCompactionTrigger.allocationSize(value.`trigger`) +
-                FfiConverterSequenceTypeFfiCompactionTier.allocationSize(value.`tiersApplied`) +
-                FfiConverterUInt.allocationSize(value.`messageCountBefore`) +
-                FfiConverterUInt.allocationSize(value.`messageCountAfter`) +
-                FfiConverterBoolean.allocationSize(value.`destructive`)
-        )
+            FfiConverterULong.allocationSize(value.`revisionBefore`) +
+            FfiConverterULong.allocationSize(value.`revisionAfter`) +
+            FfiConverterTypeFfiCompactionTrigger.allocationSize(value.`trigger`) +
+            FfiConverterSequenceTypeFfiCompactionTier.allocationSize(value.`tiersApplied`) +
+            FfiConverterUInt.allocationSize(value.`messageCountBefore`) +
+            FfiConverterUInt.allocationSize(value.`messageCountAfter`) +
+            FfiConverterBoolean.allocationSize(value.`destructive`)
+    )
 
-    override fun write(
-        value: FfiCompactionBoundary,
-        buf: ByteBuffer,
-    ) {
-        FfiConverterString.write(value.`boundaryId`, buf)
-        FfiConverterULong.write(value.`revisionBefore`, buf)
-        FfiConverterULong.write(value.`revisionAfter`, buf)
-        FfiConverterTypeFfiCompactionTrigger.write(value.`trigger`, buf)
-        FfiConverterSequenceTypeFfiCompactionTier.write(value.`tiersApplied`, buf)
-        FfiConverterUInt.write(value.`messageCountBefore`, buf)
-        FfiConverterUInt.write(value.`messageCountAfter`, buf)
-        FfiConverterBoolean.write(value.`destructive`, buf)
+    override fun write(value: FfiCompactionBoundary, buf: ByteBuffer) {
+            FfiConverterString.write(value.`boundaryId`, buf)
+            FfiConverterULong.write(value.`revisionBefore`, buf)
+            FfiConverterULong.write(value.`revisionAfter`, buf)
+            FfiConverterTypeFfiCompactionTrigger.write(value.`trigger`, buf)
+            FfiConverterSequenceTypeFfiCompactionTier.write(value.`tiersApplied`, buf)
+            FfiConverterUInt.write(value.`messageCountBefore`, buf)
+            FfiConverterUInt.write(value.`messageCountAfter`, buf)
+            FfiConverterBoolean.write(value.`destructive`, buf)
     }
 }
 
-data class FfiCompactionEvent(
-    var `tier`: FfiCompactionTier,
-    var `tokensBefore`: kotlin.UInt,
-    var `tokensAfter`: kotlin.UInt,
-    var `trigger`: FfiCompactionTrigger,
+
+
+data class FfiCompactionEvent (
+    var `tier`: FfiCompactionTier, 
+    var `tokensBefore`: kotlin.UInt, 
+    var `tokensAfter`: kotlin.UInt, 
+    var `trigger`: FfiCompactionTrigger
 ) {
+    
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeFfiCompactionEvent : FfiConverterRustBuffer<FfiCompactionEvent> {
-    override fun read(buf: ByteBuffer): FfiCompactionEvent =
-        FfiCompactionEvent(
+public object FfiConverterTypeFfiCompactionEvent: FfiConverterRustBuffer<FfiCompactionEvent> {
+    override fun read(buf: ByteBuffer): FfiCompactionEvent {
+        return FfiCompactionEvent(
             FfiConverterTypeFfiCompactionTier.read(buf),
             FfiConverterUInt.read(buf),
             FfiConverterUInt.read(buf),
             FfiConverterTypeFfiCompactionTrigger.read(buf),
         )
+    }
 
-    override fun allocationSize(value: FfiCompactionEvent) =
-        (
+    override fun allocationSize(value: FfiCompactionEvent) = (
             FfiConverterTypeFfiCompactionTier.allocationSize(value.`tier`) +
-                FfiConverterUInt.allocationSize(value.`tokensBefore`) +
-                FfiConverterUInt.allocationSize(value.`tokensAfter`) +
-                FfiConverterTypeFfiCompactionTrigger.allocationSize(value.`trigger`)
-        )
+            FfiConverterUInt.allocationSize(value.`tokensBefore`) +
+            FfiConverterUInt.allocationSize(value.`tokensAfter`) +
+            FfiConverterTypeFfiCompactionTrigger.allocationSize(value.`trigger`)
+    )
 
-    override fun write(
-        value: FfiCompactionEvent,
-        buf: ByteBuffer,
-    ) {
-        FfiConverterTypeFfiCompactionTier.write(value.`tier`, buf)
-        FfiConverterUInt.write(value.`tokensBefore`, buf)
-        FfiConverterUInt.write(value.`tokensAfter`, buf)
-        FfiConverterTypeFfiCompactionTrigger.write(value.`trigger`, buf)
+    override fun write(value: FfiCompactionEvent, buf: ByteBuffer) {
+            FfiConverterTypeFfiCompactionTier.write(value.`tier`, buf)
+            FfiConverterUInt.write(value.`tokensBefore`, buf)
+            FfiConverterUInt.write(value.`tokensAfter`, buf)
+            FfiConverterTypeFfiCompactionTrigger.write(value.`trigger`, buf)
     }
 }
 
-data class FfiContextReference(
-    var `id`: kotlin.String,
-    var `kind`: FfiContextReferenceKind,
-    var `title`: kotlin.String,
-    var `byteLen`: kotlin.ULong,
-    var `tokenEstimate`: kotlin.UInt,
-    var `preview`: kotlin.String,
-    var `retrievalHint`: kotlin.String,
+
+
+data class FfiContextReference (
+    var `id`: kotlin.String, 
+    var `kind`: FfiContextReferenceKind, 
+    var `title`: kotlin.String, 
+    var `byteLen`: kotlin.ULong, 
+    var `tokenEstimate`: kotlin.UInt, 
+    var `preview`: kotlin.String, 
+    var `retrievalHint`: kotlin.String
 ) {
+    
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeFfiContextReference : FfiConverterRustBuffer<FfiContextReference> {
-    override fun read(buf: ByteBuffer): FfiContextReference =
-        FfiContextReference(
+public object FfiConverterTypeFfiContextReference: FfiConverterRustBuffer<FfiContextReference> {
+    override fun read(buf: ByteBuffer): FfiContextReference {
+        return FfiContextReference(
             FfiConverterString.read(buf),
             FfiConverterTypeFfiContextReferenceKind.read(buf),
             FfiConverterString.read(buf),
@@ -3057,172 +2840,174 @@ public object FfiConverterTypeFfiContextReference : FfiConverterRustBuffer<FfiCo
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
         )
+    }
 
-    override fun allocationSize(value: FfiContextReference) =
-        (
+    override fun allocationSize(value: FfiContextReference) = (
             FfiConverterString.allocationSize(value.`id`) +
-                FfiConverterTypeFfiContextReferenceKind.allocationSize(value.`kind`) +
-                FfiConverterString.allocationSize(value.`title`) +
-                FfiConverterULong.allocationSize(value.`byteLen`) +
-                FfiConverterUInt.allocationSize(value.`tokenEstimate`) +
-                FfiConverterString.allocationSize(value.`preview`) +
-                FfiConverterString.allocationSize(value.`retrievalHint`)
-        )
+            FfiConverterTypeFfiContextReferenceKind.allocationSize(value.`kind`) +
+            FfiConverterString.allocationSize(value.`title`) +
+            FfiConverterULong.allocationSize(value.`byteLen`) +
+            FfiConverterUInt.allocationSize(value.`tokenEstimate`) +
+            FfiConverterString.allocationSize(value.`preview`) +
+            FfiConverterString.allocationSize(value.`retrievalHint`)
+    )
 
-    override fun write(
-        value: FfiContextReference,
-        buf: ByteBuffer,
-    ) {
-        FfiConverterString.write(value.`id`, buf)
-        FfiConverterTypeFfiContextReferenceKind.write(value.`kind`, buf)
-        FfiConverterString.write(value.`title`, buf)
-        FfiConverterULong.write(value.`byteLen`, buf)
-        FfiConverterUInt.write(value.`tokenEstimate`, buf)
-        FfiConverterString.write(value.`preview`, buf)
-        FfiConverterString.write(value.`retrievalHint`, buf)
+    override fun write(value: FfiContextReference, buf: ByteBuffer) {
+            FfiConverterString.write(value.`id`, buf)
+            FfiConverterTypeFfiContextReferenceKind.write(value.`kind`, buf)
+            FfiConverterString.write(value.`title`, buf)
+            FfiConverterULong.write(value.`byteLen`, buf)
+            FfiConverterUInt.write(value.`tokenEstimate`, buf)
+            FfiConverterString.write(value.`preview`, buf)
+            FfiConverterString.write(value.`retrievalHint`, buf)
     }
 }
 
-data class FfiLongLoopPolicy(
-    var `maxToolTurns`: kotlin.UInt,
-    var `sidecarByteBudgetPerCall`: kotlin.ULong,
-    var `sidecarTotalByteBudget`: kotlin.ULong,
-    var `summarizeAfterToolTurns`: kotlin.UInt,
-    var `compactEveryNToolTurns`: kotlin.UInt,
+
+
+data class FfiLongLoopPolicy (
+    var `maxToolTurns`: kotlin.UInt, 
+    var `sidecarByteBudgetPerCall`: kotlin.ULong, 
+    var `sidecarTotalByteBudget`: kotlin.ULong, 
+    var `summarizeAfterToolTurns`: kotlin.UInt, 
+    var `compactEveryNToolTurns`: kotlin.UInt
 ) {
+    
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeFfiLongLoopPolicy : FfiConverterRustBuffer<FfiLongLoopPolicy> {
-    override fun read(buf: ByteBuffer): FfiLongLoopPolicy =
-        FfiLongLoopPolicy(
+public object FfiConverterTypeFfiLongLoopPolicy: FfiConverterRustBuffer<FfiLongLoopPolicy> {
+    override fun read(buf: ByteBuffer): FfiLongLoopPolicy {
+        return FfiLongLoopPolicy(
             FfiConverterUInt.read(buf),
             FfiConverterULong.read(buf),
             FfiConverterULong.read(buf),
             FfiConverterUInt.read(buf),
             FfiConverterUInt.read(buf),
         )
+    }
 
-    override fun allocationSize(value: FfiLongLoopPolicy) =
-        (
+    override fun allocationSize(value: FfiLongLoopPolicy) = (
             FfiConverterUInt.allocationSize(value.`maxToolTurns`) +
-                FfiConverterULong.allocationSize(value.`sidecarByteBudgetPerCall`) +
-                FfiConverterULong.allocationSize(value.`sidecarTotalByteBudget`) +
-                FfiConverterUInt.allocationSize(value.`summarizeAfterToolTurns`) +
-                FfiConverterUInt.allocationSize(value.`compactEveryNToolTurns`)
-        )
+            FfiConverterULong.allocationSize(value.`sidecarByteBudgetPerCall`) +
+            FfiConverterULong.allocationSize(value.`sidecarTotalByteBudget`) +
+            FfiConverterUInt.allocationSize(value.`summarizeAfterToolTurns`) +
+            FfiConverterUInt.allocationSize(value.`compactEveryNToolTurns`)
+    )
 
-    override fun write(
-        value: FfiLongLoopPolicy,
-        buf: ByteBuffer,
-    ) {
-        FfiConverterUInt.write(value.`maxToolTurns`, buf)
-        FfiConverterULong.write(value.`sidecarByteBudgetPerCall`, buf)
-        FfiConverterULong.write(value.`sidecarTotalByteBudget`, buf)
-        FfiConverterUInt.write(value.`summarizeAfterToolTurns`, buf)
-        FfiConverterUInt.write(value.`compactEveryNToolTurns`, buf)
+    override fun write(value: FfiLongLoopPolicy, buf: ByteBuffer) {
+            FfiConverterUInt.write(value.`maxToolTurns`, buf)
+            FfiConverterULong.write(value.`sidecarByteBudgetPerCall`, buf)
+            FfiConverterULong.write(value.`sidecarTotalByteBudget`, buf)
+            FfiConverterUInt.write(value.`summarizeAfterToolTurns`, buf)
+            FfiConverterUInt.write(value.`compactEveryNToolTurns`, buf)
     }
 }
 
-data class FfiManualCompactRequest(
-    var `focusInstruction`: kotlin.String?,
-    var `forceSummary`: kotlin.Boolean,
+
+
+data class FfiManualCompactRequest (
+    var `focusInstruction`: kotlin.String?, 
+    var `forceSummary`: kotlin.Boolean
 ) {
+    
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeFfiManualCompactRequest : FfiConverterRustBuffer<FfiManualCompactRequest> {
-    override fun read(buf: ByteBuffer): FfiManualCompactRequest =
-        FfiManualCompactRequest(
+public object FfiConverterTypeFfiManualCompactRequest: FfiConverterRustBuffer<FfiManualCompactRequest> {
+    override fun read(buf: ByteBuffer): FfiManualCompactRequest {
+        return FfiManualCompactRequest(
             FfiConverterOptionalString.read(buf),
             FfiConverterBoolean.read(buf),
         )
+    }
 
-    override fun allocationSize(value: FfiManualCompactRequest) =
-        (
+    override fun allocationSize(value: FfiManualCompactRequest) = (
             FfiConverterOptionalString.allocationSize(value.`focusInstruction`) +
-                FfiConverterBoolean.allocationSize(value.`forceSummary`)
-        )
+            FfiConverterBoolean.allocationSize(value.`forceSummary`)
+    )
 
-    override fun write(
-        value: FfiManualCompactRequest,
-        buf: ByteBuffer,
-    ) {
-        FfiConverterOptionalString.write(value.`focusInstruction`, buf)
-        FfiConverterBoolean.write(value.`forceSummary`, buf)
+    override fun write(value: FfiManualCompactRequest, buf: ByteBuffer) {
+            FfiConverterOptionalString.write(value.`focusInstruction`, buf)
+            FfiConverterBoolean.write(value.`forceSummary`, buf)
     }
 }
 
-data class FfiManualCompactResult(
-    var `summaryRef`: kotlin.String?,
-    var `historyRef`: kotlin.String?,
-    var `tokensBefore`: kotlin.UInt,
-    var `tokensAfter`: kotlin.UInt,
+
+
+data class FfiManualCompactResult (
+    var `summaryRef`: kotlin.String?, 
+    var `historyRef`: kotlin.String?, 
+    var `tokensBefore`: kotlin.UInt, 
+    var `tokensAfter`: kotlin.UInt
 ) {
+    
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeFfiManualCompactResult : FfiConverterRustBuffer<FfiManualCompactResult> {
-    override fun read(buf: ByteBuffer): FfiManualCompactResult =
-        FfiManualCompactResult(
+public object FfiConverterTypeFfiManualCompactResult: FfiConverterRustBuffer<FfiManualCompactResult> {
+    override fun read(buf: ByteBuffer): FfiManualCompactResult {
+        return FfiManualCompactResult(
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
             FfiConverterUInt.read(buf),
             FfiConverterUInt.read(buf),
         )
+    }
 
-    override fun allocationSize(value: FfiManualCompactResult) =
-        (
+    override fun allocationSize(value: FfiManualCompactResult) = (
             FfiConverterOptionalString.allocationSize(value.`summaryRef`) +
-                FfiConverterOptionalString.allocationSize(value.`historyRef`) +
-                FfiConverterUInt.allocationSize(value.`tokensBefore`) +
-                FfiConverterUInt.allocationSize(value.`tokensAfter`)
-        )
+            FfiConverterOptionalString.allocationSize(value.`historyRef`) +
+            FfiConverterUInt.allocationSize(value.`tokensBefore`) +
+            FfiConverterUInt.allocationSize(value.`tokensAfter`)
+    )
 
-    override fun write(
-        value: FfiManualCompactResult,
-        buf: ByteBuffer,
-    ) {
-        FfiConverterOptionalString.write(value.`summaryRef`, buf)
-        FfiConverterOptionalString.write(value.`historyRef`, buf)
-        FfiConverterUInt.write(value.`tokensBefore`, buf)
-        FfiConverterUInt.write(value.`tokensAfter`, buf)
+    override fun write(value: FfiManualCompactResult, buf: ByteBuffer) {
+            FfiConverterOptionalString.write(value.`summaryRef`, buf)
+            FfiConverterOptionalString.write(value.`historyRef`, buf)
+            FfiConverterUInt.write(value.`tokensBefore`, buf)
+            FfiConverterUInt.write(value.`tokensAfter`, buf)
     }
 }
 
-data class FfiModelRequest(
-    var `sessionMessages`: List<FfiAgentMessage>,
-    var `systemPrompt`: kotlin.String,
-    var `toolsSchemaJson`: kotlin.String,
-    var `allowToolCall`: kotlin.Boolean,
-    var `contextReferences`: List<FfiContextReference>,
-    var `stateLedgerJson`: kotlin.String?,
-    var `toolContextIndexJson`: kotlin.String?,
-    var `fileContextIndexJson`: kotlin.String?,
-    var `cacheHints`: List<kotlin.String>,
-    var `providerContext`: FfiProviderContextSnapshot,
-    var `stateLedgerDeltaJson`: kotlin.String?,
-    var `toolContextIndexDeltaJson`: kotlin.String?,
-    var `fileContextIndexDeltaJson`: kotlin.String?,
+
+
+data class FfiModelRequest (
+    var `sessionMessages`: List<FfiAgentMessage>, 
+    var `systemPrompt`: kotlin.String, 
+    var `toolsSchemaJson`: kotlin.String, 
+    var `allowToolCall`: kotlin.Boolean, 
+    var `contextReferences`: List<FfiContextReference>, 
+    var `stateLedgerJson`: kotlin.String?, 
+    var `toolContextIndexJson`: kotlin.String?, 
+    var `fileContextIndexJson`: kotlin.String?, 
+    var `cacheHints`: List<kotlin.String>, 
+    var `providerContext`: FfiProviderContextSnapshot, 
+    var `stateLedgerDeltaJson`: kotlin.String?, 
+    var `toolContextIndexDeltaJson`: kotlin.String?, 
+    var `fileContextIndexDeltaJson`: kotlin.String?, 
+    var `retryAfterMs`: kotlin.ULong?, 
+    var `modelRetryAttempt`: kotlin.UInt?
 ) {
+    
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeFfiModelRequest : FfiConverterRustBuffer<FfiModelRequest> {
-    override fun read(buf: ByteBuffer): FfiModelRequest =
-        FfiModelRequest(
+public object FfiConverterTypeFfiModelRequest: FfiConverterRustBuffer<FfiModelRequest> {
+    override fun read(buf: ByteBuffer): FfiModelRequest {
+        return FfiModelRequest(
             FfiConverterSequenceTypeFfiAgentMessage.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
@@ -3236,102 +3021,160 @@ public object FfiConverterTypeFfiModelRequest : FfiConverterRustBuffer<FfiModelR
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalULong.read(buf),
+            FfiConverterOptionalUInt.read(buf),
         )
+    }
 
-    override fun allocationSize(value: FfiModelRequest) =
-        (
+    override fun allocationSize(value: FfiModelRequest) = (
             FfiConverterSequenceTypeFfiAgentMessage.allocationSize(value.`sessionMessages`) +
-                FfiConverterString.allocationSize(value.`systemPrompt`) +
-                FfiConverterString.allocationSize(value.`toolsSchemaJson`) +
-                FfiConverterBoolean.allocationSize(value.`allowToolCall`) +
-                FfiConverterSequenceTypeFfiContextReference.allocationSize(value.`contextReferences`) +
-                FfiConverterOptionalString.allocationSize(value.`stateLedgerJson`) +
-                FfiConverterOptionalString.allocationSize(value.`toolContextIndexJson`) +
-                FfiConverterOptionalString.allocationSize(value.`fileContextIndexJson`) +
-                FfiConverterSequenceString.allocationSize(value.`cacheHints`) +
-                FfiConverterTypeFfiProviderContextSnapshot.allocationSize(value.`providerContext`) +
-                FfiConverterOptionalString.allocationSize(value.`stateLedgerDeltaJson`) +
-                FfiConverterOptionalString.allocationSize(value.`toolContextIndexDeltaJson`) +
-                FfiConverterOptionalString.allocationSize(value.`fileContextIndexDeltaJson`)
-        )
+            FfiConverterString.allocationSize(value.`systemPrompt`) +
+            FfiConverterString.allocationSize(value.`toolsSchemaJson`) +
+            FfiConverterBoolean.allocationSize(value.`allowToolCall`) +
+            FfiConverterSequenceTypeFfiContextReference.allocationSize(value.`contextReferences`) +
+            FfiConverterOptionalString.allocationSize(value.`stateLedgerJson`) +
+            FfiConverterOptionalString.allocationSize(value.`toolContextIndexJson`) +
+            FfiConverterOptionalString.allocationSize(value.`fileContextIndexJson`) +
+            FfiConverterSequenceString.allocationSize(value.`cacheHints`) +
+            FfiConverterTypeFfiProviderContextSnapshot.allocationSize(value.`providerContext`) +
+            FfiConverterOptionalString.allocationSize(value.`stateLedgerDeltaJson`) +
+            FfiConverterOptionalString.allocationSize(value.`toolContextIndexDeltaJson`) +
+            FfiConverterOptionalString.allocationSize(value.`fileContextIndexDeltaJson`) +
+            FfiConverterOptionalULong.allocationSize(value.`retryAfterMs`) +
+            FfiConverterOptionalUInt.allocationSize(value.`modelRetryAttempt`)
+    )
 
-    override fun write(
-        value: FfiModelRequest,
-        buf: ByteBuffer,
-    ) {
-        FfiConverterSequenceTypeFfiAgentMessage.write(value.`sessionMessages`, buf)
-        FfiConverterString.write(value.`systemPrompt`, buf)
-        FfiConverterString.write(value.`toolsSchemaJson`, buf)
-        FfiConverterBoolean.write(value.`allowToolCall`, buf)
-        FfiConverterSequenceTypeFfiContextReference.write(value.`contextReferences`, buf)
-        FfiConverterOptionalString.write(value.`stateLedgerJson`, buf)
-        FfiConverterOptionalString.write(value.`toolContextIndexJson`, buf)
-        FfiConverterOptionalString.write(value.`fileContextIndexJson`, buf)
-        FfiConverterSequenceString.write(value.`cacheHints`, buf)
-        FfiConverterTypeFfiProviderContextSnapshot.write(value.`providerContext`, buf)
-        FfiConverterOptionalString.write(value.`stateLedgerDeltaJson`, buf)
-        FfiConverterOptionalString.write(value.`toolContextIndexDeltaJson`, buf)
-        FfiConverterOptionalString.write(value.`fileContextIndexDeltaJson`, buf)
+    override fun write(value: FfiModelRequest, buf: ByteBuffer) {
+            FfiConverterSequenceTypeFfiAgentMessage.write(value.`sessionMessages`, buf)
+            FfiConverterString.write(value.`systemPrompt`, buf)
+            FfiConverterString.write(value.`toolsSchemaJson`, buf)
+            FfiConverterBoolean.write(value.`allowToolCall`, buf)
+            FfiConverterSequenceTypeFfiContextReference.write(value.`contextReferences`, buf)
+            FfiConverterOptionalString.write(value.`stateLedgerJson`, buf)
+            FfiConverterOptionalString.write(value.`toolContextIndexJson`, buf)
+            FfiConverterOptionalString.write(value.`fileContextIndexJson`, buf)
+            FfiConverterSequenceString.write(value.`cacheHints`, buf)
+            FfiConverterTypeFfiProviderContextSnapshot.write(value.`providerContext`, buf)
+            FfiConverterOptionalString.write(value.`stateLedgerDeltaJson`, buf)
+            FfiConverterOptionalString.write(value.`toolContextIndexDeltaJson`, buf)
+            FfiConverterOptionalString.write(value.`fileContextIndexDeltaJson`, buf)
+            FfiConverterOptionalULong.write(value.`retryAfterMs`, buf)
+            FfiConverterOptionalUInt.write(value.`modelRetryAttempt`, buf)
     }
 }
 
-data class FfiModelResponse(
-    var `assistantText`: kotlin.String?,
-    var `toolCalls`: List<FfiRawToolCall>,
-    var `finishReason`: FfiFinishReason,
-    var `providerReasoningContent`: kotlin.String?,
+
+
+data class FfiModelResponse (
+    var `assistantText`: kotlin.String?, 
+    var `toolCalls`: List<FfiRawToolCall>, 
+    var `finishReason`: FfiFinishReason, 
+    var `providerReasoningContent`: kotlin.String?
 ) {
+    
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeFfiModelResponse : FfiConverterRustBuffer<FfiModelResponse> {
-    override fun read(buf: ByteBuffer): FfiModelResponse =
-        FfiModelResponse(
+public object FfiConverterTypeFfiModelResponse: FfiConverterRustBuffer<FfiModelResponse> {
+    override fun read(buf: ByteBuffer): FfiModelResponse {
+        return FfiModelResponse(
             FfiConverterOptionalString.read(buf),
             FfiConverterSequenceTypeFfiRawToolCall.read(buf),
             FfiConverterTypeFfiFinishReason.read(buf),
             FfiConverterOptionalString.read(buf),
         )
+    }
 
-    override fun allocationSize(value: FfiModelResponse) =
-        (
+    override fun allocationSize(value: FfiModelResponse) = (
             FfiConverterOptionalString.allocationSize(value.`assistantText`) +
-                FfiConverterSequenceTypeFfiRawToolCall.allocationSize(value.`toolCalls`) +
-                FfiConverterTypeFfiFinishReason.allocationSize(value.`finishReason`) +
-                FfiConverterOptionalString.allocationSize(value.`providerReasoningContent`)
-        )
+            FfiConverterSequenceTypeFfiRawToolCall.allocationSize(value.`toolCalls`) +
+            FfiConverterTypeFfiFinishReason.allocationSize(value.`finishReason`) +
+            FfiConverterOptionalString.allocationSize(value.`providerReasoningContent`)
+    )
 
-    override fun write(
-        value: FfiModelResponse,
-        buf: ByteBuffer,
-    ) {
-        FfiConverterOptionalString.write(value.`assistantText`, buf)
-        FfiConverterSequenceTypeFfiRawToolCall.write(value.`toolCalls`, buf)
-        FfiConverterTypeFfiFinishReason.write(value.`finishReason`, buf)
-        FfiConverterOptionalString.write(value.`providerReasoningContent`, buf)
+    override fun write(value: FfiModelResponse, buf: ByteBuffer) {
+            FfiConverterOptionalString.write(value.`assistantText`, buf)
+            FfiConverterSequenceTypeFfiRawToolCall.write(value.`toolCalls`, buf)
+            FfiConverterTypeFfiFinishReason.write(value.`finishReason`, buf)
+            FfiConverterOptionalString.write(value.`providerReasoningContent`, buf)
     }
 }
 
-data class FfiProviderContextSnapshot(
-    var `transcriptRevision`: kotlin.ULong,
-    var `sidecarGeneration`: kotlin.UInt,
-    var `sidecarByteLen`: kotlin.UInt,
-    var `compactionPassesThisTurn`: kotlin.UInt,
-    var `destructiveTiersThisTurn`: kotlin.UInt,
-    var `pressureRatioAtCallModelMillis`: kotlin.UInt,
+
+
+data class FfiModelTurnFailureReport (
+    var `errorClass`: FfiModelApiErrorClass, 
+    var `httpStatus`: kotlin.UShort?, 
+    var `providerCode`: kotlin.String?, 
+    var `message`: kotlin.String, 
+    var `hadPartialOutput`: kotlin.Boolean, 
+    var `partialOutputChars`: kotlin.UInt, 
+    var `retryAfterMs`: kotlin.ULong?
 ) {
+    
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeFfiProviderContextSnapshot : FfiConverterRustBuffer<FfiProviderContextSnapshot> {
-    override fun read(buf: ByteBuffer): FfiProviderContextSnapshot =
-        FfiProviderContextSnapshot(
+public object FfiConverterTypeFfiModelTurnFailureReport: FfiConverterRustBuffer<FfiModelTurnFailureReport> {
+    override fun read(buf: ByteBuffer): FfiModelTurnFailureReport {
+        return FfiModelTurnFailureReport(
+            FfiConverterTypeFfiModelApiErrorClass.read(buf),
+            FfiConverterOptionalUShort.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterOptionalULong.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: FfiModelTurnFailureReport) = (
+            FfiConverterTypeFfiModelApiErrorClass.allocationSize(value.`errorClass`) +
+            FfiConverterOptionalUShort.allocationSize(value.`httpStatus`) +
+            FfiConverterOptionalString.allocationSize(value.`providerCode`) +
+            FfiConverterString.allocationSize(value.`message`) +
+            FfiConverterBoolean.allocationSize(value.`hadPartialOutput`) +
+            FfiConverterUInt.allocationSize(value.`partialOutputChars`) +
+            FfiConverterOptionalULong.allocationSize(value.`retryAfterMs`)
+    )
+
+    override fun write(value: FfiModelTurnFailureReport, buf: ByteBuffer) {
+            FfiConverterTypeFfiModelApiErrorClass.write(value.`errorClass`, buf)
+            FfiConverterOptionalUShort.write(value.`httpStatus`, buf)
+            FfiConverterOptionalString.write(value.`providerCode`, buf)
+            FfiConverterString.write(value.`message`, buf)
+            FfiConverterBoolean.write(value.`hadPartialOutput`, buf)
+            FfiConverterUInt.write(value.`partialOutputChars`, buf)
+            FfiConverterOptionalULong.write(value.`retryAfterMs`, buf)
+    }
+}
+
+
+
+data class FfiProviderContextSnapshot (
+    var `transcriptRevision`: kotlin.ULong, 
+    var `sidecarGeneration`: kotlin.UInt, 
+    var `sidecarByteLen`: kotlin.UInt, 
+    var `compactionPassesThisTurn`: kotlin.UInt, 
+    var `destructiveTiersThisTurn`: kotlin.UInt, 
+    var `pressureRatioAtCallModelMillis`: kotlin.UInt
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFfiProviderContextSnapshot: FfiConverterRustBuffer<FfiProviderContextSnapshot> {
+    override fun read(buf: ByteBuffer): FfiProviderContextSnapshot {
+        return FfiProviderContextSnapshot(
             FfiConverterULong.read(buf),
             FfiConverterUInt.read(buf),
             FfiConverterUInt.read(buf),
@@ -3339,122 +3182,122 @@ public object FfiConverterTypeFfiProviderContextSnapshot : FfiConverterRustBuffe
             FfiConverterUInt.read(buf),
             FfiConverterUInt.read(buf),
         )
+    }
 
-    override fun allocationSize(value: FfiProviderContextSnapshot) =
-        (
+    override fun allocationSize(value: FfiProviderContextSnapshot) = (
             FfiConverterULong.allocationSize(value.`transcriptRevision`) +
-                FfiConverterUInt.allocationSize(value.`sidecarGeneration`) +
-                FfiConverterUInt.allocationSize(value.`sidecarByteLen`) +
-                FfiConverterUInt.allocationSize(value.`compactionPassesThisTurn`) +
-                FfiConverterUInt.allocationSize(value.`destructiveTiersThisTurn`) +
-                FfiConverterUInt.allocationSize(value.`pressureRatioAtCallModelMillis`)
-        )
+            FfiConverterUInt.allocationSize(value.`sidecarGeneration`) +
+            FfiConverterUInt.allocationSize(value.`sidecarByteLen`) +
+            FfiConverterUInt.allocationSize(value.`compactionPassesThisTurn`) +
+            FfiConverterUInt.allocationSize(value.`destructiveTiersThisTurn`) +
+            FfiConverterUInt.allocationSize(value.`pressureRatioAtCallModelMillis`)
+    )
 
-    override fun write(
-        value: FfiProviderContextSnapshot,
-        buf: ByteBuffer,
-    ) {
-        FfiConverterULong.write(value.`transcriptRevision`, buf)
-        FfiConverterUInt.write(value.`sidecarGeneration`, buf)
-        FfiConverterUInt.write(value.`sidecarByteLen`, buf)
-        FfiConverterUInt.write(value.`compactionPassesThisTurn`, buf)
-        FfiConverterUInt.write(value.`destructiveTiersThisTurn`, buf)
-        FfiConverterUInt.write(value.`pressureRatioAtCallModelMillis`, buf)
+    override fun write(value: FfiProviderContextSnapshot, buf: ByteBuffer) {
+            FfiConverterULong.write(value.`transcriptRevision`, buf)
+            FfiConverterUInt.write(value.`sidecarGeneration`, buf)
+            FfiConverterUInt.write(value.`sidecarByteLen`, buf)
+            FfiConverterUInt.write(value.`compactionPassesThisTurn`, buf)
+            FfiConverterUInt.write(value.`destructiveTiersThisTurn`, buf)
+            FfiConverterUInt.write(value.`pressureRatioAtCallModelMillis`, buf)
     }
 }
 
-data class FfiRawToolCall(
-    var `id`: kotlin.String?,
-    var `name`: kotlin.String,
-    var `argumentsJson`: kotlin.String,
+
+
+data class FfiRawToolCall (
+    var `id`: kotlin.String?, 
+    var `name`: kotlin.String, 
+    var `argumentsJson`: kotlin.String
 ) {
+    
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeFfiRawToolCall : FfiConverterRustBuffer<FfiRawToolCall> {
-    override fun read(buf: ByteBuffer): FfiRawToolCall =
-        FfiRawToolCall(
+public object FfiConverterTypeFfiRawToolCall: FfiConverterRustBuffer<FfiRawToolCall> {
+    override fun read(buf: ByteBuffer): FfiRawToolCall {
+        return FfiRawToolCall(
             FfiConverterOptionalString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
         )
+    }
 
-    override fun allocationSize(value: FfiRawToolCall) =
-        (
+    override fun allocationSize(value: FfiRawToolCall) = (
             FfiConverterOptionalString.allocationSize(value.`id`) +
-                FfiConverterString.allocationSize(value.`name`) +
-                FfiConverterString.allocationSize(value.`argumentsJson`)
-        )
+            FfiConverterString.allocationSize(value.`name`) +
+            FfiConverterString.allocationSize(value.`argumentsJson`)
+    )
 
-    override fun write(
-        value: FfiRawToolCall,
-        buf: ByteBuffer,
-    ) {
-        FfiConverterOptionalString.write(value.`id`, buf)
-        FfiConverterString.write(value.`name`, buf)
-        FfiConverterString.write(value.`argumentsJson`, buf)
+    override fun write(value: FfiRawToolCall, buf: ByteBuffer) {
+            FfiConverterOptionalString.write(value.`id`, buf)
+            FfiConverterString.write(value.`name`, buf)
+            FfiConverterString.write(value.`argumentsJson`, buf)
     }
 }
 
-data class FfiRepairRecord(
-    var `originalName`: kotlin.String,
-    var `appliedAliases`: List<kotlin.String>,
-    var `confidence`: kotlin.Float,
+
+
+data class FfiRepairRecord (
+    var `originalName`: kotlin.String, 
+    var `appliedAliases`: List<kotlin.String>, 
+    var `confidence`: kotlin.Float
 ) {
+    
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeFfiRepairRecord : FfiConverterRustBuffer<FfiRepairRecord> {
-    override fun read(buf: ByteBuffer): FfiRepairRecord =
-        FfiRepairRecord(
+public object FfiConverterTypeFfiRepairRecord: FfiConverterRustBuffer<FfiRepairRecord> {
+    override fun read(buf: ByteBuffer): FfiRepairRecord {
+        return FfiRepairRecord(
             FfiConverterString.read(buf),
             FfiConverterSequenceString.read(buf),
             FfiConverterFloat.read(buf),
         )
+    }
 
-    override fun allocationSize(value: FfiRepairRecord) =
-        (
+    override fun allocationSize(value: FfiRepairRecord) = (
             FfiConverterString.allocationSize(value.`originalName`) +
-                FfiConverterSequenceString.allocationSize(value.`appliedAliases`) +
-                FfiConverterFloat.allocationSize(value.`confidence`)
-        )
+            FfiConverterSequenceString.allocationSize(value.`appliedAliases`) +
+            FfiConverterFloat.allocationSize(value.`confidence`)
+    )
 
-    override fun write(
-        value: FfiRepairRecord,
-        buf: ByteBuffer,
-    ) {
-        FfiConverterString.write(value.`originalName`, buf)
-        FfiConverterSequenceString.write(value.`appliedAliases`, buf)
-        FfiConverterFloat.write(value.`confidence`, buf)
+    override fun write(value: FfiRepairRecord, buf: ByteBuffer) {
+            FfiConverterString.write(value.`originalName`, buf)
+            FfiConverterSequenceString.write(value.`appliedAliases`, buf)
+            FfiConverterFloat.write(value.`confidence`, buf)
     }
 }
 
-data class FfiSessionCapabilities(
-    var `summarizationAllowed`: kotlin.Boolean,
-    var `kvFixed`: kotlin.Boolean,
-    var `toolResultBudgetTokens`: kotlin.UInt?,
-    var `contextPolicyTier`: FfiContextPolicyTier,
-    var `toolSchemaDeferralSupported`: kotlin.Boolean,
-    var `fileBackedContextSupported`: kotlin.Boolean,
-    var `promptCacheSupported`: kotlin.Boolean,
-    var `historyRewriteSupported`: kotlin.Boolean,
-    var `lifecycleHooksSupported`: kotlin.Boolean,
+
+
+data class FfiSessionCapabilities (
+    var `summarizationAllowed`: kotlin.Boolean, 
+    var `kvFixed`: kotlin.Boolean, 
+    var `toolResultBudgetTokens`: kotlin.UInt?, 
+    var `contextPolicyTier`: FfiContextPolicyTier, 
+    var `toolSchemaDeferralSupported`: kotlin.Boolean, 
+    var `fileBackedContextSupported`: kotlin.Boolean, 
+    var `promptCacheSupported`: kotlin.Boolean, 
+    var `historyRewriteSupported`: kotlin.Boolean, 
+    var `lifecycleHooksSupported`: kotlin.Boolean
 ) {
+    
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeFfiSessionCapabilities : FfiConverterRustBuffer<FfiSessionCapabilities> {
-    override fun read(buf: ByteBuffer): FfiSessionCapabilities =
-        FfiSessionCapabilities(
+public object FfiConverterTypeFfiSessionCapabilities: FfiConverterRustBuffer<FfiSessionCapabilities> {
+    override fun read(buf: ByteBuffer): FfiSessionCapabilities {
+        return FfiSessionCapabilities(
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterOptionalUInt.read(buf),
@@ -3465,53 +3308,53 @@ public object FfiConverterTypeFfiSessionCapabilities : FfiConverterRustBuffer<Ff
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
         )
+    }
 
-    override fun allocationSize(value: FfiSessionCapabilities) =
-        (
+    override fun allocationSize(value: FfiSessionCapabilities) = (
             FfiConverterBoolean.allocationSize(value.`summarizationAllowed`) +
-                FfiConverterBoolean.allocationSize(value.`kvFixed`) +
-                FfiConverterOptionalUInt.allocationSize(value.`toolResultBudgetTokens`) +
-                FfiConverterTypeFfiContextPolicyTier.allocationSize(value.`contextPolicyTier`) +
-                FfiConverterBoolean.allocationSize(value.`toolSchemaDeferralSupported`) +
-                FfiConverterBoolean.allocationSize(value.`fileBackedContextSupported`) +
-                FfiConverterBoolean.allocationSize(value.`promptCacheSupported`) +
-                FfiConverterBoolean.allocationSize(value.`historyRewriteSupported`) +
-                FfiConverterBoolean.allocationSize(value.`lifecycleHooksSupported`)
-        )
+            FfiConverterBoolean.allocationSize(value.`kvFixed`) +
+            FfiConverterOptionalUInt.allocationSize(value.`toolResultBudgetTokens`) +
+            FfiConverterTypeFfiContextPolicyTier.allocationSize(value.`contextPolicyTier`) +
+            FfiConverterBoolean.allocationSize(value.`toolSchemaDeferralSupported`) +
+            FfiConverterBoolean.allocationSize(value.`fileBackedContextSupported`) +
+            FfiConverterBoolean.allocationSize(value.`promptCacheSupported`) +
+            FfiConverterBoolean.allocationSize(value.`historyRewriteSupported`) +
+            FfiConverterBoolean.allocationSize(value.`lifecycleHooksSupported`)
+    )
 
-    override fun write(
-        value: FfiSessionCapabilities,
-        buf: ByteBuffer,
-    ) {
-        FfiConverterBoolean.write(value.`summarizationAllowed`, buf)
-        FfiConverterBoolean.write(value.`kvFixed`, buf)
-        FfiConverterOptionalUInt.write(value.`toolResultBudgetTokens`, buf)
-        FfiConverterTypeFfiContextPolicyTier.write(value.`contextPolicyTier`, buf)
-        FfiConverterBoolean.write(value.`toolSchemaDeferralSupported`, buf)
-        FfiConverterBoolean.write(value.`fileBackedContextSupported`, buf)
-        FfiConverterBoolean.write(value.`promptCacheSupported`, buf)
-        FfiConverterBoolean.write(value.`historyRewriteSupported`, buf)
-        FfiConverterBoolean.write(value.`lifecycleHooksSupported`, buf)
+    override fun write(value: FfiSessionCapabilities, buf: ByteBuffer) {
+            FfiConverterBoolean.write(value.`summarizationAllowed`, buf)
+            FfiConverterBoolean.write(value.`kvFixed`, buf)
+            FfiConverterOptionalUInt.write(value.`toolResultBudgetTokens`, buf)
+            FfiConverterTypeFfiContextPolicyTier.write(value.`contextPolicyTier`, buf)
+            FfiConverterBoolean.write(value.`toolSchemaDeferralSupported`, buf)
+            FfiConverterBoolean.write(value.`fileBackedContextSupported`, buf)
+            FfiConverterBoolean.write(value.`promptCacheSupported`, buf)
+            FfiConverterBoolean.write(value.`historyRewriteSupported`, buf)
+            FfiConverterBoolean.write(value.`lifecycleHooksSupported`, buf)
     }
 }
 
-data class FfiSessionIoParams(
-    var `provider`: kotlin.String,
-    var `contextWindowTokens`: kotlin.UInt,
-    var `toolCatalogJson`: kotlin.String,
-    var `toolSchemaRegistryJson`: kotlin.String,
-    var `toolsSchemaJson`: kotlin.String,
-    var `systemPrompt`: kotlin.String,
+
+
+data class FfiSessionIoParams (
+    var `provider`: kotlin.String, 
+    var `contextWindowTokens`: kotlin.UInt, 
+    var `toolCatalogJson`: kotlin.String, 
+    var `toolSchemaRegistryJson`: kotlin.String, 
+    var `toolsSchemaJson`: kotlin.String, 
+    var `systemPrompt`: kotlin.String
 ) {
+    
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeFfiSessionIoParams : FfiConverterRustBuffer<FfiSessionIoParams> {
-    override fun read(buf: ByteBuffer): FfiSessionIoParams =
-        FfiSessionIoParams(
+public object FfiConverterTypeFfiSessionIoParams: FfiConverterRustBuffer<FfiSessionIoParams> {
+    override fun read(buf: ByteBuffer): FfiSessionIoParams {
+        return FfiSessionIoParams(
             FfiConverterString.read(buf),
             FfiConverterUInt.read(buf),
             FfiConverterString.read(buf),
@@ -3519,108 +3362,108 @@ public object FfiConverterTypeFfiSessionIoParams : FfiConverterRustBuffer<FfiSes
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
         )
+    }
 
-    override fun allocationSize(value: FfiSessionIoParams) =
-        (
+    override fun allocationSize(value: FfiSessionIoParams) = (
             FfiConverterString.allocationSize(value.`provider`) +
-                FfiConverterUInt.allocationSize(value.`contextWindowTokens`) +
-                FfiConverterString.allocationSize(value.`toolCatalogJson`) +
-                FfiConverterString.allocationSize(value.`toolSchemaRegistryJson`) +
-                FfiConverterString.allocationSize(value.`toolsSchemaJson`) +
-                FfiConverterString.allocationSize(value.`systemPrompt`)
-        )
+            FfiConverterUInt.allocationSize(value.`contextWindowTokens`) +
+            FfiConverterString.allocationSize(value.`toolCatalogJson`) +
+            FfiConverterString.allocationSize(value.`toolSchemaRegistryJson`) +
+            FfiConverterString.allocationSize(value.`toolsSchemaJson`) +
+            FfiConverterString.allocationSize(value.`systemPrompt`)
+    )
 
-    override fun write(
-        value: FfiSessionIoParams,
-        buf: ByteBuffer,
-    ) {
-        FfiConverterString.write(value.`provider`, buf)
-        FfiConverterUInt.write(value.`contextWindowTokens`, buf)
-        FfiConverterString.write(value.`toolCatalogJson`, buf)
-        FfiConverterString.write(value.`toolSchemaRegistryJson`, buf)
-        FfiConverterString.write(value.`toolsSchemaJson`, buf)
-        FfiConverterString.write(value.`systemPrompt`, buf)
+    override fun write(value: FfiSessionIoParams, buf: ByteBuffer) {
+            FfiConverterString.write(value.`provider`, buf)
+            FfiConverterUInt.write(value.`contextWindowTokens`, buf)
+            FfiConverterString.write(value.`toolCatalogJson`, buf)
+            FfiConverterString.write(value.`toolSchemaRegistryJson`, buf)
+            FfiConverterString.write(value.`toolsSchemaJson`, buf)
+            FfiConverterString.write(value.`systemPrompt`, buf)
     }
 }
 
-data class FfiStreamGateFinish(
-    var `trailingFlush`: kotlin.String,
-    var `hasToolMarker`: kotlin.Boolean,
+
+
+data class FfiStreamGateFinish (
+    var `trailingFlush`: kotlin.String, 
+    var `hasToolMarker`: kotlin.Boolean
 ) {
+    
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeFfiStreamGateFinish : FfiConverterRustBuffer<FfiStreamGateFinish> {
-    override fun read(buf: ByteBuffer): FfiStreamGateFinish =
-        FfiStreamGateFinish(
+public object FfiConverterTypeFfiStreamGateFinish: FfiConverterRustBuffer<FfiStreamGateFinish> {
+    override fun read(buf: ByteBuffer): FfiStreamGateFinish {
+        return FfiStreamGateFinish(
             FfiConverterString.read(buf),
             FfiConverterBoolean.read(buf),
         )
+    }
 
-    override fun allocationSize(value: FfiStreamGateFinish) =
-        (
+    override fun allocationSize(value: FfiStreamGateFinish) = (
             FfiConverterString.allocationSize(value.`trailingFlush`) +
-                FfiConverterBoolean.allocationSize(value.`hasToolMarker`)
-        )
+            FfiConverterBoolean.allocationSize(value.`hasToolMarker`)
+    )
 
-    override fun write(
-        value: FfiStreamGateFinish,
-        buf: ByteBuffer,
-    ) {
-        FfiConverterString.write(value.`trailingFlush`, buf)
-        FfiConverterBoolean.write(value.`hasToolMarker`, buf)
+    override fun write(value: FfiStreamGateFinish, buf: ByteBuffer) {
+            FfiConverterString.write(value.`trailingFlush`, buf)
+            FfiConverterBoolean.write(value.`hasToolMarker`, buf)
     }
 }
 
-data class FfiStreamGatePushResult(
-    var `emittedPrefix`: kotlin.String,
+
+
+data class FfiStreamGatePushResult (
+    var `emittedPrefix`: kotlin.String
 ) {
+    
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeFfiStreamGatePushResult : FfiConverterRustBuffer<FfiStreamGatePushResult> {
-    override fun read(buf: ByteBuffer): FfiStreamGatePushResult =
-        FfiStreamGatePushResult(
+public object FfiConverterTypeFfiStreamGatePushResult: FfiConverterRustBuffer<FfiStreamGatePushResult> {
+    override fun read(buf: ByteBuffer): FfiStreamGatePushResult {
+        return FfiStreamGatePushResult(
             FfiConverterString.read(buf),
         )
+    }
 
-    override fun allocationSize(value: FfiStreamGatePushResult) =
-        (
+    override fun allocationSize(value: FfiStreamGatePushResult) = (
             FfiConverterString.allocationSize(value.`emittedPrefix`)
-        )
+    )
 
-    override fun write(
-        value: FfiStreamGatePushResult,
-        buf: ByteBuffer,
-    ) {
-        FfiConverterString.write(value.`emittedPrefix`, buf)
+    override fun write(value: FfiStreamGatePushResult, buf: ByteBuffer) {
+            FfiConverterString.write(value.`emittedPrefix`, buf)
     }
 }
 
-data class FfiSummaryRequest(
-    var `messagesToSummarize`: List<FfiAgentMessage>,
-    var `instruction`: kotlin.String,
-    var `lastMessageId`: kotlin.String,
-    var `trigger`: FfiCompactionTrigger,
-    var `focusInstruction`: kotlin.String?,
-    var `historyRef`: kotlin.String?,
-    var `stateLedgerSnapshotJson`: kotlin.String?,
+
+
+data class FfiSummaryRequest (
+    var `messagesToSummarize`: List<FfiAgentMessage>, 
+    var `instruction`: kotlin.String, 
+    var `lastMessageId`: kotlin.String, 
+    var `trigger`: FfiCompactionTrigger, 
+    var `focusInstruction`: kotlin.String?, 
+    var `historyRef`: kotlin.String?, 
+    var `stateLedgerSnapshotJson`: kotlin.String?
 ) {
+    
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeFfiSummaryRequest : FfiConverterRustBuffer<FfiSummaryRequest> {
-    override fun read(buf: ByteBuffer): FfiSummaryRequest =
-        FfiSummaryRequest(
+public object FfiConverterTypeFfiSummaryRequest: FfiConverterRustBuffer<FfiSummaryRequest> {
+    override fun read(buf: ByteBuffer): FfiSummaryRequest {
+        return FfiSummaryRequest(
             FfiConverterSequenceTypeFfiAgentMessage.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
@@ -3629,454 +3472,487 @@ public object FfiConverterTypeFfiSummaryRequest : FfiConverterRustBuffer<FfiSumm
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
         )
+    }
 
-    override fun allocationSize(value: FfiSummaryRequest) =
-        (
+    override fun allocationSize(value: FfiSummaryRequest) = (
             FfiConverterSequenceTypeFfiAgentMessage.allocationSize(value.`messagesToSummarize`) +
-                FfiConverterString.allocationSize(value.`instruction`) +
-                FfiConverterString.allocationSize(value.`lastMessageId`) +
-                FfiConverterTypeFfiCompactionTrigger.allocationSize(value.`trigger`) +
-                FfiConverterOptionalString.allocationSize(value.`focusInstruction`) +
-                FfiConverterOptionalString.allocationSize(value.`historyRef`) +
-                FfiConverterOptionalString.allocationSize(value.`stateLedgerSnapshotJson`)
-        )
+            FfiConverterString.allocationSize(value.`instruction`) +
+            FfiConverterString.allocationSize(value.`lastMessageId`) +
+            FfiConverterTypeFfiCompactionTrigger.allocationSize(value.`trigger`) +
+            FfiConverterOptionalString.allocationSize(value.`focusInstruction`) +
+            FfiConverterOptionalString.allocationSize(value.`historyRef`) +
+            FfiConverterOptionalString.allocationSize(value.`stateLedgerSnapshotJson`)
+    )
 
-    override fun write(
-        value: FfiSummaryRequest,
-        buf: ByteBuffer,
-    ) {
-        FfiConverterSequenceTypeFfiAgentMessage.write(value.`messagesToSummarize`, buf)
-        FfiConverterString.write(value.`instruction`, buf)
-        FfiConverterString.write(value.`lastMessageId`, buf)
-        FfiConverterTypeFfiCompactionTrigger.write(value.`trigger`, buf)
-        FfiConverterOptionalString.write(value.`focusInstruction`, buf)
-        FfiConverterOptionalString.write(value.`historyRef`, buf)
-        FfiConverterOptionalString.write(value.`stateLedgerSnapshotJson`, buf)
+    override fun write(value: FfiSummaryRequest, buf: ByteBuffer) {
+            FfiConverterSequenceTypeFfiAgentMessage.write(value.`messagesToSummarize`, buf)
+            FfiConverterString.write(value.`instruction`, buf)
+            FfiConverterString.write(value.`lastMessageId`, buf)
+            FfiConverterTypeFfiCompactionTrigger.write(value.`trigger`, buf)
+            FfiConverterOptionalString.write(value.`focusInstruction`, buf)
+            FfiConverterOptionalString.write(value.`historyRef`, buf)
+            FfiConverterOptionalString.write(value.`stateLedgerSnapshotJson`, buf)
     }
 }
 
-data class FfiSummaryResult(
-    var `summaryText`: kotlin.String,
-    var `lastMessageId`: kotlin.String,
+
+
+data class FfiSummaryResult (
+    var `summaryText`: kotlin.String, 
+    var `lastMessageId`: kotlin.String
 ) {
+    
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeFfiSummaryResult : FfiConverterRustBuffer<FfiSummaryResult> {
-    override fun read(buf: ByteBuffer): FfiSummaryResult =
-        FfiSummaryResult(
+public object FfiConverterTypeFfiSummaryResult: FfiConverterRustBuffer<FfiSummaryResult> {
+    override fun read(buf: ByteBuffer): FfiSummaryResult {
+        return FfiSummaryResult(
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
         )
+    }
 
-    override fun allocationSize(value: FfiSummaryResult) =
-        (
+    override fun allocationSize(value: FfiSummaryResult) = (
             FfiConverterString.allocationSize(value.`summaryText`) +
-                FfiConverterString.allocationSize(value.`lastMessageId`)
-        )
+            FfiConverterString.allocationSize(value.`lastMessageId`)
+    )
 
-    override fun write(
-        value: FfiSummaryResult,
-        buf: ByteBuffer,
-    ) {
-        FfiConverterString.write(value.`summaryText`, buf)
-        FfiConverterString.write(value.`lastMessageId`, buf)
+    override fun write(value: FfiSummaryResult, buf: ByteBuffer) {
+            FfiConverterString.write(value.`summaryText`, buf)
+            FfiConverterString.write(value.`lastMessageId`, buf)
     }
 }
 
-data class FfiToolCallRecord(
-    var `callId`: kotlin.String,
-    var `name`: kotlin.String,
-    var `argumentsJson`: kotlin.String,
-    var `repairMetadata`: FfiRepairRecord?,
+
+
+data class FfiToolCallRecord (
+    var `callId`: kotlin.String, 
+    var `name`: kotlin.String, 
+    var `argumentsJson`: kotlin.String, 
+    var `repairMetadata`: FfiRepairRecord?
 ) {
+    
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeFfiToolCallRecord : FfiConverterRustBuffer<FfiToolCallRecord> {
-    override fun read(buf: ByteBuffer): FfiToolCallRecord =
-        FfiToolCallRecord(
+public object FfiConverterTypeFfiToolCallRecord: FfiConverterRustBuffer<FfiToolCallRecord> {
+    override fun read(buf: ByteBuffer): FfiToolCallRecord {
+        return FfiToolCallRecord(
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterOptionalTypeFfiRepairRecord.read(buf),
         )
+    }
 
-    override fun allocationSize(value: FfiToolCallRecord) =
-        (
+    override fun allocationSize(value: FfiToolCallRecord) = (
             FfiConverterString.allocationSize(value.`callId`) +
-                FfiConverterString.allocationSize(value.`name`) +
-                FfiConverterString.allocationSize(value.`argumentsJson`) +
-                FfiConverterOptionalTypeFfiRepairRecord.allocationSize(value.`repairMetadata`)
-        )
+            FfiConverterString.allocationSize(value.`name`) +
+            FfiConverterString.allocationSize(value.`argumentsJson`) +
+            FfiConverterOptionalTypeFfiRepairRecord.allocationSize(value.`repairMetadata`)
+    )
 
-    override fun write(
-        value: FfiToolCallRecord,
-        buf: ByteBuffer,
-    ) {
-        FfiConverterString.write(value.`callId`, buf)
-        FfiConverterString.write(value.`name`, buf)
-        FfiConverterString.write(value.`argumentsJson`, buf)
-        FfiConverterOptionalTypeFfiRepairRecord.write(value.`repairMetadata`, buf)
+    override fun write(value: FfiToolCallRecord, buf: ByteBuffer) {
+            FfiConverterString.write(value.`callId`, buf)
+            FfiConverterString.write(value.`name`, buf)
+            FfiConverterString.write(value.`argumentsJson`, buf)
+            FfiConverterOptionalTypeFfiRepairRecord.write(value.`repairMetadata`, buf)
     }
 }
 
-data class FfiToolParseBatch(
-    var `successes`: List<FfiToolParseField>,
-    var `failures`: List<FfiToolParseFailure>,
-    var `visiblePrefix`: kotlin.String,
-    var `visibleSuffix`: kotlin.String,
+
+
+data class FfiToolParseBatch (
+    var `successes`: List<FfiToolParseField>, 
+    var `failures`: List<FfiToolParseFailure>, 
+    var `visiblePrefix`: kotlin.String, 
+    var `visibleSuffix`: kotlin.String
 ) {
+    
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeFfiToolParseBatch : FfiConverterRustBuffer<FfiToolParseBatch> {
-    override fun read(buf: ByteBuffer): FfiToolParseBatch =
-        FfiToolParseBatch(
+public object FfiConverterTypeFfiToolParseBatch: FfiConverterRustBuffer<FfiToolParseBatch> {
+    override fun read(buf: ByteBuffer): FfiToolParseBatch {
+        return FfiToolParseBatch(
             FfiConverterSequenceTypeFfiToolParseField.read(buf),
             FfiConverterSequenceTypeFfiToolParseFailure.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
         )
+    }
 
-    override fun allocationSize(value: FfiToolParseBatch) =
-        (
+    override fun allocationSize(value: FfiToolParseBatch) = (
             FfiConverterSequenceTypeFfiToolParseField.allocationSize(value.`successes`) +
-                FfiConverterSequenceTypeFfiToolParseFailure.allocationSize(value.`failures`) +
-                FfiConverterString.allocationSize(value.`visiblePrefix`) +
-                FfiConverterString.allocationSize(value.`visibleSuffix`)
-        )
+            FfiConverterSequenceTypeFfiToolParseFailure.allocationSize(value.`failures`) +
+            FfiConverterString.allocationSize(value.`visiblePrefix`) +
+            FfiConverterString.allocationSize(value.`visibleSuffix`)
+    )
 
-    override fun write(
-        value: FfiToolParseBatch,
-        buf: ByteBuffer,
-    ) {
-        FfiConverterSequenceTypeFfiToolParseField.write(value.`successes`, buf)
-        FfiConverterSequenceTypeFfiToolParseFailure.write(value.`failures`, buf)
-        FfiConverterString.write(value.`visiblePrefix`, buf)
-        FfiConverterString.write(value.`visibleSuffix`, buf)
+    override fun write(value: FfiToolParseBatch, buf: ByteBuffer) {
+            FfiConverterSequenceTypeFfiToolParseField.write(value.`successes`, buf)
+            FfiConverterSequenceTypeFfiToolParseFailure.write(value.`failures`, buf)
+            FfiConverterString.write(value.`visiblePrefix`, buf)
+            FfiConverterString.write(value.`visibleSuffix`, buf)
     }
 }
 
-data class FfiToolParseFailure(
-    var `reason`: FfiToolParseFailureReason,
-    var `original`: kotlin.String,
-    var `formatHint`: kotlin.String?,
+
+
+data class FfiToolParseFailure (
+    var `reason`: FfiToolParseFailureReason, 
+    var `original`: kotlin.String, 
+    var `formatHint`: kotlin.String?
 ) {
+    
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeFfiToolParseFailure : FfiConverterRustBuffer<FfiToolParseFailure> {
-    override fun read(buf: ByteBuffer): FfiToolParseFailure =
-        FfiToolParseFailure(
+public object FfiConverterTypeFfiToolParseFailure: FfiConverterRustBuffer<FfiToolParseFailure> {
+    override fun read(buf: ByteBuffer): FfiToolParseFailure {
+        return FfiToolParseFailure(
             FfiConverterTypeFfiToolParseFailureReason.read(buf),
             FfiConverterString.read(buf),
             FfiConverterOptionalString.read(buf),
         )
+    }
 
-    override fun allocationSize(value: FfiToolParseFailure) =
-        (
+    override fun allocationSize(value: FfiToolParseFailure) = (
             FfiConverterTypeFfiToolParseFailureReason.allocationSize(value.`reason`) +
-                FfiConverterString.allocationSize(value.`original`) +
-                FfiConverterOptionalString.allocationSize(value.`formatHint`)
-        )
+            FfiConverterString.allocationSize(value.`original`) +
+            FfiConverterOptionalString.allocationSize(value.`formatHint`)
+    )
 
-    override fun write(
-        value: FfiToolParseFailure,
-        buf: ByteBuffer,
-    ) {
-        FfiConverterTypeFfiToolParseFailureReason.write(value.`reason`, buf)
-        FfiConverterString.write(value.`original`, buf)
-        FfiConverterOptionalString.write(value.`formatHint`, buf)
+    override fun write(value: FfiToolParseFailure, buf: ByteBuffer) {
+            FfiConverterTypeFfiToolParseFailureReason.write(value.`reason`, buf)
+            FfiConverterString.write(value.`original`, buf)
+            FfiConverterOptionalString.write(value.`formatHint`, buf)
     }
 }
 
-data class FfiToolParseField(
-    var `toolName`: kotlin.String,
-    var `argumentsJson`: kotlin.String,
-    var `repaired`: kotlin.Boolean,
-    var `repairs`: List<kotlin.String>,
+
+
+data class FfiToolParseField (
+    var `toolName`: kotlin.String, 
+    var `argumentsJson`: kotlin.String, 
+    var `repaired`: kotlin.Boolean, 
+    var `repairs`: List<kotlin.String>
 ) {
+    
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeFfiToolParseField : FfiConverterRustBuffer<FfiToolParseField> {
-    override fun read(buf: ByteBuffer): FfiToolParseField =
-        FfiToolParseField(
+public object FfiConverterTypeFfiToolParseField: FfiConverterRustBuffer<FfiToolParseField> {
+    override fun read(buf: ByteBuffer): FfiToolParseField {
+        return FfiToolParseField(
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterSequenceString.read(buf),
         )
+    }
 
-    override fun allocationSize(value: FfiToolParseField) =
-        (
+    override fun allocationSize(value: FfiToolParseField) = (
             FfiConverterString.allocationSize(value.`toolName`) +
-                FfiConverterString.allocationSize(value.`argumentsJson`) +
-                FfiConverterBoolean.allocationSize(value.`repaired`) +
-                FfiConverterSequenceString.allocationSize(value.`repairs`)
-        )
+            FfiConverterString.allocationSize(value.`argumentsJson`) +
+            FfiConverterBoolean.allocationSize(value.`repaired`) +
+            FfiConverterSequenceString.allocationSize(value.`repairs`)
+    )
 
-    override fun write(
-        value: FfiToolParseField,
-        buf: ByteBuffer,
-    ) {
-        FfiConverterString.write(value.`toolName`, buf)
-        FfiConverterString.write(value.`argumentsJson`, buf)
-        FfiConverterBoolean.write(value.`repaired`, buf)
-        FfiConverterSequenceString.write(value.`repairs`, buf)
+    override fun write(value: FfiToolParseField, buf: ByteBuffer) {
+            FfiConverterString.write(value.`toolName`, buf)
+            FfiConverterString.write(value.`argumentsJson`, buf)
+            FfiConverterBoolean.write(value.`repaired`, buf)
+            FfiConverterSequenceString.write(value.`repairs`, buf)
     }
 }
 
-data class FfiToolResultRecord(
-    var `callId`: kotlin.String,
-    var `resultJson`: kotlin.String,
-    var `truncated`: kotlin.Boolean,
-    var `softFailure`: kotlin.Boolean,
-    var `activatedToolNames`: List<kotlin.String>,
+
+
+data class FfiToolResultRecord (
+    var `callId`: kotlin.String, 
+    var `resultJson`: kotlin.String, 
+    var `truncated`: kotlin.Boolean, 
+    var `softFailure`: kotlin.Boolean, 
+    var `activatedToolNames`: List<kotlin.String>
 ) {
+    
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeFfiToolResultRecord : FfiConverterRustBuffer<FfiToolResultRecord> {
-    override fun read(buf: ByteBuffer): FfiToolResultRecord =
-        FfiToolResultRecord(
+public object FfiConverterTypeFfiToolResultRecord: FfiConverterRustBuffer<FfiToolResultRecord> {
+    override fun read(buf: ByteBuffer): FfiToolResultRecord {
+        return FfiToolResultRecord(
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterSequenceString.read(buf),
         )
+    }
 
-    override fun allocationSize(value: FfiToolResultRecord) =
-        (
+    override fun allocationSize(value: FfiToolResultRecord) = (
             FfiConverterString.allocationSize(value.`callId`) +
-                FfiConverterString.allocationSize(value.`resultJson`) +
-                FfiConverterBoolean.allocationSize(value.`truncated`) +
-                FfiConverterBoolean.allocationSize(value.`softFailure`) +
-                FfiConverterSequenceString.allocationSize(value.`activatedToolNames`)
-        )
+            FfiConverterString.allocationSize(value.`resultJson`) +
+            FfiConverterBoolean.allocationSize(value.`truncated`) +
+            FfiConverterBoolean.allocationSize(value.`softFailure`) +
+            FfiConverterSequenceString.allocationSize(value.`activatedToolNames`)
+    )
 
-    override fun write(
-        value: FfiToolResultRecord,
-        buf: ByteBuffer,
-    ) {
-        FfiConverterString.write(value.`callId`, buf)
-        FfiConverterString.write(value.`resultJson`, buf)
-        FfiConverterBoolean.write(value.`truncated`, buf)
-        FfiConverterBoolean.write(value.`softFailure`, buf)
-        FfiConverterSequenceString.write(value.`activatedToolNames`, buf)
+    override fun write(value: FfiToolResultRecord, buf: ByteBuffer) {
+            FfiConverterString.write(value.`callId`, buf)
+            FfiConverterString.write(value.`resultJson`, buf)
+            FfiConverterBoolean.write(value.`truncated`, buf)
+            FfiConverterBoolean.write(value.`softFailure`, buf)
+            FfiConverterSequenceString.write(value.`activatedToolNames`, buf)
     }
 }
 
-data class RepairResult(
+
+
+data class RepairResult (
     /**
      * Resolved tool name after catalog + fuzzy repair.
      */
-    var `resolvedName`: kotlin.String,
+    var `resolvedName`: kotlin.String, 
     /**
      * Possibly coerced JSON arguments.
      */
-    var `argumentsJson`: kotlin.String,
+    var `argumentsJson`: kotlin.String, 
     /**
      * True when the name or arguments were changed by repair.
      */
-    var `repaired`: kotlin.Boolean,
+    var `repaired`: kotlin.Boolean
 ) {
+    
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeRepairResult : FfiConverterRustBuffer<RepairResult> {
-    override fun read(buf: ByteBuffer): RepairResult =
-        RepairResult(
+public object FfiConverterTypeRepairResult: FfiConverterRustBuffer<RepairResult> {
+    override fun read(buf: ByteBuffer): RepairResult {
+        return RepairResult(
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterBoolean.read(buf),
         )
+    }
 
-    override fun allocationSize(value: RepairResult) =
-        (
+    override fun allocationSize(value: RepairResult) = (
             FfiConverterString.allocationSize(value.`resolvedName`) +
-                FfiConverterString.allocationSize(value.`argumentsJson`) +
-                FfiConverterBoolean.allocationSize(value.`repaired`)
-        )
+            FfiConverterString.allocationSize(value.`argumentsJson`) +
+            FfiConverterBoolean.allocationSize(value.`repaired`)
+    )
 
-    override fun write(
-        value: RepairResult,
-        buf: ByteBuffer,
-    ) {
-        FfiConverterString.write(value.`resolvedName`, buf)
-        FfiConverterString.write(value.`argumentsJson`, buf)
-        FfiConverterBoolean.write(value.`repaired`, buf)
+    override fun write(value: RepairResult, buf: ByteBuffer) {
+            FfiConverterString.write(value.`resolvedName`, buf)
+            FfiConverterString.write(value.`argumentsJson`, buf)
+            FfiConverterBoolean.write(value.`repaired`, buf)
     }
 }
 
-sealed class AgentException : kotlin.Exception() {
+
+
+
+
+sealed class AgentException: kotlin.Exception() {
+    
     class RepairFailed(
-        val `name`: kotlin.String,
-        val `reason`: kotlin.String,
-    ) : AgentException() {
+        
+        val `name`: kotlin.String, 
+        
+        val `reason`: kotlin.String
+        ) : AgentException() {
         override val message
             get() = "name=${ `name` }, reason=${ `reason` }"
     }
-
+    
     class GuardrailExceeded(
-        val `kind`: kotlin.String,
-    ) : AgentException() {
+        
+        val `kind`: kotlin.String, 
+        
+        val `detail`: kotlin.String?
+        ) : AgentException() {
         override val message
-            get() = "kind=${ `kind` }"
+            get() = "kind=${ `kind` }, detail=${ `detail` }"
     }
-
+    
     class ModelStopped(
-        val `reason`: kotlin.String,
-    ) : AgentException() {
+        
+        val `reason`: kotlin.String
+        ) : AgentException() {
         override val message
             get() = "reason=${ `reason` }"
     }
-
+    
     class CompactionFailed(
-        val `tier`: kotlin.String,
-        val `reason`: kotlin.String,
-    ) : AgentException() {
+        
+        val `tier`: kotlin.String, 
+        
+        val `reason`: kotlin.String
+        ) : AgentException() {
         override val message
             get() = "tier=${ `tier` }, reason=${ `reason` }"
     }
-
+    
     class InvalidTransition(
-        val `from`: kotlin.String,
-        val `to`: kotlin.String,
-    ) : AgentException() {
+        
+        val `from`: kotlin.String, 
+        
+        val `to`: kotlin.String
+        ) : AgentException() {
         override val message
             get() = "from=${ `from` }, to=${ `to` }"
     }
-
+    
     class Internal(
-        val `detail`: kotlin.String,
-    ) : AgentException() {
+        
+        val `detail`: kotlin.String
+        ) : AgentException() {
         override val message
             get() = "detail=${ `detail` }"
     }
-
+    
     class ContextReferenceNotFound(
-        val `referenceId`: kotlin.String,
-    ) : AgentException() {
+        
+        val `referenceId`: kotlin.String
+        ) : AgentException() {
         override val message
             get() = "referenceId=${ `referenceId` }"
     }
+    
+    class ModelApiUnavailable(
+        
+        val `detail`: kotlin.String, 
+        
+        val `attempts`: kotlin.UInt
+        ) : AgentException() {
+        override val message
+            get() = "detail=${ `detail` }, attempts=${ `attempts` }"
+    }
+    
 
     companion object ErrorHandler : UniffiRustCallStatusErrorHandler<AgentException> {
         override fun lift(error_buf: RustBuffer.ByValue): AgentException = FfiConverterTypeAgentException.lift(error_buf)
     }
+
+    
 }
 
 /**
  * @suppress
  */
 public object FfiConverterTypeAgentException : FfiConverterRustBuffer<AgentException> {
-    override fun read(buf: ByteBuffer): AgentException =
-        when (buf.getInt()) {
-            1 ->
-                AgentException.RepairFailed(
-                    FfiConverterString.read(buf),
-                    FfiConverterString.read(buf),
+    override fun read(buf: ByteBuffer): AgentException {
+        
+
+        return when(buf.getInt()) {
+            1 -> AgentException.RepairFailed(
+                FfiConverterString.read(buf),
+                FfiConverterString.read(buf),
                 )
-            2 ->
-                AgentException.GuardrailExceeded(
-                    FfiConverterString.read(buf),
+            2 -> AgentException.GuardrailExceeded(
+                FfiConverterString.read(buf),
+                FfiConverterOptionalString.read(buf),
                 )
-            3 ->
-                AgentException.ModelStopped(
-                    FfiConverterString.read(buf),
+            3 -> AgentException.ModelStopped(
+                FfiConverterString.read(buf),
                 )
-            4 ->
-                AgentException.CompactionFailed(
-                    FfiConverterString.read(buf),
-                    FfiConverterString.read(buf),
+            4 -> AgentException.CompactionFailed(
+                FfiConverterString.read(buf),
+                FfiConverterString.read(buf),
                 )
-            5 ->
-                AgentException.InvalidTransition(
-                    FfiConverterString.read(buf),
-                    FfiConverterString.read(buf),
+            5 -> AgentException.InvalidTransition(
+                FfiConverterString.read(buf),
+                FfiConverterString.read(buf),
                 )
-            6 ->
-                AgentException.Internal(
-                    FfiConverterString.read(buf),
+            6 -> AgentException.Internal(
+                FfiConverterString.read(buf),
                 )
-            7 ->
-                AgentException.ContextReferenceNotFound(
-                    FfiConverterString.read(buf),
+            7 -> AgentException.ContextReferenceNotFound(
+                FfiConverterString.read(buf),
+                )
+            8 -> AgentException.ModelApiUnavailable(
+                FfiConverterString.read(buf),
+                FfiConverterUInt.read(buf),
                 )
             else -> throw RuntimeException("invalid error enum value, something is very wrong!!")
         }
+    }
 
-    override fun allocationSize(value: AgentException): ULong =
-        when (value) {
+    override fun allocationSize(value: AgentException): ULong {
+        return when(value) {
             is AgentException.RepairFailed -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
-                4UL +
-                    FfiConverterString.allocationSize(value.`name`) +
-                    FfiConverterString.allocationSize(value.`reason`)
+                4UL
+                + FfiConverterString.allocationSize(value.`name`)
+                + FfiConverterString.allocationSize(value.`reason`)
             )
             is AgentException.GuardrailExceeded -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
-                4UL +
-                    FfiConverterString.allocationSize(value.`kind`)
+                4UL
+                + FfiConverterString.allocationSize(value.`kind`)
+                + FfiConverterOptionalString.allocationSize(value.`detail`)
             )
             is AgentException.ModelStopped -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
-                4UL +
-                    FfiConverterString.allocationSize(value.`reason`)
+                4UL
+                + FfiConverterString.allocationSize(value.`reason`)
             )
             is AgentException.CompactionFailed -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
-                4UL +
-                    FfiConverterString.allocationSize(value.`tier`) +
-                    FfiConverterString.allocationSize(value.`reason`)
+                4UL
+                + FfiConverterString.allocationSize(value.`tier`)
+                + FfiConverterString.allocationSize(value.`reason`)
             )
             is AgentException.InvalidTransition -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
-                4UL +
-                    FfiConverterString.allocationSize(value.`from`) +
-                    FfiConverterString.allocationSize(value.`to`)
+                4UL
+                + FfiConverterString.allocationSize(value.`from`)
+                + FfiConverterString.allocationSize(value.`to`)
             )
             is AgentException.Internal -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
-                4UL +
-                    FfiConverterString.allocationSize(value.`detail`)
+                4UL
+                + FfiConverterString.allocationSize(value.`detail`)
             )
             is AgentException.ContextReferenceNotFound -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
-                4UL +
-                    FfiConverterString.allocationSize(value.`referenceId`)
+                4UL
+                + FfiConverterString.allocationSize(value.`referenceId`)
+            )
+            is AgentException.ModelApiUnavailable -> (
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                4UL
+                + FfiConverterString.allocationSize(value.`detail`)
+                + FfiConverterUInt.allocationSize(value.`attempts`)
             )
         }
+    }
 
-    override fun write(
-        value: AgentException,
-        buf: ByteBuffer,
-    ) {
-        when (value) {
+    override fun write(value: AgentException, buf: ByteBuffer) {
+        when(value) {
             is AgentException.RepairFailed -> {
                 buf.putInt(1)
                 FfiConverterString.write(value.`name`, buf)
@@ -4086,6 +3962,7 @@ public object FfiConverterTypeAgentException : FfiConverterRustBuffer<AgentExcep
             is AgentException.GuardrailExceeded -> {
                 buf.putInt(2)
                 FfiConverterString.write(value.`kind`, buf)
+                FfiConverterOptionalString.write(value.`detail`, buf)
                 Unit
             }
             is AgentException.ModelStopped -> {
@@ -4115,126 +3992,126 @@ public object FfiConverterTypeAgentException : FfiConverterRustBuffer<AgentExcep
                 FfiConverterString.write(value.`referenceId`, buf)
                 Unit
             }
+            is AgentException.ModelApiUnavailable -> {
+                buf.putInt(8)
+                FfiConverterString.write(value.`detail`, buf)
+                FfiConverterUInt.write(value.`attempts`, buf)
+                Unit
+            }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
     }
+
 }
 
+
+
 sealed class FfiAgentAction {
+    
     data class CallModel(
-        val `request`: FfiModelRequest,
-    ) : FfiAgentAction() {
+        val `request`: FfiModelRequest) : FfiAgentAction() {
         companion object
     }
-
+    
     data class ExecuteTools(
-        val `calls`: List<FfiToolCallRecord>,
-    ) : FfiAgentAction() {
+        val `calls`: List<FfiToolCallRecord>) : FfiAgentAction() {
         companion object
     }
-
+    
     data class RequestSummary(
-        val `request`: FfiSummaryRequest,
-    ) : FfiAgentAction() {
+        val `request`: FfiSummaryRequest) : FfiAgentAction() {
         companion object
     }
-
+    
     object Finished : FfiAgentAction()
-
+    
+    
     data class Failed(
-        val `error`: AgentException,
-    ) : FfiAgentAction() {
+        val `error`: AgentException) : FfiAgentAction() {
         companion object
     }
-
+    
     data class ManualCompactCompleted(
-        val `result`: FfiManualCompactResult,
-    ) : FfiAgentAction() {
+        val `result`: FfiManualCompactResult) : FfiAgentAction() {
         companion object
     }
+    
 
+    
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeFfiAgentAction : FfiConverterRustBuffer<FfiAgentAction> {
-    override fun read(buf: ByteBuffer): FfiAgentAction =
-        when (buf.getInt()) {
-            1 ->
-                FfiAgentAction.CallModel(
-                    FfiConverterTypeFfiModelRequest.read(buf),
+public object FfiConverterTypeFfiAgentAction : FfiConverterRustBuffer<FfiAgentAction>{
+    override fun read(buf: ByteBuffer): FfiAgentAction {
+        return when(buf.getInt()) {
+            1 -> FfiAgentAction.CallModel(
+                FfiConverterTypeFfiModelRequest.read(buf),
                 )
-            2 ->
-                FfiAgentAction.ExecuteTools(
-                    FfiConverterSequenceTypeFfiToolCallRecord.read(buf),
+            2 -> FfiAgentAction.ExecuteTools(
+                FfiConverterSequenceTypeFfiToolCallRecord.read(buf),
                 )
-            3 ->
-                FfiAgentAction.RequestSummary(
-                    FfiConverterTypeFfiSummaryRequest.read(buf),
+            3 -> FfiAgentAction.RequestSummary(
+                FfiConverterTypeFfiSummaryRequest.read(buf),
                 )
             4 -> FfiAgentAction.Finished
-            5 ->
-                FfiAgentAction.Failed(
-                    FfiConverterTypeAgentException.read(buf),
+            5 -> FfiAgentAction.Failed(
+                FfiConverterTypeAgentException.read(buf),
                 )
-            6 ->
-                FfiAgentAction.ManualCompactCompleted(
-                    FfiConverterTypeFfiManualCompactResult.read(buf),
+            6 -> FfiAgentAction.ManualCompactCompleted(
+                FfiConverterTypeFfiManualCompactResult.read(buf),
                 )
             else -> throw RuntimeException("invalid enum value, something is very wrong!!")
         }
+    }
 
-    override fun allocationSize(value: FfiAgentAction) =
-        when (value) {
-            is FfiAgentAction.CallModel -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL +
-                        FfiConverterTypeFfiModelRequest.allocationSize(value.`request`)
-                )
-            }
-            is FfiAgentAction.ExecuteTools -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL +
-                        FfiConverterSequenceTypeFfiToolCallRecord.allocationSize(value.`calls`)
-                )
-            }
-            is FfiAgentAction.RequestSummary -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL +
-                        FfiConverterTypeFfiSummaryRequest.allocationSize(value.`request`)
-                )
-            }
-            is FfiAgentAction.Finished -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL
-                )
-            }
-            is FfiAgentAction.Failed -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL +
-                        FfiConverterTypeAgentException.allocationSize(value.`error`)
-                )
-            }
-            is FfiAgentAction.ManualCompactCompleted -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL +
-                        FfiConverterTypeFfiManualCompactResult.allocationSize(value.`result`)
-                )
-            }
+    override fun allocationSize(value: FfiAgentAction) = when(value) {
+        is FfiAgentAction.CallModel -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterTypeFfiModelRequest.allocationSize(value.`request`)
+            )
         }
+        is FfiAgentAction.ExecuteTools -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterSequenceTypeFfiToolCallRecord.allocationSize(value.`calls`)
+            )
+        }
+        is FfiAgentAction.RequestSummary -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterTypeFfiSummaryRequest.allocationSize(value.`request`)
+            )
+        }
+        is FfiAgentAction.Finished -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+            )
+        }
+        is FfiAgentAction.Failed -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterTypeAgentException.allocationSize(value.`error`)
+            )
+        }
+        is FfiAgentAction.ManualCompactCompleted -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterTypeFfiManualCompactResult.allocationSize(value.`result`)
+            )
+        }
+    }
 
-    override fun write(
-        value: FfiAgentAction,
-        buf: ByteBuffer,
-    ) {
-        when (value) {
+    override fun write(value: FfiAgentAction, buf: ByteBuffer) {
+        when(value) {
             is FfiAgentAction.CallModel -> {
                 buf.putInt(1)
                 FfiConverterTypeFfiModelRequest.write(value.`request`, buf)
@@ -4268,296 +4145,296 @@ public object FfiConverterTypeFfiAgentAction : FfiConverterRustBuffer<FfiAgentAc
     }
 }
 
+
+
+
+
 sealed class FfiAgentEvent {
+    
     data class HookInvoked(
-        val `checkpoint`: kotlin.String,
-    ) : FfiAgentEvent() {
+        val `checkpoint`: kotlin.String) : FfiAgentEvent() {
         companion object
     }
-
+    
     data class TurnStarted(
-        val `turnIndex`: kotlin.UInt,
-        val `allowToolCall`: kotlin.Boolean,
-    ) : FfiAgentEvent() {
+        val `turnIndex`: kotlin.UInt, 
+        val `allowToolCall`: kotlin.Boolean) : FfiAgentEvent() {
         companion object
     }
-
+    
     data class TurnCompleted(
-        val `turnIndex`: kotlin.UInt,
-        val `toolCallCount`: kotlin.UInt,
-        val `terminal`: kotlin.Boolean,
-    ) : FfiAgentEvent() {
+        val `turnIndex`: kotlin.UInt, 
+        val `toolCallCount`: kotlin.UInt, 
+        val `terminal`: kotlin.Boolean) : FfiAgentEvent() {
         companion object
     }
-
+    
     data class CompactionApplied(
-        val `event`: FfiCompactionEvent,
-    ) : FfiAgentEvent() {
+        val `event`: FfiCompactionEvent) : FfiAgentEvent() {
         companion object
     }
-
+    
     data class ContextPressure(
-        val `ratio`: kotlin.Float,
-    ) : FfiAgentEvent() {
+        val `ratio`: kotlin.Float) : FfiAgentEvent() {
         companion object
     }
-
+    
     data class ToolRepaired(
-        val `originalName`: kotlin.String,
-        val `resolvedName`: kotlin.String,
-        val `confidence`: kotlin.Float,
-    ) : FfiAgentEvent() {
+        val `originalName`: kotlin.String, 
+        val `resolvedName`: kotlin.String, 
+        val `confidence`: kotlin.Float) : FfiAgentEvent() {
         companion object
     }
-
+    
     data class ToolSoftFailure(
-        val `toolName`: kotlin.String,
-        val `turnIndex`: kotlin.UInt,
-    ) : FfiAgentEvent() {
+        val `toolName`: kotlin.String, 
+        val `turnIndex`: kotlin.UInt) : FfiAgentEvent() {
         companion object
     }
-
+    
     data class KvCacheInvalidated(
-        val `reason`: kotlin.String,
-    ) : FfiAgentEvent() {
+        val `reason`: kotlin.String) : FfiAgentEvent() {
         companion object
     }
-
+    
     data class PreCompact(
-        val `trigger`: FfiCompactionTrigger,
-    ) : FfiAgentEvent() {
+        val `trigger`: FfiCompactionTrigger) : FfiAgentEvent() {
         companion object
     }
-
+    
     data class PostCompact(
-        val `trigger`: FfiCompactionTrigger,
-        val `summaryRef`: kotlin.String?,
-        val `historyRef`: kotlin.String?,
-        val `transcriptRevisionAfter`: kotlin.ULong,
-    ) : FfiAgentEvent() {
+        val `trigger`: FfiCompactionTrigger, 
+        val `summaryRef`: kotlin.String?, 
+        val `historyRef`: kotlin.String?, 
+        val `transcriptRevisionAfter`: kotlin.ULong) : FfiAgentEvent() {
         companion object
     }
-
+    
     data class CompactionBoundary(
-        val `boundary`: FfiCompactionBoundary,
-    ) : FfiAgentEvent() {
+        val `boundary`: FfiCompactionBoundary) : FfiAgentEvent() {
         companion object
     }
-
+    
     data class ToolPolicyDenied(
-        val `toolName`: kotlin.String,
-    ) : FfiAgentEvent() {
+        val `toolName`: kotlin.String) : FfiAgentEvent() {
         companion object
     }
-
+    
     data class ToolTimedOut(
-        val `toolName`: kotlin.String,
-        val `timeoutMs`: kotlin.ULong,
-    ) : FfiAgentEvent() {
+        val `toolName`: kotlin.String, 
+        val `timeoutMs`: kotlin.ULong) : FfiAgentEvent() {
         companion object
     }
-
+    
     data class VisibleAssistantText(
-        val `text`: kotlin.String,
-    ) : FfiAgentEvent() {
+        val `text`: kotlin.String) : FfiAgentEvent() {
         companion object
     }
+    
+    data class ModelApiRetryScheduled(
+        val `attempt`: kotlin.UInt, 
+        val `maxAttempts`: kotlin.UInt, 
+        val `delayMs`: kotlin.ULong, 
+        val `reason`: kotlin.String) : FfiAgentEvent() {
+        companion object
+    }
+    
 
+    
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeFfiAgentEvent : FfiConverterRustBuffer<FfiAgentEvent> {
-    override fun read(buf: ByteBuffer): FfiAgentEvent =
-        when (buf.getInt()) {
-            1 ->
-                FfiAgentEvent.HookInvoked(
-                    FfiConverterString.read(buf),
+public object FfiConverterTypeFfiAgentEvent : FfiConverterRustBuffer<FfiAgentEvent>{
+    override fun read(buf: ByteBuffer): FfiAgentEvent {
+        return when(buf.getInt()) {
+            1 -> FfiAgentEvent.HookInvoked(
+                FfiConverterString.read(buf),
                 )
-            2 ->
-                FfiAgentEvent.TurnStarted(
-                    FfiConverterUInt.read(buf),
-                    FfiConverterBoolean.read(buf),
+            2 -> FfiAgentEvent.TurnStarted(
+                FfiConverterUInt.read(buf),
+                FfiConverterBoolean.read(buf),
                 )
-            3 ->
-                FfiAgentEvent.TurnCompleted(
-                    FfiConverterUInt.read(buf),
-                    FfiConverterUInt.read(buf),
-                    FfiConverterBoolean.read(buf),
+            3 -> FfiAgentEvent.TurnCompleted(
+                FfiConverterUInt.read(buf),
+                FfiConverterUInt.read(buf),
+                FfiConverterBoolean.read(buf),
                 )
-            4 ->
-                FfiAgentEvent.CompactionApplied(
-                    FfiConverterTypeFfiCompactionEvent.read(buf),
+            4 -> FfiAgentEvent.CompactionApplied(
+                FfiConverterTypeFfiCompactionEvent.read(buf),
                 )
-            5 ->
-                FfiAgentEvent.ContextPressure(
-                    FfiConverterFloat.read(buf),
+            5 -> FfiAgentEvent.ContextPressure(
+                FfiConverterFloat.read(buf),
                 )
-            6 ->
-                FfiAgentEvent.ToolRepaired(
-                    FfiConverterString.read(buf),
-                    FfiConverterString.read(buf),
-                    FfiConverterFloat.read(buf),
+            6 -> FfiAgentEvent.ToolRepaired(
+                FfiConverterString.read(buf),
+                FfiConverterString.read(buf),
+                FfiConverterFloat.read(buf),
                 )
-            7 ->
-                FfiAgentEvent.ToolSoftFailure(
-                    FfiConverterString.read(buf),
-                    FfiConverterUInt.read(buf),
+            7 -> FfiAgentEvent.ToolSoftFailure(
+                FfiConverterString.read(buf),
+                FfiConverterUInt.read(buf),
                 )
-            8 ->
-                FfiAgentEvent.KvCacheInvalidated(
-                    FfiConverterString.read(buf),
+            8 -> FfiAgentEvent.KvCacheInvalidated(
+                FfiConverterString.read(buf),
                 )
-            9 ->
-                FfiAgentEvent.PreCompact(
-                    FfiConverterTypeFfiCompactionTrigger.read(buf),
+            9 -> FfiAgentEvent.PreCompact(
+                FfiConverterTypeFfiCompactionTrigger.read(buf),
                 )
-            10 ->
-                FfiAgentEvent.PostCompact(
-                    FfiConverterTypeFfiCompactionTrigger.read(buf),
-                    FfiConverterOptionalString.read(buf),
-                    FfiConverterOptionalString.read(buf),
-                    FfiConverterULong.read(buf),
+            10 -> FfiAgentEvent.PostCompact(
+                FfiConverterTypeFfiCompactionTrigger.read(buf),
+                FfiConverterOptionalString.read(buf),
+                FfiConverterOptionalString.read(buf),
+                FfiConverterULong.read(buf),
                 )
-            11 ->
-                FfiAgentEvent.CompactionBoundary(
-                    FfiConverterTypeFfiCompactionBoundary.read(buf),
+            11 -> FfiAgentEvent.CompactionBoundary(
+                FfiConverterTypeFfiCompactionBoundary.read(buf),
                 )
-            12 ->
-                FfiAgentEvent.ToolPolicyDenied(
-                    FfiConverterString.read(buf),
+            12 -> FfiAgentEvent.ToolPolicyDenied(
+                FfiConverterString.read(buf),
                 )
-            13 ->
-                FfiAgentEvent.ToolTimedOut(
-                    FfiConverterString.read(buf),
-                    FfiConverterULong.read(buf),
+            13 -> FfiAgentEvent.ToolTimedOut(
+                FfiConverterString.read(buf),
+                FfiConverterULong.read(buf),
                 )
-            14 ->
-                FfiAgentEvent.VisibleAssistantText(
-                    FfiConverterString.read(buf),
+            14 -> FfiAgentEvent.VisibleAssistantText(
+                FfiConverterString.read(buf),
+                )
+            15 -> FfiAgentEvent.ModelApiRetryScheduled(
+                FfiConverterUInt.read(buf),
+                FfiConverterUInt.read(buf),
+                FfiConverterULong.read(buf),
+                FfiConverterString.read(buf),
                 )
             else -> throw RuntimeException("invalid enum value, something is very wrong!!")
         }
+    }
 
-    override fun allocationSize(value: FfiAgentEvent) =
-        when (value) {
-            is FfiAgentEvent.HookInvoked -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL +
-                        FfiConverterString.allocationSize(value.`checkpoint`)
-                )
-            }
-            is FfiAgentEvent.TurnStarted -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL +
-                        FfiConverterUInt.allocationSize(value.`turnIndex`) +
-                        FfiConverterBoolean.allocationSize(value.`allowToolCall`)
-                )
-            }
-            is FfiAgentEvent.TurnCompleted -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL +
-                        FfiConverterUInt.allocationSize(value.`turnIndex`) +
-                        FfiConverterUInt.allocationSize(value.`toolCallCount`) +
-                        FfiConverterBoolean.allocationSize(value.`terminal`)
-                )
-            }
-            is FfiAgentEvent.CompactionApplied -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL +
-                        FfiConverterTypeFfiCompactionEvent.allocationSize(value.`event`)
-                )
-            }
-            is FfiAgentEvent.ContextPressure -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL +
-                        FfiConverterFloat.allocationSize(value.`ratio`)
-                )
-            }
-            is FfiAgentEvent.ToolRepaired -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL +
-                        FfiConverterString.allocationSize(value.`originalName`) +
-                        FfiConverterString.allocationSize(value.`resolvedName`) +
-                        FfiConverterFloat.allocationSize(value.`confidence`)
-                )
-            }
-            is FfiAgentEvent.ToolSoftFailure -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL +
-                        FfiConverterString.allocationSize(value.`toolName`) +
-                        FfiConverterUInt.allocationSize(value.`turnIndex`)
-                )
-            }
-            is FfiAgentEvent.KvCacheInvalidated -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL +
-                        FfiConverterString.allocationSize(value.`reason`)
-                )
-            }
-            is FfiAgentEvent.PreCompact -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL +
-                        FfiConverterTypeFfiCompactionTrigger.allocationSize(value.`trigger`)
-                )
-            }
-            is FfiAgentEvent.PostCompact -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL +
-                        FfiConverterTypeFfiCompactionTrigger.allocationSize(value.`trigger`) +
-                        FfiConverterOptionalString.allocationSize(value.`summaryRef`) +
-                        FfiConverterOptionalString.allocationSize(value.`historyRef`) +
-                        FfiConverterULong.allocationSize(value.`transcriptRevisionAfter`)
-                )
-            }
-            is FfiAgentEvent.CompactionBoundary -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL +
-                        FfiConverterTypeFfiCompactionBoundary.allocationSize(value.`boundary`)
-                )
-            }
-            is FfiAgentEvent.ToolPolicyDenied -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL +
-                        FfiConverterString.allocationSize(value.`toolName`)
-                )
-            }
-            is FfiAgentEvent.ToolTimedOut -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL +
-                        FfiConverterString.allocationSize(value.`toolName`) +
-                        FfiConverterULong.allocationSize(value.`timeoutMs`)
-                )
-            }
-            is FfiAgentEvent.VisibleAssistantText -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL +
-                        FfiConverterString.allocationSize(value.`text`)
-                )
-            }
+    override fun allocationSize(value: FfiAgentEvent) = when(value) {
+        is FfiAgentEvent.HookInvoked -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterString.allocationSize(value.`checkpoint`)
+            )
         }
+        is FfiAgentEvent.TurnStarted -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterUInt.allocationSize(value.`turnIndex`)
+                + FfiConverterBoolean.allocationSize(value.`allowToolCall`)
+            )
+        }
+        is FfiAgentEvent.TurnCompleted -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterUInt.allocationSize(value.`turnIndex`)
+                + FfiConverterUInt.allocationSize(value.`toolCallCount`)
+                + FfiConverterBoolean.allocationSize(value.`terminal`)
+            )
+        }
+        is FfiAgentEvent.CompactionApplied -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterTypeFfiCompactionEvent.allocationSize(value.`event`)
+            )
+        }
+        is FfiAgentEvent.ContextPressure -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterFloat.allocationSize(value.`ratio`)
+            )
+        }
+        is FfiAgentEvent.ToolRepaired -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterString.allocationSize(value.`originalName`)
+                + FfiConverterString.allocationSize(value.`resolvedName`)
+                + FfiConverterFloat.allocationSize(value.`confidence`)
+            )
+        }
+        is FfiAgentEvent.ToolSoftFailure -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterString.allocationSize(value.`toolName`)
+                + FfiConverterUInt.allocationSize(value.`turnIndex`)
+            )
+        }
+        is FfiAgentEvent.KvCacheInvalidated -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterString.allocationSize(value.`reason`)
+            )
+        }
+        is FfiAgentEvent.PreCompact -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterTypeFfiCompactionTrigger.allocationSize(value.`trigger`)
+            )
+        }
+        is FfiAgentEvent.PostCompact -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterTypeFfiCompactionTrigger.allocationSize(value.`trigger`)
+                + FfiConverterOptionalString.allocationSize(value.`summaryRef`)
+                + FfiConverterOptionalString.allocationSize(value.`historyRef`)
+                + FfiConverterULong.allocationSize(value.`transcriptRevisionAfter`)
+            )
+        }
+        is FfiAgentEvent.CompactionBoundary -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterTypeFfiCompactionBoundary.allocationSize(value.`boundary`)
+            )
+        }
+        is FfiAgentEvent.ToolPolicyDenied -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterString.allocationSize(value.`toolName`)
+            )
+        }
+        is FfiAgentEvent.ToolTimedOut -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterString.allocationSize(value.`toolName`)
+                + FfiConverterULong.allocationSize(value.`timeoutMs`)
+            )
+        }
+        is FfiAgentEvent.VisibleAssistantText -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterString.allocationSize(value.`text`)
+            )
+        }
+        is FfiAgentEvent.ModelApiRetryScheduled -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterUInt.allocationSize(value.`attempt`)
+                + FfiConverterUInt.allocationSize(value.`maxAttempts`)
+                + FfiConverterULong.allocationSize(value.`delayMs`)
+                + FfiConverterString.allocationSize(value.`reason`)
+            )
+        }
+    }
 
-    override fun write(
-        value: FfiAgentEvent,
-        buf: ByteBuffer,
-    ) {
-        when (value) {
+    override fun write(value: FfiAgentEvent, buf: ByteBuffer) {
+        when(value) {
             is FfiAgentEvent.HookInvoked -> {
                 buf.putInt(1)
                 FfiConverterString.write(value.`checkpoint`, buf)
@@ -4638,140 +4515,159 @@ public object FfiConverterTypeFfiAgentEvent : FfiConverterRustBuffer<FfiAgentEve
                 FfiConverterString.write(value.`text`, buf)
                 Unit
             }
+            is FfiAgentEvent.ModelApiRetryScheduled -> {
+                buf.putInt(15)
+                FfiConverterUInt.write(value.`attempt`, buf)
+                FfiConverterUInt.write(value.`maxAttempts`, buf)
+                FfiConverterULong.write(value.`delayMs`, buf)
+                FfiConverterString.write(value.`reason`, buf)
+                Unit
+            }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
     }
 }
 
+
+
+
+
+
 enum class FfiAgentRole {
+    
     SYSTEM,
     USER,
     ASSISTANT,
     TOOL,
-    COMPACT_SUMMARY,
-    ;
-
+    COMPACT_SUMMARY;
     companion object
 }
+
 
 /**
  * @suppress
  */
-public object FfiConverterTypeFfiAgentRole : FfiConverterRustBuffer<FfiAgentRole> {
-    override fun read(buf: ByteBuffer) =
-        try {
-            FfiAgentRole.values()[buf.getInt() - 1]
-        } catch (e: IndexOutOfBoundsException) {
-            throw RuntimeException("invalid enum value, something is very wrong!!", e)
-        }
+public object FfiConverterTypeFfiAgentRole: FfiConverterRustBuffer<FfiAgentRole> {
+    override fun read(buf: ByteBuffer) = try {
+        FfiAgentRole.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
 
     override fun allocationSize(value: FfiAgentRole) = 4UL
 
-    override fun write(
-        value: FfiAgentRole,
-        buf: ByteBuffer,
-    ) {
+    override fun write(value: FfiAgentRole, buf: ByteBuffer) {
         buf.putInt(value.ordinal + 1)
     }
 }
 
+
+
+
+
+
 enum class FfiCompactionTier {
+    
     MICRO,
     FIFO,
     ARTIFACT_SQUASH,
     SUMMARY,
     TOOL_SPILL,
     HISTORY_SNAPSHOT,
-    ;
-
+    TEXT_TRUNCATE;
     companion object
 }
+
 
 /**
  * @suppress
  */
-public object FfiConverterTypeFfiCompactionTier : FfiConverterRustBuffer<FfiCompactionTier> {
-    override fun read(buf: ByteBuffer) =
-        try {
-            FfiCompactionTier.values()[buf.getInt() - 1]
-        } catch (e: IndexOutOfBoundsException) {
-            throw RuntimeException("invalid enum value, something is very wrong!!", e)
-        }
+public object FfiConverterTypeFfiCompactionTier: FfiConverterRustBuffer<FfiCompactionTier> {
+    override fun read(buf: ByteBuffer) = try {
+        FfiCompactionTier.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
 
     override fun allocationSize(value: FfiCompactionTier) = 4UL
 
-    override fun write(
-        value: FfiCompactionTier,
-        buf: ByteBuffer,
-    ) {
+    override fun write(value: FfiCompactionTier, buf: ByteBuffer) {
         buf.putInt(value.ordinal + 1)
     }
 }
 
+
+
+
+
+
 enum class FfiCompactionTrigger {
+    
     PREFLIGHT,
     MID_TURN,
     POST_TOOL_RESULT,
-    MANUAL,
-    ;
-
+    MANUAL;
     companion object
 }
+
 
 /**
  * @suppress
  */
-public object FfiConverterTypeFfiCompactionTrigger : FfiConverterRustBuffer<FfiCompactionTrigger> {
-    override fun read(buf: ByteBuffer) =
-        try {
-            FfiCompactionTrigger.values()[buf.getInt() - 1]
-        } catch (e: IndexOutOfBoundsException) {
-            throw RuntimeException("invalid enum value, something is very wrong!!", e)
-        }
+public object FfiConverterTypeFfiCompactionTrigger: FfiConverterRustBuffer<FfiCompactionTrigger> {
+    override fun read(buf: ByteBuffer) = try {
+        FfiCompactionTrigger.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
 
     override fun allocationSize(value: FfiCompactionTrigger) = 4UL
 
-    override fun write(
-        value: FfiCompactionTrigger,
-        buf: ByteBuffer,
-    ) {
+    override fun write(value: FfiCompactionTrigger, buf: ByteBuffer) {
         buf.putInt(value.ordinal + 1)
     }
 }
 
+
+
+
+
+
 enum class FfiContextPolicyTier {
+    
     HOSTED_MUTABLE,
     HOSTED_PROXY,
     LOCAL_MUTABLE,
     FIXED_KV,
     HIGH_CONTEXT,
-    SMALL_CONTEXT,
-    ;
-
+    SMALL_CONTEXT;
     companion object
 }
+
 
 /**
  * @suppress
  */
-public object FfiConverterTypeFfiContextPolicyTier : FfiConverterRustBuffer<FfiContextPolicyTier> {
-    override fun read(buf: ByteBuffer) =
-        try {
-            FfiContextPolicyTier.values()[buf.getInt() - 1]
-        } catch (e: IndexOutOfBoundsException) {
-            throw RuntimeException("invalid enum value, something is very wrong!!", e)
-        }
+public object FfiConverterTypeFfiContextPolicyTier: FfiConverterRustBuffer<FfiContextPolicyTier> {
+    override fun read(buf: ByteBuffer) = try {
+        FfiContextPolicyTier.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
 
     override fun allocationSize(value: FfiContextPolicyTier) = 4UL
 
-    override fun write(
-        value: FfiContextPolicyTier,
-        buf: ByteBuffer,
-    ) {
+    override fun write(value: FfiContextPolicyTier, buf: ByteBuffer) {
         buf.putInt(value.ordinal + 1)
     }
 }
 
+
+
+
+
+
 enum class FfiContextReferenceKind {
+    
     TOOL_OUTPUT,
     TERMINAL_OUTPUT,
     HISTORY_SNAPSHOT,
@@ -4779,99 +4675,99 @@ enum class FfiContextReferenceKind {
     FILE_OUTLINE,
     FILE_CHUNK,
     TOOL_SCHEMA,
-    TOOL_CATALOG_INDEX,
-    ;
-
+    TOOL_CATALOG_INDEX;
     companion object
 }
+
 
 /**
  * @suppress
  */
-public object FfiConverterTypeFfiContextReferenceKind : FfiConverterRustBuffer<FfiContextReferenceKind> {
-    override fun read(buf: ByteBuffer) =
-        try {
-            FfiContextReferenceKind.values()[buf.getInt() - 1]
-        } catch (e: IndexOutOfBoundsException) {
-            throw RuntimeException("invalid enum value, something is very wrong!!", e)
-        }
+public object FfiConverterTypeFfiContextReferenceKind: FfiConverterRustBuffer<FfiContextReferenceKind> {
+    override fun read(buf: ByteBuffer) = try {
+        FfiContextReferenceKind.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
 
     override fun allocationSize(value: FfiContextReferenceKind) = 4UL
 
-    override fun write(
-        value: FfiContextReferenceKind,
-        buf: ByteBuffer,
-    ) {
+    override fun write(value: FfiContextReferenceKind, buf: ByteBuffer) {
         buf.putInt(value.ordinal + 1)
     }
 }
 
+
+
+
+
 sealed class FfiFinishReason {
+    
     object ToolUse : FfiFinishReason()
-
+    
+    
     object Stop : FfiFinishReason()
-
+    
+    
     object MaxTokens : FfiFinishReason()
-
+    
+    
     data class Other(
-        val `reason`: kotlin.String,
-    ) : FfiFinishReason() {
+        val `reason`: kotlin.String) : FfiFinishReason() {
         companion object
     }
+    
 
+    
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeFfiFinishReason : FfiConverterRustBuffer<FfiFinishReason> {
-    override fun read(buf: ByteBuffer): FfiFinishReason =
-        when (buf.getInt()) {
+public object FfiConverterTypeFfiFinishReason : FfiConverterRustBuffer<FfiFinishReason>{
+    override fun read(buf: ByteBuffer): FfiFinishReason {
+        return when(buf.getInt()) {
             1 -> FfiFinishReason.ToolUse
             2 -> FfiFinishReason.Stop
             3 -> FfiFinishReason.MaxTokens
-            4 ->
-                FfiFinishReason.Other(
-                    FfiConverterString.read(buf),
+            4 -> FfiFinishReason.Other(
+                FfiConverterString.read(buf),
                 )
             else -> throw RuntimeException("invalid enum value, something is very wrong!!")
         }
+    }
 
-    override fun allocationSize(value: FfiFinishReason) =
-        when (value) {
-            is FfiFinishReason.ToolUse -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL
-                )
-            }
-            is FfiFinishReason.Stop -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL
-                )
-            }
-            is FfiFinishReason.MaxTokens -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL
-                )
-            }
-            is FfiFinishReason.Other -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL +
-                        FfiConverterString.allocationSize(value.`reason`)
-                )
-            }
+    override fun allocationSize(value: FfiFinishReason) = when(value) {
+        is FfiFinishReason.ToolUse -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+            )
         }
+        is FfiFinishReason.Stop -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+            )
+        }
+        is FfiFinishReason.MaxTokens -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+            )
+        }
+        is FfiFinishReason.Other -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterString.allocationSize(value.`reason`)
+            )
+        }
+    }
 
-    override fun write(
-        value: FfiFinishReason,
-        buf: ByteBuffer,
-    ) {
-        when (value) {
+    override fun write(value: FfiFinishReason, buf: ByteBuffer) {
+        when(value) {
             is FfiFinishReason.ToolUse -> {
                 buf.putInt(1)
                 Unit
@@ -4893,154 +4789,177 @@ public object FfiConverterTypeFfiFinishReason : FfiConverterRustBuffer<FfiFinish
     }
 }
 
+
+
+
+
+
+enum class FfiModelApiErrorClass {
+    
+    TRANSIENT,
+    PERMANENT;
+    companion object
+}
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFfiModelApiErrorClass: FfiConverterRustBuffer<FfiModelApiErrorClass> {
+    override fun read(buf: ByteBuffer) = try {
+        FfiModelApiErrorClass.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: FfiModelApiErrorClass) = 4UL
+
+    override fun write(value: FfiModelApiErrorClass, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+
+
+
+
 sealed class FfiToolParseFailureReason {
+    
     object MalformedEnvelope : FfiToolParseFailureReason()
-
+    
+    
     data class InvalidJson(
-        val `detail`: kotlin.String,
-    ) : FfiToolParseFailureReason() {
+        val `detail`: kotlin.String) : FfiToolParseFailureReason() {
         companion object
     }
-
+    
     data class UnknownTool(
-        val `name`: kotlin.String,
-    ) : FfiToolParseFailureReason() {
+        val `name`: kotlin.String) : FfiToolParseFailureReason() {
         companion object
     }
-
+    
     data class UnknownParameter(
-        val `tool`: kotlin.String,
-        val `param`: kotlin.String,
-    ) : FfiToolParseFailureReason() {
+        val `tool`: kotlin.String, 
+        val `param`: kotlin.String) : FfiToolParseFailureReason() {
         companion object
     }
-
+    
     data class DuplicateParameter(
-        val `tool`: kotlin.String,
-        val `param`: kotlin.String,
-    ) : FfiToolParseFailureReason() {
+        val `tool`: kotlin.String, 
+        val `param`: kotlin.String) : FfiToolParseFailureReason() {
         companion object
     }
-
+    
     data class MissingRequiredParameter(
-        val `tool`: kotlin.String,
-        val `param`: kotlin.String,
-    ) : FfiToolParseFailureReason() {
+        val `tool`: kotlin.String, 
+        val `param`: kotlin.String) : FfiToolParseFailureReason() {
         companion object
     }
-
+    
     data class SchemaCoercionFailed(
-        val `tool`: kotlin.String,
-        val `param`: kotlin.String,
-        val `expected`: kotlin.String,
-    ) : FfiToolParseFailureReason() {
+        val `tool`: kotlin.String, 
+        val `param`: kotlin.String, 
+        val `expected`: kotlin.String) : FfiToolParseFailureReason() {
         companion object
     }
+    
 
+    
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeFfiToolParseFailureReason : FfiConverterRustBuffer<FfiToolParseFailureReason> {
-    override fun read(buf: ByteBuffer): FfiToolParseFailureReason =
-        when (buf.getInt()) {
+public object FfiConverterTypeFfiToolParseFailureReason : FfiConverterRustBuffer<FfiToolParseFailureReason>{
+    override fun read(buf: ByteBuffer): FfiToolParseFailureReason {
+        return when(buf.getInt()) {
             1 -> FfiToolParseFailureReason.MalformedEnvelope
-            2 ->
-                FfiToolParseFailureReason.InvalidJson(
-                    FfiConverterString.read(buf),
+            2 -> FfiToolParseFailureReason.InvalidJson(
+                FfiConverterString.read(buf),
                 )
-            3 ->
-                FfiToolParseFailureReason.UnknownTool(
-                    FfiConverterString.read(buf),
+            3 -> FfiToolParseFailureReason.UnknownTool(
+                FfiConverterString.read(buf),
                 )
-            4 ->
-                FfiToolParseFailureReason.UnknownParameter(
-                    FfiConverterString.read(buf),
-                    FfiConverterString.read(buf),
+            4 -> FfiToolParseFailureReason.UnknownParameter(
+                FfiConverterString.read(buf),
+                FfiConverterString.read(buf),
                 )
-            5 ->
-                FfiToolParseFailureReason.DuplicateParameter(
-                    FfiConverterString.read(buf),
-                    FfiConverterString.read(buf),
+            5 -> FfiToolParseFailureReason.DuplicateParameter(
+                FfiConverterString.read(buf),
+                FfiConverterString.read(buf),
                 )
-            6 ->
-                FfiToolParseFailureReason.MissingRequiredParameter(
-                    FfiConverterString.read(buf),
-                    FfiConverterString.read(buf),
+            6 -> FfiToolParseFailureReason.MissingRequiredParameter(
+                FfiConverterString.read(buf),
+                FfiConverterString.read(buf),
                 )
-            7 ->
-                FfiToolParseFailureReason.SchemaCoercionFailed(
-                    FfiConverterString.read(buf),
-                    FfiConverterString.read(buf),
-                    FfiConverterString.read(buf),
+            7 -> FfiToolParseFailureReason.SchemaCoercionFailed(
+                FfiConverterString.read(buf),
+                FfiConverterString.read(buf),
+                FfiConverterString.read(buf),
                 )
             else -> throw RuntimeException("invalid enum value, something is very wrong!!")
         }
+    }
 
-    override fun allocationSize(value: FfiToolParseFailureReason) =
-        when (value) {
-            is FfiToolParseFailureReason.MalformedEnvelope -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL
-                )
-            }
-            is FfiToolParseFailureReason.InvalidJson -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL +
-                        FfiConverterString.allocationSize(value.`detail`)
-                )
-            }
-            is FfiToolParseFailureReason.UnknownTool -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL +
-                        FfiConverterString.allocationSize(value.`name`)
-                )
-            }
-            is FfiToolParseFailureReason.UnknownParameter -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL +
-                        FfiConverterString.allocationSize(value.`tool`) +
-                        FfiConverterString.allocationSize(value.`param`)
-                )
-            }
-            is FfiToolParseFailureReason.DuplicateParameter -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL +
-                        FfiConverterString.allocationSize(value.`tool`) +
-                        FfiConverterString.allocationSize(value.`param`)
-                )
-            }
-            is FfiToolParseFailureReason.MissingRequiredParameter -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL +
-                        FfiConverterString.allocationSize(value.`tool`) +
-                        FfiConverterString.allocationSize(value.`param`)
-                )
-            }
-            is FfiToolParseFailureReason.SchemaCoercionFailed -> {
-                // Add the size for the Int that specifies the variant plus the size needed for all fields
-                (
-                    4UL +
-                        FfiConverterString.allocationSize(value.`tool`) +
-                        FfiConverterString.allocationSize(value.`param`) +
-                        FfiConverterString.allocationSize(value.`expected`)
-                )
-            }
+    override fun allocationSize(value: FfiToolParseFailureReason) = when(value) {
+        is FfiToolParseFailureReason.MalformedEnvelope -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+            )
         }
+        is FfiToolParseFailureReason.InvalidJson -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterString.allocationSize(value.`detail`)
+            )
+        }
+        is FfiToolParseFailureReason.UnknownTool -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterString.allocationSize(value.`name`)
+            )
+        }
+        is FfiToolParseFailureReason.UnknownParameter -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterString.allocationSize(value.`tool`)
+                + FfiConverterString.allocationSize(value.`param`)
+            )
+        }
+        is FfiToolParseFailureReason.DuplicateParameter -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterString.allocationSize(value.`tool`)
+                + FfiConverterString.allocationSize(value.`param`)
+            )
+        }
+        is FfiToolParseFailureReason.MissingRequiredParameter -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterString.allocationSize(value.`tool`)
+                + FfiConverterString.allocationSize(value.`param`)
+            )
+        }
+        is FfiToolParseFailureReason.SchemaCoercionFailed -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterString.allocationSize(value.`tool`)
+                + FfiConverterString.allocationSize(value.`param`)
+                + FfiConverterString.allocationSize(value.`expected`)
+            )
+        }
+    }
 
-    override fun write(
-        value: FfiToolParseFailureReason,
-        buf: ByteBuffer,
-    ) {
-        when (value) {
+    override fun write(value: FfiToolParseFailureReason, buf: ByteBuffer) {
+        when(value) {
             is FfiToolParseFailureReason.MalformedEnvelope -> {
                 buf.putInt(1)
                 Unit
@@ -5084,23 +5003,27 @@ public object FfiConverterTypeFfiToolParseFailureReason : FfiConverterRustBuffer
     }
 }
 
-public interface AgentSummarizerCallback {
-    fun `summarize`(`request`: FfiSummaryRequest): FfiSummaryResult
 
+
+
+
+
+
+public interface AgentSummarizerCallback {
+    
+    fun `summarize`(`request`: FfiSummaryRequest): FfiSummaryResult
+    
     companion object
 }
 
+
+
 // Put the implementation in an object so we don't pollute the top-level namespace
 internal object uniffiCallbackInterfaceAgentSummarizerCallback {
-    internal object `summarize` : UniffiCallbackInterfaceAgentSummarizerCallbackMethod0 {
-        override fun callback(
-            `uniffiHandle`: Long,
-            `request`: RustBuffer.ByValue,
-            `uniffiOutReturn`: RustBuffer,
-            uniffiCallStatus: UniffiRustCallStatus,
-        ) {
+    internal object `summarize`: UniffiCallbackInterfaceAgentSummarizerCallbackMethod0 {
+        override fun callback(`uniffiHandle`: Long,`request`: RustBuffer.ByValue,`uniffiOutReturn`: RustBuffer,uniffiCallStatus: UniffiRustCallStatus,) {
             val uniffiObj = FfiConverterTypeAgentSummarizerCallback.handleMap.get(uniffiHandle)
-            val makeCall = {
+            val makeCall = { ->
                 uniffiObj.`summarize`(
                     FfiConverterTypeFfiSummaryRequest.lift(`request`),
                 )
@@ -5110,17 +5033,16 @@ internal object uniffiCallbackInterfaceAgentSummarizerCallback {
         }
     }
 
-    internal object uniffiFree : UniffiCallbackInterfaceFree {
+    internal object uniffiFree: UniffiCallbackInterfaceFree {
         override fun callback(handle: Long) {
             FfiConverterTypeAgentSummarizerCallback.handleMap.remove(handle)
         }
     }
 
-    internal var vtable =
-        UniffiVTableCallbackInterfaceAgentSummarizerCallback.UniffiByValue(
-            `summarize`,
-            uniffiFree,
-        )
+    internal var vtable = UniffiVTableCallbackInterfaceAgentSummarizerCallback.UniffiByValue(
+        `summarize`,
+        uniffiFree,
+    )
 
     // Registers the foreign callback with the Rust side.
     // This method is generated for each callback interface.
@@ -5134,47 +5056,46 @@ internal object uniffiCallbackInterfaceAgentSummarizerCallback {
  *
  * @suppress
  */
-public object FfiConverterTypeAgentSummarizerCallback : FfiConverterCallbackInterface<AgentSummarizerCallback>()
+public object FfiConverterTypeAgentSummarizerCallback: FfiConverterCallbackInterface<AgentSummarizerCallback>()
+
+
+
+
 
 public interface AgentToolExecutorCallback {
+    
     fun `executeTools`(`calls`: List<FfiToolCallRecord>): List<FfiToolResultRecord>
-
+    
     companion object
 }
 
+
+
 // Put the implementation in an object so we don't pollute the top-level namespace
 internal object uniffiCallbackInterfaceAgentToolExecutorCallback {
-    internal object `executeTools` : UniffiCallbackInterfaceAgentToolExecutorCallbackMethod0 {
-        override fun callback(
-            `uniffiHandle`: Long,
-            `calls`: RustBuffer.ByValue,
-            `uniffiOutReturn`: RustBuffer,
-            uniffiCallStatus: UniffiRustCallStatus,
-        ) {
+    internal object `executeTools`: UniffiCallbackInterfaceAgentToolExecutorCallbackMethod0 {
+        override fun callback(`uniffiHandle`: Long,`calls`: RustBuffer.ByValue,`uniffiOutReturn`: RustBuffer,uniffiCallStatus: UniffiRustCallStatus,) {
             val uniffiObj = FfiConverterTypeAgentToolExecutorCallback.handleMap.get(uniffiHandle)
-            val makeCall = {
+            val makeCall = { ->
                 uniffiObj.`executeTools`(
                     FfiConverterSequenceTypeFfiToolCallRecord.lift(`calls`),
                 )
             }
-            val writeReturn = { value: List<FfiToolResultRecord> ->
-                uniffiOutReturn.setValue(FfiConverterSequenceTypeFfiToolResultRecord.lower(value))
-            }
+            val writeReturn = { value: List<FfiToolResultRecord> -> uniffiOutReturn.setValue(FfiConverterSequenceTypeFfiToolResultRecord.lower(value)) }
             uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
         }
     }
 
-    internal object uniffiFree : UniffiCallbackInterfaceFree {
+    internal object uniffiFree: UniffiCallbackInterfaceFree {
         override fun callback(handle: Long) {
             FfiConverterTypeAgentToolExecutorCallback.handleMap.remove(handle)
         }
     }
 
-    internal var vtable =
-        UniffiVTableCallbackInterfaceAgentToolExecutorCallback.UniffiByValue(
-            `executeTools`,
-            uniffiFree,
-        )
+    internal var vtable = UniffiVTableCallbackInterfaceAgentToolExecutorCallback.UniffiByValue(
+        `executeTools`,
+        uniffiFree,
+    )
 
     // Registers the foreign callback with the Rust side.
     // This method is generated for each callback interface.
@@ -5188,28 +5109,30 @@ internal object uniffiCallbackInterfaceAgentToolExecutorCallback {
  *
  * @suppress
  */
-public object FfiConverterTypeAgentToolExecutorCallback : FfiConverterCallbackInterface<AgentToolExecutorCallback>()
+public object FfiConverterTypeAgentToolExecutorCallback: FfiConverterCallbackInterface<AgentToolExecutorCallback>()
+
+
+
+
 
 /**
  * Kotlin / host transport — UniFFI callback (crate root required for UniFFI metadata).
  */
 public interface AgentTransportCallback {
+    
     fun `completeModelTurn`(`request`: FfiModelRequest): FfiModelResponse
-
+    
     companion object
 }
 
+
+
 // Put the implementation in an object so we don't pollute the top-level namespace
 internal object uniffiCallbackInterfaceAgentTransportCallback {
-    internal object `completeModelTurn` : UniffiCallbackInterfaceAgentTransportCallbackMethod0 {
-        override fun callback(
-            `uniffiHandle`: Long,
-            `request`: RustBuffer.ByValue,
-            `uniffiOutReturn`: RustBuffer,
-            uniffiCallStatus: UniffiRustCallStatus,
-        ) {
+    internal object `completeModelTurn`: UniffiCallbackInterfaceAgentTransportCallbackMethod0 {
+        override fun callback(`uniffiHandle`: Long,`request`: RustBuffer.ByValue,`uniffiOutReturn`: RustBuffer,uniffiCallStatus: UniffiRustCallStatus,) {
             val uniffiObj = FfiConverterTypeAgentTransportCallback.handleMap.get(uniffiHandle)
-            val makeCall = {
+            val makeCall = { ->
                 uniffiObj.`completeModelTurn`(
                     FfiConverterTypeFfiModelRequest.lift(`request`),
                 )
@@ -5219,17 +5142,16 @@ internal object uniffiCallbackInterfaceAgentTransportCallback {
         }
     }
 
-    internal object uniffiFree : UniffiCallbackInterfaceFree {
+    internal object uniffiFree: UniffiCallbackInterfaceFree {
         override fun callback(handle: Long) {
             FfiConverterTypeAgentTransportCallback.handleMap.remove(handle)
         }
     }
 
-    internal var vtable =
-        UniffiVTableCallbackInterfaceAgentTransportCallback.UniffiByValue(
-            `completeModelTurn`,
-            uniffiFree,
-        )
+    internal var vtable = UniffiVTableCallbackInterfaceAgentTransportCallback.UniffiByValue(
+        `completeModelTurn`,
+        uniffiFree,
+    )
 
     // Registers the foreign callback with the Rust side.
     // This method is generated for each callback interface.
@@ -5243,12 +5165,47 @@ internal object uniffiCallbackInterfaceAgentTransportCallback {
  *
  * @suppress
  */
-public object FfiConverterTypeAgentTransportCallback : FfiConverterCallbackInterface<AgentTransportCallback>()
+public object FfiConverterTypeAgentTransportCallback: FfiConverterCallbackInterface<AgentTransportCallback>()
+
+
+
 
 /**
  * @suppress
  */
-public object FfiConverterOptionalUInt : FfiConverterRustBuffer<kotlin.UInt?> {
+public object FfiConverterOptionalUShort: FfiConverterRustBuffer<kotlin.UShort?> {
+    override fun read(buf: ByteBuffer): kotlin.UShort? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterUShort.read(buf)
+    }
+
+    override fun allocationSize(value: kotlin.UShort?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterUShort.allocationSize(value)
+        }
+    }
+
+    override fun write(value: kotlin.UShort?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterUShort.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalUInt: FfiConverterRustBuffer<kotlin.UInt?> {
     override fun read(buf: ByteBuffer): kotlin.UInt? {
         if (buf.get().toInt() == 0) {
             return null
@@ -5264,10 +5221,7 @@ public object FfiConverterOptionalUInt : FfiConverterRustBuffer<kotlin.UInt?> {
         }
     }
 
-    override fun write(
-        value: kotlin.UInt?,
-        buf: ByteBuffer,
-    ) {
+    override fun write(value: kotlin.UInt?, buf: ByteBuffer) {
         if (value == null) {
             buf.put(0)
         } else {
@@ -5277,10 +5231,45 @@ public object FfiConverterOptionalUInt : FfiConverterRustBuffer<kotlin.UInt?> {
     }
 }
 
+
+
+
 /**
  * @suppress
  */
-public object FfiConverterOptionalString : FfiConverterRustBuffer<kotlin.String?> {
+public object FfiConverterOptionalULong: FfiConverterRustBuffer<kotlin.ULong?> {
+    override fun read(buf: ByteBuffer): kotlin.ULong? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterULong.read(buf)
+    }
+
+    override fun allocationSize(value: kotlin.ULong?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterULong.allocationSize(value)
+        }
+    }
+
+    override fun write(value: kotlin.ULong?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterULong.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalString: FfiConverterRustBuffer<kotlin.String?> {
     override fun read(buf: ByteBuffer): kotlin.String? {
         if (buf.get().toInt() == 0) {
             return null
@@ -5296,10 +5285,7 @@ public object FfiConverterOptionalString : FfiConverterRustBuffer<kotlin.String?
         }
     }
 
-    override fun write(
-        value: kotlin.String?,
-        buf: ByteBuffer,
-    ) {
+    override fun write(value: kotlin.String?, buf: ByteBuffer) {
         if (value == null) {
             buf.put(0)
         } else {
@@ -5309,10 +5295,13 @@ public object FfiConverterOptionalString : FfiConverterRustBuffer<kotlin.String?
     }
 }
 
+
+
+
 /**
  * @suppress
  */
-public object FfiConverterOptionalTypeFfiRepairRecord : FfiConverterRustBuffer<FfiRepairRecord?> {
+public object FfiConverterOptionalTypeFfiRepairRecord: FfiConverterRustBuffer<FfiRepairRecord?> {
     override fun read(buf: ByteBuffer): FfiRepairRecord? {
         if (buf.get().toInt() == 0) {
             return null
@@ -5328,10 +5317,7 @@ public object FfiConverterOptionalTypeFfiRepairRecord : FfiConverterRustBuffer<F
         }
     }
 
-    override fun write(
-        value: FfiRepairRecord?,
-        buf: ByteBuffer,
-    ) {
+    override fun write(value: FfiRepairRecord?, buf: ByteBuffer) {
         if (value == null) {
             buf.put(0)
         } else {
@@ -5341,10 +5327,13 @@ public object FfiConverterOptionalTypeFfiRepairRecord : FfiConverterRustBuffer<F
     }
 }
 
+
+
+
 /**
  * @suppress
  */
-public object FfiConverterOptionalTypeAgentSummarizerCallback : FfiConverterRustBuffer<AgentSummarizerCallback?> {
+public object FfiConverterOptionalTypeAgentSummarizerCallback: FfiConverterRustBuffer<AgentSummarizerCallback?> {
     override fun read(buf: ByteBuffer): AgentSummarizerCallback? {
         if (buf.get().toInt() == 0) {
             return null
@@ -5360,10 +5349,7 @@ public object FfiConverterOptionalTypeAgentSummarizerCallback : FfiConverterRust
         }
     }
 
-    override fun write(
-        value: AgentSummarizerCallback?,
-        buf: ByteBuffer,
-    ) {
+    override fun write(value: AgentSummarizerCallback?, buf: ByteBuffer) {
         if (value == null) {
             buf.put(0)
         } else {
@@ -5373,10 +5359,13 @@ public object FfiConverterOptionalTypeAgentSummarizerCallback : FfiConverterRust
     }
 }
 
+
+
+
 /**
  * @suppress
  */
-public object FfiConverterSequenceString : FfiConverterRustBuffer<List<kotlin.String>> {
+public object FfiConverterSequenceString: FfiConverterRustBuffer<List<kotlin.String>> {
     override fun read(buf: ByteBuffer): List<kotlin.String> {
         val len = buf.getInt()
         return List<kotlin.String>(len) {
@@ -5390,10 +5379,7 @@ public object FfiConverterSequenceString : FfiConverterRustBuffer<List<kotlin.St
         return sizeForLength + sizeForItems
     }
 
-    override fun write(
-        value: List<kotlin.String>,
-        buf: ByteBuffer,
-    ) {
+    override fun write(value: List<kotlin.String>, buf: ByteBuffer) {
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterString.write(it, buf)
@@ -5401,10 +5387,13 @@ public object FfiConverterSequenceString : FfiConverterRustBuffer<List<kotlin.St
     }
 }
 
+
+
+
 /**
  * @suppress
  */
-public object FfiConverterSequenceTypeFfiAgentMessage : FfiConverterRustBuffer<List<FfiAgentMessage>> {
+public object FfiConverterSequenceTypeFfiAgentMessage: FfiConverterRustBuffer<List<FfiAgentMessage>> {
     override fun read(buf: ByteBuffer): List<FfiAgentMessage> {
         val len = buf.getInt()
         return List<FfiAgentMessage>(len) {
@@ -5418,10 +5407,7 @@ public object FfiConverterSequenceTypeFfiAgentMessage : FfiConverterRustBuffer<L
         return sizeForLength + sizeForItems
     }
 
-    override fun write(
-        value: List<FfiAgentMessage>,
-        buf: ByteBuffer,
-    ) {
+    override fun write(value: List<FfiAgentMessage>, buf: ByteBuffer) {
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeFfiAgentMessage.write(it, buf)
@@ -5429,10 +5415,13 @@ public object FfiConverterSequenceTypeFfiAgentMessage : FfiConverterRustBuffer<L
     }
 }
 
+
+
+
 /**
  * @suppress
  */
-public object FfiConverterSequenceTypeFfiContextReference : FfiConverterRustBuffer<List<FfiContextReference>> {
+public object FfiConverterSequenceTypeFfiContextReference: FfiConverterRustBuffer<List<FfiContextReference>> {
     override fun read(buf: ByteBuffer): List<FfiContextReference> {
         val len = buf.getInt()
         return List<FfiContextReference>(len) {
@@ -5446,10 +5435,7 @@ public object FfiConverterSequenceTypeFfiContextReference : FfiConverterRustBuff
         return sizeForLength + sizeForItems
     }
 
-    override fun write(
-        value: List<FfiContextReference>,
-        buf: ByteBuffer,
-    ) {
+    override fun write(value: List<FfiContextReference>, buf: ByteBuffer) {
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeFfiContextReference.write(it, buf)
@@ -5457,10 +5443,13 @@ public object FfiConverterSequenceTypeFfiContextReference : FfiConverterRustBuff
     }
 }
 
+
+
+
 /**
  * @suppress
  */
-public object FfiConverterSequenceTypeFfiRawToolCall : FfiConverterRustBuffer<List<FfiRawToolCall>> {
+public object FfiConverterSequenceTypeFfiRawToolCall: FfiConverterRustBuffer<List<FfiRawToolCall>> {
     override fun read(buf: ByteBuffer): List<FfiRawToolCall> {
         val len = buf.getInt()
         return List<FfiRawToolCall>(len) {
@@ -5474,10 +5463,7 @@ public object FfiConverterSequenceTypeFfiRawToolCall : FfiConverterRustBuffer<Li
         return sizeForLength + sizeForItems
     }
 
-    override fun write(
-        value: List<FfiRawToolCall>,
-        buf: ByteBuffer,
-    ) {
+    override fun write(value: List<FfiRawToolCall>, buf: ByteBuffer) {
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeFfiRawToolCall.write(it, buf)
@@ -5485,10 +5471,13 @@ public object FfiConverterSequenceTypeFfiRawToolCall : FfiConverterRustBuffer<Li
     }
 }
 
+
+
+
 /**
  * @suppress
  */
-public object FfiConverterSequenceTypeFfiToolCallRecord : FfiConverterRustBuffer<List<FfiToolCallRecord>> {
+public object FfiConverterSequenceTypeFfiToolCallRecord: FfiConverterRustBuffer<List<FfiToolCallRecord>> {
     override fun read(buf: ByteBuffer): List<FfiToolCallRecord> {
         val len = buf.getInt()
         return List<FfiToolCallRecord>(len) {
@@ -5502,10 +5491,7 @@ public object FfiConverterSequenceTypeFfiToolCallRecord : FfiConverterRustBuffer
         return sizeForLength + sizeForItems
     }
 
-    override fun write(
-        value: List<FfiToolCallRecord>,
-        buf: ByteBuffer,
-    ) {
+    override fun write(value: List<FfiToolCallRecord>, buf: ByteBuffer) {
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeFfiToolCallRecord.write(it, buf)
@@ -5513,10 +5499,13 @@ public object FfiConverterSequenceTypeFfiToolCallRecord : FfiConverterRustBuffer
     }
 }
 
+
+
+
 /**
  * @suppress
  */
-public object FfiConverterSequenceTypeFfiToolParseFailure : FfiConverterRustBuffer<List<FfiToolParseFailure>> {
+public object FfiConverterSequenceTypeFfiToolParseFailure: FfiConverterRustBuffer<List<FfiToolParseFailure>> {
     override fun read(buf: ByteBuffer): List<FfiToolParseFailure> {
         val len = buf.getInt()
         return List<FfiToolParseFailure>(len) {
@@ -5530,10 +5519,7 @@ public object FfiConverterSequenceTypeFfiToolParseFailure : FfiConverterRustBuff
         return sizeForLength + sizeForItems
     }
 
-    override fun write(
-        value: List<FfiToolParseFailure>,
-        buf: ByteBuffer,
-    ) {
+    override fun write(value: List<FfiToolParseFailure>, buf: ByteBuffer) {
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeFfiToolParseFailure.write(it, buf)
@@ -5541,10 +5527,13 @@ public object FfiConverterSequenceTypeFfiToolParseFailure : FfiConverterRustBuff
     }
 }
 
+
+
+
 /**
  * @suppress
  */
-public object FfiConverterSequenceTypeFfiToolParseField : FfiConverterRustBuffer<List<FfiToolParseField>> {
+public object FfiConverterSequenceTypeFfiToolParseField: FfiConverterRustBuffer<List<FfiToolParseField>> {
     override fun read(buf: ByteBuffer): List<FfiToolParseField> {
         val len = buf.getInt()
         return List<FfiToolParseField>(len) {
@@ -5558,10 +5547,7 @@ public object FfiConverterSequenceTypeFfiToolParseField : FfiConverterRustBuffer
         return sizeForLength + sizeForItems
     }
 
-    override fun write(
-        value: List<FfiToolParseField>,
-        buf: ByteBuffer,
-    ) {
+    override fun write(value: List<FfiToolParseField>, buf: ByteBuffer) {
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeFfiToolParseField.write(it, buf)
@@ -5569,10 +5555,13 @@ public object FfiConverterSequenceTypeFfiToolParseField : FfiConverterRustBuffer
     }
 }
 
+
+
+
 /**
  * @suppress
  */
-public object FfiConverterSequenceTypeFfiToolResultRecord : FfiConverterRustBuffer<List<FfiToolResultRecord>> {
+public object FfiConverterSequenceTypeFfiToolResultRecord: FfiConverterRustBuffer<List<FfiToolResultRecord>> {
     override fun read(buf: ByteBuffer): List<FfiToolResultRecord> {
         val len = buf.getInt()
         return List<FfiToolResultRecord>(len) {
@@ -5586,10 +5575,7 @@ public object FfiConverterSequenceTypeFfiToolResultRecord : FfiConverterRustBuff
         return sizeForLength + sizeForItems
     }
 
-    override fun write(
-        value: List<FfiToolResultRecord>,
-        buf: ByteBuffer,
-    ) {
+    override fun write(value: List<FfiToolResultRecord>, buf: ByteBuffer) {
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeFfiToolResultRecord.write(it, buf)
@@ -5597,10 +5583,13 @@ public object FfiConverterSequenceTypeFfiToolResultRecord : FfiConverterRustBuff
     }
 }
 
+
+
+
 /**
  * @suppress
  */
-public object FfiConverterSequenceTypeFfiAgentEvent : FfiConverterRustBuffer<List<FfiAgentEvent>> {
+public object FfiConverterSequenceTypeFfiAgentEvent: FfiConverterRustBuffer<List<FfiAgentEvent>> {
     override fun read(buf: ByteBuffer): List<FfiAgentEvent> {
         val len = buf.getInt()
         return List<FfiAgentEvent>(len) {
@@ -5614,10 +5603,7 @@ public object FfiConverterSequenceTypeFfiAgentEvent : FfiConverterRustBuffer<Lis
         return sizeForLength + sizeForItems
     }
 
-    override fun write(
-        value: List<FfiAgentEvent>,
-        buf: ByteBuffer,
-    ) {
+    override fun write(value: List<FfiAgentEvent>, buf: ByteBuffer) {
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeFfiAgentEvent.write(it, buf)
@@ -5625,10 +5611,13 @@ public object FfiConverterSequenceTypeFfiAgentEvent : FfiConverterRustBuffer<Lis
     }
 }
 
+
+
+
 /**
  * @suppress
  */
-public object FfiConverterSequenceTypeFfiCompactionTier : FfiConverterRustBuffer<List<FfiCompactionTier>> {
+public object FfiConverterSequenceTypeFfiCompactionTier: FfiConverterRustBuffer<List<FfiCompactionTier>> {
     override fun read(buf: ByteBuffer): List<FfiCompactionTier> {
         val len = buf.getInt()
         return List<FfiCompactionTier>(len) {
@@ -5642,149 +5631,98 @@ public object FfiConverterSequenceTypeFfiCompactionTier : FfiConverterRustBuffer
         return sizeForLength + sizeForItems
     }
 
-    override fun write(
-        value: List<FfiCompactionTier>,
-        buf: ByteBuffer,
-    ) {
+    override fun write(value: List<FfiCompactionTier>, buf: ByteBuffer) {
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeFfiCompactionTier.write(it, buf)
         }
     }
+} fun `coerceProviderArguments`(`toolName`: kotlin.String, `argsJson`: kotlin.String, `toolSemanticsJson`: kotlin.String, `toolCatalogJson`: kotlin.String): FfiToolParseField {
+            return FfiConverterTypeFfiToolParseField.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_agent_core_fn_func_coerce_provider_arguments(
+        FfiConverterString.lower(`toolName`),FfiConverterString.lower(`argsJson`),FfiConverterString.lower(`toolSemanticsJson`),FfiConverterString.lower(`toolCatalogJson`),_status)
 }
-
-fun `coerceProviderArguments`(
-    `toolName`: kotlin.String,
-    `argsJson`: kotlin.String,
-    `toolSemanticsJson`: kotlin.String,
-    `toolCatalogJson`: kotlin.String,
-): FfiToolParseField =
-    FfiConverterTypeFfiToolParseField.lift(
-        uniffiRustCall { _status ->
-            UniffiLib.INSTANCE.uniffi_agent_core_fn_func_coerce_provider_arguments(
-                FfiConverterString.lower(`toolName`),
-                FfiConverterString.lower(`argsJson`),
-                FfiConverterString.lower(`toolSemanticsJson`),
-                FfiConverterString.lower(`toolCatalogJson`),
-                _status,
-            )
-        },
     )
+    }
+    
 
-/**
- * Construct an [`AgentEngine`] wired to Kotlin callback implementations.
- *
- * Callbacks are invoked on the **caller thread** (often a JNI worker thread). Kotlin must
- * dispatch heavy work to `Dispatchers.IO` and never block the Android main thread.
- */
-fun `createAgentEngine`(
-    `transport`: AgentTransportCallback,
-    `executor`: AgentToolExecutorCallback,
-    `summarizer`: AgentSummarizerCallback?,
-): FfiAgentEngine =
-    FfiConverterTypeFfiAgentEngine.lift(
-        uniffiRustCall { _status ->
-            UniffiLib.INSTANCE.uniffi_agent_core_fn_func_create_agent_engine(
-                FfiConverterTypeAgentTransportCallback.lower(`transport`),
-                FfiConverterTypeAgentToolExecutorCallback.lower(`executor`),
-                FfiConverterOptionalTypeAgentSummarizerCallback.lower(`summarizer`),
-                _status,
-            )
-        },
+        /**
+         * Construct an [`AgentEngine`] wired to Kotlin callback implementations.
+         *
+         * Callbacks are invoked on the **caller thread** (often a JNI worker thread). Kotlin must
+         * dispatch heavy work to `Dispatchers.IO` and never block the Android main thread.
+         */ fun `createAgentEngine`(`transport`: AgentTransportCallback, `executor`: AgentToolExecutorCallback, `summarizer`: AgentSummarizerCallback?): FfiAgentEngine {
+            return FfiConverterTypeFfiAgentEngine.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_agent_core_fn_func_create_agent_engine(
+        FfiConverterTypeAgentTransportCallback.lower(`transport`),FfiConverterTypeAgentToolExecutorCallback.lower(`executor`),FfiConverterOptionalTypeAgentSummarizerCallback.lower(`summarizer`),_status)
+}
     )
+    }
+    
+ fun `createToolStreamGate`(`allowToolCall`: kotlin.Boolean): FfiToolStreamGate {
+            return FfiConverterTypeFfiToolStreamGate.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_agent_core_fn_func_create_tool_stream_gate(
+        FfiConverterBoolean.lower(`allowToolCall`),_status)
+}
+    )
+    }
+    
+ fun `hasLocalToolContract`(`systemPrompt`: kotlin.String, `toolCatalogJson`: kotlin.String): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_agent_core_fn_func_has_local_tool_contract(
+        FfiConverterString.lower(`systemPrompt`),FfiConverterString.lower(`toolCatalogJson`),_status)
+}
+    )
+    }
+    
+ fun `parseToolCalls`(`raw`: kotlin.String, `toolSemanticsJson`: kotlin.String, `toolCatalogJson`: kotlin.String): FfiToolParseBatch {
+            return FfiConverterTypeFfiToolParseBatch.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_agent_core_fn_func_parse_tool_calls(
+        FfiConverterString.lower(`raw`),FfiConverterString.lower(`toolSemanticsJson`),FfiConverterString.lower(`toolCatalogJson`),_status)
+}
+    )
+    }
+    
+ fun `repairTool`(`name`: kotlin.String, `argsJson`: kotlin.String, `toolSemanticsJson`: kotlin.String, `toolCatalogJson`: kotlin.String): RepairResult {
+            return FfiConverterTypeRepairResult.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_agent_core_fn_func_repair_tool(
+        FfiConverterString.lower(`name`),FfiConverterString.lower(`argsJson`),FfiConverterString.lower(`toolSemanticsJson`),FfiConverterString.lower(`toolCatalogJson`),_status)
+}
+    )
+    }
+    
+ fun `resultJsonLooksSoftFailure`(`json`: kotlin.String): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_agent_core_fn_func_result_json_looks_soft_failure(
+        FfiConverterString.lower(`json`),_status)
+}
+    )
+    }
+    
+ fun `shouldAllowTool`(`softFailureStreak`: kotlin.UInt, `maxStreak`: kotlin.UInt): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_agent_core_fn_func_should_allow_tool(
+        FfiConverterUInt.lower(`softFailureStreak`),FfiConverterUInt.lower(`maxStreak`),_status)
+}
+    )
+    }
+    
+ fun `truncateResult`(`json`: kotlin.String, `budgetBytes`: kotlin.ULong): kotlin.String {
+            return FfiConverterString.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_agent_core_fn_func_truncate_result(
+        FfiConverterString.lower(`json`),FfiConverterULong.lower(`budgetBytes`),_status)
+}
+    )
+    }
+    
 
-fun `createToolStreamGate`(`allowToolCall`: kotlin.Boolean): FfiToolStreamGate =
-    FfiConverterTypeFfiToolStreamGate.lift(
-        uniffiRustCall { _status ->
-            UniffiLib.INSTANCE.uniffi_agent_core_fn_func_create_tool_stream_gate(
-                FfiConverterBoolean.lower(`allowToolCall`),
-                _status,
-            )
-        },
-    )
 
-fun `hasLocalToolContract`(
-    `systemPrompt`: kotlin.String,
-    `toolCatalogJson`: kotlin.String,
-): kotlin.Boolean =
-    FfiConverterBoolean.lift(
-        uniffiRustCall { _status ->
-            UniffiLib.INSTANCE.uniffi_agent_core_fn_func_has_local_tool_contract(
-                FfiConverterString.lower(`systemPrompt`),
-                FfiConverterString.lower(`toolCatalogJson`),
-                _status,
-            )
-        },
-    )
-
-fun `parseToolCalls`(
-    `raw`: kotlin.String,
-    `toolSemanticsJson`: kotlin.String,
-    `toolCatalogJson`: kotlin.String,
-): FfiToolParseBatch =
-    FfiConverterTypeFfiToolParseBatch.lift(
-        uniffiRustCall { _status ->
-            UniffiLib.INSTANCE.uniffi_agent_core_fn_func_parse_tool_calls(
-                FfiConverterString.lower(`raw`),
-                FfiConverterString.lower(`toolSemanticsJson`),
-                FfiConverterString.lower(`toolCatalogJson`),
-                _status,
-            )
-        },
-    )
-
-fun `repairTool`(
-    `name`: kotlin.String,
-    `argsJson`: kotlin.String,
-    `toolSemanticsJson`: kotlin.String,
-    `toolCatalogJson`: kotlin.String,
-): RepairResult =
-    FfiConverterTypeRepairResult.lift(
-        uniffiRustCall { _status ->
-            UniffiLib.INSTANCE.uniffi_agent_core_fn_func_repair_tool(
-                FfiConverterString.lower(`name`),
-                FfiConverterString.lower(`argsJson`),
-                FfiConverterString.lower(`toolSemanticsJson`),
-                FfiConverterString.lower(`toolCatalogJson`),
-                _status,
-            )
-        },
-    )
-
-fun `resultJsonLooksSoftFailure`(`json`: kotlin.String): kotlin.Boolean =
-    FfiConverterBoolean.lift(
-        uniffiRustCall { _status ->
-            UniffiLib.INSTANCE.uniffi_agent_core_fn_func_result_json_looks_soft_failure(
-                FfiConverterString.lower(`json`),
-                _status,
-            )
-        },
-    )
-
-fun `shouldAllowTool`(
-    `softFailureStreak`: kotlin.UInt,
-    `maxStreak`: kotlin.UInt,
-): kotlin.Boolean =
-    FfiConverterBoolean.lift(
-        uniffiRustCall { _status ->
-            UniffiLib.INSTANCE.uniffi_agent_core_fn_func_should_allow_tool(
-                FfiConverterUInt.lower(`softFailureStreak`),
-                FfiConverterUInt.lower(`maxStreak`),
-                _status,
-            )
-        },
-    )
-
-fun `truncateResult`(
-    `json`: kotlin.String,
-    `budgetBytes`: kotlin.ULong,
-): kotlin.String =
-    FfiConverterString.lift(
-        uniffiRustCall { _status ->
-            UniffiLib.INSTANCE.uniffi_agent_core_fn_func_truncate_result(
-                FfiConverterString.lower(`json`),
-                FfiConverterULong.lower(`budgetBytes`),
-                _status,
-            )
-        },
-    )

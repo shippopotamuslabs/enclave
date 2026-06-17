@@ -1,6 +1,7 @@
 package com.browntowndev.enclave.domain.usecase.chat
 
 import com.browntowndev.enclave.domain.model.chat.ChatId
+import com.browntowndev.enclave.domain.model.chat.ChatResponseMode
 import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.Mode
@@ -17,6 +18,7 @@ import com.browntowndev.enclave.domain.port.repository.MessageRepository
 import com.browntowndev.enclave.domain.port.repository.SettingsData
 import com.browntowndev.enclave.domain.port.repository.SettingsRepository
 import com.browntowndev.enclave.domain.usecase.FakeInferenceFactory
+import com.browntowndev.enclave.domain.usecase.FakeInferenceLockManager
 import com.browntowndev.enclave.domain.usecase.FakeInferenceService
 import io.mockk.coEvery
 import io.mockk.every
@@ -50,6 +52,7 @@ class GenerateChatResponseUseCaseSearchToolTest {
                 retrievedMemories: List<com.browntowndev.enclave.domain.model.memory.Memory>,
                 retrievedSearchResults: String?,
                 retrievedXSearchResults: String?,
+                compactStaticPrompt: Boolean,
             ): String = baseSystemPrompt ?: ""
         }
 
@@ -128,6 +131,7 @@ class GenerateChatResponseUseCaseSearchToolTest {
                             settingsRepository = settingsRepository,
                         ),
                     embeddingEngine = mockk(relaxed = true),
+                    inferenceLockManager = FakeInferenceLockManager(),
                 )
 
             useCase(
@@ -135,7 +139,7 @@ class GenerateChatResponseUseCaseSearchToolTest {
                 userMessageId = MessageId("1"),
                 assistantMessageId = MessageId("2"),
                 chatId = ChatId("3"),
-                mode = Mode.FAST,
+                responseMode = ChatResponseMode.Fast,
                 backgroundInferenceEnabled = false,
             ).toList()
 
@@ -202,6 +206,7 @@ class GenerateChatResponseUseCaseSearchToolTest {
                             settingsRepository = settingsRepository,
                         ),
                     embeddingEngine = mockk(relaxed = true),
+                    inferenceLockManager = FakeInferenceLockManager(),
                 )
 
             useCase(
@@ -209,7 +214,7 @@ class GenerateChatResponseUseCaseSearchToolTest {
                 userMessageId = MessageId("1"),
                 assistantMessageId = MessageId("2"),
                 chatId = ChatId("3"),
-                mode = Mode.FAST,
+                responseMode = ChatResponseMode.Fast,
                 backgroundInferenceEnabled = false,
             ).toList()
 
@@ -235,7 +240,7 @@ class GenerateChatResponseUseCaseSearchToolTest {
 
     private fun mockPipelineExecutor(): PipelineExecutorPort =
         mockk {
-            every { executePipeline(any(), any()) } returns emptyFlow()
+            every { executePipeline(any(), any(), any(), any(), any()) } returns emptyFlow()
             coEvery { stopPipeline(any()) } returns Unit
             coEvery { resumeFromState(any(), any(), any(), any()) } returns emptyFlow()
         }

@@ -16,11 +16,14 @@ import com.browntowndev.enclave.domain.usecase.media.*
 import com.browntowndev.enclave.domain.usecase.modelconfig.*
 import com.browntowndev.enclave.domain.usecase.security.CreateVaultUseCase
 import com.browntowndev.enclave.domain.usecase.settings.*
+import com.browntowndev.enclave.domain.usecase.auth.GetAuthStateUseCase
 import com.browntowndev.enclave.feature.settings.usage.UsageSpendUiMapper
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -53,6 +56,12 @@ class SettingsViewModelEventTest {
         val getLocalModelAssetsUseCase = mockk<GetLocalModelAssetsUseCase>()
         every { getLocalModelAssetsUseCase() } returns MutableStateFlow<List<LocalModelAsset>>(emptyList())
 
+        val observeActiveUtilityModelsUseCase = mockk<ObserveActiveUtilityModelsUseCase>()
+        every { observeActiveUtilityModelsUseCase() } returns kotlinx.coroutines.flow.flowOf(emptyList())
+
+        val getModelPacksForSettingsUseCase = mockk<GetModelPacksForSettingsUseCase>()
+        coEvery { getModelPacksForSettingsUseCase() } returns emptyList()
+
         val getApiModelAssetsUseCase = mockk<GetApiModelAssetsUseCase>()
         every { getApiModelAssetsUseCase() } returns MutableStateFlow<List<ApiModelAsset>>(emptyList())
 
@@ -62,8 +71,14 @@ class SettingsViewModelEventTest {
         val getTtsProvidersUseCase = mockk<GetTtsProvidersUseCase>()
         every { getTtsProvidersUseCase() } returns MutableStateFlow<List<TtsProviderAsset>>(emptyList())
 
+        val getLiveVoiceProvidersUseCase = mockk<GetLiveVoiceProvidersUseCase>()
+        every { getLiveVoiceProvidersUseCase() } returns MutableStateFlow<List<LiveVoiceProviderAsset>>(emptyList())
+
         val getMediaProvidersUseCase = mockk<GetMediaProvidersUseCase>()
         every { getMediaProvidersUseCase() } returns MutableStateFlow<List<MediaProviderAsset>>(emptyList())
+
+        val getAuthStateUseCase = mockk<GetAuthStateUseCase>()
+        every { getAuthStateUseCase() } returns MutableStateFlow(com.browntowndev.enclave.domain.port.auth.AuthState.Loading)
 
         val settingsUseCases =
             mockk<SettingsUseCases>(relaxed = true) {
@@ -80,6 +95,8 @@ class SettingsViewModelEventTest {
                 every { localModels } returns
                     mockk(relaxed = true) {
                         every { getLocalModelAssets } returns getLocalModelAssetsUseCase
+                        every { getModelPacksForSettings } returns getModelPacksForSettingsUseCase
+                        every { observeActiveUtilityModels } returns observeActiveUtilityModelsUseCase
                     }
                 every { apiProviders } returns
                     mockk(relaxed = true) {
@@ -93,17 +110,17 @@ class SettingsViewModelEventTest {
                     mockk(relaxed = true) {
                         every { getTtsProviders } returns getTtsProvidersUseCase
                     }
+                every { liveVoice } returns
+                    mockk(relaxed = true) {
+                        every { getLiveVoiceProviders } returns getLiveVoiceProvidersUseCase
+                    }
                 every { media } returns
                     mockk(relaxed = true) {
                         every { getMediaProviders } returns getMediaProvidersUseCase
                     }
                 every { auth } returns
                     mockk(relaxed = true) {
-                        every { getAuthState } returns
-                            mockk {
-                                every { this@mockk.invoke() } returns
-                                    MutableStateFlow(com.browntowndev.enclave.domain.port.auth.AuthState.Loading)
-                            }
+                        every { getAuthState } returns getAuthStateUseCase
                     }
                 every { memories } returns
                     mockk(relaxed = true) {
@@ -117,6 +134,9 @@ class SettingsViewModelEventTest {
         val embeddingProgressPort = mockk<com.browntowndev.enclave.domain.port.repository.EmbeddingProgressPort>()
         every { embeddingProgressPort.isReindexing } returns MutableStateFlow(false)
         every { embeddingProgressPort.progress } returns MutableStateFlow(0f)
+
+        val downloadWorkRepository = mockk<com.browntowndev.enclave.core.data.repository.DownloadWorkRepository>()
+        every { downloadWorkRepository.observeDownloadProgress() } returns kotlinx.coroutines.flow.flowOf(null)
 
         val deletionHelper = SettingsDeletionHelper(settingsUseCases.deletion, reassignmentOptionUiMapper, errorHandler)
         val detectVaultReconciliationStateUseCase =
@@ -152,12 +172,18 @@ class SettingsViewModelEventTest {
             createSettingsApiProvidersDelegate(
                 apiProviderUseCases = settingsUseCases.apiProviders,
                 ttsUseCases = settingsUseCases.tts,
+                liveVoiceUseCases = settingsUseCases.liveVoice,
                 mediaUseCases = settingsUseCases.media,
                 deletionHelper = deletionHelper,
                 apiModelAssetUiMapper = apiModelAssetUiMapper,
                 errorHandler = errorHandler,
             )
-        val searchDelegate = SettingsSearchDelegate(settingsUseCases.preferences, errorHandler)
+        val searchDelegate =
+            SettingsSearchDelegate(
+                settingsUseCases.preferences,
+                mockk<com.browntowndev.enclave.domain.port.repository.CloudSyncPort>(relaxed = true),
+                errorHandler,
+            )
         val assignmentsDelegate = SettingsAssignmentsDelegate(settingsUseCases.assignments, errorHandler)
 
         val dataControlsDelegate = SettingsDataControlsDelegate(settingsUseCases.dataControls, settingsUseCases.preferences, errorHandler)
@@ -186,6 +212,7 @@ class SettingsViewModelEventTest {
                 deletionHelper = deletionHelper,
                 errorHandler = errorHandler,
                 embeddingProgressPort = embeddingProgressPort,
+                downloadWorkRepository = downloadWorkRepository,
             )
     }
 
@@ -193,9 +220,11 @@ class SettingsViewModelEventTest {
     fun `onShowDataControlsSheet updates uiState`() =
         runTest {
             viewModel.onShowDataControlsSheet(true)
+            runCurrent()
             assertTrue(viewModel.uiState.value.dataControls.isSheetOpen)
 
             viewModel.onShowDataControlsSheet(false)
+            runCurrent()
             assertFalse(viewModel.uiState.value.dataControls.isSheetOpen)
         }
 
@@ -203,9 +232,11 @@ class SettingsViewModelEventTest {
     fun `onShowMemoriesSheet updates uiState`() =
         runTest {
             viewModel.onShowMemoriesSheet(true)
+            runCurrent()
             assertTrue(viewModel.uiState.value.memories.isSheetOpen)
 
             viewModel.onShowMemoriesSheet(false)
+            runCurrent()
             assertFalse(viewModel.uiState.value.memories.isSheetOpen)
         }
 
@@ -213,6 +244,7 @@ class SettingsViewModelEventTest {
     fun `onAddMemory updates memoriesState`() =
         runTest {
             viewModel.onAddMemory()
+            runCurrent()
 
             val state = viewModel.uiState.value.memories
             assertTrue(state.isEditing)
@@ -224,6 +256,7 @@ class SettingsViewModelEventTest {
         runTest {
             viewModel.onAddMemory()
             viewModel.onUpdateMemoryDraft("Test memory", MemoryCategory.FACTS)
+            runCurrent()
 
             val state = viewModel.uiState.value.memories
             assertEquals("Test memory", state.memoryDraft?.text)
@@ -234,9 +267,11 @@ class SettingsViewModelEventTest {
     fun `onSaveCustomization closes sheet`() =
         runTest {
             viewModel.onShowCustomizationSheet(true)
+            runCurrent()
             assertTrue(viewModel.uiState.value.customization.isSheetOpen)
 
             viewModel.onSaveCustomization()
+            runCurrent()
             assertFalse(viewModel.uiState.value.customization.isSheetOpen)
         }
 
@@ -272,6 +307,7 @@ class SettingsViewModelEventTest {
             viewModel.onUpdateMemoryDraft("Test memory", MemoryCategory.FACTS)
 
             viewModel.onSaveMemory()
+            runCurrent()
 
             val state = viewModel.uiState.value.memories
             assertFalse(state.isEditing)

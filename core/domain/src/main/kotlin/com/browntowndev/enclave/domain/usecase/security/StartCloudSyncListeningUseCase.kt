@@ -17,7 +17,7 @@ class StartCloudSyncListeningUseCase
     ) {
         suspend operator fun invoke(
             uploadLocalFirst: Boolean = true,
-            onProgress: ((CloudSyncReplayProgress) -> Unit)? = null,
+            onProgress: (suspend (CloudSyncReplayProgress) -> Unit)? = null,
         ): Result<Unit> {
             if (uploadLocalFirst) {
                 val uploadResult = cloudSyncPort.syncAllLocalDataToCloud()
@@ -101,6 +101,15 @@ class StartCloudSyncListeningUseCase
                     return Result.failure(IllegalStateException("replay exceeded max pages"))
                 }
             }
+
+            val bootstrapResult = cloudSyncPort.bootstrapFeatureSettings()
+            if (bootstrapResult.isFailure) {
+                return Result.failure(
+                    bootstrapResult.exceptionOrNull()
+                        ?: IllegalStateException("feature settings bootstrap failed"),
+                )
+            }
+
             cloudSyncPort.startListening()
             return Result.success(Unit)
         }

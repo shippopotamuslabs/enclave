@@ -33,6 +33,48 @@ import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import kotlinx.coroutines.flow.collect
 
 @Composable
+internal fun LiveVoiceConfigureRoute(
+    onNavigateBack: () -> Unit,
+    viewModel: SettingsViewModel = hiltViewModel(),
+) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val apiKey by viewModel.currentApiKey.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(viewModel) {
+        viewModel.snackbarMessages.collect { message ->
+            snackbarHostState.showSnackbar(message)
+        }
+    }
+
+    val handleBack: () -> Unit = {
+        viewModel.onBackToLiveVoiceList()
+        onNavigateBack()
+    }
+
+    LiveVoiceConfigureScreen(
+        uiState = uiState,
+        apiKey = apiKey,
+        onNavigateBack = handleBack,
+        onLiveVoiceAssetFieldChange = viewModel::onLiveVoiceAssetFieldChange,
+        onApiKeyChange = viewModel::onApiKeyChange,
+        onSelectReusableApiCredential = viewModel::onSelectReusableLiveVoiceApiCredential,
+        onSaveLiveVoiceProvider = {
+            viewModel.onSaveLiveVoiceProvider(onSuccess = {
+                viewModel.onBackToLiveVoiceList()
+                onNavigateBack()
+            })
+        },
+        onFetchLiveVoiceModels = viewModel::onFetchLiveVoiceModels,
+        onUpdateModelSearchQuery = viewModel::onUpdateLiveVoiceModelSearchQuery,
+        onToggleModelProviderFilter = viewModel::onToggleLiveVoiceModelProviderFilter,
+        onClearModelProviderFilters = viewModel::onClearLiveVoiceModelProviderFilters,
+        onUpdateModelSortOption = viewModel::onUpdateLiveVoiceModelSortOption,
+        snackbarHostState = snackbarHostState,
+    )
+}
+
+@Composable
 internal fun TtsConfigureRoute(
     onNavigateBack: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel(),

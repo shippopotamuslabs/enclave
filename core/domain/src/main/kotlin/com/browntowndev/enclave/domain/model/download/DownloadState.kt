@@ -13,4 +13,6 @@ data class DownloadState(
     val currentSpeedMBs: Double? = null, // e.g. 12.4
     val errorMessage: String? = null,
     val waitingForUnmeteredNetwork: Boolean = false, // True if blocked because unmetered (WiFi) network is required but unavailable
+    /** 0–1 progress while extracting QNN zip packs during finalize; null when not applicable. */
+    val postProcessProgress: Float? = null,
 )

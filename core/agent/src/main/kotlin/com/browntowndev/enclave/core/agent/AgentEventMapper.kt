@@ -56,6 +56,13 @@ object AgentEventMapper {
             -> null
             is FfiAgentEvent.VisibleAssistantText ->
                 AgentLoopEvent.TextToken(event.text)
+            is FfiAgentEvent.ModelApiRetryScheduled ->
+                AgentLoopEvent.ModelApiRetryScheduled(
+                    attempt = event.attempt.toInt(),
+                    maxAttempts = event.maxAttempts.toInt(),
+                    delayMs = event.delayMs.toLong(),
+                    reason = event.reason,
+                )
         }
 
     fun log(
@@ -124,6 +131,12 @@ object AgentEventMapper {
                     "tool_timed_out tool=${event.toolName} timeoutMs=${event.timeoutMs}",
                 )
             is FfiAgentEvent.VisibleAssistantText -> Unit
+            is FfiAgentEvent.ModelApiRetryScheduled ->
+                loggingPort.warning(
+                    TAG,
+                    "model_api_retry_scheduled attempt=${event.attempt}/${event.maxAttempts} " +
+                        "delayMs=${event.delayMs} reason=${event.reason}",
+                )
             is FfiAgentEvent.TurnStarted,
             is FfiAgentEvent.TurnCompleted,
             -> Unit

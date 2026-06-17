@@ -1,5 +1,4 @@
 package com.browntowndev.enclave.feature.settings
-import com.browntowndev.enclave.core.ui.component.sheet.TosBottomSheet
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -21,6 +20,7 @@ import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Feedback
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Memory
@@ -58,6 +58,7 @@ import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
 import com.browntowndev.enclave.core.ui.component.neo.NeoSettingsSection
 import com.browntowndev.enclave.core.ui.component.neo.NeoThemeChip
 import com.browntowndev.enclave.core.ui.component.neo.NeoToggleRow
+import com.browntowndev.enclave.core.ui.component.sheet.TosBottomSheet
 import com.browntowndev.enclave.core.ui.component.vault.VaultAuthUiState
 import com.browntowndev.enclave.core.ui.component.vault.VaultReauthBottomSheet
 import com.browntowndev.enclave.core.ui.component.vault.VaultUserUiState
@@ -114,7 +115,14 @@ fun SettingsScreen(
     onShowOssLicensesSheet: (Boolean) -> Unit,
     onShowVisionSettingsSheet: (Boolean) -> Unit,
     onNavigateToModelConfigure: (ModelType) -> Unit,
-    onSetDefaultModel: (ModelType, LocalModelConfigurationId?, ApiModelConfigurationId?, TtsProviderId?, MediaProviderId?) -> Unit,
+    onSetDefaultModel: (
+        ModelType,
+        LocalModelConfigurationId?,
+        ApiModelConfigurationId?,
+        TtsProviderId?,
+        MediaProviderId?,
+        com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId?,
+    ) -> Unit,
     onShowLocalModelsSheet: (Boolean) -> Unit,
     onShowByokSheet: (Boolean) -> Unit,
     onNavigateToByokConfigure: () -> Unit,
@@ -142,6 +150,11 @@ fun SettingsScreen(
     onStartCreateTtsProviderAsset: () -> Unit,
     onSelectTtsProviderAsset: (TtsProviderAssetUi?) -> Unit,
     onDeleteTtsProviderAsset: (TtsProviderId) -> Unit,
+    onShowLiveVoiceProvidersSheet: (Boolean) -> Unit = {},
+    onNavigateToLiveVoiceConfigure: () -> Unit = {},
+    onStartCreateLiveVoiceProviderAsset: () -> Unit = {},
+    onSelectLiveVoiceProviderAsset: (LiveVoiceProviderAssetUi?) -> Unit = {},
+    onDeleteLiveVoiceProviderAsset: (com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId) -> Unit = {},
     onShowMediaProvidersSheet: (Boolean) -> Unit,
     onNavigateToMediaConfigure: () -> Unit,
     onStartCreateMediaProviderAsset: () -> Unit,
@@ -152,8 +165,9 @@ fun SettingsScreen(
     onSelectLocalModelConfig: (LocalModelConfigUi?) -> Unit,
     onDeleteLocalModelAsset: (LocalModelId) -> Unit,
     onDeleteLocalModelConfig: (LocalModelConfigurationId) -> Unit,
-    onConfirmDeletionWithReassignment: (LocalModelConfigurationId?, ApiModelConfigurationId?) -> Unit,
+    onConfirmDeletionWithReassignment: (LocalModelConfigurationId?, ApiModelConfigurationId?, MediaProviderId?) -> Unit,
     onDismissDeletionSafety: () -> Unit,
+    onDeleteModelPack: (String) -> Unit = {},
     onSubmitVaultReauthPassword: (String) -> Unit = {},
     onConfirmAdoptCloudFromSettings: () -> Unit = {},
     onCancelVaultReauth: () -> Unit = {},
@@ -253,6 +267,12 @@ fun SettingsScreen(
                         onClick = { onShowTtsProvidersSheet(true) },
                     )
                     NeoNavRow(
+                        title = "Live Voice",
+                        subtitle = "Manage realtime speech-to-speech providers",
+                        icon = Icons.Default.GraphicEq,
+                        onClick = { onShowLiveVoiceProvidersSheet(true) },
+                    )
+                    NeoNavRow(
                         title = "Media Generation Models",
                         subtitle = "Manage Image and Video generation APIs",
                         icon = Icons.Default.Palette,
@@ -331,7 +351,7 @@ fun SettingsScreen(
                         onClick = { onShowFeedbackSheet(true) },
                     )
                     NeoNavRow(
-                        title = "Open Source Licenses",
+                        title = "Licenses & Attributions",
                         icon = Icons.Default.Info,
                         onClick = { onShowOssLicensesSheet(true) },
                     )
@@ -370,6 +390,17 @@ fun SettingsScreen(
                 onStartCreateTtsProviderAsset = onStartCreateTtsProviderAsset,
                 onSelectTtsProviderAsset = onSelectTtsProviderAsset,
                 onDeleteTtsProviderAsset = onDeleteTtsProviderAsset,
+            )
+        }
+
+        if (uiState.home.isLiveVoiceProvidersSheetOpen) {
+            LiveVoiceProvidersBottomSheet(
+                uiState = uiState,
+                onDismiss = { onShowLiveVoiceProvidersSheet(false) },
+                onNavigateToLiveVoiceConfigure = onNavigateToLiveVoiceConfigure,
+                onStartCreateLiveVoiceProviderAsset = onStartCreateLiveVoiceProviderAsset,
+                onSelectLiveVoiceProviderAsset = onSelectLiveVoiceProviderAsset,
+                onDeleteLiveVoiceProviderAsset = onDeleteLiveVoiceProviderAsset,
             )
         }
 
@@ -416,6 +447,7 @@ fun SettingsScreen(
                 onDeleteLocalModelConfig = onDeleteLocalModelConfig,
                 onConfirmDeletionWithReassignment = onConfirmDeletionWithReassignment,
                 onDismissDeletionSafety = onDismissDeletionSafety,
+                onDeleteModelPack = onDeleteModelPack,
             )
         }
 
@@ -739,7 +771,7 @@ fun PreviewSettingsScreen() {
             onShowOssLicensesSheet = {},
             onShowVisionSettingsSheet = {},
             onNavigateToModelConfigure = {},
-            onSetDefaultModel = { _, _, _, _, _ -> },
+            onSetDefaultModel = { _, _, _, _, _, _ -> },
             onShowLocalModelsSheet = {},
             onShowByokSheet = {},
             onNavigateToByokConfigure = {},
@@ -767,6 +799,11 @@ fun PreviewSettingsScreen() {
             onStartCreateTtsProviderAsset = {},
             onSelectTtsProviderAsset = {},
             onDeleteTtsProviderAsset = {},
+            onShowLiveVoiceProvidersSheet = {},
+            onNavigateToLiveVoiceConfigure = {},
+            onStartCreateLiveVoiceProviderAsset = {},
+            onSelectLiveVoiceProviderAsset = {},
+            onDeleteLiveVoiceProviderAsset = {},
             onShowMediaProvidersSheet = {},
             onNavigateToMediaConfigure = {},
             onStartCreateMediaProviderAsset = {},
@@ -777,7 +814,7 @@ fun PreviewSettingsScreen() {
             onSelectLocalModelConfig = {},
             onDeleteLocalModelAsset = {},
             onDeleteLocalModelConfig = {},
-            onConfirmDeletionWithReassignment = { _, _ -> },
+            onConfirmDeletionWithReassignment = { _, _, _ -> },
             onDismissDeletionSafety = {},
         )
     }

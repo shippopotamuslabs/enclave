@@ -1,15 +1,15 @@
 {
   "tools": [
     {
-      "name": "disclose_tool_schemas",
+      "name": "tool_discovery_tool",
       "aliases": [],
       "reproducible": true,
       "schema_hint": {
         "required_fields": [
           {
-            "name": "tool_names",
-            "ty": "array",
-            "description": "Deferred tool names whose full schemas should be disclosed"
+            "name": "capability",
+            "ty": "string",
+            "description": "Executable action to enable; never a fact, question, topic, or web-search query"
           }
         ],
         "defaults": {}
@@ -19,12 +19,13 @@
       "name": "read_context_reference",
       "aliases": [],
       "reproducible": true,
+      "description": "[RARE] Fetch exact content for a context reference ID only when a spill envelope or context sidecar explicitly names that ID. Never use for discovery, search, or browsing references. IDs starting with tool-schema- return the full deferred tool registry (all tools)—use tool_discovery_tool instead. Route retrieval needs: past conversations → search_chat_history; web/current facts → web_search; hidden executable tools → tool_discovery_tool.",
       "schema_hint": {
         "required_fields": [
           {
             "name": "reference_id",
             "ty": "string",
-            "description": "ID of the context reference to retrieve"
+            "description": "Exact context reference ID from a spill envelope or sidecar; never for discovery or search. tool-schema-* IDs return the full deferred registry—use tool_discovery_tool instead."
           }
         ],
         "defaults": {}

@@ -19,6 +19,7 @@ interface PromptComposerPort {
         retrievedMemories: List<Memory> = emptyList(),
         retrievedSearchResults: String? = null,
         retrievedXSearchResults: String? = null,
+        compactStaticPrompt: Boolean = false,
     ): String
 
     /**

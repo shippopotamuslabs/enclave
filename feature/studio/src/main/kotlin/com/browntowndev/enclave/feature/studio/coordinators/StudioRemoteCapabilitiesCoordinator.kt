@@ -37,27 +37,44 @@ class StudioRemoteCapabilitiesCoordinator
                     remoteCapabilitiesRequestKey(previous.first) ==
                     remoteCapabilitiesRequestKey(next.first)
             }.flatMapLatest { (provider, mediaCapability) ->
-                flow {
-                    val requiresRemoteSchema = requiresRemoteCapabilities(provider)
-                    if (requiresRemoteSchema) {
+                if (provider == null) {
+                    // Local image-generation assignments expose capabilities via MultimodalViewModel's
+                    // localImageCapabilitiesFlow; do not overwrite that state from the remote path.
+                    kotlinx.coroutines.flow.emptyFlow()
+                } else if (requiresRemoteCapabilities(provider)) {
+                    flow {
                         emit(
                             CapabilitiesLoadSnapshot(
                                 isLoading = true,
                                 capabilities = null,
                             ),
                         )
-                    }
-                    val resolved =
-                        resolveMediaProviderCapabilitiesUseCase(
-                            mediaProvider = provider,
-                            mediaCapability = mediaCapability,
+                        val resolved =
+                            resolveMediaProviderCapabilitiesUseCase(
+                                mediaProvider = provider,
+                                mediaCapability = mediaCapability,
+                            )
+                        emit(
+                            CapabilitiesLoadSnapshot(
+                                isLoading = false,
+                                capabilities = resolved,
+                            ),
                         )
-                    emit(
-                        CapabilitiesLoadSnapshot(
-                            isLoading = false,
-                            capabilities = resolved,
-                        ),
-                    )
+                    }
+                } else {
+                    flow {
+                        val resolved =
+                            resolveMediaProviderCapabilitiesUseCase(
+                                mediaProvider = provider,
+                                mediaCapability = mediaCapability,
+                            )
+                        emit(
+                            CapabilitiesLoadSnapshot(
+                                isLoading = false,
+                                capabilities = resolved,
+                            ),
+                        )
+                    }
                 }
             }.onEach { snapshot ->
                 isCapabilitiesLoading.value = snapshot.isLoading
@@ -65,8 +82,7 @@ class StudioRemoteCapabilitiesCoordinator
             }.launchIn(scope)
         }
 
-        fun requiresRemoteCapabilitiesLoading(provider: MediaProviderAsset?): Boolean =
-            requiresRemoteCapabilities(provider)
+        fun requiresRemoteCapabilitiesLoading(provider: MediaProviderAsset?): Boolean = requiresRemoteCapabilities(provider)
 
         private data class CapabilitiesLoadSnapshot(
             val isLoading: Boolean,
@@ -86,4 +102,4 @@ class StudioRemoteCapabilitiesCoordinator
                 append('|')
                 append(provider?.modelName.orEmpty())
             }
-            }
+    }

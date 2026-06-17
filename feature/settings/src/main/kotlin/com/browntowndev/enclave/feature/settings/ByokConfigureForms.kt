@@ -29,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,6 +47,8 @@ import com.browntowndev.enclave.core.ui.component.neo.NeoApiKeyField
 import com.browntowndev.enclave.core.ui.component.neo.NeoCircularProgressIndicator
 import com.browntowndev.enclave.core.ui.component.neo.NeoFilterChip
 import com.browntowndev.enclave.core.ui.component.neo.NeoOutlinedTextField
+import com.browntowndev.enclave.core.ui.component.neo.neoBorder
+import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
 import com.browntowndev.enclave.core.ui.component.neo.neoOutlinedTextFieldColors
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
@@ -53,6 +56,7 @@ import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.inference.ApiModelParameterSupport
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ApiReasoningControlStyle
+import com.browntowndev.enclave.domain.model.inference.ZaiEndpoint
 
 @Composable
 fun SearchSkillConfigurationForm(
@@ -131,6 +135,9 @@ fun ProviderSelectionField(
         ExposedDropdownMenu(
             expanded = providerDropdownExpanded,
             onDismissRequest = { providerDropdownExpanded = false },
+            modifier = Modifier.neoBorder(color = neoBorderColor(), shape = EnclaveNeoTokens.shape),
+            shape = EnclaveNeoTokens.shape,
+            containerColor = MaterialTheme.colorScheme.surface,
         ) {
             ApiProvider.entries.filter(ApiProvider::supportsChat).forEach { provider ->
                 DropdownMenuItem(
@@ -138,8 +145,11 @@ fun ProviderSelectionField(
                     onClick = {
                         val nextBaseUrl =
                             when {
-                                asset.baseUrl == asset.provider.defaultBaseUrl() -> provider.defaultBaseUrl()
-                                asset.baseUrl.isNullOrBlank() -> provider.defaultBaseUrl()
+                                provider == ApiProvider.ZAI -> ZaiEndpoint.PUBLIC.baseUrl
+                                asset.provider == ApiProvider.ZAI -> provider.defaultBaseUrl()
+                                asset.baseUrl.isNullOrBlank() ||
+                                    asset.baseUrl == asset.provider.defaultBaseUrl() ->
+                                    provider.defaultBaseUrl()
                                 else -> asset.baseUrl
                             }
                         onAssetChange(
@@ -353,9 +363,11 @@ internal fun reusableCredentialsForProvider(
     apiAssets: List<ApiModelAssetUi>,
     mediaAssets: List<MediaProviderAssetUi> = emptyList(),
     ttsAssets: List<TtsProviderAssetUi> = emptyList(),
+    liveVoiceAssets: List<LiveVoiceProviderAssetUi> = emptyList(),
     excludeApiCredentialsId: com.browntowndev.enclave.domain.model.config.ApiCredentialsId? = null,
     excludeMediaProviderId: com.browntowndev.enclave.domain.model.config.MediaProviderId? = null,
     excludeTtsProviderId: com.browntowndev.enclave.domain.model.config.TtsProviderId? = null,
+    excludeLiveVoiceProviderId: com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId? = null,
 ): List<ReusableApiCredentialUi> {
     val fromApi =
         apiAssets
@@ -403,7 +415,23 @@ internal fun reusableCredentialsForProvider(
                     credentialAlias = asset.credentialAlias,
                 )
             }
-    return (fromApi + fromMedia + fromTts).distinctBy { it.credentialAlias }
+    val fromLiveVoice =
+        liveVoiceAssets
+            .filter { asset ->
+                asset.provider == provider &&
+                    asset.id != excludeLiveVoiceProviderId &&
+                    asset.credentialAlias.isNotBlank()
+            }.map { asset ->
+                ReusableApiCredentialUi(
+                    credentialsId =
+                        com.browntowndev.enclave.domain.model.config
+                            .ApiCredentialsId(""),
+                    displayName = asset.displayName,
+                    providerLabel = asset.provider.displayName,
+                    credentialAlias = asset.credentialAlias,
+                )
+            }
+    return (fromApi + fromMedia + fromTts + fromLiveVoice).distinctBy { it.credentialAlias }
 }
 
 internal fun resolveSelectedReusableCredential(
@@ -509,6 +537,9 @@ fun ReusableCredentialDropdown(
         DropdownMenu(
             expanded = reusableCredentialDropdownExpanded,
             onDismissRequest = { reusableCredentialDropdownExpanded = false },
+            modifier = Modifier.neoBorder(color = neoBorderColor(), shape = EnclaveNeoTokens.shape),
+            shape = EnclaveNeoTokens.shape,
+            containerColor = MaterialTheme.colorScheme.surface,
         ) {
             if (selectedReusableCredential != null) {
                 DropdownMenuItem(
@@ -563,12 +594,19 @@ fun CredentialsConfigurationForm(
             onAssetChange = onAssetChange,
         )
 
-        NeoOutlinedTextField(
-            value = asset.baseUrl ?: "",
-            onValueChange = { onAssetChange(asset.copy(baseUrl = it)) },
-            label = { Text("Base URL (Optional)") },
-            modifier = Modifier.fillMaxWidth(),
-        )
+        if (asset.provider == ApiProvider.ZAI) {
+            ZaiEndpointSelectionField(
+                asset = asset,
+                onAssetChange = onAssetChange,
+            )
+        } else {
+            NeoOutlinedTextField(
+                value = asset.baseUrl ?: "",
+                onValueChange = { onAssetChange(asset.copy(baseUrl = it)) },
+                label = { Text("Base URL (Optional)") },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
 
         ApiKeyWithReuseSection(
             reusableCredentials = reusableCredentials,
@@ -866,6 +904,9 @@ fun TuningConfiguration(
             ExposedDropdownMenu(
                 expanded = reasoningDropdownExpanded,
                 onDismissRequest = { reasoningDropdownExpanded = false },
+                modifier = Modifier.neoBorder(color = neoBorderColor(), shape = EnclaveNeoTokens.shape),
+                shape = EnclaveNeoTokens.shape,
+                containerColor = MaterialTheme.colorScheme.surface,
             ) {
                 reasoningOptions(reasoningPolicy).forEach { option ->
                     DropdownMenuItem(
@@ -963,6 +1004,13 @@ fun PresetConfigurationForm(
     onNavigateToCustomHeaders: () -> Unit,
     discoveryCallbacks: ModelDiscoveryFieldCallbacks,
 ) {
+    LaunchedEffect(provider, config.id, config.isFreshPreset) {
+        val normalized = config.applyProviderPresetDefaultsIfFresh(provider)
+        if (normalized != config) {
+            onConfigChange(normalized)
+        }
+    }
+
     val hasReadonlyContextWindow = selectedModelMetadata?.contextWindowTokens != null
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -1194,4 +1242,22 @@ fun PreviewByokConfigureOpenRouterPreset() {
             onSaveSearchSettings = {},
         )
     }
+}
+
+internal fun freshApiPresetDraft(provider: ApiProvider): ApiModelConfigUi =
+    ApiModelConfigUi(
+        temperature = provider.defaultPresetTemperature(),
+        isFreshPreset = true,
+    )
+
+internal fun ApiModelConfigUi.applyProviderPresetDefaultsIfFresh(provider: ApiProvider): ApiModelConfigUi {
+    if (!isFreshPreset) return this
+    val recommendedTemperature = provider.defaultPresetTemperature()
+    val updated =
+        if (temperature == ApiProvider.GENERIC_PRESET_TEMPERATURE && temperature != recommendedTemperature) {
+            copy(temperature = recommendedTemperature)
+        } else {
+            this
+        }
+    return updated.copy(isFreshPreset = false)
 }

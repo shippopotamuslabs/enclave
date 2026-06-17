@@ -2,11 +2,21 @@ package com.browntowndev.enclave.domain.util
 
 import com.browntowndev.enclave.domain.model.chat.ChatMessage
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
+import com.browntowndev.enclave.domain.usecase.chat.SearchToolPromptComposer
 
 /**
  * Centralized context-window budgeting for preflight history trimming and tool loops.
  */
 object ContextWindowPlanner {
+    /** Local agent-loop sessions below this use compact static prompts. */
+    const val SMALL_CONTEXT_AGENT_LOOP_THRESHOLD = 32_000
+    /** Llama.cpp sessions at or above this use FIXED_KV Rust policy; below use SMALL_CONTEXT. */
+    const val LOCAL_FIXED_KV_CONTEXT_THRESHOLD = 12_000
+
+    private const val MIN_COMPACT_VOLATILE_CONTEXT_CHARS = 512
+    private const val COMPACT_VOLATILE_CONTEXT_CHARS_DIVISOR = 2
+    private const val VOLATILE_CONTEXT_TRUNCATION_NOTE = "\n[Context truncated to fit local model window]"
+
     const val DEFAULT_OUTPUT_RESERVE_TOKENS = 1_024
     const val DEFAULT_SAFETY_BUFFER_TOKENS = 256
     const val DEFAULT_IMAGE_RESERVE_TOKENS = 1_024
@@ -47,18 +57,9 @@ object ContextWindowPlanner {
     ): Budget {
         val outputReserve = outputReserveFor(contextWindowTokens, options.maxTokens)
         val reasoningReserve = options.reasoningBudget.coerceAtLeast(0)
-        val catalogTokens =
+        val discoveryInstructionTokens =
             if (options.toolCatalog.isNotEmpty()) {
-                val compactCatalogPayload =
-                    options.toolCatalog.joinToString(separator = "\n") { entry ->
-                        val args =
-                            (
-                                entry.requiredArguments.map { it.name to "required" } +
-                                    entry.optionalArguments.map { it.name to "optional" }
-                            ).joinToString(", ") { (n, k) -> "$n:$k" }
-                        "TOOL CATALOG ${entry.name} ${entry.description} $args"
-                    }
-                tokenCounter.countTokens(compactCatalogPayload, modelId)
+                tokenCounter.countTokens(SearchToolPromptComposer.TOOL_DISCOVERY_INSTRUCTION_TEXT, modelId)
             } else {
                 0
             }
@@ -72,7 +73,7 @@ object ContextWindowPlanner {
             } else {
                 0
             }
-        val toolSchemaTokens = catalogTokens + activeSchemaTokens
+        val toolSchemaTokens = discoveryInstructionTokens + activeSchemaTokens
         val mediaReserve = options.imageUris.size * DEFAULT_IMAGE_RESERVE_TOKENS
 
         return Budget(
@@ -119,6 +120,27 @@ object ContextWindowPlanner {
     ): Boolean {
         val pressureLimit = minOf(budget.usablePromptTokens, budget.thresholdTokens)
         return estimatedPromptTokens > pressureLimit
+    }
+
+    fun isSmallContextLocalWindow(
+        isLocal: Boolean,
+        contextWindowTokens: Int?,
+    ): Boolean = isLocal && contextWindowTokens != null && contextWindowTokens < SMALL_CONTEXT_AGENT_LOOP_THRESHOLD
+
+    fun compactVolatileTurnContext(
+        context: String?,
+        contextWindowTokens: Int?,
+    ): String? {
+        val trimmed = context?.trim()?.takeIf(String::isNotEmpty) ?: return null
+        val window = contextWindowTokens?.takeIf { it > 0 } ?: return trimmed
+        val maxChars =
+            (window / COMPACT_VOLATILE_CONTEXT_CHARS_DIVISOR)
+                .coerceAtLeast(MIN_COMPACT_VOLATILE_CONTEXT_CHARS)
+        if (trimmed.length <= maxChars) return trimmed
+
+        return trimmed
+            .take((maxChars - VOLATILE_CONTEXT_TRUNCATION_NOTE.length).coerceAtLeast(1))
+            .trimEnd() + VOLATILE_CONTEXT_TRUNCATION_NOTE
     }
 
     fun outputReserveFor(

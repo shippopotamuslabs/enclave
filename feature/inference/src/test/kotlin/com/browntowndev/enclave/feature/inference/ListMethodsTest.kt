@@ -13,6 +13,7 @@ class ListMethodsTest {
                 activeModelProvider = mockk(relaxed = true),
                 loggingPort = mockk(relaxed = true),
                 toolExecutor = mockk(relaxed = true),
+            embeddingEnginePort = mockk(relaxed = true),
             )
 
         manager.javaClass.getDeclaredClasses().forEach { innerClass ->

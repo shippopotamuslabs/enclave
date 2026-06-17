@@ -44,6 +44,18 @@ internal object GoogleAgentLoopContentMapper {
                 null
             }
 
+        if (EngineInternalMessageMapper.isEngineInternalMessage(message.metadataJson)) {
+            val wireText = EngineInternalMessageMapper.formatForProviderWire(message.content)
+            if (wireText.isBlank()) {
+                return null
+            }
+            return Content
+                .builder()
+                .role("user")
+                .parts(listOf(Part.fromText(wireText)))
+                .build()
+        }
+
         val contentText =
             if (!prependedText.isNullOrBlank()) {
                 "$prependedText\n\n${message.content}"

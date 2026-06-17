@@ -82,6 +82,20 @@ class EnclaveDatabaseMigrationTest {
             }
         assertTrue(localModelColumnNames.contains("display_name"))
 
+        val localConfigColumns = sqliteDb.query("PRAGMA table_info('local_model_configurations')")
+        val localConfigColumnDefaults =
+            buildMap {
+                localConfigColumns.use {
+                    while (it.moveToNext()) {
+                        put(
+                            it.getString(it.getColumnIndexOrThrow("name")),
+                            it.getString(it.getColumnIndexOrThrow("dflt_value")),
+                        )
+                    }
+                }
+            }
+        assertEquals("1024", localConfigColumnDefaults["reasoning_budget"])
+
         db.close()
     }
 
@@ -291,6 +305,76 @@ class EnclaveDatabaseMigrationTest {
             assertTrue(columns.containsKey("message_id"), "message_id column must exist")
             assertTrue(columns.containsKey("inference_content"), "inference_content column must exist")
             assertTrue(columns.containsKey("updated_at"), "updated_at column must exist")
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("LV-DB-001")
+    fun lvDb001_liveVoiceProvidersTableExists() {
+        val db =
+            Room
+                .inMemoryDatabaseBuilder(
+                    ApplicationProvider.getApplicationContext(),
+                    EnclaveDatabase::class.java,
+                ).allowMainThreadQueries()
+                .build()
+
+        try {
+            val sqliteDb = db.openHelper.writableDatabase
+            val cursor =
+                sqliteDb.query(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                    arrayOf("live_voice_providers"),
+                )
+            assertTrue(cursor.use { it.count == 1 })
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("LV-DB-002")
+    fun lvDb002_defaultModelsHasLiveVoiceProviderIdColumn() {
+        val db =
+            Room
+                .inMemoryDatabaseBuilder(
+                    ApplicationProvider.getApplicationContext(),
+                    EnclaveDatabase::class.java,
+                ).allowMainThreadQueries()
+                .build()
+
+        try {
+            val sqliteDb = db.openHelper.writableDatabase
+            val cursor = sqliteDb.query("PRAGMA table_info('default_models')")
+            val columnNames =
+                buildList {
+                    cursor.use {
+                        while (it.moveToNext()) {
+                            add(it.getString(it.getColumnIndexOrThrow("name")))
+                        }
+                    }
+                }
+            assertTrue(columnNames.contains("live_voice_provider_id"))
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("LV-DB-VERSION-001")
+    fun lvDbVersion001_databaseVersionIsThree() {
+        val db =
+            Room
+                .inMemoryDatabaseBuilder(
+                    ApplicationProvider.getApplicationContext(),
+                    EnclaveDatabase::class.java,
+                ).allowMainThreadQueries()
+                .build()
+
+        try {
+            assertEquals(3, db.openHelper.writableDatabase.version)
         } finally {
             db.close()
         }

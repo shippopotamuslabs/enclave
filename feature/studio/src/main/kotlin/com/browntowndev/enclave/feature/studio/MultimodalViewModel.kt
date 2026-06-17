@@ -2,15 +2,27 @@ package com.browntowndev.enclave.feature.studio
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.enclave.domain.model.config.MediaCapability
+import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.inference.ModelType
+import com.browntowndev.enclave.domain.model.media.GenerationSettings
 import com.browntowndev.enclave.domain.model.media.ProviderCapabilities
+import com.browntowndev.enclave.domain.model.media.StudioModelOverride
+import com.browntowndev.enclave.domain.model.media.StudioTemplate
+
 import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
+import com.browntowndev.enclave.domain.port.repository.UiSelectionRepository
 import com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase
 import com.browntowndev.enclave.domain.usecase.inference.ShouldModeratePromptUseCase
-import com.browntowndev.enclave.domain.usecase.media.ResolveMediaModelTypeUseCase
+import com.browntowndev.enclave.domain.usecase.inference.SubmitModerationReportUseCase
+import com.browntowndev.enclave.domain.usecase.media.GetImageGenerationCapabilitiesUseCase
+import com.browntowndev.enclave.domain.usecase.media.GetStudioCapablePresetsUseCase
+
 import com.browntowndev.enclave.feature.studio.coordinators.CapabilitiesPlaybackInputs
 import com.browntowndev.enclave.feature.studio.coordinators.GenerationInputs
+import com.browntowndev.enclave.feature.studio.coordinators.OverrideInputs
 import com.browntowndev.enclave.feature.studio.coordinators.PlaybackInputs
 import com.browntowndev.enclave.feature.studio.coordinators.PromptCoreInputs
 import com.browntowndev.enclave.feature.studio.coordinators.PromptInputs
@@ -20,13 +32,19 @@ import com.browntowndev.enclave.feature.studio.coordinators.StudioAlbumSelection
 import com.browntowndev.enclave.feature.studio.coordinators.StudioCapabilitiesCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioGenerationCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioMediaActionsCoordinator
+import com.browntowndev.enclave.feature.studio.coordinators.StudioModelOverrideCoordinator
+import com.browntowndev.enclave.feature.studio.coordinators.StudioResolvedModelCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioPlaybackCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioPromptCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioRemoteCapabilitiesCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioSpeechCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioUiStateReducer
+import com.browntowndev.enclave.feature.studio.StudioCapablePresetsUi
+import com.browntowndev.enclave.feature.studio.StudioModelOptionUi
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -34,15 +52,21 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 
 @HiltViewModel
 @OptIn(ExperimentalCoroutinesApi::class)
+@Suppress("TooManyFunctions")
 class MultimodalViewModel
     @Inject
     constructor(
@@ -50,7 +74,8 @@ class MultimodalViewModel
         private val mediaProviderRepository: MediaProviderRepositoryPort,
         private val moderatePromptUseCase: ModeratePromptUseCase,
         private val shouldModeratePromptUseCase: ShouldModeratePromptUseCase,
-        private val resolveMediaModelTypeUseCase: ResolveMediaModelTypeUseCase,
+        private val submitModerationReportUseCase: SubmitModerationReportUseCase,
+        private val getImageGenerationCapabilitiesUseCase: GetImageGenerationCapabilitiesUseCase,
         private val generationCoordinator: StudioGenerationCoordinator,
         private val albumSelectionCoordinator: StudioAlbumSelectionCoordinator,
         private val speechCoordinator: StudioSpeechCoordinator,
@@ -58,31 +83,66 @@ class MultimodalViewModel
         private val studioUiStateReducer: StudioUiStateReducer,
         private val capabilitiesCoordinator: StudioCapabilitiesCoordinator,
         private val remoteCapabilitiesCoordinator: StudioRemoteCapabilitiesCoordinator,
-        val promptCoordinator: StudioPromptCoordinator,
-        val mediaActionsCoordinator: StudioMediaActionsCoordinator,
+        private val promptCoordinator: StudioPromptCoordinator,
+        private val mediaActionsCoordinator: StudioMediaActionsCoordinator,
+        private val uiSelectionRepository: UiSelectionRepository,
+        private val overrideCoordinator: StudioModelOverrideCoordinator,
+        private val resolvedModelCoordinator: StudioResolvedModelCoordinator,
+        private val getStudioCapablePresetsUseCase: GetStudioCapablePresetsUseCase,
     ) : ViewModel() {
+        private val generationAttemptInFlight = AtomicBoolean(false)
         private val sessionMedia = albumSelectionCoordinator.sessionMediaFlow(viewModelScope)
 
-        private val activeModelFlow =
-            combine(
-                promptCoordinator.mediaType,
-                promptCoordinator.settings,
-                defaultModelRepository.observeDefaults(),
-            ) { type, settings, defaults ->
-                val modelType = resolveMediaModelTypeUseCase(type, settings)
-                defaults.find { it.modelType == modelType }
-            }
+        private val _moderationEvents = Channel<ModerationEvent>(Channel.BUFFERED)
+        val moderationEvents: Flow<ModerationEvent> = _moderationEvents.receiveAsFlow()
+
+        private val resolvedStudioModelFlow =
+            resolvedModelCoordinator.observeResolvedModel(
+                overrideState = overrideCoordinator.state,
+                mediaType = promptCoordinator.mediaType,
+                settings = promptCoordinator.settings,
+                defaults = defaultModelRepository.observeDefaults(),
+            )
+
+        private val activeModelDisplayNameFlow =
+            resolvedStudioModelFlow
+                .map { it.displayName }
+                .distinctUntilChanged()
 
         private val activeProviderFlow =
-            activeModelFlow.flatMapLatest { assignment ->
-                if (assignment?.mediaProviderId != null) {
+            resolvedStudioModelFlow.flatMapLatest { resolved ->
+                val providerId = resolved.mediaProviderId
+                if (providerId != null) {
                     mediaProviderRepository.getMediaProviders().map { providers ->
-                        providers.find { it.id == assignment.mediaProviderId }
+                        providers.find { it.id == providerId }
                     }
                 } else {
                     flowOf(null)
                 }
             }
+
+        /**
+         * Emits the on-device backend capabilities while the active image-generation slot is a
+         * local stable-diffusion (Bonsai) assignment, or `null` for remote/other slots so the
+         * remote capabilities coordinator stays in charge of provider-backed schemas.
+         *
+         * Capabilities are sourced through [GetImageGenerationCapabilitiesUseCase] so Studio drives
+         * its pickers from the same capability shape as remote providers.
+         */
+        private val localImageCapabilitiesFlow =
+            resolvedStudioModelFlow
+                .map { resolved ->
+                    resolved.localConfigId?.takeIf { resolved.mediaProviderId == null }
+                }.distinctUntilChanged()
+                .flatMapLatest { localConfigId: LocalModelConfigurationId? ->
+                    if (localConfigId == null) {
+                        flowOf<ProviderCapabilities?>(null)
+                    } else {
+                        flow {
+                            emit(getImageGenerationCapabilitiesUseCase.localCapabilities(localConfigId))
+                        }
+                    }
+                }
 
         private val _capabilities = MutableStateFlow<ProviderCapabilities?>(null)
         private val _isCapabilitiesLoading = MutableStateFlow(false)
@@ -101,7 +161,8 @@ class MultimodalViewModel
                 .observeDefaults()
                 .map { assignments ->
                     assignments.any { assignment ->
-                        assignment.modelType == ModelType.IMAGE_EDIT && assignment.mediaProviderId != null
+                        assignment.modelType == ModelType.IMAGE_EDIT &&
+                            (assignment.mediaProviderId != null || assignment.localConfigId != null)
                     }
                 }.distinctUntilChanged()
 
@@ -157,19 +218,37 @@ class MultimodalViewModel
 
         private val generationInputsFlow =
             combine(
-                generationCoordinator.isGenerating,
-                generationCoordinator.lastSubmittedPrompt,
-                generationCoordinator.isContinualGenerationActive,
-                generationCoordinator.error,
-                generationCoordinator.videoGenerationState,
-            ) { isGenerating, lastSubmittedPrompt, isContinualGenerationActive, error, videoGenerationState ->
-                GenerationInputs(
-                    isGenerating = isGenerating,
-                    lastSubmittedPrompt = lastSubmittedPrompt,
-                    isContinualGenerationActive = isContinualGenerationActive,
-                    error = error,
-                    videoGenerationState = videoGenerationState,
+                combine(
+                    generationCoordinator.isGenerating,
+                    generationCoordinator.lastSubmittedPrompt,
+                    generationCoordinator.isContinualGenerationActive,
+                    generationCoordinator.error,
+                    generationCoordinator.generationProgressLabel,
+                ) { isGenerating, lastSubmittedPrompt, isContinualGenerationActive, error, generationProgressLabel ->
+                    GenerationInputs(
+                        isGenerating = isGenerating,
+                        lastSubmittedPrompt = lastSubmittedPrompt,
+                        isContinualGenerationActive = isContinualGenerationActive,
+                        error = error,
+                        generationProgressLabel = generationProgressLabel,
+                        activeGenerationExpectedCount = 1,
+                        activeGenerationBaselineMediaCount = 0,
+                        videoGenerationState = VideoGenerationState.Idle,
+                    )
+                },
+                combine(
+                    generationCoordinator.activeGenerationExpectedCount,
+                    generationCoordinator.activeGenerationBaselineMediaCount,
+                ) { activeGenerationExpectedCount, activeGenerationBaselineMediaCount ->
+                    activeGenerationExpectedCount to activeGenerationBaselineMediaCount
+                },
+            ) { generationInputs, generationTracking ->
+                generationInputs.copy(
+                    activeGenerationExpectedCount = generationTracking.first,
+                    activeGenerationBaselineMediaCount = generationTracking.second,
                 )
+            }.combine(generationCoordinator.videoGenerationState) { generationInputs, videoGenerationState ->
+                generationInputs.copy(videoGenerationState = videoGenerationState)
             }
 
         private val selectionInputsFlow =
@@ -194,12 +273,14 @@ class MultimodalViewModel
                 _capabilities,
                 _isCapabilitiesLoading,
                 activeProviderFlow,
-            ) { capabilities, isCapabilitiesLoading, activeProvider ->
+                activeModelDisplayNameFlow,
+            ) { capabilities, isCapabilitiesLoading, activeProvider, activeModelDisplayName ->
                 CapabilitiesPlaybackInputs(
                     capabilities = capabilities,
                     isCapabilitiesLoading =
                         isCapabilitiesLoading &&
                             remoteCapabilitiesCoordinator.requiresRemoteCapabilitiesLoading(activeProvider),
+                    activeModelDisplayName = activeModelDisplayName,
                 )
             }
 
@@ -218,11 +299,47 @@ class MultimodalViewModel
                     isPlayingTts = isPlayingTts,
                     hasImageEditModel = hasImageEdit,
                     hasImageToVideoModel = hasImageToVideo,
+                    activeModelDisplayName = capabilitiesPlayback.activeModelDisplayName,
+                )
+            }
+
+        private val modelPickerAssetsFlow: Flow<StudioCapablePresetsUi> =
+            overrideCoordinator.state
+                .map { it.picker.modelType }
+                .distinctUntilChanged()
+                .flatMapLatest { modelType ->
+                    if (modelType != null) {
+                        getStudioCapablePresetsUseCase(modelType).map { it.toPickerUi() }
+                    } else {
+                        flowOf(StudioCapablePresetsUi.EMPTY)
+                    }
+                }
+
+        private val overrideInputsFlow: Flow<OverrideInputs> =
+            combine(
+                overrideCoordinator.state,
+                modelPickerAssetsFlow,
+            ) { overrideState, pickerAssets ->
+                OverrideInputs(
+                    modelPickerAssets = pickerAssets,
+                    isModelPickerVisible = overrideState.picker.isVisible,
+                    selectedModelIdInPicker = overrideState.picker.pendingSelection?.optionId(),
+                    resolvedModelTypeLabel = overrideState.picker.modelType?.displayName(),
                 )
             }
 
         init {
-            generationCoordinator.startObservers(viewModelScope)
+            generationCoordinator.startObservers(
+                scope = viewModelScope,
+                onActiveGeneration = promptCoordinator::restoreActiveGeneration,
+            )
+            viewModelScope.launch {
+                val persistedMediaType = uiSelectionRepository.selectedStudioMediaType.first()
+                promptCoordinator.restoreLastMediaType(persistedMediaType)
+            }
+            generationCoordinator.moderationEvents
+                .onEach { event -> _moderationEvents.send(event) }
+                .launchIn(viewModelScope)
             speechCoordinator.observeResults(viewModelScope) { text ->
                 promptCoordinator.prompt.value = text
             }
@@ -238,11 +355,22 @@ class MultimodalViewModel
                 capabilities = _capabilities,
                 isCapabilitiesLoading = _isCapabilitiesLoading,
             )
+            // The remote coordinator only resolves provider-backed schemas; feed the on-device
+            // stable-diffusion capabilities directly when the active image slot is local.
+            combine(localImageCapabilitiesFlow, promptCoordinator.mediaType) { localCapabilities, mediaType ->
+                localCapabilities to mediaType
+            }.onEach { (localCapabilities, mediaType) ->
+                if (localCapabilities != null && mediaType == MediaCapability.IMAGE) {
+                    _isCapabilitiesLoading.value = false
+                    _capabilities.value = localCapabilities
+                }
+            }.launchIn(viewModelScope)
             mediaActionsCoordinator.attach(
                 scope = viewModelScope,
                 sessionMedia = sessionMedia,
                 hasImageToVideoModel = hasImageToVideoModelFlow,
             )
+            resolvedModelCoordinator.attachProviderCache(viewModelScope)
         }
 
         fun onMicClick() {
@@ -261,13 +389,126 @@ class MultimodalViewModel
             playbackCoordinator.onStopTts()
         }
 
+        fun onPromptChange(newPrompt: String) {
+            promptCoordinator.onPromptChange(newPrompt)
+        }
+
+        fun onUpdateReferenceImage(uri: String?) {
+            val previousModelType = currentResolvedModelType()
+            promptCoordinator.onUpdateReferenceImage(uri)
+            resolvedModelCoordinator.revalidateOverrideIfModelTypeChanged(
+                overrideCoordinator = overrideCoordinator,
+                previousModelType = previousModelType,
+                mediaType = promptCoordinator.mediaType.value,
+                settings = promptCoordinator.settings.value,
+                scope = viewModelScope,
+            )
+        }
+
+        fun onSettingsToggle() {
+            promptCoordinator.onSettingsToggle()
+        }
+
+        fun onUpdateSettings(newSettings: GenerationSettings) {
+            val previousModelType = currentResolvedModelType()
+            promptCoordinator.onUpdateSettings(newSettings)
+            resolvedModelCoordinator.revalidateOverrideIfModelTypeChanged(
+                overrideCoordinator = overrideCoordinator,
+                previousModelType = previousModelType,
+                mediaType = promptCoordinator.mediaType.value,
+                settings = promptCoordinator.settings.value,
+                scope = viewModelScope,
+            )
+        }
+
+        fun onContinualModeToggle(enabled: Boolean) {
+            promptCoordinator.onContinualModeToggle(enabled)
+        }
+
+        fun onMediaTypeChange(type: MediaCapability) {
+            overrideCoordinator.clearForCapabilityChange()
+            promptCoordinator.onMediaTypeChange(type)
+            viewModelScope.launch {
+                uiSelectionRepository.setStudioMediaType(type)
+            }
+        }
+
+        fun onTemplateSelected(template: StudioTemplate) {
+            promptCoordinator.onTemplateSelected(template)
+        }
+
+        fun onOpenModelPicker() {
+            val modelType = currentResolvedModelType()
+            overrideCoordinator.openPicker(
+                modelType = modelType,
+                current = overrideCoordinator.state.value.committedOverride,
+            )
+        }
+
+        fun onStageModelSelection(option: StudioModelOptionUi) {
+            overrideCoordinator.stageSelection(option.toDomainOverride())
+        }
+
+        fun onConfirmModelSelection() {
+            overrideCoordinator.confirmSelection()
+        }
+
+        fun onCancelModelPicker() {
+            overrideCoordinator.cancelPicker()
+        }
+
+        fun shareMedia(assetIds: Set<String>) {
+            mediaActionsCoordinator.shareMedia(assetIds)
+        }
+
+        fun shareSingleMedia(assetId: String) {
+            mediaActionsCoordinator.shareSingleMedia(assetId)
+        }
+
+        fun onEditMedia(
+            assetId: String?,
+            rehydrateIds: List<String> = emptyList(),
+            rehydrateUris: List<String> = emptyList(),
+            rehydrateTypes: List<String> = emptyList(),
+            rehydratePrompts: List<String> = emptyList(),
+            fromUserAction: Boolean = false,
+        ) {
+            mediaActionsCoordinator.onEditMedia(
+                prompt = promptCoordinator,
+                assetId = assetId,
+                rehydrateIds = rehydrateIds,
+                rehydrateUris = rehydrateUris,
+                rehydrateTypes = rehydrateTypes,
+                rehydratePrompts = rehydratePrompts,
+                fromUserAction = fromUserAction,
+            )
+        }
+
+        fun onAnimateMedia(
+            assetId: String,
+            autoAnimate: Boolean = false,
+            customPrompt: String? = null,
+        ) {
+            mediaActionsCoordinator.onAnimateMedia(
+                prompt = promptCoordinator,
+                assetId = assetId,
+                autoAnimate = autoAnimate,
+                customPrompt = customPrompt,
+            )
+        }
+
+        fun deleteMedia(id: String) {
+            mediaActionsCoordinator.deleteMedia(id)
+        }
+
         val uiState: StateFlow<StudioUiState> =
             combine(
                 promptInputsFlow,
                 generationInputsFlow,
                 selectionInputsFlow,
                 playbackInputsFlow,
-            ) { promptInputs, generationInputs, selectionInputs, playbackInputs ->
+                overrideInputsFlow,
+            ) { promptInputs, generationInputs, selectionInputs, playbackInputs, overrideInputs ->
                 studioUiStateReducer.reduce(
                     StudioUiStateReducer.ReduceParams(
                         prompt = promptInputs.prompt,
@@ -286,13 +527,21 @@ class MultimodalViewModel
                         continualMode = promptInputs.continualMode,
                         isContinualGenerationActive = generationInputs.isContinualGenerationActive,
                         error = generationInputs.error,
+                        generationProgressLabel = generationInputs.generationProgressLabel,
                         lastSubmittedPrompt = generationInputs.lastSubmittedPrompt,
+                        activeGenerationExpectedCount = generationInputs.activeGenerationExpectedCount,
+                        activeGenerationBaselineMediaCount = generationInputs.activeGenerationBaselineMediaCount,
                         videoGenerationState = generationInputs.videoGenerationState,
                         speechState = playbackInputs.speechState,
                         isPlayingTts = playbackInputs.isPlayingTts,
                         referenceMediaType = promptInputs.referenceMediaType,
                         hasImageEditModel = playbackInputs.hasImageEditModel,
                         hasImageToVideoModel = playbackInputs.hasImageToVideoModel,
+                        activeModelDisplayName = playbackInputs.activeModelDisplayName,
+                        modelPickerAssets = overrideInputs.modelPickerAssets,
+                        isModelPickerVisible = overrideInputs.isModelPickerVisible,
+                        selectedModelIdInPicker = overrideInputs.selectedModelIdInPicker,
+                        resolvedModelTypeLabel = overrideInputs.resolvedModelTypeLabel,
                     ),
                 )
             }.stateIn(
@@ -322,21 +571,49 @@ class MultimodalViewModel
         }
 
         fun clearSession() {
+            overrideCoordinator.clearSession()
             promptCoordinator.clearSession(viewModelScope, albumSelectionCoordinator)
+        }
+
+        suspend fun clearSessionIfIdle() {
+            if (!generationCoordinator.isGenerationActive()) {
+                clearSession()
+            }
         }
 
         fun clearError() {
             generationCoordinator.clearError(viewModelScope)
         }
 
+        /**
+         * Submits the moderated prompt as a false-positive report to Firestore so the moderation
+         * thresholds can be tuned. Called when the user taps "GOT IT WRONG?" on the snackbar.
+         */
+        fun reportBlockedPrompt(prompt: String) {
+            viewModelScope.launch {
+                submitModerationReportUseCase(prompt, "blocked")
+                _moderationEvents.send(ModerationEvent.ReportSubmitted)
+            }
+        }
+
         fun generate() {
             if (generationCoordinator.isGenerating.value || generationCoordinator.isContinualGenerationActive.value) {
+                generationAttemptInFlight.set(false)
                 generationCoordinator.stopGeneration()
+                return
+            }
+
+            if (generationAttemptInFlight.get()) {
+                generationAttemptInFlight.set(false)
                 return
             }
 
             val submittedPrompt = promptCoordinator.prompt.value
             if (submittedPrompt.isBlank()) return
+
+            if (!generationAttemptInFlight.compareAndSet(false, true)) {
+                return
+            }
 
             viewModelScope.launch {
                 try {
@@ -344,23 +621,32 @@ class MultimodalViewModel
                     if (shouldModerate) {
                         val moderationResult = moderatePromptUseCase(submittedPrompt)
                         if (moderationResult.blocked) {
-                            generationCoordinator.rejectPrompt(PROMPT_REJECTED_MESSAGE)
+                            generationCoordinator.rejectPromptAsModerated(submittedPrompt)
                             return@launch
                         }
                     }
+
+                    val baselineMediaCountForPrompt =
+                        uiState.value.groupedGallery
+                            .find { group -> group.prompt == submittedPrompt }
+                            ?.mediaItems
+                            ?.size
+                            ?: 0
+                    generationCoordinator.beginGenerationAttempt(
+                        submittedPrompt = submittedPrompt,
+                        mediaType = promptCoordinator.mediaType.value,
+                        continualMode = promptCoordinator.continualMode.value,
+                        settings = promptCoordinator.settings.value,
+                        baselineMediaCountForPrompt = baselineMediaCountForPrompt,
+                        override = overrideCoordinator.state.value.committedOverride,
+                    )
+                    promptCoordinator.prompt.update { "" }
                 } catch (e: Exception) {
                     android.util.Log.e("MultimodalViewModel", "Prompt moderation failed", e)
                     generationCoordinator.rejectPrompt("Failed to verify prompt safety. Please try again.")
-                    return@launch
+                } finally {
+                    generationAttemptInFlight.set(false)
                 }
-
-                generationCoordinator.beginGenerationAttempt(
-                    submittedPrompt = submittedPrompt,
-                    mediaType = promptCoordinator.mediaType.value,
-                    continualMode = promptCoordinator.continualMode.value,
-                    settings = promptCoordinator.settings.value,
-                )
-                promptCoordinator.prompt.update { "" }
             }
         }
 
@@ -373,12 +659,18 @@ class MultimodalViewModel
 
         override fun onCleared() {
             super.onCleared()
+            overrideCoordinator.clearSession()
             speechCoordinator.onCleared()
             playbackCoordinator.onCleared()
         }
 
+        private fun currentResolvedModelType(): ModelType =
+            resolvedModelCoordinator.resolveModelType(
+                promptCoordinator.mediaType.value,
+                promptCoordinator.settings.value,
+            )
+
         private companion object {
             private const val SUBSCRIBE_TIMEOUT_MS = 5_000L
-            private const val PROMPT_REJECTED_MESSAGE = "Prompt rejected due to moderation"
         }
     }

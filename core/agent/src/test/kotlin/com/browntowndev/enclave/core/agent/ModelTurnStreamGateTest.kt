@@ -55,6 +55,23 @@ class ModelTurnStreamGateTest {
         }
 
     @Test
+    fun envelope_tool_markup_finishes_like_native_tool_calls_without_emitting_marker() =
+        runTest {
+            val port = FakeToolStreamGatePort()
+            val gate = ModelTurnStreamGate(port, allowToolCall = true)
+            val emitted = mutableListOf<String>()
+            val envelope =
+                """<tool_call>{"name":"web_search","arguments":{"query":"kotlin"}}</tool_call>"""
+
+            gate.onProviderTextChunk(envelope) { emitted.add(it) }
+            gate.finish(hasNativeToolCalls = false) { emitted.add(it) }
+
+            assertEquals(listOf<String>(), emitted, "envelope markup must not flush as visible text")
+            assertEquals(true, port.finishCalls.single().second, "finish must use native-tool-turn path")
+            assertEquals(envelope, gate.bufferedText(), "buffered envelope preserved for engine ingest")
+        }
+
+    @Test
     fun faal_sg_04_finish_forwards_trailing_flush_to_emit() =
         runTest {
             val port =
@@ -97,5 +114,7 @@ class ModelTurnStreamGateTest {
         ): ToolStreamGateFinish = finishResult
 
         override fun bufferedText(handle: ToolStreamGateHandle): String = buffer.toString()
+
+        override fun hasToolMarkup(handle: ToolStreamGateHandle): Boolean = finishResult.hasToolMarker
     }
 }

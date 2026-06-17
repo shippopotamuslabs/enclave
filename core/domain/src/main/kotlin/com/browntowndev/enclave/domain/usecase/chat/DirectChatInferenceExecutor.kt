@@ -1,8 +1,11 @@
 package com.browntowndev.enclave.domain.usecase.chat
 
 import com.browntowndev.enclave.domain.model.chat.ChatId
+import com.browntowndev.enclave.domain.model.chat.ChatModelOverride
 import com.browntowndev.enclave.domain.model.chat.MessageGenerationState
 import com.browntowndev.enclave.domain.model.chat.MessageId
+import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
+import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.error.ActiveModelConfigurationDecryptException
 import com.browntowndev.enclave.domain.model.error.InferenceIOException
 import com.browntowndev.enclave.domain.model.inference.ModelType
@@ -16,9 +19,13 @@ import com.browntowndev.enclave.domain.port.inference.LlmInferencePort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.MonotonicToolActivationPort
 import com.browntowndev.enclave.domain.port.inference.NoopCommittedInferencePromptPort
+import com.browntowndev.enclave.domain.port.inference.NoopOnDeviceInferenceCancellationPort
+import com.browntowndev.enclave.domain.port.inference.OnDeviceInferenceCancellationPort
 import com.browntowndev.enclave.domain.port.inference.PromptComposerPort
 import com.browntowndev.enclave.domain.port.inference.SearchIntentClassifierPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
+import com.browntowndev.enclave.domain.port.inference.NoopToolSearchEmbeddingCachePort
+import com.browntowndev.enclave.domain.port.inference.ToolSearchEmbeddingCachePort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.MemoriesRepository
 import com.browntowndev.enclave.domain.port.repository.MessageRepository
@@ -55,7 +62,10 @@ class DirectChatInferenceExecutor
         private val searchIntentClassifier: SearchIntentClassifierPort,
         private val toolExecutor: ToolExecutorPort,
         private val monotonicToolActivation: MonotonicToolActivationPort = InMemoryMonotonicToolActivationStore(),
+        private val toolSearchEmbeddingCache: ToolSearchEmbeddingCachePort = NoopToolSearchEmbeddingCachePort,
         private val committedInferencePrompts: CommittedInferencePromptPort = NoopCommittedInferencePromptPort,
+        private val onDeviceInferenceCancellation: OnDeviceInferenceCancellationPort =
+            NoopOnDeviceInferenceCancellationPort,
     ) : ChatInferenceExecutorPort {
         private val historyRehydrator =
             ChatHistoryRehydrator(
@@ -79,6 +89,7 @@ class DirectChatInferenceExecutor
                 searchIntentClassifier = searchIntentClassifier,
                 toolExecutor = toolExecutor,
                 monotonicToolActivation = monotonicToolActivation,
+                toolSearchEmbeddingCache = toolSearchEmbeddingCache,
             )
 
         override fun execute(
@@ -126,8 +137,83 @@ class DirectChatInferenceExecutor
                 }
             }.flowOn(Dispatchers.Default)
 
+        override fun executeWithOverride(
+            prompt: String,
+            userMessageId: MessageId,
+            assistantMessageId: MessageId,
+            chatId: ChatId,
+            userHasImage: Boolean,
+            modelOverride: ChatModelOverride,
+            resolvedConfiguration: ActiveModelConfiguration,
+            backgroundInferenceEnabled: Boolean,
+        ): Flow<MessageGenerationState> =
+            flow {
+                val modelType = ModelType.FAST
+                try {
+                    if (userHasImage) {
+                        emit(MessageGenerationState.Processing(modelType))
+                    }
+                    if (resolvedConfiguration.isLocal) {
+                        val localConfigId = resolvedConfiguration.id
+                            as? com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
+                            ?: throw IllegalStateException(
+                                "Local override configuration must carry a LocalModelConfigurationId " +
+                                    "(got ${resolvedConfiguration.id::class.simpleName})",
+                            )
+                        inferenceFactory.withInferenceServiceForLocalConfig(localConfigId) { service ->
+                            emitAll(
+                                generateWithService(
+                                    prompt = prompt,
+                                    userMessageId = userMessageId,
+                                    assistantMessageId = assistantMessageId,
+                                    chatId = chatId,
+                                    service = service,
+                                    modelType = modelType,
+                                    explicitConfiguration = resolvedConfiguration,
+                                ),
+                            )
+                        }
+                    } else {
+                        val configId = resolvedConfiguration.id as ApiModelConfigurationId
+                        inferenceFactory.withApiServiceForConfig(configId) { service ->
+                            emitAll(
+                                generateWithService(
+                                    prompt = prompt,
+                                    userMessageId = userMessageId,
+                                    assistantMessageId = assistantMessageId,
+                                    chatId = chatId,
+                                    service = service,
+                                    modelType = modelType,
+                                    explicitConfiguration = resolvedConfiguration,
+                                ),
+                            )
+                        }
+                    }
+                } catch (e: InferenceBusyException) {
+                    emit(MessageGenerationState.Failed(error = e, modelType = modelType))
+                } catch (e: ActiveModelConfigurationDecryptException) {
+                    emit(MessageGenerationState.Failed(e, modelType))
+                } catch (e: IllegalStateException) {
+                    emit(MessageGenerationState.Failed(e, modelType))
+                } catch (e: InferenceIOException) {
+                    emit(MessageGenerationState.Failed(e, modelType))
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    loggingPort.error(TAG, "Unexpected error in override mode for ${modelOverride.displayName}", e)
+                    emit(MessageGenerationState.Failed(error = e, modelType = modelType))
+                } catch (e: Throwable) {
+                    loggingPort.error(
+                        TAG,
+                        "Unexpected error in override mode for ${modelOverride.displayName} due to system error",
+                        e,
+                    )
+                    emit(MessageGenerationState.Failed(error = RuntimeException(e), modelType = modelType))
+                }
+            }.flowOn(Dispatchers.Default)
+
         override fun stop() {
-            // No-op for direct executor, cancellation is handled by the coroutine scope
+            onDeviceInferenceCancellation.cancelActiveGeneration()
         }
 
         private fun generateWithService(
@@ -137,6 +223,7 @@ class DirectChatInferenceExecutor
             chatId: ChatId,
             service: LlmInferencePort,
             modelType: ModelType,
+            explicitConfiguration: ActiveModelConfiguration? = null,
         ): Flow<MessageGenerationState> =
             flow {
                 val preparedRequest =
@@ -146,6 +233,7 @@ class DirectChatInferenceExecutor
                         userMessageId = userMessageId,
                         assistantMessageId = assistantMessageId,
                         modelType = modelType,
+                        explicitConfiguration = explicitConfiguration,
                     )
 
                 if (preparedRequest.preRetrievalSources.isNotEmpty()) {
@@ -191,6 +279,10 @@ class DirectChatInferenceExecutor
                                 emit(MessageGenerationState.GeneratingText(event.chunk, event.modelType))
                             }
 
+                            is InferenceEvent.AnswerStreamBoundary -> {
+                                emit(MessageGenerationState.AnswerStreamBoundary(event.modelType))
+                            }
+
                             is InferenceEvent.WebSearchResults -> {
                                 emit(MessageGenerationState.WebSearchSourcesAttached(event.sources, event.modelType))
                             }
@@ -218,6 +310,16 @@ class DirectChatInferenceExecutor
                             is InferenceEvent.PostCompact -> Unit
 
                             is InferenceEvent.ToolRepaired -> Unit
+
+                            is InferenceEvent.ModelApiRetryScheduled ->
+                                emit(
+                                    MessageGenerationState.ModelApiRetryScheduled(
+                                        attempt = event.attempt,
+                                        maxAttempts = event.maxAttempts,
+                                        delayMs = event.delayMs,
+                                        modelType = event.modelType,
+                                    ),
+                                )
 
                             is InferenceEvent.TelemetryCaptured -> {
                                 emit(

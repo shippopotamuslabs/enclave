@@ -3,7 +3,6 @@ package com.browntowndev.enclave.feature.inference.fal
 import com.browntowndev.enclave.domain.model.media.ModelGenerationOutputSchema
 import com.browntowndev.enclave.domain.model.media.OutputMediaKind
 import com.browntowndev.enclave.domain.model.media.OutputMediaUrlPath
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull

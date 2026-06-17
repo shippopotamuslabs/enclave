@@ -125,7 +125,7 @@ class DownloadViewModelUiModelTest {
                 configurations = emptyList(),
             )
         val modelsResult =
-            mockk<DownloadModelsResult> {
+            mockk<DownloadModelsResult>(relaxed = true) {
                 every { utilityAssets } returns listOf(utilityAsset)
             }
         val progress =
@@ -152,6 +152,56 @@ class DownloadViewModelUiModelTest {
         val uiModel = with(viewModel) { progress.toUiModel() }
 
         assertEquals("Speech Recognition", uiModel.displayName)
+    }
+
+    @Test
+    fun `toUiModel uses image safety classifier display name from catalog or utility type`() {
+        val classifierSha = "6de8c7322b88223f734dabe0dfed6761b476a7d31c0b7443c35ec0c887ab2464"
+        val utilityAsset =
+            LocalModelAsset(
+                metadata =
+                    LocalModelMetadata(
+                        id = LocalModelId("image-safety"),
+                        huggingFaceModelName = "",
+                        remoteFileName = "model_quantized.onnx",
+                        localFileName = "model_quantized.onnx",
+                        sha256 = classifierSha,
+                        sizeInBytes = 87_018_507L,
+                        modelFileFormat = ModelFileFormat.ONNX,
+                        displayName = "Image Safety Classifier",
+                        utilityType = UtilityType.IMAGE_SAFETY_CLASSIFIER,
+                    ),
+                configurations = emptyList(),
+            )
+        val modelsResult =
+            mockk<DownloadModelsResult>(relaxed = true) {
+                every { utilityAssets } returns listOf(utilityAsset)
+            }
+        val progress =
+            FileProgress(
+                filename = "model_quantized.onnx",
+                sha256 = classifierSha,
+                bytesDownloaded = 0,
+                totalBytes = 87_018_507L,
+                status = FileStatus.QUEUED,
+                modelTypes = emptyList(),
+            )
+
+        val viewModel =
+            DownloadViewModel(
+                modelDownloadOrchestrator = mockk(relaxed = true),
+                downloadWorkRepository = mockk(relaxed = true),
+                progressParser = mockk(relaxed = true),
+                errorHandler = mockk(relaxed = true),
+                modelsResult = modelsResult,
+                initialErrorMessage = null,
+                autoStartDownloads = false,
+            )
+
+        val uiModel = with(viewModel) { progress.toUiModel() }
+
+        assertEquals("Image Safety Classifier", uiModel.displayName)
+        assertEquals(UtilityType.IMAGE_SAFETY_CLASSIFIER.displayName(), uiModel.displayName)
     }
 
     @Test

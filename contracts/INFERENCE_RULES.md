@@ -1,4 +1,4 @@
-**Enclave – Inference Layer Contract v2.5**
+**Enclave – Inference Layer Contract v2.6**
 
 Non-negotiable rules for the `:feature:inference` module and all model/runtime operations.
 Always enforce together with `ARCHITECTURE_RULES.md` and the defined **Always/Never** Kotlin standards.
@@ -69,7 +69,29 @@ Execute the required 6-step pipeline for complex queries:
 - **Layer 2 (Activation Probe):** Use linear probes on pooled features if exposed by LiteRT; otherwise, fallback to the 1B judge.
 - **UX Requirement:** **Silent rewrite.** Display a small red shield icon (`Color.Red`). Tapping the icon shows a one-line reason. No disclosure of original text.
 
-## 7. Executable Validation
+## 7. Utility ONNX Models (Auxiliary Lane)
+
+The "LiteRT only" rule (§Strict Boundaries) governs the **chat LLM**. Small auxiliary
+models — response **moderation** (KoalaAI/Text-Moderation), image-safety classification
+(Falconsai/nsfw_image_detection), semantic **embeddings**, and **chat-title generation** —
+run on **ONNX Runtime** (`com.microsoft.onnxruntime`) as a sanctioned exception. They are
+not chat engines and must never replace LiteRT for chat.
+
+| Always | Never |
+| :--- | :--- |
+| Run utility inference on `Dispatchers.IO`, off the main thread. | Block the UI thread or the chat send path on a utility model. |
+| Run **outside** the `InferenceLockManager` ON_DEVICE lock so utility models execute **in parallel** with the chat LLM. | Acquire the ON_DEVICE lock for a utility model (it would serialize against chat). |
+| Lazy-load the session once, guarded by a `Mutex` + `@Volatile`, on first use. | Load utility models at app startup or on every call. |
+| Use the **CPU** execution provider (utility runs are short and infrequent). | Contend for the GPU that the LiteRT chat engine uses. |
+| Degrade **silently** to a deterministic fallback on any failure (load error, exception, empty/low-quality output). | Surface a utility-model error to the user or fail the chat turn. |
+| Bundle assets under `app/src/main/assets/models/<name>/` with a committed `model_config.json`; gitignore the binaries. | Commit `.onnx`/tokenizer binaries to git. |
+
+**Encoder-decoder utility models** (e.g. flan-t5 title generator): bound the autoregressive
+greedy-decode loop by `max_output_tokens` from `model_config.json` and stop on `eos_token_id`.
+The "Max 1 model instance loaded" pipeline constraint (§5) applies to the LiteRT chat pipeline,
+not to this auxiliary ONNX lane.
+
+## 8. Executable Validation
 1. **Compile Inference Module:** Run `./gradlew :feature:inference:assembleDebug`. Must pass.
 2. **Architectural Isolation:** Run `./gradlew :feature:inference:dependencies --configuration debugRuntimeClasspath` and verify no Compose UI dependency is introduced.
 3. **State Management:** Ensure all UI-facing inference results are handled via `collectAsStateWithLifecycle()` in the UI layer, with state hoisted to the `ViewModel`.

@@ -1,9 +1,9 @@
 package com.browntowndev.enclave.feature.studio
 
+import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.PromptModerationPort
 import com.browntowndev.enclave.domain.port.inference.PromptModerationScores
 import com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase
-
 import com.browntowndev.enclave.domain.usecase.inference.ShouldModeratePromptUseCase
 import io.mockk.coEvery
 import io.mockk.mockk
@@ -14,9 +14,17 @@ internal fun allowPromptModerationUseCase(): ModeratePromptUseCase =
             override suspend fun classify(prompt: String): PromptModerationScores =
                 PromptModerationScores(scoresByLabel = mapOf("OK" to 1.0))
         },
+        NoOpLoggingPort,
     )
 
 internal fun allowShouldModeratePromptUseCase(shouldModerate: Boolean = true): ShouldModeratePromptUseCase =
-    mockk(relaxed = true) {
-        coEvery { this@mockk.invoke(any()) } returns shouldModerate
+    mockk<ShouldModeratePromptUseCase>(relaxed = true) {
+        coEvery { this@mockk.invoke(any<com.browntowndev.enclave.domain.model.inference.ModelType>()) } returns shouldModerate
     }
+
+internal object NoOpLoggingPort : LoggingPort {
+    override fun debug(tag: String, message: String) = Unit
+    override fun info(tag: String, message: String) = Unit
+    override fun warning(tag: String, message: String) = Unit
+    override fun error(tag: String, message: String, throwable: Throwable?) = Unit
+}

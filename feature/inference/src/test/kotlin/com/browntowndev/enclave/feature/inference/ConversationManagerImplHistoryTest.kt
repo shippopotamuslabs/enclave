@@ -44,6 +44,7 @@ class ConversationManagerImplHistoryTest {
                 activeModelProvider = activeModelProvider,
                 loggingPort = loggingPort,
                 toolExecutor = toolExecutor,
+            embeddingEnginePort = mockk(relaxed = true),
             )
     }
 

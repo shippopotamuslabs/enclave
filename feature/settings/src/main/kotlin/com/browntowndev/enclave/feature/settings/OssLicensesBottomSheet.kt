@@ -46,8 +46,10 @@ fun OssLicensesBottomSheet(
         modifier = modifier,
     ) {
         NeoSheetHeader(
-            title = "Open Source Licenses",
-            subtitle = "Enclave is built with the following open-source libraries.",
+            title = "Licenses & Attributions",
+            subtitle =
+                "Open-source libraries, bundled AI model terms, and third-party runtime notices " +
+                    "used by Enclave.",
             onDismiss = onDismiss,
         )
         LazyColumn(

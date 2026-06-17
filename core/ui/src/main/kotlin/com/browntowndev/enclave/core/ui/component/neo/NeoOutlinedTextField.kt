@@ -41,7 +41,7 @@ fun NeoOutlinedTextField(
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     colors: TextFieldColors = neoOutlinedTextFieldColors(),
 ) {
-    Column(modifier = Modifier.fillMaxWidth()) {
+    val field: @Composable () -> Unit = {
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
@@ -62,7 +62,14 @@ fun NeoOutlinedTextField(
             keyboardOptions = keyboardOptions,
             colors = colors,
         )
-        if (supportingText != null) {
+    }
+    if (supportingText == null) {
+        // No wrapper: layout modifiers from the caller (e.g. RowScope.weight) must apply
+        // to this composable's root node, or two fields sharing a Row cannot split width.
+        field()
+    } else {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            field()
             ProvideTextStyle(
                 value =
                     MaterialTheme.typography.bodySmall.copy(

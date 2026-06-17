@@ -36,4 +36,28 @@ class StudioGenerationErrorMessagesTest {
             StudioGenerationErrorMessages.toSnackbarMessage(null),
         )
     }
+
+    @Test
+    fun isModerationError_detectsContentPolicyMessage() {
+        val raw =
+            "fal video generation failed: could not fetch queue result from " +
+                "https://queue.fal.run/requests/1 " +
+                "(fal queue result failed: 422 Output video has sensitive content.)"
+
+        assertTrue(StudioGenerationErrorMessages.isModerationError(raw))
+    }
+
+    @Test
+    fun isModerationError_detectsContentPolicyType() {
+        val raw = "Request failed: content_policy_violation"
+
+        assertTrue(StudioGenerationErrorMessages.isModerationError(raw))
+    }
+
+    @Test
+    fun isModerationError_returnsFalseForGenericFailure() {
+        assertFalse(StudioGenerationErrorMessages.isModerationError("fal image generation failed: timeout"))
+        assertFalse(StudioGenerationErrorMessages.isModerationError(null))
+        assertFalse(StudioGenerationErrorMessages.isModerationError(""))
+    }
 }

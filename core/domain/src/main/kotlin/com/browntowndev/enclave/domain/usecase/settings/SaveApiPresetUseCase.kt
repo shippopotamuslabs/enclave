@@ -35,6 +35,13 @@ class SaveApiPresetUseCase
                     minP = draft.minP,
                     frequencyPenalty = draft.frequencyPenalty,
                     presencePenalty = draft.presencePenalty,
+                    maxTokensDisabled = draft.maxTokensDisabled,
+                    temperatureDisabled = draft.temperatureDisabled,
+                    topPDisabled = draft.topPDisabled,
+                    topKDisabled = draft.topKDisabled,
+                    minPDisabled = draft.minPDisabled,
+                    frequencyPenaltyDisabled = draft.frequencyPenaltyDisabled,
+                    presencePenaltyDisabled = draft.presencePenaltyDisabled,
                     systemPrompt = draft.systemPrompt,
                     reasoningEffort = draft.reasoningEffort ?: defaultReasoningEffort,
                     customHeaders =

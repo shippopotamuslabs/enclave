@@ -71,10 +71,23 @@ class DynamicModelUrlProviderTest {
         }
     }
 
+    @Test
+    fun getModelDownloadUrl_returnsR2UrlWithPathPrefix_whenSourceIsR2AndPathIsProvided() {
+        // Given
+        val spec = createFileSpec(source = "CLOUDFLARE_R2", fileName = "test-model.gguf", huggingFacePath = "my-sub-folder")
+
+        // When
+        val url = urlProvider.getModelDownloadUrl(spec)
+
+        // Then
+        assertEquals("https://config.enclave-app.com/my-sub-folder/test-model.gguf", url)
+    }
+
     private fun createFileSpec(
         source: String,
         fileName: String = "model.gguf",
         huggingFaceModelName: String = "",
+        huggingFacePath: String? = null,
     ): DownloadFileSpec =
         DownloadFileSpec(
             remoteFileName = fileName,
@@ -82,6 +95,7 @@ class DynamicModelUrlProviderTest {
             sha256 = "abc123",
             sizeInBytes = 1000L,
             huggingFaceModelName = huggingFaceModelName,
+            huggingFacePath = huggingFacePath,
             source = source,
             modelFileFormat = "GGUF",
         )

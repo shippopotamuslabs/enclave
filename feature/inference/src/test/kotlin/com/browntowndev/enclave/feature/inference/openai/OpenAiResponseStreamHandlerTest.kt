@@ -16,6 +16,10 @@ import com.openai.models.responses.ResponseReasoningTextDoneEvent
 import com.openai.models.responses.ResponseRefusalDeltaEvent
 import com.openai.models.responses.ResponseRefusalDoneEvent
 import com.openai.models.responses.ResponseStreamEvent
+import com.openai.models.responses.ResponseOutputItem
+import com.openai.models.responses.ResponseOutputItemDoneEvent
+import com.openai.models.responses.ResponseOutputMessage
+import com.openai.models.responses.ResponseOutputText
 import com.openai.models.responses.ResponseTextDeltaEvent
 import com.openai.models.responses.ResponseTextDoneEvent
 import com.openai.models.responses.ResponseUsage
@@ -88,12 +92,39 @@ class OpenAiResponseStreamHandlerTest {
     // ── handleStreamTermination ──────────────────────────────────────────────
 
     @Test
-    fun `handleStreamTermination returns state when recovery is possible`() {
+    fun `handleStreamTermination returns state when substantial text was streamed`() {
         val handler = createHandler()
         val state = StreamState(emittedAny = true)
+        state.streamedAssistantMessage.append("x".repeat(MIN_SALVAGEABLE_STREAM_CHARS))
         val result = handler.handleStreamTermination(state, "stream ended unexpectedly", "checking next event")
         assertNotNull(result)
         assertEquals(state, result)
+    }
+
+    @Test
+    fun `handleStreamTermination returns state when complete tool calls were buffered`() {
+        val handler = createHandler()
+        val state = StreamState(emittedAny = true)
+        state.toolCallRequests +=
+            ToolCallRequest(
+                toolName = "search",
+                argumentsJson = """{"q":"test"}""",
+                provider = "TEST",
+                modelType = ModelType.THINKING,
+                chatId = null,
+                userMessageId = null,
+            )
+        val result = handler.handleStreamTermination(state, "stream ended unexpectedly", "checking next event")
+        assertNotNull(result)
+    }
+
+    @Test
+    fun `handleStreamTermination returns null for short partial so retry path can replay`() {
+        val handler = createHandler()
+        val state = StreamState(emittedAny = true)
+        state.streamedAssistantMessage.append("only a few words")
+        val result = handler.handleStreamTermination(state, "stream ended unexpectedly", "checking next event")
+        assertNull(result)
     }
 
     @Test
@@ -108,7 +139,9 @@ class OpenAiResponseStreamHandlerTest {
     fun `handleStreamTermination returns null for non-recoverable error`() {
         val handler = createHandler()
         val state = StreamState(emittedAny = true)
-        val result = handler.handleStreamTermination(state, "connection refused", "reading next event")
+        // "connection refused" became a transient transport message with the model
+        // API retry feature; a permanent auth failure is the non-recoverable sample.
+        val result = handler.handleStreamTermination(state, "401 unauthorized: invalid api key", "reading next event")
         assertNull(result)
     }
 
@@ -209,6 +242,93 @@ class OpenAiResponseStreamHandlerTest {
             val partial = emittedEvents.single() as InferenceEvent.PartialResponse
             assertEquals(" world", partial.chunk)
             assertEquals(" world", state.streamedAssistantMessage.toString())
+        }
+
+    @Test
+    fun `handleEvent reconciles truncated deltas from output item done message`() =
+        runTest {
+            val handler = createHandler()
+            val state = StreamState()
+            state.streamedAssistantMessage.append(
+                "I'll immediately proceed to append_blocks with artifact hbWxQYaTV7WyJ39rLRiq9to9LCu2 and pop",
+            )
+
+            val finalizedText =
+                "I'll immediately proceed to append_blocks with artifact hbWxQYaTV7WyJ39rLRiq9to9LCu2 " +
+                    "and populate the document with the requested sections."
+            val message =
+                ResponseOutputMessage
+                    .builder()
+                    .id("msg_1")
+                    .content(
+                        listOf(
+                            ResponseOutputMessage.Content.ofOutputText(
+                                ResponseOutputText
+                                    .builder()
+                                    .text(finalizedText)
+                                    .annotations(emptyList())
+                                    .build(),
+                            ),
+                        ),
+                    ).status(ResponseOutputMessage.Status.COMPLETED)
+                    .build()
+            val item = ResponseOutputItem.ofMessage(message)
+            val doneEvent = mockk<ResponseOutputItemDoneEvent>()
+            every { doneEvent.item() } returns item
+            val event = mockk<ResponseStreamEvent>(relaxed = true)
+            every { event.isOutputItemDone() } returns true
+            every { event.outputItemDone() } returns Optional.of(doneEvent)
+
+            handler.handleEvent(event, state)
+
+            assertEquals(1, emittedEvents.size)
+            val partial = emittedEvents.single() as InferenceEvent.PartialResponse
+            assertEquals("ulate the document with the requested sections.", partial.chunk)
+            assertEquals(finalizedText, state.streamedAssistantMessage.toString())
+        }
+
+    @Test
+    fun `handleEvent reconciles truncated deltas from response completed message output`() =
+        runTest {
+            val handler = createHandler()
+            val state = StreamState()
+            state.streamedAssistantMessage.append("I'll immed")
+
+            val finalizedText =
+                "I'll immediately proceed to append_blocks with artifact hbWxQYaTV7WyJ39rLRiq9to9LCu2."
+            val message =
+                ResponseOutputMessage
+                    .builder()
+                    .id("msg_2")
+                    .content(
+                        listOf(
+                            ResponseOutputMessage.Content.ofOutputText(
+                                ResponseOutputText
+                                    .builder()
+                                    .text(finalizedText)
+                                    .annotations(emptyList())
+                                    .build(),
+                            ),
+                        ),
+                    ).status(ResponseOutputMessage.Status.COMPLETED)
+                    .build()
+            val item = ResponseOutputItem.ofMessage(message)
+            val response = mockk<Response>()
+            every { response.id() } returns "resp_1"
+            every { response.output() } returns listOf(item)
+            every { response.usage() } returns Optional.empty()
+            val completed = mockk<ResponseCompletedEvent>()
+            every { completed.response() } returns response
+            val event = mockk<ResponseStreamEvent>(relaxed = true)
+            every { event.isCompleted() } returns true
+            every { event.completed() } returns Optional.of(completed)
+
+            handler.handleEvent(event, state)
+
+            assertEquals(1, emittedEvents.size)
+            val partial = emittedEvents.single() as InferenceEvent.PartialResponse
+            assertEquals("iately proceed to append_blocks with artifact hbWxQYaTV7WyJ39rLRiq9to9LCu2.", partial.chunk)
+            assertEquals(finalizedText, state.streamedAssistantMessage.toString())
         }
 
     // ── handleEvent: reasoning ───────────────────────────────────────────────
@@ -320,6 +440,7 @@ class OpenAiResponseStreamHandlerTest {
             val inputDetails = mockk<ResponseUsage.InputTokensDetails>()
             val outputDetails = mockk<ResponseUsage.OutputTokensDetails>()
             every { response.id() } returns "resp_done"
+            every { response.output() } returns emptyList()
             every { response.usage() } returns Optional.of(usage)
             every { usage.inputTokens() } returns 1_000L
             every { usage.outputTokens() } returns 200L
@@ -327,6 +448,7 @@ class OpenAiResponseStreamHandlerTest {
             every { usage.outputTokensDetails() } returns outputDetails
             every { inputDetails.cachedTokens() } returns 400L
             every { outputDetails.reasoningTokens() } returns 0L
+            every { usage._additionalProperties() } returns emptyMap()
             every { completed.response() } returns response
             every { event.isCompleted() } returns true
             every { event.completed() } returns Optional.of(completed)
@@ -384,6 +506,7 @@ class OpenAiResponseStreamHandlerTest {
         runTest {
             val handler = createHandler()
             val state = StreamState(emittedAny = true)
+            state.streamedAssistantMessage.append("p".repeat(MIN_SALVAGEABLE_STREAM_CHARS))
             val event = mockk<ResponseStreamEvent>(relaxed = true)
             val failed = mockk<ResponseFailedEvent>()
             val response = mockk<com.openai.models.responses.Response>()

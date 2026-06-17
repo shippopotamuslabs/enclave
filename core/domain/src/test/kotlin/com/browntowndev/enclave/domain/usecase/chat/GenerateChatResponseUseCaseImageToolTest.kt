@@ -1,6 +1,7 @@
 package com.browntowndev.enclave.domain.usecase.chat
 
 import com.browntowndev.enclave.domain.model.chat.ChatId
+import com.browntowndev.enclave.domain.model.chat.ChatResponseMode
 import com.browntowndev.enclave.domain.model.chat.Content
 import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.chat.MessageId
@@ -23,6 +24,7 @@ import com.browntowndev.enclave.domain.port.repository.MessageRepository
 import com.browntowndev.enclave.domain.port.repository.SettingsData
 import com.browntowndev.enclave.domain.port.repository.SettingsRepository
 import com.browntowndev.enclave.domain.usecase.FakeInferenceFactory
+import com.browntowndev.enclave.domain.usecase.FakeInferenceLockManager
 import com.browntowndev.enclave.domain.usecase.FakeInferenceService
 import io.mockk.coEvery
 import io.mockk.every
@@ -83,7 +85,7 @@ class GenerateChatResponseUseCaseImageToolTest {
                 userMessageId = MessageId("1"),
                 assistantMessageId = MessageId("2"),
                 chatId = ChatId("chat"),
-                mode = Mode.FAST,
+                responseMode = ChatResponseMode.Fast,
                 backgroundInferenceEnabled = false,
             ).toList()
 
@@ -139,7 +141,7 @@ class GenerateChatResponseUseCaseImageToolTest {
                 userMessageId = MessageId("2"),
                 assistantMessageId = MessageId("3"),
                 chatId = ChatId("chat"),
-                mode = Mode.FAST,
+                responseMode = ChatResponseMode.Fast,
                 backgroundInferenceEnabled = false,
             ).toList()
 
@@ -153,7 +155,7 @@ class GenerateChatResponseUseCaseImageToolTest {
             val inferenceFactory = FakeInferenceFactory()
             val pipelineExecutor = mockk<PipelineExecutorPort>()
             val promptSlot = slot<String>()
-            every { pipelineExecutor.executePipeline(any(), capture(promptSlot)) } returns emptyFlow()
+            every { pipelineExecutor.executePipeline(any(), capture(promptSlot), any(), any(), any()) } returns emptyFlow()
 
             val messageRepository =
                 mockMessageRepository(
@@ -189,7 +191,7 @@ class GenerateChatResponseUseCaseImageToolTest {
                 userMessageId = MessageId("1"),
                 assistantMessageId = MessageId("2"),
                 chatId = ChatId("chat"),
-                mode = Mode.COUNCIL,
+                responseMode = ChatResponseMode.Council,
                 backgroundInferenceEnabled = false,
             ).toList()
 
@@ -240,7 +242,7 @@ class GenerateChatResponseUseCaseImageToolTest {
                 userMessageId = MessageId("1"),
                 assistantMessageId = MessageId("2"),
                 chatId = ChatId("chat"),
-                mode = Mode.FAST,
+                responseMode = ChatResponseMode.Fast,
                 backgroundInferenceEnabled = false,
             ).toList()
 
@@ -329,7 +331,7 @@ class GenerateChatResponseUseCaseImageToolTest {
                 userMessageId = MessageId("1"),
                 assistantMessageId = MessageId("2"),
                 chatId = ChatId("chat"),
-                mode = Mode.FAST,
+                responseMode = ChatResponseMode.Fast,
                 backgroundInferenceEnabled = false,
             ).toList()
 
@@ -400,7 +402,7 @@ class GenerateChatResponseUseCaseImageToolTest {
                 userMessageId = MessageId("1"),
                 assistantMessageId = MessageId("2"),
                 chatId = ChatId("chat"),
-                mode = Mode.FAST,
+                responseMode = ChatResponseMode.Fast,
                 backgroundInferenceEnabled = false,
             ).toList()
 
@@ -432,6 +434,7 @@ class GenerateChatResponseUseCaseImageToolTest {
                 retrievedMemories: List<com.browntowndev.enclave.domain.model.memory.Memory>,
                 retrievedSearchResults: String?,
                 retrievedXSearchResults: String?,
+                compactStaticPrompt: Boolean,
             ): String = baseSystemPrompt ?: ""
         }
 
@@ -485,6 +488,7 @@ class GenerateChatResponseUseCaseImageToolTest {
                 },
             chatInferenceExecutor = directExecutor,
             embeddingEngine = mockk(relaxed = true),
+            inferenceLockManager = FakeInferenceLockManager(),
         )
     }
 
@@ -567,7 +571,7 @@ class GenerateChatResponseUseCaseImageToolTest {
 
     private fun mockPipelineExecutor(): PipelineExecutorPort =
         mockk {
-            every { executePipeline(any(), any()) } returns emptyFlow()
+            every { executePipeline(any(), any(), any(), any(), any()) } returns emptyFlow()
             coEvery { stopPipeline(any()) } returns Unit
             coEvery { resumeFromState(any(), any(), any(), any()) } returns emptyFlow()
         }

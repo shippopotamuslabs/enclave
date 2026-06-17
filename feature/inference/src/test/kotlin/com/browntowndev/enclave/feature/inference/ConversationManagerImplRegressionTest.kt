@@ -38,9 +38,11 @@ class ConversationManagerImplRegressionTest {
                     activeModelProvider = activeModelProvider,
                     loggingPort = loggingPort,
                     toolExecutor = toolExecutor,
+                    embeddingEnginePort = mockk(relaxed = true),
                     agentPolicyPort = policy,
                 )
 
+            manager.beginGenerationRequest()
             val result =
                 manager.executeToolSafelyForTest(
                     ToolCallRequest(
@@ -49,6 +51,7 @@ class ConversationManagerImplRegressionTest {
                         provider = "LITERT",
                         modelType = ModelType.FAST,
                     ),
+                    manager.defaultTurnContextForTest(),
                 )
 
             assertTrue(result.contains("Context window exceeded"))
@@ -66,6 +69,7 @@ class ConversationManagerImplRegressionTest {
                     activeModelProvider = activeModelProvider,
                     loggingPort = loggingPort,
                     toolExecutor = toolExecutor,
+                    embeddingEnginePort = mockk(relaxed = true),
                     agentPolicyPort = policy,
                 )
             coEvery { toolExecutor.execute(any()) } returns
@@ -82,8 +86,10 @@ class ConversationManagerImplRegressionTest {
                     modelType = ModelType.FAST,
                 )
 
-            val firstResult = manager.executeToolSafelyForTest(request)
-            val secondResult = manager.executeToolSafelyForTest(request)
+            manager.beginGenerationRequest()
+            val turn = manager.defaultTurnContextForTest()
+            val firstResult = manager.executeToolSafelyForTest(request, turn)
+            val secondResult = manager.executeToolSafelyForTest(request, turn)
 
             assertEquals("""{"status":"error","message":"provider failed"}""", firstResult)
             assertTrue(secondResult.contains("Context window exceeded"))
@@ -106,6 +112,7 @@ class ConversationManagerImplRegressionTest {
                     activeModelProvider = activeModelProvider,
                     loggingPort = loggingPort,
                     toolExecutor = toolExecutor,
+                embeddingEnginePort = mockk(relaxed = true),
                 )
 
             val result =
@@ -138,6 +145,7 @@ class ConversationManagerImplRegressionTest {
                 activeModelProvider = activeModelProvider,
                 loggingPort = loggingPort,
                 toolExecutor = toolExecutor,
+            embeddingEnginePort = mockk(relaxed = true),
             )
 
         manager.conversationPort = activeConversationPort
@@ -160,6 +168,7 @@ class ConversationManagerImplRegressionTest {
                     activeModelProvider = activeModelProvider,
                     loggingPort = loggingPort,
                     toolExecutor = toolExecutor,
+                embeddingEnginePort = mockk(relaxed = true),
                 )
 
             manager.conversation = liteRtConversation

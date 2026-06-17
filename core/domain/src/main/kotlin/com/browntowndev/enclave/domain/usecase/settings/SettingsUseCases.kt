@@ -32,7 +32,11 @@ import com.browntowndev.enclave.domain.usecase.byok.SetDefaultModelUseCase
 import com.browntowndev.enclave.domain.usecase.media.DeleteMediaProviderUseCase
 import com.browntowndev.enclave.domain.usecase.media.GetMediaProvidersUseCase
 import com.browntowndev.enclave.domain.usecase.media.SaveMediaProviderUseCase
+import com.browntowndev.enclave.domain.usecase.modelconfig.DeleteModelPackUseCase
 import com.browntowndev.enclave.domain.usecase.modelconfig.GetLocalModelAssetsUseCase
+import com.browntowndev.enclave.domain.usecase.modelconfig.GetModelPacksForSettingsUseCase
+import com.browntowndev.enclave.domain.usecase.modelconfig.ObserveActiveUtilityModelsUseCase
+import com.browntowndev.enclave.domain.usecase.modelconfig.ReDownloadModelPackUseCase
 import com.browntowndev.enclave.domain.usecase.modelconfig.ReDownloadModelUseCase
 
 interface SettingsPreferencesUseCases {
@@ -62,6 +66,10 @@ interface SettingsLocalModelUseCases {
     val getRestorableLocalModels: GetRestorableLocalModelsUseCase
     val saveLocalModelPreset: SaveLocalModelPresetUseCase
     val reDownloadModel: ReDownloadModelUseCase
+    val getModelPacksForSettings: GetModelPacksForSettingsUseCase
+    val observeActiveUtilityModels: ObserveActiveUtilityModelsUseCase
+    val reDownloadModelPack: ReDownloadModelPackUseCase
+    val deleteModelPack: DeleteModelPackUseCase
 }
 
 interface SettingsApiProviderUseCases {
@@ -89,6 +97,12 @@ interface SettingsTtsUseCases {
     val getTtsProviders: GetTtsProvidersUseCase
     val saveTtsProvider: SaveTtsProviderUseCase
     val deleteTtsProvider: DeleteTtsProviderUseCase
+}
+
+interface SettingsLiveVoiceUseCases {
+    val getLiveVoiceProviders: GetLiveVoiceProvidersUseCase
+    val saveLiveVoiceProvider: SaveLiveVoiceProviderUseCase
+    val deleteLiveVoiceProvider: DeleteLiveVoiceProviderUseCase
 }
 
 interface SettingsMediaUseCases {
@@ -135,6 +149,7 @@ interface SettingsUseCases {
     val assignments: SettingsAssignmentUseCases
     val deletion: SettingsDeletionUseCases
     val tts: SettingsTtsUseCases
+    val liveVoice: SettingsLiveVoiceUseCases
     val media: SettingsMediaUseCases
     val auth: SettingsAuthUseCases
     val memories: SettingsMemoriesUseCases

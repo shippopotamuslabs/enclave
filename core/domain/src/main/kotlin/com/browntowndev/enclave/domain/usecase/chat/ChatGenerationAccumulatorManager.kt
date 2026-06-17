@@ -3,6 +3,8 @@ package com.browntowndev.enclave.domain.usecase.chat
 import com.browntowndev.enclave.domain.model.artifact.ArtifactGenerationRequest
 import com.browntowndev.enclave.domain.model.artifact.mergeArtifactGenerationRequests
 import com.browntowndev.enclave.domain.model.chat.AccumulatedMessages
+import com.browntowndev.enclave.domain.model.chat.ChatInferenceErrorCategory
+import com.browntowndev.enclave.domain.model.chat.ChatInferenceUserErrorMapper
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageGenerationState
 import com.browntowndev.enclave.domain.model.chat.MessageId
@@ -14,7 +16,6 @@ import com.browntowndev.enclave.domain.model.chat.WebSearchSource
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.PipelineStep
 import com.browntowndev.enclave.domain.model.telemetry.TurnTelemetry
-import com.browntowndev.enclave.domain.port.inference.InferenceBusyException
 import com.browntowndev.enclave.domain.port.repository.ChatRepository
 
 internal class ChatGenerationAccumulatorManager(
@@ -57,6 +58,10 @@ internal class ChatGenerationAccumulatorManager(
                 }
             }
 
+            is MessageGenerationState.AnswerStreamBoundary -> {
+                getOrCreateAccumulator(state.modelType).markAnswerStreamBoundaryIfNeeded()
+            }
+
             is MessageGenerationState.GeneratingText -> {
                 getOrCreateAccumulator(state.modelType).apply {
                     appendContent(state.textDelta)
@@ -95,6 +100,10 @@ internal class ChatGenerationAccumulatorManager(
                 getOrCreateAccumulator(state.modelType).addTelemetry(state.telemetry)
             }
 
+            is MessageGenerationState.ModelApiRetryScheduled -> {
+                getOrCreateAccumulator(state.modelType).clearStreamingContent()
+            }
+
             is MessageGenerationState.StepCompleted,
             is MessageGenerationState.Finished,
             -> {
@@ -119,14 +128,17 @@ internal class ChatGenerationAccumulatorManager(
 
             is MessageGenerationState.Failed -> {
                 getOrCreateAccumulator(state.modelType).apply {
-                    replaceContent(
-                        if (state.error is InferenceBusyException) {
-                            state.error.message
-                                ?: "Another message is in progress. Please wait until it completes."
-                        } else {
-                            "Sorry, something went wrong. Please try again."
-                        },
-                    )
+                    val userError = ChatInferenceUserErrorMapper.map(state.error)
+                    failureErrorCategory = userError.category
+                    val errorText = userError.formatForMessage()
+                    // Append as a transcript segment so the error is visible in the
+                    // rendered message, not just in the copied content. Partial streamed
+                    // text stays in place above it.
+                    if (content.isBlank()) {
+                        appendContent(errorText)
+                    } else {
+                        appendContent("\n\n$errorText")
+                    }
                     isComplete = true
                     currentState = MessageState.COMPLETE
                 }
@@ -157,6 +169,7 @@ internal class ChatGenerationAccumulatorManager(
                         thinkingEndTime = messageSnapshot.thinkingEndTime
                         isComplete = messageSnapshot.isComplete
                         currentState = messageSnapshot.messageState
+                        failureErrorCategory = messageSnapshot.failureErrorCategory
                     }
                 }
 
@@ -192,6 +205,10 @@ internal class ChatGenerationAccumulatorManager(
                     }
                 }
             }
+
+            messageSnapshot.telemetryRows.forEach { row ->
+                accumulator.addTelemetryIfAbsent(row)
+            }
         }
     }
 
@@ -207,6 +224,7 @@ internal class ChatGenerationAccumulatorManager(
                     Mode.FAST -> ModelType.FAST
                     Mode.THINKING -> ModelType.THINKING
                     Mode.COUNCIL -> ModelType.DRAFT_ONE
+                    Mode.OTHER -> ModelType.FAST
                 }
             getOrCreateAccumulator(defaultModelType)
         }
@@ -269,6 +287,7 @@ internal class MessageAccumulator(
     isComplete: Boolean = false,
     currentState: MessageState = MessageState.PROCESSING,
     pipelineStep: PipelineStep? = null,
+    failureErrorCategory: ChatInferenceErrorCategory? = null,
     webSearchSources: MutableList<WebSearchSource> = mutableListOf(),
     artifacts: MutableList<ArtifactGenerationRequest> = mutableListOf(),
     generatedMediaUris: MutableList<String> = mutableListOf(),
@@ -297,6 +316,7 @@ internal class MessageAccumulator(
     private var telemetryRowsVersion = 0
     private var cachedSnapshotVersion = -1L
     private var cachedSnapshot: MessageSnapshot? = null
+    private var pendingAnswerStreamBoundary = false
 
     val webSearchSources: MutableList<WebSearchSource> = webSearchSourcesList
     val artifacts: MutableList<ArtifactGenerationRequest> = artifactsList
@@ -345,6 +365,14 @@ internal class MessageAccumulator(
             }
         }
 
+    var failureErrorCategory: ChatInferenceErrorCategory? = failureErrorCategory
+        set(value) {
+            if (field != value) {
+                field = value
+                markScalarDirty()
+            }
+        }
+
     val thinkingDurationSeconds: Long
         get() {
             val start = thinkingStartTime
@@ -382,12 +410,26 @@ internal class MessageAccumulator(
         markTranscriptSegmentsDirty()
     }
 
+    fun markAnswerStreamBoundaryIfNeeded() {
+        if (hasNonEmptyAssistantText()) {
+            pendingAnswerStreamBoundary = true
+        }
+    }
+
     fun appendThinking(chunk: String) {
         if (thinkingEndTime != null) {
             thinkingEndTime = null
             thinkingStartTime = System.currentTimeMillis()
         } else if (thinkingStartTime == null) {
             thinkingStartTime = System.currentTimeMillis()
+        }
+
+        val startsNewThinkingWaveAfterAnswer =
+            transcriptSegmentsMutable.isNotEmpty() &&
+                transcriptSegmentsMutable.last().kind == TranscriptSegmentKind.ASSISTANT_TEXT
+        if (startsNewThinkingWaveAfterAnswer) {
+            pendingAnswerStreamBoundary = false
+            thinkingRaw.appendSegmentSeparatorIfNeeded()
         }
         thinkingRaw.append(chunk)
 
@@ -402,7 +444,7 @@ internal class MessageAccumulator(
                     ),
                 )
             }
-            transcriptSegmentsMutable.last().kind == TranscriptSegmentKind.ASSISTANT_TEXT -> {
+            startsNewThinkingWaveAfterAnswer -> {
                 transcriptSegmentsMutable.add(
                     MutableTranscriptSegment(
                         kind = TranscriptSegmentKind.THINKING,
@@ -418,6 +460,12 @@ internal class MessageAccumulator(
     }
 
     fun appendContent(chunk: String) {
+        if (chunk.isEmpty()) return
+
+        val shouldStartNewAnswerSegment = consumeAnswerStreamBoundary()
+        if (shouldStartNewAnswerSegment) {
+            content.appendSegmentSeparatorIfNeeded()
+        }
         content.append(chunk)
         if (thinkingStartTime != null && thinkingEndTime == null) {
             thinkingEndTime = System.currentTimeMillis()
@@ -441,6 +489,14 @@ internal class MessageAccumulator(
                     ),
                 )
             }
+            shouldStartNewAnswerSegment -> {
+                transcriptSegmentsMutable.add(
+                    MutableTranscriptSegment(
+                        kind = TranscriptSegmentKind.ASSISTANT_TEXT,
+                        text = StringBuilder(chunk),
+                    ),
+                )
+            }
             else -> transcriptSegmentsMutable.last().text.append(chunk)
         }
         markTranscriptSegmentsDirty()
@@ -453,9 +509,42 @@ internal class MessageAccumulator(
         markScalarDirty()
     }
 
+    fun clearStreamingContent() {
+        content.clear()
+        thinkingRaw.clear()
+        thinkingStartTime = null
+        thinkingEndTime = null
+        transcriptSegmentsMutable.clear()
+        telemetryRows.clear()
+        pendingAnswerStreamBoundary = false
+        currentState = MessageState.PROCESSING
+        markTranscriptSegmentsDirty()
+        markScalarDirty()
+        telemetryRowsVersion += 1
+    }
+
+    private fun hasNonEmptyAssistantText(): Boolean {
+        if (content.isNotBlank()) return true
+        val last = transcriptSegmentsMutable.lastOrNull() ?: return false
+        return last.kind == TranscriptSegmentKind.ASSISTANT_TEXT && last.text.isNotBlank()
+    }
+
+    private fun consumeAnswerStreamBoundary(): Boolean {
+        if (!pendingAnswerStreamBoundary) return false
+        pendingAnswerStreamBoundary = false
+        return true
+    }
+
     fun addTelemetry(row: TurnTelemetry) {
         telemetryRows.add(row)
         telemetryRowsVersion += 1
+    }
+
+    fun addTelemetryIfAbsent(row: TurnTelemetry) {
+        if (telemetryRows.none { it.id == row.id }) {
+            telemetryRows.add(row)
+            telemetryRowsVersion += 1
+        }
     }
 
     private fun finalizeOpenThinkingSegment(now: Long = System.currentTimeMillis()) {
@@ -548,6 +637,7 @@ internal class MessageAccumulator(
             generatedMediaPrompts = generatedMediaPromptsSnapshot.value(),
             transcriptSegments = toTranscriptSegments(finalizeOpenThinking = shouldFinalizeOpenThinking),
             telemetryRows = telemetryRows.toList(),
+            failureErrorCategory = failureErrorCategory,
         ).also { snapshot ->
             cachedSnapshot = snapshot
             cachedSnapshotVersion = snapshotVersion

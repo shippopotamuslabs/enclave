@@ -9,9 +9,11 @@ import com.browntowndev.enclave.domain.model.media.VideoGenerationSettings
 import com.browntowndev.enclave.domain.model.media.VisualGenerationSettings
 import com.browntowndev.enclave.domain.model.media.withClampedGenerationCount
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
+import com.browntowndev.enclave.domain.port.repository.ActiveStudioGeneration
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 
 class StudioPromptCoordinator
@@ -20,8 +22,14 @@ class StudioPromptCoordinator
         private val generationCoordinator: StudioGenerationCoordinator,
         private val studioRepository: StudioRepositoryPort,
     ) {
+        /**
+         * Set once an active generation is restored so that [restoreLastMediaType] does not
+         * clobber the resumed generation's media type with the persisted last selection.
+         */
+        private val restoredFromActiveGeneration = AtomicBoolean(false)
+
         val prompt = MutableStateFlow("")
-        val mediaType = MutableStateFlow(MediaCapability.IMAGE)
+        val mediaType = MutableStateFlow(MediaCapability.DEFAULT)
         val settings = MutableStateFlow<GenerationSettings>(ImageGenerationSettings())
         val selectedTemplateId = MutableStateFlow<String?>(null)
         val isSettingsOpen = MutableStateFlow(false)
@@ -35,20 +43,44 @@ class StudioPromptCoordinator
             generationCoordinator.clearScrollAnchors()
         }
 
+        fun restoreActiveGeneration(generation: ActiveStudioGeneration) {
+            restoredFromActiveGeneration.set(true)
+            mediaType.value = generation.mediaType
+            settings.value = generation.settings
+        }
+
         fun onMediaTypeChange(type: MediaCapability) {
             val currentRefUri = (settings.value as? VisualGenerationSettings)?.referenceImageUri
             mediaType.value = type
-            settings.value =
-                when (type) {
-                    MediaCapability.IMAGE -> ImageGenerationSettings(referenceImageUri = currentRefUri)
-                    MediaCapability.VIDEO -> VideoGenerationSettings(referenceImageUri = currentRefUri)
-                    MediaCapability.MUSIC -> MusicGenerationSettings()
-                }
+            settings.value = defaultSettingsFor(type, currentRefUri)
             selectedTemplateId.value = null
             generationCoordinator.stopGeneration()
             generationCoordinator.resetVideoGenerationState()
             generationCoordinator.clearScrollAnchors()
         }
+
+        /**
+         * Restores the last user-selected media type on a fresh open. No-ops once an active
+         * generation has been (or will be) restored, since resuming an in-flight generation
+         * must keep its own media type and settings. Unlike [onMediaTypeChange] this does not
+         * touch generation/scroll state (there is nothing to stop on cold start).
+         */
+        fun restoreLastMediaType(type: MediaCapability) {
+            if (restoredFromActiveGeneration.get()) return
+            if (mediaType.value == type) return
+            mediaType.value = type
+            settings.value = defaultSettingsFor(type, referenceImageUri = null)
+        }
+
+        private fun defaultSettingsFor(
+            type: MediaCapability,
+            referenceImageUri: String?,
+        ): GenerationSettings =
+            when (type) {
+                MediaCapability.IMAGE -> ImageGenerationSettings(referenceImageUri = referenceImageUri)
+                MediaCapability.VIDEO -> VideoGenerationSettings(referenceImageUri = referenceImageUri)
+                MediaCapability.MUSIC -> MusicGenerationSettings()
+            }
 
         fun onTemplateSelected(template: StudioTemplate) {
             selectedTemplateId.value = if (selectedTemplateId.value == template.id) null else template.id
@@ -101,6 +133,8 @@ class StudioPromptCoordinator
             generationCoordinator.resetGeneratingFlags()
             generationCoordinator.clearLocalError()
             scope.launch {
+                studioRepository.clearActiveGeneration()
+                studioRepository.clearGenerationError()
                 studioRepository.clearEphemeralCache()
             }
         }

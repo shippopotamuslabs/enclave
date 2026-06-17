@@ -1,6 +1,7 @@
 package com.browntowndev.enclave.domain.mapper
 
 import com.browntowndev.enclave.domain.model.config.RemoteModelAsset
+import com.browntowndev.enclave.domain.model.config.resolvedModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelFile
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -35,7 +36,7 @@ class ModelConfigMapper
                     modelTypes = allModelTypes,
                     originalFileName = asset.fileName,
                     displayName = asset.displayName.ifBlank { asset.fileName },
-                    modelFileFormat = asset.modelFileFormat,
+                    modelFileFormat = asset.resolvedModelFileFormat(),
                     temperature = primaryConfig?.temperature ?: 0.7,
                     topK = primaryConfig?.topK ?: 40,
                     topP = primaryConfig?.topP ?: 0.95,

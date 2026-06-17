@@ -38,10 +38,29 @@ interface ConversationManager {
     suspend fun setHistory(messages: List<ChatMessage>)
 
     /**
+     * Snapshot of conversation context for local telemetry estimation.
+     * History excludes the active user/assistant pair; the current prompt is passed separately.
+     */
+    fun telemetryContext(): LiteRtTelemetryContext
+
+    /**
      * Closes the underlying engine and releases all resources.
      * After calling this, the ConversationManager should not be used.
      */
     suspend fun closeEngine()
+
+    /**
+     * Begins a new generation request and returns an ownership token. Each [sendPrompt] flow
+     * must call this once; [endGenerationRequest] in `finally` only affects state when the
+     * token still matches the active request.
+     */
+    fun beginGenerationRequest(): Int
+
+    /**
+     * Ends a generation request started by [beginGenerationRequest]. Cancellation is applied
+     * only when [requestId] still owns the active request.
+     */
+    fun endGenerationRequest(requestId: Int)
 
     /**
      * Cancels the current ongoing generation.

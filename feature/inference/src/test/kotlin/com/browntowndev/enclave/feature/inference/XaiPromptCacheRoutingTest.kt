@@ -141,6 +141,14 @@ class XaiPromptCacheRoutingTest {
             assertTrue(requestBody.contains("cache_control"), requestBody)
             assertTrue(requestBody.contains("ephemeral"), requestBody)
             assertFalse(params.promptCacheKey().isPresent)
+
+            val headers = params._headers()
+            val sessionIdHeader = headers.values("X-Session-Id").firstOrNull()
+                ?: headers.values("x-session-id").firstOrNull()
+            assertEquals("chat-123", sessionIdHeader)
+
+            val sessionIdBody = params._additionalBodyProperties()["session_id"]?.convert(String::class.java)
+            assertEquals("chat-123", sessionIdBody)
         }
 
     private fun xaiSingleTurnService(capturedParams: CapturedChatParams): BaseOpenAiSdkInferenceService =

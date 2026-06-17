@@ -17,4 +17,13 @@ class ImageGenerationSettingsTest {
 
         assertEquals(10, settings.withClampedGenerationCount().generationCount)
     }
+
+    @Test
+    fun resolvedImg2ImgDenoiseStrength_clampsOutOfRangeValues() {
+        val belowMin = ImageGenerationSettings(img2ImgDenoiseStrength = 0.1f)
+        val aboveMax = ImageGenerationSettings(img2ImgDenoiseStrength = 1.5f)
+
+        assertEquals(0.25f, belowMin.resolvedImg2ImgDenoiseStrength())
+        assertEquals(1.0f, aboveMax.resolvedImg2ImgDenoiseStrength())
+    }
 }

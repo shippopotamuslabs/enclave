@@ -21,6 +21,7 @@ class DownloadNotificationManager(
     companion object {
         const val NOTIFICATION_ID = 1001
         const val CHANNEL_ID = "model_download_channel"
+        const val DEFAULT_TITLE = "Downloading Models"
     }
 
     fun createNotificationChannel() {
@@ -36,13 +37,17 @@ class DownloadNotificationManager(
         notificationManager.createNotificationChannel(channel)
     }
 
-    fun createForegroundInfo(cancelPendingIntent: PendingIntent): ForegroundInfo {
+    fun createForegroundInfo(
+        cancelPendingIntent: PendingIntent,
+        title: String = DEFAULT_TITLE,
+    ): ForegroundInfo {
         val notification =
             createNotification(
                 progress = 0,
                 currentFile = "Preparing...",
                 subText = "Calculating...",
                 cancelPendingIntent = cancelPendingIntent,
+                title = title,
             )
 
         return ForegroundInfo(
@@ -62,6 +67,7 @@ class DownloadNotificationManager(
         currentFile: String,
         subText: String,
         cancelPendingIntent: PendingIntent,
+        title: String = DEFAULT_TITLE,
     ): ForegroundInfo {
         val progressInt = (progress * 100).toInt()
 
@@ -71,6 +77,7 @@ class DownloadNotificationManager(
                 currentFile = currentFile,
                 subText = subText,
                 cancelPendingIntent = cancelPendingIntent,
+                title = title,
             )
 
         return ForegroundInfo(
@@ -157,11 +164,12 @@ class DownloadNotificationManager(
         currentFile: String,
         subText: String,
         cancelPendingIntent: PendingIntent?,
+        title: String = DEFAULT_TITLE,
     ): Notification =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
             Notification
                 .Builder(context, CHANNEL_ID)
-                .setContentTitle("Downloading Models")
+                .setContentTitle(title)
                 .setContentText(currentFile)
                 .setSmallIcon(android.R.drawable.stat_sys_download)
                 .setOngoing(true)
@@ -182,7 +190,7 @@ class DownloadNotificationManager(
         } else {
             NotificationCompat
                 .Builder(context, CHANNEL_ID)
-                .setContentTitle("Downloading Models")
+                .setContentTitle(title)
                 .setContentText(currentFile)
                 .setSmallIcon(android.R.drawable.stat_sys_download)
                 .setOngoing(true)

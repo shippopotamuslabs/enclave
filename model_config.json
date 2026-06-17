@@ -4,6 +4,7 @@
       "displayName": "MiniCPM-V-4.6 1.3B",
       "huggingFaceModelName": "openbmb/MiniCPM-V-4.6-Thinking-gguf",
       "fileName": "MiniCPM-V-4_6-Thinking-Q8_0.gguf",
+      "modelFileFormat": "GGUF",
       "sha256": "1cfadbb76a841c6a448870dda3f2f46209ae6d552a848ee4ab3205de76b5adfb",
       "sizeInBytes": 811591648,
       "source": "HF",
@@ -29,6 +30,7 @@
       "displayName": "Qwen 3.5 2B",
       "huggingFaceModelName": "Jackrong/Qwen3.5-2B-Claude-4.6-Opus-Reasoning-Distilled-GGUF",
       "fileName": "Qwen3.5-2B.Q8_0.gguf",
+      "modelFileFormat": "GGUF",
       "sha256": "fd6cad5e60993df99704e693e7006658e54e49289cfe02e519f93cf741f27136",
       "sizeInBytes": 2012008384,
       "source": "HF",
@@ -54,6 +56,7 @@
       "displayName": "Jamba Reasoning 3B",
       "huggingFaceModelName": "bartowski/ai21labs_AI21-Jamba-Reasoning-3B-GGUF",
       "fileName": "ai21labs_AI21-Jamba-Reasoning-3B-Q8_0.gguf",
+      "modelFileFormat": "GGUF",
       "sha256": "a6ce2452d5b1ddd4279607a44ff1b580bfae57695bdcb09b394a7b5e089bb8ff",
       "sizeInBytes": 3407952352,
       "source": "HF",
@@ -79,6 +82,7 @@
       "displayName": "Gemma 4 E4B",
       "huggingFaceModelName": "litert-community/gemma-4-E4B-it-litert-lm",
       "fileName": "gemma-4-E4B-it.litertlm",
+      "modelFileFormat": "LITERTLM",
       "sha256": "0b2a8980ce155fd97673d8e820b4d29d9c7d99b8fa6806f425d969b145bd52e0",
       "sizeInBytes": 3659530240,
       "source": "R2",
@@ -129,6 +133,58 @@
       ]
     },
     {
+      "displayName": "Stable Diffusion 1.5 (NPU)",
+      "huggingFaceModelName": "gpustack/stable-diffusion-v1-5-GGUF",
+      "fileName": "stable-diffusion-v1-5-Q4_0.gguf",
+      "sha256": "c2f6e92f9d08d69cc673a1003528ac8199274b3c0eaec88d5fbefe5af67bd42b",
+      "sizeInBytes": 1747190784,
+      "modelFileFormat": "GGUF",
+      "source": "HF",
+      "isMultimodal": false,
+      "configurations": [
+        {
+          "configId": "sd15-local-config",
+          "displayName": "Stable Diffusion 1.5 (NPU)",
+          "systemPrompt": "",
+          "temperature": 0.0,
+          "topK": 1,
+          "topP": 1.0,
+          "minP": 0.0,
+          "repetitionPenalty": 1.0,
+          "contextWindow": 0,
+          "maxTokens": 0,
+          "thinkingEnabled": false,
+          "defaultAssignments": ["image_generation"]
+        }
+      ]
+    },
+    {
+      "displayName": "Stable Diffusion XL (NPU)",
+      "huggingFaceModelName": "xororz/sdxl-qnn",
+      "fileName": "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip",
+      "sha256": "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83",
+      "sizeInBytes": 3504485672,
+      "modelFileFormat": "BIN",
+      "source": "HF",
+      "isMultimodal": false,
+      "configurations": [
+        {
+          "configId": "sdxl-local-config",
+          "displayName": "Stable Diffusion XL (NPU)",
+          "systemPrompt": "",
+          "temperature": 0.0,
+          "topK": 1,
+          "topP": 1.0,
+          "minP": 0.0,
+          "repetitionPenalty": 1.0,
+          "contextWindow": 0,
+          "maxTokens": 0,
+          "thinkingEnabled": false,
+          "defaultAssignments": ["image_generation"]
+        }
+      ]
+    },
+    {
       "huggingFaceModelName": "ggerganov/whisper.cpp",
       "fileName": "ggml-base.en.bin",
       "sha256": "a03779c86df3323075f5e796cb2ce5029f00ec8869eee3fdfb897afe36c6d002",
@@ -160,6 +216,178 @@
       "utilityType": "onnx_vocab",
       "isMultimodal": false,
       "configurations": []
+    },
+    {
+      "displayName": "Chat Title Model",
+      "huggingFaceModelName": null,
+      "huggingFacePath": "chat_title_generator",
+      "fileName": "model_q4.onnx",
+      "sha256": "d1a705712e93aafaba1346b32245fa59e7857a46e2272003c0e8c524977e0de8",
+      "sizeInBytes": 183442,
+      "source": "R2",
+      "utilityType": "title_generator_encoder",
+      "isMultimodal": false,
+      "configurations": []
+    },
+    {
+      "displayName": "Chat Title Weights",
+      "huggingFaceModelName": null,
+      "huggingFacePath": "chat_title_generator",
+      "fileName": "model_q4.onnx_data",
+      "sha256": "71ec6ad38a4c463dcb3dba671d06a1d9861be3a23e51290d818b95c0b7d2a5db",
+      "sizeInBytes": 293629952,
+      "source": "R2",
+      "utilityType": "title_generator_decoder",
+      "isMultimodal": false,
+      "configurations": []
+    },
+    {
+      "displayName": "SD 1.5 NPU weights",
+      "huggingFaceModelName": "xororz/sd-qnn",
+      "fileName": "AnythingV5_qnn2.28_8gen2.zip",
+      "sha256": "b744c6ec55cf8ce38b641e4b9a1d8d8c9c336f410dca01841be4fe52e290e33f",
+      "sizeInBytes": 1057820237,
+      "modelFileFormat": "BIN",
+      "source": "HF",
+      "utilityType": "sd15_qnn_pack",
+      "isMultimodal": false,
+      "configurations": []
+    },
+    {
+      "displayName": "SDXL NPU weights",
+      "huggingFaceModelName": "xororz/sdxl-qnn",
+      "fileName": "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip",
+      "sha256": "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83",
+      "sizeInBytes": 3504485672,
+      "modelFileFormat": "BIN",
+      "source": "HF",
+      "utilityType": "sdxl_qnn_pack",
+      "isMultimodal": false,
+      "configurations": []
+    },
+    {
+      "displayName": "Juggernaut XL (NPU)",
+      "huggingFaceModelName": "xororz/sdxl-qnn",
+      "fileName": "juggernaut_qnn2.28_8gen3.zip",
+      "sha256": "b27231823434c4e4184a61f77401227264a5308c6846c6fc628c37583e76413c",
+      "sizeInBytes": 3747687306,
+      "modelFileFormat": "BIN",
+      "source": "HF",
+      "isMultimodal": false,
+      "configurations": [
+        {
+          "configId": "juggernaut-local-config",
+          "displayName": "Juggernaut XL (NPU)",
+          "systemPrompt": "",
+          "temperature": 0.0,
+          "topK": 1,
+          "topP": 1.0,
+          "minP": 0.0,
+          "repetitionPenalty": 1.0,
+          "contextWindow": 0,
+          "maxTokens": 0,
+          "thinkingEnabled": false,
+          "defaultAssignments": ["image_edit"]
+        }
+      ]
+    },
+    {
+      "displayName": "Juggernaut XL NPU weights",
+      "huggingFaceModelName": "xororz/sdxl-qnn",
+      "fileName": "juggernaut_qnn2.28_8gen3.zip",
+      "sha256": "b27231823434c4e4184a61f77401227264a5308c6846c6fc628c37583e76413c",
+      "sizeInBytes": 3747687306,
+      "modelFileFormat": "BIN",
+      "source": "HF",
+      "utilityType": "juggernaut_xl_qnn_pack",
+      "isMultimodal": false,
+      "configurations": []
+    },
+    {
+      "displayName": "Chat Title Tokenizer",
+      "huggingFaceModelName": null,
+      "huggingFacePath": "chat_title_generator",
+      "fileName": "tokenizer.json",
+      "sha256": "29d43b4be8e8a896fefd7cd836ca6d6b4eedd249f823866ce0453b368e646f49",
+      "sizeInBytes": 3297793,
+      "source": "R2",
+      "utilityType": "title_generator_tokenizer",
+      "isMultimodal": false,
+      "configurations": []
+    },
+    {
+      "displayName": "Image Safety Classifier",
+      "huggingFaceModelName": null,
+      "huggingFacePath": "image_safety_classifier",
+      "fileName": "model_quantized.onnx",
+      "sha256": "6de8c7322b88223f734dabe0dfed6761b476a7d31c0b7443c35ec0c887ab2464",
+      "sizeInBytes": 87018507,
+      "source": "R2",
+      "utilityType": "image_safety_classifier",
+      "isMultimodal": false,
+      "configurations": []
+    },
+    {
+      "displayName": "Prompt Safety Classifier",
+      "huggingFaceModelName": "KoalaAI/Text-Moderation",
+      "huggingFacePath": "nsfw_text_classifier",
+      "fileName": "model_quantized.onnx",
+      "sha256": "ff451bd2ebf4eda6ff296a749ebadb6f500c4a0a63e7e5f2ecd4111fdffd4327",
+      "sizeInBytes": 142975672,
+      "source": "R2",
+      "utilityType": "prompt_safety_classifier",
+      "isMultimodal": false,
+      "configurations": []
+    }
+  ],
+  "modelPacks": [
+    {
+      "packId": "sd15-t2i",
+      "displayName": "Stable Diffusion 1.5 (NPU)",
+      "slot": "image_generation",
+      "members": [
+        {
+          "role": "diffusion",
+          "fileName": "stable-diffusion-v1-5-Q4_0.gguf"
+        },
+        {
+          "role": "text_encoder",
+          "fileName": "AnythingV5_qnn2.28_8gen2.zip",
+          "utilityType": "sd15_qnn_pack"
+        }
+      ]
+    },
+    {
+      "packId": "sdxl-t2i",
+      "displayName": "Stable Diffusion XL (NPU)",
+      "slot": "image_generation",
+      "members": [
+        {
+          "role": "diffusion",
+          "fileName": "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip"
+        },
+        {
+          "role": "text_encoder",
+          "fileName": "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip",
+          "utilityType": "sdxl_qnn_pack"
+        }
+      ]
+    },
+    {
+      "packId": "juggernaut-xl-t2i",
+      "displayName": "Juggernaut XL (NPU)",
+      "slot": "image_edit",
+      "members": [
+        {
+          "role": "diffusion",
+          "fileName": "juggernaut_qnn2.28_8gen3.zip"
+        },
+        {
+          "role": "text_encoder",
+          "fileName": "juggernaut_qnn2.28_8gen3.zip",
+          "utilityType": "juggernaut_xl_qnn_pack"
+        }
+      ]
     }
   ]
 }

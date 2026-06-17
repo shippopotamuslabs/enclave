@@ -4,6 +4,7 @@ import android.util.Log
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.config.MediaTask
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
+import com.browntowndev.enclave.domain.model.inference.ApiProviderModelPolicy
 import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.enclave.domain.model.media.ImageInputRequirement
 import com.browntowndev.enclave.domain.model.media.ModelGenerationInputSchema
@@ -320,6 +321,24 @@ private fun deriveFalTasks(
     return emptySet()
 }
 
+private val falTaskCategories =
+    setOf(
+        "text-to-image",
+        "image-to-image",
+        "text-to-video",
+        "image-to-video",
+    )
+
+private fun String?.normalizedFalTaskCategory(): String? {
+    val normalized = this?.trim()?.lowercase() ?: return null
+    return normalized.takeIf { it in falTaskCategories }
+}
+
+private fun FalModel.resolvedTaskCategory(): String? =
+    category.normalizedFalTaskCategory()
+        ?: metadata?.category.normalizedFalTaskCategory()
+        ?: categories.firstNotNullOfOrNull { it.normalizedFalTaskCategory() }
+
 private fun FalModel.toDiscoveredApiModel(): DiscoveredApiModel? {
     val modelId = resolvedId() ?: return null
     val hints = capabilityHints()
@@ -342,7 +361,7 @@ private fun FalModel.toDiscoveredApiModel(): DiscoveredApiModel? {
     val derivedTasks =
         deriveFalTasks(
             modelId = modelId,
-            category = category,
+            category = resolvedTaskCategory(),
             isImageGen = isImageGen || isUnclassified,
             isVideoGen = isVideoGen,
             imageInput = inputSchema?.imageInput,
@@ -408,22 +427,18 @@ class ApiModelCatalogRepositoryImpl
             baseUrl: String?,
         ): ApiModelCatalogResult =
             withContext(Dispatchers.IO) {
-                require(
-                    provider == ApiProvider.OPENAI ||
-                        provider == ApiProvider.ANTHROPIC ||
-                        provider == ApiProvider.GOOGLE ||
-                        provider == ApiProvider.OPENROUTER ||
-                        provider == ApiProvider.XAI ||
-                        provider == ApiProvider.FAL,
-                ) {
-                    "Model discovery is currently supported for OpenAI, Anthropic, Google, OpenRouter, xAI, and fal.ai."
+                require(ApiProviderModelPolicy.supportsModelDiscovery(provider)) {
+                    "Model discovery is not supported for provider $provider."
                 }
                 val resolvedBaseUrl = baseUrl?.takeIf { it.isNotBlank() } ?: provider.defaultBaseUrl()
 
                 when (provider) {
                     ApiProvider.ANTHROPIC ->
                         ApiModelCatalogResult(
-                            fetchAnthropicModels(apiKey = apiKey, baseUrl = resolvedBaseUrl),
+                            fetchAnthropicModels(
+                                apiKey = apiKey,
+                                baseUrl = resolvedBaseUrl,
+                            ),
                         )
 
                     ApiProvider.GOOGLE ->
@@ -581,26 +596,6 @@ class ApiModelCatalogRepositoryImpl
             }
         }
 
-        private fun buildAnthropicModelsUrl(baseUrl: String?): okhttp3.HttpUrl {
-            val httpUrl = (AnthropicSdkBaseUrl.normalize(baseUrl) ?: "https://api.anthropic.com").toHttpUrl()
-            val segments = httpUrl.pathSegments
-            val lastSegment = segments.lastOrNull()
-            val penultimateSegment = segments.dropLast(1).lastOrNull()
-            val removeModelsSegment = lastSegment == "models"
-            val removeVersionSegment = lastSegment == "v1" || (removeModelsSegment && penultimateSegment == "v1")
-            return httpUrl
-                .newBuilder()
-                .apply {
-                    if (removeModelsSegment) {
-                        removePathSegment(segments.lastIndex)
-                    }
-                    if (removeVersionSegment) {
-                        removePathSegment(if (removeModelsSegment) segments.lastIndex - 1 else segments.lastIndex)
-                    }
-                }.addPathSegments("v1/models")
-                .build()
-        }
-
         internal fun parseAnthropicModels(responseBody: String): List<DiscoveredApiModel> {
             val response = json.decodeFromString<AnthropicModelsResponse>(responseBody)
             return response.data
@@ -625,6 +620,26 @@ class ApiModelCatalogRepositoryImpl
                     ).applyCapabilities(ApiProvider.ANTHROPIC)
                 }.distinctBy(DiscoveredApiModel::id)
                 .sortedBy(DiscoveredApiModel::id)
+        }
+
+        private fun buildAnthropicModelsUrl(baseUrl: String?): okhttp3.HttpUrl {
+            val httpUrl = (AnthropicSdkBaseUrl.normalize(baseUrl) ?: "https://api.anthropic.com").toHttpUrl()
+            val segments = httpUrl.pathSegments
+            val lastSegment = segments.lastOrNull()
+            val penultimateSegment = segments.dropLast(1).lastOrNull()
+            val removeModelsSegment = lastSegment == "models"
+            val removeVersionSegment = lastSegment == "v1" || (removeModelsSegment && penultimateSegment == "v1")
+            return httpUrl
+                .newBuilder()
+                .apply {
+                    if (removeModelsSegment) {
+                        removePathSegment(segments.lastIndex)
+                    }
+                    if (removeVersionSegment) {
+                        removePathSegment(if (removeModelsSegment) segments.lastIndex - 1 else segments.lastIndex)
+                    }
+                }.addPathSegments("v1/models")
+                .build()
         }
 
         private fun fetchOpenRouterModels(

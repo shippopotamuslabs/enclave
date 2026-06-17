@@ -157,4 +157,10 @@ interface MessageRepository {
      * @param chatId The chat ID
      */
     suspend fun deleteChatSummary(chatId: ChatId)
+
+    /**
+     * Soft-deletes a message (sets deleted=1, pending_sync=1).
+     * Used for moderation rollback — not for user-initiated delete UI.
+     */
+    suspend fun softDeleteMessage(messageId: MessageId)
 }

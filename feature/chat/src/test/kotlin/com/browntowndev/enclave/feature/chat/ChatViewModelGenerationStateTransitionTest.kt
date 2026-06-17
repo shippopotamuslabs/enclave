@@ -25,7 +25,6 @@ import com.browntowndev.enclave.domain.usecase.chat.ChatTurnTiming
 import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
 import com.browntowndev.enclave.domain.usecase.chat.GetModelDisplayNameUseCase
 import com.browntowndev.enclave.domain.usecase.chat.StageImageAttachmentUseCase
-import com.browntowndev.enclave.domain.usecase.chat.UserPromptResult
 import com.browntowndev.enclave.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.enclave.domain.usecase.settings.SettingsAssignmentUseCases
@@ -129,29 +128,19 @@ class ChatViewModelGenerationStateTransitionTest {
         }
         coEvery { modelDisplayNamesUseCase.invoke(any()) } returns "LiteRT Model"
         coEvery { activeModelProvider.getActiveConfiguration(any()) } returns null
-        coEvery { chatUseCases.processPrompt(any()) } returns
-            UserPromptResult(
-                userMessageId = userMessageId,
-                chatId = chatId,
-                userMessageCreatedAtMillis = 2L,
-            )
-        coEvery {
-            chatUseCases.createAssistantPlaceholder(
-                chatId = any(),
-                userMessageCreatedAtMillis = any(),
-                assistantMessageId = any(),
-            )
-        } returns
-            com.browntowndev.enclave.domain.usecase.chat.AssistantPlaceholderResult(
-                assistantMessageId = assistantMessageId,
-            )
+        mockSubmitPrompt(
+            chatUseCases = chatUseCases,
+            userMessageId = userMessageId,
+            chatId = chatId,
+            userMessageCreatedAtMillis = 2L,
+        )
         coEvery {
             chatUseCases.generateChatResponse(
                 prompt = any(),
                 userMessageId = any(),
                 assistantMessageId = any(),
                 chatId = any(),
-                mode = any(),
+                responseMode = any(),
                 backgroundInferenceEnabled = any(),
             )
         } returns flowOf()

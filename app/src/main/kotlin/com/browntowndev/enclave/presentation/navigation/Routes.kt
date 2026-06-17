@@ -8,6 +8,7 @@ object Routes {
     const val CHAT_DEEP_LINK_PATTERN = ChatNotificationDeepLink.URI_PATTERN
     const val HISTORY = "history"
     const val STUDIO = "studio"
+    const val STUDIO_DEEP_LINK_PATTERN = "enclave://studio"
 
     @Suppress("MaxLineLength")
     const val STUDIO_WITH_ARGS =

@@ -45,6 +45,8 @@ data class LocalModelConfigurationEntity(
     val contextWindow: Int = 4096,
     @ColumnInfo(name = "thinking_enabled")
     val thinkingEnabled: Boolean = false,
+    @ColumnInfo(name = "reasoning_budget", defaultValue = "1024")
+    val reasoningBudget: Int = 1024,
     @ColumnInfo(name = "system_prompt")
     val systemPrompt: String? = null,
     @ColumnInfo(name = "is_system_preset")

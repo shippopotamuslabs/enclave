@@ -90,6 +90,7 @@ class WorkProgressParserChainStageTest {
         val workInfo =
             mockk<WorkInfo> {
                 every { state } returns WorkInfo.State.SUCCEEDED
+                every { progress } returns androidx.work.Data.EMPTY
                 every { outputData } returns
                     mockk {
                         every { getString(DownloadWorkKeys.KEY_SESSION_ID) } returns SESSION_ID
@@ -122,8 +123,8 @@ class WorkProgressParserChainStageTest {
         // Current behavior: Returns READY (INCORRECT)
         // Refactored behavior: Returns null or intermediate state
         assertTrue(
-            result == null || result.status != DownloadStatus.READY,
-            "Parser should NOT emit READY for SUCCEEDED download worker (intermediate stage)",
+            result != null && result.status == DownloadStatus.FINALIZING,
+            "Parser should emit FINALIZING for SUCCEEDED download worker (intermediate stage)",
         )
     }
 
@@ -353,8 +354,9 @@ class WorkProgressParserChainStageTest {
 
         // Then: Should preserve progress, not emit terminal READY
         assertNotNull(result)
+        assertEquals(DownloadStatus.FINALIZING, result!!.status)
         assertTrue(
-            result!!.status != DownloadStatus.READY,
+            result.status != DownloadStatus.READY,
             "Parser should NOT emit READY while finalizer is running",
         )
         // Should preserve the file list

@@ -59,6 +59,12 @@ enum class ModelType(
     TTS("tts"),
 
     /**
+     * Realtime speech-to-speech voice conversation.
+     */
+    @SerialName("live_voice")
+    LIVE_VOICE("live_voice"),
+
+    /**
      * Image generation model.
      */
     @SerialName("image_generation")
@@ -108,6 +114,7 @@ enum class ModelType(
             THINKING -> "Thinking"
             FINAL_SYNTHESIS -> "Final Review"
             TTS -> "Text-to-Speech"
+            LIVE_VOICE -> "Live Voice"
             IMAGE_GENERATION -> "Image Generation"
             IMAGE_EDIT -> "Image Edit"
             VIDEO_GENERATION -> "Video Generation"
@@ -130,6 +137,7 @@ enum class ModelType(
                 THINKING -> "Deep reasoning and logic for complex tasks."
                 FINAL_SYNTHESIS -> "Polishing and final synthesis of the response."
                 TTS -> "Synthesize text responses into natural-sounding speech."
+                LIVE_VOICE -> "Realtime speech-to-speech voice conversation."
                 IMAGE_GENERATION -> "Generate images from text prompts."
                 IMAGE_EDIT -> "Edit or transform images using a reference image."
                 VIDEO_GENERATION -> "Generate videos from text prompts."

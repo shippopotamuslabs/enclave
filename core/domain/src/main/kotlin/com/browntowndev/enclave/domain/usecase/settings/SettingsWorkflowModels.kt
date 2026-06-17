@@ -9,6 +9,7 @@ import com.browntowndev.enclave.domain.model.config.LocalModelAsset
 import com.browntowndev.enclave.domain.model.config.LocalModelConfiguration
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelId
+import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.config.ModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.OpenRouterRoutingConfiguration
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
@@ -23,6 +24,7 @@ data class ResolvedAssignedModelSelection(
     val apiAsset: ApiModelAsset? = null,
     val apiConfig: ApiModelConfiguration? = null,
     val ttsAsset: com.browntowndev.enclave.domain.model.config.TtsProviderAsset? = null,
+    val liveVoiceAsset: com.browntowndev.enclave.domain.model.config.LiveVoiceProviderAsset? = null,
 )
 
 data class LocalModelPresetDraft(
@@ -36,6 +38,7 @@ data class LocalModelPresetDraft(
     val minP: Double = 0.0,
     val repetitionPenalty: Double = 1.1,
     val thinkingEnabled: Boolean = false,
+    val reasoningBudget: String = "1024",
     val systemPrompt: String = "",
     val isSystemPreset: Boolean = false,
 )
@@ -56,17 +59,28 @@ sealed interface ModelDeletionTarget {
     data class ApiPreset(
         val id: ApiModelConfigurationId,
     ) : ModelDeletionTarget
+
+    data class ModelPack(
+        val packId: String,
+    ) : ModelDeletionTarget
 }
 
 data class ReassignmentCandidate(
-    val configId: ModelConfigurationId,
+    val configId: ModelConfigurationId? = null,
+    val mediaProviderId: MediaProviderId? = null,
     val source: ModelSource,
     val assetDisplayName: String,
     val configDisplayName: String,
     val providerName: String? = null,
     val apiCredentialsId: ApiCredentialsId? = null,
     val localModelId: LocalModelId? = null,
-)
+) {
+    init {
+        require((configId != null) xor (mediaProviderId != null)) {
+            "Reassignment candidate must specify either a model config or a media provider"
+        }
+    }
+}
 
 sealed interface PreparedModelDeletion {
     data object BlockedLastModel : PreparedModelDeletion
@@ -152,6 +166,20 @@ data class ApiModelMetadataDefaults(
 data class SearchSkillSettingsDraft(
     val enabled: Boolean = false,
     val tavilyKeyPresent: Boolean = false,
+)
+
+data class LiveVoiceProviderDraft(
+    val id: com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId =
+        com.browntowndev.enclave.domain.model.config
+            .LiveVoiceProviderId(""),
+    val displayName: String,
+    val provider: ApiProvider,
+    val voiceName: String,
+    val modelName: String? = null,
+    val baseUrl: String? = null,
+    val credentialAlias: String,
+    val apiKey: String,
+    val sourceCredentialAlias: String? = null,
 )
 
 data class TtsProviderDraft(

@@ -50,17 +50,33 @@ class ModelDownloadOrchestratorImpl
         // Cached startup result from InitializeModelsUseCase
         private var startupModelsResult: DownloadModelsResult? = null
 
+        private var requestedWifiOnly: Boolean = true
+
         /**
          * Initialize the orchestrator with a pre-computed result from startup model check.
          * This avoids duplicate scanning when called from InitializeModelsUseCase.
          */
         override fun initializeWithStartupResult(result: DownloadModelsResult) {
+            // Drop failed/succeeded chains from a previous session so the download screen does not
+            // inherit a stale finalize error (e.g. QNN zip missing) before a new session starts.
+            workScheduler.cancel()
+            sessionManager.clearSession()
+            stateManager.updateState {
+                copy(
+                    status = DownloadStatus.CHECKING,
+                    errorMessage = null,
+                    currentDownloads = emptyList(),
+                    overallProgress = 0f,
+                    modelsComplete = 0,
+                    modelsTotal = 0,
+                    postProcessProgress = null,
+                )
+            }
+
             startupModelsResult = result
 
             val modelsCount = result.modelsToDownload.size
             logger.info(TAG, "Orchestrator initialized from startup result ($modelsCount models to download)")
-
-            stateManager.updateStatus(DownloadStatus.CHECKING)
 
             val scan = result.scanResult
 
@@ -127,6 +143,7 @@ class ModelDownloadOrchestratorImpl
                 return false
             }
 
+            requestedWifiOnly = wifiOnly
             logger.info(TAG, "Starting downloads for ${modelsToDownload.size} models (wifiOnly=$wifiOnly)")
             speedTracker.clearAll()
 
@@ -185,7 +202,16 @@ class ModelDownloadOrchestratorImpl
                     }
                 }",
             )
-            workScheduler.enqueue(request)
+            try {
+                workScheduler.enqueue(request)
+            } catch (e: DownloadWorkPayloadTooLargeException) {
+                val errorMsg =
+                    "Too many models to download in one batch (${e.fileSpecCount} files). " +
+                        "Try again after removing unused models."
+                logger.error(TAG, errorMsg, e)
+                stateManager.updateState { copy(status = DownloadStatus.ERROR, errorMessage = errorMsg) }
+                return false
+            }
 
             // Set DOWNLOADING status immediately — WorkManager handles WiFi gating via
             // UNMETERED constraint. If WiFi is unavailable, the work transitions to BLOCKED
@@ -221,9 +247,8 @@ class ModelDownloadOrchestratorImpl
         }
 
         override suspend fun resumeDownloads() {
-            val wifiOnly = _downloadState.value.waitingForUnmeteredNetwork
-            logger.info(TAG, "Resuming downloads (wifiOnly=$wifiOnly)")
-            startDownloads(wifiOnly)
+            logger.info(TAG, "Resuming downloads (wifiOnly=$requestedWifiOnly)")
+            startDownloads(wifiOnly = requestedWifiOnly)
         }
 
         override suspend fun cancelDownloads() {
@@ -251,10 +276,11 @@ class ModelDownloadOrchestratorImpl
                 }
                 return
             }
-            startDownloads(wifiOnly = false)
+            startDownloads(wifiOnly = requestedWifiOnly)
         }
 
         override suspend fun downloadOnMobileData() {
+            requestedWifiOnly = false
             stateManager.updateState { copy(waitingForUnmeteredNetwork = false) }
             // If startupModelsResult is null (edge case), set error and return
             if (startupModelsResult == null) {

@@ -5,7 +5,6 @@ import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelId
-import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.config.MediaTask
 import com.browntowndev.enclave.domain.model.config.ModelConfigurationId
@@ -13,7 +12,6 @@ import com.browntowndev.enclave.domain.model.config.OpenRouterRoutingConfigurati
 import com.browntowndev.enclave.domain.model.config.TtsProviderId
 import com.browntowndev.enclave.domain.model.inference.ApiModelParameterSupport
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
-import com.browntowndev.enclave.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.enclave.domain.model.inference.ModelSource
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.memory.MemoryCategory
@@ -21,6 +19,24 @@ import com.browntowndev.enclave.domain.model.settings.AppTheme
 import com.browntowndev.enclave.domain.model.settings.SearchProvider
 import com.browntowndev.enclave.domain.model.settings.SystemPromptOption
 import com.browntowndev.enclave.domain.usecase.settings.ModelDeletionTarget
+
+typealias TtsProviderAssetUi = com.browntowndev.enclave.core.ui.component.assignment.TtsProviderAssetUi
+
+typealias LiveVoiceProviderAssetUi = com.browntowndev.enclave.core.ui.component.assignment.LiveVoiceProviderAssetUi
+
+typealias MediaProviderAssetUi = com.browntowndev.enclave.core.ui.component.assignment.MediaProviderAssetUi
+
+typealias ApiModelAssetUi = com.browntowndev.enclave.core.ui.component.assignment.ApiModelAssetUi
+
+typealias ReusableApiCredentialUi = com.browntowndev.enclave.core.ui.component.assignment.ReusableApiCredentialUi
+
+typealias CustomHeaderUi = com.browntowndev.enclave.core.ui.component.assignment.CustomHeaderUi
+
+typealias ApiModelConfigUi = com.browntowndev.enclave.core.ui.component.assignment.ApiModelConfigUi
+
+typealias LocalModelAssetUi = com.browntowndev.enclave.core.ui.component.assignment.LocalModelAssetUi
+
+typealias LocalModelConfigUi = com.browntowndev.enclave.core.ui.component.assignment.LocalModelConfigUi
 
 @Immutable
 data class StoredMemory(
@@ -68,6 +84,8 @@ data class SettingsUiState(
     val xSearchEditor: XSearchEditorUiState = XSearchEditorUiState(),
     val ttsProvidersSheet: TtsProvidersSheetUiState = TtsProvidersSheetUiState(),
     val ttsProviderEditor: TtsProviderEditorUiState = TtsProviderEditorUiState(),
+    val liveVoiceProvidersSheet: LiveVoiceProvidersSheetUiState = LiveVoiceProvidersSheetUiState(),
+    val liveVoiceProviderEditor: LiveVoiceProviderEditorUiState = LiveVoiceProviderEditorUiState(),
     val mediaProvidersSheet: MediaProvidersSheetUiState = MediaProvidersSheetUiState(),
     val mediaProviderEditor: MediaProviderEditorUiState = MediaProviderEditorUiState(),
     val assignments: ModelAssignmentsUiState = ModelAssignmentsUiState(),
@@ -115,6 +133,7 @@ data class SettingsHomeUiState(
     val isUsageSpendSheetOpen: Boolean = false,
     val isVisionSettingsSheetOpen: Boolean = false,
     val isTtsProvidersSheetOpen: Boolean = false,
+    val isLiveVoiceProvidersSheetOpen: Boolean = false,
     val isMediaProvidersSheetOpen: Boolean = false,
     val isSearchSkillSheetOpen: Boolean = false,
     val isOssLicensesSheetOpen: Boolean = false,
@@ -170,8 +189,22 @@ data class FeedbackUiState(
 )
 
 @Immutable
+data class ModelPackUi(
+    val packId: String,
+    val displayName: String,
+    val completenessLabel: String,
+    val installedCount: Int,
+    val totalCount: Int,
+    val showDownloadAction: Boolean,
+    val isDiffusionSoftDeleted: Boolean,
+    val disabledReason: String? = null,
+    val isEligible: Boolean = true,
+)
+
+@Immutable
 data class LocalModelsSheetUiState(
     val isVisible: Boolean = false,
+    val modelPacks: List<ModelPackUi> = emptyList(),
     val models: List<LocalModelAssetUi> = emptyList(),
     val availableDownloads: List<LocalModelAssetUi> = emptyList(),
     val selectedAsset: LocalModelAssetUi? = null,
@@ -201,6 +234,21 @@ data class TtsProvidersSheetUiState(
 data class TtsProviderEditorUiState(
     val isEditing: Boolean = false,
     val assetDraft: TtsProviderAssetUi? = null,
+    val selectedReusableCredential: ReusableApiCredentialUi? = null,
+    val discovery: ApiModelDiscoveryUiState = ApiModelDiscoveryUiState(),
+)
+
+@Immutable
+data class LiveVoiceProvidersSheetUiState(
+    val isVisible: Boolean = false,
+    val assets: List<LiveVoiceProviderAssetUi> = emptyList(),
+    val selectedAsset: LiveVoiceProviderAssetUi? = null,
+)
+
+@Immutable
+data class LiveVoiceProviderEditorUiState(
+    val isEditing: Boolean = false,
+    val assetDraft: LiveVoiceProviderAssetUi? = null,
     val selectedReusableCredential: ReusableApiCredentialUi? = null,
     val discovery: ApiModelDiscoveryUiState = ApiModelDiscoveryUiState(),
 )
@@ -300,6 +348,10 @@ sealed interface PendingDeletionTarget {
     data class ApiPreset(
         val id: ApiModelConfigurationId,
     ) : PendingDeletionTarget
+
+    data class ModelPack(
+        val packId: String,
+    ) : PendingDeletionTarget
 }
 
 internal fun ModelDeletionTarget.toUi(): PendingDeletionTarget =
@@ -308,61 +360,18 @@ internal fun ModelDeletionTarget.toUi(): PendingDeletionTarget =
         is ModelDeletionTarget.LocalModelPreset -> PendingDeletionTarget.LocalModelPreset(id)
         is ModelDeletionTarget.ApiProvider -> PendingDeletionTarget.ApiProvider(id)
         is ModelDeletionTarget.ApiPreset -> PendingDeletionTarget.ApiPreset(id)
+        is ModelDeletionTarget.ModelPack -> PendingDeletionTarget.ModelPack(packId)
     }
 
 @Immutable
 data class ReassignmentOptionUi(
-    val configId: ModelConfigurationId,
+    val configId: ModelConfigurationId? = null,
+    val mediaProviderId: MediaProviderId? = null,
     val displayName: String,
     val source: ModelSource,
     val providerName: String? = null,
     val apiCredentialsId: ApiCredentialsId? = null,
     val localModelId: LocalModelId? = null,
-)
-
-@Immutable
-data class TtsProviderAssetUi(
-    val id: com.browntowndev.enclave.domain.model.config.TtsProviderId =
-        com.browntowndev.enclave.domain.model.config
-            .TtsProviderId(""),
-    val displayName: String = "",
-    val provider: ApiProvider = ApiProvider.OPENAI,
-    val voiceName: String = "",
-    val modelName: String? = null,
-    val baseUrl: String? = null,
-    val credentialAlias: String = "",
-    val useAsDefault: Boolean = false,
-)
-
-@Immutable
-data class MediaProviderAssetUi(
-    val id: MediaProviderId = MediaProviderId(""),
-    val displayName: String = "",
-    val provider: ApiProvider = ApiProvider.OPENAI,
-    val capability: MediaCapability = MediaCapability.IMAGE,
-    val tasks: Set<MediaTask> = emptySet(),
-    val modelName: String = "",
-    val baseUrl: String? = null,
-    val credentialAlias: String = "",
-    val useAsDefault: Boolean = false,
-)
-
-@Immutable
-data class ApiModelAssetUi(
-    val credentialsId: ApiCredentialsId,
-    val displayName: String,
-    val provider: ApiProvider,
-    val baseUrl: String?,
-    val credentialAlias: String,
-    val configurations: List<ApiModelConfigUi>,
-)
-
-@Immutable
-data class ReusableApiCredentialUi(
-    val credentialsId: ApiCredentialsId,
-    val displayName: String,
-    val providerLabel: String,
-    val credentialAlias: String,
 )
 
 enum class ApiConnectionTestStatus {
@@ -371,49 +380,11 @@ enum class ApiConnectionTestStatus {
     SUCCESS,
 }
 
-@Immutable
-data class CustomHeaderUi(
-    val key: String = "",
-    val value: String = "",
-)
-
 enum class ModelSortOption {
     A_TO_Z,
     NEWEST,
     PRICE_LOW_TO_HIGH,
 }
-
-@Immutable
-data class ApiModelConfigUi(
-    val id: ApiModelConfigurationId = ApiModelConfigurationId(""),
-    val credentialsId: ApiCredentialsId = ApiCredentialsId(""),
-    val modelId: String = "",
-    val isMultimodal: Boolean = false,
-    val displayName: String = "",
-    val maxTokens: String = "4096",
-    val contextWindow: String = "4096",
-    val temperature: Double = 0.7,
-    val topP: Double = 0.95,
-    val topK: String = "40",
-    val minP: Double = 0.05,
-    val frequencyPenalty: Double = 0.0,
-    val presencePenalty: Double = 0.0,
-    val maxTokensDisabled: Boolean = false,
-    val temperatureDisabled: Boolean = false,
-    val topPDisabled: Boolean = false,
-    val topKDisabled: Boolean = false,
-    val minPDisabled: Boolean = false,
-    val frequencyPenaltyDisabled: Boolean = false,
-    val presencePenaltyDisabled: Boolean = false,
-    val customHeaders: List<CustomHeaderUi> = emptyList(),
-    val openRouterRouting: OpenRouterRoutingConfiguration = OpenRouterRoutingConfiguration(),
-    val thinkingEnabled: Boolean = false,
-    val systemPrompt: String = "",
-    val reasoningEffort: ApiReasoningEffort? = null,
-    val promptPriceUsdPerMillion: String = "",
-    val completionPriceUsdPerMillion: String = "",
-    val cachedPromptPriceUsdPerMillion: String = "",
-)
 
 @Immutable
 data class DiscoveredApiModelUi(
@@ -432,38 +403,6 @@ data class DiscoveredApiModelUi(
     val isVideoGenerationCapable: Boolean = false,
     val isAudioGenerationCapable: Boolean = false,
     val tasks: Set<MediaTask> = emptySet(),
-)
-
-@Immutable
-data class LocalModelAssetUi(
-    val metadataId: LocalModelId,
-    val huggingFaceModelName: String,
-    val friendlyName: String,
-    val providerName: String,
-    val format: String,
-    val remoteFileName: String,
-    val sizeInBytes: Long,
-    val configurations: List<LocalModelConfigUi>,
-    val isExpanded: Boolean = false,
-    val isMultimodal: Boolean = false,
-    val isSoftDeleted: Boolean = false,
-)
-
-@Immutable
-data class LocalModelConfigUi(
-    val id: LocalModelConfigurationId = LocalModelConfigurationId(""),
-    val localModelId: LocalModelId = LocalModelId(""),
-    val displayName: String = "",
-    val maxTokens: String = "4096",
-    val contextWindow: String = "4096",
-    val temperature: Double = 0.7,
-    val topP: Double = 0.95,
-    val topK: String = "40",
-    val minP: Double = 0.0,
-    val repetitionPenalty: Double = 1.1,
-    val systemPrompt: String = "",
-    val thinkingEnabled: Boolean = false,
-    val isSystemPreset: Boolean = false,
 )
 
 @Immutable
@@ -522,7 +461,9 @@ internal val DefaultModelAssignmentUi.assignmentRowDisplay: AssignmentRowDisplay
                             providerName = providerName,
                             modelName = presetName.toReadableAssignmentLabel(),
                         )
-                    ModelType.TTS ->
+                    ModelType.TTS,
+                    ModelType.LIVE_VOICE,
+                    ->
                         AssignmentRowDisplay(
                             presetName = currentModelName.toReadableAssignmentLabel() ?: currentModelName,
                             providerName = providerName,
@@ -546,6 +487,7 @@ internal val ModelType.displayLabel: String
             ModelType.THINKING -> "Thinking"
             ModelType.VISION -> "Vision (API)"
             ModelType.TTS -> "Text-to-Speech"
+            ModelType.LIVE_VOICE -> "Live Voice"
             ModelType.IMAGE_GENERATION -> "Image Generation"
             ModelType.IMAGE_EDIT -> "Image Edit"
             ModelType.VIDEO_GENERATION -> "Video Generation"
@@ -565,6 +507,7 @@ internal val ModelType.description: String
             ModelType.THINKING -> "A reasoning model with extended context for complex tasks."
             ModelType.VISION -> "A dedicated API vision model that acts as the chat's eyes for image inspection."
             ModelType.TTS -> "Synthesize text responses into natural-sounding speech."
+            ModelType.LIVE_VOICE -> "Realtime speech-to-speech voice conversation."
             ModelType.IMAGE_GENERATION -> "Generate images from text prompts."
             ModelType.IMAGE_EDIT -> "Edit or transform images using a reference image."
             ModelType.VIDEO_GENERATION -> "Generate videos from text prompts."
@@ -713,6 +656,22 @@ object MockSettingsData {
                 isMultimodal = true,
             ),
             DefaultModelAssignmentUi(ModelType.THINKING, ModelSource.ON_DEVICE, "Llama 3 8B (Precise)", "Thinking"),
+            DefaultModelAssignmentUi(
+                ModelType.TTS,
+                ModelSource.API,
+                "Default OpenAI TTS",
+                "Text-to-Speech",
+                "OpenAI",
+                presetName = "alloy",
+            ),
+            DefaultModelAssignmentUi(
+                ModelType.LIVE_VOICE,
+                ModelSource.API,
+                "Gemini Live",
+                "Live Voice",
+                "Google",
+                presetName = "Puck",
+            ),
         )
 
     val baseUiState =
@@ -739,6 +698,20 @@ object MockSettingsData {
                                 displayName = "Default OpenAI TTS",
                                 provider = ApiProvider.OPENAI,
                                 voiceName = "alloy",
+                            ),
+                        ),
+                ),
+            liveVoiceProvidersSheet =
+                LiveVoiceProvidersSheetUiState(
+                    assets =
+                        listOf(
+                            LiveVoiceProviderAssetUi(
+                                id =
+                                    com.browntowndev.enclave.domain.model.config
+                                        .LiveVoiceProviderId("lv-1"),
+                                displayName = "Gemini Live",
+                                provider = ApiProvider.GOOGLE,
+                                voiceName = "Puck",
                             ),
                         ),
                 ),

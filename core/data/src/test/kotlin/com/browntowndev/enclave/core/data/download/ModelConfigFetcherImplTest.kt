@@ -1,11 +1,14 @@
 package com.browntowndev.enclave.core.data.download
 
 import android.util.Log
+import androidx.test.core.app.ApplicationProvider
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.RemoteModelAsset
 import com.browntowndev.enclave.domain.model.config.RemoteModelConfiguration
 import com.browntowndev.enclave.domain.model.config.UtilityType
 import com.browntowndev.enclave.domain.model.download.DownloadSource
+import com.browntowndev.enclave.domain.model.download.ModelPackRole
+import com.browntowndev.enclave.domain.model.download.ModelPackTestFixtures
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.download.ModelUrlProviderPort
@@ -23,8 +26,14 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class ModelConfigFetcherImplTest {
     private lateinit var mockOkHttpClient: OkHttpClient
     private lateinit var mockModelUrlProvider: ModelUrlProviderPort
@@ -44,7 +53,12 @@ class ModelConfigFetcherImplTest {
 
         every { mockModelUrlProvider.getConfigUrl() } returns "https://config.example.com/model_config.json"
 
-        fetcher = ModelConfigFetcherImpl(mockOkHttpClient, mockModelUrlProvider)
+        fetcher =
+            ModelConfigFetcherImpl(
+                ApplicationProvider.getApplicationContext(),
+                mockOkHttpClient,
+                mockModelUrlProvider,
+            )
     }
 
     @AfterEach
@@ -473,6 +487,84 @@ class ModelConfigFetcherImplTest {
         }
 
     @Test
+    fun fetchRemoteConfig_infersFormatFromFileExtensionWhenFieldOmitted() =
+        runTest {
+            // Catalog assets that omit modelFileFormat must resolve from the file
+            // extension instead of silently defaulting to LITERTLM (which hid the
+            // llama.cpp-only settings for GGUF models in the configure screen).
+            val json =
+                """
+                {
+                  "assets": [
+                    {
+                      "displayName": "GGUF Model",
+                      "fileName": "model.gguf",
+                      "sha256": "gguf-sha",
+                      "sizeInBytes": 1000000,
+                      "configurations": [
+                        {
+                          "configId": "config-gguf-1",
+                          "displayName": "GGUF Model",
+                          "systemPrompt": "Hi",
+                          "temperature": 0.7,
+                          "topK": 40,
+                          "topP": 0.95,
+                          "minP": 0.05,
+                          "repetitionPenalty": 1.1,
+                          "maxTokens": 2048,
+                          "contextWindow": 4096,
+                          "defaultAssignments": ["main"]
+                        }
+                      ]
+                    },
+                    {
+                      "displayName": "LiteRT Model",
+                      "fileName": "model.litertlm",
+                      "sha256": "litert-sha",
+                      "sizeInBytes": 1000000,
+                      "configurations": [
+                        {
+                          "configId": "config-litert-1",
+                          "displayName": "LiteRT Model",
+                          "systemPrompt": "Hi",
+                          "temperature": 0.7,
+                          "topK": 40,
+                          "topP": 0.95,
+                          "minP": 0.05,
+                          "repetitionPenalty": 1.1,
+                          "maxTokens": 2048,
+                          "contextWindow": 4096,
+                          "defaultAssignments": ["fast"]
+                        }
+                      ]
+                    }
+                  ]
+                }
+                """.trimIndent()
+
+            val mockCall = mockk<okhttp3.Call>()
+            val response =
+                Response
+                    .Builder()
+                    .request(mockk())
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(200)
+                    .message("OK")
+                    .body(json.toResponseBody())
+                    .build()
+
+            every { mockOkHttpClient.newCall(any()) } returns mockCall
+            every { mockCall.execute() } returns response
+
+            val result = fetcher.fetchRemoteConfig()
+
+            assertTrue(result.isSuccess)
+            val assets = result.getOrNull()!!
+            assertEquals(ModelFileFormat.GGUF, assets[0].metadata.modelFileFormat)
+            assertEquals(ModelFileFormat.LITERTLM, assets[1].metadata.modelFileFormat)
+        }
+
+    @Test
     fun fetchRemoteConfig_parsesUtilityAsset() =
         runTest {
             val json =
@@ -612,6 +704,111 @@ class ModelConfigFetcherImplTest {
             assertEquals(2, assets[1].configurations.size)
             assertTrue(assets[1].metadata.isMultimodal)
             assertFalse(assets[0].metadata.isMultimodal)
+        }
+
+    @Test
+    @DisplayName("MPK-001 Parse modelPacks from model_config.json")
+    fun mpk001_parseModelPacksFromConfig() =
+        runTest {
+            val json = sd15PackConfigJson()
+            mockConfigResponse(json)
+
+            val result = fetcher.fetchParsedCatalog()
+
+            assertTrue(result.isSuccess)
+            val catalog = result.getOrThrow()
+            assertEquals(1, catalog.packs.size)
+            assertEquals(ModelPackTestFixtures.PACK_ID, catalog.packs[0].packId)
+            assertEquals(ModelPackTestFixtures.PACK_DISPLAY, catalog.packs[0].displayName)
+            assertEquals(1, catalog.packs[0].members.size)
+        }
+
+    @Test
+    @DisplayName("MPK-002 Pack member assets resolve from assets[]")
+    fun mpk002_packMemberAssetsResolveFromAssets() =
+        runTest {
+            mockConfigResponse(sd15PackConfigJson())
+            val catalog = fetcher.fetchParsedCatalog().getOrThrow()
+            val pack = catalog.packById(ModelPackTestFixtures.PACK_ID)!!
+            val diffusion = pack.members.single { it.role == ModelPackRole.DIFFUSION }
+
+            assertEquals(ModelPackTestFixtures.DIFFUSION_SHA, diffusion.asset.metadata.sha256)
+            assertEquals(ModelPackTestFixtures.DIFFUSION_FILE, diffusion.asset.metadata.localFileName)
+        }
+
+    @Test
+    @DisplayName("MPK-003 Invalid pack member fileName fails parse")
+    fun mpk003_invalidPackMemberFileNameFailsParse() =
+        runTest {
+            val json =
+                sd15PackConfigJson(
+                    packMembers =
+                        """
+                        { "role": "diffusion", "fileName": "missing-file.gguf" }
+                        """.trimIndent(),
+                )
+            mockConfigResponse(json)
+
+            val result = fetcher.fetchParsedCatalog()
+
+            assertTrue(result.isFailure)
+            assertTrue(
+                result.exceptionOrNull()?.message?.contains("Pack member file not found in assets") == true,
+            )
+        }
+
+    @Test
+    @DisplayName("MPK-027 fetchParsedCatalog reuses last successful catalog on network failure")
+    fun mpk027_fetchParsedCatalogReusesLastSuccessfulCatalog() =
+        runTest {
+            mockConfigResponse(sd15PackConfigJson())
+            fetcher.fetchParsedCatalog().getOrThrow()
+
+            val mockCall = mockk<okhttp3.Call>()
+            every { mockOkHttpClient.newCall(any()) } returns mockCall
+            every { mockCall.execute() } throws java.io.IOException("offline")
+
+            val result = fetcher.fetchParsedCatalog()
+
+            assertTrue(result.isSuccess)
+            assertEquals(
+                ModelPackTestFixtures.PACK_ID,
+                result
+                    .getOrThrow()
+                    .packs
+                    .single()
+                    .packId,
+            )
+        }
+
+    @Test
+    @DisplayName("MPK-028 getPersistedParsedCatalog reads on-disk cache without network")
+    fun mpk028_getPersistedParsedCatalogReadsDiskWithoutNetwork() =
+        runTest {
+            mockConfigResponse(sd15PackConfigJson())
+            fetcher.fetchParsedCatalog().getOrThrow()
+
+            val offlineFetcher =
+                ModelConfigFetcherImpl(
+                    ApplicationProvider.getApplicationContext(),
+                    mockOkHttpClient,
+                    mockModelUrlProvider,
+                )
+            val mockCall = mockk<okhttp3.Call>()
+            every { mockOkHttpClient.newCall(any()) } returns mockCall
+            every { mockCall.execute() } throws java.io.IOException("offline")
+
+            val result = offlineFetcher.getPersistedParsedCatalog()
+
+            assertTrue(result.isSuccess)
+            assertEquals(
+                ModelPackTestFixtures.PACK_ID,
+                result
+                    .getOrThrow()
+                    .packs
+                    .single()
+                    .packId,
+            )
         }
 
     @Test
@@ -767,6 +964,218 @@ class ModelConfigFetcherImplTest {
 
             assertEquals(1, modelAssets.size)
             assertEquals("", modelAssets[0].metadata.displayName)
+        }
+
+    private fun mockConfigResponse(json: String) {
+        val mockCall = mockk<okhttp3.Call>()
+        val response =
+            Response
+                .Builder()
+                .request(mockk())
+                .protocol(Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .body(json.toResponseBody())
+                .build()
+
+        every { mockOkHttpClient.newCall(any()) } returns mockCall
+        every { mockCall.execute() } returns response
+    }
+
+    private fun sd15PackConfigJson(
+        packMembers: String =
+            """
+            { "role": "diffusion", "fileName": "${ModelPackTestFixtures.DIFFUSION_FILE}" }
+            """.trimIndent(),
+    ): String =
+        """
+        {
+          "assets": [
+            {
+              "displayName": "${ModelPackTestFixtures.PACK_DISPLAY}",
+              "huggingFaceModelName": "gpustack/stable-diffusion-v1-5-GGUF",
+              "fileName": "${ModelPackTestFixtures.DIFFUSION_FILE}",
+              "sha256": "${ModelPackTestFixtures.DIFFUSION_SHA}",
+              "sizeInBytes": 1747190784,
+              "modelFileFormat": "GGUF",
+              "source": "HF",
+              "configurations": [
+                {
+                  "configId": "${ModelPackTestFixtures.SD15_CONFIG_ID}",
+                  "displayName": "${ModelPackTestFixtures.PACK_DISPLAY}",
+                  "systemPrompt": "",
+                  "temperature": 0.0,
+                  "topK": 1,
+                  "topP": 1.0,
+                  "minP": 0.0,
+                  "repetitionPenalty": 1.0,
+                  "maxTokens": 0,
+                  "contextWindow": 0,
+                  "defaultAssignments": ["image_generation"]
+                }
+              ]
+            }
+          ],
+          "modelPacks": [
+            {
+              "packId": "${ModelPackTestFixtures.PACK_ID}",
+              "displayName": "${ModelPackTestFixtures.PACK_DISPLAY}",
+              "slot": "image_generation",
+              "members": [ $packMembers ]
+            }
+          ]
+        }
+        """.trimIndent()
+
+    @Test
+    fun `DL-001 catalog parses sd15-t2i sdxl-t2i and juggernaut-xl-t2i`() =
+        runTest {
+            // Parse the SHIPPED model_config.json rather than hand-crafted JSON so the
+            // scenario is red until the production catalog carries all three image packs.
+            val configFile =
+                listOf(
+                    java.io.File("model_config.json"),
+                    java.io.File("../model_config.json"),
+                    java.io.File("../../model_config.json"),
+                ).first { it.exists() }
+            mockConfigResponse(configFile.readText())
+
+            val result = fetcher.fetchParsedCatalog()
+
+            assertTrue(result.isSuccess)
+            val catalog = result.getOrThrow()
+
+            // All three local image packs are present in catalog order.
+            assertEquals(listOf("sd15-t2i", "sdxl-t2i", "juggernaut-xl-t2i"), catalog.packs.map { it.packId })
+
+            // SD1.5 pack carries its utility (`sd15_qnn_pack`) member.
+            val sd15Pack = catalog.packById("sd15-t2i")!!
+            assertEquals(
+                UtilityType.SD15_QNN_PACK,
+                sd15Pack.members
+                    .single { it.role == ModelPackRole.TEXT_ENCODER }
+                    .asset.metadata.utilityType,
+            )
+
+            // SDXL pack carries its diffusion member AND its utility (`sdxl_qnn_pack`) member.
+            val sdxlPack = catalog.packById("sdxl-t2i")!!
+            assertEquals(
+                "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip",
+                sdxlPack.members
+                    .single { it.role == ModelPackRole.DIFFUSION }
+                    .asset.metadata.localFileName,
+            )
+            assertEquals(
+                UtilityType.SDXL_QNN_PACK,
+                sdxlPack.members
+                    .single { it.role == ModelPackRole.TEXT_ENCODER }
+                    .asset.metadata.utilityType,
+            )
+
+            val juggernautPack = catalog.packById("juggernaut-xl-t2i")!!
+            assertEquals(ModelType.IMAGE_EDIT, juggernautPack.slot)
+            assertEquals(
+                "juggernaut_qnn2.28_8gen3.zip",
+                juggernautPack.members
+                    .single { it.role == ModelPackRole.DIFFUSION }
+                    .asset.metadata.localFileName,
+            )
+            assertEquals(
+                UtilityType.JUGGERNAUT_XL_QNN_PACK,
+                juggernautPack.members
+                    .single { it.role == ModelPackRole.TEXT_ENCODER }
+                    .asset.metadata.utilityType,
+            )
+        }
+
+    @Test
+    fun fetchParsedCatalog_discardsStaleCachedLegacySdxlGgufFilename() =
+        runTest {
+            val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+            val cacheFile = java.io.File(context.filesDir, "model_config_cache.json")
+            cacheFile.writeText(
+                """
+                {
+                  "assets": [
+                    {
+                      "huggingFaceModelName": "gpustack/stable-diffusion-xl-base-1.0-GGUF",
+                      "fileName": "realvis_xl_v5_dmd2.gguf",
+                      "sha256": "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83",
+                      "sizeInBytes": 3504485672,
+                      "source": "HF",
+                      "configurations": []
+                    }
+                  ],
+                  "modelPacks": []
+                }
+                """.trimIndent(),
+            )
+
+            val configFile =
+                listOf(
+                    java.io.File("model_config.json"),
+                    java.io.File("../model_config.json"),
+                    java.io.File("../../model_config.json"),
+                ).first { it.exists() }
+            mockConfigResponse(configFile.readText())
+
+            val result = fetcher.fetchParsedCatalog()
+
+            assertTrue(result.isSuccess)
+            val sdxlAsset =
+                result
+                    .getOrThrow()
+                    .assets
+                    .first { it.metadata.localFileName.contains("realvis_xl_v5_dmd2") }
+            assertEquals("realvis_xl_v5_dmd2_qnn2.28_8gen3.zip", sdxlAsset.metadata.localFileName)
+            assertTrue(cacheFile.readText().contains("realvis_xl_v5_dmd2_qnn2.28_8gen3.zip"))
+        }
+
+    @Test
+    fun toLocalModelAssets_disambiguatesCollidingSafetyClassifierFilenames() =
+        runTest {
+            val remoteAssets =
+                listOf(
+                    RemoteModelAsset(
+                        displayName = "Image Safety Classifier",
+                        huggingFacePath = "image_safety_classifier",
+                        fileName = "model_quantized.onnx",
+                        sha256 = "image-sha",
+                        sizeInBytes = 87_018_507L,
+                        modelFileFormat = ModelFileFormat.ONNX,
+                        source = DownloadSource.CLOUDFLARE_R2,
+                        utilityType = UtilityType.IMAGE_SAFETY_CLASSIFIER,
+                        configurations = emptyList(),
+                    ),
+                    RemoteModelAsset(
+                        displayName = "Prompt Safety Classifier",
+                        huggingFaceModelName = "KoalaAI/Text-Moderation",
+                        huggingFacePath = "nsfw_text_classifier",
+                        fileName = "model_quantized.onnx",
+                        sha256 = "prompt-sha",
+                        sizeInBytes = 142_975_672L,
+                        modelFileFormat = ModelFileFormat.ONNX,
+                        source = DownloadSource.CLOUDFLARE_R2,
+                        utilityType = UtilityType.PROMPT_SAFETY_CLASSIFIER,
+                        configurations = emptyList(),
+                    ),
+                )
+
+            val modelAssets = fetcher.toLocalModelAssets(remoteAssets)
+
+            assertEquals(
+                "image_safety_classifier_model_quantized.onnx",
+                modelAssets.first { it.metadata.utilityType == UtilityType.IMAGE_SAFETY_CLASSIFIER }
+                    .metadata.localFileName,
+            )
+            assertEquals(
+                "nsfw_text_classifier_model_quantized.onnx",
+                modelAssets.first { it.metadata.utilityType == UtilityType.PROMPT_SAFETY_CLASSIFIER }
+                    .metadata.localFileName,
+            )
+            modelAssets.forEach { asset ->
+                assertEquals("model_quantized.onnx", asset.metadata.remoteFileName)
+            }
         }
 }
 

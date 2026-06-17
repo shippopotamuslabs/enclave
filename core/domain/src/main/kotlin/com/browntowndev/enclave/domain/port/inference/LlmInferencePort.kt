@@ -89,6 +89,15 @@ sealed interface InferenceEvent {
     ) : InferenceEvent
 
     /**
+     * Emitted before a new model turn when prior assistant answer text may already be visible.
+     * The next [PartialResponse] should be visually separated from that text when no thinking
+     * header sits between them (for example, text → tool call → more text without CoT).
+     */
+    data class AnswerStreamBoundary(
+        val modelType: ModelType,
+    ) : InferenceEvent
+
+    /**
      * Emitted when a web search tool execution completes with results.
      * @param sources The list of search results returned by the provider.
      * @param modelType The type of model that triggered the search.
@@ -140,6 +149,15 @@ sealed interface InferenceEvent {
         val originalName: String,
         val resolvedName: String,
         val confidence: Float,
+        val modelType: ModelType,
+    ) : InferenceEvent
+
+    /** Provider transport failed transiently; Rust scheduled another model attempt. */
+    data class ModelApiRetryScheduled(
+        val attempt: Int,
+        val maxAttempts: Int,
+        val delayMs: Long,
+        val reason: String,
         val modelType: ModelType,
     ) : InferenceEvent
 

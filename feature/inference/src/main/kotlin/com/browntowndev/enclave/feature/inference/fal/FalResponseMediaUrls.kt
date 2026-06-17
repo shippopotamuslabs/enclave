@@ -107,8 +107,7 @@ internal object FalResponseMediaUrls {
                 )
             }.toList()
 
-    private fun FalMediaUrlCandidate.isPrimaryMediaUrl(): Boolean =
-        url.isResolvableMediaUrl() && priority < PREVIEW_MEDIA_URL_PRIORITY
+    private fun FalMediaUrlCandidate.isPrimaryMediaUrl(): Boolean = url.isResolvableMediaUrl() && priority < PREVIEW_MEDIA_URL_PRIORITY
 
     private fun String.isResolvableMediaUrl(): Boolean =
         startsWith("http://") ||

@@ -2,7 +2,10 @@ package com.browntowndev.enclave.domain.usecase.chat
 
 import com.browntowndev.enclave.domain.model.artifact.ArtifactGenerationRequest
 import com.browntowndev.enclave.domain.model.artifact.MimeType
+import com.browntowndev.enclave.domain.model.chat.AccumulatedMessages
 import com.browntowndev.enclave.domain.model.chat.ChatId
+import com.browntowndev.enclave.domain.model.chat.ChatInferenceErrorCategory
+import com.browntowndev.enclave.domain.model.chat.ChatInferenceUserErrorMapper
 import com.browntowndev.enclave.domain.model.chat.MessageGenerationState
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.MessageState
@@ -52,6 +55,117 @@ class ChatGenerationAccumulatorManagerTest {
         }
 
     @Test
+    fun `model api retry clears partial streamed content`() =
+        runTest {
+            val manager =
+                ChatGenerationAccumulatorManager(
+                    mode = Mode.FAST,
+                    chatId = ChatId("chat"),
+                    userMessageId = MessageId("user"),
+                    defaultAssistantMessageId = MessageId("assistant"),
+                    chatRepository = mockk(relaxed = true),
+                )
+
+            manager.reduce(MessageGenerationState.GeneratingText("partial doc", ModelType.FAST))
+            val cleared =
+                manager.reduce(
+                    MessageGenerationState.ModelApiRetryScheduled(
+                        attempt = 1,
+                        maxAttempts = 3,
+                        delayMs = 1_000L,
+                        modelType = ModelType.FAST,
+                    ),
+                )
+
+            val snapshot = cleared.messages.getValue(MessageId("assistant"))
+            assertEquals("", snapshot.content)
+            assertEquals("", snapshot.thinkingRaw)
+            assertEquals(MessageState.PROCESSING, snapshot.messageState)
+            assertTrue(snapshot.transcriptSegments.isEmpty())
+            assertTrue(snapshot.telemetryRows.isEmpty())
+        }
+
+    @Test
+    fun `model api retry clears telemetry captured before retry`() =
+        runTest {
+            val manager =
+                ChatGenerationAccumulatorManager(
+                    mode = Mode.FAST,
+                    chatId = ChatId("chat"),
+                    userMessageId = MessageId("user"),
+                    defaultAssistantMessageId = MessageId("assistant"),
+                    chatRepository = mockk(relaxed = true),
+                )
+
+            manager.reduce(MessageGenerationState.GeneratingText("partial", ModelType.FAST))
+            manager.reduce(
+                MessageGenerationState.TelemetryCaptured(
+                    telemetry = TelemetryTestFixtures.telOpenAi1,
+                    modelType = ModelType.FAST,
+                ),
+            )
+            val cleared =
+                manager.reduce(
+                    MessageGenerationState.ModelApiRetryScheduled(
+                        attempt = 1,
+                        maxAttempts = 3,
+                        delayMs = 1_000L,
+                        modelType = ModelType.FAST,
+                    ),
+                )
+
+            assertTrue(cleared.messages.getValue(MessageId("assistant")).telemetryRows.isEmpty())
+        }
+
+    @Test
+    fun `reconcileWithSnapshot merges snapshot telemetry without duplicating event-captured rows`() =
+        runTest {
+            val manager =
+                ChatGenerationAccumulatorManager(
+                    mode = Mode.FAST,
+                    chatId = ChatId("chat"),
+                    userMessageId = MessageId("user"),
+                    defaultAssistantMessageId = MessageId("assistant"),
+                    chatRepository = mockk(relaxed = true),
+                )
+
+            manager.reduce(MessageGenerationState.GeneratingText("answer", ModelType.FAST))
+            manager.reduce(
+                MessageGenerationState.TelemetryCaptured(
+                    telemetry = TelemetryTestFixtures.telOpenAi1,
+                    modelType = ModelType.FAST,
+                ),
+            )
+
+            val snapshotFromPort =
+                manager.toMessagesState().messages.getValue(MessageId("assistant"))
+            val portOnlyRow =
+                TelemetryTestFixtures.telAgent2.copy(
+                    id = com.browntowndev.enclave.domain.model.telemetry.TurnTelemetryId("tel-port-only"),
+                )
+            val snapshotWithExtraRow =
+                AccumulatedMessages(
+                    messages =
+                        mapOf(
+                            MessageId("assistant") to
+                                snapshotFromPort.copy(
+                                    telemetryRows =
+                                        snapshotFromPort.telemetryRows + listOf(portOnlyRow),
+                                ),
+                        ),
+                )
+
+            manager.reconcileWithSnapshot(snapshotWithExtraRow)
+
+            val telemetryRows = manager.toMessagesState().messages.getValue(MessageId("assistant")).telemetryRows
+            assertEquals(2, telemetryRows.size)
+            assertEquals(
+                listOf(TelemetryTestFixtures.telOpenAi1.id, portOnlyRow.id),
+                telemetryRows.map { it.id },
+            )
+        }
+
+    @Test
     fun `second thinking wave clears thinkingEndTime after interleaved answer tokens`() =
         runTest {
             val manager =
@@ -75,8 +189,76 @@ class ChatGenerationAccumulatorManagerTest {
 
             assertNull(acc.thinkingEndTime, "New CoT wave must reset end time so duration/timer are not stale")
             assertEquals(MessageState.THINKING, acc.currentState)
-            assertEquals("cot1cot2", acc.thinkingRaw.toString())
+            assertEquals("cot1\n\ncot2", acc.thinkingRaw.toString())
             assertEquals("answer1", acc.content.toString())
+        }
+
+    @Test
+    fun `answer stream boundary starts new assistant segment after prior answer text`() =
+        runTest {
+            val manager =
+                ChatGenerationAccumulatorManager(
+                    mode = Mode.FAST,
+                    chatId = ChatId("chat"),
+                    userMessageId = MessageId("user"),
+                    defaultAssistantMessageId = MessageId("assistant"),
+                    chatRepository = mockk(relaxed = true),
+                )
+
+            manager.reduce(MessageGenerationState.GeneratingText("Before tools.", ModelType.FAST))
+            manager.reduce(MessageGenerationState.AnswerStreamBoundary(ModelType.FAST))
+            manager.reduce(MessageGenerationState.GeneratingText("After tools.", ModelType.FAST))
+
+            val snapshot = manager.toMessagesState().messages.getValue(MessageId("assistant"))
+            assertEquals("Before tools.\n\nAfter tools.", snapshot.content)
+            val segs = snapshot.transcriptSegments
+            assertEquals(2, segs.size)
+            val first = segs[0] as MessageTranscriptSegment.AssistantText
+            val second = segs[1] as MessageTranscriptSegment.AssistantText
+            assertEquals("Before tools.", first.text)
+            assertEquals("After tools.", second.text)
+        }
+
+    @Test
+    fun `answer stream boundary is ignored before any assistant text exists`() =
+        runTest {
+            val manager =
+                ChatGenerationAccumulatorManager(
+                    mode = Mode.FAST,
+                    chatId = ChatId("chat"),
+                    userMessageId = MessageId("user"),
+                    defaultAssistantMessageId = MessageId("assistant"),
+                    chatRepository = mockk(relaxed = true),
+                )
+
+            manager.reduce(MessageGenerationState.AnswerStreamBoundary(ModelType.FAST))
+            manager.reduce(MessageGenerationState.GeneratingText("Hello", ModelType.FAST))
+
+            val snapshot = manager.toMessagesState().messages.getValue(MessageId("assistant"))
+            assertEquals("Hello", snapshot.content)
+            assertEquals(1, snapshot.transcriptSegments.size)
+        }
+
+    @Test
+    fun `thinking after answer clears pending answer stream boundary`() =
+        runTest {
+            val manager =
+                ChatGenerationAccumulatorManager(
+                    mode = Mode.FAST,
+                    chatId = ChatId("chat"),
+                    userMessageId = MessageId("user"),
+                    defaultAssistantMessageId = MessageId("assistant"),
+                    chatRepository = mockk(relaxed = true),
+                )
+
+            manager.reduce(MessageGenerationState.GeneratingText("First", ModelType.FAST))
+            manager.reduce(MessageGenerationState.AnswerStreamBoundary(ModelType.FAST))
+            manager.reduce(MessageGenerationState.ThinkingLive("more thought", ModelType.FAST))
+            manager.reduce(MessageGenerationState.GeneratingText("Second", ModelType.FAST))
+
+            val snapshot = manager.toMessagesState().messages.getValue(MessageId("assistant"))
+            assertEquals("FirstSecond", snapshot.content)
+            assertEquals(3, snapshot.transcriptSegments.size)
         }
 
     @Test
@@ -372,6 +554,122 @@ class ChatGenerationAccumulatorManagerTest {
             val snapshot = result.messages.getValue(MessageId("assistant"))
             assertTrue(snapshot.content.contains("Another message is in progress"))
             assertEquals(MessageState.COMPLETE, snapshot.messageState)
+        }
+
+    @Test
+    fun `failed state surfaces underlying error detail to the user`() =
+        runTest {
+            val manager =
+                ChatGenerationAccumulatorManager(
+                    mode = Mode.FAST,
+                    chatId = ChatId("chat"),
+                    userMessageId = MessageId("user"),
+                    defaultAssistantMessageId = MessageId("assistant"),
+                    chatRepository = mockk(relaxed = true),
+                )
+
+            val result =
+                manager.reduce(
+                    MessageGenerationState.Failed(
+                        error =
+                            RuntimeException(
+                                "Agent loop failed: Model API unavailable: stream ended unexpectedly (attempts=3)",
+                            ),
+                        modelType = ModelType.FAST,
+                    ),
+                )
+
+            val snapshot = result.messages.getValue(MessageId("assistant"))
+            assertTrue(snapshot.content.contains("temporarily unavailable"))
+            assertFalse(snapshot.content.contains("attempts=3"))
+            assertEquals(ChatInferenceErrorCategory.TRANSPORT_FAILURE, snapshot.failureErrorCategory)
+            assertEquals(MessageState.COMPLETE, snapshot.messageState)
+        }
+
+    @Test
+    fun `failed guardrail retry exhaustion surfaces provider reset detail`() =
+        runTest {
+            val manager =
+                ChatGenerationAccumulatorManager(
+                    mode = Mode.FAST,
+                    chatId = ChatId("chat"),
+                    userMessageId = MessageId("user"),
+                    defaultAssistantMessageId = MessageId("assistant"),
+                    chatRepository = mockk(relaxed = true),
+                )
+
+            val result =
+                manager.reduce(
+                    MessageGenerationState.Failed(
+                        error =
+                            RuntimeException(
+                                "Agent loop failed: Guardrail exceeded: model_api_retries_exhausted: " +
+                                    "RateLimitException: 429: Weekly/Monthly Limit Exhausted. " +
+                                    "Your limit will reset at 2026-06-21 05:51:46",
+                            ),
+                        modelType = ModelType.FAST,
+                    ),
+                )
+
+            val snapshot = result.messages.getValue(MessageId("assistant"))
+            assertEquals(ChatInferenceErrorCategory.RATE_LIMITED, snapshot.failureErrorCategory)
+            assertTrue(snapshot.content.contains("Weekly/Monthly Limit Exhausted"))
+            assertTrue(snapshot.content.contains("2026-06-21 05:51:46"))
+            assertFalse(snapshot.content.contains("model_api_retries_exhausted"))
+            assertEquals(MessageState.COMPLETE, snapshot.messageState)
+        }
+
+    @Test
+    fun `failed compaction ceiling sets prompt too large category on snapshot`() =
+        runTest {
+            val manager =
+                ChatGenerationAccumulatorManager(
+                    mode = Mode.FAST,
+                    chatId = ChatId("chat"),
+                    userMessageId = MessageId("user"),
+                    defaultAssistantMessageId = MessageId("assistant"),
+                    chatRepository = mockk(relaxed = true),
+                )
+
+            val result =
+                manager.reduce(
+                    MessageGenerationState.Failed(
+                        error =
+                            RuntimeException(
+                                "Compaction failed (tier=pipeline): " +
+                                    "Projected prompt exceeds hard ceiling",
+                            ),
+                        modelType = ModelType.FAST,
+                    ),
+                )
+
+            val snapshot = result.messages.getValue(MessageId("assistant"))
+            assertEquals(ChatInferenceErrorCategory.PROMPT_TOO_LARGE, snapshot.failureErrorCategory)
+            assertTrue(snapshot.content.contains(ChatInferenceUserErrorMapper.PROMPT_TOO_LARGE_TITLE))
+        }
+
+    @Test
+    fun `failed state without error message keeps generic copy`() =
+        runTest {
+            val manager =
+                ChatGenerationAccumulatorManager(
+                    mode = Mode.FAST,
+                    chatId = ChatId("chat"),
+                    userMessageId = MessageId("user"),
+                    defaultAssistantMessageId = MessageId("assistant"),
+                    chatRepository = mockk(relaxed = true),
+                )
+
+            val result =
+                manager.reduce(
+                    MessageGenerationState.Failed(
+                        error = RuntimeException(),
+                        modelType = ModelType.FAST,
+                    ),
+                )
+
+            val snapshot = result.messages.getValue(MessageId("assistant"))
+            assertEquals("Something went wrong.\n\nPlease try again. If you use a cloud provider, check your API key and settings.", snapshot.content)
         }
 
     @Test

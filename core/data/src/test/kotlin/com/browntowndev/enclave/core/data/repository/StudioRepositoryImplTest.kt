@@ -1,12 +1,16 @@
 package com.browntowndev.enclave.core.data.repository
 
 import android.content.Context
+import app.cash.turbine.test
 import com.browntowndev.enclave.core.data.local.StudioAlbumDao
 import com.browntowndev.enclave.core.data.local.StudioAlbumEntity
 import com.browntowndev.enclave.core.data.local.StudioMediaDao
 import com.browntowndev.enclave.core.data.local.StudioMediaEntity
 import com.browntowndev.enclave.core.data.security.SensitiveRoomReadRepairApplier
 import com.browntowndev.enclave.core.data.sync.CloudSyncTrigger
+import com.browntowndev.enclave.domain.model.config.MediaCapability
+import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
+import com.browntowndev.enclave.domain.port.repository.ActiveStudioGeneration
 import com.browntowndev.enclave.domain.port.repository.DEFAULT_GALLERY_ALBUM_ID
 import com.browntowndev.enclave.domain.port.repository.TransactionProvider
 import io.mockk.coEvery
@@ -17,6 +21,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -37,6 +42,7 @@ class StudioRepositoryImplTest {
     private lateinit var filesDir: File
     private val healer = testSensitiveSelfHealer(FakeLocalDataEncryptionService())
     private val readRepairApplier = mockk<SensitiveRoomReadRepairApplier>(relaxed = true)
+    private val activeGenerationPersistence = mockk<ActiveStudioGenerationPersistence>(relaxed = true)
     private lateinit var repository: StudioRepositoryImpl
 
     @BeforeEach
@@ -48,6 +54,7 @@ class StudioRepositoryImplTest {
 
         every { context.cacheDir } returns cacheDir
         every { context.filesDir } returns filesDir
+        coEvery { activeGenerationPersistence.load() } returns null
 
         repository =
             StudioRepositoryImpl(
@@ -58,6 +65,7 @@ class StudioRepositoryImplTest {
                 syncTrigger = syncTrigger,
                 healer = healer,
                 readRepairApplier = readRepairApplier,
+                activeGenerationPersistence = activeGenerationPersistence,
                 context = context,
             )
     }
@@ -72,7 +80,7 @@ class StudioRepositoryImplTest {
             assertTrue(ephemeralDir.exists())
             val files = ephemeralDir.listFiles()
             assertEquals(1, files?.size)
-            assertTrue(files!![0].name.endsWith(".jpg"))
+            assertTrue(files!![0].name.endsWith(".png"))
             assertEquals("test data", files[0].readText())
             assertTrue(uriString.contains("studio_ephemeral"))
         }
@@ -87,6 +95,100 @@ class StudioRepositoryImplTest {
             repository.clearEphemeralCache()
 
             assertFalse(ephemeralDir.exists())
+        }
+
+    @Test
+    fun `active generation is observable until cleared`() =
+        runTest {
+            val activeGeneration =
+                ActiveStudioGeneration(
+                    id = "gen-1",
+                    prompt = "in progress",
+                    mediaType = MediaCapability.IMAGE,
+                    settings = ImageGenerationSettings(),
+                )
+
+            repository.observeActiveGeneration().test {
+                assertNull(awaitItem())
+
+                assertTrue(repository.reportActiveGeneration(activeGeneration))
+                assertEquals(activeGeneration, awaitItem())
+
+                assertFalse(repository.reportActiveGeneration(activeGeneration.copy(prompt = "second")))
+                expectNoEvents()
+
+                repository.clearActiveGeneration()
+                assertNull(awaitItem())
+            }
+        }
+
+    @Test
+    fun `clearActiveGenerationIfOwned only clears matching generation`() =
+        runTest {
+            val first =
+                ActiveStudioGeneration(
+                    id = "gen-1",
+                    prompt = "first",
+                    mediaType = MediaCapability.IMAGE,
+                    settings = ImageGenerationSettings(),
+                )
+            val second =
+                ActiveStudioGeneration(
+                    id = "gen-2",
+                    prompt = "second",
+                    mediaType = MediaCapability.IMAGE,
+                    settings = ImageGenerationSettings(),
+                )
+
+            assertTrue(repository.reportActiveGeneration(first))
+            assertFalse(repository.clearActiveGenerationIfOwned("gen-2"))
+            assertTrue(repository.hasActiveGeneration())
+            assertTrue(repository.clearActiveGenerationIfOwned("gen-1"))
+            assertFalse(repository.hasActiveGeneration())
+
+            assertTrue(repository.reportActiveGeneration(second))
+            assertTrue(repository.clearActiveGenerationIfOwned("gen-2"))
+        }
+
+    @Test
+    fun `reconcilePersistedActiveGeneration clears stale claim without surfacing error`() =
+        runTest {
+            val staleGeneration =
+                ActiveStudioGeneration(
+                    id = "gen-stale",
+                    prompt = "orphaned",
+                    mediaType = MediaCapability.IMAGE,
+                    settings = ImageGenerationSettings(),
+                )
+            coEvery { activeGenerationPersistence.load() } returns staleGeneration
+
+            repository.reconcilePersistedActiveGeneration()
+
+            coVerify { activeGenerationPersistence.clear() }
+            repository.observeGenerationError().test {
+                assertNull(awaitItem())
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `clearEphemeralCache refuses while generation active`() =
+        runTest {
+            repository.reportActiveGeneration(
+                ActiveStudioGeneration(
+                    id = "gen-1",
+                    prompt = "busy",
+                    mediaType = MediaCapability.IMAGE,
+                    settings = ImageGenerationSettings(),
+                ),
+            )
+
+            val error =
+                runCatching {
+                    repository.clearEphemeralCache()
+                }.exceptionOrNull()
+
+            assertTrue(error is IllegalStateException)
         }
 
     @Test
@@ -178,6 +280,7 @@ class StudioRepositoryImplTest {
                     syncTrigger = syncTrigger,
                     healer = healer,
                     readRepairApplier = readRepairApplier,
+                    activeGenerationPersistence = activeGenerationPersistence,
                     context = context,
                 )
             val sourceFile = File(filesDir, "encrypted-test.jpg")
@@ -206,6 +309,81 @@ class StudioRepositoryImplTest {
                 )
             }
             assertEquals("private prompt", resultAsset.prompt)
+        }
+
+    @Test
+    fun `getMediaPendingDownload returns only uploaded rows missing a local file`() =
+        runTest {
+            val localFile = File(filesDir, "present.jpg")
+            localFile.writeText("bytes")
+
+            coEvery { studioMediaDao.getUploaded() } returns
+                listOf(
+                    // Synced down on a fresh device: mediaUri points at the remote URL, no local file.
+                    StudioMediaEntity(
+                        id = "remote-only",
+                        prompt = "PCENC:v1:aes-gcm:p",
+                        mediaUri = "PCENC:v1:aes-gcm:https://storage/users/u/media/remote-only",
+                        mediaType = "IMAGE",
+                        remoteUrl = "PCENC:v1:aes-gcm:https://storage/users/u/media/remote-only",
+                        syncStatus = "UPLOADED",
+                    ),
+                    // Source device: bytes already present locally, must be skipped.
+                    StudioMediaEntity(
+                        id = "has-local",
+                        prompt = "PCENC:v1:aes-gcm:p",
+                        mediaUri = "PCENC:v1:aes-gcm:file://${localFile.absolutePath}",
+                        mediaType = "IMAGE",
+                        remoteUrl = "PCENC:v1:aes-gcm:https://storage/users/u/media/has-local",
+                        syncStatus = "UPLOADED",
+                    ),
+                    // Never uploaded (no remote URL): nothing to download.
+                    StudioMediaEntity(
+                        id = "no-remote",
+                        prompt = "PCENC:v1:aes-gcm:p",
+                        mediaUri = "PCENC:v1:aes-gcm:https://storage/users/u/media/no-remote",
+                        mediaType = "IMAGE",
+                        remoteUrl = null,
+                        syncStatus = "UPLOADED",
+                    ),
+                )
+
+            val pending = repository.getMediaPendingDownload()
+
+            assertEquals(listOf("remote-only"), pending.map { it.id })
+        }
+
+    @Test
+    fun `materializeDownloadedMedia writes bytes locally and repoints the row without re-uploading`() =
+        runTest {
+            val bytes = "decrypted image".toByteArray()
+            coEvery { studioMediaDao.getMediaById("media-1") } returns
+                StudioMediaEntity(
+                    id = "media-1",
+                    prompt = "PCENC:v1:aes-gcm:p",
+                    mediaUri = "PCENC:v1:aes-gcm:https://storage/users/u/media/media-1",
+                    mediaType = "IMAGE",
+                    remoteUrl = "PCENC:v1:aes-gcm:https://storage/users/u/media/media-1",
+                    syncStatus = "UPLOADED",
+                    pendingSync = 0,
+                )
+
+            repository.materializeDownloadedMedia("media-1", bytes)
+
+            val written = File(filesDir, "studio_synced_media-1.png")
+            assertTrue(written.exists())
+            assertEquals("decrypted image", written.readText())
+
+            coVerify {
+                studioMediaDao.insertMedia(
+                    match {
+                        it.id == "media-1" &&
+                            it.mediaUri == "PCENC:v1:aes-gcm:file://${written.absolutePath}" &&
+                            it.syncStatus == "UPLOADED" &&
+                            it.pendingSync == 0
+                    },
+                )
+            }
         }
 
     @Test

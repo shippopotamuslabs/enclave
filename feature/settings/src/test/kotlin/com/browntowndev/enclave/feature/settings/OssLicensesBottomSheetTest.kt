@@ -214,27 +214,62 @@ class OssLicensesBottomSheetTest {
         @Test
         fun `OssLicenses contains all mandatory attributed libraries`() {
             val names = OssLicenses.entries.map { it.name }.toSet()
-            listOf(
-                "OkHttp",
-                "Kotlin",
-                "JNA (Java Native Access)",
-                "CommonMark Java",
-                "jtokkit",
+            val expected = setOf(
+                "Android Jetpack Activity",
+                "Android Jetpack Biometric",
+                "Android Jetpack Compose",
+                "Android Jetpack Core KTX",
+                "Android Jetpack Core SplashScreen",
+                "Android Jetpack Credentials",
+                "Android Jetpack DataStore Preferences",
+                "Android Jetpack Hilt Navigation Compose",
+                "Android Jetpack Hilt Work",
+                "Android Jetpack Lifecycle",
+                "Android Jetpack Media3",
+                "Android Jetpack Navigation Compose",
+                "Android Jetpack Room",
+                "Android Jetpack WorkManager",
                 "Anthropic Java SDK",
+                "Coil 3",
+                "CommonMark Java",
+                "Enclave diffusion engine",
                 "Firebase Android SDK",
-                "Dataset: AdvBench",
-                "Dataset: ClearHarm",
-                "Dataset: CLINC150",
-                "Dataset: Gretel Safety Alignment",
-                "Dataset: HarmBench",
-                "Dataset: JailbreakBench JBB-Behaviors",
-                "Dataset: Natural Questions Open",
-                "Dataset: OpenAI Moderation",
-                "Dataset: OpenAssistant OASST1",
-                "Dataset: Project-Generated Safety Prompts",
-            ).forEach { expected ->
-                assertTrue(expected in names, "Missing required library: $expected")
-            }
+                "Google GenAI SDK",
+                "Google Identity (googleid)",
+                "gRPC",
+                "Haze",
+                "Hilt (Dagger)",
+                "javax.inject",
+                "JNA (Java Native Access)",
+                "jtokkit",
+                "Kotlin",
+                "kotlinx-serialization",
+                "LiteRT (TFLite)",
+                "llama.cpp",
+                "markdown-parser & markdown-renderer",
+                "Model: Falconsai NSFW Image Detection",
+                "Model: Gemma 4 E4B",
+                "Model: Jamba Reasoning 3B",
+                "Model: KoalaAI Text-Moderation",
+                "Model: MiniCPM-V-4.6",
+                "Model: Qwen 3.5 2B",
+                "Model: Sentence Transformers (all-MiniLM-L6-v2)",
+                "Model: Stable Diffusion 1.5",
+                "Model: Stable Diffusion 1.5 NPU pack",
+                "Model: Stable Diffusion XL NPU pack",
+                "Model: Whisper (ggml-base.en)",
+                "OkHttp",
+                "OpenAI Java SDK",
+                "Qualcomm AI Runtime (QNN)",
+                "stb_image_write",
+                "Telephoto",
+                "uniffi-kotlin-runtime",
+                "whisper.cpp",
+            )
+            val missing = expected - names
+            assertTrue(missing.isEmpty(), "OssLicenses is missing required attributions: $missing")
+            val unregistered = names - expected
+            assertTrue(unregistered.isEmpty(), "OssLicenses has entries not registered in the test: $unregistered")
         }
 
         // S4-06
@@ -270,6 +305,23 @@ class OssLicensesBottomSheetTest {
                         "BSD entry '${entry.name}' must include Copyright in licenseText",
                     )
                 }
+        }
+
+        // S4-09
+        @Test
+        fun `Enclave diffusion engine entry discloses Apache license`() {
+            val engine = OssLicenses.entries.first { it.name == "Enclave diffusion engine" }
+            assertTrue(engine.licenseType.contains("Apache"))
+            assertTrue(engine.licenseText.contains("Apache License", ignoreCase = true))
+        }
+
+        // S4-10
+        @Test
+        fun `QNN entry discloses proprietary Qualcomm terms`() {
+            val qnn = OssLicenses.entries.first { it.name == "Qualcomm AI Runtime (QNN)" }
+            assertTrue(qnn.licenseType.contains("Proprietary"))
+            assertTrue(qnn.licenseText.contains("Qualcomm"))
+            assertTrue(qnn.licenseText.contains("QAIRT"))
         }
     }
 }
@@ -361,6 +413,13 @@ private fun buildMinimalViewModel(): SettingsViewModel {
     val clearExaApiKeyUseCase = mockk<ClearExaApiKeyUseCase>(relaxed = true)
     val updateShowSearchProviderSwitchAlertUseCase = mockk<UpdateShowSearchProviderSwitchAlertUseCase>(relaxed = true)
 
+    val observeActiveUtilityModelsUseCase =
+        mockk<com.browntowndev.enclave.domain.usecase.modelconfig.ObserveActiveUtilityModelsUseCase>()
+    every { observeActiveUtilityModelsUseCase() } returns
+        kotlinx.coroutines.flow.flowOf(
+            emptyList<com.browntowndev.enclave.domain.model.config.UtilityModelMetadata>(),
+        )
+
     val settingsUseCases =
         SettingsUseCasesImpl(
             preferences =
@@ -391,6 +450,10 @@ private fun buildMinimalViewModel(): SettingsViewModel {
                     getRestorableLocalModels = mockk(relaxed = true),
                     saveLocalModelPreset = mockk(relaxed = true),
                     reDownloadModel = mockk<ReDownloadModelUseCase>(relaxed = true),
+                    getModelPacksForSettings = mockk(relaxed = true),
+                    observeActiveUtilityModels = observeActiveUtilityModelsUseCase,
+                    reDownloadModelPack = mockk(relaxed = true),
+                    deleteModelPack = mockk(relaxed = true),
                 ),
             apiProviders =
                 SettingsApiProviderUseCasesImpl(
@@ -445,6 +508,9 @@ private fun buildMinimalViewModel(): SettingsViewModel {
     val embeddingProgressPort = mockk<EmbeddingProgressPort>()
     every { embeddingProgressPort.isReindexing } returns MutableStateFlow(false)
     every { embeddingProgressPort.progress } returns MutableStateFlow(0f)
+
+    val downloadWorkRepository = mockk<com.browntowndev.enclave.core.data.repository.DownloadWorkRepository>()
+    every { downloadWorkRepository.observeDownloadProgress() } returns kotlinx.coroutines.flow.flowOf(null)
 
     val detectVaultReconciliationStateUseCase = mockk<DetectVaultReconciliationStateUseCase>(relaxed = true)
     val adoptCloudVaultUseCase = mockk<AdoptCloudVaultUseCase>(relaxed = true)
@@ -506,15 +572,22 @@ private fun buildMinimalViewModel(): SettingsViewModel {
             createSettingsApiProvidersDelegate(
                 apiProviderUseCases = settingsUseCases.apiProviders,
                 ttsUseCases = settingsUseCases.tts,
+                liveVoiceUseCases = settingsUseCases.liveVoice,
                 mediaUseCases = settingsUseCases.media,
                 deletionHelper = deletionHelper,
                 apiModelAssetUiMapper = apiModelAssetUiMapper,
                 errorHandler = errorHandler,
             ),
-        searchDelegate = SettingsSearchDelegate(settingsUseCases.preferences, errorHandler),
+        searchDelegate =
+            SettingsSearchDelegate(
+                settingsUseCases.preferences,
+                mockk<com.browntowndev.enclave.domain.port.repository.CloudSyncPort>(relaxed = true),
+                errorHandler,
+            ),
         assignmentsDelegate = SettingsAssignmentsDelegate(settingsUseCases.assignments, errorHandler),
         deletionHelper = deletionHelper,
         errorHandler = errorHandler,
         embeddingProgressPort = embeddingProgressPort,
+        downloadWorkRepository = downloadWorkRepository,
     )
 }

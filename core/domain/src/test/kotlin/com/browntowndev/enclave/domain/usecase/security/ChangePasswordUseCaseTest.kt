@@ -355,6 +355,10 @@ class ChangePasswordUseCaseTest {
         override suspend fun deleteAllArtifactsFromCloud(): Result<Unit> = Result.success(Unit)
 
         override fun enqueueEmbeddingRegeneration() = Unit
+
+        override suspend fun bootstrapFeatureSettings(): Result<Unit> = Result.success(Unit)
+
+        override fun triggerSync() = Unit
     }
 }
 

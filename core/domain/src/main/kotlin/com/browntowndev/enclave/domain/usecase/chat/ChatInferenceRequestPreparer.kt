@@ -3,6 +3,8 @@ package com.browntowndev.enclave.domain.usecase.chat
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.WebSearchSource
+import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
+import com.browntowndev.enclave.domain.model.config.LocalModelConfiguration
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
@@ -14,7 +16,9 @@ import com.browntowndev.enclave.domain.model.memory.MemoryRetrievalPolicy
 import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.MonotonicToolActivationPort
+import com.browntowndev.enclave.domain.port.inference.NoopToolSearchEmbeddingCachePort
 import com.browntowndev.enclave.domain.port.inference.PromptComposerPort
+import com.browntowndev.enclave.domain.port.inference.ToolSearchEmbeddingCachePort
 import com.browntowndev.enclave.domain.port.inference.SearchIntentClassifierPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
@@ -25,6 +29,7 @@ import com.browntowndev.enclave.domain.port.repository.MessageRepository
 import com.browntowndev.enclave.domain.port.repository.SettingsRepository
 import com.browntowndev.enclave.domain.usecase.media.GetProviderCapabilitiesUseCase
 import com.browntowndev.enclave.domain.usecase.media.MediaToolDefinitionFactory
+import com.browntowndev.enclave.domain.util.ContextWindowPlanner
 import com.browntowndev.enclave.domain.util.SearchIntentPolicy
 import com.browntowndev.enclave.domain.util.ToolIntentActivationPolicy
 import com.browntowndev.enclave.domain.util.WebSearchResultParser
@@ -54,7 +59,8 @@ class ChatInferenceRequestPreparer(
     private val loggingPort: LoggingPort,
     private val searchIntentClassifier: SearchIntentClassifierPort = DummySearchIntentClassifier,
     private val toolExecutor: ToolExecutorPort = DummyToolExecutor,
-    private val monotonicToolActivation: MonotonicToolActivationPort = NoopMonotonicToolActivationPort,
+    private val monotonicToolActivation: MonotonicToolActivationPort = InMemoryMonotonicToolActivationStore(),
+    private val toolSearchEmbeddingCache: ToolSearchEmbeddingCachePort = NoopToolSearchEmbeddingCachePort,
 ) {
     private val dateTimeFormatter =
         DateTimeFormatter
@@ -69,9 +75,10 @@ class ChatInferenceRequestPreparer(
         userMessageId: MessageId,
         assistantMessageId: MessageId,
         modelType: ModelType,
+        explicitConfiguration: ActiveModelConfiguration? = null,
     ): PreparedChatInferenceRequest {
         val settings = settingsRepository.settingsFlow.first()
-        val config = activeModelProvider.getActiveConfiguration(modelType)
+        val config = explicitConfiguration ?: activeModelProvider.getActiveConfiguration(modelType)
         val visionConfig = activeModelProvider.getActiveConfiguration(ModelType.VISION)
         val userMessage = messageRepository.getMessageById(userMessageId)
         val resolvedImageTarget = messageRepository.resolveLatestImageBearingUserMessage(chatId, userMessageId)
@@ -86,7 +93,7 @@ class ChatInferenceRequestPreparer(
                 hasImageContext && apiVisionConfigured && !activeVisionCapable -> ChatImageHandling.TOOL
                 else -> ChatImageHandling.NONE
             }
-        val reasoningBudget = if (config?.isLocal == true && config.thinkingEnabled) 2048 else 0
+        val reasoningBudget = resolveLocalReasoningBudget(config)
 
         val coreMemories = memoriesRepository.getCoreMemories()
         val embedding = if (prompt.isNotBlank()) embeddingEnginePort.getEmbedding(prompt) else null
@@ -271,6 +278,7 @@ class ChatInferenceRequestPreparer(
                         ModelFileFormat.GGUF -> ToolCallStrategy.JSON_XML_ENVELOPE
                         ModelFileFormat.BIN,
                         ModelFileFormat.ONNX,
+                        ModelFileFormat.SAFETENSORS,
                         ModelFileFormat.TXT,
                         -> ToolCallStrategy.JSON_XML_ENVELOPE
                         null -> ToolCallStrategy.JSON_XML_ENVELOPE
@@ -282,11 +290,16 @@ class ChatInferenceRequestPreparer(
         val toolingEnabled = true // Memory tools are always available
         val imageAssignment = defaultModelRepository.getDefault(ModelType.IMAGE_GENERATION)
         val imageTool =
-            if (imageAssignment?.mediaProviderId != null) {
-                val provider = mediaProviderRepository.getMediaProvider(imageAssignment.mediaProviderId)
-                mediaToolDefinitionFactory.buildImageToolDefinition(provider?.provider?.name)
-            } else {
-                null
+            when {
+                imageAssignment?.mediaProviderId != null -> {
+                    val provider = mediaProviderRepository.getMediaProvider(imageAssignment.mediaProviderId)
+                    mediaToolDefinitionFactory.buildImageToolDefinition(provider?.provider?.name)
+                }
+                // Local on-device image generation (e.g. Bonsai) has no media provider; the
+                // generate_image tool stays available so chat can still trigger generation.
+                imageAssignment?.localConfigId != null ->
+                    mediaToolDefinitionFactory.buildImageToolDefinition(null)
+                else -> null
             }
 
         val videoAssignment = defaultModelRepository.getDefault(ModelType.VIDEO_GENERATION)
@@ -322,11 +335,12 @@ class ChatInferenceRequestPreparer(
                 }
             }
 
-        val intentActivatedNames = monotonicToolActivation.union(chatId, rawIntentActivatedNames)
+        monotonicToolActivation.recordActivation(chatId, rawIntentActivatedNames)
+        val sessionActivatedNames = monotonicToolActivation.activatedNames(chatId)
 
         val eligibleTools =
             buildList {
-                add(ToolDefinition.DISCLOSE_TOOL_SCHEMAS)
+                add(ToolDefinition.SEARCH_TOOLS)
                 add(ToolDefinition.READ_CONTEXT_REFERENCE)
                 if (webSearchConfigured) {
                     add(ToolDefinition.WEB_SEARCH)
@@ -353,24 +367,22 @@ class ChatInferenceRequestPreparer(
             }
 
         val toolCatalog =
-            eligibleTools.map { tool ->
-                val disclosureMode =
-                    when {
-                        tool.name in PRELOADED_TOOL_NAMES ->
-                            com.browntowndev.enclave.domain.model.inference.ToolDisclosureMode.PRELOADED
-                        tool.name in intentActivatedNames ->
-                            com.browntowndev.enclave.domain.model.inference.ToolDisclosureMode.INTENT_ACTIVATED
-                        else ->
-                            com.browntowndev.enclave.domain.model.inference.ToolDisclosureMode.DISCLOSE_ON_DEMAND
-                    }
-                tool.catalogEntry().copy(disclosureMode = disclosureMode)
-            }
+            buildToolCatalog(
+                eligibleTools = eligibleTools,
+                sessionActivatedNames = sessionActivatedNames,
+            )
 
-        val activeToolNames = PRELOADED_TOOL_NAMES + intentActivatedNames
+        val activeToolNames =
+            resolvePreloadedActiveToolNames(
+                webSearchConfigured = webSearchConfigured,
+                imageHandling = imageHandling,
+                sessionActivatedNames = sessionActivatedNames,
+            )
         val activeTools =
             eligibleTools.filter { tool ->
                 tool.name in activeToolNames
             }
+        val toolSearchIndex = resolveToolSearchIndex(toolingEnabled = toolingEnabled, toolCatalog = toolCatalog)
 
         val composedPrompts =
             composeInferencePrompts(
@@ -384,15 +396,14 @@ class ChatInferenceRequestPreparer(
                 retrievedMemories = retrievedMemories,
                 retrievedSearchResults = retrievedSearchResults,
                 retrievedXSearchResults = retrievedXSearchResults,
+                isLocal = config?.isLocal == true,
+                contextWindow = config?.contextWindow,
             )
-
-        val formattedTime = dateTimeFormatter.format(java.time.Instant.now())
-        val promptWithMetadata = "$prompt\n\n[Metadata: Current Time: $formattedTime]"
 
         return PreparedChatInferenceRequest(
             prompt =
                 prepareChatPrompt(
-                    prompt = promptWithMetadata,
+                    prompt = promptWithTemporalMetadata(prompt),
                     hasImageContext = hasImageContext,
                     imageHandling = imageHandling,
                     fileAttachments = userMessage?.content?.fileAttachments ?: emptyList(),
@@ -430,12 +441,18 @@ class ChatInferenceRequestPreparer(
                     toolingEnabled = toolingEnabled,
                     toolCatalog = toolCatalog,
                     activeTools = activeTools,
+                    toolSearchIndex = toolSearchIndex,
                     toolCallStrategy = strategy,
                     chatId = chatId,
                     userMessageId = userMessageId,
                     assistantMessageId = assistantMessageId,
                 ),
         )
+    }
+
+    private fun promptWithTemporalMetadata(prompt: String): String {
+        val formattedTime = dateTimeFormatter.format(java.time.Instant.now())
+        return "$prompt\n\n[Metadata: Sent at $formattedTime]"
     }
 
     private fun composeInferencePrompts(
@@ -449,13 +466,22 @@ class ChatInferenceRequestPreparer(
         retrievedMemories: List<com.browntowndev.enclave.domain.model.memory.Memory>,
         retrievedSearchResults: String?,
         retrievedXSearchResults: String?,
+        isLocal: Boolean,
+        contextWindow: Int?,
     ): ComposedInferencePrompts {
-        val volatileTurnContext =
+        val compactStaticPrompt = ContextWindowPlanner.isSmallContextLocalWindow(isLocal, contextWindow)
+        val rawVolatileTurnContext =
             promptComposer.composeVolatileTurnContext(
                 retrievedMemories = retrievedMemories,
                 retrievedSearchResults = retrievedSearchResults,
                 retrievedXSearchResults = retrievedXSearchResults,
             )
+        val volatileTurnContext =
+            if (compactStaticPrompt) {
+                ContextWindowPlanner.compactVolatileTurnContext(rawVolatileTurnContext, contextWindow)
+            } else {
+                rawVolatileTurnContext
+            }
         val systemPrompt =
             if (toolingEnabled) {
                 promptComposer.compose(
@@ -468,6 +494,7 @@ class ChatInferenceRequestPreparer(
                     retrievedMemories = emptyList(),
                     retrievedSearchResults = null,
                     retrievedXSearchResults = null,
+                    compactStaticPrompt = compactStaticPrompt,
                 )
             } else {
                 configSystemPrompt
@@ -477,6 +504,54 @@ class ChatInferenceRequestPreparer(
             volatileTurnContext = volatileTurnContext,
         )
     }
+
+    private fun buildToolCatalog(
+        eligibleTools: List<ToolDefinition>,
+        sessionActivatedNames: Set<String>,
+    ): List<com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry> =
+        eligibleTools.map { tool ->
+            val disclosureMode =
+                when {
+                    tool.name in PRELOADED_TOOL_NAMES ->
+                        com.browntowndev.enclave.domain.model.inference.ToolDisclosureMode.PRELOADED
+                    tool.name in sessionActivatedNames ->
+                        com.browntowndev.enclave.domain.model.inference.ToolDisclosureMode.INTENT_ACTIVATED
+                    else ->
+                        com.browntowndev.enclave.domain.model.inference.ToolDisclosureMode.DISCLOSE_ON_DEMAND
+                }
+            tool.catalogEntry().copy(disclosureMode = disclosureMode)
+        }
+
+    private fun resolvePreloadedActiveToolNames(
+        webSearchConfigured: Boolean,
+        imageHandling: ChatImageHandling,
+        sessionActivatedNames: Set<String>,
+    ): Set<String> =
+        buildSet {
+            add(ToolDefinition.SEARCH_TOOLS.name)
+            if (webSearchConfigured) {
+                add(ToolDefinition.WEB_SEARCH.name)
+                add(ToolDefinition.WEB_EXTRACT.name)
+            }
+            if (imageHandling == ChatImageHandling.TOOL) {
+                add(ToolDefinition.ATTACHED_IMAGE_INSPECT.name)
+            }
+            addAll(sessionActivatedNames)
+        }
+
+    private suspend fun resolveToolSearchIndex(
+        toolingEnabled: Boolean,
+        toolCatalog: List<com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry>,
+    ): com.browntowndev.enclave.domain.model.inference.ToolSearchIndexSnapshot? =
+        if (!toolingEnabled) {
+            null
+        } else {
+            ToolSearchCatalogBuilder.build(
+                catalog = toolCatalog,
+                embeddingEngine = embeddingEnginePort,
+                embeddingCache = toolSearchEmbeddingCache,
+            )
+        }
 
     private fun logLocalPrompt(
         prompt: String,
@@ -503,19 +578,9 @@ class ChatInferenceRequestPreparer(
         private const val TAG = "GenerateChatResponse"
         private const val PROMPT_LOG_CHUNK_SIZE = 2_000
 
-        private object NoopMonotonicToolActivationPort : MonotonicToolActivationPort {
-            override fun union(
-                chatId: ChatId,
-                newNames: Set<String>,
-            ): Set<String> = newNames
-
-            override fun clearSession(chatId: ChatId) = Unit
-        }
-
         private val PRELOADED_TOOL_NAMES =
             setOf(
-                ToolDefinition.DISCLOSE_TOOL_SCHEMAS.name,
-                ToolDefinition.READ_CONTEXT_REFERENCE.name,
+                ToolDefinition.SEARCH_TOOLS.name,
                 ToolDefinition.WEB_SEARCH.name,
                 ToolDefinition.WEB_EXTRACT.name,
                 ToolDefinition.ATTACHED_IMAGE_INSPECT.name,
@@ -537,6 +602,18 @@ class ChatInferenceRequestPreparer(
             return numericOnly.takeIf { it.isNotEmpty() } ?: tweetUrlOrId
         }
     }
+}
+
+private fun resolveLocalReasoningBudget(config: ActiveModelConfiguration?): Int {
+    if (
+        config?.isLocal != true ||
+        config.localModelFormat != ModelFileFormat.GGUF ||
+        !config.thinkingEnabled
+    ) {
+        return 0
+    }
+    return config.reasoningBudget
+        ?: LocalModelConfiguration.defaultReasoningBudget(config.contextWindow ?: 4096)
 }
 
 data class PreparedChatInferenceRequest(

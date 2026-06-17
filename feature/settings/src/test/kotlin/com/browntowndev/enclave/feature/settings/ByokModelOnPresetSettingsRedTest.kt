@@ -372,7 +372,43 @@ class ByokModelOnPresetSettingsRedTest {
 
     @Test
     fun `SCN-UI-ASSIGN-001 Assignment Picker Uses Preset Model`() {
-        val source = readSettingsSource("ModelConfigurationScreen.kt")
+        var root: java.nio.file.Path? = null
+        try {
+            val classLocation = ByokModelOnPresetSettingsRedTest::class.java.protectionDomain.codeSource.location.toURI()
+            var current = java.nio.file.Paths.get(classLocation)
+            while (current != null) {
+                if (java.nio.file.Files.exists(current.resolve("settings.gradle.kts"))) {
+                    root = current
+                    break
+                }
+                current = current.parent
+            }
+        } catch (e: Exception) {
+            // ignore and fallback
+        }
+
+        if (root == null) {
+            var current = java.nio.file.Paths.get("").toAbsolutePath()
+            while (current != null) {
+                if (java.nio.file.Files.exists(current.resolve("settings.gradle.kts"))) {
+                    root = current
+                    break
+                }
+                current = current.parent
+            }
+        }
+
+        val path = if (root != null) {
+            val extracted = root.resolve("core/ui/src/main/kotlin/com/browntowndev/enclave/core/ui/component/assignment/AssignmentSelectionBottomSheet.kt")
+            val original = root.resolve("feature/settings/src/main/kotlin/com/browntowndev/enclave/feature/settings/ModelConfigurationScreen.kt")
+            if (java.nio.file.Files.exists(extracted)) extracted else original
+        } else {
+            val extractedRelative = java.nio.file.Paths.get("../../core/ui/src/main/kotlin/com/browntowndev/enclave/core/ui/component/assignment/AssignmentSelectionBottomSheet.kt")
+            val originalRelative = java.nio.file.Paths.get("src/main/kotlin/com/browntowndev/enclave/feature/settings/ModelConfigurationScreen.kt")
+            if (java.nio.file.Files.exists(extractedRelative)) extractedRelative else originalRelative
+        }
+
+        val source = java.nio.file.Files.readString(path)
         assertTrue(source.contains("modelId"))
     }
 

@@ -12,6 +12,7 @@ internal fun buildSettingsUiStateFactory(
     apiDiscoveryUiFilter: ApiDiscoveryUiFilter = ApiDiscoveryUiFilter(),
     applyApiModelMetadataDefaultsUseCase: ApplyApiModelMetadataDefaultsUseCase = ApplyApiModelMetadataDefaultsUseCase(),
     usageSpendUiMapper: UsageSpendUiMapper = UsageSpendUiMapper(),
+    modelPackUiMapper: ModelPackUiMapper = ModelPackUiMapper(),
 ): SettingsUiStateFactory =
     SettingsUiStateFactory(
         SettingsUiStateAssembler(
@@ -22,5 +23,6 @@ internal fun buildSettingsUiStateFactory(
             apiDiscoveryUiFilter = apiDiscoveryUiFilter,
             applyApiModelMetadataDefaultsUseCase = applyApiModelMetadataDefaultsUseCase,
             usageSpendUiMapper = usageSpendUiMapper,
+            modelPackUiMapper = modelPackUiMapper,
         ),
     )

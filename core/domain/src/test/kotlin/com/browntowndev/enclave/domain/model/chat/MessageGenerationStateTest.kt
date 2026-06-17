@@ -38,6 +38,11 @@ class MessageGenerationStateTest {
     }
 
     @Test
+    fun `isTerminal returns false for AnswerStreamBoundary`() {
+        assertFalse(MessageGenerationState.AnswerStreamBoundary(ModelType.MAIN).isTerminal)
+    }
+
+    @Test
     fun `isTerminal returns false for EngineLoading`() {
         assertFalse(MessageGenerationState.EngineLoading(ModelType.MAIN).isTerminal)
     }
@@ -124,5 +129,18 @@ class MessageGenerationStateTest {
     @Test
     fun `isPipelineTerminal returns false for GeneratingText`() {
         assertFalse(MessageGenerationState.GeneratingText("delta", ModelType.MAIN).isPipelineTerminal)
+    }
+
+    @Test
+    fun `isTerminal returns false for ModelApiRetryScheduled`() {
+        assertFalse(
+            MessageGenerationState
+                .ModelApiRetryScheduled(
+                    attempt = 1,
+                    maxAttempts = 3,
+                    delayMs = 1_000L,
+                    modelType = ModelType.MAIN,
+                ).isTerminal,
+        )
     }
 }

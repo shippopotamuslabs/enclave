@@ -56,7 +56,7 @@ class ToolDefinitionTest {
                 )
 
             assertEquals(
-                """ActionResult{"name":"nullable_tool","arguments":{"title":"...","author":"..."}}ActionResult""",
+                """<tool_call>{"name":"nullable_tool","arguments":{"title":"...","author":"..."}}</tool_call>""",
                 tool.toExample(ToolCallStrategy.JSON_XML_ENVELOPE),
             )
         }
@@ -73,6 +73,20 @@ class ToolDefinitionTest {
     }
 
     @Test
+    fun `READ_CONTEXT_REFERENCE is deferred and discoverable via search_tools`() {
+        val tool = ToolDefinition.READ_CONTEXT_REFERENCE
+
+        assertEquals(ToolDisclosureMode.DISCLOSE_ON_DEMAND, tool.disclosureMode)
+        assertTrue(tool.supportsLazyDisclosure)
+        assertEquals(ToolDisclosureMode.DISCLOSE_ON_DEMAND, tool.catalogEntry().disclosureMode)
+        assertTrue(tool.description.startsWith("[RARE]"))
+        assertTrue(tool.description.contains("tool-schema-"))
+        assertTrue(tool.description.contains("search_chat_history"))
+        assertTrue(tool.description.contains("web_search"))
+        assertTrue(tool.description.contains("tool_discovery_tool"))
+    }
+
+    @Test
     fun `catalogEntry marks deferred tools as disclose on demand`() {
         val entry = ToolDefinition.APPEND_BLOCKS.catalogEntry()
 
@@ -86,16 +100,28 @@ class ToolDefinitionTest {
     }
 
     @Test
-    fun `DISCLOSE_TOOL_SCHEMAS is preloaded and not lazily disclosable`() {
-        val tool = ToolDefinition.DISCLOSE_TOOL_SCHEMAS
+    fun `SEARCH_TOOLS is preloaded and not lazily disclosable`() {
+        val tool = ToolDefinition.SEARCH_TOOLS
 
-        assertEquals("disclose_tool_schemas", tool.name)
+        assertEquals("tool_discovery_tool", tool.name)
         assertEquals(ToolDisclosureMode.PRELOADED, tool.disclosureMode)
         assertEquals(false, tool.supportsLazyDisclosure)
+        assertTrue(tool.description.contains("Search hidden tool metadata"))
+        assertTrue(tool.description.contains("Never use to look up facts"))
+        assertTrue(tool.description.contains("decide whether web_search is needed"))
 
         val entry = tool.catalogEntry()
         assertEquals(ToolDisclosureMode.PRELOADED, entry.disclosureMode)
-        assertTrue(entry.requiredArguments.any { it.name == "tool_names" })
+        assertTrue(entry.requiredArguments.any { it.name == "capability" })
+        assertEquals(listOf("discovery"), entry.categoryTags)
+    }
+
+    @Test
+    fun `WEB_SEARCH directs models to call it without discovery`() {
+        val tool = ToolDefinition.WEB_SEARCH
+
+        assertTrue(tool.description.contains("current or explicitly requested online information"))
+        assertTrue(tool.description.contains("Use directly without tool_discovery_tool"))
     }
 
     @Test

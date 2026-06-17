@@ -45,6 +45,14 @@ sealed interface MessageGenerationState {
         val modelType: ModelType,
     ) : MessageGenerationState
 
+    /**
+     * Marks that the next answer tokens belong to a fresh model response and should not be
+     * concatenated directly against prior assistant text unless thinking separates them.
+     */
+    data class AnswerStreamBoundary(
+        val modelType: ModelType,
+    ) : MessageGenerationState
+
     data class Finished(
         val modelType: ModelType,
     ) : MessageGenerationState
@@ -86,6 +94,14 @@ sealed interface MessageGenerationState {
 
     data class TelemetryCaptured(
         val telemetry: TurnTelemetry,
+        val modelType: ModelType,
+    ) : MessageGenerationState
+
+    /** Provider transport failed transiently; partial streamed text was discarded and a retry is pending. */
+    data class ModelApiRetryScheduled(
+        val attempt: Int,
+        val maxAttempts: Int,
+        val delayMs: Long,
         val modelType: ModelType,
     ) : MessageGenerationState
 }

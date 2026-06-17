@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.core.data.download.remote
 
+import com.browntowndev.enclave.core.data.download.DownloadMetaFile
 import com.browntowndev.enclave.domain.port.download.FileDownloaderPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import kotlinx.coroutines.Dispatchers
@@ -57,7 +58,12 @@ class HttpFileDownloader
                 val tempFile = downloadPaths.tempFile
                 val metaFile = downloadPaths.metaFile
 
-                metaFile.writeText("${config.expectedSizeBytes}\n${config.expectedSha256}")
+                DownloadMetaFile.write(
+                    metaFile = metaFile,
+                    expectedSizeBytes = config.expectedSizeBytes,
+                    expectedSha256 = config.expectedSha256,
+                    committedOffset = existingBytes,
+                )
 
                 val request =
                     Request
@@ -69,24 +75,26 @@ class HttpFileDownloader
                             }
                         }.build()
 
-                okHttpClient.newCall(request).execute().use { response ->
+                val initialResponse = okHttpClient.newCall(request).execute()
+                if (initialResponse.code == HTTP_RANGE_NOT_SATISFIABLE) {
+                    initialResponse.close()
+                    logger.warning(
+                        TAG,
+                        "HTTP 416 for $filename: Range not satisfiable. Deleting temp files and restarting.",
+                    )
+                    tempFile.delete()
+                    metaFile.delete()
+                    val retryRequest =
+                        Request
+                            .Builder()
+                            .url(requestUrl)
+                            .build()
+                    return@withContext downloadWithRetry(retryRequest, config, targetDir, progressCallback)
+                }
+
+                initialResponse.use { response ->
                     if (response.priorResponse?.isRedirect == true) {
                         DownloadSecurity.requireTrustedRedirect(requestUrl, response.request.url)
-                    }
-
-                    if (response.code == HTTP_RANGE_NOT_SATISFIABLE) {
-                        logger.warning(
-                            TAG,
-                            "HTTP 416 for $filename: Range not satisfiable. Deleting temp files and restarting.",
-                        )
-                        tempFile.delete()
-                        metaFile.delete()
-                        val retryRequest =
-                            Request
-                                .Builder()
-                                .url(requestUrl)
-                                .build()
-                        return@withContext downloadWithRetry(retryRequest, config, targetDir, progressCallback)
                     }
 
                     if (!response.isSuccessful) {
@@ -96,6 +104,14 @@ class HttpFileDownloader
                     }
 
                     val isResuming = response.code == HTTP_PARTIAL_CONTENT
+                    if (existingBytes > 0 && !isResuming) {
+                        logger.warning(
+                            TAG,
+                            "Server ignored Range header for $filename; restarting download from scratch.",
+                        )
+                        tempFile.delete()
+                        metaFile.delete()
+                    }
                     val actualExistingBytes = if (isResuming) existingBytes else 0L
 
                     val body =
@@ -134,14 +150,7 @@ class HttpFileDownloader
                         }
                     }
 
-                    // Use FileChannel with force(true) for atomic write+flush to disk
-                    val channel =
-                        FileChannel.open(
-                            tempFile.toPath(),
-                            if (isResuming) StandardOpenOption.CREATE else StandardOpenOption.CREATE_NEW,
-                            StandardOpenOption.WRITE,
-                            StandardOpenOption.APPEND,
-                        )
+                    val channel = openWriteChannel(tempFile, isResuming)
 
                     try {
                         DigestInputStream(body.byteStream(), digest).use { inputStream ->
@@ -158,6 +167,7 @@ class HttpFileDownloader
                                 // Periodic sync to disk (every 64MB) for durability
                                 if (bytesSinceLastSync >= SYNC_INTERVAL_BYTES) {
                                     channel.force(true)
+                                    DownloadMetaFile.updateCommittedOffset(metaFile, totalBytesRead)
                                     bytesSinceLastSync = 0L
                                 }
 
@@ -168,6 +178,7 @@ class HttpFileDownloader
 
                         // Final sync before hash verification to ensure data is durable
                         channel.force(true)
+                        DownloadMetaFile.updateCommittedOffset(metaFile, totalBytesRead)
                     } finally {
                         channel.close()
                     }
@@ -232,7 +243,12 @@ class HttpFileDownloader
                 val tempFile = downloadPaths.tempFile
                 val metaFile = downloadPaths.metaFile
 
-                metaFile.writeText("${config.expectedSizeBytes}\n${config.expectedSha256}")
+                DownloadMetaFile.write(
+                    metaFile = metaFile,
+                    expectedSizeBytes = config.expectedSizeBytes,
+                    expectedSha256 = config.expectedSha256,
+                    committedOffset = 0L,
+                )
 
                 okHttpClient.newCall(request).execute().use { response ->
                     if (response.priorResponse?.isRedirect == true) {
@@ -261,12 +277,7 @@ class HttpFileDownloader
                     var totalBytesRead = 0L
                     val digest = MessageDigest.getInstance("SHA-256")
 
-                    val channel =
-                        FileChannel.open(
-                            tempFile.toPath(),
-                            StandardOpenOption.CREATE_NEW,
-                            StandardOpenOption.WRITE,
-                        )
+                    val channel = openWriteChannel(tempFile, isResuming = false)
 
                     try {
                         DigestInputStream(body.byteStream(), digest).use { inputStream ->
@@ -283,6 +294,7 @@ class HttpFileDownloader
                                 // Periodic sync to disk (every 64MB) for durability
                                 if (bytesSinceLastSync >= SYNC_INTERVAL_BYTES) {
                                     channel.force(true)
+                                    DownloadMetaFile.updateCommittedOffset(metaFile, totalBytesRead)
                                     bytesSinceLastSync = 0L
                                 }
 
@@ -293,6 +305,7 @@ class HttpFileDownloader
 
                         // Final sync before hash verification to ensure data is durable
                         channel.force(true)
+                        DownloadMetaFile.updateCommittedOffset(metaFile, totalBytesRead)
                     } finally {
                         channel.close()
                     }
@@ -310,6 +323,15 @@ class HttpFileDownloader
                         throw IOException("SHA-256 hash mismatch after download")
                     }
                     logger.info(TAG, "SHA-256 verified for ${config.filename}")
+
+                    if (totalBytesRead != config.expectedSizeBytes) {
+                        logger.error(TAG, "[MISMATCHED FILE SIZE] Download retry failed for ${config.filename}")
+                        logger.error(TAG, "[MISMATCHED FILE SIZE] Config Size: ${config.expectedSizeBytes}")
+                        logger.error(TAG, "[MISMATCHED FILE SIZE] Downloaded Size: $totalBytesRead")
+                        throw Exception("Incomplete download")
+                    } else {
+                        logger.info(TAG, "[COMPLETED DOWNLOAD] ${config.filename}. Size: $totalBytesRead")
+                    }
 
                     // Rename temp file to target file
                     if (targetFile.exists()) {
@@ -329,10 +351,31 @@ class HttpFileDownloader
                     FileDownloaderPort.DownloadResult(
                         filePath = targetFile.absolutePath,
                         bytesDownloaded = totalBytesRead,
-                        totalBytes = actualTotalSize,
+                        totalBytes = actualTotalSize.coerceAtLeast(config.expectedSizeBytes),
                         isResumed = false,
                     )
                 }
+            }
+
+        private fun openWriteChannel(
+            tempFile: File,
+            isResuming: Boolean,
+        ): FileChannel =
+            if (isResuming) {
+                FileChannel.open(
+                    tempFile.toPath(),
+                    StandardOpenOption.CREATE,
+                    StandardOpenOption.WRITE,
+                    StandardOpenOption.APPEND,
+                )
+            } else {
+                tempFile.delete()
+                FileChannel.open(
+                    tempFile.toPath(),
+                    StandardOpenOption.CREATE,
+                    StandardOpenOption.WRITE,
+                    StandardOpenOption.TRUNCATE_EXISTING,
+                )
             }
 
         override suspend fun getServerFileSize(url: String): Long? =

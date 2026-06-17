@@ -21,6 +21,10 @@ data class GoogleSdkResult(
     val functionCall: FunctionCall?,
     val assistantContent: Content?,
     val finishReason: String?,
+    val promptTokens: Int? = null,
+    val completionTokens: Int? = null,
+    val cachedContentTokens: Int? = null,
+    val thoughtsTokens: Int? = null,
 )
 
 interface GoogleGenAiSdkClient {
@@ -116,9 +120,14 @@ internal class GoogleGenAiSdkClientImpl(
         logRequestDetails(modelId, contents)
 
         var emittedAny = false
+        var outputTextDeltaCount = 0
         var lastFunctionCall: FunctionCall? = null
         var assistantContent: Content? = null
         var finishReason: String? = null
+        var promptTokens: Int? = null
+        var completionTokens: Int? = null
+        var cachedContentTokens: Int? = null
+        var thoughtsTokens: Int? = null
 
         try {
             runInterruptible(Dispatchers.IO) {
@@ -127,6 +136,13 @@ internal class GoogleGenAiSdkClientImpl(
                 val iterator = responseStream.iterator()
                 while (currentCoroutineContext().isActive && runInterruptible(Dispatchers.IO) { iterator.hasNext() }) {
                     val response = runInterruptible(Dispatchers.IO) { iterator.next() }
+
+                    response.usageMetadata().orElse(null)?.let { meta ->
+                        meta.promptTokenCount().ifPresent { promptTokens = it }
+                        meta.candidatesTokenCount().ifPresent { completionTokens = it }
+                        meta.cachedContentTokenCount().ifPresent { cachedContentTokens = it }
+                        meta.thoughtsTokenCount().ifPresent { thoughtsTokens = it }
+                    }
 
                     response.candidates().orElse(emptyList()).forEach { candidate ->
                         finishReason = candidate.finishReason().map { it.toString() }.orElse(finishReason)
@@ -140,6 +156,7 @@ internal class GoogleGenAiSdkClientImpl(
                                     if (part.thought().orElse(false)) {
                                         emitEvent(InferenceEvent.Thinking(text, modelType))
                                     } else {
+                                        outputTextDeltaCount++
                                         emitEvent(InferenceEvent.PartialResponse(text, modelType))
                                     }
                                 }
@@ -150,10 +167,26 @@ internal class GoogleGenAiSdkClientImpl(
 
                     val responseText = response.text().orEmpty()
                     if (responseText.isNotBlank() && !emittedAny) {
+                        outputTextDeltaCount++
                         emitEvent(InferenceEvent.PartialResponse(responseText, modelType))
                         emittedAny = true
                     }
                 }
+            }
+            // A function call is a complete unit even when the terminal chunk is lost, so it
+            // exempts the guard. Everything else without a finish reason — including
+            // thinking-only (CoT) streams and zero-delta streams — is a truncated turn.
+            // The message must contain "stream ended unexpectedly" so retry classification
+            // treats it as transient.
+            if (finishReason == null && lastFunctionCall == null && currentCoroutineContext().isActive) {
+                loggingPort.warning(
+                    TAG,
+                    "Gemini stream ended without finishReason model=$modelId " +
+                        "outputTextDeltas=$outputTextDeltaCount emittedAny=$emittedAny",
+                )
+                throw RuntimeException(
+                    "Model stream ended unexpectedly without finish signal (provider=Google model=$modelId)",
+                )
             }
         } catch (e: Exception) {
             loggingPort.error(TAG, "SDK request failed: ${e.message}", e)
@@ -165,6 +198,10 @@ internal class GoogleGenAiSdkClientImpl(
             functionCall = lastFunctionCall,
             assistantContent = assistantContent,
             finishReason = finishReason,
+            promptTokens = promptTokens,
+            completionTokens = completionTokens,
+            cachedContentTokens = cachedContentTokens,
+            thoughtsTokens = thoughtsTokens,
         )
     }
 

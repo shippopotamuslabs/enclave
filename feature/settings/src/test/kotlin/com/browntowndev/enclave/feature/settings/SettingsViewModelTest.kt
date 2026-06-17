@@ -28,12 +28,25 @@ import com.browntowndev.enclave.domain.usecase.byok.SetDefaultModelUseCase
 import com.browntowndev.enclave.domain.usecase.media.DeleteMediaProviderUseCase
 import com.browntowndev.enclave.domain.usecase.media.GetMediaProvidersUseCase
 import com.browntowndev.enclave.domain.usecase.media.SaveMediaProviderUseCase
+import com.browntowndev.enclave.domain.model.config.LocalModelAsset
+import com.browntowndev.enclave.domain.model.config.LocalModelConfiguration
+import com.browntowndev.enclave.domain.model.config.LocalModelMetadata
+import com.browntowndev.enclave.domain.model.download.DownloadSource
+import com.browntowndev.enclave.domain.model.download.ModelPack
+import com.browntowndev.enclave.domain.model.download.ModelPackCompleteness
+import com.browntowndev.enclave.domain.model.download.ModelPackTestFixtures
+import com.browntowndev.enclave.domain.model.download.ModelPackMember
+import com.browntowndev.enclave.domain.model.download.ModelPackRole
+import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.usecase.modelconfig.GetLocalModelAssetsUseCase
+import com.browntowndev.enclave.domain.usecase.modelconfig.GetModelPacksForSettingsUseCase
+import com.browntowndev.enclave.domain.usecase.modelconfig.ModelPackSettingsRow
 import com.browntowndev.enclave.domain.usecase.modelconfig.ReDownloadModelUseCase
 import com.browntowndev.enclave.domain.usecase.security.CreateVaultUseCase
 import com.browntowndev.enclave.domain.usecase.settings.*
 import com.browntowndev.enclave.domain.usecase.settings.SettingsMemoriesUseCasesImpl
 import com.browntowndev.enclave.domain.usecase.telemetry.ObserveUsageSpendSummaryUseCase
+import org.junit.jupiter.api.DisplayName
 import com.browntowndev.enclave.feature.settings.usage.UsageSpendUiMapper
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -47,6 +60,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -75,6 +89,7 @@ class SettingsViewModelTest {
     private val getRestorableLocalModelsUseCase = mockk<GetRestorableLocalModelsUseCase>(relaxed = true)
     private val saveLocalModelPresetUseCase = mockk<SaveLocalModelPresetUseCase>(relaxed = true)
     private val reDownloadModelUseCase = mockk<ReDownloadModelUseCase>(relaxed = true)
+    private val getModelPacksForSettingsUseCase = mockk<GetModelPacksForSettingsUseCase>(relaxed = true)
     private val getApiModelAssetsUseCase = mockk<GetApiModelAssetsUseCase>()
     private val saveApiProviderDraftUseCase = mockk<SaveApiProviderDraftUseCase>(relaxed = true)
     private val saveApiPresetUseCase = mockk<SaveApiPresetUseCase>(relaxed = true)
@@ -108,13 +123,15 @@ class SettingsViewModelTest {
     private val reassignmentOptionUiMapper = ReassignmentOptionUiMapper()
     private val errorHandler = mockk<ViewModelErrorHandler>()
 
+    private val localModelAssetsStateFlow = MutableStateFlow<List<LocalModelAsset>>(emptyList())
+
     private lateinit var viewModel: SettingsViewModel
 
     @BeforeEach
     fun setup() {
         val settingsFlow = MutableStateFlow(SettingsData())
         every { getSettingsUseCase() } returns settingsFlow
-        every { getLocalModelAssetsUseCase() } returns MutableStateFlow(emptyList())
+        every { getLocalModelAssetsUseCase() } returns localModelAssetsStateFlow
         val apiAssets =
             MockSettingsData.apiModels.map { uiAsset ->
                 com.browntowndev.enclave.domain.model.config.ApiModelAsset(
@@ -151,6 +168,13 @@ class SettingsViewModelTest {
         val clearExaApiKeyUseCase = mockk<ClearExaApiKeyUseCase>()
         val updateShowSearchProviderSwitchAlertUseCase = mockk<UpdateShowSearchProviderSwitchAlertUseCase>()
 
+        val observeActiveUtilityModelsUseCase =
+            mockk<com.browntowndev.enclave.domain.usecase.modelconfig.ObserveActiveUtilityModelsUseCase>()
+        every { observeActiveUtilityModelsUseCase() } returns
+            kotlinx.coroutines.flow.flowOf(
+                emptyList<com.browntowndev.enclave.domain.model.config.UtilityModelMetadata>(),
+            )
+
         val dataControlsUseCases = mockk<SettingsDataControlsUseCases>(relaxed = true)
 
         val settingsUseCases =
@@ -183,6 +207,10 @@ class SettingsViewModelTest {
                         getRestorableLocalModels = getRestorableLocalModelsUseCase,
                         saveLocalModelPreset = saveLocalModelPresetUseCase,
                         reDownloadModel = reDownloadModelUseCase,
+                        getModelPacksForSettings = getModelPacksForSettingsUseCase,
+                        observeActiveUtilityModels = observeActiveUtilityModelsUseCase,
+                        reDownloadModelPack = mockk(relaxed = true),
+                        deleteModelPack = mockk(relaxed = true),
                     ),
                 apiProviders =
                     SettingsApiProviderUseCasesImpl(
@@ -231,6 +259,9 @@ class SettingsViewModelTest {
         every { embeddingProgressPort.isReindexing } returns MutableStateFlow(false)
         every { embeddingProgressPort.progress } returns MutableStateFlow(0f)
 
+        val downloadWorkRepository = mockk<com.browntowndev.enclave.core.data.repository.DownloadWorkRepository>()
+        every { downloadWorkRepository.observeDownloadProgress() } returns kotlinx.coroutines.flow.flowOf(null)
+
         val detectVaultReconciliationStateUseCase =
             mockk<com.browntowndev.enclave.domain.usecase.security.DetectVaultReconciliationStateUseCase>(relaxed = true)
         val adoptCloudVaultUseCase =
@@ -266,12 +297,18 @@ class SettingsViewModelTest {
             createSettingsApiProvidersDelegate(
                 apiProviderUseCases = settingsUseCases.apiProviders,
                 ttsUseCases = settingsUseCases.tts,
+                liveVoiceUseCases = settingsUseCases.liveVoice,
                 mediaUseCases = settingsUseCases.media,
                 deletionHelper = deletionHelper,
                 apiModelAssetUiMapper = apiModelAssetUiMapper,
                 errorHandler = errorHandler,
             )
-        val searchDelegate = SettingsSearchDelegate(settingsUseCases.preferences, errorHandler)
+        val searchDelegate =
+            SettingsSearchDelegate(
+                settingsUseCases.preferences,
+                mockk<com.browntowndev.enclave.domain.port.repository.CloudSyncPort>(relaxed = true),
+                errorHandler,
+            )
         val assignmentsDelegate = SettingsAssignmentsDelegate(settingsUseCases.assignments, errorHandler)
 
         viewModel =
@@ -298,6 +335,7 @@ class SettingsViewModelTest {
                 deletionHelper = deletionHelper,
                 errorHandler = errorHandler,
                 embeddingProgressPort = embeddingProgressPort,
+                downloadWorkRepository = downloadWorkRepository,
             )
     }
 
@@ -754,7 +792,9 @@ class SettingsViewModelTest {
                     reassignmentCandidates = emptyList(),
                 )
             coEvery { prepareModelDeletionUseCase(any()) } returns prepared
-            coEvery { executeModelDeletionWithReassignmentUseCase(any(), any(), any(), any()) } returns Result.success<Unit>(Unit)
+            coEvery {
+                executeModelDeletionWithReassignmentUseCase(any(), any(), any(), any(), any())
+            } returns Result.success<Unit>(Unit)
 
             // Trigger deletion prep
             viewModel.onDeleteLocalModelAsset(target.id)
@@ -773,6 +813,7 @@ class SettingsViewModelTest {
                     modelTypesNeedingReassignment = listOf(ModelType.MAIN),
                     replacementLocalConfigId = replacementConfigId,
                     replacementApiConfigId = null,
+                    replacementMediaProviderId = null,
                 )
             }
         }
@@ -992,6 +1033,164 @@ class SettingsViewModelTest {
 
             assertTrue(viewModel.uiState.value.home.isApiProvidersSheetOpen)
             assertTrue(viewModel.uiState.value.apiProvidersSheet.isVisible)
+        }
+
+    @Test
+    @DisplayName("SET-007 Gen2 hides Juggernaut from assignment and shows disabled reason")
+    fun set007_disabledJuggernautHiddenFromAssignment() =
+        runTest {
+            val juggernautSha = ModelPackTestFixtures.JUGGERNAUT_DIFFUSION_SHA
+            val juggernautAsset = LocalModelAsset(
+                metadata = LocalModelMetadata(
+                    id = LocalModelId("juggernaut-model"),
+                    displayName = ModelPackTestFixtures.JUGGERNAUT_PACK_DISPLAY,
+                    huggingFaceModelName = "xororz/sdxl-qnn",
+                    remoteFileName = ModelPackTestFixtures.JUGGERNAUT_DIFFUSION_FILE,
+                    localFileName = ModelPackTestFixtures.JUGGERNAUT_DIFFUSION_FILE,
+                    sha256 = juggernautSha,
+                    sizeInBytes = 3_747_687_306L,
+                    modelFileFormat = ModelFileFormat.BIN,
+                    source = DownloadSource.HUGGING_FACE,
+                ),
+                configurations = listOf(
+                    LocalModelConfiguration(
+                        id = com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId(ModelPackTestFixtures.JUGGERNAUT_CONFIG_ID),
+                        localModelId = LocalModelId("juggernaut-model"),
+                        displayName = ModelPackTestFixtures.JUGGERNAUT_PACK_DISPLAY,
+                        maxTokens = 0,
+                        contextWindow = 0,
+                        temperature = 0.0,
+                        topP = 1.0,
+                        topK = 1,
+                        repetitionPenalty = 1.0,
+                        systemPrompt = "",
+                        defaultAssignments = listOf(ModelType.IMAGE_EDIT),
+                    ),
+                ),
+            )
+            val juggernautPack = ModelPack(
+                packId = ModelPackTestFixtures.JUGGERNAUT_PACK_ID,
+                displayName = ModelPackTestFixtures.JUGGERNAUT_PACK_DISPLAY,
+                slot = ModelType.IMAGE_EDIT,
+                members = listOf(ModelPackMember(ModelPackRole.DIFFUSION, juggernautAsset)),
+            )
+            val packRow = ModelPackSettingsRow(
+                pack = juggernautPack,
+                completeness = ModelPackCompleteness(
+                    packId = ModelPackTestFixtures.JUGGERNAUT_PACK_ID,
+                    installedCount = 0,
+                    totalCount = 2,
+                    isComplete = false,
+                    members = emptyList(),
+                ),
+                isDiffusionSoftDeleted = false,
+                areUtilityRegistryEntriesAbsent = true,
+                showDownloadAction = false,
+                disabledReason = "Requires Snapdragon 8 Gen 3+ with QNN.",
+                isEligible = false,
+            )
+
+            coEvery { getModelPacksForSettingsUseCase() } returns listOf(packRow)
+            localModelAssetsStateFlow.value = listOf(juggernautAsset)
+
+            viewModel.onShowModelConfigSheet(show = true)
+            advanceUntilIdle()
+
+            val assignmentOptions =
+                selectableLocalAssetsForSlot(
+                    modelType = ModelType.IMAGE_EDIT,
+                    assets = viewModel.uiState.value.localModelsSheet.models,
+                    modelPacks = viewModel.uiState.value.localModelsSheet.modelPacks,
+                )
+            assertTrue(
+                assignmentOptions.none { asset ->
+                    asset.configurations.any { it.id.value == ModelPackTestFixtures.JUGGERNAUT_CONFIG_ID }
+                },
+            )
+            assertEquals(
+                "Requires Snapdragon 8 Gen 3+ with QNN.",
+                viewModel.uiState.value.localModelsSheet.modelPacks.single().disabledReason,
+            )
+        }
+
+    @Test
+    @DisplayName("SET-002 Gen2 hides SDXL from assignment and shows disabled reason")
+    fun set002_disabledSdxlHiddenFromAssignment() =
+        runTest {
+            val sdxlSha = "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83"
+            val sdxlAsset = LocalModelAsset(
+                metadata = LocalModelMetadata(
+                    id = LocalModelId("sdxl-model"),
+                    displayName = "Stable Diffusion XL",
+                    huggingFaceModelName = "xororz/sdxl-qnn",
+                    remoteFileName = "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip",
+                    localFileName = "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip",
+                    sha256 = sdxlSha,
+                    sizeInBytes = 3_504_485_672L,
+                    modelFileFormat = ModelFileFormat.BIN,
+                    source = DownloadSource.HUGGING_FACE,
+                ),
+                configurations = listOf(
+                    LocalModelConfiguration(
+                        id = com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId("sdxl-local-config"),
+                        localModelId = LocalModelId("sdxl-model"),
+                        displayName = "Stable Diffusion XL",
+                        maxTokens = 0,
+                        contextWindow = 0,
+                        temperature = 0.0,
+                        topP = 1.0,
+                        topK = 1,
+                        repetitionPenalty = 1.0,
+                        systemPrompt = "",
+                        defaultAssignments = listOf(ModelType.IMAGE_GENERATION),
+                    )
+                )
+            )
+            val sdxlPack = ModelPack(
+                packId = "sdxl-t2i",
+                displayName = "Stable Diffusion XL",
+                slot = ModelType.IMAGE_GENERATION,
+                members = listOf(ModelPackMember(ModelPackRole.DIFFUSION, sdxlAsset)),
+            )
+            val packRow = ModelPackSettingsRow(
+                pack = sdxlPack,
+                completeness = ModelPackCompleteness(
+                    packId = "sdxl-t2i",
+                    installedCount = 0,
+                    totalCount = 1,
+                    isComplete = false,
+                    members = emptyList(),
+                ),
+                isDiffusionSoftDeleted = false,
+                areUtilityRegistryEntriesAbsent = true,
+                showDownloadAction = false,
+                disabledReason = "Requires Snapdragon 8 Gen 3+ with QNN.",
+                isEligible = false,
+            )
+
+            coEvery { getModelPacksForSettingsUseCase() } returns listOf(packRow)
+            localModelAssetsStateFlow.value = listOf(sdxlAsset)
+
+            viewModel.onShowModelConfigSheet(show = true)
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            val assignmentOptions =
+                selectableLocalAssetsForSlot(
+                    modelType = ModelType.IMAGE_GENERATION,
+                    assets = state.localModelsSheet.models,
+                    modelPacks = state.localModelsSheet.modelPacks,
+                )
+            assertTrue(
+                assignmentOptions.none { asset ->
+                    asset.configurations.any { it.id.value == "sdxl-local-config" }
+                },
+            )
+            // The pack row must still surface with the exact Gen2 disabled reason and be ineligible.
+            val mappedPack = state.localModelsSheet.modelPacks.firstOrNull { it.packId == "sdxl-t2i" }
+            assertNotNull(mappedPack)
+            assertEquals("Requires Snapdragon 8 Gen 3+ with QNN.", mappedPack!!.disabledReason)
+            assertFalse(mappedPack.isEligible)
         }
 }
 

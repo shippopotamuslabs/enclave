@@ -7,9 +7,11 @@ import com.browntowndev.enclave.domain.model.inference.LlamaModelConfig
 import com.browntowndev.enclave.domain.port.inference.LlamaEnginePort
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
@@ -31,7 +33,6 @@ import com.browntowndev.enclave.domain.model.chat.ChatMessage as DomainChatMessa
 class JniLlamaEngine
     @Inject
     constructor(
-        private val gpuProfiler: GpuProfiler,
         private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     ) : LlamaEnginePort {
         companion object {
@@ -69,7 +70,7 @@ class JniLlamaEngine
                 @Suppress("MaxLineLength")
                 Log.i(
                     TAG,
-                    "  contextWindow=${config.sampling.contextWindow}, maxTokens=${config.sampling.maxTokens}, batchSize=${config.sampling.batchSize}, gpuLayers=${config.sampling.gpuLayers}",
+                    "  contextWindow=${config.sampling.contextWindow}, maxTokens=${config.sampling.maxTokens}, batchSize=${config.sampling.batchSize}",
                 )
 
                 if (modelLifecycle.loaded.get()) {
@@ -78,19 +79,6 @@ class JniLlamaEngine
                 }
 
                 val startTime = System.currentTimeMillis()
-                val detectedBackend = gpuProfiler.detectOptimalBackend()
-                val backendDescription = gpuProfiler.getBackendDescription()
-                val gpuName = gpuProfiler.detectGpuName()
-                Log.i(TAG, "GPU Backend: $backendDescription")
-                Log.i(TAG, "GPU detected: $gpuName")
-
-                if (detectedBackend == LlamaBackend.CPU) {
-                    Log.w(TAG, "=== WARNING: Running on CPU only! GPU acceleration is DISABLED ===")
-                    Log.w(TAG, "=== To enable GPU: change GpuProfiler to return Vulkan backend ===")
-                } else {
-                    Log.i(TAG, "=== GPU acceleration ENABLED ===")
-                }
-
                 val future =
                     llamaExecutor.submit<Boolean> {
                         nativeLoadModel(
@@ -98,8 +86,6 @@ class JniLlamaEngine
                             mmprojPath = config.mmprojPath,
                             contextSize = config.sampling.contextWindow,
                             batchSize = config.sampling.batchSize,
-                            gpuLayers = config.sampling.gpuLayers,
-                            backendType = detectedBackend.value,
                         )
                     }
                 val ok: Boolean = future.get()
@@ -171,7 +157,13 @@ class JniLlamaEngine
 
                 val callback =
                     LlamaGenerationSession.createTokenCallback(
-                        emit = ::trySend,
+                        emit = { event ->
+                            trySend(event).also { result ->
+                                if (result.isFailure) {
+                                    Log.w(TAG, "Dropped generation event (${event::class.simpleName}): $result")
+                                }
+                            }
+                        },
                         onGenerationComplete = { promptTokens, generatedTokens, fullText ->
                             modelLifecycle.recordGenerationComplete(promptTokens, generatedTokens)
                             modelLifecycle.checkAndCompressContext()
@@ -200,6 +192,8 @@ class JniLlamaEngine
                                 penaltyFreq = params.penaltyFreq,
                                 penaltyPresent = params.penaltyPresent,
                                 reasoningBudget = params.reasoningBudget,
+                                continuation = false,
+                                prevMessageCount = 0,
                                 callback = callback,
                             )
                         }
@@ -215,9 +209,13 @@ class JniLlamaEngine
                     llamaExecutor.submit { nativeStopCompletion() }
                     generating.set(false)
                 }
-            }.flowOn(Dispatchers.IO)
+            }.buffer(Channel.UNLIMITED).flowOn(Dispatchers.IO)
 
-        override fun generateWithOptions(options: GenerationOptions): Flow<GenerationEvent> =
+        override fun generateWithOptions(
+            options: GenerationOptions,
+            continuation: Boolean,
+            prevMessageCount: Int,
+        ): Flow<GenerationEvent> =
             callbackFlow {
                 Log.i(TAG, "Starting generation with options: reasoningBudget=${options.reasoningBudget}")
                 check(modelLifecycle.loaded.get()) { "Engine not initialized" }
@@ -240,7 +238,13 @@ class JniLlamaEngine
 
                 val callback =
                     LlamaGenerationSession.createTokenCallback(
-                        emit = ::trySend,
+                        emit = { event ->
+                            trySend(event).also { result ->
+                                if (result.isFailure) {
+                                    Log.w(TAG, "Dropped generation event (${event::class.simpleName}): $result")
+                                }
+                            }
+                        },
                         onGenerationComplete = { promptTokens, generatedTokens, fullText ->
                             modelLifecycle.recordGenerationComplete(promptTokens, generatedTokens)
                             modelLifecycle.checkAndCompressContext()
@@ -269,6 +273,8 @@ class JniLlamaEngine
                                 penaltyFreq = params.penaltyFreq,
                                 penaltyPresent = params.penaltyPresent,
                                 reasoningBudget = params.reasoningBudget,
+                                continuation = continuation,
+                                prevMessageCount = prevMessageCount,
                                 callback = callback,
                             )
                         }
@@ -284,7 +290,7 @@ class JniLlamaEngine
                     llamaExecutor.submit { nativeStopCompletion() }
                     generating.set(false)
                 }
-            }.flowOn(Dispatchers.IO)
+            }.buffer(Channel.UNLIMITED).flowOn(Dispatchers.IO)
 
         override suspend fun stopGeneration() =
             withContext(ioDispatcher) {
@@ -327,6 +333,8 @@ class JniLlamaEngine
 
         override fun isLoaded(): Boolean = modelLifecycle.loaded.get()
 
+        override suspend fun contextUsage(): Int = withContext(ioDispatcher) { modelLifecycle.readContextUsage() }
+
         private fun unloadInternal() {
             try {
                 nativeStopCompletion()
@@ -350,14 +358,13 @@ class JniLlamaEngine
             mmprojPath: String?,
             contextSize: Int,
             batchSize: Int,
-            gpuLayers: Int,
-            backendType: Int,
         ): Boolean
 
         private external fun nativeUnloadModel()
 
         private external fun nativeClearKvCache()
 
+        @Suppress("LongParameterList")
         internal fun startCompletion(
             roles: Array<String>,
             contents: Array<String>,
@@ -372,6 +379,8 @@ class JniLlamaEngine
             penaltyPresent: Float,
             reasoningBudget: Int,
             callback: NativeTokenCallback,
+            continuation: Boolean = false,
+            prevMessageCount: Int = 0,
         ) {
             nativeStartCompletion(
                 roles,
@@ -386,10 +395,13 @@ class JniLlamaEngine
                 penaltyFreq,
                 penaltyPresent,
                 reasoningBudget,
+                continuation,
+                prevMessageCount,
                 callback,
             )
         }
 
+        @Suppress("LongParameterList")
         private external fun nativeStartCompletion(
             roles: Array<String>,
             contents: Array<String>,
@@ -403,6 +415,8 @@ class JniLlamaEngine
             penaltyFreq: Float,
             penaltyPresent: Float,
             reasoningBudget: Int,
+            continuation: Boolean,
+            prevMessageCount: Int,
             callback: NativeTokenCallback,
         )
 
@@ -434,6 +448,7 @@ interface NativeTokenCallback {
     fun onComplete(
         promptTokens: Int,
         generatedTokens: Int,
+        prefixReusedTokens: Int,
     )
 
     fun onError(message: String)

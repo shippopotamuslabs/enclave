@@ -31,7 +31,54 @@ export interface SyncFeedState {
     nextSequence: number;
     schemaVersion: 1;
     updatedAtMillis: number;
+    feedInitialized?: boolean;
+    feedEpoch?: number;
+    oldestRetainedSequence?: number;
+    backfilledAtMillis?: number | null;
 }
+
+export interface SyncFeedStatus {
+    nextSequence: number;
+    feedInitialized: boolean;
+    feedEpoch: number;
+    oldestRetainedSequence: number;
+    schemaVersion: 1;
+}
+
+export interface BackfillSyncFeedResult {
+    status: 'initialized' | 'already_initialized';
+    eventsWritten: number;
+    nextSequence: number;
+}
+
+/**
+ * Dependency-ordered collection scan for baseline backfill and client-side entity
+ * reconciliation. Parents always precede children.
+ */
+export const BACKFILL_COLLECTION_ORDER: ReadonlyArray<string> = Object.freeze([
+    'chats',
+    'memories',
+    'api_credentials',
+    'local_models',
+    'utility_models',
+    'tts_providers',
+    'live_voice_providers',
+    'media_providers',
+    'studio_albums',
+    'messages',
+    'chat_summaries',
+    'message_files',
+    'web_search_sources',
+    'message_transcript_segments',
+    'message_inference_telemetry',
+    'vision_analysis',
+    'documents',
+    'local_model_configs',
+    'api_model_configs',
+    'default_models',
+    'api_keys',
+    'studio_gallery',
+]);
 
 export interface RuleRequest {
     authenticatedUid: string | null;
@@ -62,6 +109,7 @@ export const SYNC_FEED_ALLOWLIST: ReadonlyArray<string> = Object.freeze([
     'local_model_configs',
     'default_models',
     'tts_providers',
+    'live_voice_providers',
     'media_providers',
     'studio_albums',
     'studio_gallery',
@@ -69,13 +117,36 @@ export const SYNC_FEED_ALLOWLIST: ReadonlyArray<string> = Object.freeze([
 
 export class InMemorySyncFeedFirestore {
     syncEvents: SyncEventDocument[] = [];
-    syncMeta: SyncFeedState = {
-        nextSequence: 0,
-        schemaVersion: 1,
-        updatedAtMillis: 0,
-    };
+    syncMeta: SyncFeedState = normalizeSyncFeedState(undefined);
     processedEvents = new Map<string, number>();
     documents = new Map<string, Record<string, unknown>>();
+}
+
+export function normalizeSyncFeedState(raw: Partial<SyncFeedState> | undefined): SyncFeedState {
+    return {
+        nextSequence: raw?.nextSequence ?? 0,
+        schemaVersion: 1,
+        updatedAtMillis: raw?.updatedAtMillis ?? 0,
+        feedInitialized: raw?.feedInitialized ?? false,
+        feedEpoch: raw?.feedEpoch ?? 1,
+        oldestRetainedSequence: raw?.oldestRetainedSequence ?? 1,
+        backfilledAtMillis: raw?.backfilledAtMillis ?? null,
+    };
+}
+
+export function buildSyncFeedStatus(meta: SyncFeedState): SyncFeedStatus {
+    const normalized = normalizeSyncFeedState(meta);
+    return {
+        nextSequence: normalized.nextSequence,
+        feedInitialized: normalized.feedInitialized ?? false,
+        feedEpoch: normalized.feedEpoch ?? 1,
+        oldestRetainedSequence: normalized.oldestRetainedSequence ?? 1,
+        schemaVersion: 1,
+    };
+}
+
+export function paddedSequenceDocId(sequence: number): string {
+    return paddedSequence(sequence);
 }
 
 function paddedSequence(sequence: number): string {
@@ -207,12 +278,9 @@ export const handleSyncEntityWriteTrigger = functions.firestore
             }
 
             const metaSnap = await transaction.get(metaRef);
-            const meta: SyncFeedState =
-                (metaSnap.data() as SyncFeedState | undefined) ?? {
-                    nextSequence: 0,
-                    schemaVersion: 1,
-                    updatedAtMillis: 0,
-                };
+            const meta: SyncFeedState = normalizeSyncFeedState(
+                metaSnap.data() as Partial<SyncFeedState> | undefined,
+            );
 
             const store = new InMemorySyncFeedFirestore();
             store.syncMeta = { ...meta };
@@ -245,3 +313,248 @@ export const handleSyncEntityWriteTrigger = functions.firestore
             transaction.set(metaRef, store.syncMeta, { merge: true });
         });
     });
+
+export interface SyncFeedDocumentReader {
+    listCollectionDocuments(
+        uid: string,
+        collectionPath: string,
+    ): Promise<Array<{ entityId: string; data: Record<string, unknown> }>>;
+}
+
+export class InMemorySyncFeedDocumentReader implements SyncFeedDocumentReader {
+    constructor(private readonly store: InMemorySyncFeedFirestore) {}
+
+    async listCollectionDocuments(
+        uid: string,
+        collectionPath: string,
+    ): Promise<Array<{ entityId: string; data: Record<string, unknown> }>> {
+        const prefix = `users/${uid}/${collectionPath}/`;
+        const results: Array<{ entityId: string; data: Record<string, unknown> }> = [];
+        for (const [path, data] of this.store.documents.entries()) {
+            if (!path.startsWith(prefix)) continue;
+            const entityId = path.substring(prefix.length);
+            if (!entityId || entityId.includes('/')) continue;
+            results.push({ entityId, data });
+        }
+        results.sort((left, right) => left.entityId.localeCompare(right.entityId));
+        return results;
+    }
+}
+
+export class FirestoreSyncFeedDocumentReader implements SyncFeedDocumentReader {
+    constructor(private readonly firestore: admin.firestore.Firestore) {}
+
+    async listCollectionDocuments(
+        uid: string,
+        collectionPath: string,
+    ): Promise<Array<{ entityId: string; data: Record<string, unknown> }>> {
+        const snapshot = await this.firestore.collection(`users/${uid}/${collectionPath}`).get();
+        return snapshot.docs.map((doc) => ({
+            entityId: doc.id,
+            data: doc.data() as Record<string, unknown>,
+        }));
+    }
+}
+
+async function emitBaselineEntityEvent(
+    store: InMemorySyncFeedFirestore,
+    uid: string,
+    collectionPath: string,
+    entityId: string,
+    sourceData: Record<string, unknown>,
+): Promise<boolean> {
+    const triggerEventId = `backfill:${collectionPath}:${entityId}`;
+    const eventsBefore = store.syncEvents.length;
+    await handleSyncEntityWrite(store, {
+        uid,
+        collectionPath,
+        entityId,
+        triggerEventId,
+        after: sourceData,
+    });
+    return store.syncEvents.length > eventsBefore;
+}
+
+export async function handleBackfillSyncFeed(
+    store: InMemorySyncFeedFirestore,
+    reader: SyncFeedDocumentReader,
+    uid: string,
+    nowMillis: number = Date.now(),
+): Promise<BackfillSyncFeedResult> {
+    const meta = normalizeSyncFeedState(store.syncMeta);
+    if (meta.feedInitialized) {
+        return {
+            status: 'already_initialized',
+            eventsWritten: 0,
+            nextSequence: meta.nextSequence,
+        };
+    }
+
+    if (meta.nextSequence > 0) {
+        store.syncMeta = {
+            ...meta,
+            feedInitialized: true,
+            backfilledAtMillis: nowMillis,
+            updatedAtMillis: nowMillis,
+        };
+        return {
+            status: 'initialized',
+            eventsWritten: 0,
+            nextSequence: meta.nextSequence,
+        };
+    }
+
+    let eventsWritten = 0;
+    for (const collectionPath of BACKFILL_COLLECTION_ORDER) {
+        if (!SYNC_FEED_ALLOWLIST.includes(collectionPath)) continue;
+        const documents = await reader.listCollectionDocuments(uid, collectionPath);
+        for (const document of documents) {
+            const sourcePath = `users/${uid}/${collectionPath}/${document.entityId}`;
+            store.documents.set(sourcePath, document.data);
+            const wrote = await emitBaselineEntityEvent(
+                store,
+                uid,
+                collectionPath,
+                document.entityId,
+                document.data,
+            );
+            if (wrote) eventsWritten += 1;
+        }
+    }
+
+    store.syncMeta = {
+        ...normalizeSyncFeedState(store.syncMeta),
+        feedInitialized: true,
+        backfilledAtMillis: nowMillis,
+        updatedAtMillis: nowMillis,
+    };
+
+    return {
+        status: 'initialized',
+        eventsWritten,
+        nextSequence: store.syncMeta.nextSequence,
+    };
+}
+
+export async function persistBackfillResult(
+    firestore: admin.firestore.Firestore,
+    uid: string,
+    store: InMemorySyncFeedFirestore,
+): Promise<BackfillSyncFeedResult> {
+    const meta = normalizeSyncFeedState(store.syncMeta);
+    if (!meta.feedInitialized) {
+        throw new Error('backfill store must be marked initialized before persistence');
+    }
+
+    const eventsWritten = await commitBackfillWrites(firestore, uid, store.syncEvents, meta);
+    return {
+        status: 'initialized',
+        eventsWritten,
+        nextSequence: meta.nextSequence,
+    };
+}
+
+const BACKFILL_WRITE_BATCH_LIMIT = 400;
+
+async function commitBackfillWrites(
+    firestore: admin.firestore.Firestore,
+    uid: string,
+    events: SyncEventDocument[],
+    meta: SyncFeedState,
+): Promise<number> {
+    let batch = firestore.batch();
+    let operations = 0;
+    let eventsWritten = 0;
+
+    const flush = async () => {
+        if (operations === 0) return;
+        await batch.commit();
+        batch = firestore.batch();
+        operations = 0;
+    };
+
+    const enqueue = async (write: (current: admin.firestore.WriteBatch) => void) => {
+        if (operations >= BACKFILL_WRITE_BATCH_LIMIT) {
+            await flush();
+        }
+        write(batch);
+        operations += 1;
+    };
+
+    await enqueue((current) => {
+        current.set(firestore.doc(`users/${uid}/sync_meta/state`), meta, { merge: true });
+    });
+
+    for (const event of events) {
+        await enqueue((current) => {
+            current.set(
+                firestore.doc(`users/${uid}/sync_events/${paddedSequence(event.sequence)}`),
+                event,
+            );
+        });
+        await enqueue((current) => {
+            current.set(
+                firestore.doc(`users/${uid}/sync_processed_events/${hashEventId(event.triggerEventId)}`),
+                {
+                    triggerEventId: event.triggerEventId,
+                    sequence: event.sequence,
+                    processedAtMillis: Date.now(),
+                },
+            );
+        });
+        eventsWritten += 1;
+    }
+
+    await flush();
+    return eventsWritten;
+}
+
+export async function runProductionBackfillSyncFeed(
+    firestore: admin.firestore.Firestore,
+    uid: string,
+    options: { migrationOnly?: boolean } = {},
+): Promise<BackfillSyncFeedResult> {
+    const metaRef = firestore.doc(`users/${uid}/sync_meta/state`);
+    const metaSnap = await metaRef.get();
+    const existingMeta = normalizeSyncFeedState(metaSnap.data() as Partial<SyncFeedState> | undefined);
+    if (existingMeta.feedInitialized) {
+        return {
+            status: 'already_initialized',
+            eventsWritten: 0,
+            nextSequence: existingMeta.nextSequence,
+        };
+    }
+
+    if (options.migrationOnly || existingMeta.nextSequence > 0) {
+        const nowMillis = Date.now();
+        const migratedMeta: SyncFeedState = {
+            ...existingMeta,
+            feedInitialized: true,
+            backfilledAtMillis: nowMillis,
+            updatedAtMillis: nowMillis,
+        };
+        await metaRef.set(migratedMeta, { merge: true });
+        return {
+            status: 'initialized',
+            eventsWritten: 0,
+            nextSequence: existingMeta.nextSequence,
+        };
+    }
+
+    const store = new InMemorySyncFeedFirestore();
+    store.syncMeta = existingMeta;
+    const reader = new FirestoreSyncFeedDocumentReader(firestore);
+    const result = await handleBackfillSyncFeed(store, reader, uid);
+    if (result.status === 'already_initialized') {
+        return result;
+    }
+    return persistBackfillResult(firestore, uid, store);
+}
+
+export const backfillSyncFeedCallable = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError('unauthenticated', 'User must be logged in.');
+    }
+    const migrationOnly = data?.migrationOnly === true;
+    return runProductionBackfillSyncFeed(admin.firestore(), context.auth.uid, { migrationOnly });
+});

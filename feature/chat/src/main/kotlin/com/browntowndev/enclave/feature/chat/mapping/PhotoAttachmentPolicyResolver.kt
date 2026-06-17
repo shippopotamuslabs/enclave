@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.feature.chat.mapping
 
+import com.browntowndev.enclave.domain.model.chat.ChatModelOverride
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
@@ -17,12 +18,17 @@ class PhotoAttachmentPolicyResolver
     constructor(
         private val activeModelProvider: ActiveModelProviderPort,
     ) {
-        suspend fun resolve(selectedMode: ChatModeUi): PhotoAttachmentPolicy {
+        suspend fun resolve(
+            selectedMode: ChatModeUi,
+            modelOverride: ChatModelOverride? = null,
+        ): PhotoAttachmentPolicy {
             val activeConfig =
                 when (selectedMode) {
                     ChatModeUi.FAST -> activeModelProvider.getActiveConfiguration(ModelType.FAST)
                     ChatModeUi.THINKING -> activeModelProvider.getActiveConfiguration(ModelType.THINKING)
                     ChatModeUi.COUNCIL -> null
+                    ChatModeUi.OTHER ->
+                        modelOverride?.let { activeModelProvider.getActiveConfigurationByOverride(it) }
                 }
             val visionConfig = activeModelProvider.getActiveConfiguration(ModelType.VISION)
             val apiVisionConfigured = visionConfig?.let { it.isLocal == false && it.isMultimodal } ?: false
@@ -66,6 +72,19 @@ class PhotoAttachmentPolicyResolver
                             isEnabled = false,
                             maxItems = 0,
                             disabledReason = "Council mode requires a configured API vision model for photo attachments.",
+                        )
+                    }
+                }
+                ChatModeUi.OTHER -> {
+                    if (activeVisionCapable || apiVisionConfigured) {
+                        PhotoAttachmentPolicy(isEnabled = true, maxItems = maxItems)
+                    } else {
+                        PhotoAttachmentPolicy(
+                            isEnabled = false,
+                            maxItems = 0,
+                            disabledReason =
+                                "Photo attachments require a vision-capable override model " +
+                                    "or a configured API vision model.",
                         )
                     }
                 }

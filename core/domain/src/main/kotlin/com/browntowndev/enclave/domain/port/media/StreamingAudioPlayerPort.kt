@@ -11,6 +11,10 @@ data class StreamingAudioConfig(
     val sampleRate: Int,
     val channels: Int,
     val bitsPerSample: Int,
+    /** When set, playback shares the capture session so hardware AEC can correlate echo. */
+    val audioSessionId: Int? = null,
+    /** Routes assistant audio through the voice-communication path for echo cancellation. */
+    val useVoiceCommunicationRoute: Boolean = false,
 ) {
     companion object {
         /** Standard configuration for TTS PCM 16-bit 24kHz mono audio. */

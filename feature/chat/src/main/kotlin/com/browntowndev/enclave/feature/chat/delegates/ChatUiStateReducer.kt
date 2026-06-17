@@ -2,6 +2,7 @@ package com.browntowndev.enclave.feature.chat.delegates
 
 import com.browntowndev.enclave.domain.model.chat.AccumulatedMessages
 import com.browntowndev.enclave.domain.model.chat.ChatId
+import com.browntowndev.enclave.domain.model.chat.ChatModelOverride
 import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.inference.ModelType
@@ -14,6 +15,7 @@ import com.browntowndev.enclave.feature.chat.ChatMessage
 import com.browntowndev.enclave.feature.chat.ChatMessageProjector
 import com.browntowndev.enclave.feature.chat.ChatModeUi
 import com.browntowndev.enclave.feature.chat.ChatUiState
+import com.browntowndev.enclave.feature.chat.LiveVoiceUiState
 import com.browntowndev.enclave.feature.chat.IndicatorState
 import com.browntowndev.enclave.feature.chat.MessageRole
 import com.browntowndev.enclave.feature.chat.ResponseHapticPhase
@@ -30,8 +32,12 @@ class ChatUiStateReducer
         private val chatMessageUiMapper: ChatMessageUiMapper,
     ) {
         private val chatMessageProjector = ChatMessageProjector()
-        private var lastResponseHapticSignature: ResponseHapticSignature? = null
-        private var responseHapticPulseKey: Long = 0L
+
+        data class HapticReducerState(
+            val lastResponseHapticMessageId: MessageId? = null,
+            val lastResponseHapticVisibleTextLength: Int = 0,
+            val responseHapticPulseKey: Long = 0L,
+        )
 
         data class ReduceParams(
             val settings: SettingsData,
@@ -57,11 +63,16 @@ class ChatUiStateReducer
             val artifactExportSheet: ArtifactExportSheetState,
             val chatId: ChatId?,
             val modelDisplayNames: Map<ModelType, String>,
+            val liveVoiceState: LiveVoiceUiState = LiveVoiceUiState.Idle,
+            val hasLiveVoiceProviderAssigned: Boolean = false,
+            val hapticState: HapticReducerState = HapticReducerState(),
+            val selectedModelOverride: ChatModelOverride? = null,
         )
 
         data class ReduceResult(
             val uiState: ChatUiState,
             val acknowledgedTurnKey: ActiveChatTurnKey?,
+            val hapticState: HapticReducerState,
         )
 
         fun reduce(params: ReduceParams): ReduceResult {
@@ -139,8 +150,9 @@ class ChatUiStateReducer
             }
 
             val visibleTextHapticSignature = chatMessages.latestVisibleTextHapticSignature()
-            val responseHapticPhase =
+            val hapticResolution =
                 resolveResponseHapticPhase(
+                    hapticState = params.hapticState,
                     activeToolCallBanner = activeToolCallBanner,
                     visibleTextHapticSignature = visibleTextHapticSignature,
                     hasThinkingIndicator = hasThinkingIndicator,
@@ -157,10 +169,26 @@ class ChatUiStateReducer
                     photoAttachmentMaxItems = params.attachmentPolicy.maxItems,
                     photoAttachmentDisabledReason = params.attachmentPolicy.disabledReason,
                     selectedMode = params.selectedMode,
+                    selectedModeModelName =
+                        resolveModelNameForMode(
+                            mode = params.selectedMode,
+                            modelDisplayNames = params.modelDisplayNames,
+                            selectedModelOverride = params.selectedModelOverride,
+                        ),
+                    modeModelNames =
+                        ChatModeUi.entries
+                            .filter { it != ChatModeUi.OTHER }
+                            .associateWith { mode ->
+                                resolveModelNameForMode(
+                                    mode = mode,
+                                    modelDisplayNames = params.modelDisplayNames,
+                                    selectedModelOverride = null,
+                                )
+                            },
                     isGlobalInferenceBlocked = params.isGlobalInferenceBlocked,
                     hapticResponse = params.settings.hapticResponse,
-                    responseHapticPhase = responseHapticPhase,
-                    responseHapticPulseKey = responseHapticPulseKey,
+                    responseHapticPhase = hapticResolution.phase,
+                    responseHapticPulseKey = hapticResolution.updatedState.responseHapticPulseKey,
                     chatId = params.chatId,
                     isGenerating = isGenerating,
                     canStop = canStop,
@@ -169,6 +197,8 @@ class ChatUiStateReducer
                     activeToolCallBanner = activeToolCallBanner,
                     backgroundInferenceEnabled = params.settings.backgroundInferenceEnabled,
                     hasTtsProviderAssigned = params.hasTtsProviderAssigned,
+                    liveVoiceState = params.liveVoiceState,
+                    hasLiveVoiceProviderAssigned = params.hasLiveVoiceProviderAssigned,
                     isPlayingTts = params.isPlayingTts,
                     isLoadingTts = params.isLoadingTts,
                     isPausedTts = params.isPausedTts,
@@ -176,7 +206,11 @@ class ChatUiStateReducer
                     isReadOnly = params.isReadOnly,
                     artifactExportSheet = params.artifactExportSheet,
                 )
-            return ReduceResult(uiState = uiState, acknowledgedTurnKey = acknowledgedTurnKey)
+            return ReduceResult(
+                uiState = uiState,
+                acknowledgedTurnKey = acknowledgedTurnKey,
+                hapticState = hapticResolution.updatedState,
+            )
         }
 
         private fun resolveActiveToolCallMessageId(
@@ -191,34 +225,68 @@ class ChatUiStateReducer
                 ?: chatMessages.lastOrNull { it.role == MessageRole.Assistant }?.id
                 ?: chatMessages.lastOrNull { it.role == MessageRole.User }?.id
 
+        private data class HapticResolution(
+            val phase: ResponseHapticPhase,
+            val updatedState: HapticReducerState,
+        )
+
         private fun resolveResponseHapticPhase(
+            hapticState: HapticReducerState,
             activeToolCallBanner: ToolCallBannerUi?,
             visibleTextHapticSignature: ResponseHapticSignature?,
             hasThinkingIndicator: Boolean,
-        ): ResponseHapticPhase {
+        ): HapticResolution {
             if (activeToolCallBanner != null) {
-                lastResponseHapticSignature = visibleTextHapticSignature
-                return ResponseHapticPhase.None
+                return HapticResolution(
+                    phase = ResponseHapticPhase.None,
+                    updatedState =
+                        hapticState.copy(
+                            lastResponseHapticMessageId = visibleTextHapticSignature?.messageId,
+                            lastResponseHapticVisibleTextLength = visibleTextHapticSignature?.visibleTextLength ?: 0,
+                        ),
+                )
             }
             if (visibleTextHapticSignature == null) {
-                lastResponseHapticSignature = null
-                return if (hasThinkingIndicator) {
-                    ResponseHapticPhase.ThinkingPulse
-                } else {
-                    ResponseHapticPhase.None
-                }
+                return HapticResolution(
+                    phase =
+                        if (hasThinkingIndicator) {
+                            ResponseHapticPhase.ThinkingPulse
+                        } else {
+                            ResponseHapticPhase.None
+                        },
+                    updatedState =
+                        hapticState.copy(
+                            lastResponseHapticMessageId = null,
+                            lastResponseHapticVisibleTextLength = 0,
+                        ),
+                )
             }
 
-            val previous = lastResponseHapticSignature
-            lastResponseHapticSignature = visibleTextHapticSignature
+            val previousMessageId = hapticState.lastResponseHapticMessageId
+            val previousVisibleTextLength = hapticState.lastResponseHapticVisibleTextLength
             val visibleTextAdvanced =
-                previous != null &&
-                    previous.messageId == visibleTextHapticSignature.messageId &&
-                    visibleTextHapticSignature.visibleTextLength > previous.visibleTextLength
-            if (!visibleTextAdvanced) return ResponseHapticPhase.None
+                previousMessageId != null &&
+                    previousMessageId == visibleTextHapticSignature.messageId &&
+                    visibleTextHapticSignature.visibleTextLength > previousVisibleTextLength
+            val updatedState =
+                hapticState.copy(
+                    lastResponseHapticMessageId = visibleTextHapticSignature.messageId,
+                    lastResponseHapticVisibleTextLength = visibleTextHapticSignature.visibleTextLength,
+                )
+            if (!visibleTextAdvanced) {
+                return HapticResolution(
+                    phase = ResponseHapticPhase.None,
+                    updatedState = updatedState,
+                )
+            }
 
-            responseHapticPulseKey += 1
-            return ResponseHapticPhase.GeneratingBuzz
+            return HapticResolution(
+                phase = ResponseHapticPhase.GeneratingBuzz,
+                updatedState =
+                    updatedState.copy(
+                        responseHapticPulseKey = updatedState.responseHapticPulseKey + 1,
+                    ),
+            )
         }
 
         private fun List<ChatMessage>.latestVisibleTextHapticSignature(): ResponseHapticSignature? =
@@ -232,6 +300,22 @@ class ChatUiStateReducer
                     visibleTextLength = message.visibleAnswerTextLength(),
                 )
             }
+
+        private fun resolveModelNameForMode(
+            mode: ChatModeUi,
+            modelDisplayNames: Map<ModelType, String>,
+            selectedModelOverride: ChatModelOverride?,
+        ): String? {
+            val modelType =
+                when (mode) {
+                    ChatModeUi.FAST -> ModelType.FAST
+                    ChatModeUi.THINKING -> ModelType.THINKING
+                    // Council fans out to up to 4 models; there is no single name to show.
+                    ChatModeUi.COUNCIL -> return null
+                    ChatModeUi.OTHER -> return selectedModelOverride?.displayName
+                }
+            return modelDisplayNames[modelType]?.takeIf { it.isNotEmpty() }
+        }
 
         private fun ChatMessage.visibleAnswerTextLength(): Int {
             val answerTextLength =

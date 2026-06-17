@@ -4,12 +4,10 @@ import android.util.Log
 import com.browntowndev.enclave.domain.model.media.ModelGenerationOutputSchema
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 
 internal object FalMediaResponseDiagnostics {
     private val json = Json { ignoreUnknownKeys = true }
@@ -118,7 +116,10 @@ internal object FalMediaResponseDiagnostics {
             else -> url.take(URL_LOG_MAX_CHARS) + "…(truncated)"
         }
 
-    private fun sanitizeForLog(raw: String, maxChars: Int): String {
+    private fun sanitizeForLog(
+        raw: String,
+        maxChars: Int,
+    ): String {
         val redacted = raw.replace(Regex("""base64,[A-Za-z0-9+/=]+"""), "base64,<redacted>")
         return if (redacted.length <= maxChars) {
             redacted

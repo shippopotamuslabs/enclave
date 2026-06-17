@@ -197,9 +197,11 @@ internal fun StudioGalleryList(
     ) {
         groupedGallery.forEachIndexed { index, group ->
             val isActiveGenerationGroup =
-                isGenerating &&
-                    group.prompt == activeGenerationPrompt &&
-                    index == groupedGallery.lastIndex
+                isStudioActiveGenerationGroup(
+                    groupPrompt = group.prompt,
+                    isGenerating = isGenerating,
+                    activeGenerationPrompt = activeGenerationPrompt,
+                )
             val galleryRows =
                 buildStudioGalleryRows(
                     group = group,
@@ -255,8 +257,16 @@ internal fun StudioGalleryList(
             }
         }
 
-        if (isGenerating && activeGenerationPrompt != null && groupedGallery.lastOrNull()?.prompt != activeGenerationPrompt) {
-            val headerKey = studioPromptHeaderKey(groupIndex = groupedGallery.size, prompt = activeGenerationPrompt)
+        if (
+            isGenerating &&
+                activeGenerationPrompt != null &&
+                shouldShowStudioTrailingGenerationSection(groupedGallery, isGenerating, activeGenerationPrompt)
+        ) {
+            val headerKey =
+                studioPromptHeaderKey(
+                    groupIndex = groupedGallery.size,
+                    prompt = activeGenerationPrompt,
+                )
             item(key = headerKey) {
                 PromptHeaderDivider(
                     prompt = activeGenerationPrompt,
@@ -318,6 +328,29 @@ internal fun studioPromptHeaderKey(
     prompt: String,
 ): String = "$GALLERY_HEADER_KEY_PREFIX${groupIndex}_$prompt"
 
+internal fun computeStudioActiveGenerationRemainingPlaceholders(
+    isGenerating: Boolean,
+    lastSubmittedPrompt: String?,
+    groupedGallery: List<StudioGalleryGroup>,
+    expectedCount: Int,
+    baselineMediaCount: Int,
+): Int {
+    if (!isGenerating || lastSubmittedPrompt.isNullOrBlank()) {
+        return 0
+    }
+
+    val completedInBatch =
+        groupedGallery
+            .find { group -> group.prompt == lastSubmittedPrompt }
+            ?.mediaItems
+            ?.size
+            ?.minus(baselineMediaCount)
+            ?.coerceAtLeast(0)
+            ?: 0
+
+    return (expectedCount - completedInBatch).coerceAtLeast(0)
+}
+
 internal fun buildStudioGalleryRows(
     group: StudioGalleryGroup,
     placeholderCount: Int,
@@ -362,9 +395,11 @@ internal fun buildStudioPromptHeaderInfo(
 
     groupedGallery.forEachIndexed { groupIndex, group ->
         val isActiveGenerationGroup =
-            isGenerating &&
-                group.prompt == activeGenerationPrompt &&
-                groupIndex == groupedGallery.lastIndex
+            isStudioActiveGenerationGroup(
+                groupPrompt = group.prompt,
+                isGenerating = isGenerating,
+                activeGenerationPrompt = activeGenerationPrompt,
+            )
         val galleryRows =
             buildStudioGalleryRows(
                 group = group,
@@ -383,7 +418,10 @@ internal fun buildStudioPromptHeaderInfo(
         itemIndex += galleryRows.count { it.mediaItems.isEmpty() }
     }
 
-    if (isGenerating && activeGenerationPrompt != null && groupedGallery.lastOrNull()?.prompt != activeGenerationPrompt) {
+    if (
+        activeGenerationPrompt != null &&
+            shouldShowStudioTrailingGenerationSection(groupedGallery, isGenerating, activeGenerationPrompt)
+    ) {
         headers.add(
             StudioPromptHeaderInfo(
                 key = studioPromptHeaderKey(groupIndex = groupedGallery.size, prompt = activeGenerationPrompt),
@@ -394,6 +432,69 @@ internal fun buildStudioPromptHeaderInfo(
     }
 
     return headers
+}
+
+internal fun isStudioActiveGenerationGroup(
+    groupPrompt: String,
+    isGenerating: Boolean,
+    activeGenerationPrompt: String?,
+): Boolean = isGenerating && groupPrompt == activeGenerationPrompt
+
+internal fun shouldShowStudioTrailingGenerationSection(
+    groupedGallery: List<StudioGalleryGroup>,
+    isGenerating: Boolean,
+    activeGenerationPrompt: String?,
+): Boolean =
+    isGenerating &&
+        activeGenerationPrompt != null &&
+        groupedGallery.none { group -> group.prompt == activeGenerationPrompt }
+
+internal fun computeStudioGenerationPlaceholderScrollIndex(
+    groupedGallery: List<StudioGalleryGroup>,
+    isGenerating: Boolean,
+    activeGenerationPrompt: String?,
+    generationPlaceholderCount: Int,
+): Int? {
+    if (!isGenerating || activeGenerationPrompt.isNullOrBlank() || generationPlaceholderCount <= 0) {
+        return null
+    }
+
+    val activeGroupIndex = groupedGallery.indexOfFirst { group -> group.prompt == activeGenerationPrompt }
+    var itemIndex = 0
+
+    if (activeGroupIndex >= 0) {
+        groupedGallery.forEachIndexed { groupIndex, group ->
+            val isActiveGenerationGroup = groupIndex == activeGroupIndex
+            val galleryRows =
+                buildStudioGalleryRows(
+                    group = group,
+                    placeholderCount = if (isActiveGenerationGroup) generationPlaceholderCount else 0,
+                )
+
+            if (groupIndex == activeGroupIndex) {
+                itemIndex += 1
+                val mediaRowCount = galleryRows.count { row -> row.mediaItems.isNotEmpty() }
+                val lastMediaRow = galleryRows.lastOrNull { row -> row.mediaItems.isNotEmpty() }
+                return when {
+                    lastMediaRow != null && lastMediaRow.placeholderCount > 0 ->
+                        itemIndex + mediaRowCount - 1
+                    galleryRows.any { row -> row.mediaItems.isEmpty() && row.placeholderCount > 0 } ->
+                        itemIndex + mediaRowCount
+                    else -> null
+                }
+            }
+
+            itemIndex += 1
+            itemIndex += galleryRows.size
+        }
+        return null
+    }
+
+    groupedGallery.forEach { group ->
+        val galleryRows = buildStudioGalleryRows(group = group, placeholderCount = 0)
+        itemIndex += 1 + galleryRows.size
+    }
+    return itemIndex + 1
 }
 
 internal fun updateStudioExpandedHeaderKeys(

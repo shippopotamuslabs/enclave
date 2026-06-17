@@ -12,6 +12,7 @@ import com.browntowndev.enclave.domain.model.inference.SearchChatParams
 import com.browntowndev.enclave.domain.model.inference.StartArtifactParams
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
+import com.browntowndev.enclave.domain.model.inference.ToolSearchThresholds
 import com.browntowndev.enclave.domain.model.inference.WebExtractParams
 import com.browntowndev.enclave.domain.model.inference.WebSearchParams
 import com.browntowndev.enclave.domain.util.NativeToolResultFormatter
@@ -20,10 +21,18 @@ import com.google.ai.edge.litertlm.ToolSet
 import com.google.ai.edge.litertlm.tool
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.put
 import java.util.concurrent.CancellationException as JavaCancellationException
 import kotlinx.serialization.json.Json as KJson
 
+/**
+ * Native LiteRT [ToolSet] providers for high-frequency and artifact tools.
+ *
+ * Tools discovered via `tool_discovery_tool` that are not listed here (X APIs, media generation, etc.)
+ * remain callable through the envelope [ToolExecutorPort] path when the model uses text/JSON tools.
+ */
 internal object LiteRtNativeToolsets {
     private const val TAG = "ConversationManager"
 
@@ -35,7 +44,7 @@ internal object LiteRtNativeToolsets {
             activeToolNames.forEach { name ->
                 val set: ToolSet? =
                     when (name) {
-                        "disclose_tool_schemas" -> LocalDiscloseToolset(context)
+                        "tool_discovery_tool" -> LocalSearchToolsToolset(context)
                         "web_search" -> LocalSearchToolset(context)
                         "web_extract" -> LocalExtractToolset(context)
                         "attached_image_inspect" -> LocalImageInspectToolset(context)
@@ -63,23 +72,35 @@ internal object LiteRtNativeToolsets {
     ): List<com.google.ai.edge.litertlm.ToolProvider> = buildToolList(activeToolNames, context).map { tool(it) }
 
     @Suppress("FunctionNaming")
-    internal class LocalDiscloseToolset(
+    internal class LocalSearchToolsToolset(
         private val context: LiteRtToolContext,
     ) : ToolSet {
         @com.google.ai.edge.litertlm.Tool(
-            description = "Disclose full schemas for deferred tools so the model may call them next turn.",
+            description =
+                "Search hidden tool metadata and activate matching executable tools. Use only when the task requires " +
+                    "an action unavailable in the active tool set. Never use to look up facts, research a question, " +
+                    "or decide whether web_search is needed.",
         )
-        fun disclose_tool_schemas(
-            @ToolParam(description = "JSON array of deferred tool names to activate.") tool_names: String,
+        fun tool_discovery_tool(
+            @ToolParam(
+                description =
+                    "Executable action to enable, e.g. 'generate an image' or 'search past conversations'. " +
+                        "Never a fact, question, topic, or web-search query.",
+            )
+            capability: String,
+            @ToolParam(description = "Maximum number of matches to return.") limit: String? = null,
         ): String =
             runBlocking(Dispatchers.IO) {
-                context.toolLoop.handleDisclosure(
-                    runCatching {
-                        KJson
-                            .parseToJsonElement(tool_names)
-                            .jsonArray
-                            .mapNotNull { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
-                    }.getOrDefault(emptyList()),
+                val parsedLimit = limit?.toIntOrNull() ?: ToolSearchThresholds.DEFAULT_SEARCH_LIMIT
+                val argumentsJson =
+                    buildJsonObject {
+                        put("capability", capability)
+                        put("limit", parsedLimit.toString())
+                    }.toString()
+                context.toolLoop.handleToolSearch(
+                    argumentsJson = argumentsJson,
+                    chatId = context.chatId,
+                    turnContext = context,
                 )
             }
     }
@@ -88,7 +109,11 @@ internal object LiteRtNativeToolsets {
     internal class LocalSearchToolset(
         private val context: LiteRtToolContext,
     ) : ToolSet {
-        @com.google.ai.edge.litertlm.Tool(description = "Search the web for information.")
+        @com.google.ai.edge.litertlm.Tool(
+            description =
+                "Search the public web for current or explicitly requested online information. " +
+                    "Use directly without tool_discovery_tool when a web lookup is needed.",
+        )
         fun tavily_web_search(
             @ToolParam(description = "The search query.") query: String,
         ): String =
@@ -259,7 +284,7 @@ internal object LiteRtNativeToolsets {
                     modelType = context.modelType,
                     chatId = context.chatId,
                     userMessageId = context.userMessageId,
-                    assistantMessageId = context.toolLoop.latestAssistantMessageId(),
+                    assistantMessageId = context.turn.latestAssistantMessageId,
                 )
             }
     }
@@ -295,7 +320,7 @@ internal object LiteRtNativeToolsets {
                     modelType = context.modelType,
                     chatId = context.chatId,
                     userMessageId = context.userMessageId,
-                    assistantMessageId = context.toolLoop.latestAssistantMessageId(),
+                    assistantMessageId = context.turn.latestAssistantMessageId,
                 )
             }
     }
@@ -325,7 +350,7 @@ internal object LiteRtNativeToolsets {
                     modelType = context.modelType,
                     chatId = context.chatId,
                     userMessageId = context.userMessageId,
-                    assistantMessageId = context.toolLoop.latestAssistantMessageId(),
+                    assistantMessageId = context.turn.latestAssistantMessageId,
                 )
             }
     }
@@ -348,7 +373,7 @@ internal object LiteRtNativeToolsets {
                     TAG,
                     "Dispatching native tool call tool=${request.toolName} provider=${request.provider} modelType=${request.modelType}",
                 )
-                context.toolLoop.executeToolSafely(request)
+                context.toolLoop.executeToolSafely(request, context)
             }
         } catch (e: JavaCancellationException) {
             throw e

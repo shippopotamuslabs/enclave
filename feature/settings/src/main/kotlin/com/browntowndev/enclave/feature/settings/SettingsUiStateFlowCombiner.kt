@@ -4,6 +4,7 @@ import com.browntowndev.enclave.domain.model.config.ApiModelAsset
 import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
 import com.browntowndev.enclave.domain.model.config.LocalModelAsset
 import com.browntowndev.enclave.domain.model.config.MediaProviderAsset
+import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderAsset
 import com.browntowndev.enclave.domain.model.config.TtsProviderAsset
 import com.browntowndev.enclave.domain.port.auth.AuthState
 import com.browntowndev.enclave.domain.port.repository.SettingsData
@@ -14,34 +15,37 @@ internal object SettingsUiStateFlowCombiner {
     internal fun observeRepositorySlice(sources: SettingsUiStateSources): Flow<SettingsRepositorySlice> =
         with(sources) {
             combine(
-                combine(persistedSettings, localAssets, apiAssets, ttsAssets, mediaAssets) {
+                combine(persistedSettings, localAssets, apiAssets, ttsAssets, liveVoiceAssets) {
                     persistedSettings,
                     localAssets,
                     apiAssets,
                     ttsAssets,
-                    mediaAssets,
+                    liveVoiceAssets,
                     ->
                     SettingsRepositoryAssetsSlice(
                         persistedSettings = persistedSettings,
                         localAssets = localAssets,
                         apiAssets = apiAssets,
                         ttsAssets = ttsAssets,
-                        mediaAssets = mediaAssets,
+                        liveVoiceAssets = liveVoiceAssets,
+                        mediaAssets = emptyList(),
                     )
                 },
+                mediaAssets,
                 combine(defaultModels, authState) { defaultModels, authState ->
                     SettingsRepositoryMetaSlice(
                         defaultModels = defaultModels,
                         authState = authState,
                     )
                 },
-            ) { assets, meta ->
+            ) { assets, mediaAssets, meta ->
                 SettingsRepositorySlice(
                     persistedSettings = assets.persistedSettings,
                     localAssets = assets.localAssets,
                     apiAssets = assets.apiAssets,
                     ttsAssets = assets.ttsAssets,
-                    mediaAssets = assets.mediaAssets,
+                    liveVoiceAssets = assets.liveVoiceAssets,
+                    mediaAssets = mediaAssets,
                     defaultModels = meta.defaultModels,
                     authState = meta.authState,
                 )
@@ -66,19 +70,21 @@ internal object SettingsUiStateFlowCombiner {
                         apiState = apiState,
                     )
                 },
-                combine(ttsState, mediaState, searchSkillState, assignmentsState, deletionState) {
-                    ttsState,
-                    mediaState,
-                    searchSkillState,
-                    assignmentsState,
-                    deletionState,
-                    ->
+                combine(
+                    combine(ttsState, liveVoiceState, mediaState) { ttsState, liveVoiceState, mediaState ->
+                        Triple(ttsState, liveVoiceState, mediaState)
+                    },
+                    combine(searchSkillState, assignmentsState, deletionState) { searchSkillState, assignmentsState, deletionState ->
+                        Triple(searchSkillState, assignmentsState, deletionState)
+                    },
+                ) { providerStates, dialogStates ->
                     SettingsEditorSecondarySlice(
-                        ttsState = ttsState,
-                        mediaState = mediaState,
-                        searchSkillState = searchSkillState,
-                        assignmentsState = assignmentsState,
-                        deletionState = deletionState,
+                        ttsState = providerStates.first,
+                        liveVoiceState = providerStates.second,
+                        mediaState = providerStates.third,
+                        searchSkillState = dialogStates.first,
+                        assignmentsState = dialogStates.second,
+                        deletionState = dialogStates.third,
                     )
                 },
                 combine(memoriesState, dataControlsState) { memoriesState, dataControlsState ->
@@ -95,6 +101,7 @@ internal object SettingsUiStateFlowCombiner {
                     localModelsState = primary.localModelsState,
                     apiState = primary.apiState,
                     ttsState = secondary.ttsState,
+                    liveVoiceState = secondary.liveVoiceState,
                     mediaState = secondary.mediaState,
                     searchSkillState = secondary.searchSkillState,
                     assignmentsState = secondary.assignmentsState,
@@ -147,6 +154,7 @@ internal data class SettingsRepositoryAssetsSlice(
     val localAssets: List<LocalModelAsset>,
     val apiAssets: List<ApiModelAsset>,
     val ttsAssets: List<TtsProviderAsset>,
+    val liveVoiceAssets: List<LiveVoiceProviderAsset>,
     val mediaAssets: List<MediaProviderAsset>,
 )
 
@@ -160,6 +168,7 @@ internal data class SettingsRepositorySlice(
     val localAssets: List<LocalModelAsset>,
     val apiAssets: List<ApiModelAsset>,
     val ttsAssets: List<TtsProviderAsset>,
+    val liveVoiceAssets: List<LiveVoiceProviderAsset>,
     val mediaAssets: List<MediaProviderAsset>,
     val defaultModels: List<DefaultModelAssignment>,
     val authState: AuthState,
@@ -175,6 +184,7 @@ internal data class SettingsEditorPrimarySlice(
 
 internal data class SettingsEditorSecondarySlice(
     val ttsState: TtsProvidersTransientState,
+    val liveVoiceState: LiveVoiceProvidersTransientState,
     val mediaState: MediaProvidersTransientState,
     val searchSkillState: SearchSkillTransientState,
     val assignmentsState: AssignmentDialogTransientState,
@@ -193,6 +203,7 @@ internal data class SettingsEditorSlice(
     val localModelsState: LocalModelsTransientState,
     val apiState: ApiProvidersTransientState,
     val ttsState: TtsProvidersTransientState,
+    val liveVoiceState: LiveVoiceProvidersTransientState,
     val mediaState: MediaProvidersTransientState,
     val searchSkillState: SearchSkillTransientState,
     val assignmentsState: AssignmentDialogTransientState,

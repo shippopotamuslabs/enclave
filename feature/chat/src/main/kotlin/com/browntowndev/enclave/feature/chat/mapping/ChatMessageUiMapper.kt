@@ -128,7 +128,7 @@ class ChatMessageUiMapper
                             isStreaming =
                                 !isMessageComplete &&
                                     index == lastAnswerIndex &&
-                                    message.messageState == MessageState.GENERATING,
+                                    message.messageState != MessageState.COMPLETE,
                         )
                 }
             }

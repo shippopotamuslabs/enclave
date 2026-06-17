@@ -137,7 +137,7 @@ internal class ByokProvidersCoordinator
             config: ApiModelConfigUi,
         ) {
             apiState.update { state ->
-                val normalized = state.normalizeVisionCapability(config)
+                val normalized = state.normalizeVisionCapability(config.copy(isFreshPreset = false))
                 state.copy(
                     presetDraft = normalized,
                     discoveredApiModels = state.discoveredApiModels.mergeSelectedModel(normalized),
@@ -224,7 +224,7 @@ internal class ByokProvidersCoordinator
                                 apiKey = currentApiKey.value,
                                 sourceCredentialAlias = sourceCredentialAlias,
                             ),
-                        ).getOrNull() ?: throw IllegalStateException("Operation failed")
+                        ).getOrElse { throw it }
 
                 val updatedAsset = apiModelAssetUiMapper.map(result.persistedAsset)
                 val createdPreset = result.createdPreset?.let(apiModelAssetUiMapper::mapConfig)

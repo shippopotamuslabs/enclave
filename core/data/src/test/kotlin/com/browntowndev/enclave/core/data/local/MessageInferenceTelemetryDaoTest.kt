@@ -79,4 +79,48 @@ class MessageInferenceTelemetryDaoTest {
             assertEquals(140L, firestore["appVersionCode"])
             assertEquals(1, firestore["telemetrySchemaVersion"])
         }
+
+    @Test
+    fun `replaceTelemetryForMessage soft-deletes prior rows and inserts new ones`() =
+        runTest {
+            seedMessage()
+            val original = TelemetryTestFixtures.telOpenAi1.toEntity()
+            val replacement =
+                TelemetryTestFixtures.telOpenAi1
+                    .copy(
+                        inputTokens = 9_999,
+                        outputTokens = 111,
+                    ).toEntity()
+            telemetryDao.insertAll(listOf(original))
+
+            telemetryDao.replaceTelemetryForMessage(
+                messageId = TelemetryTestFixtures.mOpenAi1.value,
+                rows = listOf(replacement),
+            )
+
+            val activeRows = telemetryDao.observeByMessageId(TelemetryTestFixtures.mOpenAi1.value).first()
+            assertEquals(1, activeRows.size)
+            assertEquals(9_999, activeRows.single().inputTokens)
+            assertEquals(111, activeRows.single().outputTokens)
+        }
+
+    @Test
+    fun `replaceTelemetryForMessage is idempotent on re-persist`() =
+        runTest {
+            seedMessage()
+            val row = TelemetryTestFixtures.telOpenAi1.toEntity()
+
+            telemetryDao.replaceTelemetryForMessage(
+                messageId = TelemetryTestFixtures.mOpenAi1.value,
+                rows = listOf(row),
+            )
+            telemetryDao.replaceTelemetryForMessage(
+                messageId = TelemetryTestFixtures.mOpenAi1.value,
+                rows = listOf(row),
+            )
+
+            val activeRows = telemetryDao.observeByMessageId(TelemetryTestFixtures.mOpenAi1.value).first()
+            assertEquals(1, activeRows.size)
+            assertEquals(row.id, activeRows.single().id)
+        }
 }

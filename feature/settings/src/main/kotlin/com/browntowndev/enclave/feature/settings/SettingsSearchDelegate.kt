@@ -2,6 +2,7 @@ package com.browntowndev.enclave.feature.settings
 
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.settings.SearchProvider
+import com.browntowndev.enclave.domain.port.repository.CloudSyncPort
 import com.browntowndev.enclave.domain.usecase.settings.SettingsPreferencesUseCases
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -13,6 +14,7 @@ internal class SettingsSearchDelegate
     @Inject
     constructor(
         private val preferencesUseCases: SettingsPreferencesUseCases,
+        private val cloudSyncPort: CloudSyncPort,
         private val errorHandler: ViewModelErrorHandler,
     ) {
         fun onSearchEnabledChange(
@@ -138,6 +140,8 @@ internal class SettingsSearchDelegate
                     preferencesUseCases.saveExaApiKey(pendingExaKey)
                 }
 
+                cloudSyncPort.triggerSync()
+
                 currentTavilyApiKey.value = ""
                 currentExaApiKey.value = ""
                 transientSearchSkillState.value = SearchSkillTransientState()
@@ -196,6 +200,8 @@ internal class SettingsSearchDelegate
                 if (pendingKey.isNotBlank()) {
                     preferencesUseCases.saveXApiKey(pendingKey)
                 }
+
+                cloudSyncPort.triggerSync()
 
                 currentXApiKey.value = ""
                 transientXSearchState.value = XSearchTransientState()

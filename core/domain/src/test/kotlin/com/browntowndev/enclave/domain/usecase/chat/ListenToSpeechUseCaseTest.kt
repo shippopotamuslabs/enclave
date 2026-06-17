@@ -178,6 +178,9 @@ class ListenToSpeechUseCaseTest {
             assertEquals(UtilityType.WHISPER, utilityType)
             return path
         }
+
+        override suspend fun resolveLocalModelPath(metadata: com.browntowndev.enclave.domain.model.config.LocalModelMetadata): String? =
+            null
     }
 
     private class FakeClock : Clock {

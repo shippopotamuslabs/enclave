@@ -1,18 +1,17 @@
 package com.browntowndev.enclave.feature.inference.conversation
 
-import com.browntowndev.enclave.domain.model.chat.MessageId
+import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.inference.AgentLoopToolCatalogJson
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.port.inference.AgentPolicyPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
-import com.browntowndev.enclave.domain.usecase.chat.ToolSchemaDisclosureResolver
+import com.browntowndev.enclave.domain.usecase.chat.SearchToolsHostCoordinator
 import com.browntowndev.enclave.domain.util.JTokkitTokenCounter
 import com.browntowndev.enclave.feature.inference.LocalToolResultPolicy
 import kotlinx.coroutines.CancellationException
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
+import java.util.concurrent.atomic.AtomicInteger
 
 internal class LiteRtToolCallLoop(
     private val cache: ConversationSignatureCache,
@@ -20,34 +19,35 @@ internal class LiteRtToolCallLoop(
     val loggingPort: LoggingPort,
     private val agentPolicyPort: AgentPolicyPort,
     private val cancellationGate: ConversationCancellationGate,
+    private val searchToolsHostCoordinator: SearchToolsHostCoordinator,
 ) {
-    @Volatile
-    private var consecutiveSoftFailures: Int = 0
+    private val consecutiveSoftFailures = AtomicInteger(0)
 
-    fun latestAssistantMessageId(): MessageId? = cache.latestAssistantMessageId
+    fun resetForNewTurn() {
+        consecutiveSoftFailures.set(0)
+    }
 
-    suspend fun executeToolSafely(request: ToolCallRequest): String {
-        if (cancellationGate.isCurrentGenerationCancelled) {
+    suspend fun executeToolSafely(
+        request: ToolCallRequest,
+        turnContext: LiteRtToolContext,
+    ): String {
+        if (!cancellationGate.isRequestActive(turnContext.turn.requestId)) {
             loggingPort.warning(TAG, "Tool execution aborted: generation was cancelled")
+            cache.markConversationDirtyForDanglingToolCall()
             throw CancellationException("Generation was cancelled")
         }
 
-        if (request.toolName == ToolDefinition.DISCLOSE_TOOL_SCHEMAS.name) {
-            val parsedNames =
-                runCatching {
-                    kotlinx.serialization.json.Json
-                        .parseToJsonElement(request.argumentsJson)
-                        .jsonObject["tool_names"]
-                        ?.jsonArray
-                        ?.mapNotNull { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }
-                        ?: emptyList()
-                }.getOrDefault(emptyList())
-            return handleDisclosure(parsedNames)
+        if (request.toolName == ToolDefinition.SEARCH_TOOLS.name) {
+            return handleToolSearch(
+                argumentsJson = request.argumentsJson,
+                chatId = request.chatId,
+                turnContext = turnContext,
+            )
         }
 
         val effectiveRequest =
             if (request.provider == "LITERT") {
-                repairLiteRtToolRequest(request)
+                repairLiteRtToolRequest(request, turnContext.turn.toolCatalog)
             } else {
                 request
             }
@@ -59,24 +59,29 @@ internal class LiteRtToolCallLoop(
                     "modelType=${effectiveRequest.modelType}",
             )
 
-            if (!agentPolicyPort.shouldAllowTool(consecutiveSoftFailures.toUInt(), ConversationSignatureCache.MAX_SOFT_FAILURE_STREAK)) {
+            if (
+                !agentPolicyPort.shouldAllowTool(
+                    consecutiveSoftFailures.get().toUInt(),
+                    ConversationSignatureCache.MAX_SOFT_FAILURE_STREAK,
+                )
+            ) {
                 loggingPort.warning(
                     TAG,
                     "soft-failure streak reached limit; refusing tool dispatch tool=${effectiveRequest.toolName}",
                 )
-                consecutiveSoftFailures += 1
                 return LocalToolResultPolicy.buildContextWindowExceededToolError(effectiveRequest.toolName)
             }
 
             val rawResultJson = toolExecutor.execute(effectiveRequest).resultJson
-            val modelId = cache.currentModelPath?.substringAfterLast('/')
+            val turn = turnContext.turn
+            val modelId = turn.modelPath?.substringAfterLast('/')
             val decision =
                 LocalToolResultPolicy.evaluate(
                     rawResultJson = rawResultJson,
-                    contextWindowTokens = cache.currentContextWindow,
-                    currentSystemPrompt = cache.currentSystemPrompt,
-                    history = cache.history,
-                    transientToolResultTokens = cache.transientToolResultTokens,
+                    contextWindowTokens = turn.contextWindow,
+                    currentSystemPrompt = turn.systemPrompt,
+                    history = turn.history,
+                    transientToolResultTokens = turnContext.turnTransientToolResultTokens.get(),
                     modelId = modelId,
                     resultJsonLooksSoftFailure = agentPolicyPort::resultJsonLooksSoftFailure,
                 )
@@ -91,15 +96,16 @@ internal class LiteRtToolCallLoop(
 
             if (decision.shouldTrackTransientToolResult) {
                 cache.hasTransientToolResults = true
-                cache.transientToolResultTokens +=
-                    JTokkitTokenCounter.countTokens(decision.finalResult, modelId) + TRANSIENT_TOOL_BUFFER_TOKENS
+                turnContext.turnTransientToolResultTokens.addAndGet(
+                    JTokkitTokenCounter.countTokens(decision.finalResult, modelId) + TRANSIENT_TOOL_BUFFER_TOKENS,
+                )
             }
 
             if (decision.contextFull) {
                 loggingPort.warning(
                     TAG,
                     "Context nearly full after tool result. Truncating via Rust bridge and scheduling context recreation. " +
-                        "tool=${effectiveRequest.toolName} usedTokens=${decision.totalTokens} window=${cache.currentContextWindow}",
+                        "tool=${effectiveRequest.toolName} usedTokens=${decision.totalTokens} window=${turn.contextWindow}",
                 )
                 cache.hasTransientToolResults = true
                 return agentPolicyPort.truncateResult(
@@ -118,6 +124,7 @@ internal class LiteRtToolCallLoop(
             }
             decision.finalResult
         } catch (e: CancellationException) {
+            cache.markConversationDirtyForDanglingToolCall()
             throw e
         } catch (t: Throwable) {
             val rootCause = ConversationErrorMapper.rootCause(t)
@@ -133,44 +140,48 @@ internal class LiteRtToolCallLoop(
     }
 
     /**
-     * Intercepts a `disclose_tool_schemas` request locally without invoking [ToolExecutorPort].
-     * Updates [ConversationSignatureCache.activeToolNames] in first-seen order and returns
-     * the canonical resolver JSON payload.
+     * Intercepts `tool_discovery_tool` locally without invoking [ToolExecutorPort].
+     * Updates [ConversationSignatureCache.toolActivationRegistry] (single activation source).
      */
-    fun handleDisclosure(toolNames: List<String>): String {
-        val activeNames = cache.activeToolNames
-        val activeNameSet = activeNames.toSet()
-        val deferredCatalog =
-            cache.toolCatalog.filter { entry ->
-                entry.name !in activeNameSet
-            }
-        val activeDefinitions = activeNames.mapNotNull(ToolDefinition::fromName)
-        val resolution =
-            disclosureResolver.resolve(
-                toolNames = toolNames,
-                toolCatalog = deferredCatalog,
-                activeTools = activeDefinitions,
-                strategy = cache.toolCallStrategy,
+    suspend fun handleToolSearch(
+        argumentsJson: String,
+        chatId: ChatId? = null,
+        turnContext: LiteRtToolContext,
+    ): String =
+        try {
+            val turn = turnContext.turn
+            val input =
+                SearchToolsHostCoordinator.inputFrom(
+                    argumentsJson = argumentsJson,
+                    toolCatalog = turn.toolCatalog,
+                    activationRegistry = cache.toolActivationRegistry,
+                    providedIndex = turn.toolSearchIndex,
+                    strategy = turn.toolCallStrategy,
+                    chatId = chatId,
+                )
+            searchToolsHostCoordinator.execute(input).resultJson
+        } catch (e: CancellationException) {
+            throw e
+        } catch (t: Throwable) {
+            val rootCause = ConversationErrorMapper.rootCause(t)
+            loggingPort.error(
+                TAG,
+                "tool_discovery_tool host failed cause=${rootCause::class.java.simpleName}: ${rootCause.message}",
+                rootCause,
             )
-        if (resolution.activatedToolNames.isNotEmpty()) {
-            val seen = activeNames.toMutableList()
-            resolution.activatedToolNames.forEach { newName ->
-                if (newName !in seen) seen += newName
-            }
-            cache.activeToolNames = seen
+            ConversationErrorMapper.executionFailed(ToolDefinition.SEARCH_TOOLS.name, rootCause)
         }
-        return resolution.resultJson
-    }
 
-    private val disclosureResolver = ToolSchemaDisclosureResolver()
-
-    private fun repairLiteRtToolRequest(request: ToolCallRequest): ToolCallRequest =
+    private fun repairLiteRtToolRequest(
+        request: ToolCallRequest,
+        toolCatalog: List<com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry>,
+    ): ToolCallRequest =
         try {
             val repaired =
                 agentPolicyPort.repairTool(
                     name = request.toolName,
                     argsJson = request.argumentsJson,
-                    toolCatalogJson = AgentLoopToolCatalogJson.jsonForCatalog(cache.toolCatalog),
+                    toolCatalogJson = AgentLoopToolCatalogJson.jsonForCatalog(toolCatalog),
                 )
             request.copy(toolName = repaired.resolvedName, argumentsJson = repaired.argumentsJson)
         } catch (t: Throwable) {
@@ -184,12 +195,11 @@ internal class LiteRtToolCallLoop(
         }
 
     private fun updateSoftFailureStreak(softFailure: Boolean) {
-        consecutiveSoftFailures =
-            if (softFailure) {
-                consecutiveSoftFailures + 1
-            } else {
-                0
-            }
+        if (softFailure) {
+            consecutiveSoftFailures.incrementAndGet()
+        } else {
+            consecutiveSoftFailures.set(0)
+        }
     }
 
     companion object {
@@ -199,6 +209,8 @@ internal class LiteRtToolCallLoop(
 }
 
 internal class ConversationCancellationGate {
+    private val currentRequestId = java.util.concurrent.atomic.AtomicInteger(0)
+
     @Volatile
     var isCurrentGenerationCancelled: Boolean = false
 
@@ -206,8 +218,26 @@ internal class ConversationCancellationGate {
         java.util.concurrent.atomic
             .AtomicInteger(0)
 
+    fun beginRequest(): Int {
+        val requestId = currentRequestId.incrementAndGet()
+        isCurrentGenerationCancelled = false
+        return requestId
+    }
+
+    fun currentRequestId(): Int = currentRequestId.get()
+
+    fun prepareForGetConversation() {
+        isCurrentGenerationCancelled = false
+    }
+
     fun cancelCurrentGeneration() {
         isCurrentGenerationCancelled = true
+    }
+
+    fun cancelCurrentGenerationIfOwner(requestId: Int) {
+        if (currentRequestId.get() == requestId) {
+            isCurrentGenerationCancelled = true
+        }
     }
 
     fun cancelProcess() {
@@ -215,7 +245,6 @@ internal class ConversationCancellationGate {
         cancellationEpoch.incrementAndGet()
     }
 
-    fun resetForNewRequest() {
-        isCurrentGenerationCancelled = false
-    }
+    fun isRequestActive(requestId: Int): Boolean =
+        currentRequestId.get() == requestId && !isCurrentGenerationCancelled
 }

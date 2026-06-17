@@ -37,6 +37,7 @@ class LocalModelAssetUiMapperTest {
                             topP = 0.9,
                             topK = 40,
                             repetitionPenalty = 1.0,
+                            reasoningBudget = 2048,
                             systemPrompt = "",
                         ),
                     ),
@@ -45,5 +46,6 @@ class LocalModelAssetUiMapperTest {
         val ui = LocalModelAssetUiMapper().map(asset)
 
         assertEquals("Gemma 4 E4B", ui.friendlyName)
+        assertEquals("2048", ui.configurations.single().reasoningBudget)
     }
 }

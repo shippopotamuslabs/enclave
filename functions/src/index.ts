@@ -4,7 +4,11 @@ import { v4 as uuidv4 } from 'uuid';
 import { APP_DOMAIN, handleUploadSharedChat } from './sharedChatUpload';
 export { cleanupExpiredShares } from './scheduledCleanup';
 export { rebuildProviderDailyRollups } from './telemetry/providerDailyRollup';
-export { handleSyncEntityWrite, handleSyncEntityWriteTrigger } from './syncEventFeed';
+export {
+    handleSyncEntityWrite,
+    handleSyncEntityWriteTrigger,
+    backfillSyncFeedCallable,
+} from './syncEventFeed';
 
 admin.initializeApp();
 

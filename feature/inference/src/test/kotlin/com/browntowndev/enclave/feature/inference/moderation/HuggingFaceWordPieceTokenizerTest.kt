@@ -7,14 +7,15 @@ import org.junit.jupiter.api.Test
 class HuggingFaceWordPieceTokenizerTest {
     @Test
     fun encode_asciiPrompt_addsSpecialTokensAndPads() {
-        val vocab = listOf(
-            "[PAD]",
-            "[CLS]",
-            "[SEP]",
-            "[UNK]",
-            "hello",
-            "world"
-        )
+        val vocab =
+            listOf(
+                "[PAD]",
+                "[CLS]",
+                "[SEP]",
+                "[UNK]",
+                "hello",
+                "world",
+            )
         val tokenizer = HuggingFaceWordPieceTokenizer(vocab, maxSequenceLength = 8)
 
         val encoded = tokenizer.encode("hello world")
@@ -26,13 +27,14 @@ class HuggingFaceWordPieceTokenizerTest {
 
     @Test
     fun encode_unknownWords_mapsToUnkToken() {
-        val vocab = listOf(
-            "[PAD]",
-            "[CLS]",
-            "[SEP]",
-            "[UNK]",
-            "hello"
-        )
+        val vocab =
+            listOf(
+                "[PAD]",
+                "[CLS]",
+                "[SEP]",
+                "[UNK]",
+                "hello",
+            )
         val tokenizer = HuggingFaceWordPieceTokenizer(vocab, maxSequenceLength = 6)
 
         val encoded = tokenizer.encode("hello unknown")
@@ -43,14 +45,15 @@ class HuggingFaceWordPieceTokenizerTest {
 
     @Test
     fun encode_subwordSplitting_appliesDoubleHashPrefix() {
-        val vocab = listOf(
-            "[PAD]",
-            "[CLS]",
-            "[SEP]",
-            "[UNK]",
-            "play",
-            "##ing"
-        )
+        val vocab =
+            listOf(
+                "[PAD]",
+                "[CLS]",
+                "[SEP]",
+                "[UNK]",
+                "play",
+                "##ing",
+            )
         val tokenizer = HuggingFaceWordPieceTokenizer(vocab, maxSequenceLength = 6)
 
         val encoded = tokenizer.encode("playing")
@@ -61,15 +64,16 @@ class HuggingFaceWordPieceTokenizerTest {
 
     @Test
     fun encode_punctuationAndLowercasing_handlesCorrectly() {
-        val vocab = listOf(
-            "[PAD]",
-            "[CLS]",
-            "[SEP]",
-            "[UNK]",
-            "hello",
-            "!",
-            "world"
-        )
+        val vocab =
+            listOf(
+                "[PAD]",
+                "[CLS]",
+                "[SEP]",
+                "[UNK]",
+                "hello",
+                "!",
+                "world",
+            )
         val tokenizer = HuggingFaceWordPieceTokenizer(vocab, maxSequenceLength = 8)
 
         val encoded = tokenizer.encode("Hello, World!")

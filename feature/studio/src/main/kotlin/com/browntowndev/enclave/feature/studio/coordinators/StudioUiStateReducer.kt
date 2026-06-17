@@ -6,7 +6,9 @@ import com.browntowndev.enclave.domain.model.media.ProviderCapabilities
 import com.browntowndev.enclave.domain.model.media.StudioTemplate
 import com.browntowndev.enclave.domain.port.media.SpeechState
 import com.browntowndev.enclave.feature.studio.GalleryAlbumUi
+import com.browntowndev.enclave.feature.studio.StudioCapablePresetsUi
 import com.browntowndev.enclave.feature.studio.StudioGalleryGroup
+import com.browntowndev.enclave.feature.studio.computeStudioActiveGenerationRemainingPlaceholders
 import com.browntowndev.enclave.feature.studio.StudioMediaUi
 import com.browntowndev.enclave.feature.studio.StudioUiState
 import com.browntowndev.enclave.feature.studio.VideoGenerationState
@@ -32,13 +34,21 @@ class StudioUiStateReducer
             val continualMode: Boolean,
             val isContinualGenerationActive: Boolean,
             val error: String?,
+            val generationProgressLabel: String?,
             val lastSubmittedPrompt: String?,
+            val activeGenerationExpectedCount: Int,
+            val activeGenerationBaselineMediaCount: Int,
             val videoGenerationState: VideoGenerationState,
             val speechState: SpeechState,
             val isPlayingTts: Boolean,
             val referenceMediaType: MediaCapability?,
             val hasImageEditModel: Boolean,
             val hasImageToVideoModel: Boolean,
+            val activeModelDisplayName: String? = null,
+            val modelPickerAssets: StudioCapablePresetsUi = StudioCapablePresetsUi(),
+            val isModelPickerVisible: Boolean = false,
+            val selectedModelIdInPicker: String? = null,
+            val resolvedModelTypeLabel: String? = null,
         )
 
         fun reduce(params: ReduceParams): StudioUiState {
@@ -55,14 +65,24 @@ class StudioUiStateReducer
                     }.sortedBy { group -> group.mediaItems.maxOf { item -> item.createdAt } }
 
             val templates = if (params.mediaType == MediaCapability.MUSIC) MUSIC_TEMPLATES else IMAGE_TEMPLATES
+            val activeGenerationRemainingPlaceholderCount =
+                computeStudioActiveGenerationRemainingPlaceholders(
+                    isGenerating = params.isGenerating,
+                    lastSubmittedPrompt = params.lastSubmittedPrompt,
+                    groupedGallery = groupedGallery,
+                    expectedCount = params.activeGenerationExpectedCount,
+                    baselineMediaCount = params.activeGenerationBaselineMediaCount,
+                )
 
             return StudioUiState(
                 prompt = params.prompt,
                 isGenerating = params.isGenerating,
                 activeGenerationPrompt = if (params.isGenerating) params.lastSubmittedPrompt else null,
+                generationProgressLabel = params.generationProgressLabel,
                 mediaType = params.mediaType,
                 gallery = gallery,
                 groupedGallery = groupedGallery,
+                activeGenerationRemainingPlaceholderCount = activeGenerationRemainingPlaceholderCount,
                 selectedMediaItemIds = params.selectedMediaItemIds,
                 albums = params.albums,
                 settings = params.settings,
@@ -81,6 +101,11 @@ class StudioUiStateReducer
                 isPlayingTts = params.isPlayingTts,
                 hasImageEditModel = params.hasImageEditModel,
                 hasImageToVideoModel = params.hasImageToVideoModel,
+                activeModelDisplayName = params.activeModelDisplayName,
+                modelPickerAssets = params.modelPickerAssets,
+                isModelPickerVisible = params.isModelPickerVisible,
+                selectedModelIdInPicker = params.selectedModelIdInPicker,
+                resolvedModelTypeLabel = params.resolvedModelTypeLabel,
             )
         }
 

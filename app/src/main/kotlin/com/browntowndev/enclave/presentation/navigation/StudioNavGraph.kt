@@ -15,6 +15,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import androidx.navigation.navDeepLink
 import com.browntowndev.enclave.feature.studio.GalleryDetailScreen
 import com.browntowndev.enclave.feature.studio.GalleryRoute
 import com.browntowndev.enclave.feature.studio.GalleryViewModel
@@ -30,6 +31,12 @@ fun NavGraphBuilder.studioNavGraph(
     composable(
         route = Routes.STUDIO_WITH_ARGS,
         arguments = studioWithArgsNavArguments(),
+        deepLinks =
+            listOf(
+                navDeepLink {
+                    uriPattern = Routes.STUDIO_DEEP_LINK_PATTERN
+                },
+            ),
         enterTransition = { hierarchicalEnterTransition() },
         exitTransition = { hierarchicalExitTransition() },
         popEnterTransition = { hierarchicalPopEnterTransition() },
@@ -180,8 +187,7 @@ private fun StudioRoute(
             val types = rehydrateTypes?.let { json.decodeFromString<List<String>>(it) } ?: emptyList()
             val prompts = rehydratePrompts?.let { json.decodeFromString<List<String>>(it) } ?: emptyList()
 
-            studioViewModel.mediaActionsCoordinator.onEditMedia(
-                prompt = studioViewModel.promptCoordinator,
+            studioViewModel.onEditMedia(
                 assetId = editAssetId,
                 rehydrateIds = ids,
                 rehydrateUris = uris,
@@ -190,15 +196,14 @@ private fun StudioRoute(
             )
             isStudioInitialized = true
         } else if (animateAssetId != null) {
-            studioViewModel.mediaActionsCoordinator.onAnimateMedia(
-                prompt = studioViewModel.promptCoordinator,
+            studioViewModel.onAnimateMedia(
                 assetId = animateAssetId,
                 autoAnimate = autoAnimate,
                 customPrompt = animatePrompt,
             )
             isStudioInitialized = true
         } else if (!isStudioInitialized) {
-            studioViewModel.clearSession()
+            studioViewModel.clearSessionIfIdle()
             isStudioInitialized = true
         }
     }
@@ -208,7 +213,7 @@ private fun StudioRoute(
         onNavigateToHistory = actions.onNavigateToHistory,
         onNavigateToGallery = actions.onNavigateToGallery,
         onMediaClick = actions.onNavigateToStudioDetail,
-        onShowSnackbar = { msg, act -> actions.onShowSnackbar(msg, act, null) },
+        onShowSnackbar = actions.onShowSnackbar,
     )
 }
 
@@ -258,8 +263,7 @@ private fun StudioDetailRoute(
 
     LaunchedEffect(assetId, animatePrompt, autoAnimate) {
         if (autoAnimate) {
-            studioViewModel.mediaActionsCoordinator.onAnimateMedia(
-                prompt = studioViewModel.promptCoordinator,
+            studioViewModel.onAnimateMedia(
                 assetId = assetId,
                 autoAnimate = true,
                 customPrompt = animatePrompt,
@@ -272,22 +276,20 @@ private fun StudioDetailRoute(
         assets = studioUiState.gallery,
         onNavigateBack = onNavigateBack,
         onEditMedia = { id ->
-            studioViewModel.mediaActionsCoordinator.onEditMedia(
-                prompt = studioViewModel.promptCoordinator,
+            studioViewModel.onEditMedia(
                 assetId = id,
                 fromUserAction = true,
             )
         },
         onAnimateMedia = { assetId, autoAnimate, customPrompt ->
-            studioViewModel.mediaActionsCoordinator.onAnimateMedia(
-                prompt = studioViewModel.promptCoordinator,
+            studioViewModel.onAnimateMedia(
                 assetId = assetId,
                 autoAnimate = autoAnimate,
                 customPrompt = customPrompt,
             )
         },
-        onShareMedia = studioViewModel.mediaActionsCoordinator::shareSingleMedia,
-        onDeleteMedia = studioViewModel.mediaActionsCoordinator::deleteMedia,
+        onShareMedia = studioViewModel::shareSingleMedia,
+        onDeleteMedia = studioViewModel::deleteMedia,
         onShowSnackbar = { msg, act -> actions.onShowSnackbar(msg, act, null) },
         videoGenerationState = studioUiState.videoGenerationState,
         hasImageToVideoModel = studioUiState.hasImageToVideoModel,

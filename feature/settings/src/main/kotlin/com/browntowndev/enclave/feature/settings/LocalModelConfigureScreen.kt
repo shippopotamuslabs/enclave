@@ -1,5 +1,10 @@
 package com.browntowndev.enclave.feature.settings
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,6 +28,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,6 +40,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.browntowndev.enclave.core.ui.component.assignment.AssignmentSelectionContent
 import com.browntowndev.enclave.core.ui.component.PersistentTooltip
 import com.browntowndev.enclave.core.ui.component.neo.NeoBackScreenHeader
 import com.browntowndev.enclave.core.ui.component.neo.NeoOutlinedTextField
@@ -42,6 +49,7 @@ import com.browntowndev.enclave.core.ui.component.neo.NeoToggleRow
 import com.browntowndev.enclave.core.ui.component.neo.neoOutlinedTextFieldColors
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
+import com.browntowndev.enclave.domain.model.config.LocalModelConfiguration
 
 /** Model format string constant for GGUF models handled by llama.cpp. */
 internal const val MODEL_FORMAT_GGUF = "GGUF"
@@ -89,11 +97,28 @@ fun LocalModelConfigureScreen(
     val isGgufFormat = modelFormat == MODEL_FORMAT_GGUF
     var showSystemPromptSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scrollState = rememberScrollState()
+
+    val reasoningBudgetVisible = isGgufFormat && config.thinkingEnabled
+    // Follow the reasoning budget field as it expands/shrinks at the bottom of the form.
+    // Re-animating until maxValue settles keeps the scroll in sync with the size animation.
+    var lastBudgetVisible by remember { mutableStateOf<Boolean?>(null) }
+    LaunchedEffect(reasoningBudgetVisible) {
+        val previous = lastBudgetVisible
+        lastBudgetVisible = reasoningBudgetVisible
+        if (previous == null || previous == reasoningBudgetVisible) return@LaunchedEffect
+        var target = -1
+        while (scrollState.maxValue != target) {
+            target = scrollState.maxValue
+            scrollState.animateScrollTo(target)
+        }
+    }
 
     val isSaveEnabled =
         !config.isSystemPreset &&
             config.displayName.isNotBlank() &&
-            config.contextWindow.isNotBlank()
+            config.contextWindow.isNotBlank() &&
+            (!isGgufFormat || !config.thinkingEnabled || config.reasoningBudget.toIntOrNull() != null)
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -127,7 +152,7 @@ fun LocalModelConfigureScreen(
                     .fillMaxSize()
                     .padding(padding)
                     .padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding)
-                    .verticalScroll(rememberScrollState()),
+                    .verticalScroll(scrollState),
             verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.sectionSpacing),
         ) {
             Spacer(modifier = Modifier.height(8.dp))
@@ -191,7 +216,10 @@ fun LocalModelConfigureScreen(
             // Max Tokens is only supported by llama.cpp (GGUF). LiteRT's SamplerConfig
             // has no output token limit — the engine generates until natural stop.
             if (isGgufFormat) {
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
                     NeoOutlinedTextField(
                         value = config.maxTokens,
                         onValueChange = { onConfigChange(config.copy(maxTokens = it)) },
@@ -214,7 +242,25 @@ fun LocalModelConfigureScreen(
 
                     NeoOutlinedTextField(
                         value = config.contextWindow,
-                        onValueChange = { onConfigChange(config.copy(contextWindow = it)) },
+                        onValueChange = { newContextWindow ->
+                            val oldContextWindow = config.contextWindow.toIntOrNull() ?: 4096
+                            val oldDefault = LocalModelConfiguration.defaultReasoningBudget(oldContextWindow)
+                            val newDefault =
+                                LocalModelConfiguration.defaultReasoningBudget(
+                                    newContextWindow.toIntOrNull() ?: 4096,
+                                )
+                            onConfigChange(
+                                config.copy(
+                                    contextWindow = newContextWindow,
+                                    reasoningBudget =
+                                        if (config.reasoningBudget.toIntOrNull() == oldDefault) {
+                                            newDefault.toString()
+                                        } else {
+                                            config.reasoningBudget
+                                        },
+                                ),
+                            )
+                        },
                         label = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text("Context Window")
@@ -321,11 +367,55 @@ fun LocalModelConfigureScreen(
             NeoToggleRow(
                 title = "Thinking",
                 checked = config.thinkingEnabled,
-                onCheckedChange = { onConfigChange(config.copy(thinkingEnabled = it)) },
+                onCheckedChange = { checked ->
+                    val updatedBudget = if (checked && (config.reasoningBudget.isBlank() || config.reasoningBudget == "0")) {
+                        val cw = config.contextWindow.toIntOrNull() ?: 4096
+                        LocalModelConfiguration.defaultReasoningBudget(cw).toString()
+                    } else {
+                        config.reasoningBudget
+                    }
+                    onConfigChange(
+                        config.copy(
+                            thinkingEnabled = checked,
+                            reasoningBudget = updatedBudget,
+                        ),
+                    )
+                },
+                modifier = Modifier.testTag("ThinkingRow"),
                 subtitle = "Enable extended reasoning.",
                 enabled = !config.isSystemPreset,
                 switchTestTag = "ThinkingSwitch",
             )
+
+            AnimatedVisibility(
+                visible = reasoningBudgetVisible,
+                enter = slideInVertically(initialOffsetY = { -it }) + expandVertically(),
+                exit = slideOutVertically(targetOffsetY = { -it }) + shrinkVertically(),
+            ) {
+                NeoOutlinedTextField(
+                    value = config.reasoningBudget,
+                    onValueChange = { onConfigChange(config.copy(reasoningBudget = it)) },
+                    label = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Reasoning Budget")
+                            Spacer(modifier = Modifier.width(4.dp))
+                            PersistentTooltip(
+                                description =
+                                    "Maximum reasoning tokens before llama.cpp closes the thinking section. " +
+                                        "Defaults to 25% of the context window.",
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().testTag("ReasoningBudgetField"),
+                    keyboardOptions =
+                        KeyboardOptions(
+                            keyboardType = KeyboardType.Number,
+                            imeAction = androidx.compose.ui.text.input.ImeAction.Done,
+                        ),
+                    readOnly = config.isSystemPreset,
+                    enabled = !config.isSystemPreset,
+                )
+            }
 
             Spacer(modifier = Modifier.height(32.dp))
         }
@@ -382,9 +472,10 @@ fun PreviewLocalModelAssignmentSelectionBottomSheet() {
             localAssets = MockSettingsData.localModels,
             apiAssets = MockSettingsData.apiModels,
             ttsAssets = emptyList(),
+            liveVoiceAssets = emptyList(),
             mediaAssets = emptyList(),
             onDismiss = {},
-            onSelect = { _, _, _, _ -> },
+            onSelect = { _, _, _, _, _ -> },
         )
     }
 }

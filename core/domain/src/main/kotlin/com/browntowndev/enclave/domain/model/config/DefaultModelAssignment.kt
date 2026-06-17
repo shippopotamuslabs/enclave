@@ -11,6 +11,7 @@ data class DefaultModelAssignment(
     val apiConfigId: ApiModelConfigurationId? = null,
     val ttsProviderId: TtsProviderId? = null,
     val mediaProviderId: MediaProviderId? = null,
+    val liveVoiceProviderId: LiveVoiceProviderId? = null,
     // Resolved display data for the UI
     val displayName: String? = null,
     val presetName: String? = null,
