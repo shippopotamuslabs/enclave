@@ -5,6 +5,7 @@ import com.browntowndev.enclave.core.data.local.DocumentDao
 import com.browntowndev.enclave.core.data.local.DocumentEntity
 import com.browntowndev.enclave.core.data.local.MessageDao
 import com.browntowndev.enclave.core.data.local.MessageEntity
+import com.browntowndev.enclave.core.data.local.MessageFileDao
 import com.browntowndev.enclave.core.data.local.MessageInferenceTelemetryDao
 import com.browntowndev.enclave.core.data.local.MessageTranscriptSegmentDao
 import com.browntowndev.enclave.core.data.local.MessageTranscriptSegmentEntity
@@ -60,6 +61,7 @@ class ChatRepositoryImpl
         private val transactionProvider: com.browntowndev.enclave.domain.port.repository.TransactionProvider,
         private val cleanupDao: CleanupDao,
         private val messageInferenceTelemetryDao: MessageInferenceTelemetryDao,
+        private val messageFileDao: MessageFileDao,
         private val healer: SensitivePersistenceSelfHealer,
         private val readRepairApplier: SensitiveRoomReadRepairApplier,
     ) : ChatRepository {
@@ -262,10 +264,15 @@ class ChatRepositoryImpl
             return entity.id
         }
 
-        override suspend fun createChat(chat: Chat): ChatId {
+        override suspend fun createChat(
+            chat: Chat,
+            scheduleCloudSync: Boolean,
+        ): ChatId {
             val entity = SensitiveEntityFieldEncryptors.encrypt(chat.toEntity(), healer)
             chatDao.upsert(entity)
-            triggerSync()
+            if (scheduleCloudSync) {
+                triggerSync()
+            }
             return entity.id
         }
 
@@ -433,9 +440,10 @@ class ChatRepositoryImpl
                     }
                 messageTranscriptSegmentDao.replaceSegmentsForMessage(messageId, segmentEntities)
 
-                if (telemetry.isNotEmpty()) {
-                    messageInferenceTelemetryDao.insertAll(telemetry.map(TurnTelemetry::toEntity))
-                }
+                messageInferenceTelemetryDao.replaceTelemetryForMessage(
+                    messageId = messageId.value,
+                    rows = telemetry.map(TurnTelemetry::toEntity),
+                )
             }
             triggerSync()
         }
@@ -495,10 +503,14 @@ class ChatRepositoryImpl
         }
 
         override suspend fun deleteChat(chatId: ChatId) {
-            val rowsAffected = chatDao.softDeleteById(chatId)
-            require(rowsAffected > 0) { "Chat not found with id: $chatId" }
-            // Soft-delete related generated documents so sync doesn't resurrect them later.
-            documentDao.softDeleteByChatId(chatId)
+            transactionProvider.runInTransaction {
+                messageDao.softDeleteAllActiveByChatId(chatId)
+                messageFileDao.softDeleteByChatId(chatId)
+                val rowsAffected = chatDao.softDeleteById(chatId)
+                require(rowsAffected > 0) { "Chat not found with id: $chatId" }
+                // Soft-delete related generated documents so sync doesn't resurrect them later.
+                documentDao.softDeleteByChatId(chatId)
+            }
             triggerSync()
         }
 

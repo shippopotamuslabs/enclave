@@ -92,6 +92,8 @@ class DirectChatInferenceExecutorTest {
                         coreMemories = any(),
                         retrievedMemories = any(),
                         retrievedSearchResults = any(),
+                        retrievedXSearchResults = any(),
+                        compactStaticPrompt = any(),
                     )
                 } returns ""
                 every { composeVolatileTurnContext(any(), any(), any()) } returns null

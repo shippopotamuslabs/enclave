@@ -72,7 +72,7 @@ class ChatInferenceRequestPreparerTest {
                 {
                     assertEquals(
                         listOf(
-                            "disclose_tool_schemas",
+                            "tool_discovery_tool",
                             "read_context_reference",
                             "web_search",
                             "web_extract",
@@ -89,7 +89,7 @@ class ChatInferenceRequestPreparerTest {
                 },
                 {
                     assertEquals(
-                        listOf("disclose_tool_schemas", "read_context_reference", "web_search", "web_extract"),
+                        listOf("tool_discovery_tool", "web_search", "web_extract"),
                         request.options.activeTools.map { it.name },
                     )
                 },
@@ -213,7 +213,7 @@ class ChatInferenceRequestPreparerTest {
             assertTrue(request.options.activeTools.contains(ToolDefinition.WEB_SEARCH))
             assertTrue(request.options.activeTools.contains(ToolDefinition.ATTACHED_IMAGE_INSPECT))
             assertTrue(request.options.systemPrompt?.contains("Be concise.") == true)
-            assertTrue(request.options.systemPrompt?.contains("attached_image_inspect") == true)
+            assertFalse(request.options.systemPrompt?.contains("# ACTIVE TOOL EXAMPLES:") == true)
             assertTrue(request.prompt.contains("The user attached one or more images."))
         }
 
@@ -292,8 +292,8 @@ class ChatInferenceRequestPreparerTest {
                     modelType = ModelType.FAST,
                 )
 
-            assertTrue(request.options.systemPrompt?.contains("call:web_search") == true)
-            // tool_call may appear in strict rules
+            assertTrue(request.options.systemPrompt?.contains("call:tool_discovery_tool") == true)
+            assertFalse(request.options.systemPrompt?.contains("# ACTIVE TOOL EXAMPLES:") == true)
         }
 
     @Test
@@ -330,8 +330,12 @@ class ChatInferenceRequestPreparerTest {
                     modelType = ModelType.FAST,
                 )
 
-            // SDK_NATIVE strategy should result in no tool instructions in system prompt
-            assertFalse(request.options.systemPrompt?.contains("web_search") == true)
+            // SDK_NATIVE: capability-based discovery, no envelope syntax, no catalog enumeration
+            val systemPrompt = requireNotNull(request.options.systemPrompt)
+            assertTrue(systemPrompt.contains("# CONTEXT RETRIEVAL ROUTING:"))
+            assertTrue(systemPrompt.contains("# TOOL DISCOVERY:"))
+            assertFalse(systemPrompt.contains("# TOOL GROUPS:"))
+            assertFalse(systemPrompt.contains("<tool_call>"))
             assertTrue(request.options.activeTools.contains(ToolDefinition.WEB_SEARCH))
         }
 
@@ -372,7 +376,8 @@ class ChatInferenceRequestPreparerTest {
                     modelType = ModelType.FAST,
                 )
 
-            assertTrue(request.options.systemPrompt?.contains("ActionResult") == true)
+            assertTrue(request.options.systemPrompt?.contains("<tool_call>") == true)
+            assertFalse(request.options.systemPrompt?.contains("ActionResult") == true)
             assertTrue(request.options.systemPrompt?.contains("web_search") == true)
         }
 
@@ -413,8 +418,8 @@ class ChatInferenceRequestPreparerTest {
             assertTrue(catalogNames.contains(ToolDefinition.SEARCH_CHAT.name))
             assertTrue(catalogNames.contains(ToolDefinition.GET_MESSAGE_CONTEXT.name))
             assertTrue(request.options.toolingEnabled)
-            assertFalse(request.options.systemPrompt?.contains("web_search") == true)
-            assertTrue(request.options.systemPrompt?.contains("search_chat_history") == true)
+            assertFalse(request.options.activeTools.any { it.name == ToolDefinition.WEB_SEARCH.name })
+            assertFalse(request.options.systemPrompt?.contains("# CONVERSATION MEMORY TOOLS") == true)
         }
 
     @Test
@@ -512,6 +517,62 @@ class ChatInferenceRequestPreparerTest {
             assertFalse(request.options.systemPrompt?.contains("# RELEVANT FACTS & CONTEXT:") == true)
             assertTrue(request.options.volatileTurnContext?.contains("User has a cat.") == true)
             assertTrue(request.options.volatileTurnContext?.contains("# RELEVANT FACTS & CONTEXT:") == true)
+        }
+
+    @Test
+    fun `local small context window uses compact static system prompt`() =
+        runTest {
+            val coreMemories =
+                listOf(
+                    com.browntowndev.enclave.domain.model.memory.Memory(
+                        category = com.browntowndev.enclave.domain.model.memory.MemoryCategory.PSYCH_PROFILE,
+                        content = "Avoids vulnerability.",
+                    ),
+                )
+            val preparer =
+                ChatInferenceRequestPreparer(
+                    activeModelProvider =
+                        mockActiveModelProvider(
+                            fastConfig = fastTextConfig(),
+                            visionConfig = null,
+                        ),
+                    settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = true)),
+                    messageRepository = mockMessageRepository(resolvedImageTarget = null),
+                    memoriesRepository =
+                        mockk {
+                            coEvery { getCoreMemories() } returns coreMemories
+                            coEvery {
+                                searchMemories(
+                                    any(),
+                                    MemoryRetrievalPolicy.CHAT_RETRIEVAL_LIMIT,
+                                    MemoryRetrievalPolicy.MAX_L2_DISTANCE,
+                                    MemoryRetrievalPolicy.CHAT_EXCLUDED_CATEGORIES,
+                                )
+                            } returns emptyList()
+                        },
+                    embeddingEnginePort = mockEmbeddingEngine(),
+                    promptComposer = SearchToolPromptComposer(),
+                    defaultModelRepository = mockk(relaxed = true),
+                    mediaProviderRepository = mockk(relaxed = true),
+                    mediaToolDefinitionFactory = mockk(relaxed = true),
+                    getProviderCapabilitiesUseCase = mockk(relaxed = true),
+                    loggingPort = mockk(relaxed = true),
+                )
+
+            val request =
+                preparer(
+                    prompt = "hello",
+                    chatId = ChatId("chat"),
+                    userMessageId = MessageId("user"),
+                    assistantMessageId = MessageId("assistant"),
+                    modelType = ModelType.FAST,
+                )
+
+            assertFalse(request.options.systemPrompt?.contains("PSYCHOLOGICAL PROFILE") == true)
+            assertFalse(request.options.systemPrompt?.contains("Avoids vulnerability.") == true)
+            assertFalse(request.options.systemPrompt?.contains("# ACTIVE TOOL EXAMPLES:") == true)
+            assertFalse(request.options.systemPrompt?.contains("# CONVERSATION MEMORY TOOLS") == true)
+            assertTrue(request.options.systemPrompt?.contains("# TOOL DISCOVERY:") == true)
         }
 
     @Test
@@ -616,11 +677,12 @@ class ChatInferenceRequestPreparerTest {
             id = LocalModelConfigurationId("gguf-thinking"),
             name = "GGUF Thinking",
             thinkingEnabled = true,
+            reasoningBudget = 1536,
             localModelFormat = ModelFileFormat.GGUF,
         )
 
     @Test
-    fun `LiteRT local model with thinkingEnabled true derives reasoningBudget 2048`() =
+    fun `LiteRT local model with thinkingEnabled true derives reasoningBudget 0`() =
         runTest {
             val preparer =
                 ChatInferenceRequestPreparer(
@@ -650,11 +712,11 @@ class ChatInferenceRequestPreparerTest {
                     modelType = ModelType.FAST,
                 )
 
-            assertEquals(2048, request.options.reasoningBudget)
+            assertEquals(0, request.options.reasoningBudget)
         }
 
     @Test
-    fun `GGUF local model with thinkingEnabled true derives reasoningBudget 2048`() =
+    fun `GGUF local model with thinkingEnabled true uses configured reasoningBudget`() =
         runTest {
             val preparer =
                 ChatInferenceRequestPreparer(
@@ -684,7 +746,7 @@ class ChatInferenceRequestPreparerTest {
                     modelType = ModelType.FAST,
                 )
 
-            assertEquals(2048, request.options.reasoningBudget)
+            assertEquals(1536, request.options.reasoningBudget)
         }
 
     @Test
@@ -732,7 +794,8 @@ class ChatInferenceRequestPreparerTest {
             coEvery { mockExecutor.execute(any()) } returns
                 com.browntowndev.enclave.domain.model.inference.ToolExecutionResult(
                     toolName = ToolDefinition.WEB_SEARCH.name,
-                    resultJson = """{"results":[{"title":"Search Title","content":"Search result content"}]}""",
+                    resultJson =
+                        """{"results":[{"title":"Search Title","content":"${"Search result content ".repeat(2_000)}"}]}""",
                 )
 
             val preparer =
@@ -769,10 +832,12 @@ class ChatInferenceRequestPreparerTest {
                 )
 
             val systemPrompt = request.options.systemPrompt
-            val volatileTurnContext = request.options.volatileTurnContext
+            val volatileTurnContext = requireNotNull(request.options.volatileTurnContext)
             assertTrue(systemPrompt == null || !systemPrompt.contains("RELEVANT WEB SEARCH RESULTS"))
-            assertTrue(volatileTurnContext != null && volatileTurnContext.contains("RELEVANT WEB SEARCH RESULTS"))
-            assertTrue(volatileTurnContext!!.contains("Search result content"))
+            assertTrue(volatileTurnContext.contains("RELEVANT WEB SEARCH RESULTS"))
+            assertTrue(volatileTurnContext.length <= 2_048)
+            assertTrue(volatileTurnContext.endsWith("[Context truncated to fit local model window]"))
+            assertTrue(request.prompt.startsWith("Tell me the news"))
         }
 
     @Test

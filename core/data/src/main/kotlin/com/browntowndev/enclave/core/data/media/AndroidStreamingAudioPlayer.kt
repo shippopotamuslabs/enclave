@@ -7,8 +7,6 @@ import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.media.StreamingAudioConfig
 import com.browntowndev.enclave.domain.port.media.StreamingAudioPlayerPort
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -21,8 +19,8 @@ import javax.inject.Singleton
  * enabling playback to begin as soon as the first chunk is received rather than waiting
  * for a complete file.
  *
- * Thread safety: This class is thread-safe. All public methods use a [Mutex] to coordinate
- * access to the [AudioTrack] instance.
+ * Thread safety: All [AudioTrack] access is guarded by [trackLock] so [stop] cannot release the
+ * track while [enqueueChunk] is writing.
  */
 @Singleton
 class AndroidStreamingAudioPlayer
@@ -32,7 +30,7 @@ class AndroidStreamingAudioPlayer
     ) : StreamingAudioPlayerPort {
         private var audioTrack: AudioTrack? = null
         private var currentConfig: StreamingAudioConfig? = null
-        private val mutex = Mutex()
+        private val trackLock = Any()
 
         /**
          * Minimum buffer size in bytes before we start playback.
@@ -45,7 +43,7 @@ class AndroidStreamingAudioPlayer
         }
 
         override suspend fun initialize(config: StreamingAudioConfig): Unit =
-            mutex.withLock {
+            synchronized(trackLock) {
                 // Clean up any existing instance
                 stopInternal()
 
@@ -66,16 +64,23 @@ class AndroidStreamingAudioPlayer
                 val minBufferSize = AudioTrack.getMinBufferSize(sampleRate, channelConfig, audioFormat)
                 val bufferSize = minBufferSize.coerceAtLeast(MIN_BUFFER_BEFORE_PLAYBACK_BYTES * 2)
 
-                audioTrack =
+                val audioAttributes =
+                    AudioAttributes
+                        .Builder()
+                        .apply {
+                            if (config.useVoiceCommunicationRoute) {
+                                setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                            } else {
+                                setUsage(AudioAttributes.USAGE_MEDIA)
+                            }
+                            setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                        }.build()
+
+                val trackBuilder =
                     AudioTrack
                         .Builder()
-                        .setAudioAttributes(
-                            AudioAttributes
-                                .Builder()
-                                .setUsage(AudioAttributes.USAGE_MEDIA)
-                                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                                .build(),
-                        ).setAudioFormat(
+                        .setAudioAttributes(audioAttributes)
+                        .setAudioFormat(
                             AudioFormat
                                 .Builder()
                                 .setSampleRate(sampleRate)
@@ -84,6 +89,13 @@ class AndroidStreamingAudioPlayer
                                 .build(),
                         ).setBufferSizeInBytes(bufferSize)
                         .setTransferMode(AudioTrack.MODE_STREAM)
+
+                config.audioSessionId?.let { sessionId ->
+                    trackBuilder.setSessionId(sessionId)
+                }
+
+                audioTrack =
+                    trackBuilder
                         .build()
                         .also {
                             if (it.state == AudioTrack.STATE_UNINITIALIZED) {
@@ -97,17 +109,21 @@ class AndroidStreamingAudioPlayer
 
         override suspend fun enqueueChunk(audioChunk: ByteArray): Unit =
             withContext(Dispatchers.IO) {
-                mutex.withLock {
-                    val track =
-                        audioTrack
-                            ?: throw IllegalStateException("AudioTrack not initialized. Call initialize() first.")
+                synchronized(trackLock) {
+                    if (audioTrack == null) return@withContext
 
-                    // Write the chunk to the AudioTrack's streaming buffer
                     var offset = 0
                     val bytesToWrite = audioChunk.size
 
                     while (offset < bytesToWrite) {
-                        val written = track.write(audioChunk, offset, bytesToWrite - offset)
+                        val activeTrack = audioTrack ?: return@withContext
+                        val written =
+                            runCatching {
+                                activeTrack.write(audioChunk, offset, bytesToWrite - offset)
+                            }.getOrElse { error ->
+                                logger.debug(TAG, "AudioTrack write aborted after stop: ${error.message}")
+                                return@withContext
+                            }
                         if (written < 0) {
                             logger.error(TAG, "AudioTrack write error: $written")
                             throw IllegalStateException("AudioTrack write failed with error code: $written")
@@ -120,16 +136,20 @@ class AndroidStreamingAudioPlayer
             }
 
         override fun startPlayback() {
-            audioTrack?.play()
-                ?: throw IllegalStateException("AudioTrack not initialized. Call initialize() first.")
+            synchronized(trackLock) {
+                audioTrack?.play()
+                    ?: throw IllegalStateException("AudioTrack not initialized. Call initialize() first.")
+            }
             logger.debug(TAG, "Playback started")
         }
 
         override fun stop() {
-            runCatching {
-                stopInternal()
-            }.onFailure { e ->
-                logger.error(TAG, "Error during stop", e)
+            synchronized(trackLock) {
+                runCatching {
+                    stopInternal()
+                }.onFailure { e ->
+                    logger.error(TAG, "Error during stop", e)
+                }
             }
         }
 

@@ -3,6 +3,7 @@
     <string name="mode_fast">Fast</string>
     <string name="mode_council">Council</string>
     <string name="mode_thinking">Thinking</string>
+    <string name="mode_other">Other</string>
     <string name="use_the_council">Use the Council</string>
     <string name="use_the_council_subtitle">Get a better response</string>
     <string name="artifact_export_sheet_title">Export document</string>
@@ -23,4 +24,9 @@
     <string name="artifact_export_back">Back</string>
     <string name="artifact_export_close">Close export sheet</string>
     <string name="artifact_export_in_progress">Exporting…</string>
+    <string name="chat_moderation_prompt_rejected">Prompt rejected due to moderation</string>
+    <string name="chat_moderation_feedback_submitted">Got it. Feedback submitted!</string>
+    <string name="chat_moderation_report_action">Got it wrong?</string>
+    <string name="chat_prompt_too_large">Your prompt is too large for this model. Please edit it and try again.</string>
+    <string name="chat_share_chooser_title">Share Chat</string>
 </resources>

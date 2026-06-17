@@ -6,21 +6,39 @@ import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.SamplerConfig
 import com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry
+import com.browntowndev.enclave.domain.model.inference.ToolSearchIndexSnapshot
 import com.browntowndev.enclave.domain.usecase.chat.ToolCallStrategy
+import com.browntowndev.enclave.domain.usecase.chat.ToolSessionActivationRegistry
 import com.browntowndev.enclave.feature.inference.ConversationImpl
 import com.browntowndev.enclave.feature.inference.LiteRtConversation
 import com.google.ai.edge.litertlm.Conversation
 import com.google.ai.edge.litertlm.Engine
 import com.browntowndev.enclave.domain.model.chat.ChatMessage as DomainChatMessage
+import java.util.concurrent.atomic.AtomicInteger
 
 internal class ConversationSignatureCache {
+    @Volatile
     var currentModelPath: String? = null
+
+    @Volatile
     var currentModelType: ModelType? = null
+
+    @Volatile
     var currentConfigId: LocalModelConfigurationId? = null
+
+    @Volatile
     var currentThinkingEnabled: Boolean? = null
+
+    @Volatile
     var currentSystemPrompt: String = SystemPromptTemplates.DEFAULT
+
+    @Volatile
     var currentContextWindow: Int = DEFAULT_CONTEXT_WINDOW
+
+    @Volatile
     var currentSamplerConfig: SamplerConfig? = null
+
+    @Volatile
     var currentSignature: ConversationSignature? = null
 
     @Volatile
@@ -41,8 +59,7 @@ internal class ConversationSignatureCache {
     @Volatile
     var hasTransientToolResults: Boolean = false
 
-    @Volatile
-    var transientToolResultTokens: Int = 0
+    val transientToolResultTokens = AtomicInteger(0)
 
     @Volatile
     var latestAssistantMessageId: MessageId? = null
@@ -50,15 +67,24 @@ internal class ConversationSignatureCache {
     @Volatile
     var activeToolNames: List<String> = emptyList()
 
+    lateinit var toolActivationRegistry: ToolSessionActivationRegistry
+
     @Volatile
     var toolCatalog: List<ToolCatalogEntry> = emptyList()
+
+    @Volatile
+    var toolSearchIndex: ToolSearchIndexSnapshot? = null
 
     @Volatile
     var toolCallStrategy: ToolCallStrategy = ToolCallStrategy.LITE_RT_NATIVE
 
     fun clearTransientToolResults() {
         hasTransientToolResults = false
-        transientToolResultTokens = 0
+        transientToolResultTokens.set(0)
+    }
+
+    fun markConversationDirtyForDanglingToolCall() {
+        hasTransientToolResults = true
     }
 
     fun resetAfterEngineClose() {
@@ -71,7 +97,11 @@ internal class ConversationSignatureCache {
         currentSignature = null
         activeBackendIsNpu = false
         activeToolNames = emptyList()
+        if (::toolActivationRegistry.isInitialized) {
+            toolActivationRegistry.seedTurn(emptyList())
+        }
         toolCatalog = emptyList()
+        toolSearchIndex = null
         toolCallStrategy = ToolCallStrategy.LITE_RT_NATIVE
     }
 
@@ -79,9 +109,11 @@ internal class ConversationSignatureCache {
         context: android.content.Context,
         liteRtConversation: Conversation,
     ): LiteRtConversation {
-        if (conversationPort == null) {
-            conversationPort = ConversationImpl(context, liteRtConversation)
+        val existing = conversationPort
+        if (existing != null && conversation === liteRtConversation) {
+            return existing
         }
+        conversationPort = ConversationImpl(context, liteRtConversation)
         return conversationPort!!
     }
 

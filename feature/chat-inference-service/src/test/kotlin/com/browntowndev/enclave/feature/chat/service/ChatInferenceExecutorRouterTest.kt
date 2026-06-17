@@ -1,7 +1,10 @@
 package com.browntowndev.enclave.feature.chat.service
 
 import com.browntowndev.enclave.domain.model.chat.ChatId
+import com.browntowndev.enclave.domain.model.chat.ChatModelOverride
 import com.browntowndev.enclave.domain.model.chat.MessageId
+import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
+import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.usecase.chat.DirectChatInferenceExecutor
 import io.mockk.mockk
@@ -43,6 +46,94 @@ class ChatInferenceExecutorRouterTest {
 
         verify { directExecutor.execute(any(), any(), any(), any(), any(), any(), any()) }
         verify(exactly = 0) { serviceExecutor.execute(any(), any(), any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `executeWithOverride routes to serviceExecutor when backgroundInferenceEnabled is true`() {
+        val override =
+            ChatModelOverride.Api(
+                configId = ApiModelConfigurationId("api-claude"),
+                displayName = "Claude Sonnet",
+            )
+        val config =
+            ActiveModelConfiguration(
+                id = override.configId,
+                isLocal = false,
+                name = override.displayName,
+                modelId = "claude-sonnet",
+                systemPrompt = null,
+                reasoningEffort = null,
+                temperature = 0.7,
+                topK = 40,
+                topP = 0.95,
+                maxTokens = 512,
+                minP = 0.0,
+                repetitionPenalty = 1.1,
+                contextWindow = 4096,
+                thinkingEnabled = true,
+            )
+
+        router.executeWithOverride(
+            prompt = "hi",
+            userMessageId = MessageId("u1"),
+            assistantMessageId = MessageId("a1"),
+            chatId = ChatId("c1"),
+            userHasImage = false,
+            modelOverride = override,
+            resolvedConfiguration = config,
+            backgroundInferenceEnabled = true,
+        )
+
+        verify {
+            serviceExecutor.executeWithOverride(any(), any(), any(), any(), any(), any(), any(), any())
+        }
+        verify(exactly = 0) {
+            directExecutor.executeWithOverride(any(), any(), any(), any(), any(), any(), any(), any())
+        }
+    }
+
+    @Test
+    fun `executeWithOverride routes to direct executor when backgroundInferenceEnabled is false`() {
+        val override =
+            ChatModelOverride.Api(
+                configId = ApiModelConfigurationId("api-claude"),
+                displayName = "Claude Sonnet",
+            )
+        val config =
+            ActiveModelConfiguration(
+                id = override.configId,
+                isLocal = false,
+                name = override.displayName,
+                modelId = "claude-sonnet",
+                systemPrompt = null,
+                reasoningEffort = null,
+                temperature = 0.7,
+                topK = 40,
+                topP = 0.95,
+                maxTokens = 512,
+                minP = 0.0,
+                repetitionPenalty = 1.1,
+                contextWindow = 4096,
+                thinkingEnabled = true,
+            )
+
+        router.executeWithOverride(
+            prompt = "hi",
+            userMessageId = MessageId("u1"),
+            assistantMessageId = MessageId("a1"),
+            chatId = ChatId("c1"),
+            userHasImage = false,
+            modelOverride = override,
+            resolvedConfiguration = config,
+            backgroundInferenceEnabled = false,
+        )
+
+        verify {
+            directExecutor.executeWithOverride(any(), any(), any(), any(), any(), any(), any(), any())
+        }
+        verify(exactly = 0) {
+            serviceExecutor.executeWithOverride(any(), any(), any(), any(), any(), any(), any(), any())
+        }
     }
 
     @Test

@@ -73,7 +73,7 @@ class AgentLoopToolCatalogJsonTest {
                     .getValue("name")
                     .jsonPrimitive.content
             }
-        assertTrue(ToolDefinition.DISCLOSE_TOOL_SCHEMAS.name in names)
+        assertTrue(ToolDefinition.SEARCH_TOOLS.name in names)
         assertTrue("append_blocks" in names)
     }
 

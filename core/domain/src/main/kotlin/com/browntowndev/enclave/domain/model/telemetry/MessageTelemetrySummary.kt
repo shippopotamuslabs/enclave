@@ -13,6 +13,7 @@ data class MessageTelemetrySummary(
     val averageTtftMs: Long?,
     val averageOutputTokensPerSecond: Double?,
     val totalInputTokens: Int?,
+    val totalInputTokensNormalized: Int?,
     val totalOutputTokens: Int?,
     val totalReasoningTokens: Int?,
     val totalCacheReadInputTokens: Int?,

@@ -3,6 +3,7 @@ package com.browntowndev.enclave.feature.inference.appendonly
 import com.browntowndev.enclave.feature.inference.AnthropicInferenceServiceImpl
 import com.browntowndev.enclave.feature.inference.BaseOpenAiSdkInferenceService
 import com.browntowndev.enclave.feature.inference.GoogleInferenceServiceImpl
+import com.browntowndev.enclave.feature.inference.LlamaInferenceServiceImpl
 import com.browntowndev.enclave.feature.inference.RustCompatibleInferenceService
 
 internal fun RustCompatibleInferenceService.clearAppendOnlyOnRustCompactionBoundary() {
@@ -10,6 +11,7 @@ internal fun RustCompatibleInferenceService.clearAppendOnlyOnRustCompactionBound
         is BaseOpenAiSdkInferenceService -> clearAppendOnlyOnRustCompactionBoundary()
         is AnthropicInferenceServiceImpl -> clearAppendOnlyOnRustCompactionBoundary()
         is GoogleInferenceServiceImpl -> clearAppendOnlyOnRustCompactionBoundary()
+        is LlamaInferenceServiceImpl -> clearAppendOnlyOnRustCompactionBoundary()
     }
 }
 

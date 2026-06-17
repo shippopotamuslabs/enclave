@@ -1,6 +1,7 @@
 package com.browntowndev.enclave.feature.inference.media
 
 import com.browntowndev.enclave.domain.model.media.GenerationSettings
+import com.browntowndev.enclave.domain.model.media.ModelGenerationOutputSchema
 import com.browntowndev.enclave.domain.model.media.VideoGenerationSettings
 import com.browntowndev.enclave.feature.inference.fal.FalMediaResponseDiagnostics
 import com.browntowndev.enclave.feature.inference.fal.FalOutputSchemaResolver
@@ -10,7 +11,6 @@ import com.browntowndev.enclave.feature.inference.fal.FalService
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import com.browntowndev.enclave.domain.model.media.ModelGenerationOutputSchema
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put

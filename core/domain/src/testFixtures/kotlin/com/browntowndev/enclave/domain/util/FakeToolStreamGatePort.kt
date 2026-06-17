@@ -49,16 +49,30 @@ class FakeToolStreamGatePort : ToolStreamGatePort {
         finishCalls.add(handle to hasNativeToolCalls)
         val buffered = buffers.getValue(handle).toString()
         val allowToolCall = (handle.nativeHandle as FakeHandle).allowToolCall
+        val hasMarker = hasStrongToolMarker(buffered)
         return ToolStreamGateFinish(
-            trailingFlush = if (allowToolCall) buffered else "",
-            hasToolMarker = false,
+            trailingFlush = if (allowToolCall && !hasMarker && !hasNativeToolCalls) buffered else "",
+            hasToolMarker = hasMarker,
         )
     }
 
     override fun bufferedText(handle: ToolStreamGateHandle): String = buffers.getValue(handle).toString()
 
+    override fun hasToolMarkup(handle: ToolStreamGateHandle): Boolean =
+        hasStrongToolMarker(buffers.getValue(handle).toString())
+
     data class FakeHandle(
         val id: Int,
         val allowToolCall: Boolean,
     )
+
+    companion object {
+        internal fun hasStrongToolMarker(text: String): Boolean {
+            if (text.isEmpty()) return false
+            val lower = text.lowercase()
+            return lower.contains("<tool_call") ||
+                (lower.contains("dsml") && lower.contains("tool_calls")) ||
+                lower.contains("[tool_calls]")
+        }
+    }
 }

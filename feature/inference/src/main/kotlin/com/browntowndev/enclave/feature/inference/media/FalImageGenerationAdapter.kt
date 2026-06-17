@@ -63,8 +63,11 @@ class FalImageGenerationAdapter(
                                     ?.let { put("resolution", it) }
                                 if (referenceImage != null && supportsEdit) {
                                     val dataUri = "data:image/png;base64,${Base64.getEncoder().encodeToString(referenceImage)}"
-                                    put("image_url", dataUri)
-                                    putJsonObject("image") { put("url", dataUri) }
+                                    if (modelId.contains("kontext", ignoreCase = true)) {
+                                        put("image_url", dataUri)
+                                    } else {
+                                        putJsonObject("image") { put("url", dataUri) }
+                                    }
                                 }
                             },
                     )

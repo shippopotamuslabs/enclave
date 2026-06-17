@@ -9,8 +9,10 @@ import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.media.AspectRatio
 import com.browntowndev.enclave.domain.model.media.GenerationQuality
 import com.browntowndev.enclave.domain.model.media.GenerationSettings
+import com.browntowndev.enclave.domain.model.media.ImageGenerationProgress
 import com.browntowndev.enclave.domain.model.media.ProviderCapabilities
 import com.browntowndev.enclave.domain.model.media.VideoGenerationSettings
+import com.browntowndev.enclave.domain.port.repository.ActiveStudioGeneration
 import com.browntowndev.enclave.domain.port.media.ImageGenerationPort
 import com.browntowndev.enclave.domain.port.media.ShareMediaPort
 import com.browntowndev.enclave.domain.port.media.StudioGenerationDispatcherPort
@@ -20,14 +22,18 @@ import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPor
 import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.StudioMediaAsset
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
+import com.browntowndev.enclave.domain.port.repository.UiSelectionRepository
 import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
 import com.browntowndev.enclave.domain.usecase.media.GenerateMusicUseCase
+import com.browntowndev.enclave.domain.usecase.media.GetImageGenerationCapabilitiesUseCase
 import com.browntowndev.enclave.domain.usecase.media.ResolveMediaModelTypeUseCase
 import com.browntowndev.enclave.domain.usecase.media.ResolveMediaProviderCapabilitiesUseCase
 import com.browntowndev.enclave.feature.studio.coordinators.StudioAlbumSelectionCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioCapabilitiesCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioGenerationCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioMediaActionsCoordinator
+import com.browntowndev.enclave.feature.studio.coordinators.StudioModelOverrideCoordinator
+import com.browntowndev.enclave.feature.studio.coordinators.StudioResolvedModelCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioPlaybackCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioPromptCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioRemoteCapabilitiesCoordinator
@@ -40,6 +46,7 @@ import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -69,6 +76,8 @@ class MultimodalViewModelAnimateTest {
     private val playbackController = mockk<TtsPlaybackControllerPort>(relaxed = true)
     private val dispatcher = mockk<StudioGenerationDispatcherPort>(relaxed = true)
     private lateinit var viewModel: MultimodalViewModel
+    private val generationProgressFlow = MutableStateFlow<ImageGenerationProgress?>(null)
+    private val activeGenerationFlow = MutableStateFlow<ActiveStudioGeneration?>(null)
 
     @BeforeEach
     fun setup() {
@@ -102,6 +111,19 @@ class MultimodalViewModelAnimateTest {
         every { mediaProviderRepository.getMediaProviders() } returns flowOf(listOf(providerAsset))
         every { studioRepository.observeAllMedia() } returns flowOf(emptyList())
         every { studioRepository.observeAllAlbums() } returns flowOf(emptyList())
+        every { studioRepository.observeGenerationProgress() } returns generationProgressFlow
+        every { studioRepository.observeActiveGeneration() } returns activeGenerationFlow
+        every { studioRepository.reportActiveGeneration(any()) } answers {
+            if (activeGenerationFlow.value != null) {
+                false
+            } else {
+                activeGenerationFlow.value = firstArg()
+                true
+            }
+        }
+        every { studioRepository.clearActiveGeneration() } answers {
+            activeGenerationFlow.value = null
+        }
         coEvery { videoGenerationPort.generateVideo(any(), any(), any()) } returns Result.success("video".toByteArray())
         coEvery { studioRepository.cacheEphemeralMedia(any(), any()) } returns "cache://video.mp4"
         coEvery { resolveMediaProviderCapabilitiesUseCase(any(), any()) } returns
@@ -126,6 +148,10 @@ class MultimodalViewModelAnimateTest {
         val promptCoordinator = StudioPromptCoordinator(generationCoordinator, studioRepository)
         val mediaActionsCoordinator =
             StudioMediaActionsCoordinator(shareMediaPort, studioRepository, generationCoordinator)
+        val uiSelectionRepository =
+            mockk<UiSelectionRepository>(relaxed = true) {
+                every { selectedStudioMediaType } returns flowOf(MediaCapability.IMAGE)
+            }
 
         viewModel =
             MultimodalViewModel(
@@ -133,7 +159,8 @@ class MultimodalViewModelAnimateTest {
                 mediaProviderRepository = mediaProviderRepository,
                 moderatePromptUseCase = allowPromptModerationUseCase(),
                 shouldModeratePromptUseCase = allowShouldModeratePromptUseCase(),
-                resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase(),
+                submitModerationReportUseCase = mockk(relaxed = true),
+                getImageGenerationCapabilitiesUseCase = mockk(relaxed = true),
                 generationCoordinator = generationCoordinator,
                 albumSelectionCoordinator = albumSelectionCoordinator,
                 speechCoordinator = speechCoordinator,
@@ -143,6 +170,14 @@ class MultimodalViewModelAnimateTest {
                 remoteCapabilitiesCoordinator = remoteCapabilitiesCoordinator,
                 promptCoordinator = promptCoordinator,
                 mediaActionsCoordinator = mediaActionsCoordinator,
+                uiSelectionRepository = uiSelectionRepository,
+                overrideCoordinator = StudioModelOverrideCoordinator(),
+                resolvedModelCoordinator =
+                    StudioResolvedModelCoordinator(
+                        resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase(),
+                        mediaProviderRepository = mediaProviderRepository,
+                    ),
+                getStudioCapablePresetsUseCase = mockk(relaxed = true),
             )
     }
 
@@ -172,8 +207,7 @@ class MultimodalViewModelAnimateTest {
                 }
 
             // When
-            viewModel.mediaActionsCoordinator.onAnimateMedia(
-                prompt = viewModel.promptCoordinator,
+            viewModel.onAnimateMedia(
                 assetId = assetId,
                 autoAnimate = true,
             )
@@ -186,6 +220,7 @@ class MultimodalViewModelAnimateTest {
                     "Original Prompt",
                     MediaCapability.VIDEO,
                     capture(settingsSlot),
+                    any(),
                 )
             }
             val settings = settingsSlot.captured as VideoGenerationSettings
@@ -216,8 +251,7 @@ class MultimodalViewModelAnimateTest {
                 }
 
             // When
-            viewModel.mediaActionsCoordinator.onAnimateMedia(
-                prompt = viewModel.promptCoordinator,
+            viewModel.onAnimateMedia(
                 assetId = assetId,
                 autoAnimate = false,
             )
@@ -252,8 +286,7 @@ class MultimodalViewModelAnimateTest {
                 }
 
             // When
-            viewModel.mediaActionsCoordinator.onAnimateMedia(
-                prompt = viewModel.promptCoordinator,
+            viewModel.onAnimateMedia(
                 assetId = assetId,
                 autoAnimate = true,
                 customPrompt = "Custom Prompt",
@@ -261,7 +294,7 @@ class MultimodalViewModelAnimateTest {
             advanceUntilIdle()
 
             // Then
-            verify { dispatcher.startGeneration("Custom Prompt", MediaCapability.VIDEO, any()) }
+            verify { dispatcher.startGeneration("Custom Prompt", MediaCapability.VIDEO, any(), any()) }
             assertEquals("", viewModel.uiState.value.prompt)
             job.cancel()
         }

@@ -13,4 +13,13 @@ enum class Mode {
 
     /** Council mode - uses multi-model pipeline */
     COUNCIL,
+
+    /** UI selection marker only — NOT passed to generateChatResponse. */
+    OTHER,
+
+    ;
+
+    companion object {
+        val DEFAULT = Mode.FAST
+    }
 }

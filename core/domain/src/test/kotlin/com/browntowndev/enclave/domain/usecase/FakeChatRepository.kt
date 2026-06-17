@@ -114,7 +114,10 @@ class FakeChatRepository : ChatRepository {
         // No-op for testing
     }
 
-    override suspend fun createChat(chat: Chat): ChatId {
+    override suspend fun createChat(
+        chat: Chat,
+        scheduleCloudSync: Boolean,
+    ): ChatId {
         if (shouldThrowOnCreateChat) {
             throw RuntimeException("Simulated error on createChat")
         }

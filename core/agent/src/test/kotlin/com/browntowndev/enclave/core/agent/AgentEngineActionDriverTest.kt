@@ -198,6 +198,8 @@ class AgentEngineActionDriverTest {
                 stateLedgerDeltaJson = null,
                 toolContextIndexDeltaJson = null,
                 fileContextIndexDeltaJson = null,
+                retryAfterMs = null,
+                modelRetryAttempt = null,
             ),
         )
 

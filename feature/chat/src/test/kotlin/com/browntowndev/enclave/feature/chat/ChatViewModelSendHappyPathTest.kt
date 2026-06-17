@@ -3,27 +3,28 @@ package com.browntowndev.enclave.feature.chat
 import androidx.lifecycle.SavedStateHandle
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
+import com.browntowndev.enclave.domain.model.chat.AccumulatedMessages
 import com.browntowndev.enclave.domain.model.chat.ChatId
+import com.browntowndev.enclave.domain.model.chat.ChatResponseMode
 import com.browntowndev.enclave.domain.model.chat.Content
 import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.chat.MessageId
+import com.browntowndev.enclave.domain.model.chat.MessageSnapshot
 import com.browntowndev.enclave.domain.model.chat.MessageState
 import com.browntowndev.enclave.domain.model.chat.Mode
 import com.browntowndev.enclave.domain.model.chat.Role
+import com.browntowndev.enclave.feature.chat.R
 import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnSnapshotPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.inference.PromptModerationPort
-import com.browntowndev.enclave.domain.port.inference.PromptModerationScores
 import com.browntowndev.enclave.domain.port.inference.ToolExecutionEventPort
 import com.browntowndev.enclave.domain.port.media.TtsPlaybackControllerPort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.SettingsData
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.domain.usecase.byok.GetDefaultModelsUseCase
-import com.browntowndev.enclave.domain.usecase.chat.AssistantPlaceholderResult
 import com.browntowndev.enclave.domain.usecase.chat.ChatTurnTiming
 import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
 import com.browntowndev.enclave.domain.usecase.chat.GetModelDisplayNameUseCase
@@ -31,10 +32,8 @@ import com.browntowndev.enclave.domain.usecase.chat.ListenToSpeechUseCase
 import com.browntowndev.enclave.domain.usecase.chat.MergeMessagesUseCase
 import com.browntowndev.enclave.domain.usecase.chat.ProcessFileAttachmentUseCase
 import com.browntowndev.enclave.domain.usecase.chat.StageImageAttachmentUseCase
-import com.browntowndev.enclave.domain.usecase.chat.UserPromptResult
 import com.browntowndev.enclave.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
-import com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase
 import com.browntowndev.enclave.domain.usecase.inference.ShouldModeratePromptUseCase
 import com.browntowndev.enclave.domain.usecase.settings.SettingsAssignmentUseCases
 import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
@@ -135,26 +134,18 @@ class ChatViewModelSendHappyPathTest {
         every { studioRepository.observeAllMedia() } returns flowOf(emptyList())
         every { studioRepository.observeEphemeralMedia() } returns flowOf(emptyList())
 
-        coEvery { chatUseCases.processPrompt(any()) } returns
-            UserPromptResult(
-                userMessageId = MessageId("user-send-1"),
-                chatId = ChatId("chat-send-1"),
-                userMessageCreatedAtMillis = 100L,
-            )
-        coEvery {
-            chatUseCases.createAssistantPlaceholder(
-                chatId = any(),
-                userMessageCreatedAtMillis = any(),
-                assistantMessageId = any(),
-            )
-        } returns AssistantPlaceholderResult(assistantMessageId = MessageId("placeholder-unused"))
+        mockSubmitPrompt(
+            chatUseCases = chatUseCases,
+            userMessageId = MessageId("user-send-1"),
+            chatId = ChatId("chat-send-1"),
+        )
         coEvery {
             chatUseCases.generateChatResponse(
                 prompt = any(),
                 userMessageId = any(),
                 assistantMessageId = any(),
                 chatId = any(),
-                mode = any(),
+                responseMode = any(),
                 backgroundInferenceEnabled = any(),
             )
         } returns
@@ -184,6 +175,38 @@ class ChatViewModelSendHappyPathTest {
             )
         viewModel = harness.viewModel
     }
+
+    @Test
+    @DisplayName("DOPG-V-01 — onSendMessage routes through submit prompt")
+    fun dopgV01_sendUsesSubmitPromptOnly() =
+        runTest {
+            viewModel.onInputChange("Hello crew")
+            viewModel.onSendMessage()
+            advanceTimeBy(ChatTurnTiming.ASSISTANT_PLACEHOLDER_DELAY_MS)
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) {
+                chatUseCases.submitPrompt(
+                    match { request ->
+                        request.message.content.text == "Hello crew" &&
+                            request.assistantMessageId.value.isNotEmpty()
+                    },
+                )
+            }
+            coVerify {
+                harness.inferenceOrchestrator.sendMessage(
+                    scope = any(),
+                    input = "Hello crew",
+                    responseMode = any(),
+                    selectedImageUris = any(),
+                    fileAttachments = any(),
+                    initialChatId = any(),
+                    shouldModerateResponse = any(),
+                    onInputCleared = any(),
+                    onResponseBlocked = any(),
+                )
+            }
+        }
 
     @Test
     @DisplayName("onSendMessage clears input, sets generating, and starts generation with selected mode")
@@ -228,7 +251,7 @@ class ChatViewModelSendHappyPathTest {
                     userMessageId = MessageId("user-send-1"),
                     assistantMessageId = any(),
                     chatId = ChatId("chat-send-1"),
-                    mode = Mode.THINKING,
+                    responseMode = ChatResponseMode.Thinking,
                     backgroundInferenceEnabled = any(),
                 )
             }
@@ -236,7 +259,7 @@ class ChatViewModelSendHappyPathTest {
         }
 
     @Test
-    @DisplayName("onSendMessage passes staged image URIs into processPrompt")
+    @DisplayName("onSendMessage passes staged image URIs into safety gate")
     fun sendWithImagesHappyPath() =
         runTest {
             val collectJob = backgroundScope.launch { viewModel.uiState.collect { } }
@@ -254,10 +277,10 @@ class ChatViewModelSendHappyPathTest {
             advanceUntilIdle()
 
             coVerify {
-                chatUseCases.processPrompt(
-                    match { message ->
-                        message.content.text == "Describe these" &&
-                            message.content.imageUris == listOf("staged://img-1", "staged://img-2")
+                chatUseCases.submitPrompt(
+                    match { request ->
+                        request.message.content.text == "Describe these" &&
+                            request.message.content.imageUris == listOf("staged://img-1", "staged://img-2")
                     },
                 )
             }
@@ -265,57 +288,57 @@ class ChatViewModelSendHappyPathTest {
         }
 
     @Test
-    @DisplayName("onSendMessage rejects moderated prompts before processing")
-    fun sendBlockedByModeration() =
+    fun `compaction failure restores prompt and emits prompt too large snackbar`() =
         runTest {
-            harness =
-                ChatViewModelTestSupport.createHarness(
-                    settingsUseCases = settingsUseCases,
-                    chatUseCases = chatUseCases,
-                    savedStateHandle = SavedStateHandle(),
-                    cancelInferenceUseCase = cancelInferenceUseCase,
-                    inferenceLockManager = inferenceLockManager,
-                    modelDisplayNamesUseCase = modelDisplayNamesUseCase,
-                    activeModelProvider = activeModelProvider,
-                    toolExecutionEventPort = toolExecutionEventPort,
-                    errorHandler = errorHandler,
-                    loggingPort = loggingPort,
-                    activeChatTurnSnapshotPort = activeChatTurnStore,
-                    playbackController = playbackController,
-                    studioRepository = studioRepository,
-                    shareChatUseCase = shareChatUseCase,
-                    chatRepository = chatRepository,
-                    exportArtifactDocumentsUseCase = mockk(relaxed = true),
-                    stageImageAttachmentUseCase = stageImageAttachmentUseCase,
-                    moderatePromptUseCase =
-                        ModeratePromptUseCase(
-                            FixedPromptModerationPort(
-                                PromptModerationScores(
-                                    scoresByLabel = mapOf("S3" to 0.66, "OK" to 0.34),
-                                    labelAliases = mapOf("sexual/minors" to listOf("S3")),
-                                    thresholds = mapOf("sexual/minors" to 0.65),
-                                ),
-                            ),
-                        ),
+            val collectJob = backgroundScope.launch { viewModel.uiState.collect { } }
+            coEvery {
+                chatUseCases.generateChatResponse(
+                    prompt = any(),
+                    userMessageId = any(),
+                    assistantMessageId = any(),
+                    chatId = any(),
+                    responseMode = any(),
+                    backgroundInferenceEnabled = any(),
                 )
-            viewModel = harness.viewModel
-            val snackbar = async { viewModel.moderationMessages.first() }
+            } returns
+                flowOf(
+                    AccumulatedMessages(
+                        messages =
+                            mapOf(
+                                MessageId("assistant-failed") to
+                                    MessageSnapshot(
+                                        messageId = MessageId("assistant-failed"),
+                                        modelType = ModelType.FAST,
+                                        content =
+                                            "Sorry, something went wrong. Please try again.\n\n" +
+                                                "Error: Agent loop failed: tier=pipeline, " +
+                                                "reason=Projected prompt exceeds hard ceiling",
+                                        thinkingRaw = "",
+                                        isComplete = true,
+                                    ),
+                            ),
+                    ),
+                )
+            val snackbar = async { viewModel.chatErrorMessages.first() }
 
-            viewModel.onInputChange("blocked input")
+            viewModel.onInputChange("oversized prompt")
             viewModel.onSendMessage()
-            advanceUntilIdle()
+            advanceTimeBy(ChatTurnTiming.ASSISTANT_PLACEHOLDER_DELAY_MS)
 
-            assertEquals("Prompt rejected due to moderation", snackbar.await())
-            coVerify(exactly = 0) { chatUseCases.processPrompt(any()) }
+            assertEquals(R.string.chat_prompt_too_large, snackbar.await())
+            advanceUntilIdle()
+            assertEquals("oversized prompt", viewModel.uiState.value.inputText)
+            collectJob.cancel()
         }
 
     @Test
-    @DisplayName("onSendMessage bypasses moderation when active model is trusted")
-    fun sendBypassesModerationWhenTrusted() =
+    @DisplayName("DOPG-V-04 — trusted model bypass passes shouldModerateResponse false to orchestrator")
+    fun dopgV04_trustedBypassPassesShouldModerateFalse() =
         runTest {
-            val shouldModerateMock = mockk<ShouldModeratePromptUseCase> {
-                coEvery { this@mockk.invoke(any()) } returns false
-            }
+            val shouldModerateMock =
+                mockk<ShouldModeratePromptUseCase> {
+                    coEvery { this@mockk.invoke(any<ModelType>()) } returns false
+                }
             harness =
                 ChatViewModelTestSupport.createHarness(
                     settingsUseCases = settingsUseCases,
@@ -336,16 +359,6 @@ class ChatViewModelSendHappyPathTest {
                     exportArtifactDocumentsUseCase = mockk(relaxed = true),
                     stageImageAttachmentUseCase = stageImageAttachmentUseCase,
                     shouldModeratePromptUseCase = shouldModerateMock,
-                    moderatePromptUseCase =
-                        ModeratePromptUseCase(
-                            FixedPromptModerationPort(
-                                PromptModerationScores(
-                                    scoresByLabel = mapOf("S3" to 0.66, "OK" to 0.34),
-                                    labelAliases = mapOf("sexual/minors" to listOf("S3")),
-                                    thresholds = mapOf("sexual/minors" to 0.65),
-                                ),
-                            ),
-                        ),
                 )
             viewModel = harness.viewModel
 
@@ -354,12 +367,21 @@ class ChatViewModelSendHappyPathTest {
             advanceTimeBy(ChatTurnTiming.ASSISTANT_PLACEHOLDER_DELAY_MS)
             advanceUntilIdle()
 
-            coVerify(exactly = 1) { chatUseCases.processPrompt(any()) }
+            coVerify {
+                harness.inferenceOrchestrator.sendMessage(
+                    scope = any(),
+                    input = "blocked input but trusted",
+                    responseMode = any(),
+                    selectedImageUris = any(),
+                    fileAttachments = any(),
+                    initialChatId = any(),
+                    shouldModerateResponse = false,
+                    onInputCleared = any(),
+                    onResponseBlocked = any(),
+                )
+            }
+            coVerify(exactly = 1) {
+                chatUseCases.submitPrompt(any())
+            }
         }
-
-    private class FixedPromptModerationPort(
-        private val scores: PromptModerationScores,
-    ) : PromptModerationPort {
-        override suspend fun classify(prompt: String): PromptModerationScores = scores
-    }
 }

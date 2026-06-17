@@ -372,13 +372,42 @@ private class FakeStudioRepository : StudioRepositoryPort {
 
     override suspend fun getMediaById(id: String): StudioMediaAsset? = media.value.firstOrNull { it.id == id }
 
+    override suspend fun getMediaPendingDownload(): List<StudioMediaAsset> = emptyList()
+
+    override suspend fun materializeDownloadedMedia(
+        id: String,
+        bytes: ByteArray,
+    ) = Unit
+
     override fun observeEphemeralMedia(): Flow<List<StudioMediaAsset>> = flowOf(emptyList())
 
     override fun observeGenerationError(): Flow<String?> = flowOf(null)
 
+    override fun observeGenerationProgress(): Flow<com.browntowndev.enclave.domain.model.media.ImageGenerationProgress?> = flowOf(null)
+
+    override fun observeActiveGeneration(): Flow<com.browntowndev.enclave.domain.port.repository.ActiveStudioGeneration?> = flowOf(null)
+
     override suspend fun reportGenerationError(message: String?) {}
 
     override suspend fun clearGenerationError() {}
+
+    override fun reportGenerationProgress(progress: com.browntowndev.enclave.domain.model.media.ImageGenerationProgress?) {}
+
+    override fun clearGenerationProgress() {}
+
+    override fun reportActiveGeneration(
+        generation: com.browntowndev.enclave.domain.port.repository.ActiveStudioGeneration,
+    ): Boolean = true
+
+    override fun hasActiveGeneration(): Boolean = false
+
+    override fun clearActiveGeneration() {}
+
+    override fun clearActiveGenerationIfOwned(generationId: String): Boolean = true
+
+    override fun clearGenerationProgressIfOwned(generationId: String): Boolean = true
+
+    override suspend fun reconcilePersistedActiveGeneration() = Unit
 
     override suspend fun addEphemeralMedia(asset: StudioMediaAsset) {}
 

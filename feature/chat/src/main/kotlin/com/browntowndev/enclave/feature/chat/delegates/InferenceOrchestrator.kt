@@ -3,7 +3,11 @@ package com.browntowndev.enclave.feature.chat.delegates
 import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
+import com.browntowndev.enclave.domain.model.chat.AccumulatedMessages
+import com.browntowndev.enclave.domain.model.chat.ChatInferenceErrorCategory
+import com.browntowndev.enclave.domain.model.chat.ChatInferenceUserErrorMapper
 import com.browntowndev.enclave.domain.model.chat.ChatId
+import com.browntowndev.enclave.domain.model.chat.ChatResponseMode
 import com.browntowndev.enclave.domain.model.chat.Content
 import com.browntowndev.enclave.domain.model.chat.FileAttachment
 import com.browntowndev.enclave.domain.model.chat.Message
@@ -13,24 +17,31 @@ import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.error.ActiveModelConfigurationDecryptException
 import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnKey
 import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnSnapshotPort
+import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.domain.port.inference.PipelineExecutorPort
 import com.browntowndev.enclave.domain.port.repository.ChatRepository
 import com.browntowndev.enclave.domain.usecase.chat.ChatTurnTiming
 import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
+import com.browntowndev.enclave.domain.usecase.chat.SubmitPromptRequest
+import com.browntowndev.enclave.domain.qualifier.ApplicationScope
 import com.browntowndev.enclave.domain.usecase.inference.CancelInferenceUseCase
+import com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase
 import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
-import com.browntowndev.enclave.feature.chat.ChatModeMapper.toDomain
+import com.browntowndev.enclave.feature.chat.BuildConfig
 import com.browntowndev.enclave.feature.chat.ChatModeUi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -47,6 +58,10 @@ class InferenceOrchestrator
         private val chatRepository: ChatRepository,
         private val errorHandler: ViewModelErrorHandler,
         private val savedStateHandle: SavedStateHandle,
+        private val pipelineExecutor: PipelineExecutorPort,
+        private val moderatePromptUseCase: ModeratePromptUseCase,
+        private val loggingPort: LoggingPort,
+        @param:ApplicationScope private val applicationScope: CoroutineScope,
     ) {
         private val _currentChatId = MutableStateFlow<ChatId?>(null)
         val currentChatId: StateFlow<ChatId?> = _currentChatId.asStateFlow()
@@ -58,9 +73,13 @@ class InferenceOrchestrator
         val acknowledgedTurnKeys: StateFlow<Set<ActiveChatTurnKey>> = _acknowledgedTurnKeys.asStateFlow()
 
         private var inferenceJob: Job? = null
+        private var sendJob: Job? = null
 
         private val _optimisticUserMessage = MutableStateFlow<Message?>(null)
         val optimisticUserMessage: StateFlow<Message?> = _optimisticUserMessage.asStateFlow()
+
+        private val _promptTooLargeFailures = Channel<PromptTooLargeFailure>(Channel.BUFFERED)
+        val promptTooLargeFailures: Flow<PromptTooLargeFailure> = _promptTooLargeFailures.receiveAsFlow()
 
         fun clearOptimisticUser() {
             _optimisticUserMessage.value = null
@@ -69,15 +88,20 @@ class InferenceOrchestrator
         fun sendMessage(
             scope: CoroutineScope,
             input: String,
-            selectedMode: ChatModeUi,
+            responseMode: ChatResponseMode,
             selectedImageUris: List<String>,
             fileAttachments: List<FileAttachment>,
             initialChatId: ChatId?,
+            shouldModerateResponse: Boolean,
             onInputCleared: () -> Unit,
+            onResponseBlocked: () -> Unit,
         ) {
-            inferenceJob?.cancel()
+            cancelActiveInferenceJob()
+            cancelInferenceUseCase()
 
-            scope.launch(
+            sendJob?.cancel()
+            sendJob =
+                scope.launch(
                 errorHandler.coroutineExceptionHandler(
                     TAG,
                     "Failed to send message",
@@ -110,7 +134,12 @@ class InferenceOrchestrator
 
                     val userResult =
                         try {
-                            chatUseCases.processPrompt(domainMessage)
+                            chatUseCases.submitPrompt(
+                                SubmitPromptRequest(
+                                    message = domainMessage,
+                                    assistantMessageId = assistantMessageId,
+                                ),
+                            )
                         } catch (e: CancellationException) {
                             throw e
                         } catch (e: Exception) {
@@ -126,6 +155,7 @@ class InferenceOrchestrator
 
                     _currentChatId.value = userResult.chatId
                     savedStateHandle["chatId"] = userResult.chatId.value
+
                     val persistedUserMessage =
                         domainMessage.copy(
                             id = userResult.userMessageId,
@@ -135,12 +165,6 @@ class InferenceOrchestrator
                     _optimisticUserMessage.value = persistedUserMessage
 
                     delay(ChatTurnTiming.ASSISTANT_PLACEHOLDER_DELAY_MS.milliseconds)
-
-                    chatUseCases.createAssistantPlaceholder(
-                        chatId = userResult.chatId,
-                        userMessageCreatedAtMillis = userResult.userMessageCreatedAtMillis,
-                        assistantMessageId = assistantMessageId,
-                    )
 
                     val turnKey =
                         ActiveChatTurnKey(
@@ -153,25 +177,72 @@ class InferenceOrchestrator
                     _requestedTurnKey.value = turnKey
 
                     inferenceJob =
-                        chatUseCases
-                            .generateChatResponse(
-                                prompt = input,
-                                userMessageId = userResult.userMessageId,
-                                assistantMessageId = assistantMessageId,
-                                chatId = userResult.chatId,
-                                mode = selectedMode.toDomain(),
-                                backgroundInferenceEnabled = settings.backgroundInferenceEnabled,
-                            ).onEach {
-                                // Snapshot publication is owned by the generation pipeline
-                            }.catch { cause ->
-                                val userMessage =
-                                    if (cause is ActiveModelConfigurationDecryptException) {
-                                        cause.message ?: ActiveModelConfigurationDecryptException.USER_MESSAGE
-                                    } else {
-                                        "Failed to generate response. Please try again."
+                        applicationScope.launch(
+                            errorHandler.coroutineExceptionHandler(
+                                TAG,
+                                "Inference failed",
+                                "Failed to generate response. Please try again.",
+                            ),
+                        ) {
+                            var compactionFailureReported = false
+                            var finalResponseText: String? = null
+                            chatUseCases
+                                .generateChatResponse(
+                                    prompt = input,
+                                    userMessageId = userResult.userMessageId,
+                                    assistantMessageId = assistantMessageId,
+                                    chatId = userResult.chatId,
+                                    responseMode = responseMode,
+                                    backgroundInferenceEnabled = settings.backgroundInferenceEnabled,
+                                ).catch { cause ->
+                                    val userMessage =
+                                        if (cause is ActiveModelConfigurationDecryptException) {
+                                            cause.message
+                                                ?: ActiveModelConfigurationDecryptException.USER_MESSAGE
+                                        } else {
+                                            "Failed to generate response. Please try again."
+                                        }
+                                    errorHandler.handleError(TAG, "Inference failed", cause, userMessage)
+                                }.collect { accumulatedMessages ->
+                                    if (!compactionFailureReported && accumulatedMessages.hasCompactionFailure()) {
+                                        compactionFailureReported = true
+                                        _promptTooLargeFailures.send(PromptTooLargeFailure(prompt = input))
                                     }
-                                errorHandler.handleError(TAG, "Inference failed", cause, userMessage)
-                            }.launchIn(scope)
+                                    finalResponseText =
+                                        accumulatedMessages.messages.values
+                                            .firstOrNull { it.isComplete }?.content
+                                }
+
+                            // When background inference is enabled, the flow returns immediately
+                            // after starting the service. The actual response is published via
+                            // the snapshot port — observe it for the completed message so
+                            // post-turn moderation can run.
+                            if (finalResponseText == null && settings.backgroundInferenceEnabled) {
+                                finalResponseText =
+                                    activeChatTurnSnapshotPort.observe(turnKey)
+                                        .firstOrNull { snapshot ->
+                                            snapshot?.messages?.values
+                                                ?.any { it.isComplete } == true
+                                        }?.messages?.values
+                                        ?.firstOrNull { it.isComplete }?.content
+                            }
+
+                            // Post-turn response moderation (playStore flavor only)
+                            val responseLength = finalResponseText?.length
+                            loggingPort.debug(
+                                TAG,
+                                "Post-turn moderation gate: shouldModerateResponse=$shouldModerateResponse, " +
+                                    "finalResponseText length=$responseLength",
+                            )
+                            if (shouldModerateResponse && finalResponseText != null) {
+                                val moderationResult = moderatePromptUseCase(finalResponseText!!)
+                                if (moderationResult.blocked) {
+                                    chatRepository.updateMessageContent(assistantMessageId, BLOCKED_RESPONSE_PLACEHOLDER)
+                                    activeChatTurnSnapshotPort.clear(turnKey)
+                                    onResponseBlocked()
+                                }
+                            }
+                        }
                 }
             }
         }
@@ -181,7 +252,7 @@ class InferenceOrchestrator
             activeTurnKey: ActiveChatTurnKey? = null,
             finalContent: String? = null,
         ) {
-            inferenceJob?.cancel()
+            cancelActiveInferenceJob()
             cancelInferenceUseCase()
             val key = _requestedTurnKey.value ?: activeTurnKey
             key?.let {
@@ -215,6 +286,11 @@ class InferenceOrchestrator
          * Does not write [SavedStateHandle] — Navigation owns `chatId` there; [createNewChat] clears it.
          * Intentional no-op for null so [ChatRoute] cannot wipe nav args before they are applied.
          */
+        fun adoptChatId(chatId: ChatId) {
+            _currentChatId.value = chatId
+            savedStateHandle["chatId"] = chatId.value
+        }
+
         fun syncActiveChatFromNavigation(navChatId: ChatId?) {
             if (navChatId == null) return
             if (_currentChatId.value == navChatId) return
@@ -236,7 +312,8 @@ class InferenceOrchestrator
         }
 
         fun createNewChat() {
-            inferenceJob?.cancel()
+            cancelActiveInferenceJob()
+            cancelInferenceUseCase()
             _requestedTurnKey.value?.let { key ->
                 _acknowledgedTurnKeys.updateAcknowledgedTurnKeys("createNewChat") { keys -> keys + key }
             }
@@ -245,8 +322,31 @@ class InferenceOrchestrator
             savedStateHandle["chatId"] = null
         }
 
-        fun cancelInference() {
+        fun cancelInference(scope: CoroutineScope) {
+            cancelActiveInferenceJob()
+            cancelInferenceUseCase()
+            _currentChatId.value?.let { chatId ->
+                scope.launch {
+                    pipelineExecutor.stopPipeline(chatId.value)
+                }
+            }
+        }
+
+        /**
+         * Detach UI/session wiring when [ChatViewModel] is cleared (e.g. navigation away).
+         * In-flight generation continues on [applicationScope]; [ActiveChatTurnSnapshotPort]
+         * holds live state for reattachment when the user returns.
+         */
+        fun detachOnViewModelCleared() {
+            sendJob?.cancel()
+            sendJob = null
+        }
+
+        private fun cancelActiveInferenceJob() {
+            sendJob?.cancel()
+            sendJob = null
             inferenceJob?.cancel()
+            inferenceJob = null
         }
 
         private inline fun MutableStateFlow<Set<ActiveChatTurnKey>>.updateAcknowledgedTurnKeys(
@@ -255,16 +355,33 @@ class InferenceOrchestrator
         ) {
             update { keys ->
                 val newKeys = transform(keys)
-                Log.d(
-                    "InfOrch",
-                    "ackUpdate from=${keys.map { it.assistantMessageId.value.take(4) }} " +
-                        "to=${newKeys.map { it.assistantMessageId.value.take(4) }} via=$via",
-                )
+                if (BuildConfig.DEBUG) {
+                    Log.d(
+                        "InfOrch",
+                        "ackUpdate from=${keys.map { it.assistantMessageId.value.take(4) }} " +
+                            "to=${newKeys.map { it.assistantMessageId.value.take(4) }} via=$via",
+                    )
+                }
                 newKeys
             }
         }
 
         private companion object {
             private const val TAG = "InferenceOrchestrator"
+            private const val BLOCKED_RESPONSE_PLACEHOLDER =
+                "This response was removed due to content policy."
         }
+    }
+
+data class PromptTooLargeFailure(
+    val prompt: String,
+)
+
+private fun AccumulatedMessages.hasCompactionFailure(): Boolean =
+    messages.values.any { snapshot ->
+        snapshot.isComplete &&
+            (
+                snapshot.failureErrorCategory == ChatInferenceErrorCategory.PROMPT_TOO_LARGE ||
+                    ChatInferenceUserErrorMapper.isPromptTooLarge(snapshot.content)
+            )
     }

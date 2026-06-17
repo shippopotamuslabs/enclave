@@ -45,7 +45,7 @@ class StudioGenerationIntentCodecTest {
     }
 
     @Test
-    fun `image settings round trip through intent extras`() {
+    fun `INT-SVC-001 foreground intent round trips diffusion steps for studio service`() {
         val intent = Intent()
         val settings =
             ImageGenerationSettings(
@@ -54,6 +54,9 @@ class StudioGenerationIntentCodecTest {
                 referenceImageUri = "content://ref",
                 seed = "seed",
                 generationCount = 3,
+                imageResolution = "1024x1024",
+                diffusionSteps = 24,
+                img2ImgDenoiseStrength = 0.4f,
             )
 
         StudioGenerationIntentCodec.writeSettings(intent, settings)

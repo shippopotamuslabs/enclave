@@ -3,35 +3,29 @@ package com.browntowndev.enclave.feature.inference
 import com.anthropic.client.AnthropicClient
 import com.anthropic.core.http.StreamResponse
 import com.anthropic.models.messages.MessageCreateParams
+import com.anthropic.models.messages.MessageParam
 import com.anthropic.models.messages.RawContentBlockDelta
 import com.anthropic.models.messages.RawContentBlockDeltaEvent
-import com.anthropic.models.messages.RawContentBlockStartEvent
-import com.anthropic.models.messages.RawContentBlockStopEvent
-import com.anthropic.models.messages.RawMessageDeltaEvent
-import com.anthropic.models.messages.RawMessageStartEvent
-import com.anthropic.models.messages.RawMessageStopEvent
 import com.anthropic.models.messages.RawMessageStreamEvent
-import com.anthropic.models.messages.TextBlock
 import com.anthropic.models.messages.TextDelta
-import com.anthropic.models.messages.ThinkingDelta
 import com.anthropic.services.blocking.MessageService
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.AgentLoopMessage
+import com.browntowndev.enclave.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.InferenceNetworkException
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.port.inference.InferenceEvent
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.util.FakeToolEnvelopeParserPort
 import com.browntowndev.enclave.domain.util.FakeToolStreamGatePort
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.verify
-import kotlinx.coroutines.flow.toList
+import io.mockk.slot
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import java.util.Optional
 import java.util.stream.Stream
 
@@ -42,163 +36,11 @@ class AnthropicInferenceServiceImplTest {
     private val loggingPort = mockk<LoggingPort>(relaxed = true)
 
     @Test
-    fun `sendPrompt streams text thinking and finished events`() =
-        runTest {
-            val textDelta = mockk<TextDelta>()
-            every { textDelta.text() } returns "answer"
-
-            val thinkingDelta = mockk<ThinkingDelta>()
-            every { thinkingDelta.thinking() } returns "reasoning"
-
-            val textBlockDelta = mockk<RawContentBlockDelta>()
-            every { textBlockDelta.text() } returns Optional.of(textDelta)
-            every { textBlockDelta.inputJson() } returns Optional.empty()
-            every { textBlockDelta.thinking() } returns Optional.empty()
-
-            val thinkingBlockDelta = mockk<RawContentBlockDelta>()
-            every { thinkingBlockDelta.text() } returns Optional.empty()
-            every { thinkingBlockDelta.inputJson() } returns Optional.empty()
-            every { thinkingBlockDelta.thinking() } returns Optional.of(thinkingDelta)
-
-            val textDeltaEvent = mockk<RawContentBlockDeltaEvent>()
-            every { textDeltaEvent.delta() } returns textBlockDelta
-
-            val thinkingDeltaEvent = mockk<RawContentBlockDeltaEvent>()
-            every { thinkingDeltaEvent.delta() } returns thinkingBlockDelta
-
-            val textEvent = mockStreamEvent(contentBlockDelta = Optional.of(textDeltaEvent))
-            val thinkingEvent = mockStreamEvent(contentBlockDelta = Optional.of(thinkingDeltaEvent))
-            val stopEvent = mockStreamEvent(messageStop = Optional.of(mockk()))
-
-            every { client.messages() } returns messageService
-            every { messageService.createStreaming(any<MessageCreateParams>()) } returns streamResponse
-            every { streamResponse.stream() } returns Stream.of(textEvent, thinkingEvent, stopEvent)
-            every { streamResponse.close() } returns Unit
-
-            val service =
-                AnthropicInferenceServiceImpl(
-                    client = client,
-                    modelId = "claude-sonnet-4-20250514",
-                    modelType = ModelType.MAIN,
-                    loggingPort = loggingPort,
-                    toolEnvelopeParserPort = FakeToolEnvelopeParserPort(),
-                    toolStreamGatePort = FakeToolStreamGatePort(),
-                )
-
-            val events = service.sendPrompt("Hello", closeConversation = false).toList()
-
-            assertTrue(events.any { it is InferenceEvent.PartialResponse && it.chunk == "answer" })
-            assertTrue(events.any { it is InferenceEvent.Thinking && it.chunk == "reasoning" })
-            assertTrue(events.any { it is InferenceEvent.Finished })
-            verify(exactly = 1) { messageService.createStreaming(any<MessageCreateParams>()) }
-            verify(exactly = 1) { streamResponse.close() }
+    fun `sendPrompt is not supported on direct Anthropic service`() {
+        val service = createService()
+        assertThrows<IllegalStateException> {
+            service.sendPrompt("Hello", closeConversation = false)
         }
-
-    @Test
-    fun `sendPrompt emits text and thinking from content block start events`() =
-        runTest {
-            val textBlock = mockk<TextBlock>()
-            every { textBlock.text() } returns "start answer"
-
-            val thinkingBlock = mockk<com.anthropic.models.messages.ThinkingBlock>()
-            every { thinkingBlock.thinking() } returns "start reasoning"
-
-            val textContentBlock = mockk<RawContentBlockStartEvent.ContentBlock>()
-            every { textContentBlock.text() } returns Optional.of(textBlock)
-            every { textContentBlock.thinking() } returns Optional.empty()
-            every { textContentBlock.isToolUse() } returns false
-
-            val thinkingContentBlock = mockk<RawContentBlockStartEvent.ContentBlock>()
-            every { thinkingContentBlock.text() } returns Optional.empty()
-            every { thinkingContentBlock.thinking() } returns Optional.of(thinkingBlock)
-            every { thinkingContentBlock.isToolUse() } returns false
-
-            val textStartEvent = mockk<RawContentBlockStartEvent>()
-            every { textStartEvent.contentBlock() } returns textContentBlock
-
-            val thinkingStartEvent = mockk<RawContentBlockStartEvent>()
-            every { thinkingStartEvent.contentBlock() } returns thinkingContentBlock
-
-            val textEvent = mockStreamEvent(contentBlockStart = Optional.of(textStartEvent))
-            val thinkingEvent = mockStreamEvent(contentBlockStart = Optional.of(thinkingStartEvent))
-            val stopEvent = mockStreamEvent(messageStop = Optional.of(mockk()))
-
-            every { client.messages() } returns messageService
-            every { messageService.createStreaming(any<MessageCreateParams>()) } returns streamResponse
-            every { streamResponse.stream() } returns Stream.of(textEvent, thinkingEvent, stopEvent)
-            every { streamResponse.close() } returns Unit
-
-            val service =
-                AnthropicInferenceServiceImpl(
-                    client = client,
-                    modelId = "claude-sonnet-4-20250514",
-                    modelType = ModelType.MAIN,
-                    loggingPort = loggingPort,
-                    toolEnvelopeParserPort = FakeToolEnvelopeParserPort(),
-                    toolStreamGatePort = FakeToolStreamGatePort(),
-                )
-
-            val events = service.sendPrompt("Hello", closeConversation = false).toList()
-
-            assertTrue(events.any { it is InferenceEvent.PartialResponse && it.chunk == "start answer" })
-            assertTrue(events.any { it is InferenceEvent.Thinking && it.chunk == "start reasoning" })
-            assertTrue(events.any { it is InferenceEvent.Finished })
-        }
-
-    @Test
-    fun `sendPrompt emits finished when stream ends without stop event`() =
-        runTest {
-            val textDelta = mockk<TextDelta>()
-            every { textDelta.text() } returns "answer"
-
-            val textBlockDelta = mockk<RawContentBlockDelta>()
-            every { textBlockDelta.text() } returns Optional.of(textDelta)
-            every { textBlockDelta.inputJson() } returns Optional.empty()
-            every { textBlockDelta.thinking() } returns Optional.empty()
-
-            val textDeltaEvent = mockk<RawContentBlockDeltaEvent>()
-            every { textDeltaEvent.delta() } returns textBlockDelta
-
-            val textEvent = mockStreamEvent(contentBlockDelta = Optional.of(textDeltaEvent))
-
-            every { client.messages() } returns messageService
-            every { messageService.createStreaming(any<MessageCreateParams>()) } returns streamResponse
-            every { streamResponse.stream() } returns Stream.of(textEvent)
-            every { streamResponse.close() } returns Unit
-
-            val service =
-                AnthropicInferenceServiceImpl(
-                    client = client,
-                    modelId = "claude-sonnet-4-20250514",
-                    modelType = ModelType.MAIN,
-                    loggingPort = loggingPort,
-                    toolEnvelopeParserPort = FakeToolEnvelopeParserPort(),
-                    toolStreamGatePort = FakeToolStreamGatePort(),
-                )
-
-            val events = service.sendPrompt("Hello", closeConversation = true).toList()
-
-            assertEquals(2, events.size)
-            assertTrue(events.last() is InferenceEvent.Finished)
-            verify(exactly = 1) { messageService.createStreaming(any<MessageCreateParams>()) }
-        }
-
-    private fun mockStreamEvent(
-        contentBlockDelta: Optional<RawContentBlockDeltaEvent> = Optional.empty(),
-        messageStart: Optional<RawMessageStartEvent> = Optional.empty(),
-        messageDelta: Optional<RawMessageDeltaEvent> = Optional.empty(),
-        messageStop: Optional<RawMessageStopEvent> = Optional.empty(),
-        contentBlockStart: Optional<RawContentBlockStartEvent> = Optional.empty(),
-        contentBlockStop: Optional<RawContentBlockStopEvent> = Optional.empty(),
-    ): RawMessageStreamEvent {
-        val event = mockk<RawMessageStreamEvent>()
-        every { event.contentBlockDelta() } returns contentBlockDelta
-        every { event.messageStart() } returns messageStart
-        every { event.messageDelta() } returns messageDelta
-        every { event.messageStop() } returns messageStop
-        every { event.contentBlockStart() } returns contentBlockStart
-        every { event.contentBlockStop() } returns contentBlockStop
-        return event
     }
 
     @Test
@@ -207,18 +49,10 @@ class AnthropicInferenceServiceImplTest {
             every { client.messages() } returns messageService
             every { messageService.createStreaming(any<MessageCreateParams>()) } throws java.io.IOException("Socket timeout")
 
-            val service =
-                AnthropicInferenceServiceImpl(
-                    client = client,
-                    modelId = "claude-sonnet-4-20250514",
-                    modelType = ModelType.MAIN,
-                    loggingPort = loggingPort,
-                    toolEnvelopeParserPort = FakeToolEnvelopeParserPort(),
-                    toolStreamGatePort = FakeToolStreamGatePort(),
-                )
+            val service = createService()
 
             val exception =
-                org.junit.jupiter.api.assertThrows<InferenceNetworkException> {
+                assertThrows<InferenceNetworkException> {
                     service.completeSingleTurn(
                         sessionMessages = listOf(AgentLoopMessage(id = "user-live", role = Role.USER, content = "Hello")),
                         systemPrompt = "",
@@ -235,4 +69,146 @@ class AnthropicInferenceServiceImplTest {
             assertEquals("[ANTHROPIC] Network error: Socket timeout", exception.message)
             assertTrue(exception.cause is java.io.IOException)
         }
+
+    @Test
+    fun `completeSingleTurn throws when stream ends without stop reason after partial text`() =
+        runTest {
+            val textDelta = mockk<TextDelta>()
+            every { textDelta.text() } returns "partial"
+
+            val textBlockDelta = mockk<RawContentBlockDelta>()
+            every { textBlockDelta.text() } returns Optional.of(textDelta)
+            every { textBlockDelta.inputJson() } returns Optional.empty()
+            every { textBlockDelta.thinking() } returns Optional.empty()
+
+            val textDeltaEvent = mockk<RawContentBlockDeltaEvent>()
+            every { textDeltaEvent.delta() } returns textBlockDelta
+
+            val textEvent = mockStreamEvent(contentBlockDelta = Optional.of(textDeltaEvent))
+
+            every { client.messages() } returns messageService
+            every { messageService.createStreaming(any<MessageCreateParams>()) } returns streamResponse
+            every { streamResponse.stream() } returns Stream.of(textEvent)
+            every { streamResponse.close() } returns Unit
+
+            val service = createService()
+
+            val error =
+                assertThrows<RuntimeException> {
+                    service.completeSingleTurn(
+                        sessionMessages = listOf(AgentLoopMessage(id = "user-live", role = Role.USER, content = "Hello")),
+                        systemPrompt = "",
+                        contextSidecars = null,
+                        availableTools = emptyList(),
+                        allowToolCall = false,
+                        onTextToken = {},
+                        onThinkingToken = {},
+                        options = GenerationOptions(reasoningBudget = 0),
+                    )
+                }
+            assertTrue(error.message!!.contains("stream ended unexpectedly without finish signal"))
+        }
+
+    @Test
+    fun `completeSingleTurn maps agent tool budget sidecar to user infrastructure not assistant`() =
+        runTest {
+            val paramsSlot = slot<MessageCreateParams>()
+            every { client.messages() } returns messageService
+            every { messageService.createStreaming(capture(paramsSlot)) } returns streamResponse
+            every { streamResponse.stream() } returns Stream.of(anthropicMessageStopEvent())
+            every { streamResponse.close() } returns Unit
+
+            val service = createService()
+            val budgetContent =
+                "<system_context>\nTool budget: 3/50 used (47 remaining). Tools enabled.\n</system_context>"
+
+            service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        AgentLoopMessage(id = "user-live", role = Role.USER, content = "Hello"),
+                        AgentLoopMessage(
+                            id = "budget",
+                            role = Role.ASSISTANT,
+                            content = budgetContent,
+                            metadataJson = """{"agent_tool_budget":true}""",
+                        ),
+                    ),
+                systemPrompt = "",
+                contextSidecars = null,
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+
+            val messages = paramsSlot.captured.messages()
+            assertEquals(2, messages.size)
+            assertEquals(MessageParam.Role.USER, messages[0].role())
+            assertEquals(MessageParam.Role.USER, messages[1].role())
+            val budgetWireText =
+                messages[1]
+                    .content()
+                    .asBlockParams()
+                    .single()
+                    .asText()
+                    .text()
+            assertEquals(budgetContent, budgetWireText)
+            assertEquals(false, budgetWireText.contains(""""_agent""""))
+        }
+
+    @Test
+    fun `completeSingleTurn clamps thinking budget below max tokens`() =
+        runTest {
+            val paramsSlot = slot<MessageCreateParams>()
+            every { client.messages() } returns messageService
+            every { messageService.createStreaming(capture(paramsSlot)) } returns streamResponse
+            every { streamResponse.stream() } returns Stream.of(anthropicMessageStopEvent())
+            every { streamResponse.close() } returns Unit
+
+            val service = createService()
+
+            service.completeSingleTurn(
+                sessionMessages = listOf(AgentLoopMessage(id = "user-live", role = Role.USER, content = "Hello")),
+                systemPrompt = "",
+                contextSidecars = null,
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 8000,
+                        reasoningEffort = ApiReasoningEffort.HIGH,
+                        maxTokens = 4096,
+                    ),
+            )
+
+            val params = paramsSlot.captured
+            assertTrue(params.thinking().isPresent)
+            assertTrue(params.maxTokens() > params.thinking().get().asEnabled().budgetTokens())
+        }
+
+    private fun createService(): AnthropicInferenceServiceImpl =
+        AnthropicInferenceServiceImpl(
+            client = client,
+            modelId = "claude-sonnet-4-20250514",
+            modelType = ModelType.MAIN,
+            loggingPort = loggingPort,
+            toolEnvelopeParserPort = FakeToolEnvelopeParserPort(),
+            toolStreamGatePort = FakeToolStreamGatePort(),
+        )
+
+    private fun mockStreamEvent(
+        contentBlockDelta: Optional<RawContentBlockDeltaEvent> = Optional.empty(),
+    ): RawMessageStreamEvent {
+        val event = mockk<RawMessageStreamEvent>()
+        every { event.contentBlockDelta() } returns contentBlockDelta
+        every { event.messageStart() } returns Optional.empty()
+        every { event.messageDelta() } returns Optional.empty()
+        every { event.messageStop() } returns Optional.empty()
+        every { event.contentBlockStart() } returns Optional.empty()
+        every { event.contentBlockStop() } returns Optional.empty()
+        return event
+    }
 }

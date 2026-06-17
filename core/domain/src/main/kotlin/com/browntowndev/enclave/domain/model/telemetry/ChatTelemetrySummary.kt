@@ -27,6 +27,7 @@ data class ChatTelemetrySummary(
     val averageTtftMs: Long?,
     val averageOutputTokensPerSecond: Double?,
     val totalInputTokens: Int,
+    val totalInputTokensNormalized: Int,
     val totalOutputTokens: Int,
     val totalReasoningTokens: Int,
     val totalCacheReadInputTokens: Int,
@@ -34,4 +35,5 @@ data class ChatTelemetrySummary(
     val cacheHitRatePercent: Double?,
     val providerBreakdown: List<ProviderTelemetryBreakdown>,
     val modelBreakdown: List<ModelTelemetryBreakdown>,
+    val rows: List<TurnTelemetry> = emptyList(),
 )

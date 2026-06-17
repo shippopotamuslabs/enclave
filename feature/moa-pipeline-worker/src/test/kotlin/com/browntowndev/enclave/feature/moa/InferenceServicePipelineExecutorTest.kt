@@ -256,17 +256,17 @@ class InferenceServicePipelineExecutorTest {
 
             val chatId = "chat1"
 
-            every { serviceStarter.startService(any(), any(), any()) } throws IllegalStateException("Service start failed")
+            every {
+                serviceStarter.startService(any(), any(), any(), any(), any())
+            } throws IllegalStateException("Service start failed")
 
-            // executePipeline is a regular (non-suspend) function, so the exception
-            // propagates immediately from the call site.
-            val ex =
-                org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException::class.java) {
-                    executor.executePipeline(chatId, "Hello")
-                }
-            assertEquals("Service start failed", ex.message)
+            val thrown =
+                runCatching {
+                    executor.executePipeline(chatId, "Hello").toList()
+                }.exceptionOrNull()
+            assertTrue(thrown is IllegalStateException)
+            assertEquals("Service start failed", thrown?.message)
 
-            // After exception, the pipeline stream must be cleared
             assertFalse(inferenceEventBus.hasPipelineStream(chatId), "Pipeline stream must be cleared when startService throws")
         }
 }

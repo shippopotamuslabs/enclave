@@ -19,6 +19,8 @@ import com.browntowndev.enclave.domain.port.inference.InferenceEvent
 import com.browntowndev.enclave.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.enclave.domain.port.inference.LlmInferencePort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
+import com.browntowndev.enclave.domain.port.inference.NoopOnDeviceInferenceCancellationPort
 import com.browntowndev.enclave.domain.port.inference.MonotonicToolActivationPort
 import com.browntowndev.enclave.domain.port.inference.PromptComposerPort
 import com.browntowndev.enclave.domain.port.inference.SearchIntentClassifierPort
@@ -44,9 +46,12 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -96,6 +101,7 @@ class ChatInferenceServiceTest {
     private val chatGenerationProgressPersister = mockk<ChatGenerationProgressPersister>()
     private val monotonicToolActivation = mockk<MonotonicToolActivationPort>(relaxed = true)
     private val committedInferencePrompts = mockk<CommittedInferencePromptPort>(relaxed = true)
+    private val inferenceLockManager = mockk<InferenceLockManager>(relaxed = true)
 
     private val llmInferenceService = mockk<LlmInferencePort>()
     private val progressSession = mockk<ChatGenerationProgressSession>()
@@ -131,6 +137,8 @@ class ChatInferenceServiceTest {
         service.chatGenerationProgressPersister = chatGenerationProgressPersister
         service.monotonicToolActivation = monotonicToolActivation
         service.committedInferencePrompts = committedInferencePrompts
+        service.onDeviceInferenceCancellation = NoopOnDeviceInferenceCancellationPort
+        service.inferenceLockManager = inferenceLockManager
 
         val scopeField = ChatInferenceService::class.java.getDeclaredField("serviceScope")
         scopeField.isAccessible = true
@@ -271,6 +279,32 @@ class ChatInferenceServiceTest {
         }
 
     @Test
+    @DisplayName("CIS5: ACTION_STOP while job active defers stopSelf to finally block")
+    fun cis5_actionStopWhileJobActiveUsesFinallyStopSelf() =
+        runTest(testDispatcher) {
+            val streamStarted = CompletableDeferred<Unit>()
+            every { llmInferenceService.sendPrompt(any(), any(), any()) } returns
+                flow {
+                    streamStarted.complete(Unit)
+                    awaitCancellation()
+                }
+
+            val spiedService = spyk(service, recordPrivateCalls = false)
+            spiedService.onStartCommand(startIntent(), 0, 1)
+            streamStarted.await()
+            runCurrent()
+
+            spiedService.onStartCommand(
+                Intent(ChatInferenceService.ACTION_STOP),
+                0,
+                2,
+            )
+            advanceUntilIdle()
+
+            verify(atLeast = 1) { spiedService.stopSelf(1) }
+        }
+
+    @Test
     @DisplayName("CIS3: ACTION_START invokes startForeground for ongoing notification")
     fun cis3_actionStartInvokesStartForeground() =
         runTest(testDispatcher) {
@@ -395,17 +429,17 @@ class ChatInferenceServiceTest {
             every {
                 llmInferenceService.sendPrompt(any(), any(), any())
             } returns
-                flowOf(
-                    InferenceEvent.PartialResponse("partial", ModelType.FAST),
-                )
+                flow {
+                    emit(InferenceEvent.PartialResponse("partial", ModelType.FAST))
+                    awaitCancellation()
+                }
 
             service.onStartCommand(startIntent(), 0, 1)
             blockStarted.await()
-            advanceUntilIdle()
 
             service.onStartCommand(Intent(ChatInferenceService.ACTION_STOP), 0, 2)
             advanceUntilIdle()
 
-            coVerify { progressSession.flush(markIncompleteAsCancelled = true) }
+            coVerify(timeout = 2000) { progressSession.flush(markIncompleteAsCancelled = true) }
         }
 }

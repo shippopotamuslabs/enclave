@@ -13,6 +13,7 @@ import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
 import com.browntowndev.enclave.domain.model.media.MediaGenerationOrigin
 import com.browntowndev.enclave.domain.model.media.MediaGenerationRequest
 import com.browntowndev.enclave.domain.model.media.MusicGenerationSettings
+import com.browntowndev.enclave.domain.model.media.StudioModelOverride
 import com.browntowndev.enclave.domain.model.media.VideoGenerationSettings
 
 object MediaGenerationRequestMapper {
@@ -73,11 +74,13 @@ object MediaGenerationRequestMapper {
         prompt: String,
         capability: MediaCapability,
         settings: GenerationSettings,
+        override: StudioModelOverride? = null,
     ): MediaGenerationRequest =
         MediaGenerationRequest(
             prompt = prompt,
             capability = capability,
             settings = settings,
             origin = MediaGenerationOrigin.STUDIO_FOREGROUND,
+            override = override,
         )
 }

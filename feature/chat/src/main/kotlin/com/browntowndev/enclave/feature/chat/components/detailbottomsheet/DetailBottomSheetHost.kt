@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.LocalInspectionMode
 @Composable
 fun ProvideDetailBottomSheet(content: @Composable () -> Unit) {
     var activeSheet by remember { mutableStateOf<HostedDetailSheet?>(null) }
+    val controllerHolder = remember { arrayOfNulls<DetailBottomSheetController>(1) }
 
     val controller =
         remember {
@@ -30,19 +31,29 @@ fun ProvideDetailBottomSheet(content: @Composable () -> Unit) {
                             config =
                                 config.withDismiss {
                                     userDismiss()
+                                    controllerHolder[0]?.markInactive()
                                     activeSheet = null
                                 },
                             elapsedSeconds = elapsedSeconds,
+                        )
+                },
+                onUpdate = { config, elapsedSeconds ->
+                    val current = activeSheet ?: return@DetailBottomSheetController
+                    activeSheet =
+                        current.copy(
+                            config = config.mergePreservingDismiss(current.config),
+                            elapsedSeconds = elapsedSeconds ?: current.elapsedSeconds,
                         )
                 },
                 onUpdateElapsed = { elapsedSeconds ->
                     activeSheet = activeSheet?.copy(elapsedSeconds = elapsedSeconds)
                 },
                 onDismiss = {
+                    controllerHolder[0]?.markInactive()
                     activeSheet?.config?.onDismiss?.invoke()
                     activeSheet = null
                 },
-            )
+            ).also { controllerHolder[0] = it }
         }
 
     CompositionLocalProvider(
@@ -67,14 +78,33 @@ private data class HostedDetailSheet(
 
 class DetailBottomSheetController internal constructor(
     private val onShow: (DetailBottomSheetConfig, Int) -> Unit,
+    private val onUpdate: (DetailBottomSheetConfig, Int?) -> Unit,
     private val onUpdateElapsed: (Int) -> Unit,
     private val onDismiss: () -> Unit,
 ) {
+    private var isSheetActive: Boolean = false
+
+    internal fun markInactive() {
+        isSheetActive = false
+    }
+
     fun show(
         config: DetailBottomSheetConfig,
         elapsedSeconds: Int = 0,
     ) {
+        isSheetActive = true
         onShow(config, elapsedSeconds)
+    }
+
+    fun update(
+        config: DetailBottomSheetConfig,
+        elapsedSeconds: Int? = null,
+    ) {
+        if (!isSheetActive) {
+            show(config, elapsedSeconds ?: 0)
+            return
+        }
+        onUpdate(config, elapsedSeconds)
     }
 
     fun updateElapsed(elapsedSeconds: Int) {
@@ -82,6 +112,8 @@ class DetailBottomSheetController internal constructor(
     }
 
     fun dismiss() {
+        if (!isSheetActive) return
+        markInactive()
         onDismiss()
     }
 }
@@ -110,9 +142,22 @@ internal fun rememberDetailBottomSheetController(usePreviewStub: Boolean = Local
 private fun previewDetailBottomSheetController(): DetailBottomSheetController =
     DetailBottomSheetController(
         onShow = { _, _ -> },
+        onUpdate = { _, _ -> },
         onUpdateElapsed = {},
         onDismiss = {},
     )
+
+internal fun DetailBottomSheetConfig.mergePreservingDismiss(
+    current: DetailBottomSheetConfig,
+): DetailBottomSheetConfig =
+    when (this) {
+        is DetailBottomSheetConfig.Thinking ->
+            copy(onDismiss = current.onDismiss)
+        is DetailBottomSheetConfig.StepCompletion ->
+            copy(onDismiss = current.onDismiss)
+        is DetailBottomSheetConfig.Sources ->
+            copy(onDismiss = current.onDismiss)
+    }
 
 private fun DetailBottomSheetConfig.withDismiss(onDismiss: () -> Unit): DetailBottomSheetConfig =
     when (this) {

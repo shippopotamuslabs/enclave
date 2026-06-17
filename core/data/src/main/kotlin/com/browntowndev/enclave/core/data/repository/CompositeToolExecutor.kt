@@ -28,7 +28,7 @@ import javax.inject.Singleton
  * - [ToolDefinition.APPEND_BLOCKS] → [ArtifactToolExecutor]
  * - [ToolDefinition.SEARCH_CURRENT_ARTIFACT] → [SearchArtifactToolExecutor]
  * - [ToolDefinition.X_SEARCH] → [XSearchToolExecutorImpl]
- * - [ToolDefinition.DISCLOSE_TOOL_SCHEMAS] → no-op (handled by agent core)
+ * - [ToolDefinition.SEARCH_TOOLS] → no-op (handled by inference host)
  */
 @Singleton
 class CompositeToolExecutor
@@ -146,8 +146,11 @@ class CompositeToolExecutor
                 ToolDefinition.GENERATE_IMAGE.name -> mediaToolExecutor.execute(request)
                 ToolDefinition.GENERATE_VIDEO.name -> mediaToolExecutor.execute(request)
                 ToolDefinition.GENERATE_MUSIC.name -> mediaToolExecutor.execute(request)
-                // Intercepted and fully handled by agent core before reaching this executor.
-                ToolDefinition.DISCLOSE_TOOL_SCHEMAS.name -> ToolExecutionResult(request.toolName, "{}")
+                // Intercepted by RustLoopInferenceService / LiteRtToolCallLoop before reaching this executor.
+                ToolDefinition.SEARCH_TOOLS.name ->
+                    throw IllegalStateException(
+                        "${ToolDefinition.SEARCH_TOOLS.name} must be handled by the inference host, not CompositeToolExecutor",
+                    )
                 // Intercepted and fully handled by RustLoopInferenceService before reaching this executor.
                 ToolDefinition.READ_CONTEXT_REFERENCE.name -> ToolExecutionResult(request.toolName, "{}")
                 else -> throw IllegalArgumentException("Unsupported tool: ${request.toolName}")

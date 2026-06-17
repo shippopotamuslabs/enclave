@@ -1,14 +1,21 @@
 package com.browntowndev.enclave.feature.studio.coordinators
 
 import com.browntowndev.enclave.domain.model.config.MediaCapability
+import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.media.GenerationSettings
+import com.browntowndev.enclave.domain.model.media.ImageGenerationProgress
 import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
+import com.browntowndev.enclave.domain.model.media.StudioModelOverride
 import com.browntowndev.enclave.domain.model.media.VideoGenerationSettings
 import com.browntowndev.enclave.domain.port.media.StudioGenerationDispatcherPort
+import com.browntowndev.enclave.domain.port.repository.ActiveStudioGeneration
 import com.browntowndev.enclave.domain.port.repository.StudioMediaAsset
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
+import com.browntowndev.enclave.feature.studio.ModerationEvent
 import com.browntowndev.enclave.feature.studio.StudioGenerationErrorMessages
 import com.browntowndev.enclave.feature.studio.VideoGenerationState
+import com.browntowndev.enclave.feature.studio.test.FakeStudioGenerationDispatcher
+import app.cash.turbine.test
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -22,6 +29,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -33,6 +41,8 @@ class StudioGenerationCoordinatorTest {
     private val dispatcher = mockk<StudioGenerationDispatcherPort>(relaxed = true)
     private val ephemeralMediaFlow = MutableStateFlow(emptyList<com.browntowndev.enclave.domain.port.repository.StudioMediaAsset>())
     private val generationErrorFlow = MutableStateFlow<String?>(null)
+    private val generationProgressFlow = MutableStateFlow<ImageGenerationProgress?>(null)
+    private val activeGenerationFlow = MutableStateFlow<ActiveStudioGeneration?>(null)
 
     private lateinit var coordinator: StudioGenerationCoordinator
 
@@ -40,21 +50,113 @@ class StudioGenerationCoordinatorTest {
     fun setup() {
         every { studioRepository.observeEphemeralMedia() } returns ephemeralMediaFlow
         every { studioRepository.observeGenerationError() } returns generationErrorFlow
+        every { studioRepository.observeGenerationProgress() } returns generationProgressFlow
+        every { studioRepository.observeActiveGeneration() } returns activeGenerationFlow
+        every { studioRepository.reportActiveGeneration(any()) } answers {
+            if (activeGenerationFlow.value != null) {
+                false
+            } else {
+                activeGenerationFlow.value = firstArg()
+                true
+            }
+        }
+        every { studioRepository.clearActiveGeneration() } answers {
+            activeGenerationFlow.value = null
+        }
         coordinator = StudioGenerationCoordinator(studioRepository, dispatcher)
     }
 
     @Test
-    fun beginGenerationAttempt_startsDispatcherAndMarksGenerating() {
+    fun beginGenerationAttempt_startsDispatcherAndMarksGenerating() =
+        runTest {
+            coordinator.startObservers(this)
+            coordinator.beginGenerationAttempt(
+                submittedPrompt = "prompt",
+                mediaType = MediaCapability.IMAGE,
+                continualMode = false,
+                settings = ImageGenerationSettings(),
+            )
+            advanceUntilIdle()
+
+            assertTrue(coordinator.isGenerating.value)
+            assertEquals("prompt", activeGenerationFlow.value?.prompt)
+            verify { dispatcher.startGeneration("prompt", MediaCapability.IMAGE, ImageGenerationSettings(), any()) }
+
+            coroutineContext[Job]?.cancelChildren(CancellationException("test complete"))
+        }
+
+    @Test
+    fun startObservers_activeGeneration_rehydratesGeneratingState() =
+        runTest {
+            val activeGeneration =
+                ActiveStudioGeneration(
+                    id = "gen-1",
+                    prompt = "in progress",
+                    mediaType = MediaCapability.VIDEO,
+                    settings = VideoGenerationSettings(),
+                )
+            activeGenerationFlow.value = activeGeneration
+            var restoredGeneration: ActiveStudioGeneration? = null
+
+            coordinator.startObservers(this) { restoredGeneration = it }
+            advanceUntilIdle()
+
+            assertTrue(coordinator.isGenerating.value)
+            assertEquals("in progress", coordinator.lastSubmittedPrompt.value)
+            assertEquals(activeGeneration, restoredGeneration)
+
+            coroutineContext[Job]?.cancelChildren(CancellationException("test complete"))
+        }
+
+    @Test
+    fun beginGenerationAttempt_activeGeneration_rejectsDuplicateBeforeDispatch() {
+        activeGenerationFlow.value =
+            ActiveStudioGeneration(
+                id = "existing-gen",
+                prompt = "first",
+                mediaType = MediaCapability.IMAGE,
+                settings = ImageGenerationSettings(),
+            )
+
         coordinator.beginGenerationAttempt(
-            submittedPrompt = "prompt",
+            submittedPrompt = "second",
             mediaType = MediaCapability.IMAGE,
             continualMode = false,
             settings = ImageGenerationSettings(),
         )
 
-        assertTrue(coordinator.isGenerating.value)
-        verify { dispatcher.startGeneration("prompt", MediaCapability.IMAGE, ImageGenerationSettings()) }
+        assertEquals("Another media generation is already in progress.", coordinator.error.value)
+        verify(exactly = 0) { dispatcher.startGeneration(any(), any(), any(), any()) }
     }
+
+    @Test
+    fun rejectPromptAsModerated_resetsFlagsAndEmitsEventWithoutError() =
+        runTest {
+            coordinator.startObservers(this)
+            coordinator.beginGenerationAttempt(
+                submittedPrompt = "test prompt",
+                mediaType = MediaCapability.IMAGE,
+                continualMode = true,
+                settings = ImageGenerationSettings(),
+            )
+            advanceUntilIdle()
+            assertTrue(coordinator.isGenerating.value)
+
+            coordinator.moderationEvents.test {
+                coordinator.rejectPromptAsModerated("test prompt")
+
+                val event = awaitItem()
+                assertTrue(event is ModerationEvent.Blocked)
+                assertEquals("test prompt", (event as ModerationEvent.Blocked).prompt)
+                cancelAndIgnoreRemainingEvents()
+            }
+
+            assertFalse(coordinator.isGenerating.value)
+            assertFalse(coordinator.isContinualGenerationActive.value)
+            assertNull(coordinator.error.value)
+
+            coroutineContext[Job]?.cancelChildren(CancellationException("test complete"))
+        }
 
     @Test
     fun stopGeneration_resetsContinualGenerationActive() {
@@ -83,6 +185,7 @@ class StudioGenerationCoordinatorTest {
                 "Animate this",
                 MediaCapability.VIDEO,
                 capture(settingsSlot),
+                any(),
             )
         }
         val settings = settingsSlot.captured as VideoGenerationSettings
@@ -100,55 +203,79 @@ class StudioGenerationCoordinatorTest {
                 continualMode = true,
                 settings = ImageGenerationSettings(),
             )
+            advanceUntilIdle()
             assertTrue(coordinator.isContinualGenerationActive.value)
             assertTrue(coordinator.isGenerating.value)
-            verify(exactly = 1) { dispatcher.startGeneration(any(), any(), any()) }
+            verify(exactly = 1) { dispatcher.startGeneration(any(), any(), any(), any()) }
 
-            ephemeralMediaFlow.value =
-                listOf(
-                    StudioMediaAsset(
-                        id = "1",
-                        localUri = "cache://1.jpg",
-                        prompt = "continual prompt",
-                        mediaType = MediaCapability.IMAGE.name,
-                        createdAt = 1L,
-                    ),
-                )
+            activeGenerationFlow.value = null
             advanceUntilIdle()
             assertFalse(coordinator.isGenerating.value)
             assertTrue(coordinator.isContinualGenerationActive.value)
 
             coordinator.onGenerativeScrollThresholdVisible("anchor-1", MediaCapability.IMAGE)
-            verify(exactly = 2) { dispatcher.startGeneration(any(), any(), any()) }
+            verify(exactly = 2) { dispatcher.startGeneration(any(), any(), any(), any()) }
+            advanceUntilIdle()
             assertTrue(coordinator.isGenerating.value)
 
-            ephemeralMediaFlow.value =
-                ephemeralMediaFlow.value +
-                StudioMediaAsset(
-                    id = "2",
-                    localUri = "cache://2.jpg",
-                    prompt = "continual prompt",
-                    mediaType = MediaCapability.IMAGE.name,
-                    createdAt = 2L,
-                )
+            activeGenerationFlow.value = null
             advanceUntilIdle()
             assertFalse(coordinator.isGenerating.value)
 
             coordinator.onGenerativeScrollThresholdVisible("anchor-2", MediaCapability.IMAGE)
-            verify(exactly = 3) { dispatcher.startGeneration(any(), any(), any()) }
+            verify(exactly = 3) { dispatcher.startGeneration(any(), any(), any(), any()) }
 
             coordinator.stopGeneration()
             assertFalse(coordinator.isContinualGenerationActive.value)
             assertFalse(coordinator.isGenerating.value)
 
             coordinator.onGenerativeScrollThresholdVisible("anchor-3", MediaCapability.IMAGE)
-            verify(exactly = 3) { dispatcher.startGeneration(any(), any(), any()) }
+            verify(exactly = 3) { dispatcher.startGeneration(any(), any(), any(), any()) }
 
             coroutineContext[Job]?.cancelChildren(CancellationException("test complete"))
         }
 
     @Test
-    fun observeGenerationError_mapsFalPolicyFailureForSnackbar() =
+    fun `continual re-generation forwards the stored override to the dispatcher`() =
+        runTest {
+            // Use the real coordinator with a recording fake dispatcher (Fakes preferred over MockK).
+            val fakeContinualDispatcher = FakeStudioGenerationDispatcher()
+            val continualCoordinator = StudioGenerationCoordinator(studioRepository, fakeContinualDispatcher)
+            continualCoordinator.startObservers(this)
+
+            val override = StudioModelOverride.MediaProvider(MediaProviderId("fal-1"), "Fal Aura")
+            continualCoordinator.beginGenerationAttempt(
+                submittedPrompt = "continual prompt",
+                mediaType = MediaCapability.IMAGE,
+                continualMode = true,
+                settings = ImageGenerationSettings(),
+                override = override,
+            )
+            advanceUntilIdle()
+            // Sanity: the initial attempt forwarded the override and armed continual mode.
+            assertEquals(override, fakeContinualDispatcher.lastStarted?.override)
+            assertTrue(continualCoordinator.isContinualGenerationActive.value)
+            assertTrue(continualCoordinator.isGenerating.value)
+
+            // Simulate the first generation completing so the continual _isGenerating guard clears.
+            activeGenerationFlow.value = null
+            advanceUntilIdle()
+            assertFalse(continualCoordinator.isGenerating.value)
+            assertTrue(continualCoordinator.isContinualGenerationActive.value)
+
+            // Trigger the continual re-generation path (spec §5 task #14).
+            continualCoordinator.onGenerativeScrollThresholdVisible("anchor-1", MediaCapability.IMAGE)
+            advanceUntilIdle()
+
+            // The continual re-generation must forward the stored override (not null).
+            // If the continual path dropped the override, lastStarted.override would be null and this fails.
+            assertEquals(override, fakeContinualDispatcher.lastStarted?.override)
+
+            coroutineContext[Job]?.cancelChildren(CancellationException("test complete"))
+        }
+
+    @Test
+    fun observeGenerationError_mapsFalPolicyFailureAsModerationEvent() =
         runTest {
             coordinator.startObservers(this)
             coordinator.startDetailVideoGeneration(
@@ -161,16 +288,55 @@ class StudioGenerationCoordinatorTest {
                 ),
             )
 
-            generationErrorFlow.value =
-                "fal video generation failed: could not fetch queue result from " +
-                "https://queue.fal.run/requests/1 " +
-                "(fal queue result failed: 422 Output video has sensitive content.)"
+            coordinator.moderationEvents.test {
+                generationErrorFlow.value =
+                    "fal video generation failed: could not fetch queue result from " +
+                    "https://queue.fal.run/requests/1 " +
+                    "(fal queue result failed: 422 Output video has sensitive content.)"
+                advanceUntilIdle()
+
+                val event = awaitItem()
+                assertTrue(event is ModerationEvent.Blocked)
+                cancelAndIgnoreRemainingEvents()
+            }
+
+            assertNull(coordinator.error.value)
+            val videoError = coordinator.videoGenerationState.value as VideoGenerationState.Error
+            assertEquals("Media failed moderation.", videoError.message)
+
+            coroutineContext[Job]?.cancelChildren(CancellationException("test complete"))
+        }
+
+    @Test
+    fun observeGenerationError_mapsNonModerationFailureAsError() =
+        runTest {
+            coordinator.startObservers(this)
+
+            generationErrorFlow.value = "fal image generation failed: timeout"
             advanceUntilIdle()
 
-            val expected = StudioGenerationErrorMessages.toSnackbarMessage(generationErrorFlow.value)
+            val expected = StudioGenerationErrorMessages.toSnackbarMessage("fal image generation failed: timeout")
             assertEquals(expected, coordinator.error.value)
-            val videoError = coordinator.videoGenerationState.value as VideoGenerationState.Error
-            assertEquals(expected, videoError.message)
+
+            coroutineContext[Job]?.cancelChildren(CancellationException("test complete"))
+        }
+
+    @Test
+    fun observeGenerationProgress_mapsDomainEventsToPresentationLabels() =
+        runTest {
+            coordinator.startObservers(this)
+
+            generationProgressFlow.value = ImageGenerationProgress.LoadingModel
+            advanceUntilIdle()
+            assertEquals("Loading model", coordinator.generationProgressLabel.value)
+
+            generationProgressFlow.value = ImageGenerationProgress.SavingOutput
+            advanceUntilIdle()
+            assertEquals("Saving output", coordinator.generationProgressLabel.value)
+
+            generationProgressFlow.value = null
+            advanceUntilIdle()
+            assertEquals(null, coordinator.generationProgressLabel.value)
 
             coroutineContext[Job]?.cancelChildren(CancellationException("test complete"))
         }

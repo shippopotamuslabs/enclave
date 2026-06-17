@@ -9,6 +9,26 @@ import kotlin.test.assertIs
 
 class AgentEventMapperTest {
     @Test
+    fun toDomain_compactionApplied_mapsTextTruncateTier() {
+        val event =
+            FfiAgentEvent.CompactionApplied(
+                FfiCompactionEvent(
+                    tier = FfiCompactionTier.TEXT_TRUNCATE,
+                    tokensBefore = 4200u,
+                    tokensAfter = 2800u,
+                    trigger = FfiCompactionTrigger.PREFLIGHT,
+                ),
+            )
+
+        val mapped = assertIs<AgentLoopEvent.CompactionApplied>(AgentEventMapper.toDomain(event))
+
+        assertEquals("TEXT_TRUNCATE", mapped.tier)
+        assertEquals(4200, mapped.tokensBefore)
+        assertEquals(2800, mapped.tokensAfter)
+        assertEquals("PREFLIGHT", mapped.trigger)
+    }
+
+    @Test
     fun toDomain_compactionApplied_mapsMetadataOnly() {
         val event =
             FfiAgentEvent.CompactionApplied(
@@ -91,6 +111,26 @@ class AgentEventMapperTest {
             )
 
         assertEquals("Sorry, something went wrong on my end. Please try again.", mapped.text)
+    }
+
+    @Test
+    fun toDomain_modelApiRetryScheduled_mapsAttemptAndDelay() {
+        val mapped =
+            assertIs<AgentLoopEvent.ModelApiRetryScheduled>(
+                AgentEventMapper.toDomain(
+                    FfiAgentEvent.ModelApiRetryScheduled(
+                        attempt = 2u,
+                        maxAttempts = 3u,
+                        delayMs = 2000uL,
+                        reason = "Upstream idle timeout exceeded",
+                    ),
+                ),
+            )
+
+        assertEquals(2, mapped.attempt)
+        assertEquals(3, mapped.maxAttempts)
+        assertEquals(2000L, mapped.delayMs)
+        assertEquals("Upstream idle timeout exceeded", mapped.reason)
     }
 
     @Test

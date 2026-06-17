@@ -23,7 +23,7 @@ class JniLlamaEngineGenerateWithOptionsTest {
         }
 
         private fun setupEngineWithMocks(): JniLlamaEngine {
-            val engine = spyk(JniLlamaEngine(mockk(relaxed = true)))
+            val engine = spyk(JniLlamaEngine())
 
             engine.modelLifecycle.loaded.set(true)
             engine.modelLifecycle.currentConfig =
@@ -63,7 +63,7 @@ class JniLlamaEngineGenerateWithOptionsTest {
                 )
             } answers {
                 val callback = arg<NativeTokenCallback>(12)
-                callback.onComplete(10, 20)
+                callback.onComplete(10, 20, 8)
             }
 
             return engine

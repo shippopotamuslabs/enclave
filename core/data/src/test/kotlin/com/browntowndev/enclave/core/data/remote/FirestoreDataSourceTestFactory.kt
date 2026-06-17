@@ -14,6 +14,7 @@ import com.browntowndev.enclave.core.data.local.MediaProviderDao
 import com.browntowndev.enclave.core.data.local.MemoriesDao
 import com.browntowndev.enclave.core.data.local.MessageDao
 import com.browntowndev.enclave.core.data.local.MessageFileDao
+import com.browntowndev.enclave.core.data.local.MessageInferenceTelemetryDao
 import com.browntowndev.enclave.core.data.local.MessageTranscriptSegmentDao
 import com.browntowndev.enclave.core.data.local.MessageVisionAnalysisDao
 import com.browntowndev.enclave.core.data.local.StudioAlbumDao
@@ -25,20 +26,26 @@ import com.browntowndev.enclave.core.data.remote.firestore.ChatSyncDaos
 import com.browntowndev.enclave.core.data.remote.firestore.ConfigSyncDaos
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncDaos
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncDocumentCache
+import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncEntityReconciler
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncEventApplier
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncEventDispatcher
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncEventFeedClient
+import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncFeedCallableClient
+import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncFeedIntegrityRecovery
+import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncFeedMetaClient
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncStateStore
 import com.browntowndev.enclave.core.data.remote.firestore.StudioSyncDaos
 import com.browntowndev.enclave.core.data.repository.SettingsRepositoryImpl
 import com.browntowndev.enclave.core.data.security.ApiKeyManager
 import com.browntowndev.enclave.core.data.security.LocalDataEncryptionService
 import com.browntowndev.enclave.core.data.security.SensitivePersistenceSelfHealer
+import com.browntowndev.enclave.core.data.sync.CloudSyncTrigger
 import com.browntowndev.enclave.core.data.sync.EmbeddingRegenerationCoordinator
 import com.browntowndev.enclave.core.data.sync.SearchToolSettingsSyncQueue
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
 import com.google.firebase.firestore.FirebaseFirestore
+import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
 import java.util.concurrent.atomic.AtomicBoolean
@@ -89,8 +96,19 @@ internal fun createTestFirestoreDataSource(
                 ) { java.io.File.createTempFile("search-settings-", ".preferences_pb") },
         ),
     settingsRepository: SettingsRepositoryImpl = mockk(relaxed = true),
+    syncTrigger: CloudSyncTrigger = mockk(relaxed = true),
+    feedIntegrityRecovery: FirestoreSyncFeedIntegrityRecovery? = null,
 ): FirestoreDataSource {
     val healer = sensitiveSelfHealer ?: SensitivePersistenceSelfHealer(localEncryption, loggingPort)
+    val resolvedFeedIntegrityRecovery =
+        feedIntegrityRecovery
+            ?: FirestoreSyncFeedIntegrityRecovery(
+                metaClient = FirestoreSyncFeedMetaClient(firestore),
+                callableClient = mockk<FirestoreSyncFeedCallableClient>(relaxed = true),
+                entityReconciler = mockk<FirestoreSyncEntityReconciler>(relaxed = true),
+                syncStateStore = syncStateStore,
+                loggingPort = loggingPort,
+            )
     val facade =
         FirestoreSyncDependenciesFacade.forTests(
             firestore = firestore,
@@ -112,6 +130,7 @@ internal fun createTestFirestoreDataSource(
                 ConfigSyncDaos(
                     memoriesDao = memoriesDao,
                     ttsProviderDao = ttsProviderDao,
+                    liveVoiceProviderDao = mockk(relaxed = true),
                     mediaProviderDao = mediaProviderDao,
                     apiModelConfigurationsDao = apiModelConfigurationsDao,
                     localModelsDao = localModelsDao,
@@ -139,8 +158,26 @@ internal fun createTestFirestoreDataSource(
             documentCache = documentCache,
             searchToolSettingsSyncQueue = searchToolSettingsSyncQueue,
             settingsRepository = settingsRepository,
+            feedIntegrityRecovery = resolvedFeedIntegrityRecovery,
         )
-    return FirestoreDataSource(facade, externalScope)
+    return FirestoreDataSource(facade, externalScope, syncTrigger)
+}
+
+/** Avoids real Firestore meta reads during replay tests (prevents dangling Tasks.await coroutines). */
+internal fun testFeedIntegrityRecovery(
+    syncStateStore: FirestoreSyncStateStore,
+    loggingPort: LoggingPort,
+): FirestoreSyncFeedIntegrityRecovery {
+    val metaClient = mockk<FirestoreSyncFeedMetaClient>()
+    coEvery { metaClient.readFeedStatus(any()) } returns null
+    coEvery { metaClient.awaitSyncEvent(any(), any()) } returns false
+    return FirestoreSyncFeedIntegrityRecovery(
+        metaClient = metaClient,
+        callableClient = mockk(relaxed = true),
+        entityReconciler = mockk(relaxed = true),
+        syncStateStore = syncStateStore,
+        loggingPort = loggingPort,
+    )
 }
 
 /**
@@ -196,6 +233,7 @@ internal fun testFirestoreSyncDaos(
     chatDao: ChatDao = mockk(relaxed = true),
     messageDao: MessageDao = mockk(relaxed = true),
     messageTranscriptSegmentDao: MessageTranscriptSegmentDao = mockk(relaxed = true),
+    messageInferenceTelemetryDao: MessageInferenceTelemetryDao = mockk(relaxed = true),
     memoriesDao: MemoriesDao = mockk(relaxed = true),
     webSearchSourceDao: WebSearchSourceDao = mockk(relaxed = true),
     ttsProviderDao: TtsProviderDao = mockk(relaxed = true),
@@ -224,7 +262,7 @@ internal fun testFirestoreSyncDaos(
                 messageFileDao = messageFileDao,
                 messageVisionAnalysisDao = messageVisionAnalysisDao,
                 messageTranscriptSegmentDao = messageTranscriptSegmentDao,
-                messageInferenceTelemetryDao = mockk(relaxed = true),
+                messageInferenceTelemetryDao = messageInferenceTelemetryDao,
                 webSearchSourceDao = webSearchSourceDao,
                 documentDao = documentDao,
                 embeddingDao = embeddingDao,
@@ -234,6 +272,7 @@ internal fun testFirestoreSyncDaos(
             ConfigSyncDaos(
                 memoriesDao = memoriesDao,
                 ttsProviderDao = ttsProviderDao,
+                liveVoiceProviderDao = mockk(relaxed = true),
                 mediaProviderDao = mediaProviderDao,
                 apiModelConfigurationsDao = apiModelConfigurationsDao,
                 localModelsDao = localModelsDao,

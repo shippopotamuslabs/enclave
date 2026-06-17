@@ -18,6 +18,8 @@ sealed interface GenerationEvent {
         val fullText: String,
         val promptTokens: Int? = null,
         val generatedTokens: Int? = null,
+        /** KV prefix tokens reused without full re-evaluation (llama.cpp only). */
+        val prefixReusedTokens: Int? = null,
     ) : GenerationEvent
 
     /**

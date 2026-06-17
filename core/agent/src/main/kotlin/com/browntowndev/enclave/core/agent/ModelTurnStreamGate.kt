@@ -26,7 +26,8 @@ internal class ModelTurnStreamGate(
         hasNativeToolCalls: Boolean,
         emit: suspend (String) -> Unit = {},
     ): String {
-        val finish = port.finish(handle, hasNativeToolCalls)
+        val treatAsNativeToolTurn = hasNativeToolCalls || port.hasToolMarkup(handle)
+        val finish = port.finish(handle, treatAsNativeToolTurn)
         if (finish.trailingFlush.isNotEmpty()) {
             emit(finish.trailingFlush)
         }

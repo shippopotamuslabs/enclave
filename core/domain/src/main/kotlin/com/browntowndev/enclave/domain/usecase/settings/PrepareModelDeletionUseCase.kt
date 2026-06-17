@@ -12,6 +12,10 @@ import com.browntowndev.enclave.domain.usecase.byok.DeleteApiCredentialsUseCase
 import com.browntowndev.enclave.domain.usecase.byok.DeleteApiModelConfigurationUseCase
 import com.browntowndev.enclave.domain.usecase.byok.GetApiModelAssetsUseCase
 import com.browntowndev.enclave.domain.usecase.byok.GetDefaultModelsUseCase
+import com.browntowndev.enclave.domain.model.download.ModelPackRole
+import com.browntowndev.enclave.domain.usecase.download.ResolveModelCatalogUseCase
+import com.browntowndev.enclave.domain.model.config.MediaCapability
+import com.browntowndev.enclave.domain.usecase.media.GetMediaProvidersUseCase
 import com.browntowndev.enclave.domain.usecase.modelconfig.DeleteLocalModelUseCase
 import com.browntowndev.enclave.domain.usecase.modelconfig.GetLocalModelAssetsUseCase
 import kotlinx.coroutines.flow.first
@@ -26,6 +30,8 @@ class PrepareModelDeletionUseCase
         private val deleteLocalModelUseCase: DeleteLocalModelUseCase,
         private val deleteApiCredentialsUseCase: DeleteApiCredentialsUseCase,
         private val deleteApiModelConfigurationUseCase: DeleteApiModelConfigurationUseCase,
+        private val resolveModelCatalog: ResolveModelCatalogUseCase,
+        private val getMediaProvidersUseCase: GetMediaProvidersUseCase,
     ) {
         suspend operator fun invoke(target: ModelDeletionTarget): PreparedModelDeletion =
             when (target) {
@@ -33,7 +39,29 @@ class PrepareModelDeletionUseCase
                 is ModelDeletionTarget.LocalModelPreset -> prepareLocalModelPreset(target.id)
                 is ModelDeletionTarget.ApiProvider -> prepareApiProvider(target.id)
                 is ModelDeletionTarget.ApiPreset -> prepareApiPreset(target.id)
+                is ModelDeletionTarget.ModelPack -> prepareModelPack(target.packId)
             }
+
+        private suspend fun prepareModelPack(packId: String): PreparedModelDeletion {
+            val catalog = resolveModelCatalog().getOrNull() ?: return PreparedModelDeletion.Ready(ModelDeletionTarget.ModelPack(packId))
+            val pack = catalog.packById(packId) ?: return PreparedModelDeletion.Ready(ModelDeletionTarget.ModelPack(packId))
+            val diffusionId =
+                pack.members
+                    .firstOrNull { it.role == ModelPackRole.DIFFUSION }
+                    ?.asset
+                    ?.metadata
+                    ?.id
+                    ?: return PreparedModelDeletion.Ready(ModelDeletionTarget.ModelPack(packId))
+            return when (val prepared = prepareLocalModelAsset(diffusionId)) {
+                PreparedModelDeletion.BlockedLastModel -> prepared
+                is PreparedModelDeletion.Ready ->
+                    PreparedModelDeletion.Ready(
+                        target = ModelDeletionTarget.ModelPack(packId),
+                        modelTypesNeedingReassignment = prepared.modelTypesNeedingReassignment,
+                        reassignmentCandidates = prepared.reassignmentCandidates,
+                    )
+            }
+        }
 
         private suspend fun prepareLocalModelAsset(id: LocalModelId): PreparedModelDeletion {
             if (deleteLocalModelUseCase.isLastModel(id)) {
@@ -61,6 +89,7 @@ class PrepareModelDeletionUseCase
                         excludeLocalModelId = id,
                         requireVisionCompatibility = requiresVisionCompatibility,
                         requireApiVisionOnly = requiresApiVisionOnly,
+                        modelTypesNeedingReassignment = needingReassignment,
                     ),
             )
         }
@@ -88,6 +117,7 @@ class PrepareModelDeletionUseCase
                         excludeLocalConfigId = id,
                         requireVisionCompatibility = requiresVisionCompatibility,
                         requireApiVisionOnly = requiresApiVisionOnly,
+                        modelTypesNeedingReassignment = needingReassignment,
                     ),
             )
         }
@@ -142,7 +172,7 @@ class PrepareModelDeletionUseCase
             )
         }
 
-        private fun buildReassignmentCandidates(
+        private suspend fun buildReassignmentCandidates(
             localAssets: List<LocalModelAsset>,
             apiAssets: List<ApiModelAsset>,
             excludeLocalModelId: LocalModelId? = null,
@@ -151,6 +181,7 @@ class PrepareModelDeletionUseCase
             excludeApiConfigId: ApiModelConfigurationId? = null,
             requireVisionCompatibility: Boolean,
             requireApiVisionOnly: Boolean,
+            modelTypesNeedingReassignment: List<ModelType> = emptyList(),
         ): List<ReassignmentCandidate> {
             val candidates = mutableListOf<ReassignmentCandidate>()
 
@@ -191,6 +222,23 @@ class PrepareModelDeletionUseCase
                         ),
                     )
                 }
+            }
+
+            if (ModelType.IMAGE_GENERATION in modelTypesNeedingReassignment) {
+                val mediaProviders = getMediaProvidersUseCase().first()
+                mediaProviders
+                    .filter { it.capability == MediaCapability.IMAGE }
+                    .forEach { provider ->
+                        candidates.add(
+                            ReassignmentCandidate(
+                                mediaProviderId = provider.id,
+                                source = ModelSource.API,
+                                assetDisplayName = provider.displayName,
+                                configDisplayName = provider.modelName ?: provider.capability.displayName,
+                                providerName = provider.provider.name,
+                            ),
+                        )
+                    }
             }
 
             return candidates

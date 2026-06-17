@@ -119,6 +119,21 @@ class ProviderFinishReasonMapperTest {
     }
 
     @Test
+    fun `FB-P-012 OpenAI Responses pause turn maps to Other`() {
+        assertTurn(
+            result =
+                ProviderFinishReasonMapper.fromOpenAiResponses(
+                    status = "paused",
+                    incompleteReason = "pause_turn",
+                    responseId = "resp_paused",
+                    text = "Paused",
+                ),
+            expectedReason = AgentFinishReason.Other("pause_turn"),
+            expectedText = "Paused",
+        )
+    }
+
+    @Test
     fun `FB-M-001 OpenAI chat stream length maps to MaxTokens`() {
         assertTurn(
             result = ProviderFinishReasonMapper.fromOpenAiChatStream(finishReason = "length", text = "Partial answer"),

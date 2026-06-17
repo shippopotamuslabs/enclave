@@ -24,19 +24,40 @@ class SearchToolPromptComposerTest {
                     ),
                 activeTools =
                     listOf(
-                        ToolDefinition.DISCLOSE_TOOL_SCHEMAS,
+                        ToolDefinition.SEARCH_TOOLS,
                         ToolDefinition.WEB_SEARCH,
                         ToolDefinition.WEB_EXTRACT,
                     ),
                 strategy = ToolCallStrategy.JSON_XML_ENVELOPE,
             )
 
-        assertTrue(prompt.contains("# TOOL CATALOG:"))
-        assertTrue(prompt.contains("# SCHEMA DISCLOSURE:"))
-        assertTrue(prompt.contains("ActionResult{\"name\":\"web_search\""))
-        assertTrue(prompt.contains("ActionResult{\"name\":\"disclose_tool_schemas\""))
-        assertFalse(prompt.contains("ActionResult{\"name\":\"append_blocks\""))
-        assertFalse(prompt.contains("ActionResult{\"name\":\"search_current_artifact\""))
+        assertTrue(prompt.contains("# TOOL DISCOVERY:"))
+        assertFalse(prompt.contains("# TOOL CATALOG:"))
+        assertFalse(prompt.contains("# SCHEMA DISCLOSURE:"))
+        assertTrue(prompt.contains("<tool_call>{\"name\":\"web_search\""))
+        assertTrue(prompt.contains("<tool_call>{\"name\":\"tool_discovery_tool\""))
+        assertFalse(prompt.contains("<tool_call>{\"name\":\"append_blocks\""))
+        assertFalse(prompt.contains("<tool_call>{\"name\":\"search_current_artifact\""))
+        assertFalse(prompt.contains("ActionResult"))
+        assertFalse(prompt.contains("ipsis"))
+    }
+
+    @Test
+    fun `JSON XML prompt makes direct answers the default and limits discovery`() {
+        val prompt =
+            composer.compose(
+                baseSystemPrompt = "Be concise.",
+                toolCatalog = listOf(catalogEntry("tool_discovery_tool", ToolDisclosureMode.PRELOADED)),
+                activeTools = listOf(ToolDefinition.SEARCH_TOOLS),
+                strategy = ToolCallStrategy.JSON_XML_ENVELOPE,
+            )
+
+        assertTrue(prompt.contains("If no tool is needed, answer the user directly"))
+        assertTrue(prompt.contains("answer stable facts and ordinary questions directly"))
+        assertTrue(prompt.contains("For current information or an explicit web lookup, call web_search directly"))
+        assertTrue(prompt.contains("It searches tool metadata, never facts or the web"))
+        assertTrue(prompt.contains("If you choose to call a tool, respond ONLY with the <tool_call> tag"))
+        assertFalse(prompt.contains("1. Respond ONLY with the <tool_call> tag."))
     }
 
     @Test
@@ -51,7 +72,7 @@ class SearchToolPromptComposerTest {
                     ),
                 activeTools =
                     listOf(
-                        ToolDefinition.DISCLOSE_TOOL_SCHEMAS,
+                        ToolDefinition.SEARCH_TOOLS,
                         ToolDefinition.WEB_SEARCH,
                         ToolDefinition.WEB_EXTRACT,
                     ),
@@ -59,9 +80,31 @@ class SearchToolPromptComposerTest {
             )
 
         assertTrue(prompt.contains("call:web_search{query: <|\"|>...<|\"|>}"))
-        assertTrue(prompt.contains("call:disclose_tool_schemas{tool_names: <|\"|>[\"append_blocks\"]<|\"|>}"))
+        assertTrue(
+            prompt.contains(
+                "call:tool_discovery_tool{capability: <|\"|>describe the executable action, e.g. generate an image<|\"|>}",
+            ),
+        )
         assertFalse(prompt.contains("call:append_blocks{"))
         assertFalse(prompt.contains("call:search_current_artifact{"))
+    }
+
+    @Test
+    fun `LiteRT prompt makes direct answers the default and limits discovery`() {
+        val prompt =
+            composer.compose(
+                baseSystemPrompt = "Be concise.",
+                toolCatalog = listOf(catalogEntry("tool_discovery_tool", ToolDisclosureMode.PRELOADED)),
+                activeTools = listOf(ToolDefinition.SEARCH_TOOLS),
+                strategy = ToolCallStrategy.LITE_RT_NATIVE,
+            )
+
+        assertTrue(prompt.contains("If no tool is needed, answer the user directly"))
+        assertTrue(prompt.contains("answer stable facts and ordinary questions directly"))
+        assertTrue(prompt.contains("For current information or an explicit web lookup, call web_search directly"))
+        assertTrue(prompt.contains("It searches tool metadata, never facts or the web"))
+        assertTrue(prompt.contains("If you choose to call a tool, use exactly the 'call:tool_name{...}' format"))
+        assertFalse(prompt.contains("4. Respond ONLY with the tool call."))
     }
 
     @Test
@@ -72,13 +115,13 @@ class SearchToolPromptComposerTest {
                 toolCatalog = listOf(catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND)),
                 activeTools =
                     listOf(
-                        ToolDefinition.DISCLOSE_TOOL_SCHEMAS,
+                        ToolDefinition.SEARCH_TOOLS,
                         ToolDefinition.WEB_SEARCH,
                         ToolDefinition.WEB_EXTRACT,
                     ),
             )
 
-        assertFalse(prompt.contains("ActionResult{\"name\":\"append_blocks\""))
+        assertFalse(prompt.contains("<tool_call>{\"name\":\"append_blocks\""))
         assertFalse(prompt.contains("call:append_blocks{"))
     }
 
@@ -149,7 +192,7 @@ class SearchToolPromptComposerTest {
                     ),
                 activeTools =
                     listOf(
-                        ToolDefinition.DISCLOSE_TOOL_SCHEMAS,
+                        ToolDefinition.SEARCH_TOOLS,
                         ToolDefinition.WEB_SEARCH,
                         ToolDefinition.WEB_EXTRACT,
                         ToolDefinition.X_SEARCH,
@@ -157,8 +200,8 @@ class SearchToolPromptComposerTest {
                 strategy = ToolCallStrategy.JSON_XML_ENVELOPE,
             )
 
-        assertTrue(prompt.contains("ActionResult{\"name\":\"search_x_recent\""))
-        assertTrue(prompt.contains("[intent-activated]"))
+        assertTrue(prompt.contains("<tool_call>{\"name\":\"search_x_recent\""))
+        assertFalse(prompt.contains("# TOOL CATALOG:"))
     }
 
     @Test
@@ -173,13 +216,13 @@ class SearchToolPromptComposerTest {
                     ),
                 activeTools =
                     listOf(
-                        ToolDefinition.DISCLOSE_TOOL_SCHEMAS,
+                        ToolDefinition.SEARCH_TOOLS,
                         ToolDefinition.START_ARTIFACT,
                     ),
                 strategy = ToolCallStrategy.JSON_XML_ENVELOPE,
             )
 
-        assertTrue(prompt.contains("ActionResult{\"name\":\"start_artifact\""))
+        assertTrue(prompt.contains("<tool_call>{\"name\":\"start_artifact\""))
         assertFalse(prompt.contains("tool_names\":[\"start_artifact\"]"))
     }
 
@@ -251,6 +294,34 @@ class SearchToolPromptComposerTest {
         val profileIndex = composed.indexOf("# PSYCHOLOGICAL PROFILE:")
         assertTrue(aboutIndex >= 0)
         assertTrue(profileIndex > aboutIndex)
+    }
+
+    @Test
+    fun `compact static prompt omits psych profile and active tool examples`() {
+        val profileMemory = Memory(category = MemoryCategory.PSYCH_PROFILE, content = "Avoids vulnerability.")
+        val prompt =
+            composer.compose(
+                baseSystemPrompt = "Be concise.",
+                toolCatalog =
+                    listOf(
+                        catalogEntry("web_search", ToolDisclosureMode.PRELOADED),
+                        catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND),
+                    ),
+                activeTools =
+                    listOf(
+                        ToolDefinition.SEARCH_TOOLS,
+                        ToolDefinition.WEB_SEARCH,
+                    ),
+                strategy = ToolCallStrategy.JSON_XML_ENVELOPE,
+                coreMemories = listOf(profileMemory),
+                compactStaticPrompt = true,
+            )
+
+        assertFalse(prompt.contains("PSYCHOLOGICAL PROFILE"))
+        assertFalse(prompt.contains("Avoids vulnerability."))
+        assertFalse(prompt.contains("# ACTIVE TOOL EXAMPLES:"))
+        assertFalse(prompt.contains("<tool_call>{\"name\":\"web_search\""))
+        assertTrue(prompt.contains("# TOOL DISCOVERY:"))
     }
 
     @Test

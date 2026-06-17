@@ -16,6 +16,7 @@ This contract defines the mandatory standards for unit testing in the Enclave pr
 | **NEVER** Mock Android Classes | Do not mock `Context`, `SharedPreferences`, or `Bundle`. Use Robolectric's real implementations or appropriate fakes. |
 | **NEVER** Use JUnit 4 in New Tests | Avoid `@Rule`, `@Test(expected=...)`, and `@Before`. Migrated tests must be JUnit 5 compliant. |
 | **NEVER** Mock Implementation Details | Avoid mocking private methods or internal helper classes. Test the public API of the unit. |
+| **NEVER** Await Fire-and-Forget IO with `delay()` | Inside `runTest`, `delay(N)` advances *virtual* time (~0 wall-clock) and does **not** wait for `scope.launch(Dispatchers.IO) { … }`. Inject a `TestDispatcher` for the IO path and `advanceUntilIdle()`, or `join()` the background Jobs. See §3.3. |
 
 ---
 
@@ -84,6 +85,54 @@ class FakeChatRepository : ChatRepository {
     suspend fun emit(list: List<Message>) { messages.value = list }
 }
 ```
+
+### 3.3 Awaiting Fire-and-Forget Persistence (`runTest` + `Dispatchers.IO`)
+
+A repository that updates an in-memory cache synchronously but persists to Room
+asynchronously — `scope.launch(Dispatchers.IO) { dao.insertOrUpdate(...) }` —
+**cannot** be awaited with a virtual-time poll inside `runTest`.
+
+**Why it flakes:** `delay(N)` inside `runTest` advances *virtual* time, not
+wall-clock time, so it completes in ~0 ms regardless of `N`. The real
+`Dispatchers.IO` coroutine racing it may not have run yet, so the assertion
+fires against stale state. Increasing `N` does not help.
+
+**Wrong (flaky poll):**
+
+```kotlin
+store.commit(id, content)
+repeat(20) { delay(50) }            // virtual time only; races Dispatchers.IO
+store.clear(id)
+repeat(20) { delay(50) }
+assertNull(store.get(id))           // intermittent failure
+```
+
+**Right — option A (preferred): inject a `TestDispatcher` for the IO path.**
+Make the persistence dispatcher a constructor parameter and pass a
+`TestDispatcher` in tests, then advance virtual time deterministically:
+
+```kotlin
+val repo = MyStore(dao, scope, testDispatcher)
+repo.commit(id, content)
+advanceUntilIdle()                  // deterministic — no real threads
+```
+
+**Right — option B: `join()` the background Jobs.** When the class owns a real
+`CoroutineScope`, join its child coroutines before asserting:
+
+```kotlin
+store.commit(id, content)
+testScope.awaitBackgroundWrites()   // joins child Jobs of the injected scope
+store.clear(id)
+testScope.awaitBackgroundWrites()
+assertNull(store.get(id))
+assertNull(dao.getByMessageId(id))  // assert both cache AND DB
+```
+
+The repository already has a good precedent for option A:
+`DownloadWorkRepository` injects its `ioDispatcher` and `DownloadWorkRepositoryChainTest`
+passes `UnconfinedTestDispatcher()`. Follow whichever option matches the class's
+construction; never bridge real-dispatcher work with a `delay()` poll.
 
 ---
 

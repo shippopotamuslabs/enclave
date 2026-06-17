@@ -18,6 +18,7 @@ enum class ChatModeUi(
     FAST(R.string.mode_fast, R.drawable.bolt),
     THINKING(R.string.mode_thinking, R.drawable.lightbulb),
     COUNCIL(R.string.mode_council, R.drawable.merge),
+    OTHER(R.string.mode_other, R.drawable.robot),
     ;
 
     fun getDisplayName(context: Context): String = context.getString(displayNameRes)
@@ -38,6 +39,7 @@ enum class ToolCallBannerKind {
     ARTIFACT,
     X_SEARCH,
     MEDIA,
+    GENERIC,
 }
 
 enum class ResponseHapticPhase {
@@ -110,12 +112,19 @@ data class ChatUiState(
     val activeIndicatorMessageId: MessageId? = null,
     val backgroundInferenceEnabled: Boolean = true,
     val hasTtsProviderAssigned: Boolean = false,
+    val liveVoiceState: LiveVoiceUiState = LiveVoiceUiState.Idle,
+    val selectedModeModelName: String? = null,
+    val modeModelNames: Map<ChatModeUi, String?> = emptyMap(),
+    val hasLiveVoiceProviderAssigned: Boolean = false,
     val isPlayingTts: Boolean = false,
     val isLoadingTts: Boolean = false,
     val isPausedTts: Boolean = false,
     val shareState: ShareState = ShareState.Idle,
     val isReadOnly: Boolean = false,
     val artifactExportSheet: ArtifactExportSheetState = ArtifactExportSheetState.Hidden,
+    val isModelOverrideSheetVisible: Boolean = false,
+    val modelOverrideSheetLocalAssets: List<com.browntowndev.enclave.core.ui.component.assignment.LocalModelAssetUi> = emptyList(),
+    val modelOverrideSheetApiAssets: List<com.browntowndev.enclave.core.ui.component.assignment.ApiModelAssetUi> = emptyList(),
     val responseStatsSheet: ResponseStatsSheetUiState = ResponseStatsSheetUiState(),
     val chatStatsSheet: ChatStatsSheetUiState = ChatStatsSheetUiState(),
 )

@@ -7,6 +7,7 @@ import com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.model.inference.ToolDisclosureMode
 import com.browntowndev.enclave.domain.model.inference.WebSearchParams
+import com.browntowndev.enclave.domain.usecase.chat.SearchToolPromptComposer
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -22,6 +23,27 @@ import org.junit.jupiter.api.Test
  * and [JTokkitTokenCounter] for real-world accuracy verification.
  */
 class ContextWindowPlannerTest {
+    @Test
+    fun `compact volatile context bounds small local search payload`() {
+        val context = "search result ".repeat(2_000)
+
+        val compacted =
+            requireNotNull(ContextWindowPlanner.compactVolatileTurnContext(context, contextWindowTokens = 4_096))
+
+        assertTrue(compacted.length <= 2_048)
+        assertTrue(compacted.endsWith("[Context truncated to fit local model window]"))
+    }
+
+    @Test
+    fun `compact volatile context preserves payload already within budget`() {
+        val context = "short search result"
+
+        assertEquals(
+            context,
+            ContextWindowPlanner.compactVolatileTurnContext(context, contextWindowTokens = 4_096),
+        )
+    }
+
     // ── Fakes ──────────────────────────────────────────────────────────────
 
     /** Deterministic token counter: 1 token per character, for exact boundary testing. */
@@ -30,6 +52,14 @@ class ContextWindowPlannerTest {
             text: String,
             modelName: String?,
         ): Int = text.length
+    }
+
+    @Test
+    fun `isSmallContextLocalWindow is true only for local models below 32k`() {
+        assertTrue(ContextWindowPlanner.isSmallContextLocalWindow(isLocal = true, contextWindowTokens = 4096))
+        assertFalse(ContextWindowPlanner.isSmallContextLocalWindow(isLocal = true, contextWindowTokens = 32_000))
+        assertFalse(ContextWindowPlanner.isSmallContextLocalWindow(isLocal = false, contextWindowTokens = 4096))
+        assertFalse(ContextWindowPlanner.isSmallContextLocalWindow(isLocal = true, contextWindowTokens = null))
     }
 
     private fun makeTool(
@@ -50,7 +80,7 @@ class ContextWindowPlannerTest {
                     GenerationOptions(
                         reasoningBudget = 0,
                         toolCatalog = listOf(catalogEntry("append_blocks")),
-                        activeTools = listOf(ToolDefinition.DISCLOSE_TOOL_SCHEMAS, ToolDefinition.WEB_SEARCH),
+                        activeTools = listOf(ToolDefinition.SEARCH_TOOLS, ToolDefinition.WEB_SEARCH),
                     ),
                 tokenCounter = LazyDisclosureTokenCounter(deferredSchemaTokens = 300),
             )
@@ -68,7 +98,7 @@ class ContextWindowPlannerTest {
                     GenerationOptions(
                         reasoningBudget = 0,
                         toolCatalog = listOf(catalogEntry("append_blocks")),
-                        activeTools = listOf(ToolDefinition.DISCLOSE_TOOL_SCHEMAS, ToolDefinition.WEB_SEARCH),
+                        activeTools = listOf(ToolDefinition.SEARCH_TOOLS, ToolDefinition.WEB_SEARCH),
                     ),
                 tokenCounter = LazyDisclosureTokenCounter(deferredSchemaTokens = 300),
             )
@@ -79,7 +109,7 @@ class ContextWindowPlannerTest {
                     GenerationOptions(
                         reasoningBudget = 0,
                         toolCatalog = listOf(catalogEntry("append_blocks")),
-                        activeTools = listOf(ToolDefinition.DISCLOSE_TOOL_SCHEMAS, ToolDefinition.WEB_SEARCH),
+                        activeTools = listOf(ToolDefinition.SEARCH_TOOLS, ToolDefinition.WEB_SEARCH),
                     ),
                 tokenCounter = LazyDisclosureTokenCounter(deferredSchemaTokens = 900),
             )
@@ -96,7 +126,7 @@ class ContextWindowPlannerTest {
             modelName: String?,
         ): Int =
             when {
-                text.contains("TOOL CATALOG") -> 12
+                text == SearchToolPromptComposer.TOOL_DISCOVERY_INSTRUCTION_TEXT -> 12
                 text.contains("append_blocks") -> deferredSchemaTokens
                 else -> 40
             }

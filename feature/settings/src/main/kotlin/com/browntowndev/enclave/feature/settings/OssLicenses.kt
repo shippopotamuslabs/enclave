@@ -118,139 +118,34 @@ internal object OssLicenses {
                 licenseText = "Copyright 2024 Coil Contributors\n\nLicensed under the Apache License, Version 2.0.",
             ),
             OssLicenseEntry(
-                name = "Dataset: AdvBench",
-                version = "2023",
-                licenseType = "MIT",
-                copyrightHolder = "llm-attacks authors",
-                licenseText =
-                    """
-                    MIT License
-
-                    Copyright (c) llm-attacks authors
-
-                    Used as harmful prompt training data for Enclave's on-device criminal intent classifier.
-                    """.trimIndent(),
-            ),
-            OssLicenseEntry(
-                name = "Dataset: ClearHarm",
-                version = "2024",
+                name = "Model: KoalaAI Text-Moderation",
+                version = "INT8 ONNX",
                 licenseType = "Apache 2.0",
-                copyrightHolder = "AlignmentResearch",
+                copyrightHolder = "KoalaAI",
                 licenseText =
                     """
-                    Copyright AlignmentResearch contributors
+                    Copyright KoalaAI contributors
 
                     Licensed under the Apache License, Version 2.0.
-                    Used as safety training data for Enclave's on-device criminal intent classifier.
+                    DeBERTa-based text-safety classifier for response moderation (sexual, violence,
+                    hate categories). ONNX weights are downloaded on demand from R2; only the
+                    tokenizer/config ship in APK assets.
+                    https://huggingface.co/KoalaAI/Text-Moderation
                     """.trimIndent(),
             ),
             OssLicenseEntry(
-                name = "Dataset: CLINC150",
-                version = "2019",
-                licenseType = "MIT",
-                copyrightHolder = "CLINC, Inc.",
-                licenseText =
-                    """
-                    MIT License
-
-                    Copyright (c) CLINC, Inc. and contributors
-
-                    Used as benign intent training data for Enclave's on-device criminal intent classifier.
-                    """.trimIndent(),
-            ),
-            OssLicenseEntry(
-                name = "Dataset: Gretel Safety Alignment",
-                version = "1.0",
+                name = "Model: Falconsai NSFW Image Detection",
+                version = "quantized ONNX",
                 licenseType = "Apache 2.0",
-                copyrightHolder = "Gretel.ai",
+                copyrightHolder = "Falconsai",
                 licenseText =
                     """
-                    Copyright Gretel.ai
+                    Copyright Falconsai contributors
 
                     Licensed under the Apache License, Version 2.0.
-                    Used as synthetic safety training data for Enclave's on-device criminal intent classifier.
-                    """.trimIndent(),
-            ),
-            OssLicenseEntry(
-                name = "Dataset: HarmBench",
-                version = "2024",
-                licenseType = "MIT",
-                copyrightHolder = "Center for AI Safety",
-                licenseText =
-                    """
-                    MIT License
-
-                    Copyright (c) Center for AI Safety and HarmBench contributors
-
-                    Used as harmful prompt training data for Enclave's on-device criminal intent classifier.
-                    """.trimIndent(),
-            ),
-            OssLicenseEntry(
-                name = "Dataset: JailbreakBench JBB-Behaviors",
-                version = "2024",
-                licenseType = "Apache 2.0",
-                copyrightHolder = "JailbreakBench contributors",
-                licenseText =
-                    """
-                    Copyright JailbreakBench contributors
-
-                    Licensed under the Apache License, Version 2.0.
-                    Used as harmful and benign prompt training data for Enclave's on-device criminal intent classifier.
-                    """.trimIndent(),
-            ),
-            OssLicenseEntry(
-                name = "Dataset: Natural Questions Open",
-                version = "2019",
-                licenseType = "Apache 2.0",
-                copyrightHolder = "Google LLC",
-                licenseText =
-                    """
-                    Copyright Google LLC
-
-                    Licensed under the Apache License, Version 2.0.
-                    Used as benign question training data for Enclave's on-device criminal intent classifier.
-                    """.trimIndent(),
-            ),
-            OssLicenseEntry(
-                name = "Dataset: OpenAI Moderation",
-                version = "2022",
-                licenseType = "MIT",
-                copyrightHolder = "OpenAI",
-                licenseText =
-                    """
-                    MIT License
-
-                    Copyright (c) OpenAI
-
-                    Used as prompt moderation evaluation and training data for Enclave's on-device criminal intent classifier.
-                    """.trimIndent(),
-            ),
-            OssLicenseEntry(
-                name = "Dataset: OpenAssistant OASST1",
-                version = "2023-04-12",
-                licenseType = "Apache 2.0",
-                copyrightHolder = "OpenAssistant contributors",
-                licenseText =
-                    """
-                    Copyright OpenAssistant contributors
-
-                    Licensed under the Apache License, Version 2.0.
-                    Used as benign conversational training data for Enclave's on-device criminal intent classifier.
-                    """.trimIndent(),
-            ),
-            OssLicenseEntry(
-                name = "Dataset: Project-Generated Safety Prompts",
-                version = "2026-06-03",
-                licenseType = "BSD-0",
-                copyrightHolder = "Enclave contributors",
-                licenseText =
-                    """
-                    BSD Zero Clause License
-
-                    Copyright Enclave contributors
-
-                    Project-generated synthetic adversarial prompts and hard negatives used for
-                    Enclave's on-device criminal intent classifier.
+                    ViT-based image-safety classifier for generated-image moderation. ONNX weights
+                    are downloaded on demand from R2; only the preprocessing config ships in APK assets.
+                    https://huggingface.co/Falconsai/nsfw_image_detection
                     """.trimIndent(),
             ),
             OssLicenseEntry(
@@ -331,6 +226,38 @@ internal object OssLicenses {
                 licenseText = "Copyright 2010-2024 JetBrains s.r.o. and Kotlin Programming Language contributors.\n\nLicensed under the Apache License, Version 2.0.",
             ),
             OssLicenseEntry(
+                name = "llama.cpp",
+                version = "vendor",
+                licenseType = "MIT",
+                copyrightHolder = "Georgi Gerganov and llama.cpp contributors",
+                licenseText =
+                    """
+                    MIT License
+
+                    Copyright (c) 2023-2024 Georgi Gerganov and contributors
+
+                    Used for on-device GGUF language-model inference (llama-android).
+                    https://github.com/ggerganov/llama.cpp
+                    """.trimIndent(),
+            ),
+            OssLicenseEntry(
+                name = "Enclave diffusion engine",
+                version = "1.0",
+                licenseType = "Apache 2.0",
+                copyrightHolder = "BrownTown Dev (Enclave)",
+                licenseText =
+                    """
+                    Apache License, Version 2.0
+
+                    Copyright BrownTown Dev and Enclave contributors
+
+                    In-process Stable Diffusion txt2img/img2img engine for Qualcomm QNN packs and
+                    MNN CLIP conditioning. Replaces the former Local Dream fork/HTTP backend.
+
+                    Licensed under the Apache License, Version 2.0.
+                    """.trimIndent(),
+            ),
+            OssLicenseEntry(
                 name = "kotlinx-serialization",
                 version = "1.11.0",
                 licenseType = "Apache 2.0",
@@ -343,6 +270,131 @@ internal object OssLicenses {
                 licenseType = "Apache 2.0",
                 copyrightHolder = "Google LLC",
                 licenseText = "Copyright 2024 Google LLC\n\nLicensed under the Apache License, Version 2.0.",
+            ),
+            OssLicenseEntry(
+                name = "Model: Gemma 4 E4B",
+                version = "litert-lm",
+                licenseType = "Gemma Terms of Use",
+                copyrightHolder = "Google LLC",
+                licenseText =
+                    """
+                    Gemma is provided under the Gemma Terms of Use.
+
+                    Bundled for on-device chat inference when assigned in Model Configuration.
+                    https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm
+                    https://ai.google.dev/gemma/terms
+                    """.trimIndent(),
+            ),
+            OssLicenseEntry(
+                name = "Model: Jamba Reasoning 3B",
+                version = "Q8_0",
+                licenseType = "Jamba Open Model License",
+                copyrightHolder = "AI21 Labs",
+                licenseText =
+                    """
+                    Provided under the Jamba Open Model License by AI21 Labs.
+
+                    Bundled GGUF weights for on-device drafting/synthesis when assigned.
+                    https://huggingface.co/bartowski/ai21labs_AI21-Jamba-Reasoning-3B-GGUF
+                    """.trimIndent(),
+            ),
+            OssLicenseEntry(
+                name = "Model: MiniCPM-V-4.6",
+                version = "Q8_0",
+                licenseType = "Apache 2.0",
+                copyrightHolder = "OpenBMB",
+                licenseText =
+                    """
+                    Copyright OpenBMB contributors
+
+                    Licensed under the Apache License, Version 2.0.
+                    Bundled multimodal GGUF weights for on-device inference when assigned.
+                    https://huggingface.co/openbmb/MiniCPM-V-4.6-Thinking-gguf
+                    """.trimIndent(),
+            ),
+            OssLicenseEntry(
+                name = "Model: Qwen 3.5 2B",
+                version = "Q8_0",
+                licenseType = "Apache 2.0",
+                copyrightHolder = "Alibaba Cloud",
+                licenseText =
+                    """
+                    Copyright Alibaba Cloud and contributors
+
+                    Licensed under the Apache License, Version 2.0 (per upstream model card).
+                    Bundled GGUF weights for on-device inference when assigned.
+                    https://huggingface.co/Jackrong/Qwen3.5-2B-Claude-4.6-Opus-Reasoning-Distilled-GGUF
+                    """.trimIndent(),
+            ),
+            OssLicenseEntry(
+                name = "Model: Sentence Transformers (all-MiniLM-L6-v2)",
+                version = "ONNX",
+                licenseType = "Apache 2.0",
+                copyrightHolder = "UKPLab",
+                licenseText =
+                    """
+                    Copyright UKPLab and sentence-transformers contributors
+
+                    Licensed under the Apache License, Version 2.0.
+                    Bundled ONNX embedding model for on-device memory/search features.
+                    https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2
+                    """.trimIndent(),
+            ),
+            OssLicenseEntry(
+                name = "Model: Stable Diffusion 1.5",
+                version = "Q4_0 GGUF",
+                licenseType = "CreativeML Open RAIL-M",
+                copyrightHolder = "Runway ML / Stability AI community",
+                licenseText =
+                    """
+                    Stable Diffusion v1.5 is licensed under the CreativeML Open RAIL-M license.
+                    Use is subject to the model card restrictions (research and responsible use).
+
+                    Bundled for local text-to-image when the SD 1.5 pack is installed and assigned.
+                    https://huggingface.co/gpustack/stable-diffusion-v1-5-GGUF
+                    """.trimIndent(),
+            ),
+            OssLicenseEntry(
+                name = "Model: Stable Diffusion 1.5 NPU pack",
+                version = "QNN 2.28 / 8 Gen 2",
+                licenseType = "Upstream model terms",
+                copyrightHolder = "xororz / Anything V5 derivative",
+                licenseText =
+                    """
+                    QNN-converted weights distributed via xororz/sd-qnn (AnythingV5 derivative).
+                    Subject to the base Stable Diffusion 1.5 license and upstream model-card terms.
+
+                    Used with the Enclave diffusion engine for Hexagon NPU inference on supported devices.
+                    https://huggingface.co/xororz/sd-qnn
+                    """.trimIndent(),
+            ),
+            OssLicenseEntry(
+                name = "Model: Stable Diffusion XL NPU pack",
+                version = "QNN 2.28 / 8 Gen 3",
+                licenseType = "Open RAIL++-M (SDXL base)",
+                copyrightHolder = "xororz / RealVis XL derivative",
+                licenseText =
+                    """
+                    QNN-converted SDXL weights (RealVis XL V5 DMD2) distributed via xororz/sdxl-qnn.
+                    SDXL base models use the Open RAIL++-M license; derivative checkpoints may add terms.
+
+                    Used with the Enclave diffusion engine for Hexagon NPU inference on Gen 3+ devices.
+                    https://huggingface.co/xororz/sdxl-qnn
+                    """.trimIndent(),
+            ),
+            OssLicenseEntry(
+                name = "Model: Whisper (ggml-base.en)",
+                version = "base.en",
+                licenseType = "MIT (code) / model terms",
+                copyrightHolder = "OpenAI / ggerganov",
+                licenseText =
+                    """
+                    whisper.cpp is MIT-licensed. Whisper model weights are distributed separately;
+                    use is subject to the upstream model terms on Hugging Face.
+
+                    Bundled for on-device speech-to-text utility features.
+                    https://huggingface.co/ggerganov/whisper.cpp
+                    """.trimIndent(),
             ),
             OssLicenseEntry(
                 name = "markdown-parser & markdown-renderer",
@@ -366,6 +418,39 @@ internal object OssLicenses {
                 licenseText = "Copyright OpenAI\n\nLicensed under the Apache License, Version 2.0.",
             ),
             OssLicenseEntry(
+                name = "Qualcomm AI Runtime (QNN)",
+                version = "QAIRT (dev extract)",
+                licenseType = "Proprietary (Qualcomm EULA)",
+                copyrightHolder = "Qualcomm Technologies, Inc.",
+                licenseText =
+                    """
+                    Qualcomm AI Runtime (QNN) libraries (libQnn*.so, Hexagon skeleton libraries, etc.)
+                    are proprietary and redistributable only under Qualcomm's license terms.
+
+                    Debug builds may bundle QNN libraries extracted from a third-party APK for
+                    development convenience. Release builds must use libraries synced from an
+                    authorized QAIRT install after accepting Qualcomm's EULA:
+                    https://softwarecenter.qualcomm.com/
+
+                    Run ./scripts/sync-qnn-jniLibs.sh with qnn.sdk.dir set in local.properties.
+                    Redistribution is limited to Snapdragon-targeted applications per Qualcomm terms.
+                    """.trimIndent(),
+            ),
+            OssLicenseEntry(
+                name = "stb_image_write",
+                version = "1.16",
+                licenseType = "Public Domain",
+                copyrightHolder = "Sean Barrett",
+                licenseText =
+                    """
+                    stb_image_write - public domain
+
+                    Copyright Sean Barrett (2010-2015). No warranty implied; use at your own risk.
+                    Vendored in local-image-gen-android for PNG output from generated images.
+                    http://nothings.org/stb
+                    """.trimIndent(),
+            ),
+            OssLicenseEntry(
                 name = "Telephoto",
                 version = "0.19.0",
                 licenseType = "Apache 2.0",
@@ -378,6 +463,21 @@ internal object OssLicenses {
                 licenseType = "Apache 2.0",
                 copyrightHolder = "Ubique Innovation AG",
                 licenseText = "Copyright Ubique Innovation AG\n\nLicensed under the Apache License, Version 2.0.",
+            ),
+            OssLicenseEntry(
+                name = "whisper.cpp",
+                version = "vendor",
+                licenseType = "MIT",
+                copyrightHolder = "Georgi Gerganov and whisper.cpp contributors",
+                licenseText =
+                    """
+                    MIT License
+
+                    Copyright (c) 2023 Georgi Gerganov and contributors
+
+                    Used for on-device speech-to-text inference (whisper-android).
+                    https://github.com/ggerganov/whisper.cpp
+                    """.trimIndent(),
             ),
         ).sortedBy { it.name.lowercase() }
 }

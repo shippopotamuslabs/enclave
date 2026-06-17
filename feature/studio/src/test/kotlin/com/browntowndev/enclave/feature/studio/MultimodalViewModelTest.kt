@@ -2,6 +2,9 @@ package com.browntowndev.enclave.feature.studio
 
 import app.cash.turbine.test
 import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
+import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.enclave.domain.model.download.ModelPackTestFixtures
+import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.config.MediaProviderAsset
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
@@ -9,28 +12,36 @@ import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.media.AspectRatio
 import com.browntowndev.enclave.domain.model.media.GenerationQuality
+import com.browntowndev.enclave.domain.model.media.ImageGenerationProgress
 import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
 import com.browntowndev.enclave.domain.model.media.ProviderCapabilities
+import com.browntowndev.enclave.domain.port.repository.ActiveStudioGeneration
+import com.browntowndev.enclave.domain.port.inference.PromptModerationPort
+import com.browntowndev.enclave.domain.port.inference.PromptModerationScores
 import com.browntowndev.enclave.domain.port.media.ShareMediaPort
 import com.browntowndev.enclave.domain.port.media.SpeechState
 import com.browntowndev.enclave.domain.port.media.StudioGenerationDispatcherPort
 import com.browntowndev.enclave.domain.port.media.TtsPlaybackControllerPort
-import com.browntowndev.enclave.domain.port.inference.PromptModerationPort
-import com.browntowndev.enclave.domain.port.inference.PromptModerationScores
 import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.StudioAlbumAsset
 import com.browntowndev.enclave.domain.port.repository.StudioMediaAsset
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
+import com.browntowndev.enclave.domain.port.repository.UiSelectionRepository
 import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
 import com.browntowndev.enclave.domain.usecase.chat.ListenToSpeechUseCase
 import com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase
+import com.browntowndev.enclave.domain.usecase.inference.SubmitModerationReportUseCase
+import com.browntowndev.enclave.domain.usecase.media.GetImageGenerationCapabilitiesUseCase
+import com.browntowndev.enclave.domain.usecase.media.GetStudioCapablePresetsUseCase
 import com.browntowndev.enclave.domain.usecase.media.ResolveMediaModelTypeUseCase
 import com.browntowndev.enclave.domain.usecase.media.ResolveMediaProviderCapabilitiesUseCase
 import com.browntowndev.enclave.feature.studio.coordinators.StudioAlbumSelectionCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioCapabilitiesCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioGenerationCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioMediaActionsCoordinator
+import com.browntowndev.enclave.feature.studio.coordinators.StudioModelOverrideCoordinator
+import com.browntowndev.enclave.feature.studio.coordinators.StudioResolvedModelCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioPlaybackCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioPromptCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioRemoteCapabilitiesCoordinator
@@ -69,6 +80,9 @@ class MultimodalViewModelTest {
     private val defaultModelRepository = mockk<DefaultModelRepositoryPort>(relaxed = true)
     private val mediaProviderRepository = mockk<MediaProviderRepositoryPort>(relaxed = true)
     private val resolveMediaProviderCapabilitiesUseCase = mockk<ResolveMediaProviderCapabilitiesUseCase>()
+    private val localModelRepository = mockk<LocalModelRepositoryPort>()
+    private val getImageGenerationCapabilitiesUseCase =
+        GetImageGenerationCapabilitiesUseCase(localModelRepository)
     private val chatUseCases = mockk<ChatUseCases>()
     private val listenToSpeechUseCase = mockk<ListenToSpeechUseCase>()
     private val playbackController = mockk<TtsPlaybackControllerPort>(relaxed = true)
@@ -78,13 +92,18 @@ class MultimodalViewModelTest {
     private lateinit var speechCoordinator: StudioSpeechCoordinator
     private lateinit var playbackCoordinator: StudioPlaybackCoordinator
     private lateinit var studioUiStateReducer: StudioUiStateReducer
+    private lateinit var promptCoordinator: StudioPromptCoordinator
 
     private val allMediaFlow = MutableStateFlow<List<StudioMediaAsset>>(emptyList())
     private val ephemeralMediaFlow = MutableStateFlow<List<StudioMediaAsset>>(emptyList())
     private val allAlbumsFlow = MutableStateFlow<List<StudioAlbumAsset>>(emptyList())
     private val generationErrorFlow = MutableStateFlow<String?>(null)
+    private val generationProgressFlow = MutableStateFlow<ImageGenerationProgress?>(null)
+    private val activeGenerationFlow = MutableStateFlow<ActiveStudioGeneration?>(null)
     private val speechEvents = MutableSharedFlow<SpeechState>(extraBufferCapacity = 8)
     private val moderationPort = MutablePromptModerationPort()
+    private val submitModerationReportUseCase = mockk<SubmitModerationReportUseCase>(relaxed = true)
+    private val uiSelectionRepository = mockk<UiSelectionRepository>(relaxed = true)
 
     private lateinit var app: android.app.Application
     private lateinit var viewModel: MultimodalViewModel
@@ -93,6 +112,8 @@ class MultimodalViewModelTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         app = mockk<android.app.Application>(relaxed = true)
+
+        every { uiSelectionRepository.selectedStudioMediaType } returns flowOf(MediaCapability.IMAGE)
 
         val mediaProviderId = MediaProviderId("test-provider")
         val assignment =
@@ -135,6 +156,19 @@ class MultimodalViewModelTest {
         every { studioRepository.observeAllMedia() } returns allMediaFlow
         every { studioRepository.observeEphemeralMedia() } returns ephemeralMediaFlow
         every { studioRepository.observeGenerationError() } returns generationErrorFlow
+        every { studioRepository.observeGenerationProgress() } returns generationProgressFlow
+        every { studioRepository.observeActiveGeneration() } returns activeGenerationFlow
+        every { studioRepository.reportActiveGeneration(any()) } answers {
+            if (activeGenerationFlow.value != null) {
+                false
+            } else {
+                activeGenerationFlow.value = firstArg()
+                true
+            }
+        }
+        every { studioRepository.clearActiveGeneration() } answers {
+            activeGenerationFlow.value = null
+        }
         every { studioRepository.observeAllAlbums() } returns allAlbumsFlow
         coEvery { studioRepository.updateMedia(any()) } returns Unit
         coEvery { studioRepository.promoteEphemeralMedia(any(), any()) } returns
@@ -169,6 +203,18 @@ class MultimodalViewModelTest {
                 supportsVideo = true,
             )
 
+        coEvery {
+            localModelRepository.getAssetByConfigId(LocalModelConfigurationId("sd15-local-config"))
+        } returns ModelPackTestFixtures.diffusionAsset()
+        coEvery {
+            localModelRepository.getAssetByConfigId(LocalModelConfigurationId("sdxl-local-config"))
+        } returns ModelPackTestFixtures.sdxlDiffusionAsset()
+        coEvery {
+            localModelRepository.getAssetByConfigId(
+                LocalModelConfigurationId(ModelPackTestFixtures.JUGGERNAUT_CONFIG_ID),
+            )
+        } returns ModelPackTestFixtures.juggernautDiffusionAsset()
+
         every { listenToSpeechUseCase.invoke(any(), any()) } returns speechEvents
         every { chatUseCases.listenToSpeechUseCase } returns listenToSpeechUseCase
 
@@ -184,15 +230,16 @@ class MultimodalViewModelTest {
         val capabilitiesCoordinator = StudioCapabilitiesCoordinator()
         val remoteCapabilitiesCoordinator =
             StudioRemoteCapabilitiesCoordinator(resolveMediaProviderCapabilitiesUseCase)
-        val promptCoordinator = StudioPromptCoordinator(generationCoordinator, studioRepository)
+        promptCoordinator = StudioPromptCoordinator(generationCoordinator, studioRepository)
         val mediaActionsCoordinator =
             StudioMediaActionsCoordinator(shareMediaPort, studioRepository, generationCoordinator)
         return MultimodalViewModel(
             defaultModelRepository = defaultModelRepository,
             mediaProviderRepository = mediaProviderRepository,
-            moderatePromptUseCase = ModeratePromptUseCase(moderationPort),
+            moderatePromptUseCase = ModeratePromptUseCase(moderationPort, NoOpLoggingPort),
             shouldModeratePromptUseCase = allowShouldModeratePromptUseCase(),
-            resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase(),
+            submitModerationReportUseCase = submitModerationReportUseCase,
+            getImageGenerationCapabilitiesUseCase = getImageGenerationCapabilitiesUseCase,
             generationCoordinator = generationCoordinator,
             albumSelectionCoordinator = albumSelectionCoordinator,
             speechCoordinator = speechCoordinator,
@@ -202,6 +249,14 @@ class MultimodalViewModelTest {
             remoteCapabilitiesCoordinator = remoteCapabilitiesCoordinator,
             promptCoordinator = promptCoordinator,
             mediaActionsCoordinator = mediaActionsCoordinator,
+            uiSelectionRepository = uiSelectionRepository,
+            overrideCoordinator = StudioModelOverrideCoordinator(),
+            resolvedModelCoordinator =
+                StudioResolvedModelCoordinator(
+                    resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase(),
+                    mediaProviderRepository = mediaProviderRepository,
+                ),
+            getStudioCapablePresetsUseCase = mockk<GetStudioCapablePresetsUseCase>(relaxed = true),
         )
     }
 
@@ -218,7 +273,7 @@ class MultimodalViewModelTest {
                     viewModel.uiState.collect {}
                 }
 
-            viewModel.promptCoordinator.onPromptChange("sunset mountains")
+            viewModel.onPromptChange("sunset mountains")
             viewModel.generate()
             assertTrue(viewModel.uiState.value.isGenerating)
 
@@ -232,6 +287,7 @@ class MultimodalViewModelTest {
                         createdAt = 1L,
                     ),
                 )
+            activeGenerationFlow.value = null
             advanceUntilIdle()
 
             val state = viewModel.uiState.value
@@ -252,18 +308,46 @@ class MultimodalViewModelTest {
                     labelAliases = mapOf("sexual/minors" to listOf("S3")),
                     thresholds = mapOf("sexual/minors" to 0.65),
                 )
-            viewModel.promptCoordinator.onPromptChange("blocked studio prompt")
+            viewModel.onPromptChange("blocked studio prompt")
             val job =
                 backgroundScope.launch(testDispatcher) {
                     viewModel.uiState.collect {}
                 }
 
-            viewModel.generate()
-            advanceUntilIdle()
+            viewModel.moderationEvents.test {
+                viewModel.generate()
+                advanceUntilIdle()
+
+                val event = awaitItem()
+                assertTrue(event is ModerationEvent.Blocked)
+                assertEquals("blocked studio prompt", (event as ModerationEvent.Blocked).prompt)
+                cancelAndIgnoreRemainingEvents()
+            }
 
             assertFalse(viewModel.uiState.value.isGenerating)
-            assertEquals("Prompt rejected due to moderation", viewModel.uiState.value.error)
-            verify(exactly = 0) { dispatcher.startGeneration(any(), any(), any()) }
+            assertNull(viewModel.uiState.value.error)
+            verify(exactly = 0) { dispatcher.startGeneration(any(), any(), any(), any()) }
+            job.cancel()
+        }
+
+    @Test
+    fun `reportBlockedPrompt submits report and emits confirmation event`() =
+        runTest {
+            val job =
+                backgroundScope.launch(testDispatcher) {
+                    viewModel.uiState.collect {}
+                }
+
+            viewModel.moderationEvents.test {
+                viewModel.reportBlockedPrompt("false positive prompt")
+                advanceUntilIdle()
+
+                coVerify { submitModerationReportUseCase("false positive prompt", "blocked") }
+                val event = awaitItem()
+                assertEquals(ModerationEvent.ReportSubmitted, event)
+                cancelAndIgnoreRemainingEvents()
+            }
+
             job.cancel()
         }
 
@@ -275,9 +359,10 @@ class MultimodalViewModelTest {
                 MultimodalViewModel(
                     defaultModelRepository = defaultModelRepository,
                     mediaProviderRepository = mediaProviderRepository,
-                    moderatePromptUseCase = ModeratePromptUseCase(moderationPort),
+                    moderatePromptUseCase = ModeratePromptUseCase(moderationPort, NoOpLoggingPort),
                     shouldModeratePromptUseCase = shouldModerateMock,
-                    resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase(),
+                    submitModerationReportUseCase = submitModerationReportUseCase,
+                    getImageGenerationCapabilitiesUseCase = getImageGenerationCapabilitiesUseCase,
                     generationCoordinator = generationCoordinator,
                     albumSelectionCoordinator = albumSelectionCoordinator,
                     speechCoordinator = speechCoordinator,
@@ -287,6 +372,14 @@ class MultimodalViewModelTest {
                     remoteCapabilitiesCoordinator = StudioRemoteCapabilitiesCoordinator(resolveMediaProviderCapabilitiesUseCase),
                     promptCoordinator = StudioPromptCoordinator(generationCoordinator, studioRepository),
                     mediaActionsCoordinator = StudioMediaActionsCoordinator(shareMediaPort, studioRepository, generationCoordinator),
+                    uiSelectionRepository = uiSelectionRepository,
+                    overrideCoordinator = StudioModelOverrideCoordinator(),
+                    resolvedModelCoordinator =
+                        StudioResolvedModelCoordinator(
+                            resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase(),
+                            mediaProviderRepository = mediaProviderRepository,
+                        ),
+                    getStudioCapablePresetsUseCase = mockk<GetStudioCapablePresetsUseCase>(relaxed = true),
                 )
 
             moderationPort.scores =
@@ -295,7 +388,7 @@ class MultimodalViewModelTest {
                     labelAliases = mapOf("sexual/minors" to listOf("S3")),
                     thresholds = mapOf("sexual/minors" to 0.65),
                 )
-            viewModel.promptCoordinator.onPromptChange("blocked studio prompt but trusted")
+            viewModel.onPromptChange("blocked studio prompt but trusted")
             val job =
                 backgroundScope.launch(testDispatcher) {
                     viewModel.uiState.collect {}
@@ -305,7 +398,7 @@ class MultimodalViewModelTest {
             advanceUntilIdle()
 
             // Verify that moderation didn't block and generation dispatcher was triggered
-            verify(exactly = 1) { dispatcher.startGeneration(any(), any(), any()) }
+            verify(exactly = 1) { dispatcher.startGeneration(any(), any(), any(), any()) }
             job.cancel()
         }
 
@@ -317,7 +410,7 @@ class MultimodalViewModelTest {
                 assertEquals("", initial.prompt)
                 assertFalse(initial.isGenerating)
 
-                viewModel.promptCoordinator.onPromptChange("studio prompt")
+                viewModel.onPromptChange("studio prompt")
                 val updated = awaitItem()
                 assertEquals("studio prompt", updated.prompt)
 
@@ -355,6 +448,34 @@ class MultimodalViewModelTest {
             val state = viewModel.uiState.value
             assertEquals(listOf(AspectRatio.ONE_ONE, AspectRatio.SIXTEEN_NINE), state.capabilities?.supportedAspectRatios)
             assertEquals(listOf(GenerationQuality.SPEED, GenerationQuality.HD), state.capabilities?.supportedImageQualities)
+            job.cancel()
+        }
+
+    @Test
+    fun `local image generation assignment surfaces on-device capabilities`() =
+        runTest {
+            val localConfigId =
+                com.browntowndev.enclave.domain.model.config
+                    .LocalModelConfigurationId("sd15-local-config")
+            val localImageAssignment =
+                DefaultModelAssignment(
+                    modelType = ModelType.IMAGE_GENERATION,
+                    localConfigId = localConfigId,
+                )
+            every { defaultModelRepository.observeDefaults() } returns flowOf(listOf(localImageAssignment))
+            every { mediaProviderRepository.getMediaProviders() } returns flowOf(emptyList())
+
+            viewModel = createViewModel()
+            val job =
+                backgroundScope.launch(testDispatcher) {
+                    viewModel.uiState.collect {}
+                }
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals(listOf(AspectRatio.ONE_ONE), state.capabilities?.supportedAspectRatios)
+            assertEquals(listOf("512x512"), state.capabilities?.supportedImageResolutions)
+            assertFalse(state.isCapabilitiesLoading)
             job.cancel()
         }
 
@@ -419,7 +540,7 @@ class MultimodalViewModelTest {
 
             assertTrue(viewModel.uiState.value.isCapabilitiesLoading)
 
-            viewModel.promptCoordinator.onMediaTypeChange(MediaCapability.VIDEO)
+            viewModel.onMediaTypeChange(MediaCapability.VIDEO)
             assertTrue(
                 viewModel.uiState.value.isCapabilitiesLoading,
                 "Loading must stay active until the superseding fetch completes",
@@ -440,7 +561,7 @@ class MultimodalViewModelTest {
                     viewModel.uiState.collect {}
                 }
 
-            viewModel.promptCoordinator.onPromptChange("rejected prompt")
+            viewModel.onPromptChange("rejected prompt")
             viewModel.generate()
 
             generationErrorFlow.value = "Prompt rejected due to moderation."
@@ -451,25 +572,30 @@ class MultimodalViewModelTest {
         }
 
     @Test
-    fun `generate exposes fal content policy failure as snackbar message`() =
+    fun `generate exposes fal content policy failure as moderation event`() =
         runTest {
             val job =
                 backgroundScope.launch(testDispatcher) {
                     viewModel.uiState.collect {}
                 }
 
-            viewModel.promptCoordinator.onPromptChange("mock microsoft")
+            viewModel.onPromptChange("mock microsoft")
             viewModel.generate()
-
-            generationErrorFlow.value =
-                "fal video generation failed: could not fetch queue result from " +
-                "https://queue.fal.run/bytedance/seedance-2.0/requests/test " +
-                "(fal queue result failed: 422 Output video has sensitive content.)"
             advanceUntilIdle()
 
-            val error = viewModel.uiState.value.error
-            assertTrue(error?.contains("sensitive content", ignoreCase = true) == true)
-            assertTrue(error?.contains("blocked", ignoreCase = true) == true)
+            viewModel.moderationEvents.test {
+                generationErrorFlow.value =
+                    "fal video generation failed: could not fetch queue result from " +
+                    "https://queue.fal.run/bytedance/seedance-2.0/requests/test " +
+                    "(fal queue result failed: 422 Output video has sensitive content.)"
+                advanceUntilIdle()
+
+                val event = awaitItem()
+                assertTrue(event is ModerationEvent.Blocked)
+                cancelAndIgnoreRemainingEvents()
+            }
+
+            assertNull(viewModel.uiState.value.error)
             job.cancel()
         }
 
@@ -481,12 +607,12 @@ class MultimodalViewModelTest {
                     viewModel.uiState.collect {}
                 }
 
-            viewModel.promptCoordinator.onPromptChange("studio prompt")
+            viewModel.onPromptChange("studio prompt")
             viewModel.generate()
             assertEquals("", viewModel.uiState.value.prompt)
 
             advanceUntilIdle()
-            verify { dispatcher.startGeneration(any(), any(), any()) }
+            verify { dispatcher.startGeneration(any(), any(), any(), any()) }
             job.cancel()
         }
 
@@ -498,42 +624,44 @@ class MultimodalViewModelTest {
                     viewModel.uiState.collect {}
                 }
 
-            viewModel.promptCoordinator.onPromptChange("scroll prompt")
-            viewModel.promptCoordinator.onContinualModeToggle(true)
+            viewModel.onPromptChange("scroll prompt")
+            viewModel.onContinualModeToggle(true)
 
             // Before generate, threshold hit is ignored
             viewModel.onGenerativeScrollThresholdVisible(anchorAssetId = "anchor-0")
-            verify(exactly = 0) { dispatcher.startGeneration(any(), any(), any()) }
+            verify(exactly = 0) { dispatcher.startGeneration(any(), any(), any(), any()) }
 
             // Initial generate
             viewModel.generate()
-            verify(exactly = 1) { dispatcher.startGeneration(any(), any(), any()) }
+            verify(exactly = 1) { dispatcher.startGeneration(any(), any(), any(), any()) }
             assertTrue(viewModel.uiState.value.isGenerating)
 
-            // Simulate generation completion to reset _isGenerating
+            // Simulate generation completion to reset active generation tracking
             ephemeralMediaFlow.value =
                 listOf(StudioMediaAsset(id = "1", localUri = "uri", prompt = "p", mediaType = "IMAGE", createdAt = 1L))
+            activeGenerationFlow.value = null
             advanceUntilIdle()
             assertFalse(viewModel.uiState.value.isGenerating)
 
             // First threshold hit
             viewModel.onGenerativeScrollThresholdVisible(anchorAssetId = "anchor-1")
-            verify(exactly = 2) { dispatcher.startGeneration(any(), any(), any()) }
+            verify(exactly = 2) { dispatcher.startGeneration(any(), any(), any(), any()) }
             assertTrue(viewModel.uiState.value.isGenerating)
 
             // Simulate second completion
             ephemeralMediaFlow.value =
                 ephemeralMediaFlow.value + StudioMediaAsset(id = "2", localUri = "uri2", prompt = "p", mediaType = "IMAGE", createdAt = 2L)
+            activeGenerationFlow.value = null
             advanceUntilIdle()
             assertFalse(viewModel.uiState.value.isGenerating)
 
             // Second threshold hit with same anchor should be ignored (internal consumedScrollAnchors)
             viewModel.onGenerativeScrollThresholdVisible(anchorAssetId = "anchor-1")
-            verify(exactly = 2) { dispatcher.startGeneration(any(), any(), any()) }
+            verify(exactly = 2) { dispatcher.startGeneration(any(), any(), any(), any()) }
 
             // Third threshold hit with new anchor should work
             viewModel.onGenerativeScrollThresholdVisible(anchorAssetId = "anchor-2")
-            verify(exactly = 3) { dispatcher.startGeneration(any(), any(), any()) }
+            verify(exactly = 3) { dispatcher.startGeneration(any(), any(), any(), any()) }
 
             job.cancel()
         }
@@ -546,8 +674,8 @@ class MultimodalViewModelTest {
                     viewModel.uiState.collect {}
                 }
 
-            viewModel.promptCoordinator.onPromptChange("first prompt")
-            viewModel.promptCoordinator.onContinualModeToggle(true)
+            viewModel.onPromptChange("first prompt")
+            viewModel.onContinualModeToggle(true)
             viewModel.generate()
             assertTrue(viewModel.uiState.value.isContinualGenerationActive)
 
@@ -556,11 +684,11 @@ class MultimodalViewModelTest {
                 listOf(StudioMediaAsset(id = "1", localUri = "uri", prompt = "p", mediaType = "IMAGE", createdAt = 1L))
             advanceUntilIdle()
 
-            viewModel.promptCoordinator.onPromptChange("second prompt")
+            viewModel.onPromptChange("second prompt")
             viewModel.onGenerativeScrollThresholdVisible(anchorAssetId = "anchor-1")
 
             assertFalse(viewModel.uiState.value.isContinualGenerationActive)
-            verify(exactly = 1) { dispatcher.startGeneration(any(), any(), any()) }
+            verify(exactly = 1) { dispatcher.startGeneration(any(), any(), any(), any()) }
             job.cancel()
         }
 
@@ -647,15 +775,14 @@ class MultimodalViewModelTest {
                     viewModel.uiState.collect {}
                 }
 
-            viewModel.mediaActionsCoordinator.onAnimateMedia(
-                prompt = viewModel.promptCoordinator,
+            viewModel.onAnimateMedia(
                 assetId = assetId,
                 autoAnimate = true,
                 customPrompt = "custom prompt",
             )
             advanceUntilIdle()
 
-            verify { dispatcher.startGeneration(any(), any(), any()) }
+            verify { dispatcher.startGeneration(any(), any(), any(), any()) }
             job.cancel()
         }
 
@@ -680,7 +807,7 @@ class MultimodalViewModelTest {
                 )
             advanceUntilIdle()
 
-            viewModel.mediaActionsCoordinator.shareMedia(setOf(assetId))
+            viewModel.shareMedia(setOf(assetId))
             advanceUntilIdle()
             verify { shareMediaPort.shareMedia(listOf("cache://ephemeral.jpg"), "*/*") }
             job.cancel()
@@ -709,7 +836,7 @@ class MultimodalViewModelTest {
             ephemeralMediaFlow.value = emptyList()
             advanceUntilIdle()
 
-            viewModel.mediaActionsCoordinator.shareSingleMedia(assetId)
+            viewModel.shareSingleMedia(assetId)
             advanceUntilIdle()
 
             verify { shareMediaPort.shareMedia(listOf(persistedUri), "image/*") }
@@ -739,7 +866,7 @@ class MultimodalViewModelTest {
             ephemeralMediaFlow.value = emptyList()
             advanceUntilIdle()
 
-            viewModel.mediaActionsCoordinator.shareMedia(setOf(assetId))
+            viewModel.shareMedia(setOf(assetId))
             advanceUntilIdle()
 
             verify { shareMediaPort.shareMedia(listOf(persistedUri), "*/*") }
@@ -781,7 +908,7 @@ class MultimodalViewModelTest {
                 )
             advanceUntilIdle()
 
-            viewModel.mediaActionsCoordinator.shareMedia(setOf(ephemeralId, persistedId))
+            viewModel.shareMedia(setOf(ephemeralId, persistedId))
             advanceUntilIdle()
 
             verify {
@@ -805,7 +932,7 @@ class MultimodalViewModelTest {
             coEvery { studioRepository.getMediaById("missing") } returns null
             advanceUntilIdle()
 
-            viewModel.mediaActionsCoordinator.shareSingleMedia("missing")
+            viewModel.shareSingleMedia("missing")
             advanceUntilIdle()
 
             verify(exactly = 0) { shareMediaPort.shareMedia(any(), any()) }
@@ -835,7 +962,7 @@ class MultimodalViewModelTest {
             ephemeralMediaFlow.value = emptyList()
             advanceUntilIdle()
 
-            viewModel.mediaActionsCoordinator.shareSingleMedia(assetId)
+            viewModel.shareSingleMedia(assetId)
             advanceUntilIdle()
 
             verify { shareMediaPort.shareMedia(listOf(persistedUri), "video/*") }
@@ -865,8 +992,7 @@ class MultimodalViewModelTest {
             ephemeralMediaFlow.value = emptyList()
             advanceUntilIdle()
 
-            viewModel.mediaActionsCoordinator.onEditMedia(
-                prompt = viewModel.promptCoordinator,
+            viewModel.onEditMedia(
                 assetId = assetId,
                 fromUserAction = true,
             )
@@ -901,14 +1027,12 @@ class MultimodalViewModelTest {
             ephemeralMediaFlow.value = emptyList()
             advanceUntilIdle()
 
-            viewModel.mediaActionsCoordinator.onEditMedia(
-                prompt = viewModel.promptCoordinator,
+            viewModel.onEditMedia(
                 assetId = assetId,
                 fromUserAction = true,
             )
             advanceUntilIdle()
-            viewModel.mediaActionsCoordinator.onEditMedia(
-                prompt = viewModel.promptCoordinator,
+            viewModel.onEditMedia(
                 assetId = assetId,
                 fromUserAction = true,
             )
@@ -941,13 +1065,11 @@ class MultimodalViewModelTest {
             ephemeralMediaFlow.value = emptyList()
             advanceUntilIdle()
 
-            viewModel.mediaActionsCoordinator.onEditMedia(
-                prompt = viewModel.promptCoordinator,
+            viewModel.onEditMedia(
                 assetId = assetId,
             )
             advanceUntilIdle()
-            viewModel.mediaActionsCoordinator.onEditMedia(
-                prompt = viewModel.promptCoordinator,
+            viewModel.onEditMedia(
                 assetId = assetId,
             )
             advanceUntilIdle()
@@ -964,8 +1086,7 @@ class MultimodalViewModelTest {
                     viewModel.uiState.collect {}
                 }
 
-            viewModel.mediaActionsCoordinator.onEditMedia(
-                prompt = viewModel.promptCoordinator,
+            viewModel.onEditMedia(
                 assetId = null,
             )
             advanceUntilIdle()
@@ -1004,8 +1125,7 @@ class MultimodalViewModelTest {
                 }
 
             // When
-            viewModel.mediaActionsCoordinator.onEditMedia(
-                prompt = viewModel.promptCoordinator,
+            viewModel.onEditMedia(
                 assetId = null,
                 rehydrateIds = rehydrateIds,
                 rehydrateUris = rehydrateUris,
@@ -1021,5 +1141,172 @@ class MultimodalViewModelTest {
             assertNull(settings.referenceImageUri)
 
             job.cancel()
+        }
+
+    @Test
+    fun `STU-001 active SD15 exposes exactly 512x512`() =
+        runTest {
+            val localConfigId = LocalModelConfigurationId("sd15-local-config")
+            val localImageAssignment =
+                DefaultModelAssignment(
+                    modelType = ModelType.IMAGE_GENERATION,
+                    localConfigId = localConfigId,
+                )
+            every { defaultModelRepository.observeDefaults() } returns flowOf(listOf(localImageAssignment))
+            viewModel = createViewModel()
+            val job =
+                backgroundScope.launch(testDispatcher) {
+                    viewModel.uiState.collect {}
+                }
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals(listOf("512x512"), state.capabilities?.supportedImageResolutions)
+            job.cancel()
+        }
+
+    @Test
+    fun `MUT-001 hardcoded dual resolution fails SD15 exact resolution check`() =
+        runTest {
+            // Mutation defense reuses the STU-001 assigned-model capability path; a lazy dual-resolution
+            // implementation must fail this exact-resolution assertion for SD15_QNN.
+            val localConfigId = LocalModelConfigurationId("sd15-local-config")
+            val localImageAssignment =
+                DefaultModelAssignment(
+                    modelType = ModelType.IMAGE_GENERATION,
+                    localConfigId = localConfigId,
+                )
+            every { defaultModelRepository.observeDefaults() } returns flowOf(listOf(localImageAssignment))
+            viewModel = createViewModel()
+            val job =
+                backgroundScope.launch(testDispatcher) {
+                    viewModel.uiState.collect {}
+                }
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals(listOf("512x512"), state.capabilities?.supportedImageResolutions)
+            job.cancel()
+        }
+
+    @Test
+    fun `STU-002 active SDXL exposes exactly 1024x1024`() =
+        runTest {
+            val localConfigId = LocalModelConfigurationId("sdxl-local-config")
+            val localImageAssignment =
+                DefaultModelAssignment(
+                    modelType = ModelType.IMAGE_GENERATION,
+                    localConfigId = localConfigId,
+                )
+            every { defaultModelRepository.observeDefaults() } returns flowOf(listOf(localImageAssignment))
+
+            viewModel = createViewModel()
+            val job =
+                backgroundScope.launch(testDispatcher) {
+                    viewModel.uiState.collect {}
+                }
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals(listOf("1024x1024"), state.capabilities?.supportedImageResolutions)
+            job.cancel()
+        }
+
+    @Test
+    fun `STU-003 active SDXL exposes exact step options and default 8`() =
+        runTest {
+            val localConfigId = LocalModelConfigurationId("sdxl-local-config")
+            val localImageAssignment =
+                DefaultModelAssignment(
+                    modelType = ModelType.IMAGE_GENERATION,
+                    localConfigId = localConfigId,
+                )
+            every { defaultModelRepository.observeDefaults() } returns flowOf(listOf(localImageAssignment))
+
+            viewModel = createViewModel()
+            val job =
+                backgroundScope.launch(testDispatcher) {
+                    viewModel.uiState.collect {}
+                }
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals(listOf(8, 12, 16, 20, 24, 30), state.capabilities?.supportedImageSteps)
+            assertEquals(8, state.capabilities?.defaultImageStep)
+            job.cancel()
+        }
+
+    @Test
+    fun `STU-009 active Juggernaut exposes exactly 1024x1024`() =
+        runTest {
+            val localConfigId = LocalModelConfigurationId(ModelPackTestFixtures.JUGGERNAUT_CONFIG_ID)
+            val localImageAssignment =
+                DefaultModelAssignment(
+                    modelType = ModelType.IMAGE_EDIT,
+                    localConfigId = localConfigId,
+                )
+            every { defaultModelRepository.observeDefaults() } returns flowOf(listOf(localImageAssignment))
+            every { mediaProviderRepository.getMediaProviders() } returns flowOf(emptyList())
+            coEvery { localModelRepository.getAssetByConfigId(localConfigId) } returns
+                ModelPackTestFixtures.juggernautDiffusionAsset()
+
+            viewModel = createViewModel()
+            viewModel.onUpdateReferenceImage("file://reference.jpg")
+            val job =
+                backgroundScope.launch(testDispatcher) {
+                    viewModel.uiState.collect {}
+                }
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals(listOf("1024x1024"), state.capabilities?.supportedImageResolutions)
+            job.cancel()
+        }
+
+    @Test
+    fun `STU-010 active Juggernaut exposes exact step options and default 24`() =
+        runTest {
+            val localConfigId = LocalModelConfigurationId(ModelPackTestFixtures.JUGGERNAUT_CONFIG_ID)
+            val localImageAssignment =
+                DefaultModelAssignment(
+                    modelType = ModelType.IMAGE_EDIT,
+                    localConfigId = localConfigId,
+                )
+            every { defaultModelRepository.observeDefaults() } returns flowOf(listOf(localImageAssignment))
+            every { mediaProviderRepository.getMediaProviders() } returns flowOf(emptyList())
+            coEvery { localModelRepository.getAssetByConfigId(localConfigId) } returns
+                ModelPackTestFixtures.juggernautDiffusionAsset()
+
+            viewModel = createViewModel()
+            viewModel.onUpdateReferenceImage("file://reference.jpg")
+            val job =
+                backgroundScope.launch(testDispatcher) {
+                    viewModel.uiState.collect {}
+                }
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals(listOf(20, 22, 24, 26, 28, 30), state.capabilities?.supportedImageSteps)
+            assertEquals(24, state.capabilities?.defaultImageStep)
+            job.cancel()
+        }
+
+    @Test
+    fun `init restores persisted non-default media type`() =
+        runTest {
+            every { uiSelectionRepository.selectedStudioMediaType } returns flowOf(MediaCapability.VIDEO)
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            assertEquals(MediaCapability.VIDEO, promptCoordinator.mediaType.value)
+        }
+
+    @Test
+    fun `onMediaTypeChange persists the media type`() =
+        runTest {
+            viewModel.onMediaTypeChange(MediaCapability.MUSIC)
+            advanceUntilIdle()
+
+            coVerify { uiSelectionRepository.setStudioMediaType(MediaCapability.MUSIC) }
         }
 }

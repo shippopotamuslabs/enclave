@@ -7,6 +7,7 @@ import com.browntowndev.enclave.domain.model.download.DownloadModelsResult
 import com.browntowndev.enclave.domain.model.download.ModelScanResult
 import com.browntowndev.enclave.domain.port.auth.AuthState
 import com.browntowndev.enclave.domain.port.repository.CloudSyncPort
+import com.browntowndev.enclave.domain.port.repository.SyncOrchestrator
 import com.browntowndev.enclave.domain.port.security.BiometricPort
 import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
 import com.browntowndev.enclave.domain.port.security.VaultMetadataPort
@@ -97,6 +98,8 @@ class MainViewModelOnboardingTest {
             // initializeModelsUseCase returns empty modelsToDownload
             coEvery { initializeModelsUseCase() } returns initializedModelsResult
 
+            val syncOrchestrator = mockk<SyncOrchestrator>(relaxed = true)
+
             // When: MainViewModel is constructed with the fake settings (onboardingCompleted=false)
             val viewModel =
                 MainViewModel(
@@ -113,10 +116,10 @@ class MainViewModelOnboardingTest {
                     detectVaultReconciliationStateUseCase = detectVaultReconciliationStateUseCase,
                     adoptCloudVaultUseCase = adoptCloudVaultUseCase,
                     bootstrapCloudVaultFromLocalUseCase = bootstrapCloudVaultFromLocalUseCase,
-                    startCloudSyncListeningUseCase = startCloudSyncListeningUseCase,
                     loggingPort = loggingPort,
                     errorHandler = errorHandler,
                     settingsRepository = fakeSettingsRepository,
+                    syncOrchestrator = syncOrchestrator,
                 )
 
             advanceUntilIdle()

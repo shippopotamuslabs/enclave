@@ -41,16 +41,13 @@ class InferenceTelemetrySupport
             val clientBuild: TelemetryClientBuild,
         )
 
-        fun captureContext(
-            options: GenerationOptions,
-            sequenceIndex: Int = 0,
-        ): CaptureContext? {
+        fun captureContext(options: GenerationOptions): CaptureContext? {
             val messageId = options.assistantMessageId ?: return null
             val chatId = options.chatId ?: return null
             return CaptureContext(
                 messageId = messageId,
                 chatId = chatId,
-                sequenceIndex = sequenceIndex,
+                sequenceIndex = options.telemetrySequenceIndex,
                 clientBuild = clientBuildProvider.current(),
             )
         }
@@ -104,6 +101,7 @@ class InferenceTelemetrySupport
 
         fun anthropicTurnTelemetry(
             context: CaptureContext,
+            providerLabel: String,
             modelId: String,
             modelLabel: String,
             timing: InferenceTurnTiming,
@@ -120,6 +118,7 @@ class InferenceTelemetrySupport
                     messageId = context.messageId.value,
                     chatId = context.chatId.value,
                     sequenceIndex = context.sequenceIndex,
+                    providerLabel = providerLabel,
                     modelId = modelId,
                     modelLabel = modelLabel,
                     requestStartedAtMs = timing.requestStartedAtMs,
@@ -141,6 +140,9 @@ class InferenceTelemetrySupport
             modelLabel: String,
             timing: InferenceTurnTiming,
             outputTokens: Int?,
+            inputTokens: Int? = null,
+            cacheReadInputTokens: Int? = null,
+            reasoningTokens: Int? = null,
         ): TurnTelemetry =
             normalizer.normalizeLocalGeneration(
                 rowId = newRowId(),
@@ -155,17 +157,22 @@ class InferenceTelemetrySupport
                 appVersionName = context.clientBuild.appVersionName,
                 appVersionCode = context.clientBuild.appVersionCode,
                 telemetrySchemaVersion = context.clientBuild.telemetrySchemaVersion,
+                sequenceIndex = context.sequenceIndex,
+                inputTokens = inputTokens,
+                cacheReadInputTokens = cacheReadInputTokens,
+                reasoningTokens = reasoningTokens,
             )
 
         fun providerLabel(provider: String): String =
             when (provider.uppercase()) {
                 ApiProvider.OPENAI.name -> "OpenAI"
                 ApiProvider.ANTHROPIC.name -> "Anthropic"
+                ApiProvider.ZAI.name -> "Z.ai"
                 ApiProvider.GOOGLE.name -> "Google"
                 ApiProvider.XAI.name -> "xAI"
                 "OPENROUTER" -> "OpenRouter"
                 "LITERT", "LITERTLM" -> "LiteRT"
-                "LLAMA" -> "LiteRT"
+                "LLAMA" -> "llama.cpp"
                 else -> provider
             }
 

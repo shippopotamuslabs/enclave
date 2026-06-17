@@ -9,8 +9,15 @@ import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
 import com.browntowndev.enclave.domain.port.inference.AgentPolicyPort
+import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.domain.port.inference.MonotonicToolActivationPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
+import com.browntowndev.enclave.domain.port.inference.NoopToolSearchEmbeddingCachePort
+import com.browntowndev.enclave.domain.port.inference.ToolSearchEmbeddingCachePort
+import com.browntowndev.enclave.domain.usecase.chat.InMemoryMonotonicToolActivationStore
+import com.browntowndev.enclave.domain.usecase.chat.SearchToolsHostCoordinator
+import com.browntowndev.enclave.domain.usecase.chat.ToolSessionActivationRegistry
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.enclave.feature.inference.conversation.ConversationCancellationGate
@@ -20,6 +27,9 @@ import com.browntowndev.enclave.feature.inference.conversation.ConversationSessi
 import com.browntowndev.enclave.feature.inference.conversation.ConversationSignatureCache
 import com.browntowndev.enclave.feature.inference.conversation.LiteRtConversationFactory
 import com.browntowndev.enclave.feature.inference.conversation.LiteRtToolCallLoop
+import com.browntowndev.enclave.feature.inference.conversation.LiteRtToolContext
+import com.browntowndev.enclave.feature.inference.conversation.LiteRtTurnSnapshot
+
 import com.browntowndev.enclave.feature.inference.conversation.NoopAgentPolicyPort
 import com.browntowndev.enclave.feature.inference.conversation.resolveModelPath
 import com.google.ai.edge.litertlm.Backend
@@ -43,10 +53,22 @@ class ConversationManagerImpl
         private val activeModelProvider: ActiveModelProviderPort,
         private val loggingPort: LoggingPort,
         private val toolExecutor: ToolExecutorPort,
+        private val embeddingEnginePort: EmbeddingEnginePort,
+        private val monotonicToolActivation: MonotonicToolActivationPort = InMemoryMonotonicToolActivationStore(),
+        private val toolSearchEmbeddingCache: ToolSearchEmbeddingCachePort = NoopToolSearchEmbeddingCachePort,
         private val agentPolicyPort: AgentPolicyPort = NoopAgentPolicyPort,
     ) : ConversationManager {
         private val cache = ConversationSignatureCache()
         private val cancellationGate = ConversationCancellationGate()
+
+        init {
+            cache.toolActivationRegistry =
+                ToolSessionActivationRegistry(
+                    monotonicToolActivation = monotonicToolActivation,
+                    onActiveNamesUpdated = { names -> cache.activeToolNames = names },
+                    onSearchDiscoveredNewTools = { invalidateLiteRtConversationForToolChange() },
+                )
+        }
 
         @VisibleForTesting
         internal val engineCreatorHolder = ConversationEngineCreatorHolder()
@@ -63,6 +85,11 @@ class ConversationManagerImpl
                 )
             }
         }
+        private val searchToolsHostCoordinator =
+            SearchToolsHostCoordinator(
+                embeddingEngine = embeddingEnginePort,
+                embeddingCache = toolSearchEmbeddingCache,
+            )
         private val toolLoop =
             LiteRtToolCallLoop(
                 cache = cache,
@@ -70,6 +97,7 @@ class ConversationManagerImpl
                 loggingPort = loggingPort,
                 agentPolicyPort = agentPolicyPort,
                 cancellationGate = cancellationGate,
+                searchToolsHostCoordinator = searchToolsHostCoordinator,
             )
         private val sessionCoordinator: ConversationSessionCoordinator by lazy {
             ConversationSessionCoordinator(
@@ -80,6 +108,16 @@ class ConversationManagerImpl
             )
         }
         private val mutex = Mutex()
+
+        override fun beginGenerationRequest(): Int {
+            val requestId = cancellationGate.beginRequest()
+            toolLoop.resetForNewTurn()
+            return requestId
+        }
+
+        override fun endGenerationRequest(requestId: Int) {
+            cancellationGate.cancelCurrentGenerationIfOwner(requestId)
+        }
 
         override fun cancelCurrentGeneration() {
             Log.d(TAG, "cancelCurrentGeneration called")
@@ -101,7 +139,7 @@ class ConversationManagerImpl
             onLoadingStarted: suspend () -> Unit,
         ): LiteRtConversation =
             withContext(Dispatchers.IO) {
-                cancellationGate.resetForNewRequest()
+                cancellationGate.prepareForGetConversation()
                 mutex.withLock {
                     val activeConfig =
                         activeModelProvider.getActiveConfiguration(modelType)
@@ -136,6 +174,12 @@ class ConversationManagerImpl
             }
         }
 
+        private fun invalidateLiteRtConversationForToolChange() {
+            // Keep the active conversation alive while tool_discovery_tool is executing; rebuild on the
+            // next getConversation when the signature no longer matches activeToolNames.
+            cache.currentSignature = null
+        }
+
         override suspend fun setHistory(messages: List<ChatMessage>) {
             mutex.withLock {
                 ConversationHistoryHandler.applyHistoryUpdate(
@@ -145,6 +189,12 @@ class ConversationManagerImpl
                 )
             }
         }
+
+        override fun telemetryContext(): LiteRtTelemetryContext =
+            LiteRtTelemetryContext(
+                history = cache.history,
+                systemPrompt = cache.currentSystemPrompt,
+            )
 
         override suspend fun closeEngine() {
             mutex.withLock {
@@ -174,7 +224,37 @@ class ConversationManagerImpl
             )
 
         @VisibleForTesting
-        internal suspend fun executeToolSafelyForTest(request: ToolCallRequest): String = toolLoop.executeToolSafely(request)
+        internal suspend fun executeToolSafelyForTest(request: ToolCallRequest): String {
+            val requestId = beginGenerationRequest()
+            return toolLoop.executeToolSafely(request, defaultTurnContextForTest(requestId))
+        }
+
+        internal suspend fun executeToolSafelyForTest(
+            request: ToolCallRequest,
+            turnContext: LiteRtToolContext,
+        ): String = toolLoop.executeToolSafely(request, turnContext)
+
+        @VisibleForTesting
+        internal fun defaultTurnContextForTest(requestId: Int = cancellationGate.currentRequestId()): LiteRtToolContext =
+            LiteRtToolContext(
+                modelType = ModelType.FAST,
+                chatId = null,
+                userMessageId = null,
+                toolLoop = toolLoop,
+                turn =
+                    LiteRtTurnSnapshot(
+                        requestId = requestId,
+                        systemPrompt = cache.currentSystemPrompt,
+                        contextWindow = cache.currentContextWindow,
+                        history = cache.history,
+                        modelPath = cache.currentModelPath,
+                        latestAssistantMessageId = cache.latestAssistantMessageId,
+                        toolCatalog = cache.toolCatalog,
+                        toolSearchIndex = cache.toolSearchIndex,
+                        toolCallStrategy = cache.toolCallStrategy,
+                        transientToolResultTokens = cache.transientToolResultTokens.get(),
+                    ),
+            )
 
         @VisibleForTesting
         internal var conversation
@@ -204,6 +284,14 @@ class ConversationManagerImpl
         @VisibleForTesting
         internal val cancellationEpoch
             get() = cancellationGate.cancellationEpoch
+
+        @VisibleForTesting
+        internal val currentRequestId
+            get() = cancellationGate.currentRequestId()
+
+        @VisibleForTesting
+        internal val hasTransientToolResults
+            get() = cache.hasTransientToolResults
 
         private fun validateModelType(
             modelType: ModelType,

@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -23,8 +24,11 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -51,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.browntowndev.enclave.core.ui.component.neo.NeoCircularProgressIndicator
+import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
 import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
 import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
 import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
@@ -62,6 +67,7 @@ import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelId
+import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import kotlinx.coroutines.launch
 
@@ -90,11 +96,13 @@ fun LocalModelsBottomSheet(
     onSelectLocalModelConfig: (LocalModelConfigUi?) -> Unit,
     onDeleteLocalModelAsset: (LocalModelId) -> Unit,
     onDeleteLocalModelConfig: (LocalModelConfigurationId) -> Unit,
-    onConfirmDeletionWithReassignment: (LocalModelConfigurationId?, ApiModelConfigurationId?) -> Unit,
+    onConfirmDeletionWithReassignment: (LocalModelConfigurationId?, ApiModelConfigurationId?, MediaProviderId?) -> Unit,
     onDismissDeletionSafety: () -> Unit,
+    onDeleteModelPack: (String) -> Unit,
     reDownloadViewModel: ModelReDownloadViewModel = hiltViewModel(),
 ) {
     val reDownloadStates by reDownloadViewModel.reDownloadStates.collectAsStateWithLifecycle()
+    val packReDownloadStates by reDownloadViewModel.packReDownloadStates.collectAsStateWithLifecycle()
 
     LocalModelsBottomSheetContent(
         uiState = uiState,
@@ -108,6 +116,9 @@ fun LocalModelsBottomSheet(
         onConfirmDeletionWithReassignment = onConfirmDeletionWithReassignment,
         onDismissDeletionSafety = onDismissDeletionSafety,
         onReDownloadModel = { modelId -> reDownloadViewModel.reDownloadModel(modelId) },
+        onDownloadModelPack = { packId -> reDownloadViewModel.reDownloadPack(packId) },
+        onDeleteModelPack = onDeleteModelPack,
+        packReDownloadStates = packReDownloadStates,
     )
 }
 
@@ -122,9 +133,12 @@ fun LocalModelsBottomSheetContent(
     onSelectLocalModelConfig: (LocalModelConfigUi?) -> Unit,
     onDeleteLocalModelAsset: (LocalModelId) -> Unit,
     onDeleteLocalModelConfig: (LocalModelConfigurationId) -> Unit,
-    onConfirmDeletionWithReassignment: (LocalModelConfigurationId?, ApiModelConfigurationId?) -> Unit,
+    onConfirmDeletionWithReassignment: (LocalModelConfigurationId?, ApiModelConfigurationId?, MediaProviderId?) -> Unit,
     onDismissDeletionSafety: () -> Unit,
     onReDownloadModel: (LocalModelId) -> Unit,
+    onDownloadModelPack: (String) -> Unit,
+    onDeleteModelPack: (String) -> Unit,
+    packReDownloadStates: Map<String, ReDownloadProgress> = emptyMap(),
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var pendingDeleteTarget by remember { mutableStateOf<LocalDeleteTarget?>(null) }
@@ -183,15 +197,21 @@ fun LocalModelsBottomSheetContent(
                     }
                     is LocalModelsSheetView.AssetList -> {
                         LocalModelAssetListView(
+                            modelPacks = uiState.localModelsSheet.modelPacks,
                             localModels = uiState.localModelsSheet.models,
                             availableToDownloadModels = uiState.localModelsSheet.availableDownloads,
                             reDownloadStates = reDownloadStates,
+                            packReDownloadStates = packReDownloadStates,
                             onDismiss = onDismiss,
                             onSelectAsset = { asset -> onSelectLocalModelAsset(asset) },
                             onRequestDeleteAsset = { asset ->
                                 pendingDeleteTarget = LocalDeleteTarget.Asset(asset.metadataId, asset.friendlyName)
                             },
                             onReDownloadModel = onReDownloadModel,
+                            onDownloadModelPack = onDownloadModelPack,
+                            onRequestDeleteModelPack = { pack ->
+                                pendingDeleteTarget = LocalDeleteTarget.Pack(pack.packId, pack.displayName)
+                            },
                         )
                     }
                     is LocalModelsSheetView.Reassignment -> {
@@ -222,22 +242,26 @@ fun LocalModelsBottomSheetContent(
         pendingDeleteTarget?.let { deleteTarget ->
             DeleteConfirmationDialog(
                 title =
-                    if (deleteTarget is LocalDeleteTarget.Asset) {
-                        "Delete Model?"
-                    } else {
-                        "Delete Preset?"
+                    when (deleteTarget) {
+                        is LocalDeleteTarget.Asset -> "Delete Model?"
+                        is LocalDeleteTarget.Config -> "Delete Preset?"
+                        is LocalDeleteTarget.Pack -> "Delete Model Pack?"
                     },
                 message =
-                    if (deleteTarget is LocalDeleteTarget.Asset) {
-                        "Delete ${deleteTarget.displayName}? This removes the model and all of its presets."
-                    } else {
-                        "Delete ${deleteTarget.displayName}? This preset will be removed."
+                    when (deleteTarget) {
+                        is LocalDeleteTarget.Asset ->
+                            "Delete ${deleteTarget.displayName}? This removes the model and all of its presets."
+                        is LocalDeleteTarget.Config ->
+                            "Delete ${deleteTarget.displayName}? This preset will be removed."
+                        is LocalDeleteTarget.Pack ->
+                            "Delete ${deleteTarget.displayName}? All pack files will be removed from this device."
                     },
                 confirmLabel = "Delete",
                 onConfirm = {
                     when (deleteTarget) {
                         is LocalDeleteTarget.Asset -> onDeleteLocalModelAsset(deleteTarget.id)
                         is LocalDeleteTarget.Config -> onDeleteLocalModelConfig(deleteTarget.id)
+                        is LocalDeleteTarget.Pack -> onDeleteModelPack(deleteTarget.packId)
                     }
                     pendingDeleteTarget = null
                 },
@@ -249,18 +273,29 @@ fun LocalModelsBottomSheetContent(
 
 @Composable
 private fun LocalModelAssetListView(
+    modelPacks: List<ModelPackUi>,
     localModels: List<LocalModelAssetUi>,
     availableToDownloadModels: List<LocalModelAssetUi>,
     reDownloadStates: Map<LocalModelId, ReDownloadProgress>,
+    packReDownloadStates: Map<String, ReDownloadProgress>,
     onDismiss: () -> Unit,
     onSelectAsset: (LocalModelAssetUi) -> Unit,
     onRequestDeleteAsset: (LocalModelAssetUi) -> Unit,
     onReDownloadModel: (LocalModelId) -> Unit,
+    onDownloadModelPack: (String) -> Unit,
+    onRequestDeleteModelPack: (ModelPackUi) -> Unit,
 ) {
+    val displayedLocalModels = remember(localModels) {
+        localModels.filter { !it.isImageGenerationCapable }
+    }
+    val displayedAvailableToDownloadModels = remember(availableToDownloadModels) {
+        availableToDownloadModels.filter { !it.isImageGenerationCapable }
+    }
+
     Column(modifier = Modifier.fillMaxWidth()) {
         NeoSheetHeader(
             title = "Local AI Models",
-            subtitle = "Manage your downloaded models and their tuning presets.",
+            subtitle = "Manage your model packs, local models, and tuning presets.",
             onDismiss = onDismiss,
         )
 
@@ -268,11 +303,18 @@ private fun LocalModelAssetListView(
             modifier = Modifier.weight(1f, fill = false),
             verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing),
         ) {
-            if (localModels.isNotEmpty()) {
+            modelPacksSection(
+                modelPacks = modelPacks,
+                packReDownloadStates = packReDownloadStates,
+                onDownloadModelPack = onDownloadModelPack,
+                onRequestDeleteModelPack = onRequestDeleteModelPack,
+            )
+
+            if (displayedLocalModels.isNotEmpty()) {
                 item {
-                    NeoSectionHeader(text = "Downloaded")
+                    NeoSectionHeader(text = "Models")
                 }
-                items(localModels, key = { it.metadataId.value }) { asset ->
+                items(displayedLocalModels, key = { it.metadataId.value }) { asset ->
                     LocalModelAssetCard(
                         asset = asset,
                         reDownloadProgress = reDownloadStates[asset.metadataId],
@@ -289,12 +331,12 @@ private fun LocalModelAssetListView(
                 }
             }
 
-            if (availableToDownloadModels.isNotEmpty()) {
+            if (displayedAvailableToDownloadModels.isNotEmpty()) {
                 item {
                     Spacer(modifier = Modifier.height(EnclaveNeoTokens.sectionSpacing))
-                    NeoSectionHeader(text = "Available for download")
+                    NeoSectionHeader(text = "Removed")
                 }
-                items(availableToDownloadModels, key = { "dl_${it.metadataId.value}" }) { asset ->
+                items(displayedAvailableToDownloadModels, key = { "dl_${it.metadataId.value}" }) { asset ->
                     LocalModelAssetCard(
                         asset = asset,
                         reDownloadProgress = reDownloadStates[asset.metadataId],
@@ -305,16 +347,39 @@ private fun LocalModelAssetListView(
                 }
             }
 
-            if (localModels.isEmpty() && availableToDownloadModels.isEmpty()) {
+            if (modelPacks.isEmpty() && displayedLocalModels.isEmpty() && displayedAvailableToDownloadModels.isEmpty()) {
                 item {
                     Text(
-                        text = "No models downloaded yet.",
+                        text = "No local models or packs yet.",
                         style = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier.padding(bottom = 16.dp),
                     )
                 }
             }
         }
+    }
+}
+
+private fun LazyListScope.modelPacksSection(
+    modelPacks: List<ModelPackUi>,
+    packReDownloadStates: Map<String, ReDownloadProgress>,
+    onDownloadModelPack: (String) -> Unit,
+    onRequestDeleteModelPack: (ModelPackUi) -> Unit,
+) {
+    if (modelPacks.isEmpty()) {
+        return
+    }
+    item(key = "model_packs_header") {
+        NeoSectionHeader(text = "Model packs")
+    }
+    items(modelPacks, key = { it.packId }) { pack ->
+        ModelPackCard(
+            pack = pack,
+            reDownloadProgress = packReDownloadStates[pack.packId],
+            onDownload = { onDownloadModelPack(pack.packId) },
+            onReDownload = { onDownloadModelPack(pack.packId) },
+            onRequestDelete = { onRequestDeleteModelPack(pack) },
+        )
     }
 }
 
@@ -407,6 +472,16 @@ private fun LocalModelAssetCard(
                                 modifier = Modifier.size(20.dp),
                             )
                         }
+                        is ReDownloadProgress.Finalizing -> {
+                            if (reDownloadProgress.progress != null) {
+                                NeoCircularProgressIndicator(
+                                    progress = { reDownloadProgress.progress },
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            } else {
+                                NeoCircularProgressIndicator(modifier = Modifier.size(20.dp))
+                            }
+                        }
                         is ReDownloadProgress.Complete -> {
                             Icon(
                                 imageVector = Icons.Default.CheckCircle,
@@ -492,21 +567,37 @@ private fun LocalModelConfigListView(
             "Presets"
         }
 
+    var menuExpanded by remember { mutableStateOf(false) }
+
     Column(modifier = Modifier.fillMaxWidth()) {
-        Box(modifier = Modifier.fillMaxWidth()) {
-            NeoSheetHeader(
-                title = asset.friendlyName,
-                subtitle = presetSubtitle,
-                onDismiss = onDismiss,
-                onBackClick = onBack,
-            )
-            TextButton(
-                onClick = { onRequestDeleteAsset(asset) },
-                modifier = Modifier.align(Alignment.CenterEnd),
-            ) {
-                Text("Delete Model", color = MaterialTheme.colorScheme.error)
-            }
-        }
+        NeoSheetHeader(
+            title = asset.friendlyName,
+            subtitle = presetSubtitle,
+            onDismiss = onDismiss,
+            onBackClick = onBack,
+            trailingContent = {
+                Box {
+                    NeoIconButton(
+                        onClick = { menuExpanded = true },
+                        icon = Icons.Default.MoreVert,
+                        contentDescription = "Options",
+                    )
+                    DropdownMenu(
+                        expanded = menuExpanded,
+                        onDismissRequest = { menuExpanded = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Delete") },
+                            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
+                            onClick = {
+                                menuExpanded = false
+                                onRequestDeleteAsset(asset)
+                            },
+                        )
+                    }
+                }
+            },
+        )
 
         LazyColumn(
             modifier = Modifier.weight(1f, fill = false),
@@ -569,6 +660,141 @@ private fun LocalModelConfigListView(
     }
 }
 
+@Composable
+private fun ModelPackCard(
+    pack: ModelPackUi,
+    reDownloadProgress: ReDownloadProgress?,
+    onDownload: () -> Unit,
+    onReDownload: () -> Unit,
+    onRequestDelete: () -> Unit,
+) {
+    val showDownload = pack.showDownloadAction && pack.isEligible
+    val dismissState =
+        rememberSwipeToDismissBoxState(
+            confirmValueChange = { value ->
+                if (value == SwipeToDismissBoxValue.EndToStart) {
+                    onRequestDelete()
+                    false
+                } else {
+                    true
+                }
+            },
+        )
+    SwipeToDismissBox(
+        state = dismissState,
+        modifier = Modifier.clip(EnclaveNeoTokens.shape),
+        enableDismissFromStartToEnd = false,
+        backgroundContent = {
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.errorContainer),
+                contentAlignment = Alignment.CenterEnd,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = "Delete pack",
+                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier.padding(end = 16.dp),
+                )
+            }
+        },
+    ) {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .neoSurface(
+                        backgroundColor = MaterialTheme.colorScheme.surface,
+                        borderColor = neoBorderColor(),
+                        withShadow = false,
+                    ).padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = pack.displayName,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = "Pack • ${pack.completenessLabel} files",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+                pack.disabledReason?.takeIf { it.isNotBlank() }?.let { reason ->
+                    Text(
+                        text = reason,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+            }
+            if (showDownload || reDownloadProgress != null) {
+                Box(
+                    modifier = Modifier.size(24.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    when (reDownloadProgress) {
+                        null, ReDownloadProgress.Idle -> {
+                            IconButton(
+                                onClick = if (pack.isDiffusionSoftDeleted) onReDownload else onDownload,
+                                modifier = Modifier.size(24.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Download,
+                                    contentDescription = "Download ${pack.displayName}",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
+                        }
+                        ReDownloadProgress.Preparing -> {
+                            NeoCircularProgressIndicator(modifier = Modifier.size(20.dp))
+                        }
+                        is ReDownloadProgress.Downloading -> {
+                            NeoCircularProgressIndicator(
+                                progress = { reDownloadProgress.progress },
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                        is ReDownloadProgress.Finalizing -> {
+                            if (reDownloadProgress.progress != null) {
+                                NeoCircularProgressIndicator(
+                                    progress = { reDownloadProgress.progress },
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            } else {
+                                NeoCircularProgressIndicator(modifier = Modifier.size(20.dp))
+                            }
+                        }
+                        ReDownloadProgress.Complete -> {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = "Download complete",
+                                tint = SUCCESS_COLOR,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                        is ReDownloadProgress.Failed -> {
+                            Icon(
+                                imageVector = Icons.Default.Error,
+                                contentDescription = "Download failed",
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 private sealed interface LocalDeleteTarget {
     val displayName: String
 
@@ -579,6 +805,11 @@ private sealed interface LocalDeleteTarget {
 
     data class Config(
         val id: LocalModelConfigurationId,
+        override val displayName: String,
+    ) : LocalDeleteTarget
+
+    data class Pack(
+        val packId: String,
         override val displayName: String,
     ) : LocalDeleteTarget
 }
@@ -602,9 +833,12 @@ fun PreviewLocalModelsBottomSheetAssets() {
             onSelectLocalModelConfig = {},
             onDeleteLocalModelAsset = {},
             onDeleteLocalModelConfig = {},
-            onConfirmDeletionWithReassignment = { _, _ -> },
+            onConfirmDeletionWithReassignment = { _, _, _ -> },
             onDismissDeletionSafety = {},
             onReDownloadModel = {},
+            onDownloadModelPack = {},
+            onDeleteModelPack = {},
+            packReDownloadStates = emptyMap(),
         )
     }
 }
@@ -628,9 +862,12 @@ fun PreviewLocalModelsBottomSheetContext() {
             onSelectLocalModelConfig = {},
             onDeleteLocalModelAsset = {},
             onDeleteLocalModelConfig = {},
-            onConfirmDeletionWithReassignment = { _, _ -> },
+            onConfirmDeletionWithReassignment = { _, _, _ -> },
             onDismissDeletionSafety = {},
             onReDownloadModel = {},
+            onDownloadModelPack = {},
+            onDeleteModelPack = {},
+            packReDownloadStates = emptyMap(),
         )
     }
 }

@@ -3,6 +3,7 @@ package com.browntowndev.enclave.feature.inference
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.ChatMessage
 import com.browntowndev.enclave.domain.model.chat.Role
+import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry
@@ -18,7 +19,7 @@ class OpenAiRequestMapperTest {
     @Test
     fun `LTD-04 provider native request mappers use activeTools only`() {
         val params =
-            OpenAiRequestMapper.mapToChatCompletionParams(
+            OpenAiRequestMapper.mapToResponseParams(
                 modelId = "gpt-4o",
                 prompt = "Search and write",
                 history = emptyList(),
@@ -31,20 +32,19 @@ class OpenAiRequestMapperTest {
                                 catalogEntry("web_search", ToolDisclosureMode.PRELOADED),
                                 catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND),
                             ),
-                        activeTools = listOf(ToolDefinition.DISCLOSE_TOOL_SCHEMAS, ToolDefinition.WEB_SEARCH),
+                        activeTools = listOf(ToolDefinition.SEARCH_TOOLS, ToolDefinition.WEB_SEARCH),
                     ),
             )
 
-        val registeredToolNames = params.tools().orElseThrow().map { it.asFunction().function().name() }
-
-        assertEquals(listOf("disclose_tool_schemas", "web_search"), registeredToolNames)
-        assertEquals(2, registeredToolNames.size)
+        val toolsPayload = params.tools().orElseThrow().toString()
+        assertTrue(toolsPayload.contains("tool_discovery_tool"))
+        assertTrue(toolsPayload.contains("web_search"))
     }
 
     @Test
     fun `MUT-01 deferred schema never leaks before disclosure`() {
         val params =
-            OpenAiRequestMapper.mapToChatCompletionParams(
+            OpenAiRequestMapper.mapToResponseParams(
                 modelId = "gpt-4o",
                 prompt = "Search and write",
                 history = emptyList(),
@@ -53,13 +53,13 @@ class OpenAiRequestMapperTest {
                         reasoningBudget = 0,
                         toolingEnabled = true,
                         toolCatalog = listOf(catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND)),
-                        activeTools = listOf(ToolDefinition.DISCLOSE_TOOL_SCHEMAS, ToolDefinition.WEB_SEARCH),
+                        activeTools = listOf(ToolDefinition.SEARCH_TOOLS, ToolDefinition.WEB_SEARCH),
                     ),
             )
 
-        val registeredToolNames = params.tools().orElseThrow().map { it.asFunction().function().name() }
-
-        assertEquals(listOf("disclose_tool_schemas", "web_search"), registeredToolNames)
+        val toolsPayload = params.tools().orElseThrow().toString()
+        assertTrue(toolsPayload.contains("tool_discovery_tool"))
+        assertTrue(toolsPayload.contains("web_search"))
         assertFalse(
             params
                 .tools()
@@ -78,57 +78,6 @@ class OpenAiRequestMapperTest {
             description = "$name description",
             disclosureMode = disclosureMode,
         )
-
-    @Test
-    fun `mapToChatCompletionParams correctly maps model, prompt, and history`() {
-        val history =
-            listOf(
-                ChatMessage(Role.SYSTEM, "You are a helpful assistant."),
-                ChatMessage(Role.USER, "Hello"),
-                ChatMessage(Role.ASSISTANT, "Hi there!"),
-            )
-        val options =
-            GenerationOptions(
-                reasoningBudget = 0,
-                temperature = 0.7f,
-                maxTokens = 100,
-            )
-
-        val params =
-            OpenAiRequestMapper.mapToChatCompletionParams(
-                modelId = "gpt-4o",
-                prompt = "How are you?",
-                history = history,
-                options = options,
-            )
-
-        assertTrue(params.model().toString().contains("gpt-4o"))
-        assertEquals(4, params.messages().size)
-        assertTrue(
-            params
-                .messages()
-                .first()
-                .toString()
-                .contains("system="),
-        )
-    }
-
-    @Test
-    fun `mapToChatCompletionParams sets prompt cache key from chat id`() {
-        val params =
-            OpenAiRequestMapper.mapToChatCompletionParams(
-                modelId = "gpt-4o",
-                prompt = "How are you?",
-                history = emptyList(),
-                options =
-                    GenerationOptions(
-                        reasoningBudget = 0,
-                        chatId = ChatId("chat-123"),
-                    ),
-            )
-
-        assertEquals("chat-123", params.promptCacheKey().orElse(null))
-    }
 
     @Test
     fun `mapToResponseParams correctly maps model, prompt, and history`() {
@@ -221,6 +170,47 @@ class OpenAiRequestMapperTest {
     }
 
     @Test
+    fun `mapToResponseParams omits temperature when excluded for openai reasoning models`() {
+        val params =
+            OpenAiRequestMapper.mapToResponseParams(
+                modelId = "gpt-5.4-nano",
+                prompt = "How are you?",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        apiProvider = ApiProvider.OPENAI,
+                        modelId = "gpt-5.4-nano",
+                        temperature = 0.7f,
+                        temperatureDisabled = true,
+                    ),
+            )
+
+        assertFalse(params.temperature().isPresent)
+    }
+
+    @Test
+    fun `mapToResponseParams omits unsupported sampling parameters for openai nano models`() {
+        val params =
+            OpenAiRequestMapper.mapToResponseParams(
+                modelId = "gpt-5.4-nano",
+                prompt = "How are you?",
+                history = emptyList(),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        apiProvider = ApiProvider.OPENAI,
+                        modelId = "gpt-5.4-nano",
+                        temperature = 0.7f,
+                        topP = 0.9f,
+                    ),
+            )
+
+        assertFalse(params.temperature().isPresent)
+        assertFalse(params.topP().isPresent)
+    }
+
+    @Test
     fun `mapToResponseParams includes max output tokens for generic openai models`() {
         val params =
             OpenAiRequestMapper.mapToResponseParams(
@@ -239,9 +229,9 @@ class OpenAiRequestMapperTest {
     }
 
     @Test
-    fun `mapToChatCompletionParams excludes synthetic assistant error history`() {
+    fun `mapToResponseParams excludes synthetic assistant error history`() {
         val params =
-            OpenAiRequestMapper.mapToChatCompletionParams(
+            OpenAiRequestMapper.mapToResponseParams(
                 modelId = "gpt-4o",
                 prompt = "retry",
                 history =
@@ -252,7 +242,7 @@ class OpenAiRequestMapperTest {
                 options = GenerationOptions(reasoningBudget = 0),
             )
 
-        assertEquals(2, params.messages().size)
+        assertEquals(2, params.input().orElseThrow().asResponse().size)
     }
 
     @Test

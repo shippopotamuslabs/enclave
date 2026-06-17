@@ -3,10 +3,19 @@ package com.browntowndev.enclave.feature.inference.media
 import com.browntowndev.enclave.domain.model.config.MediaProviderAsset
 import com.browntowndev.enclave.domain.model.config.MediaTask
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
-import com.browntowndev.enclave.domain.model.media.*
+import com.browntowndev.enclave.domain.model.media.GenerationSettings
+import com.browntowndev.enclave.domain.model.media.ImageGenerationProgress
+import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
+import com.browntowndev.enclave.domain.model.media.ImageGenerationTarget
+import com.browntowndev.enclave.domain.model.media.VisualGenerationSettings
+import com.browntowndev.enclave.domain.model.media.withClampedGenerationCount
+import com.browntowndev.enclave.domain.port.media.GpuCapabilityPort
 import com.browntowndev.enclave.domain.port.media.ImageGenerationPort
+import com.browntowndev.enclave.domain.port.media.LOCAL_IMAGE_GENERATION_UNSUPPORTED_MESSAGE
+import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.domain.port.security.ApiKeyProviderPort
+import com.browntowndev.enclave.feature.inference.media.local.LocalStableDiffusionImageGenerator
 import javax.inject.Inject
 
 class ImageGenerationPortImpl
@@ -14,6 +23,9 @@ class ImageGenerationPortImpl
     constructor(
         private val apiKeyProvider: ApiKeyProviderPort,
         private val studioRepository: StudioRepositoryPort,
+        private val mediaProviderRepository: MediaProviderRepositoryPort,
+        private val gpuCapabilityPort: GpuCapabilityPort,
+        private val localStableDiffusionImageGenerator: LocalStableDiffusionImageGenerator,
         private val openAiAdapter: OpenAiImageGenerationAdapter,
         private val googleAdapter: GoogleImageGenerationAdapter,
         private val xaiAdapter: XaiImageGenerationAdapter,
@@ -21,9 +33,90 @@ class ImageGenerationPortImpl
     ) : ImageGenerationPort {
         override suspend fun generateImage(
             prompt: String,
-            provider: MediaProviderAsset,
+            target: ImageGenerationTarget,
+            settings: GenerationSettings,
+            onProgress: (ImageGenerationProgress) -> Unit,
+        ): Result<List<ByteArray>> =
+            when (target) {
+                is ImageGenerationTarget.LocalStableDiffusion -> generateLocal(prompt, target, settings, onProgress)
+                is ImageGenerationTarget.Remote -> generateRemote(prompt, target, settings)
+            }
+
+        private suspend fun generateLocal(
+            prompt: String,
+            target: ImageGenerationTarget.LocalStableDiffusion,
+            settings: GenerationSettings,
+            onProgress: (ImageGenerationProgress) -> Unit,
+        ): Result<List<ByteArray>> {
+            if (!gpuCapabilityPort.isLocalImageGenerationSupported()) {
+                return Result.failure(IllegalStateException(LOCAL_IMAGE_GENERATION_UNSUPPORTED_MESSAGE))
+            }
+
+            val imageSettings =
+                settings as? ImageGenerationSettings
+                    ?: return Result.failure(
+                        IllegalArgumentException("Local image generation requires image settings."),
+                    )
+
+            val generationCount = imageSettings.withClampedGenerationCount().generationCount
+            val generatedImages = mutableListOf<ByteArray>()
+
+            repeat(generationCount) { index ->
+                val iterationSettings = imageSettingsForGenerationIteration(imageSettings, index)
+                val iterationResult =
+                    localStableDiffusionImageGenerator
+                        .generate(
+                            prompt = prompt,
+                            target = target,
+                            settings = iterationSettings,
+                            onProgress = onProgress,
+                        ).mapCatching { result ->
+                            try {
+                                result.outputFileReferences.map { outputFileReference ->
+                                    studioRepository.readMediaBytes(outputFileReference)
+                                        ?: throw IllegalStateException("Local image generation failed.")
+                                }
+                            } finally {
+                                result.outputFileReferences.forEach { outputFileReference ->
+                                    java.io.File(outputFileReference).delete()
+                                }
+                            }
+                        }
+
+                iterationResult
+                    .onSuccess { generatedImages += it }
+                    .onFailure {
+                        return if (generatedImages.isEmpty()) {
+                            Result.failure(it)
+                        } else {
+                            Result.success(generatedImages)
+                        }
+                    }
+            }
+
+            return Result.success(generatedImages)
+        }
+
+        private fun imageSettingsForGenerationIteration(
+            settings: ImageGenerationSettings,
+            index: Int,
+        ): ImageGenerationSettings {
+            val explicitSeed = settings.seed.toLongOrNull()
+            return settings.copy(
+                generationCount = 1,
+                seed = if (explicitSeed != null) (explicitSeed + index).toString() else settings.seed,
+            )
+        }
+
+        private suspend fun generateRemote(
+            prompt: String,
+            target: ImageGenerationTarget.Remote,
             settings: GenerationSettings,
         ): Result<List<ByteArray>> {
+            val provider =
+                mediaProviderRepository.getMediaProvider(target.providerAssetId)
+                    ?: return Result.failure(IllegalStateException("Assigned media provider not found"))
+
             val hasReferenceImage = (settings as? VisualGenerationSettings)?.referenceImageUri != null
             if (hasReferenceImage && MediaTask.EDIT_IMAGE !in provider.tasks) {
                 return Result.failure(IllegalArgumentException("Model '${provider.modelName}' does not support image editing."))
@@ -38,10 +131,18 @@ class ImageGenerationPortImpl
                     studioRepository.readMediaBytes(uri)
                 }
 
-            return when (provider.provider) {
-                @Suppress("MaxLineLength")
-                ApiProvider.OPENAI,
-                ->
+            return dispatchToProvider(prompt, provider, settings, apiKey, referenceImageBytes)
+        }
+
+        private suspend fun dispatchToProvider(
+            prompt: String,
+            provider: MediaProviderAsset,
+            settings: GenerationSettings,
+            apiKey: String,
+            referenceImageBytes: ByteArray?,
+        ): Result<List<ByteArray>> =
+            when (provider.provider) {
+                ApiProvider.OPENAI ->
                     openAiAdapter.generateImage(
                         prompt,
                         apiKey,
@@ -50,9 +151,7 @@ class ImageGenerationPortImpl
                         settings,
                         referenceImageBytes,
                     )
-                @Suppress("MaxLineLength")
-                ApiProvider.GOOGLE,
-                ->
+                ApiProvider.GOOGLE ->
                     googleAdapter.generateImage(
                         prompt,
                         apiKey,
@@ -61,9 +160,7 @@ class ImageGenerationPortImpl
                         settings,
                         referenceImageBytes,
                     )
-                @Suppress("MaxLineLength")
-                ApiProvider.XAI,
-                ->
+                ApiProvider.XAI ->
                     xaiAdapter.generateImage(
                         prompt,
                         apiKey,
@@ -84,5 +181,4 @@ class ImageGenerationPortImpl
                     )
                 else -> Result.failure(UnsupportedOperationException("Image generation not supported for provider: ${provider.provider}"))
             }
-        }
     }

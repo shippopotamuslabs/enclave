@@ -254,7 +254,7 @@ class AnthropicVolatileTurnContextCommitTest {
             streamResponse
         }
         every { streamResponse.stream() } answers {
-            Stream.of(mockk(relaxed = true))
+            Stream.of(anthropicMessageStopEvent())
         }
         every { streamResponse.close() } returns Unit
 

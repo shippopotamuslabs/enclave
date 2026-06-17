@@ -543,6 +543,42 @@ class ApiModelRepositoryImplTest {
         }
 
     @Test
+    fun `saveCredentials releases deleted identity locks before insert`() =
+        runTest {
+            val creds =
+                ApiCredentials(
+                    id = ApiCredentialsId(""),
+                    displayName = "My OpenAI",
+                    provider = ApiProvider.OPENAI,
+                    credentialAlias = "openai",
+                )
+            val generatedId = ApiCredentialsId("88")
+            coEvery {
+                credentialsDao.releaseDeletedIdentityLocks(
+                    credentialAlias = "openai",
+                    apiKeySignature = any(),
+                )
+            } returns Unit
+            coEvery { credentialsDao.insert(any()) } returns 88L
+            coEvery { credentialsDao.getById(any()) } returns
+                ApiCredentialsEntity(
+                    id = generatedId,
+                    displayName = "My OpenAI",
+                    provider = ApiProvider.OPENAI,
+                    credentialAlias = "openai",
+                )
+
+            repo.saveCredentials(creds, "sk-openai")
+
+            coVerify(exactly = 1) {
+                credentialsDao.releaseDeletedIdentityLocks(
+                    credentialAlias = "openai",
+                    apiKeySignature = any(),
+                )
+            }
+        }
+
+    @Test
     fun `deleteConfiguration calls triggerSync once`() =
         runTest {
             val configId = ApiModelConfigurationId("cfg-1")

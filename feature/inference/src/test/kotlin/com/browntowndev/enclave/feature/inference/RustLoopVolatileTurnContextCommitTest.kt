@@ -641,7 +641,17 @@ class RustLoopVolatileTurnContextCommitTest {
                             block: suspend (com.browntowndev.enclave.domain.port.inference.LlmInferencePort) -> T,
                         ): T = throw UnsupportedOperationException("Not needed in CSPC tests")
 
+                        override suspend fun <T> withInferenceServiceForLocalConfig(
+                            configId: com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId,
+                            block: suspend (com.browntowndev.enclave.domain.port.inference.LlmInferencePort) -> T,
+                        ): T = throw UnsupportedOperationException("Not needed in CSPC tests")
+
                         override suspend fun <T> withRawApiServiceForConfig(
+                            configId: ApiModelConfigurationId,
+                            block: suspend (com.browntowndev.enclave.domain.port.inference.LlmInferencePort) -> T,
+                        ): T = throw UnsupportedOperationException("Not needed in CSPC tests")
+
+                        override suspend fun <T> withApiServiceForConfig(
                             configId: ApiModelConfigurationId,
                             block: suspend (com.browntowndev.enclave.domain.port.inference.LlmInferencePort) -> T,
                         ): T = throw UnsupportedOperationException("Not needed in CSPC tests")
@@ -650,6 +660,7 @@ class RustLoopVolatileTurnContextCommitTest {
             rollingSummarizer = RollingSummarizer(logger, JTokkitTokenCounter),
             resolveCompactionSummaryModel = resolveCompactionSummaryModel,
             committedInferencePrompts = committedInferencePrompts,
+            embeddingEnginePort = com.browntowndev.enclave.domain.port.inference.Bm25OnlyEmbeddingEnginePort,
         )
     }
 
@@ -761,6 +772,7 @@ class RustLoopVolatileTurnContextCommitTest {
             onTextToken: suspend (String) -> Unit,
             onThinkingToken: suspend (String) -> Unit,
             options: GenerationOptions,
+            onLifecycleEvent: suspend (InferenceEvent) -> Unit,
         ): AgentModelTurnResult {
             capturedTurnArgs.add(sessionMessages)
             return AgentModelTurnResult(

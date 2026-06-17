@@ -6,6 +6,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.TreeMap
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Owns the single live `users/{uid}/sync_events` listener. Entity collection listeners were
@@ -19,60 +20,33 @@ internal class FirestoreListenerCoordinator(
     private val eventApplyMutex: Mutex = Mutex(),
     private val externalScope: CoroutineScope,
     private val cache: FirestoreSyncDocumentCache? = null,
+    private val feedIntegrityRecovery: FirestoreSyncFeedIntegrityRecovery? = null,
 ) {
     private val listenerMutex = Mutex()
     private val pendingLiveEvents = TreeMap<Long, FirestoreSyncEvent>()
     private var eventListenerRegistration: FirestoreSyncEventListenerRegistration? = null
+    private val listenerOperationSeq = AtomicLong(0)
+    private var listenerDesiredAttached = false
 
     fun startListening() {
+        val operation = listenerOperationSeq.incrementAndGet()
+        listenerDesiredAttached = true
         externalScope.launch {
-            try {
-                listenerMutex.withLock {
-                    if (eventListenerRegistration != null) {
-                        ctx.loggingPort.debug(
-                            FirestoreSyncContext.TAG,
-                            "startListening: sync_events listener already attached",
-                        )
-                        return@withLock
-                    }
-                    if (!ctx.cryptoManager.hasCachedKey()) {
-                        ctx.loggingPort.debug(
-                            FirestoreSyncContext.TAG,
-                            "startListening: Vault is locked, skipping",
-                        )
-                        return@withLock
-                    }
-                    val userId = ctx.userIdProvider() ?: return@withLock
-                    ctx.loggingPort.debug(
-                        FirestoreSyncContext.TAG,
-                        "startListening: Attaching sync_events listener for UID: $userId",
-                    )
-                    ctx.cleanupOrphanedPlaceholderChats()
-                    val lastApplied = syncStateStore.lastAppliedSequence(userId)
-                    eventListenerRegistration =
-                        syncEventFeedClient.attachLiveListener(userId, lastApplied) { events ->
-                            applyLiveEvents(userId, events)
-                        }
-                }
-            } catch (cancellation: CancellationException) {
-                throw cancellation
-            } catch (failure: Throwable) {
-                ctx.loggingPort.error(
-                    FirestoreSyncContext.TAG,
-                    "startListening: failed to attach sync_events listener",
-                    failure,
-                )
-            }
+            applyListenerOperation(operation)
         }
     }
 
     fun stopListening() {
+        val operation = listenerOperationSeq.incrementAndGet()
+        listenerDesiredAttached = false
         externalScope.launch {
-            detachAllListeners()
+            applyListenerOperation(operation)
         }
     }
 
     suspend fun detachAllListeners() {
+        listenerOperationSeq.incrementAndGet()
+        listenerDesiredAttached = false
         listenerMutex.withLock {
             eventListenerRegistration?.remove()
             eventListenerRegistration = null
@@ -80,6 +54,69 @@ internal class FirestoreListenerCoordinator(
         eventApplyMutex.withLock {
             pendingLiveEvents.clear()
         }
+    }
+
+    private suspend fun applyListenerOperation(operation: Long) {
+        try {
+            listenerMutex.withLock {
+                if (operation != listenerOperationSeq.get()) {
+                    return@withLock
+                }
+                if (listenerDesiredAttached) {
+                    attachListenerIfNeeded()
+                } else {
+                    detachListenerIfCurrent()
+                }
+            }
+            if (!listenerDesiredAttached && operation == listenerOperationSeq.get()) {
+                eventApplyMutex.withLock {
+                    if (operation == listenerOperationSeq.get()) {
+                        pendingLiveEvents.clear()
+                    }
+                }
+            }
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (failure: Throwable) {
+            ctx.loggingPort.error(
+                FirestoreSyncContext.TAG,
+                "applyListenerOperation: failed for attach=$listenerDesiredAttached",
+                failure,
+            )
+        }
+    }
+
+    private suspend fun attachListenerIfNeeded() {
+        if (eventListenerRegistration != null) {
+            ctx.loggingPort.debug(
+                FirestoreSyncContext.TAG,
+                "startListening: sync_events listener already attached",
+            )
+            return
+        }
+        if (!ctx.cryptoManager.hasCachedKey()) {
+            ctx.loggingPort.debug(
+                FirestoreSyncContext.TAG,
+                "startListening: Vault is locked, skipping",
+            )
+            return
+        }
+        val userId = ctx.userIdProvider() ?: return
+        ctx.loggingPort.debug(
+            FirestoreSyncContext.TAG,
+            "startListening: Attaching sync_events listener for UID: $userId",
+        )
+        ctx.cleanupOrphanedPlaceholderChats()
+        val lastApplied = syncStateStore.lastAppliedSequence(userId)
+        eventListenerRegistration =
+            syncEventFeedClient.attachLiveListener(userId, lastApplied) { events ->
+                applyLiveEvents(userId, events)
+            }
+    }
+
+    private fun detachListenerIfCurrent() {
+        eventListenerRegistration?.remove()
+        eventListenerRegistration = null
     }
 
     private suspend fun applyLiveEvents(
@@ -131,6 +168,15 @@ internal class FirestoreListenerCoordinator(
                 runCatching {
                     syncEventApplier.apply(userId, event)
                 }.getOrElse { failure ->
+                    if (failure is SyncFeedSequenceGapException) {
+                        val recovery = feedIntegrityRecovery
+                        if (recovery == null) {
+                            pendingLiveEvents[nextSequence] = event
+                            throw failure
+                        }
+                        recovery.recoverFromSequenceGap(userId, failure.expectedSequence)
+                        return
+                    }
                     pendingLiveEvents[nextSequence] = event
                     if (failure is CancellationException) throw failure
                     ctx.loggingPort.error(

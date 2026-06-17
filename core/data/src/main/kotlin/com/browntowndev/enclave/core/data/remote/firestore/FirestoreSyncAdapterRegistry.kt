@@ -8,6 +8,7 @@ import com.browntowndev.enclave.core.data.remote.firestore.handlers.ChatSummaryS
 import com.browntowndev.enclave.core.data.remote.firestore.handlers.ChatSyncHandler
 import com.browntowndev.enclave.core.data.remote.firestore.handlers.DefaultModelSyncHandler
 import com.browntowndev.enclave.core.data.remote.firestore.handlers.DocumentSyncHandler
+import com.browntowndev.enclave.core.data.remote.firestore.handlers.LiveVoiceProviderSyncHandler
 import com.browntowndev.enclave.core.data.remote.firestore.handlers.LocalModelConfigSyncHandler
 import com.browntowndev.enclave.core.data.remote.firestore.handlers.LocalModelSyncHandler
 import com.browntowndev.enclave.core.data.remote.firestore.handlers.MediaProviderSyncHandler
@@ -38,14 +39,17 @@ internal class FirestoreSyncAdapterRegistry(
             WebSearchSourceSyncHandler(ctx),
             MessageTranscriptSegmentSyncHandler(ctx),
             MessageInferenceTelemetrySyncHandler(ctx),
-            ApiModelConfigSyncHandler(ctx),
+            // Config uploads: parents before children so Firestore always has FK targets
+            // before default_models (and api/local configs) reference them.
+            ApiCredentialsSyncHandler(ctx),
             LocalModelSyncHandler(ctx),
+            TtsProviderSyncHandler(ctx),
+            LiveVoiceProviderSyncHandler(ctx),
+            MediaProviderSyncHandler(ctx),
+            UtilityModelSyncHandler(ctx),
+            ApiModelConfigSyncHandler(ctx),
             LocalModelConfigSyncHandler(ctx),
             DefaultModelSyncHandler(ctx),
-            UtilityModelSyncHandler(ctx),
-            TtsProviderSyncHandler(ctx),
-            MediaProviderSyncHandler(ctx),
-            ApiCredentialsSyncHandler(ctx),
             ApiKeySyncHandler(ctx),
             StudioAlbumSyncHandler(ctx),
             StudioMediaSyncHandler(ctx),

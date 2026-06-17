@@ -91,4 +91,6 @@ dependencies {
     testImplementation(project(":core:testing"))
     testImplementation(testFixtures(project(":core:domain")))
     testImplementation(libs.turbine)
+    testRuntimeOnly(libs.junit.vintage.engine)
+    testRuntimeOnly(libs.junit.platform.launcher)
 }

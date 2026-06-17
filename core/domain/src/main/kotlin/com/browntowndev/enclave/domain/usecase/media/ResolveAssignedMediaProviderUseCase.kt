@@ -2,6 +2,7 @@ package com.browntowndev.enclave.domain.usecase.media
 
 import com.browntowndev.enclave.domain.model.config.MediaProviderAsset
 import com.browntowndev.enclave.domain.model.inference.ModelType
+import com.browntowndev.enclave.domain.model.media.StudioModelOverride
 import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
 import javax.inject.Inject
@@ -15,7 +16,19 @@ class ResolveAssignedMediaProviderUseCase
         private val defaultModelRepository: DefaultModelRepositoryPort,
         private val mediaProviderRepository: MediaProviderRepositoryPort,
     ) {
-        suspend operator fun invoke(modelType: ModelType): Result<MediaProviderAsset> {
+        suspend operator fun invoke(
+            modelType: ModelType,
+            override: StudioModelOverride? = null,
+        ): Result<MediaProviderAsset> {
+            if (override is StudioModelOverride.MediaProvider) {
+                // Short-circuit slot resolution so the default slot is never consulted (MD01).
+                val provider =
+                    mediaProviderRepository.getMediaProvider(override.providerId)
+                        ?: return Result.failure(
+                            IllegalStateException("Override media provider not found: ${override.providerId.value}"),
+                        )
+                return Result.success(provider)
+            }
             val providerId =
                 defaultModelRepository.getDefault(modelType)?.mediaProviderId
                     ?: return Result.failure(

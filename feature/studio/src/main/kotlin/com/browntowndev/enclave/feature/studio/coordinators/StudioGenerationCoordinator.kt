@@ -4,20 +4,32 @@ import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.media.AspectRatio
 import com.browntowndev.enclave.domain.model.media.GenerationQuality
 import com.browntowndev.enclave.domain.model.media.GenerationSettings
+import com.browntowndev.enclave.domain.model.media.ImageGenerationProgress
+import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
+import com.browntowndev.enclave.domain.model.media.StudioModelOverride
 import com.browntowndev.enclave.domain.model.media.VideoGenerationSettings
+import com.browntowndev.enclave.domain.model.media.withClampedGenerationCount
 import com.browntowndev.enclave.domain.port.media.StudioGenerationDispatcherPort
+import com.browntowndev.enclave.domain.port.repository.ActiveStudioGeneration
 import com.browntowndev.enclave.domain.port.repository.StudioMediaAsset
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
+import com.browntowndev.enclave.feature.studio.MODERATION_REJECTED_MESSAGE
+import com.browntowndev.enclave.feature.studio.ModerationEvent
 import com.browntowndev.enclave.feature.studio.STUDIO_ANIMATE_I2V_UNAVAILABLE
 import com.browntowndev.enclave.feature.studio.StudioGenerationErrorMessages
 import com.browntowndev.enclave.feature.studio.VideoGenerationState
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import java.util.UUID
 import javax.inject.Inject
 
 class StudioGenerationCoordinator
@@ -37,11 +49,25 @@ class StudioGenerationCoordinator
 
         private val _lastSubmittedSettings = MutableStateFlow<GenerationSettings?>(null)
 
+        private var lastOverride: StudioModelOverride? = null
+
         private val _error = MutableStateFlow<String?>(null)
         val error: StateFlow<String?> = _error.asStateFlow()
 
+        private val _generationProgressLabel = MutableStateFlow<String?>(null)
+        val generationProgressLabel: StateFlow<String?> = _generationProgressLabel.asStateFlow()
+
+        private val _activeGenerationExpectedCount = MutableStateFlow(1)
+        val activeGenerationExpectedCount: StateFlow<Int> = _activeGenerationExpectedCount.asStateFlow()
+
+        private val _activeGenerationBaselineMediaCount = MutableStateFlow(0)
+        val activeGenerationBaselineMediaCount: StateFlow<Int> = _activeGenerationBaselineMediaCount.asStateFlow()
+
         private val _videoGenerationState = MutableStateFlow<VideoGenerationState>(VideoGenerationState.Idle)
         val videoGenerationState: StateFlow<VideoGenerationState> = _videoGenerationState.asStateFlow()
+
+        private val _moderationEvents = Channel<ModerationEvent>(Channel.BUFFERED)
+        val moderationEvents: Flow<ModerationEvent> = _moderationEvents.receiveAsFlow()
 
         private val consumedScrollAnchors = mutableSetOf<String>()
 
@@ -51,37 +77,82 @@ class StudioGenerationCoordinator
         private var pendingDetailVideoSourceAssetId: String? = null
         private var pendingDetailVideoSourceCreatedAt: Long? = null
 
-        fun startObservers(scope: CoroutineScope) {
+        fun startObservers(
+            scope: CoroutineScope,
+            onActiveGeneration: (ActiveStudioGeneration) -> Unit = {},
+        ) {
             studioRepository
                 .observeEphemeralMedia()
                 .onEach { media ->
-                    _isGenerating.value = false
                     resolveDetailVideoGeneration(media)
+                }.launchIn(scope)
+
+            studioRepository
+                .observeActiveGeneration()
+                .onEach { activeGeneration ->
+                    _isGenerating.value = activeGeneration != null
+                    if (activeGeneration == null) {
+                        _generationProgressLabel.value = null
+                        clearActiveGenerationTracking()
+                    } else {
+                        _lastSubmittedPrompt.value = activeGeneration.prompt
+                        onActiveGeneration(activeGeneration)
+                    }
                 }.launchIn(scope)
 
             studioRepository
                 .observeGenerationError()
                 .onEach { generationError ->
                     if (generationError != null) {
-                        val snackbarMessage = StudioGenerationErrorMessages.toSnackbarMessage(generationError)
-                        _error.value = snackbarMessage
-                        _isGenerating.value = false
-                        _isContinualGenerationActive.value = false
-                        pendingDetailVideoSourceAssetId?.let { sourceAssetId ->
-                            _videoGenerationState.value =
-                                VideoGenerationState.Error(
-                                    sourceAssetId = sourceAssetId,
-                                    message = snackbarMessage,
-                                )
-                            clearPendingDetailVideoGeneration()
+                        if (StudioGenerationErrorMessages.isModerationError(generationError)) {
+                            _moderationEvents.send(
+                                ModerationEvent.Blocked(
+                                    prompt = _lastSubmittedPrompt.value.orEmpty(),
+                                ),
+                            )
+                            _isGenerating.value = false
+                            _isContinualGenerationActive.value = false
+                            _generationProgressLabel.value = null
+                            pendingDetailVideoSourceAssetId?.let { sourceAssetId ->
+                                _videoGenerationState.value =
+                                    VideoGenerationState.Error(
+                                        sourceAssetId = sourceAssetId,
+                                        message = MODERATION_REJECTED_MESSAGE,
+                                    )
+                                clearPendingDetailVideoGeneration()
+                            }
+                        } else {
+                            val snackbarMessage = StudioGenerationErrorMessages.toSnackbarMessage(generationError)
+                            _error.value = snackbarMessage
+                            _isGenerating.value = false
+                            _isContinualGenerationActive.value = false
+                            _generationProgressLabel.value = null
+                            pendingDetailVideoSourceAssetId?.let { sourceAssetId ->
+                                _videoGenerationState.value =
+                                    VideoGenerationState.Error(
+                                        sourceAssetId = sourceAssetId,
+                                        message = snackbarMessage,
+                                    )
+                                clearPendingDetailVideoGeneration()
+                            }
                         }
                     }
+                }.launchIn(scope)
+
+            studioRepository
+                .observeGenerationProgress()
+                .onEach { progress ->
+                    _generationProgressLabel.value = progress?.toPresentationLabel()
                 }.launchIn(scope)
         }
 
         fun stopGeneration() {
             _isContinualGenerationActive.value = false
             _isGenerating.value = false
+            _generationProgressLabel.value = null
+            clearActiveGenerationTracking()
+            studioRepository.clearGenerationProgress()
+            studioRepository.clearActiveGeneration()
             dispatcher.stopGeneration()
         }
 
@@ -89,10 +160,36 @@ class StudioGenerationCoordinator
             prompt: String,
             mediaType: MediaCapability,
             settings: GenerationSettings,
+            override: StudioModelOverride? = null,
         ) {
-            dispatcher.startGeneration(prompt, mediaType, settings)
-            _isGenerating.value = true
+            _generationProgressLabel.value = null
+            val generationId = UUID.randomUUID().toString()
+            val claimedGeneration =
+                studioRepository.reportActiveGeneration(
+                    ActiveStudioGeneration(
+                        id = generationId,
+                        prompt = prompt,
+                        mediaType = mediaType,
+                        settings = settings,
+                        override = override,
+                    ),
+                )
+            if (!claimedGeneration) {
+                _error.value = GENERATION_ALREADY_ACTIVE_MESSAGE
+                _isContinualGenerationActive.value = false
+                return
+            }
+            try {
+                dispatcher.startGeneration(prompt, mediaType, settings, generationId, override)
+            } catch (error: IllegalStateException) {
+                studioRepository.clearActiveGenerationIfOwned(generationId)
+                _error.value = error.message ?: GENERATION_ALREADY_ACTIVE_MESSAGE
+                _isContinualGenerationActive.value = false
+                _isGenerating.value = false
+            }
         }
+
+        suspend fun isGenerationActive(): Boolean = studioRepository.observeActiveGeneration().first() != null
 
         fun setVideoGenerationError(
             sourceAssetId: String?,
@@ -137,15 +234,24 @@ class StudioGenerationCoordinator
             mediaType: MediaCapability,
             continualMode: Boolean,
             settings: GenerationSettings,
+            baselineMediaCountForPrompt: Int = 0,
+            override: StudioModelOverride? = null,
         ) {
             lastProcessedEditAssetId = null
             lastProcessedAnimateAssetId = null
             _lastSubmittedPrompt.value = submittedPrompt
             _lastSubmittedSettings.value = settings
+            lastOverride = override
+            _activeGenerationExpectedCount.value =
+                (settings as? ImageGenerationSettings)
+                    ?.withClampedGenerationCount()
+                    ?.generationCount
+                    ?: 1
+            _activeGenerationBaselineMediaCount.value = baselineMediaCountForPrompt
             if (continualMode && mediaType == MediaCapability.IMAGE) {
                 _isContinualGenerationActive.value = true
             }
-            startGeneration(submittedPrompt, mediaType, settings)
+            startGeneration(submittedPrompt, mediaType, settings, override)
         }
 
         fun onContinualModeDisabled() {
@@ -186,6 +292,11 @@ class StudioGenerationCoordinator
             pendingDetailVideoSourceCreatedAt = null
         }
 
+        private fun clearActiveGenerationTracking() {
+            _activeGenerationExpectedCount.value = 1
+            _activeGenerationBaselineMediaCount.value = 0
+        }
+
         fun onGenerativeScrollThresholdVisible(
             anchorAssetId: String,
             mediaType: MediaCapability,
@@ -203,6 +314,7 @@ class StudioGenerationCoordinator
                 requireNotNull(_lastSubmittedPrompt.value),
                 mediaType,
                 requireNotNull(_lastSubmittedSettings.value),
+                lastOverride,
             )
         }
 
@@ -221,6 +333,17 @@ class StudioGenerationCoordinator
             _error.value = message
             _isGenerating.value = false
             _isContinualGenerationActive.value = false
+        }
+
+        /**
+         * Resets generation flags without polluting [_error] and emits a [ModerationEvent.Blocked]
+         * so the UI can show a dedicated moderation snackbar with a "GOT IT WRONG?" action.
+         */
+        fun rejectPromptAsModerated(prompt: String) {
+            _isGenerating.value = false
+            _isContinualGenerationActive.value = false
+            _generationProgressLabel.value = null
+            _moderationEvents.trySend(ModerationEvent.Blocked(prompt))
         }
 
         fun resetGeneratingFlags() {
@@ -251,5 +374,14 @@ class StudioGenerationCoordinator
         private companion object {
             private const val DEFAULT_DETAIL_VIDEO_DURATION_SECONDS = 5
             private const val DEFAULT_DETAIL_VIDEO_RESOLUTION = "480p"
+            private const val GENERATION_ALREADY_ACTIVE_MESSAGE = "Another media generation is already in progress."
         }
+
+        private fun ImageGenerationProgress.toPresentationLabel(): String =
+            when (this) {
+                ImageGenerationProgress.PreparingModel -> "Preparing model"
+                ImageGenerationProgress.LoadingModel -> "Loading model"
+                is ImageGenerationProgress.Generating -> "Generating image"
+                ImageGenerationProgress.SavingOutput -> "Saving output"
+            }
     }

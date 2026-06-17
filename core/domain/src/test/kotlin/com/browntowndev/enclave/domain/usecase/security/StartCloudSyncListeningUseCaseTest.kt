@@ -23,6 +23,7 @@ class StartCloudSyncListeningUseCaseTest {
         useCase = StartCloudSyncListeningUseCase(cloudSyncPort)
         every { cloudSyncPort.startListening() } returns Unit
         coEvery { cloudSyncPort.getRemainingEventsCount() } returns Result.success(0L)
+        coEvery { cloudSyncPort.bootstrapFeatureSettings() } returns Result.success(Unit)
     }
 
     @Test
@@ -55,6 +56,7 @@ class StartCloudSyncListeningUseCaseTest {
                 cloudSyncPort.getRemainingEventsCount()
                 cloudSyncPort.syncRemoteChangesFromCloud()
                 cloudSyncPort.syncRemoteChangesFromCloud()
+                cloudSyncPort.bootstrapFeatureSettings()
                 cloudSyncPort.startListening()
             }
         }
@@ -120,6 +122,27 @@ class StartCloudSyncListeningUseCaseTest {
 
             assertTrue(result.isSuccess)
             coVerify(exactly = 3) { cloudSyncPort.syncRemoteChangesFromCloud() }
+            coVerify(exactly = 1) { cloudSyncPort.bootstrapFeatureSettings() }
             verify(exactly = 1) { cloudSyncPort.startListening() }
+        }
+
+    @Test
+    fun `search tool settings bootstrap failure prevents listener start`() =
+        runTest {
+            coEvery { cloudSyncPort.syncRemoteChangesFromCloud() } returns
+                Result.success(
+                    CloudSyncEventReplayResult(
+                        eventsApplied = 0,
+                        lastAppliedSequence = 0,
+                        hasMore = false,
+                    ),
+                )
+            coEvery { cloudSyncPort.bootstrapFeatureSettings() } returns
+                Result.failure(IllegalStateException("bootstrap failed"))
+
+            val result = useCase(uploadLocalFirst = false)
+
+            verify(exactly = 0) { cloudSyncPort.startListening() }
+            assertEquals("bootstrap failed", result.exceptionOrNull()?.message)
         }
 }

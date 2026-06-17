@@ -24,4 +24,7 @@ interface ToolStreamGatePort {
     ): ToolStreamGateFinish
 
     fun bufferedText(handle: ToolStreamGateHandle): String
+
+    /** True when buffered stream content contains confirmed tool syntax at turn end. */
+    fun hasToolMarkup(handle: ToolStreamGateHandle): Boolean
 }

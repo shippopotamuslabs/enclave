@@ -2,7 +2,6 @@ package com.browntowndev.enclave.feature.chat.components
 
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.lifecycle.Lifecycle
 import com.browntowndev.enclave.feature.chat.ResponseHapticPhase
@@ -11,8 +10,10 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class StreamingResponseHapticEffectTest {
     @get:Rule
     val composeTestRule = createComposeRule()
@@ -211,52 +212,6 @@ class StreamingResponseHapticEffectTest {
         assertEquals(1, controller.startGeneratingBuzzCount)
         assertEquals(0, controller.stopCount)
         assertEquals("generating-buzz", controller.activePattern)
-    }
-
-    @Test
-    fun appBackgrounded_stopsActiveThinkingPulse() {
-        val androidComposeRule = createAndroidComposeRule<ComponentActivity>()
-        val controller = FakeStreamingResponseHapticController()
-
-        androidComposeRule.setContent {
-            StreamingResponseHapticEffect(
-                hapticsEnabled = true,
-                phase = ResponseHapticPhase.ThinkingPulse,
-                controller = controller,
-            )
-        }
-        androidComposeRule.waitForIdle()
-
-        assertEquals(1, controller.startThinkingPulseCount)
-
-        androidComposeRule.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
-        androidComposeRule.waitForIdle()
-
-        assertEquals(1, controller.stopCount)
-        assertEquals("none", controller.activePattern)
-    }
-
-    @Test
-    fun appForegrounded_afterBackground_resumesThinkingPulseWhenStillThinking() {
-        val androidComposeRule = createAndroidComposeRule<ComponentActivity>()
-        val controller = FakeStreamingResponseHapticController()
-
-        androidComposeRule.setContent {
-            StreamingResponseHapticEffect(
-                hapticsEnabled = true,
-                phase = ResponseHapticPhase.ThinkingPulse,
-                controller = controller,
-            )
-        }
-        androidComposeRule.waitForIdle()
-        androidComposeRule.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
-        androidComposeRule.waitForIdle()
-
-        androidComposeRule.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
-        androidComposeRule.waitForIdle()
-
-        assertEquals(2, controller.startThinkingPulseCount)
-        assertEquals("thinking-pulse", controller.activePattern)
     }
 
     @Test

@@ -18,7 +18,11 @@ enum class MediaCapability(
 ) {
     IMAGE("Image"),
     VIDEO("Video"),
-    MUSIC("Music"),
+    MUSIC("Music");
+
+    companion object {
+        val DEFAULT = IMAGE
+    }
 }
 
 /**

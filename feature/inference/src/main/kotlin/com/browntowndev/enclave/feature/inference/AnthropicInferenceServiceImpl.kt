@@ -32,6 +32,12 @@ import com.browntowndev.enclave.domain.port.inference.ToolEnvelopeParserPort
 import com.browntowndev.enclave.domain.port.inference.ToolStreamGatePort
 import com.browntowndev.enclave.domain.port.telemetry.TelemetryEventPort
 import com.browntowndev.enclave.feature.inference.appendonly.ProviderAppendOnlyContext
+import com.browntowndev.enclave.feature.inference.appendonly.ProviderAppendOnlyContextFactory
+import com.browntowndev.enclave.feature.inference.appendonly.SessionIndexVolatilePlacement
+import com.browntowndev.enclave.feature.inference.appendonly.ensureAppendOnlyContext
+import com.browntowndev.enclave.feature.inference.appendonly.toProviderNormalizedMessages
+import com.browntowndev.enclave.feature.inference.appendonly.toToolsFingerprint
+import com.browntowndev.enclave.feature.inference.telemetry.AnthropicReasoningTokenExtractor
 import com.browntowndev.enclave.feature.inference.telemetry.InferenceTelemetrySupport
 import com.browntowndev.enclave.feature.inference.telemetry.emitInferenceExecutionOutcome
 import com.fasterxml.jackson.core.type.TypeReference
@@ -62,6 +68,7 @@ class AnthropicInferenceServiceImpl(
     private val toolStreamGatePort: ToolStreamGatePort,
     private val telemetrySupport: InferenceTelemetrySupport? = null,
     private val telemetryEventPort: TelemetryEventPort? = null,
+    private val providerLabel: String = DEFAULT_PROVIDER_LABEL,
 ) : RustCompatibleInferenceService {
     private data class StreamedAnthropicResponse(
         val emittedAny: Boolean,
@@ -92,14 +99,13 @@ class AnthropicInferenceServiceImpl(
         private const val MAX_LOG_BODY_CHARS = 4_000
         private const val TAG = "AnthropicInferenceService"
         private const val PROVIDER = "ANTHROPIC"
-        private const val THINKING_BUDGET_MEDIUM = 1536L
-        private const val THINKING_BUDGET_XHIGH = 3072L
+        const val DEFAULT_PROVIDER_LABEL = "Anthropic"
         private val TOOL_INPUT_JSON_MAPPER = ObjectMapper()
     }
 
-    private val conversationHistory = mutableListOf<ChatMessage>()
-
     private var appendOnlyContext: ProviderAppendOnlyContext? = null
+
+    internal fun appendOnlyContextForTests(): ProviderAppendOnlyContext? = appendOnlyContext
 
     @Volatile
     private var activeToolCatalogJson: String = AgentLoopToolCatalogJson.EMPTY_ARRAY
@@ -107,82 +113,15 @@ class AnthropicInferenceServiceImpl(
     override fun sendPrompt(
         prompt: String,
         closeConversation: Boolean,
-    ): Flow<InferenceEvent> = sendPrompt(prompt, GenerationOptions(reasoningBudget = 0), closeConversation)
+    ): Flow<InferenceEvent> = error("sendPrompt not supported; all Anthropic services are wrapped by RustLoopInferenceService")
 
     override fun sendPrompt(
         prompt: String,
         options: GenerationOptions,
         closeConversation: Boolean,
-    ): Flow<InferenceEvent> =
-        flow {
-            try {
-                require(options.imageUris.size <= 20) {
-                    "Anthropic API supports a maximum of 20 images per request."
-                }
-                val requestHistory = buildRequestHistory(options)
-                loggingPort.debug(
-                    TAG,
-                    @Suppress("MaxLineLength")
-                    "sendPrompt start provider=$PROVIDER model=$modelId modelType=$modelType closeConversation=$closeConversation reasoningBudget=${options.reasoningBudget} reasoningEffort=${options.reasoningEffort} maxTokens=${options.maxTokens}",
-                )
-                executePrompt(prompt, options, requestHistory) { emit(it) }
-
-                conversationHistory.add(ChatMessage(Role.USER, prompt))
-                if (closeConversation) {
-                    closeSession()
-                }
-            } catch (e: CancellationException) {
-                loggingPort.debug(TAG, "sendPrompt cancelled provider=$PROVIDER model=$modelId")
-                emit(InferenceEvent.Finished(modelType))
-                throw e
-            } catch (e: IllegalArgumentException) {
-                loggingPort.error(TAG, "Tool request failed. ${describeException(e)}", e)
-                emit(InferenceEvent.Error(e, modelType))
-                return@flow
-            } catch (e: IllegalStateException) {
-                loggingPort.error(TAG, "Tool request failed. ${describeException(e)}", e)
-                emit(InferenceEvent.Error(e, modelType))
-                return@flow
-            } catch (e: Exception) {
-                val errorMsg = e.message ?: "Unknown error"
-                loggingPort.error(TAG, "API request failed. ${describeException(e)}", e)
-                emit(InferenceEvent.Error(Exception("API Error ($PROVIDER): $errorMsg", e), modelType))
-            }
-        }.flowOn(Dispatchers.IO)
-
-    private suspend fun executePrompt(
-        prompt: String,
-        options: GenerationOptions,
-        requestHistory: List<ChatMessage>,
-        emitEvent: suspend (InferenceEvent) -> Unit,
-    ) {
-        activeToolCatalogJson = AgentLoopToolCatalogJson.jsonForCatalog(options.toolCatalog)
-        logImagePayloads(options)
-
-        val params =
-            AnthropicRequestMapper.mapToMessageParams(
-                modelId = modelId,
-                prompt = prompt,
-                history = requestHistory,
-                options = options,
-            )
-
-        loggingPort.info(
-            TAG,
-            @Suppress("MaxLineLength")
-            "Using Anthropic Messages API. model=$modelId reasoningEffort=${options.reasoningEffort} reasoningBudget=${options.reasoningBudget} maxTokens=${options.maxTokens}",
-        )
-        logRequest(params)
-        streamMessages(
-            params = params,
-            emitEvent = emitEvent,
-        )
-        emitEvent(InferenceEvent.Finished(modelType))
-    }
+    ): Flow<InferenceEvent> = error("sendPrompt not supported; all Anthropic services are wrapped by RustLoopInferenceService")
 
     override suspend fun setHistory(messages: List<ChatMessage>) {
-        conversationHistory.clear()
-        conversationHistory.addAll(messages)
         resetAppendOnlyForNewPrompt()
     }
 
@@ -196,12 +135,11 @@ class AnthropicInferenceServiceImpl(
     }
 
     override suspend fun closeSession() {
-        conversationHistory.clear()
         appendOnlyContext?.invalidate()
         appendOnlyContext = null
     }
 
-    @Suppress("CyclomaticComplexMethod")
+    @Suppress("CyclomaticComplexMethod", "LongMethod")
     override suspend fun completeSingleTurn(
         sessionMessages: List<AgentLoopMessage>,
         systemPrompt: String,
@@ -211,6 +149,7 @@ class AnthropicInferenceServiceImpl(
         onTextToken: suspend (String) -> Unit,
         onThinkingToken: suspend (String) -> Unit,
         options: GenerationOptions,
+        onLifecycleEvent: suspend (InferenceEvent) -> Unit,
     ): AgentModelTurnResult {
         val startedAtMs = System.currentTimeMillis()
         val resolvedModelId = options.modelId ?: modelId
@@ -238,20 +177,29 @@ class AnthropicInferenceServiceImpl(
                     .builder()
                     .model(options.modelId ?: modelId)
 
-            if (!options.maxTokensDisabled) {
-                options.maxTokens?.let { builder.maxTokens(it.toLong()) } ?: builder.maxTokens(DEFAULT_MAX_TOKENS)
-            } else {
-                builder.maxTokens(DEFAULT_MAX_TOKENS)
-            }
-
-            resolveThinkingBudget(options)?.let {
+            var maxTokens =
+                if (!options.maxTokensDisabled) {
+                    options.maxTokens?.toLong() ?: DEFAULT_MAX_TOKENS
+                } else {
+                    DEFAULT_MAX_TOKENS
+                }
+            val thinkingBudget = resolveThinkingBudget(options)
+            if (thinkingBudget != null) {
+                if (maxTokens <= thinkingBudget) {
+                    // Thinking tokens count against max_tokens; +1 would leave a single
+                    // token for the visible answer and the turn would end mid-thought
+                    // with stop_reason=max_tokens.
+                    maxTokens = thinkingBudget + DEFAULT_MAX_TOKENS
+                }
+                val clampedBudget = thinkingBudget.coerceAtMost(maxTokens - 1)
                 builder.thinking(
                     ThinkingConfigEnabled
                         .builder()
-                        .budgetTokens(it)
+                        .budgetTokens(clampedBudget)
                         .build(),
                 )
             }
+            builder.maxTokens(maxTokens)
 
             val useCaching = AnthropicPromptCacheSupport.supportsPromptCaching(options.modelId ?: modelId)
             val stableTailIndex = AnthropicPromptCacheSupport.stableHistoryTailIndex(sessionMessages)
@@ -269,6 +217,13 @@ class AnthropicInferenceServiceImpl(
                 builder.systemOfTextBlockParams(listOf(systemBlockBuilder.build()))
             }
 
+            val appendOnly = wireAppendOnlyForTurn(
+                sessionMessages = sessionMessages,
+                systemPrompt = systemPrompt,
+                availableTools = availableTools,
+            )
+            val tailInsertIndex = SessionIndexVolatilePlacement.resolveTailInsertIndex(sessionMessages)
+
             sessionMessages.forEachIndexed { index, msg ->
                 val metadata =
                     if (msg.metadataJson != "null" && msg.metadataJson.isNotBlank()) {
@@ -284,13 +239,31 @@ class AnthropicInferenceServiceImpl(
                     if (index == lastUserIndex) {
                         VolatileTurnContextWireSupport
                             .combinedLatestUserPrepends(
-                                volatileTurnContext = null, // already in msg.content via Rust history
+                                volatileTurnContext = null,
                                 contextSidecars = contextSidecars,
                             )?.let { prepended -> "$prepended\n\n${msg.content}" }
                             ?: msg.content
                     } else {
                         msg.content
                     }
+
+                if (EngineInternalMessageMapper.isEngineInternalMessage(msg.metadataJson)) {
+                    val wireText = EngineInternalMessageMapper.formatForProviderWire(msg.content)
+                    if (wireText.isNotBlank()) {
+                        val textBlockBuilder = TextBlockParam.builder().text(wireText)
+                        if (attachCacheBreakpoint) {
+                            textBlockBuilder.cacheControl(AnthropicPromptCacheSupport.ephemeralCacheControl())
+                        }
+                        builder.addMessage(
+                            MessageParam
+                                .builder()
+                                .role(MessageParam.Role.USER)
+                                .contentOfBlockParams(listOf(ContentBlockParam.ofText(textBlockBuilder.build())))
+                                .build(),
+                        )
+                    }
+                    return@forEachIndexed
+                }
 
                 when (msg.role) {
                     Role.SYSTEM -> {} // systemPrompt mapped above
@@ -458,7 +431,10 @@ class AnthropicInferenceServiceImpl(
                             accumulatedText.append(event.chunk)
                             onTextToken(event.chunk)
                         }
-                        is InferenceEvent.Thinking -> onThinkingToken(event.chunk)
+                        is InferenceEvent.Thinking -> {
+                            timing?.markFirstOutput()
+                            onThinkingToken(event.chunk)
+                        }
                         else -> {}
                     }
                 }
@@ -478,6 +454,7 @@ class AnthropicInferenceServiceImpl(
                 if (telemetrySupport != null && timing != null && captureContext != null) {
                     telemetrySupport.anthropicTurnTelemetry(
                         context = captureContext,
+                        providerLabel = providerLabel,
                         modelId = modelId,
                         modelLabel = modelId,
                         timing = timing,
@@ -491,6 +468,12 @@ class AnthropicInferenceServiceImpl(
                 } else {
                     null
                 }
+
+            freezeContextSidecarIfPresent(
+                appendOnly = appendOnly,
+                contextSidecars = contextSidecars,
+                tailInsertIndex = tailInsertIndex,
+            )
 
             return AgentModelTurnResult(
                 assistantText = bufferedText.takeIf { it.isNotBlank() },
@@ -507,7 +490,7 @@ class AnthropicInferenceServiceImpl(
             ).also {
                 telemetryEventPort.emitInferenceExecutionOutcome(
                     startedAtMs = startedAtMs,
-                    provider = "Anthropic",
+                    provider = providerLabel,
                     modelId = resolvedModelId,
                     success = true,
                     tokenCount = response.outputTokens,
@@ -521,7 +504,7 @@ class AnthropicInferenceServiceImpl(
         } catch (e: InferenceNetworkException) {
             telemetryEventPort.emitInferenceExecutionOutcome(
                 startedAtMs = startedAtMs,
-                provider = "Anthropic",
+                provider = providerLabel,
                 modelId = resolvedModelId,
                 success = false,
                 errorMessage = e.message,
@@ -532,7 +515,7 @@ class AnthropicInferenceServiceImpl(
             loggingPort.error(TAG, "completeSingleTurn network failure: ${describeException(e)}", e)
             telemetryEventPort.emitInferenceExecutionOutcome(
                 startedAtMs = startedAtMs,
-                provider = "Anthropic",
+                provider = providerLabel,
                 modelId = resolvedModelId,
                 success = false,
                 errorMessage = e.message,
@@ -545,8 +528,50 @@ class AnthropicInferenceServiceImpl(
             )
         } catch (e: Exception) {
             loggingPort.error(TAG, "completeSingleTurn failed: ${describeException(e)}", e)
+            telemetryEventPort.emitInferenceExecutionOutcome(
+                startedAtMs = startedAtMs,
+                provider = providerLabel,
+                modelId = resolvedModelId,
+                success = false,
+                errorMessage = e.message,
+                baseUrl = baseUrl,
+            )
             throw e
         }
+    }
+
+    private fun freezeContextSidecarIfPresent(
+        appendOnly: ProviderAppendOnlyContext,
+        contextSidecars: String?,
+        tailInsertIndex: Int,
+    ) {
+        if (!contextSidecars.isNullOrBlank()) {
+            appendOnly.endTurnFreezeSidecar(
+                sidecarText = contextSidecars,
+                mappedInsertIndex = tailInsertIndex,
+            )
+        }
+    }
+
+    private fun wireAppendOnlyForTurn(
+        sessionMessages: List<AgentLoopMessage>,
+        systemPrompt: String,
+        availableTools: List<ToolDefinition>,
+    ): ProviderAppendOnlyContext {
+        appendOnlyContext =
+            ProviderAppendOnlyContextFactory.ensureAppendOnlyContext(
+                current = appendOnlyContext,
+                onLogCleared = { reason ->
+                    loggingPort.warning(TAG, "Append-only message log cleared: $reason")
+                },
+            )
+        val appendOnly = requireNotNull(appendOnlyContext)
+        appendOnly.ensureStablePrefix(
+            systemPrompt = systemPrompt,
+            toolsFingerprint = availableTools.toToolsFingerprint(),
+        )
+        appendOnly.syncMessages(sessionMessages.toProviderNormalizedMessages())
+        return appendOnly
     }
 
     private fun resolveThinkingBudget(options: GenerationOptions): Long? =
@@ -557,32 +582,11 @@ class AnthropicInferenceServiceImpl(
                     null -> null
                     ApiReasoningEffort.NONE -> null
                     ApiReasoningEffort.LOW -> 1024L
-                    ApiReasoningEffort.MEDIUM -> THINKING_BUDGET_MEDIUM
+                    ApiReasoningEffort.MEDIUM -> ProviderInferenceConstants.ANTHROPIC_THINKING_BUDGET_MEDIUM
                     ApiReasoningEffort.HIGH -> 2048L
-                    ApiReasoningEffort.XHIGH -> THINKING_BUDGET_XHIGH
+                    ApiReasoningEffort.XHIGH -> ProviderInferenceConstants.ANTHROPIC_THINKING_BUDGET_XHIGH
                 }
         }
-
-    private fun buildRequestHistory(options: GenerationOptions): List<ChatMessage> {
-        val historyWithSystemPrompt = mergeSystemPrompt(conversationHistory, options.systemPrompt)
-        loggingPort.debug(
-            TAG,
-            @Suppress("MaxLineLength")
-            "Prepared request history provider=$PROVIDER model=$modelId modelType=$modelType historyCount=${historyWithSystemPrompt.size} systemPromptIncluded=${historyWithSystemPrompt.firstOrNull()?.role == Role.SYSTEM}",
-        )
-        return historyWithSystemPrompt
-    }
-
-    private fun mergeSystemPrompt(
-        history: List<ChatMessage>,
-        systemPrompt: String?,
-    ): List<ChatMessage> {
-        val normalizedPrompt = systemPrompt?.trim()?.takeIf { it.isNotEmpty() } ?: return history
-        if (history.any { it.role == Role.SYSTEM && it.content == normalizedPrompt }) {
-            return history
-        }
-        return listOf(ChatMessage(role = Role.SYSTEM, content = normalizedPrompt)) + history
-    }
 
     private fun describeException(throwable: Throwable): String =
         buildString {
@@ -612,47 +616,6 @@ class AnthropicInferenceServiceImpl(
         return value.take(MAX_LOG_BODY_CHARS) + "...<truncated>"
     }
 
-    private fun logImagePayloads(options: GenerationOptions) {
-        if (options.imageUris.isEmpty()) {
-            return
-        }
-        val payloads =
-            runCatching {
-                ImagePayloads.fromUris(options.imageUris)
-            }.getOrElse { error ->
-                loggingPort.error(
-                    TAG,
-                    "Failed to load image payloads provider=$PROVIDER model=$modelId message=${error.message}",
-                    error,
-                )
-                return
-            }
-
-        val details =
-            payloads.joinToString(separator = "; ") { payload ->
-                "file=${payload.filename}, mime=${payload.mimeType}, bytes=${payload.byteCount}, sha256=${
-                    payload.sha256.take(
-                        8,
-                    )
-                }"
-            }
-        loggingPort.info(
-            TAG,
-            "Image payloads provider=$PROVIDER model=$modelId count=${payloads.size} $details",
-        )
-    }
-
-    private fun describeStreamEvent(event: RawMessageStreamEvent): String =
-        when {
-            event.messageStart().isPresent -> "message_start"
-            event.messageDelta().isPresent -> "message_delta"
-            event.messageStop().isPresent -> "message_stop"
-            event.contentBlockStart().isPresent -> "content_block_start"
-            event.contentBlockDelta().isPresent -> "content_block_delta"
-            event.contentBlockStop().isPresent -> "content_block_stop"
-            else -> "other"
-        }
-
     private suspend fun streamMessages(
         params: MessageCreateParams,
         emitEvent: suspend (InferenceEvent) -> Unit,
@@ -664,6 +627,7 @@ class AnthropicInferenceServiceImpl(
             var outputTextDeltaCount = 0
             var thinkingTextDeltaCount = 0
             var stopReason: String? = null
+            var receivedMessageStop = false
             var inputTokens: Int? = null
             var outputTokens: Int? = null
             var reasoningTokens: Int? = null
@@ -682,16 +646,19 @@ class AnthropicInferenceServiceImpl(
                             .usage()
                     inputTokens = usage.inputTokens().toInt()
                     outputTokens = usage.outputTokens().toInt()
-                    reasoningTokens = null
-                    val rawCacheCreationStart = usage.cacheCreationInputTokens().orElse(-1L)
-                    val rawCacheReadStart = usage.cacheReadInputTokens().orElse(-1L)
+                    // messageStart is guaranteed-first in the Anthropic streaming protocol, so an
+                    // unconditional assignment here is intentional. Use the same guarded override
+                    // pattern as the cache fields below so the semantics are uniform.
+                    AnthropicReasoningTokenExtractor.extract(usage)?.let { reasoningTokens = it }
+                    val cacheCreationOpt = usage.cacheCreationInputTokens()
+                    val cacheReadOpt = usage.cacheReadInputTokens()
                     loggingPort.debug(
                         TAG,
                         @Suppress("MaxLineLength")
-                        "Anthropic messageStart usage model=$modelId inputTokens=$inputTokens outputTokens=$outputTokens rawCacheCreation=$rawCacheCreationStart rawCacheRead=$rawCacheReadStart (-1=absent, 0=present-zero)",
+                        "Anthropic messageStart usage provider=$providerLabel model=$modelId inputTokens=$inputTokens outputTokens=$outputTokens reasoningTokens=$reasoningTokens cacheCreation=${cacheCreationOpt.map { it.toString() }.orElse("absent")} cacheRead=${cacheReadOpt.map { it.toString() }.orElse("absent")}",
                     )
-                    cacheCreationInputTokens = rawCacheCreationStart.toInt().takeIf { it > 0 }
-                    cacheReadInputTokens = rawCacheReadStart.toInt().takeIf { it > 0 }
+                    cacheCreationInputTokens = cacheCreationOpt.map { it.toInt() }.orElse(null)
+                    cacheReadInputTokens = cacheReadOpt.map { it.toInt() }.orElse(null)
                 }
                 val contentBlockStart = event.contentBlockStart()
                 if (contentBlockStart.isPresent) {
@@ -750,6 +717,7 @@ class AnthropicInferenceServiceImpl(
                     }
                 }
                 if (event.messageStop().isPresent) {
+                    receivedMessageStop = true
                     loggingPort.debug(
                         TAG,
                         @Suppress("MaxLineLength")
@@ -767,41 +735,42 @@ class AnthropicInferenceServiceImpl(
                     val usage = deltaEvent.usage()
                     outputTokens = usage.outputTokens().toInt()
                     usage.inputTokens().ifPresent { inputTokens = it.toInt() }
-                    val rawCacheCreationDelta = usage.cacheCreationInputTokens().orElse(-1L)
-                    val rawCacheReadDelta = usage.cacheReadInputTokens().orElse(-1L)
+                    val cacheCreationDeltaOpt = usage.cacheCreationInputTokens()
+                    val cacheReadDeltaOpt = usage.cacheReadInputTokens()
                     loggingPort.debug(
                         TAG,
                         @Suppress("MaxLineLength")
-                        "Anthropic messageDelta usage model=$modelId rawCacheCreation=$rawCacheCreationDelta rawCacheRead=$rawCacheReadDelta priorCacheCreation=$cacheCreationInputTokens priorCacheRead=$cacheReadInputTokens (-1=absent, 0=present-zero)",
+                        "Anthropic messageDelta usage model=$modelId cacheCreation=${cacheCreationDeltaOpt.map { it.toString() }.orElse("absent")} cacheRead=${cacheReadDeltaOpt.map { it.toString() }.orElse("absent")} priorCacheCreation=$cacheCreationInputTokens priorCacheRead=$cacheReadInputTokens",
                     )
-                    cacheCreationInputTokens =
-                        usage
-                            .cacheCreationInputTokens()
-                            .orElse(cacheCreationInputTokens?.toLong() ?: 0L)
-                            .toInt()
-                            .takeIf { it > 0 }
-                    cacheReadInputTokens =
-                        usage
-                            .cacheReadInputTokens()
-                            .orElse(cacheReadInputTokens?.toLong() ?: 0L)
-                            .toInt()
-                            .takeIf { it > 0 }
+                    if (cacheCreationDeltaOpt.isPresent) {
+                        cacheCreationInputTokens = cacheCreationDeltaOpt.get().toInt()
+                    }
+                    if (cacheReadDeltaOpt.isPresent) {
+                        cacheReadInputTokens = cacheReadDeltaOpt.get().toInt()
+                    }
+                    AnthropicReasoningTokenExtractor.extract(usage)?.let { reasoningTokens = it }
                     loggingPort.debug(TAG, "Anthropic stream message delta model=$modelId")
                 }
-                if (event.contentBlockStart().isPresent) {
-                    loggingPort.debug(
-                        TAG,
-                        "Anthropic stream content block start model=$modelId type=${
-                            describeStreamEvent(event)
-                        }",
-                    )
-                }
-                if (event.contentBlockStop().isPresent) {
-                    loggingPort.debug(TAG, "Anthropic stream content block stop model=$modelId")
-                }
-                if (event.messageStart().isPresent) {
-                    loggingPort.debug(TAG, "Anthropic stream message start model=$modelId")
-                }
+            }
+
+            if (
+                isAnthropicStreamDisconnect(stopReason, receivedMessageStop) &&
+                currentCoroutineContext().isActive
+            ) {
+                loggingPort.warning(
+                    TAG,
+                    "Anthropic stream ended without messageStop model=$modelId " +
+                        "outputTextDeltas=$outputTextDeltaCount thinkingTextDeltas=$thinkingTextDeltaCount " +
+                        "pendingToolUses=${pendingToolUses.size}",
+                )
+                // Throw for every truncated stream — including thinking-only (CoT) and
+                // mid-tool-use truncation — so the agent loop retries instead of treating
+                // a dropped connection as a completed turn. The message must contain
+                // "stream ended unexpectedly" so retry classification treats it as transient.
+                throw RuntimeException(
+                    "Model stream ended unexpectedly without finish signal " +
+                        "(provider=$PROVIDER model=$modelId)",
+                )
             }
 
             val capturedToolUses =
@@ -877,3 +846,8 @@ class AnthropicInferenceServiceImpl(
             throw IllegalArgumentException("Tool input JSON is invalid", error)
         }
 }
+
+private fun isAnthropicStreamDisconnect(
+    stopReason: String?,
+    receivedMessageStop: Boolean,
+): Boolean = stopReason == null && !receivedMessageStop

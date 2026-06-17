@@ -6,6 +6,7 @@ import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.google.ai.edge.litertlm.Content
 import com.google.ai.edge.litertlm.Contents
 import com.google.ai.edge.litertlm.Conversation
+import com.google.ai.edge.litertlm.ExperimentalApi
 import com.google.ai.edge.litertlm.Message
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -39,6 +40,23 @@ class ConversationImpl
             Log.d(TAG, "Cancelling LiteRT conversation process")
             conversation.cancelProcess()
         }
+
+        @OptIn(ExperimentalApi::class)
+        override fun benchmarkInfo(): LiteRtBenchmarkSnapshot? =
+            try {
+                val info = conversation.getBenchmarkInfo()
+                LiteRtBenchmarkSnapshot(
+                    initTimeInSecond = info.initTimeInSecond,
+                    timeToFirstTokenInSecond = info.timeToFirstTokenInSecond,
+                    lastPrefillTokenCount = info.lastPrefillTokenCount,
+                    lastDecodeTokenCount = info.lastDecodeTokenCount,
+                    lastPrefillTokensPerSecond = info.lastPrefillTokensPerSecond,
+                    lastDecodeTokensPerSecond = info.lastDecodeTokensPerSecond,
+                )
+            } catch (e: Exception) {
+                Log.w(TAG, "LiteRT benchmark info unavailable; falling back to estimated telemetry", e)
+                null
+            }
 
         override fun sendMessageAsync(
             message: String,

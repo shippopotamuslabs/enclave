@@ -22,6 +22,7 @@ set(CMAKE_ANDROID_NDK_DEPRECATED_HEADERS ON)
 set(LLAMA_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_SERVER OFF CACHE BOOL "" FORCE)
+set(LLAMA_BUILD_COMMON ON CACHE BOOL "" FORCE)
 
 # CPU-only mode - disable all GPU backends for stability
 set(GGML_VULKAN OFF CACHE BOOL "" FORCE)
@@ -68,11 +69,13 @@ set(GGML_LLAMAFILE OFF CACHE BOOL "" FORCE)
 # =============================================================================
 # ARM CPU Optimization
 # =============================================================================
-# Enable ARMv8.2-a features for better performance on Snapdragon 888
+# Enable ARMv8.2-a features for better performance on modern AArch64 phones.
 # dotprod = UDOT/SDOT instructions for faster matrix ops
-# fp16 = half-precision float for better throughput
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=armv8.2-a+dotprod+fp16")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=armv8.2-a+dotprod+fp16")
+# fp16    = half-precision float for better throughput
+# i8mm    = int8 matrix multiply (KleidiAI); runtime-gated in ggml_cpu_has_matmul_int8()
+set(ENCLAVE_ARM_MARCH "armv8.2-a+dotprod+fp16+i8mm")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=${ENCLAVE_ARM_MARCH}")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=${ENCLAVE_ARM_MARCH}")
 
 # Log the configuration for debugging
 message(STATUS "CPU Backend Configuration:")
@@ -188,6 +191,7 @@ target_link_libraries(mtmd
 )
 
 target_link_libraries(llama-jni
+    common
     llama
     ggml
     ggml-cpu
@@ -199,7 +203,7 @@ target_link_libraries(llama-jni
 
 # Compiler options for optimization
 set_target_properties(llama-jni PROPERTIES
-    COMPILE_OPTIONS "-O3;-fPIC;-ffunction-sections;-fdata-sections;-march=armv8.2-a+dotprod+fp16"
+    COMPILE_OPTIONS "-O3;-fPIC;-ffunction-sections;-fdata-sections;-march=${ENCLAVE_ARM_MARCH}"
     LINK_OPTIONS "-Wl,--gc-sections;-Wl,-z,max-page-size=16384;-Wl,-z,common-page-size=16384"
 )
 

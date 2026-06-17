@@ -25,6 +25,17 @@ enum class ModelFileFormat(
     @SerialName("ONNX")
     ONNX(".onnx"),
 
+    @SerialName("SAFETENSORS")
+    SAFETENSORS(".safetensors"),
+
     @SerialName("TXT")
     TXT(".txt"),
+
+    ;
+
+    companion object {
+        /** Resolves the format from a file name's extension, or null if no format matches. */
+        fun fromFileName(fileName: String): ModelFileFormat? =
+            entries.firstOrNull { fileName.endsWith(it.extension, ignoreCase = true) }
+    }
 }

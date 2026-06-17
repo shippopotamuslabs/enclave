@@ -1,12 +1,12 @@
 package com.browntowndev.enclave.app
 
 import com.browntowndev.enclave.domain.model.download.ModelConfig
+import com.browntowndev.enclave.domain.qualifier.DownloadHttpClient
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import okhttp3.Call
-import okhttp3.Dispatcher
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
@@ -20,21 +20,25 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideOkHttpClient(): OkHttpClient {
-        val dispatcher =
-            Dispatcher().apply {
-                maxRequests = ModelConfig.CONCURRENT_DOWNLOADS
-                maxRequestsPerHost = ModelConfig.CONCURRENT_DOWNLOADS
-            }
-
-        return OkHttpClient
+    fun provideOkHttpClient(): OkHttpClient =
+        OkHttpClient
             .Builder()
-            .dispatcher(dispatcher)
             .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-            .readTimeout(READ_TIMEOUT_MINUTES, TimeUnit.MINUTES) // 5 minutes for large downloads
+            .readTimeout(READ_TIMEOUT_MINUTES, TimeUnit.MINUTES)
             .writeTimeout(WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             .build()
-    }
+
+    @Provides
+    @Singleton
+    @DownloadHttpClient
+    fun provideDownloadOkHttpClient(): OkHttpClient =
+        OkHttpClient
+            .Builder()
+            .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            .readTimeout(READ_TIMEOUT_MINUTES, TimeUnit.MINUTES)
+            .writeTimeout(WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            .followSslRedirects(false)
+            .build()
 
     @Provides
     @Singleton

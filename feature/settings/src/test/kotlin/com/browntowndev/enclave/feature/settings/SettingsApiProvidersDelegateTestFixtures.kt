@@ -3,11 +3,14 @@ package com.browntowndev.enclave.feature.settings
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.usecase.settings.SettingsApiProviderUseCases
 import com.browntowndev.enclave.domain.usecase.settings.SettingsMediaUseCases
+import com.browntowndev.enclave.domain.usecase.settings.SettingsLiveVoiceUseCases
 import com.browntowndev.enclave.domain.usecase.settings.SettingsTtsUseCases
+import io.mockk.mockk
 
 internal fun createSettingsApiProvidersDelegate(
     apiProviderUseCases: SettingsApiProviderUseCases,
     ttsUseCases: SettingsTtsUseCases,
+    liveVoiceUseCases: SettingsLiveVoiceUseCases,
     mediaUseCases: SettingsMediaUseCases,
     deletionHelper: SettingsDeletionHelper,
     apiModelAssetUiMapper: ApiModelAssetUiMapper = ApiModelAssetUiMapper(),
@@ -27,10 +30,18 @@ internal fun createSettingsApiProvidersDelegate(
                 ttsUseCases = ttsUseCases,
                 errorHandler = errorHandler,
             ),
+        liveVoiceCoordinator =
+            LiveVoiceProvidersCoordinator(
+                apiProviderUseCases = apiProviderUseCases,
+                liveVoiceUseCases = liveVoiceUseCases,
+                errorHandler = errorHandler,
+            ),
         mediaCoordinator =
             MediaProvidersCoordinator(
                 apiProviderUseCases = apiProviderUseCases,
                 mediaUseCases = mediaUseCases,
+                fetchApiProviderModelDetailUseCase =
+                    mockk<com.browntowndev.enclave.domain.usecase.byok.FetchApiProviderModelDetailUseCase>(relaxed = true),
                 errorHandler = errorHandler,
             ),
     )

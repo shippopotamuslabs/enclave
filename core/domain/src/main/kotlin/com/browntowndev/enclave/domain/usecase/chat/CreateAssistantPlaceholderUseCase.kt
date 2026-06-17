@@ -20,6 +20,7 @@ class CreateAssistantPlaceholderUseCase
             chatId: ChatId,
             userMessageCreatedAtMillis: Long,
             assistantMessageId: MessageId,
+            scheduleCloudSync: Boolean = true,
         ): AssistantPlaceholderResult {
             val assistantMessage =
                 Message(

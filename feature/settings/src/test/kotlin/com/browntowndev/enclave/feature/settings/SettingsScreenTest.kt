@@ -64,7 +64,7 @@ class SettingsScreenTest {
                     onShowOssLicensesSheet = {},
                     onShowVisionSettingsSheet = {},
                     onNavigateToModelConfigure = {},
-                    onSetDefaultModel = { _, _, _, _, _ -> },
+                    onSetDefaultModel = { _, _, _, _, _, _ -> },
                     onShowLocalModelsSheet = {},
                     onShowByokSheet = {},
                     onNavigateToByokConfigure = {},
@@ -102,7 +102,7 @@ class SettingsScreenTest {
                     onSelectLocalModelConfig = {},
                     onDeleteLocalModelAsset = {},
                     onDeleteLocalModelConfig = {},
-                    onConfirmDeletionWithReassignment = { _, _ -> },
+                    onConfirmDeletionWithReassignment = { _, _, _ -> },
                     onDismissDeletionSafety = {},
                 )
             }

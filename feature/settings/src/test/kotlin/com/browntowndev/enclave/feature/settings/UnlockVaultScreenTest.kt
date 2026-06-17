@@ -75,9 +75,8 @@ class UnlockVaultScreenTest {
     }
 
     @Test
-    fun unlockingStateKeepsLoadingUiVisibleUntilTheScreenLeaves() {
+    fun unlockingStateShowsLoadingWhileUnlockingThenReturnsToPasswordForm() {
         var isUnlocking by mutableStateOf(true)
-        composeTestRule.mainClock.autoAdvance = false
 
         composeTestRule.setContent {
             EnclaveTheme {
@@ -101,16 +100,13 @@ class UnlockVaultScreenTest {
 
         composeTestRule.onNodeWithText("Signing In...").assertExists()
         composeTestRule.onAllNodesWithText("Enclave Password").assertCountEquals(0)
-        composeTestRule.onAllNodesWithText("Biometric Unlock").assertCountEquals(0)
 
         composeTestRule.runOnIdle {
             isUnlocking = false
         }
-        composeTestRule.mainClock.advanceTimeBy(500)
 
-        composeTestRule.onNodeWithText("Signing In...").assertExists()
-        composeTestRule.onAllNodesWithText("Enclave Password").assertCountEquals(0)
-        composeTestRule.onAllNodesWithText("Biometric Unlock").assertCountEquals(0)
+        composeTestRule.onNodeWithText("Signing In...").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Enclave Password").assertExists()
     }
 
     @Test

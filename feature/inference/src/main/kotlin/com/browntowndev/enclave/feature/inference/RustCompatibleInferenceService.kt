@@ -4,6 +4,7 @@ import com.browntowndev.enclave.domain.model.inference.AgentLoopMessage
 import com.browntowndev.enclave.domain.model.inference.AgentModelTurnResult
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
+import com.browntowndev.enclave.domain.port.inference.InferenceEvent
 import com.browntowndev.enclave.domain.port.inference.LlmInferencePort
 
 /**
@@ -26,6 +27,7 @@ interface RustCompatibleInferenceService : LlmInferencePort {
      * @param allowToolCall whether the model is permitted to emit a tool call this turn
      * @param onTextToken callback for each streamed text delta
      * @param onThinkingToken callback for each streamed reasoning/thinking delta
+     * @param onLifecycleEvent optional hook for non-token lifecycle events (e.g. engine load)
      */
     suspend fun completeSingleTurn(
         sessionMessages: List<AgentLoopMessage>,
@@ -36,5 +38,6 @@ interface RustCompatibleInferenceService : LlmInferencePort {
         onTextToken: suspend (String) -> Unit,
         onThinkingToken: suspend (String) -> Unit,
         options: GenerationOptions,
+        onLifecycleEvent: suspend (InferenceEvent) -> Unit = {},
     ): AgentModelTurnResult
 }

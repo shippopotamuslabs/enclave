@@ -2,12 +2,15 @@ package com.browntowndev.enclave.feature.settings
 
 import androidx.work.Data
 import androidx.work.WorkInfo
+import com.browntowndev.enclave.core.data.download.DownloadFinalizeWorker
+import com.browntowndev.enclave.core.data.download.ModelDownloadWorker
 import com.browntowndev.enclave.core.data.repository.DownloadWorkRepository
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
 import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.download.DownloadKey
 import com.browntowndev.enclave.domain.model.download.DownloadRequestKind
 import com.browntowndev.enclave.domain.model.download.ScheduledDownload
+import com.browntowndev.enclave.domain.usecase.modelconfig.ReDownloadModelPackUseCase
 import com.browntowndev.enclave.domain.usecase.modelconfig.ReDownloadModelUseCase
 import io.mockk.coEvery
 import io.mockk.every
@@ -26,12 +29,13 @@ import org.junit.jupiter.api.extension.ExtendWith
 @OptIn(ExperimentalCoroutinesApi::class)
 class ModelReDownloadViewModelTest {
     private val reDownloadModelUseCase = mockk<ReDownloadModelUseCase>()
+    private val reDownloadModelPackUseCase = mockk<ReDownloadModelPackUseCase>(relaxed = true)
     private val downloadWorkRepository = mockk<DownloadWorkRepository>()
     private lateinit var viewModel: ModelReDownloadViewModel
 
     @BeforeEach
     fun setup() {
-        viewModel = ModelReDownloadViewModel(reDownloadModelUseCase, downloadWorkRepository)
+        viewModel = ModelReDownloadViewModel(reDownloadModelUseCase, reDownloadModelPackUseCase, downloadWorkRepository)
     }
 
     @Test
@@ -56,7 +60,9 @@ class ModelReDownloadViewModelTest {
 
             val workInfoRunning = mockk<WorkInfo>()
             every { workInfoRunning.state } returns WorkInfo.State.RUNNING
+            every { workInfoRunning.tags } returns setOf(ModelDownloadWorker::class.java.name)
             every { workInfoRunning.progress } returns progressData
+            every { workInfoRunning.outputData } returns Data.EMPTY
 
             // Simulate the finalizer SUCCEEDED (terminal state in the chain)
             val finalizerOutputData =
@@ -66,6 +72,7 @@ class ModelReDownloadViewModelTest {
                     .build()
             val workInfoSucceeded = mockk<WorkInfo>()
             every { workInfoSucceeded.state } returns WorkInfo.State.SUCCEEDED
+            every { workInfoSucceeded.tags } returns setOf(DownloadFinalizeWorker::class.java.name)
             every { workInfoSucceeded.progress } returns Data.EMPTY
             every { workInfoSucceeded.outputData } returns finalizerOutputData
 
@@ -117,6 +124,7 @@ class ModelReDownloadViewModelTest {
                     .build()
             val downloaderSucceeded = mockk<WorkInfo>()
             every { downloaderSucceeded.state } returns WorkInfo.State.SUCCEEDED
+            every { downloaderSucceeded.tags } returns setOf(ModelDownloadWorker::class.java.name)
             every { downloaderSucceeded.progress } returns Data.EMPTY
             every { downloaderSucceeded.outputData } returns downloaderOutputData
 
@@ -128,6 +136,7 @@ class ModelReDownloadViewModelTest {
                     .build()
             val finalizerSucceeded = mockk<WorkInfo>()
             every { finalizerSucceeded.state } returns WorkInfo.State.SUCCEEDED
+            every { finalizerSucceeded.tags } returns setOf(DownloadFinalizeWorker::class.java.name)
             every { finalizerSucceeded.progress } returns Data.EMPTY
             every { finalizerSucceeded.outputData } returns finalizerOutputData
 
@@ -138,6 +147,54 @@ class ModelReDownloadViewModelTest {
             advanceUntilIdle()
 
             val finalState = viewModel.reDownloadStates.value[modelId]
+            assertTrue(finalState is ReDownloadProgress.Complete || finalState == null)
+        }
+
+    @Test
+    fun `reDownloadPack waits for finalizer after downloader succeeds`() =
+        runTest {
+            coEvery { reDownloadModelPackUseCase("sdxl-t2i") } returns
+                Result.success(
+                    listOf(
+                        ScheduledDownload(
+                            sessionId = "pack-session",
+                            requestKind = DownloadRequestKind.INITIALIZE_MODELS,
+                        ),
+                    ),
+                )
+
+            val downloaderOutputData =
+                Data
+                    .Builder()
+                    .putString("worker_stage", "DOWNLOAD")
+                    .build()
+            val downloaderSucceeded = mockk<WorkInfo>()
+            every { downloaderSucceeded.state } returns WorkInfo.State.SUCCEEDED
+            every { downloaderSucceeded.tags } returns setOf(ModelDownloadWorker::class.java.name)
+            every { downloaderSucceeded.progress } returns
+                Data.Builder()
+                    .putStringArray(DownloadKey.FILES_PROGRESS.key, arrayOf("realvis.zip|100|100"))
+                    .build()
+            every { downloaderSucceeded.outputData } returns downloaderOutputData
+
+            val finalizerOutputData =
+                Data
+                    .Builder()
+                    .putString("worker_stage", "FINALIZE")
+                    .build()
+            val finalizerSucceeded = mockk<WorkInfo>()
+            every { finalizerSucceeded.state } returns WorkInfo.State.SUCCEEDED
+            every { finalizerSucceeded.tags } returns setOf(DownloadFinalizeWorker::class.java.name)
+            every { finalizerSucceeded.progress } returns Data.EMPTY
+            every { finalizerSucceeded.outputData } returns finalizerOutputData
+
+            every { downloadWorkRepository.observeDownloadProgress() } returns
+                flowOf(downloaderSucceeded, finalizerSucceeded)
+
+            viewModel.reDownloadPack("sdxl-t2i")
+            advanceUntilIdle()
+
+            val finalState = viewModel.packReDownloadStates.value["sdxl-t2i"]
             assertTrue(finalState is ReDownloadProgress.Complete || finalState == null)
         }
 }

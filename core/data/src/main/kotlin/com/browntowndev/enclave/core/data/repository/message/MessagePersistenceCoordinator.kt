@@ -5,6 +5,7 @@ import com.browntowndev.enclave.core.data.local.ChatSummaryDao
 import com.browntowndev.enclave.core.data.local.ChatSummaryEntity
 import com.browntowndev.enclave.core.data.local.EmbeddingDao
 import com.browntowndev.enclave.core.data.local.MessageDao
+import com.browntowndev.enclave.core.data.local.MessageFileDao
 import com.browntowndev.enclave.core.data.mapper.message.toEntity
 import com.browntowndev.enclave.core.data.security.SensitiveEntityFieldEncryptors
 import com.browntowndev.enclave.core.data.security.SensitivePersistenceSelfHealer
@@ -26,12 +27,24 @@ class MessagePersistenceCoordinator
     constructor(
         private val syncTrigger: CloudSyncTrigger,
         private val messageDao: MessageDao,
+        private val messageFileDao: MessageFileDao,
         private val embeddingDao: EmbeddingDao,
         private val chatSummaryDao: ChatSummaryDao,
         private val transactionProvider: TransactionProvider,
         private val healer: SensitivePersistenceSelfHealer,
     ) {
-        suspend fun saveMessage(message: Message): MessageId {
+        suspend fun softDeleteMessage(messageId: MessageId) {
+            transactionProvider.runInTransaction {
+                messageDao.softDeleteById(messageId, System.currentTimeMillis())
+                messageFileDao.softDeleteByMessageId(messageId)
+            }
+            syncTrigger.trigger()
+        }
+
+        suspend fun saveMessage(
+            message: Message,
+            scheduleCloudSync: Boolean = true,
+        ): MessageId {
             require(message.chatId != null) {
                 "Message(id=${message.id.value}) must have a chatId before persisting — route through CreateUserMessageUseCase"
             }
@@ -55,8 +68,14 @@ class MessagePersistenceCoordinator
                     entity.id
                 }
 
-            syncTrigger.trigger()
+            if (scheduleCloudSync) {
+                syncTrigger.trigger()
+            }
             return messageId
+        }
+
+        suspend fun schedulePendingCloudSync() {
+            syncTrigger.trigger()
         }
 
         suspend fun saveEmbedding(

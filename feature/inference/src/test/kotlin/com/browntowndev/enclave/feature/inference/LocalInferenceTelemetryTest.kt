@@ -43,4 +43,27 @@ class LocalInferenceTelemetryTest {
         assertNull(captured.costUsd)
         assertEquals(TelemetryCostStatus.UNAVAILABLE, captured.costStatus)
     }
+
+    @Test
+    fun `local inference telemetry threads reasoning token estimate`() {
+        val captured =
+            ProviderTelemetryNormalizer(ProviderCostEstimator(SavedApiModelPricingEstimator()))
+                .normalizeLocalGeneration(
+                    rowId = "tel-litert-reasoning",
+                    messageId = TelemetryTestFixtures.mLitert1.value,
+                    chatId = TelemetryTestFixtures.chat1.value,
+                    providerLabel = "LiteRT",
+                    modelLabel = "test-litert",
+                    requestStartedAtMs = 1_000L,
+                    firstOutputTokenAtMs = 1_200L,
+                    completedAtMs = 3_200L,
+                    outputTokens = 60,
+                    appVersionName = "1.4.0",
+                    appVersionCode = 140L,
+                    telemetrySchemaVersion = 1,
+                    reasoningTokens = 25,
+                )
+
+        assertEquals(25, captured.reasoningTokens)
+    }
 }

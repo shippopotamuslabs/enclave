@@ -7,13 +7,12 @@ import com.browntowndev.enclave.domain.model.inference.ApiProvider
 internal fun ApiProvider.showsMediaBaseUrlOverride(): Boolean = this == ApiProvider.OPENAI
 
 /** fal.ai task support is defined by discovery; manual toggles would break generation. */
-internal fun ApiProvider.locksMediaTaskToggles(): Boolean = this == ApiProvider.FAL
+internal fun ApiProvider.locksMediaTaskToggles(discoveredTasks: Set<MediaTask>): Boolean =
+    this == ApiProvider.FAL && discoveredTasks.isNotEmpty()
 
-internal fun MediaCapability.requiresMediaTaskSelection(): Boolean =
-    this == MediaCapability.IMAGE || this == MediaCapability.VIDEO
+internal fun MediaCapability.requiresMediaTaskSelection(): Boolean = this == MediaCapability.IMAGE || this == MediaCapability.VIDEO
 
-internal fun Set<MediaTask>.hasRelevantTaskFor(capability: MediaCapability): Boolean =
-    any { it.kind == capability }
+internal fun Set<MediaTask>.hasRelevantTaskFor(capability: MediaCapability): Boolean = any { it.kind == capability }
 
 internal fun isMediaProviderSaveEnabled(
     displayName: String,

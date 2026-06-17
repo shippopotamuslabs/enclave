@@ -1,5 +1,7 @@
 package com.browntowndev.enclave.domain.usecase
 
+import com.browntowndev.enclave.domain.model.media.ImageGenerationProgress
+import com.browntowndev.enclave.domain.port.repository.ActiveStudioGeneration
 import com.browntowndev.enclave.domain.port.repository.StudioAlbumAsset
 import com.browntowndev.enclave.domain.port.repository.StudioMediaAsset
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
@@ -40,9 +42,29 @@ class FakeStudioRepository : StudioRepositoryPort {
 
     override fun observeGenerationError(): Flow<String?> = throw UnsupportedOperationException()
 
+    override fun observeGenerationProgress(): Flow<ImageGenerationProgress?> = throw UnsupportedOperationException()
+
+    override fun observeActiveGeneration(): Flow<ActiveStudioGeneration?> = throw UnsupportedOperationException()
+
     override suspend fun reportGenerationError(message: String?) = unsupported()
 
     override suspend fun clearGenerationError() = unsupported()
+
+    override fun reportGenerationProgress(progress: ImageGenerationProgress?) = unsupported()
+
+    override fun clearGenerationProgress() = unsupported()
+
+    override fun reportActiveGeneration(generation: ActiveStudioGeneration): Boolean = unsupported()
+
+    override fun hasActiveGeneration(): Boolean = false
+
+    override fun clearActiveGeneration() = unsupported()
+
+    override fun clearActiveGenerationIfOwned(generationId: String): Boolean = unsupported()
+
+    override fun clearGenerationProgressIfOwned(generationId: String): Boolean = unsupported()
+
+    override suspend fun reconcilePersistedActiveGeneration() = unsupported()
 
     override suspend fun addEphemeralMedia(asset: StudioMediaAsset) = unsupported()
 
@@ -81,6 +103,13 @@ class FakeStudioRepository : StudioRepositoryPort {
     override suspend fun clearEphemeralCache() = unsupported()
 
     override suspend fun getMediaById(id: String): StudioMediaAsset? = unsupported()
+
+    override suspend fun getMediaPendingDownload(): List<StudioMediaAsset> = unsupported()
+
+    override suspend fun materializeDownloadedMedia(
+        id: String,
+        bytes: ByteArray,
+    ) = unsupported()
 
     override suspend fun createAlbum(name: String): String = unsupported()
 

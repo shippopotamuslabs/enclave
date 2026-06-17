@@ -26,8 +26,8 @@ class ModelTypeTest {
     }
 
     @Test
-    fun `ModelType has exactly 14 values`() {
-        assertEquals(14, ModelType.entries.size)
+    fun `ModelType has exactly 15 values`() {
+        assertEquals(15, ModelType.entries.size)
     }
 
     @Test

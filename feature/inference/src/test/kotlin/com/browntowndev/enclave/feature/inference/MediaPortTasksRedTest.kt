@@ -6,7 +6,10 @@ import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.config.MediaTask
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
+import com.browntowndev.enclave.domain.model.media.ImageGenerationTarget
 import com.browntowndev.enclave.domain.model.media.VideoGenerationSettings
+import com.browntowndev.enclave.domain.port.media.GpuCapabilityPort
+import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.domain.port.security.ApiKeyProviderPort
 import com.browntowndev.enclave.feature.inference.media.FalImageGenerationAdapter
@@ -19,8 +22,10 @@ import com.browntowndev.enclave.feature.inference.media.OpenAiVideoGenerationAda
 import com.browntowndev.enclave.feature.inference.media.VideoGenerationPortImpl
 import com.browntowndev.enclave.feature.inference.media.XaiImageGenerationAdapter
 import com.browntowndev.enclave.feature.inference.media.XaiVideoGenerationAdapter
+import com.browntowndev.enclave.feature.inference.media.local.LocalStableDiffusionImageGenerator
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertArrayEquals
@@ -32,6 +37,9 @@ import org.junit.jupiter.api.Test
 class MediaPortTasksRedTest {
     private val apiKeyProvider = mockk<ApiKeyProviderPort>()
     private val studioRepository = mockk<StudioRepositoryPort>()
+    private val mediaProviderRepository = mockk<MediaProviderRepositoryPort>()
+    private val gpuCapabilityPort = mockk<GpuCapabilityPort>()
+    private val localStableDiffusionImageGenerator = mockk<LocalStableDiffusionImageGenerator>()
     private val falImageAdapter = mockk<FalImageGenerationAdapter>()
     private val falVideoAdapter = mockk<FalVideoGenerationAdapter>()
     private lateinit var imagePort: ImageGenerationPortImpl
@@ -43,6 +51,9 @@ class MediaPortTasksRedTest {
             ImageGenerationPortImpl(
                 apiKeyProvider = apiKeyProvider,
                 studioRepository = studioRepository,
+                mediaProviderRepository = mediaProviderRepository,
+                gpuCapabilityPort = gpuCapabilityPort,
+                localStableDiffusionImageGenerator = localStableDiffusionImageGenerator,
                 openAiAdapter = mockk<OpenAiImageGenerationAdapter>(),
                 googleAdapter = mockk<GoogleImageGenerationAdapter>(),
                 xaiAdapter = mockk<XaiImageGenerationAdapter>(),
@@ -58,6 +69,7 @@ class MediaPortTasksRedTest {
                 falAdapter = falVideoAdapter,
             )
         coEvery { apiKeyProvider.getApiKey("alias") } returns "key"
+        every { gpuCapabilityPort.isLocalImageGenerationSupported() } returns true
         coEvery { studioRepository.readMediaBytes("cache://reference.png") } returns "png".toByteArray()
         coEvery { falImageAdapter.generateImage(any(), any(), any(), any(), any(), any(), any()) } returns
             Result.success(listOf("image".toByteArray()))
@@ -69,8 +81,11 @@ class MediaPortTasksRedTest {
     fun `IMGPORT-01 edit-capable provider loads reference and forwards supportsEdit true`() =
         runTest {
             val settings = ImageGenerationSettings(referenceImageUri = "cache://reference.png")
+            val provider = imageProvider(setOf(MediaTask.TEXT_TO_IMAGE, MediaTask.EDIT_IMAGE))
+            coEvery { mediaProviderRepository.getMediaProvider(provider.id) } returns provider
+            val target = ImageGenerationTarget.Remote(provider.id, provider.displayName)
 
-            val result = imagePort.generateImage("draw", imageProvider(setOf(MediaTask.TEXT_TO_IMAGE, MediaTask.EDIT_IMAGE)), settings)
+            val result = imagePort.generateImage("draw", target, settings)
 
             assertTrue(result.isSuccess)
             coVerify {
@@ -89,10 +104,13 @@ class MediaPortTasksRedTest {
     @Test
     fun `IMGPORT-02 text-to-image-only provider with reference fails fast`() =
         runTest {
+            val provider = imageProvider(setOf(MediaTask.TEXT_TO_IMAGE), modelName = "fal-ai/recraft/v3")
+            coEvery { mediaProviderRepository.getMediaProvider(provider.id) } returns provider
+            val target = ImageGenerationTarget.Remote(provider.id, provider.displayName)
             val result =
                 imagePort.generateImage(
                     "draw",
-                    imageProvider(setOf(MediaTask.TEXT_TO_IMAGE), modelName = "fal-ai/recraft/v3"),
+                    target,
                     ImageGenerationSettings(referenceImageUri = "cache://reference.png"),
                 )
 
@@ -106,10 +124,13 @@ class MediaPortTasksRedTest {
     @Test
     fun `IMGPORT-03 text-to-image-only provider without reference forwards supportsEdit false`() =
         runTest {
+            val provider = imageProvider(setOf(MediaTask.TEXT_TO_IMAGE), modelName = "fal-ai/recraft/v3")
+            coEvery { mediaProviderRepository.getMediaProvider(provider.id) } returns provider
+            val target = ImageGenerationTarget.Remote(provider.id, provider.displayName)
             val result =
                 imagePort.generateImage(
                     "draw",
-                    imageProvider(setOf(MediaTask.TEXT_TO_IMAGE), modelName = "fal-ai/recraft/v3"),
+                    target,
                     ImageGenerationSettings(referenceImageUri = null),
                 )
 

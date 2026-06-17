@@ -12,6 +12,20 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+sealed interface TtsPlaybackUiState {
+    data object Idle : TtsPlaybackUiState
+
+    data object Loading : TtsPlaybackUiState
+
+    data class Playing(
+        val text: String,
+    ) : TtsPlaybackUiState
+
+    data class Paused(
+        val text: String,
+    ) : TtsPlaybackUiState
+}
+
 class TtsController
     @Inject
     constructor(
@@ -19,6 +33,9 @@ class TtsController
         private val loggingPort: LoggingPort,
         private val errorHandler: ViewModelErrorHandler,
     ) {
+        private val _playbackState = MutableStateFlow<TtsPlaybackUiState>(TtsPlaybackUiState.Idle)
+        val playbackState: StateFlow<TtsPlaybackUiState> = _playbackState.asStateFlow()
+
         private val _isPlayingTts = MutableStateFlow(false)
         val isPlayingTts: StateFlow<Boolean> = _isPlayingTts.asStateFlow()
 
@@ -29,7 +46,6 @@ class TtsController
         val isPausedTts: StateFlow<Boolean> = _isPausedTts.asStateFlow()
 
         private var streamingTtsJob: Job? = null
-        private var currentText: String? = null
 
         fun onPlayTts(
             text: String,
@@ -38,15 +54,13 @@ class TtsController
         ) {
             if (!hasTtsProviderAssigned) return
 
-            if (_isPausedTts.value && currentText == text) {
+            val currentState = _playbackState.value
+            if (currentState is TtsPlaybackUiState.Paused && currentState.text == text) {
                 playbackController.resume()
                 return
             }
 
-            _isPlayingTts.value = false
-            _isPausedTts.value = false
-            _isLoadingTts.value = true
-            currentText = text
+            setPlaybackState(TtsPlaybackUiState.Loading)
 
             streamingTtsJob?.cancel()
             playbackController.stop()
@@ -60,35 +74,25 @@ class TtsController
                         .collect { status ->
                             when (status) {
                                 is TtsPlaybackStatus.Initializing -> {
-                                    _isLoadingTts.value = true
+                                    setPlaybackState(TtsPlaybackUiState.Loading)
                                     loggingPort.debug(TAG, "TTS initializing")
                                 }
                                 is TtsPlaybackStatus.Playing -> {
-                                    _isLoadingTts.value = false
-                                    _isPlayingTts.value = true
-                                    _isPausedTts.value = false
+                                    setPlaybackState(TtsPlaybackUiState.Playing(text))
                                     loggingPort.debug(TAG, "TTS playing")
                                 }
                                 is TtsPlaybackStatus.Paused -> {
-                                    _isLoadingTts.value = false
-                                    _isPlayingTts.value = false
-                                    _isPausedTts.value = true
+                                    setPlaybackState(TtsPlaybackUiState.Paused(text))
                                     loggingPort.debug(TAG, "TTS paused")
                                 }
                                 is TtsPlaybackStatus.Completed -> {
-                                    _isLoadingTts.value = false
-                                    _isPlayingTts.value = false
-                                    _isPausedTts.value = false
+                                    setPlaybackState(TtsPlaybackUiState.Idle)
                                     streamingTtsJob = null
-                                    currentText = null
                                     loggingPort.debug(TAG, "TTS completed")
                                 }
                                 is TtsPlaybackStatus.Error -> {
-                                    _isLoadingTts.value = false
-                                    _isPlayingTts.value = false
-                                    _isPausedTts.value = false
+                                    setPlaybackState(TtsPlaybackUiState.Idle)
                                     streamingTtsJob = null
-                                    currentText = null
                                     loggingPort.error(TAG, "TTS failed: ${status.message}", status.cause)
                                     errorHandler.handleError(
                                         tag = TAG,
@@ -98,11 +102,8 @@ class TtsController
                                     )
                                 }
                                 is TtsPlaybackStatus.Stopped -> {
-                                    _isLoadingTts.value = false
-                                    _isPlayingTts.value = false
-                                    _isPausedTts.value = false
+                                    setPlaybackState(TtsPlaybackUiState.Idle)
                                     streamingTtsJob = null
-                                    currentText = null
                                     loggingPort.debug(TAG, "TTS stopped")
                                 }
                             }
@@ -118,10 +119,14 @@ class TtsController
             streamingTtsJob?.cancel()
             streamingTtsJob = null
             playbackController.stop()
-            _isPlayingTts.value = false
-            _isPausedTts.value = false
-            _isLoadingTts.value = false
-            currentText = null
+            setPlaybackState(TtsPlaybackUiState.Idle)
+        }
+
+        private fun setPlaybackState(state: TtsPlaybackUiState) {
+            _playbackState.value = state
+            _isPlayingTts.value = state is TtsPlaybackUiState.Playing
+            _isLoadingTts.value = state is TtsPlaybackUiState.Loading
+            _isPausedTts.value = state is TtsPlaybackUiState.Paused
         }
 
         private companion object {

@@ -11,10 +11,11 @@ import org.junit.jupiter.api.Test
 class DownloadStatusTest {
     @Test
     fun `enum contains all expected values`() {
-        assertEquals(7, DownloadStatus.entries.size)
+        assertEquals(8, DownloadStatus.entries.size)
         assertEquals(DownloadStatus.IDLE, DownloadStatus.valueOf("IDLE"))
         assertEquals(DownloadStatus.CHECKING, DownloadStatus.valueOf("CHECKING"))
         assertEquals(DownloadStatus.DOWNLOADING, DownloadStatus.valueOf("DOWNLOADING"))
+        assertEquals(DownloadStatus.FINALIZING, DownloadStatus.valueOf("FINALIZING"))
         assertEquals(DownloadStatus.WIFI_BLOCKED, DownloadStatus.valueOf("WIFI_BLOCKED"))
         assertEquals(DownloadStatus.READY, DownloadStatus.valueOf("READY"))
         assertEquals(DownloadStatus.PAUSED, DownloadStatus.valueOf("PAUSED"))

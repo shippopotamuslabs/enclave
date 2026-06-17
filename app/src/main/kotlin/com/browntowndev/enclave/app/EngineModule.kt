@@ -1,10 +1,16 @@
 package com.browntowndev.enclave.app
 
 import android.content.Context
+import com.browntowndev.enclave.domain.port.config.DistributionConfigurationPort
+import com.browntowndev.enclave.domain.port.inference.ChatTitleGeneratorPort
+import com.browntowndev.enclave.domain.port.inference.CompactionSummarizerPort
+import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.enclave.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.inference.CriminalIntentModerationPort
+import com.browntowndev.enclave.domain.port.inference.OnDeviceInferenceCancellationPort
 import com.browntowndev.enclave.domain.port.inference.PromptModerationPort
+import com.browntowndev.enclave.domain.port.inference.MonotonicToolActivationPort
+import com.browntowndev.enclave.domain.port.inference.ToolSearchEmbeddingCachePort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
 import com.browntowndev.enclave.domain.port.profile.ProfileAnalysisInferencePort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
@@ -12,9 +18,12 @@ import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.enclave.feature.inference.ConversationManager
 import com.browntowndev.enclave.feature.inference.ConversationManagerImpl
 import com.browntowndev.enclave.feature.inference.InferenceFactoryImpl
+import com.browntowndev.enclave.feature.inference.OnDeviceInferenceCancellationImpl
 import com.browntowndev.enclave.feature.inference.ProfileAnalysisInferenceAdapter
-import com.browntowndev.enclave.feature.inference.moderation.OnnxCriminalIntentClassifier
-import com.browntowndev.enclave.feature.inference.moderation.OnnxPromptModerationClassifier
+import com.browntowndev.enclave.feature.inference.moderation.NoOpPromptModerationPort
+import com.browntowndev.enclave.feature.inference.moderation.ResponseModerationClassifier
+import com.browntowndev.enclave.feature.inference.compaction.OnnxCompactionSummarizer
+import com.browntowndev.enclave.feature.inference.titlegen.OnnxChatTitleGenerator
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -41,15 +50,38 @@ abstract class EngineModule {
 
     @Binds
     @Singleton
-    abstract fun bindPromptModerationPort(impl: OnnxPromptModerationClassifier): PromptModerationPort
+    abstract fun bindChatTitleGeneratorPort(impl: OnnxChatTitleGenerator): ChatTitleGeneratorPort
 
     @Binds
     @Singleton
-    abstract fun bindCriminalIntentModerationPort(impl: OnnxCriminalIntentClassifier): CriminalIntentModerationPort
+    abstract fun bindCompactionSummarizerPort(impl: OnnxCompactionSummarizer): CompactionSummarizerPort
+
+    @Binds
+    @Singleton
+    abstract fun bindOnDeviceInferenceCancellationPort(
+        impl: OnDeviceInferenceCancellationImpl,
+    ): OnDeviceInferenceCancellationPort
+
+    @Binds
+    @Singleton
+    abstract fun bindDistributionConfiguration(impl: DistributionConfigurationImpl): DistributionConfigurationPort
 
     companion object {
         // Consolidated ConversationManager provider - resolve models lazily via ModelRegistry
         // Each InferenceService gets its own manager instance to isolate Engine lifecycle per model file
+        @Provides
+        @Singleton
+        fun providePromptModerationPort(
+            @ApplicationContext context: Context,
+            distributionConfig: DistributionConfigurationPort,
+            utilityModelFilePort: com.browntowndev.enclave.domain.port.repository.UtilityModelFilePort,
+        ): PromptModerationPort =
+            if (distributionConfig.isPlayStoreFlavor) {
+                ResponseModerationClassifier(context, utilityModelFilePort)
+            } else {
+                NoOpPromptModerationPort
+            }
+
         @Provides
         fun provideConversationManager(
             @ApplicationContext context: Context,
@@ -57,6 +89,9 @@ abstract class EngineModule {
             activeModelProvider: ActiveModelProviderPort,
             loggingPort: LoggingPort,
             toolExecutor: ToolExecutorPort,
+            embeddingEnginePort: EmbeddingEnginePort,
+            monotonicToolActivation: MonotonicToolActivationPort,
+            toolSearchEmbeddingCache: ToolSearchEmbeddingCachePort,
         ): ConversationManager =
             ConversationManagerImpl(
                 context = context,
@@ -64,6 +99,9 @@ abstract class EngineModule {
                 activeModelProvider = activeModelProvider,
                 loggingPort = loggingPort,
                 toolExecutor = toolExecutor,
+                embeddingEnginePort = embeddingEnginePort,
+                monotonicToolActivation = monotonicToolActivation,
+                toolSearchEmbeddingCache = toolSearchEmbeddingCache,
             )
     }
 }

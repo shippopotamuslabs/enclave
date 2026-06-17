@@ -89,15 +89,7 @@ class AgentEngineActionDriver {
 private fun FfiAgentMessage.toDomainMessage() =
     com.browntowndev.enclave.domain.model.inference.AgentLoopMessage(
         id = id,
-        role =
-            when (role) {
-                FfiAgentRole.USER -> com.browntowndev.enclave.domain.model.chat.Role.USER
-                FfiAgentRole.SYSTEM -> com.browntowndev.enclave.domain.model.chat.Role.SYSTEM
-                FfiAgentRole.ASSISTANT,
-                FfiAgentRole.TOOL,
-                FfiAgentRole.COMPACT_SUMMARY,
-                -> com.browntowndev.enclave.domain.model.chat.Role.ASSISTANT
-            },
+        role = role.toDomainRole(),
         content = content,
         metadataJson = metadataJson,
     )
@@ -105,10 +97,16 @@ private fun FfiAgentMessage.toDomainMessage() =
 private fun AgentException.toDomainMessage(): String =
     when (this) {
         is AgentException.Internal -> detail
-        is AgentException.GuardrailExceeded -> "Guardrail exceeded: $kind"
+        is AgentException.GuardrailExceeded ->
+            if (detail.isNullOrBlank()) {
+                "Guardrail exceeded: $kind"
+            } else {
+                "Guardrail exceeded: $kind: $detail"
+            }
         is AgentException.ModelStopped -> "Model stopped before completion: $reason"
         is AgentException.RepairFailed -> "Tool repair failed for '$name': $reason"
         is AgentException.CompactionFailed -> "Compaction failed (tier=$tier): $reason"
         is AgentException.InvalidTransition -> "Invalid state transition from '$from' to '$to'"
         is AgentException.ContextReferenceNotFound -> "Context reference not found: $referenceId"
+        is AgentException.ModelApiUnavailable -> "Model API unavailable: $detail (attempts=$attempts)"
     }

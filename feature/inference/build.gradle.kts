@@ -48,6 +48,7 @@ dependencies {
 
     // Inference native bindings
     implementation(project(":llama-android"))
+    implementation(project(":local-image-gen-android"))
 
     // LiteRT
     implementation(libs.litertlm.android)

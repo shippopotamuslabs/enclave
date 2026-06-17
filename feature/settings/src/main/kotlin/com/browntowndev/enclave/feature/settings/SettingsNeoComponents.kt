@@ -24,6 +24,13 @@ import com.browntowndev.enclave.core.ui.component.PersistentTooltip
 import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
 import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
 import com.browntowndev.enclave.core.ui.component.neo.neoSurface
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.State
+import androidx.compose.ui.graphics.Color
+import com.browntowndev.enclave.core.ui.component.shimmerEffect
 
 @Composable
 internal fun SettingsProviderCard(
@@ -127,6 +134,75 @@ internal fun SettingsAssignmentRow(
             onClick = onEditClick,
             icon = Icons.Default.Edit,
             contentDescription = "Change assignment",
+        )
+    }
+}
+
+@Composable
+internal fun SettingsAssignmentRowSkeleton(
+    progressState: State<Float>,
+    baseColor: Color,
+    highlightColor: Color,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .neoSurface(
+                backgroundColor = MaterialTheme.colorScheme.surface,
+                borderColor = neoBorderColor(),
+                withShadow = false,
+            )
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Box(
+                modifier = Modifier
+                    .width(80.dp)
+                    .height(16.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .shimmerEffect(
+                        progressState = progressState,
+                        baseColor = baseColor,
+                        highlightColor = highlightColor,
+                    )
+            )
+            Spacer(modifier = Modifier.size(6.dp))
+            Box(
+                modifier = Modifier
+                    .width(150.dp)
+                    .height(18.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .shimmerEffect(
+                        progressState = progressState,
+                        baseColor = baseColor,
+                        highlightColor = highlightColor,
+                    )
+            )
+            Spacer(modifier = Modifier.size(4.dp))
+            Box(
+                modifier = Modifier
+                    .width(110.dp)
+                    .height(12.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .shimmerEffect(
+                        progressState = progressState,
+                        baseColor = baseColor,
+                        highlightColor = highlightColor,
+                    )
+            )
+        }
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .shimmerEffect(
+                    progressState = progressState,
+                    baseColor = baseColor,
+                    highlightColor = highlightColor,
+                )
         )
     }
 }

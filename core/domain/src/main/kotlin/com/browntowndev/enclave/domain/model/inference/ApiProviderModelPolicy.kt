@@ -65,7 +65,8 @@ object ApiProviderModelPolicy {
             provider == ApiProvider.GOOGLE ||
             provider == ApiProvider.OPENROUTER ||
             provider == ApiProvider.XAI ||
-            provider == ApiProvider.FAL
+            provider == ApiProvider.FAL ||
+            provider == ApiProvider.ZAI
 
     fun isXaiMultiAgentModel(modelId: String): Boolean = modelId.matchesXaiMultiAgent()
 
@@ -85,7 +86,12 @@ object ApiProviderModelPolicy {
 
     fun isXaiChatReasoningContentModel(modelId: String): Boolean = modelId.matchesXaiChatReasoningContentModel()
 
-    fun isOpenAiReasoningModel(modelId: String): Boolean = modelId.startsWith("o1") || modelId.startsWith("o3")
+    fun isOpenAiReasoningModel(modelId: String): Boolean {
+        val normalized = modelId.substringAfterLast('/')
+        return normalized.startsWith("o1") ||
+            normalized.startsWith("o3") ||
+            normalized.endsWith("-nano")
+    }
 
     /**
      * Anthropic ephemeral prompt-cache breakpoints are only valid on documented Claude 3.5+ / 3.7 / 4 families.
@@ -101,46 +107,58 @@ object ApiProviderModelPolicy {
         modelId: String,
     ): ApiModelParameterSupport {
         val reasoningPolicy = reasoningPolicy(provider = provider, modelId = modelId)
-        if (provider == ApiProvider.ANTHROPIC) {
-            return ApiModelParameterSupport(
-                reasoningPolicy = reasoningPolicy,
-                supportsTemperature = false,
-                supportsTopP = false,
-                supportsTopK = false,
-                supportsMinP = false,
-                supportsFrequencyPenalty = false,
-                supportsPresencePenalty = false,
-                supportsReasoningEffort = true,
-            )
+        return when (provider) {
+            ApiProvider.ANTHROPIC ->
+                ApiModelParameterSupport(
+                    reasoningPolicy = reasoningPolicy,
+                    supportsTemperature = false,
+                    supportsTopP = false,
+                    supportsTopK = false,
+                    supportsMinP = false,
+                    supportsFrequencyPenalty = false,
+                    supportsPresencePenalty = false,
+                    supportsReasoningEffort = true,
+                )
+            // OpenAI Chat Completions path; limited sampling per https://docs.z.ai/guides/overview/concept-param.
+            ApiProvider.ZAI ->
+                ApiModelParameterSupport(
+                    reasoningPolicy = reasoningPolicy,
+                    supportsTemperature = true,
+                    supportsTopP = true,
+                    supportsTopK = false,
+                    supportsMinP = false,
+                    supportsFrequencyPenalty = false,
+                    supportsPresencePenalty = false,
+                    supportsReasoningEffort = true,
+                )
+            ApiProvider.GOOGLE ->
+                ApiModelParameterSupport(
+                    reasoningPolicy = reasoningPolicy,
+                    supportsTopK = true,
+                    supportsMinP = false,
+                    supportsFrequencyPenalty = false,
+                    supportsPresencePenalty = false,
+                    supportsReasoningEffort = false,
+                )
+            ApiProvider.OPENAI if isOpenAiReasoningModel(modelId) ->
+                ApiModelParameterSupport(
+                    reasoningPolicy = reasoningPolicy,
+                    supportsTemperature = false,
+                    supportsTopP = false,
+                    supportsMinP = false,
+                    supportsFrequencyPenalty = false,
+                    supportsPresencePenalty = false,
+                    supportsReasoningEffort = true,
+                )
+            ApiProvider.XAI -> xaiParameterSupport(reasoningPolicy = reasoningPolicy, modelId = modelId)
+            else -> ApiModelParameterSupport(reasoningPolicy = reasoningPolicy)
         }
+    }
 
-        if (provider == ApiProvider.GOOGLE) {
-            return ApiModelParameterSupport(
-                reasoningPolicy = reasoningPolicy,
-                supportsTopK = true,
-                supportsMinP = false,
-                supportsFrequencyPenalty = false,
-                supportsPresencePenalty = false,
-                supportsReasoningEffort = false,
-            )
-        }
-
-        if (provider == ApiProvider.OPENAI && isOpenAiReasoningModel(modelId)) {
-            return ApiModelParameterSupport(
-                reasoningPolicy = reasoningPolicy,
-                supportsTemperature = false,
-                supportsTopP = false,
-                supportsMinP = false,
-                supportsFrequencyPenalty = false,
-                supportsPresencePenalty = false,
-                supportsReasoningEffort = true,
-            )
-        }
-
-        if (provider != ApiProvider.XAI) {
-            return ApiModelParameterSupport(reasoningPolicy = reasoningPolicy)
-        }
-
+    private fun xaiParameterSupport(
+        reasoningPolicy: ApiReasoningPolicy,
+        modelId: String,
+    ): ApiModelParameterSupport {
         // xAI only accepts user-controlled reasoning effort on the grok-3-mini, grok-4.3, and multi-agent families.
         val reasoningEffortSupported =
             when {

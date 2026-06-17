@@ -315,6 +315,8 @@ class FakeApiModelRepository : ApiModelRepositoryPort {
 
     override suspend fun getAllCredentials(): List<ApiCredentials> = _credentials.value
 
+    override suspend fun getAllCredentialAliases(): Set<String> = _credentials.value.map { it.credentialAlias }.toSet()
+
     override suspend fun getCredentialsById(id: ApiCredentialsId): ApiCredentials? = _credentials.value.find { it.id == id }
 
     override suspend fun findMatchingCredentials(
@@ -415,8 +417,17 @@ class FakeDefaultModelRepository : DefaultModelRepositoryPort {
         apiConfigId: ApiModelConfigurationId?,
         ttsProviderId: TtsProviderId?,
         mediaProviderId: MediaProviderId?,
+        liveVoiceProviderId: com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId?,
     ) {
-        val assignment = DefaultModelAssignment(modelType, localConfigId, apiConfigId, ttsProviderId, mediaProviderId)
+        val assignment =
+            DefaultModelAssignment(
+                modelType,
+                localConfigId,
+                apiConfigId,
+                ttsProviderId,
+                mediaProviderId,
+                liveVoiceProviderId,
+            )
         _defaults.value = _defaults.value.filter { it.modelType != modelType } + assignment
     }
 

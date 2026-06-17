@@ -5,6 +5,31 @@
 #include <string_view>
 #include <algorithm>
 
+inline bool reached_reasoning_budget(int current_token_count, int reasoning_budget) {
+    return reasoning_budget > 0 && current_token_count + 1 >= reasoning_budget;
+}
+
+inline std::string_view trailing_thinking_open_tag(std::string_view prompt) {
+    while (!prompt.empty()) {
+        const char c = prompt.back();
+        if (c != ' ' && c != '\n' && c != '\r' && c != '\t') {
+            break;
+        }
+        prompt.remove_suffix(1);
+    }
+
+    constexpr std::string_view xml_tag = "<think>";
+    constexpr std::string_view bracket_tag = "[THINK]";
+    if (prompt.size() >= xml_tag.size() && prompt.substr(prompt.size() - xml_tag.size()) == xml_tag) {
+        return xml_tag;
+    }
+    if (prompt.size() >= bracket_tag.size() &&
+        prompt.substr(prompt.size() - bracket_tag.size()) == bracket_tag) {
+        return bracket_tag;
+    }
+    return "";
+}
+
 /**
  * TokenProcessor handles the low-level byte manipulation of tokens coming from llama.cpp.
  * It ensures that only complete UTF-8 sequences are sent to the JNI layer, handles

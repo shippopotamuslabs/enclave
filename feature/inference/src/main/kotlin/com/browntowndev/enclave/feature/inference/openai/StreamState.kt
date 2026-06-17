@@ -12,6 +12,7 @@ import com.openai.models.responses.Response
  */
 data class StreamState(
     var emittedAny: Boolean = false,
+    var receivedTerminalEvent: Boolean = false,
     var outputTextDeltaCount: Int = 0,
     var reasoningTextDeltaCount: Int = 0,
     var reasoningSummaryDeltaCount: Int = 0,
@@ -34,6 +35,7 @@ data class StreamState(
     val reasoningTokens: Int? get() = usageAccumulator.reasoningTokens
     val cacheReadInputTokens: Int? get() = usageAccumulator.cacheReadInputTokens
     val cacheWriteInputTokens: Int? get() = usageAccumulator.cacheWriteInputTokens
+    val costUsd: java.math.BigDecimal? get() = usageAccumulator.costUsd
 
     fun applyResponseUsage(response: Response) {
         accumulateResponseStreamUsage(response, usageAccumulator)

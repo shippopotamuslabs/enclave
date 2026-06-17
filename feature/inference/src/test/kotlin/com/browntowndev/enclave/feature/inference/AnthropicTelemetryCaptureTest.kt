@@ -26,6 +26,7 @@ class AnthropicTelemetryCaptureTest {
                     messageId = row.messageId.value,
                     chatId = row.chatId.value,
                     sequenceIndex = row.sequenceIndex,
+                    providerLabel = "Anthropic",
                     modelId = row.modelId,
                     modelLabel = row.modelLabel,
                     requestStartedAtMs = row.requestStartedAtMs,

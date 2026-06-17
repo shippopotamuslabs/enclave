@@ -3,6 +3,7 @@ package com.browntowndev.enclave.core.data.remote.firestore
 import com.browntowndev.enclave.core.data.local.ApiCredentialsDao
 import com.browntowndev.enclave.core.data.local.ApiModelConfigurationsDao
 import com.browntowndev.enclave.core.data.local.DefaultModelsDao
+import com.browntowndev.enclave.core.data.local.LiveVoiceProviderDao
 import com.browntowndev.enclave.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.enclave.core.data.local.LocalModelsDao
 import com.browntowndev.enclave.core.data.local.MediaProviderDao
@@ -18,6 +19,7 @@ class ConfigSyncDaos
     constructor(
         val memoriesDao: MemoriesDao,
         val ttsProviderDao: TtsProviderDao,
+        val liveVoiceProviderDao: LiveVoiceProviderDao,
         val mediaProviderDao: MediaProviderDao,
         val apiModelConfigurationsDao: ApiModelConfigurationsDao,
         val localModelsDao: LocalModelsDao,

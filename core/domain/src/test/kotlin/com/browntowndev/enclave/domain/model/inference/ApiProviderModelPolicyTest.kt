@@ -20,13 +20,14 @@ class ApiProviderModelPolicyTest {
     )
 
     @Test
-    fun `supports model discovery for openai anthropic google openrouter xai and fal`() {
+    fun `supports model discovery for openai anthropic google openrouter xai fal and zai`() {
         assertTrue(ApiProviderModelPolicy.supportsModelDiscovery(ApiProvider.OPENAI))
         assertTrue(ApiProviderModelPolicy.supportsModelDiscovery(ApiProvider.ANTHROPIC))
         assertTrue(ApiProviderModelPolicy.supportsModelDiscovery(ApiProvider.GOOGLE))
         assertTrue(ApiProviderModelPolicy.supportsModelDiscovery(ApiProvider.OPENROUTER))
         assertTrue(ApiProviderModelPolicy.supportsModelDiscovery(ApiProvider.XAI))
         assertTrue(ApiProviderModelPolicy.supportsModelDiscovery(ApiProvider.FAL))
+        assertTrue(ApiProviderModelPolicy.supportsModelDiscovery(ApiProvider.ZAI))
     }
 
     @Test
@@ -39,11 +40,12 @@ class ApiProviderModelPolicyTest {
     }
 
     @Test
-    fun `provider defaults include hosted endpoints for google openrouter xai and fal`() {
+    fun `provider defaults include hosted endpoints for google openrouter xai fal and zai`() {
         assertEquals("https://generativelanguage.googleapis.com", ApiProvider.GOOGLE.defaultBaseUrl())
         assertEquals("https://openrouter.ai/api/v1", ApiProvider.OPENROUTER.defaultBaseUrl())
         assertEquals("https://api.x.ai/v1", ApiProvider.XAI.defaultBaseUrl())
         assertEquals("https://queue.fal.run", ApiProvider.FAL.defaultBaseUrl())
+        assertEquals("https://api.z.ai/api/paas/v4", ApiProvider.ZAI.defaultBaseUrl())
         assertEquals(null, ApiProvider.OPENAI.defaultBaseUrl())
         assertEquals(null, ApiProvider.ANTHROPIC.defaultBaseUrl())
     }
@@ -64,6 +66,10 @@ class ApiProviderModelPolicyTest {
         assertFalse(ApiProviderModelPolicy.supportsAnthropicPromptCaching("claude-2.1"))
         assertFalse(ApiProviderModelPolicy.supportsAnthropicPromptCaching("claude-instant-1.2"))
         assertFalse(ApiProviderModelPolicy.supportsAnthropicPromptCaching("gpt-4o"))
+        // Z.ai GLM models use implicit provider caching via OpenAI usage fields, not explicit
+        // Anthropic cache_control breakpoints — so they must return false here.
+        assertFalse(ApiProviderModelPolicy.supportsAnthropicPromptCaching("glm-4.6"))
+        assertFalse(ApiProviderModelPolicy.supportsAnthropicPromptCaching("glm-4.5-air"))
     }
 
     @Test
@@ -78,6 +84,28 @@ class ApiProviderModelPolicyTest {
         assertTrue(support.supportsMaxTokens)
         assertFalse(support.supportsTemperature)
         assertFalse(support.supportsTopP)
+        assertFalse(support.supportsTopK)
+        assertFalse(support.supportsMinP)
+        assertFalse(support.supportsFrequencyPenalty)
+        assertFalse(support.supportsPresencePenalty)
+    }
+
+    @Test
+    fun `zai exposes temperature and top_p but not other openai-style sampling controls`() {
+        // Z.ai speaks the OpenAI Chat Completions protocol with OpenAI-style sampling:
+        // temperature and top_p are supported core parameters (GLM-4.6 defaults temp=1.0, top_p=0.95).
+        // It does NOT expose top_k, min_p, frequency_penalty, or presence_penalty.
+        // See https://docs.z.ai/guides/overview/concept-param.
+        val support =
+            ApiProviderModelPolicy.parameterSupport(
+                provider = ApiProvider.ZAI,
+                modelId = "glm-4.6",
+            )
+
+        assertTrue(support.supportsReasoningEffort)
+        assertTrue(support.supportsMaxTokens)
+        assertTrue(support.supportsTemperature)
+        assertTrue(support.supportsTopP)
         assertFalse(support.supportsTopK)
         assertFalse(support.supportsMinP)
         assertFalse(support.supportsFrequencyPenalty)
@@ -119,6 +147,21 @@ class ApiProviderModelPolicyTest {
             policy.supportedEfforts,
         )
         assertEquals(ApiReasoningEffort.LOW, policy.defaultEffort)
+    }
+
+    @Test
+    fun `openai nano models are treated as reasoning models for sampling restrictions`() {
+        assertTrue(ApiProviderModelPolicy.isOpenAiReasoningModel("gpt-5.4-nano"))
+        assertTrue(ApiProviderModelPolicy.isOpenAiReasoningModel("openai/gpt-5.4-nano"))
+
+        val support =
+            ApiProviderModelPolicy.parameterSupport(
+                provider = ApiProvider.OPENAI,
+                modelId = "gpt-5.4-nano",
+            )
+
+        assertFalse(support.supportsTemperature)
+        assertFalse(support.supportsTopP)
     }
 
     @Test

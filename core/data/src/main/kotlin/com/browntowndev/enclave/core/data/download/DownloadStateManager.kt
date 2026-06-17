@@ -43,6 +43,7 @@ class DownloadStateManager(
                 currentSpeedMBs = update.currentSpeedMBs ?: it.currentSpeedMBs,
                 waitingForUnmeteredNetwork = update.waitingForUnmeteredNetwork ?: it.waitingForUnmeteredNetwork,
                 errorMessage = update.errorMessage,
+                postProcessProgress = update.postProcessProgress ?: it.postProcessProgress,
             )
         }
     }

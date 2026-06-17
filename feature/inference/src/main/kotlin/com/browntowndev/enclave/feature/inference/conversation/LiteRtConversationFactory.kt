@@ -48,10 +48,12 @@ internal class LiteRtConversationFactory(
         try {
             val speculativeDecodingEnabled = supportsSpeculativeDecoding(modelPath)
             ExperimentalFlags.enableSpeculativeDecoding = speculativeDecodingEnabled
+            ExperimentalFlags.enableBenchmark = true
             Log.d(
                 TAG,
                 "Initializing LiteRT text engine with GPU backend, contextWindow=$contextWindow " +
-                    "speculativeDecodingEnabled=$speculativeDecodingEnabled memoryBeforeInit=${MemoryDiagnostics.snapshot()}",
+                    "speculativeDecodingEnabled=$speculativeDecodingEnabled benchmarkEnabled=true " +
+                    "memoryBeforeInit=${MemoryDiagnostics.snapshot()}",
             )
 
             candidate =
@@ -84,6 +86,7 @@ internal class LiteRtConversationFactory(
             throw IllegalStateException("Failed to initialize LiteRT text engine with GPU backend", t)
         } finally {
             ExperimentalFlags.enableSpeculativeDecoding = false
+            ExperimentalFlags.enableBenchmark = false
         }
     }
 

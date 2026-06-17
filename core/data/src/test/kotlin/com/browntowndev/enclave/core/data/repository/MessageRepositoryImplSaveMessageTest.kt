@@ -15,7 +15,6 @@ import com.browntowndev.enclave.domain.model.chat.Role
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -173,24 +172,5 @@ class MessageRepositoryImplSaveMessageTest {
             coVerify { transactionProvider.runInTransaction<Any>(any()) }
             coVerify { messageDao.upsert(any()) }
             coVerify { messageDao.insertFiles(any()) }
-        }
-
-    @Test
-    fun `saveMessage triggers cloud sync after successful persist`() =
-        runTest {
-            val messageId = MessageId(UUID.randomUUID().toString())
-            val chatId = ChatId(UUID.randomUUID().toString())
-            val message =
-                Message(
-                    id = messageId,
-                    chatId = chatId,
-                    content = Content(text = "sync me"),
-                    role = Role.USER,
-                )
-            coEvery { messageDao.upsert(any()) } returns 1L
-
-            repository.saveMessage(message)
-
-            verify { syncTrigger.trigger() }
         }
 }

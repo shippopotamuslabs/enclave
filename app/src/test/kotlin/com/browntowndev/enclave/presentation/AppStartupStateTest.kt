@@ -77,14 +77,14 @@ class AppStartupStateTest {
     }
 
     @Test
-    fun `initialRoute should be CHAT when no initializationError and modelsResult is null`() {
+    fun `initialRoute should be MODEL_DOWNLOAD when modelsResult is null and scan is pending`() {
         val readyState =
             AppStartupState.Ready(
                 authState = VaultAuthUiState.Unauthenticated,
                 modelsResult = null,
             )
 
-        assertEquals(Routes.CHAT, readyState.initialRoute)
+        assertEquals(Routes.MODEL_DOWNLOAD, readyState.initialRoute)
     }
 
     @Test

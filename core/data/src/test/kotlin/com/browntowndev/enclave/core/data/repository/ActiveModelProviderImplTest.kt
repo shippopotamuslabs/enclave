@@ -8,6 +8,7 @@ import com.browntowndev.enclave.core.data.local.LocalModelConfigurationEntity
 import com.browntowndev.enclave.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.enclave.core.data.local.LocalModelEntity
 import com.browntowndev.enclave.core.data.local.LocalModelsDao
+import com.browntowndev.enclave.domain.model.chat.ChatModelOverride
 import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
@@ -19,22 +20,24 @@ import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import java.nio.file.Files
 import java.nio.file.Paths
 
 class ActiveModelProviderImplTest {
     private val defaultModelRepository = mockk<DefaultModelRepositoryPort>()
-    private val localModelsDao = mockk<LocalModelsDao>()
-    private val localConfigsDao = mockk<LocalModelConfigurationsDao>()
-    private val apiCredentialsDao = mockk<ApiCredentialsDao>()
-    private val apiConfigsDao = mockk<ApiModelConfigurationsDao>()
+    private val localModelsDao = mockk<LocalModelsDao>(relaxed = true)
+    private val localConfigsDao = mockk<LocalModelConfigurationsDao>(relaxed = true)
+    private val apiCredentialsDao = mockk<ApiCredentialsDao>(relaxed = true)
+    private val apiConfigsDao = mockk<ApiModelConfigurationsDao>(relaxed = true)
     private val localEncryption = FakeLocalDataEncryptionService()
 
     private lateinit var repository: ActiveModelProviderImpl
@@ -67,6 +70,7 @@ class ActiveModelProviderImplTest {
                     id = configId,
                     localModelId = modelId,
                     displayName = localEncryption.encryptString("Fast"),
+                    reasoningBudget = 1536,
                 )
             coEvery { localModelsDao.getById(modelId) } returns
                 LocalModelEntity(
@@ -84,6 +88,7 @@ class ActiveModelProviderImplTest {
 
             assertEquals("Gemma 4 E4B", result?.name)
             assertEquals("gemma-4-E4B-it.litertlm", result?.modelId)
+            assertEquals(1536, result?.reasoningBudget)
         }
 
     @Test
@@ -195,5 +200,55 @@ class ActiveModelProviderImplTest {
 
             assertEquals("Gemma 4 E4B", result?.name)
             assertNull(result?.systemPrompt)
+        }
+
+    @Test
+    @DisplayName("S04 — getActiveConfigurationByOverride resolves local config by explicit id")
+    fun s04_getActiveConfigurationByOverrideLocal() =
+        runTest {
+            val override =
+                ChatModelOverride.Local(
+                    configId = LocalModelConfigurationId("local-qwen-preset"),
+                    displayName = "Qwen 3 8B Fast",
+                )
+
+            val result = repository.getActiveConfigurationByOverride(override)
+
+            // TDD Red: should return config with name "Qwen 3 8B Fast"
+            assertEquals("Qwen 3 8B Fast", result?.name)
+        }
+
+    @Test
+    @DisplayName("S05 — getActiveConfigurationByOverride resolves api config by explicit id")
+    fun s05_getActiveConfigurationByOverrideApi() =
+        runTest {
+            val override =
+                ChatModelOverride.Api(
+                    configId = ApiModelConfigurationId("api-grok-beta"),
+                    displayName = "Grok Beta",
+                )
+
+            val result = repository.getActiveConfigurationByOverride(override)
+
+            // TDD Red: should return config with name "Grok Beta"
+            assertEquals("Grok Beta", result?.name)
+        }
+
+    @Test
+    @DisplayName("S06 — getActiveConfigurationByOverride does not read slot assignment")
+    fun s06_getActiveConfigurationByOverrideDoesNotReadSlot() =
+        runTest {
+            val override =
+                ChatModelOverride.Api(
+                    configId = ApiModelConfigurationId("api-grok-beta"),
+                    displayName = "Grok Beta",
+                )
+
+            // Should NOT call defaultModelRepository.getDefault (slot lookup)
+            val result = repository.getActiveConfigurationByOverride(override)
+
+            // TDD Red: should resolve from explicit config id, not FAST slot
+            assertEquals("Grok Beta", result?.name)
+            coVerify(exactly = 0) { defaultModelRepository.getDefault(any()) }
         }
 }

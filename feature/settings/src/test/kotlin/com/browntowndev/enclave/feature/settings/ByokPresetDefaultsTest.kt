@@ -1,0 +1,77 @@
+package com.browntowndev.enclave.feature.settings
+
+import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.enclave.domain.model.inference.ApiProvider
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Test
+
+class ByokPresetDefaultsTest {
+    @Test
+    fun `freshApiPresetDraft uses ZAI recommended temperature`() {
+        val draft = freshApiPresetDraft(ApiProvider.ZAI)
+
+        assertEquals(1.0, draft.temperature)
+        assertEquals(true, draft.isFreshPreset)
+    }
+
+    @Test
+    fun `applyProviderPresetDefaultsIfFresh updates unsaved ZAI preset from generic default`() {
+        val normalized =
+            ApiModelConfigUi(isFreshPreset = true)
+                .applyProviderPresetDefaultsIfFresh(ApiProvider.ZAI)
+
+        assertEquals(1.0, normalized.temperature)
+        assertFalse(normalized.isFreshPreset)
+    }
+
+    @Test
+    fun `applyProviderPresetDefaultsIfFresh clears fresh flag for auto created default preset`() {
+        val normalized =
+            ApiModelConfigUi(
+                id = ApiModelConfigurationId("preset-1"),
+                displayName = "Default Preset",
+                modelId = "",
+                isFreshPreset = true,
+            ).applyProviderPresetDefaultsIfFresh(ApiProvider.ZAI)
+
+        assertEquals(1.0, normalized.temperature)
+        assertFalse(normalized.isFreshPreset)
+    }
+
+    @Test
+    fun `applyProviderPresetDefaultsIfFresh preserves customized temperature`() {
+        val normalized =
+            ApiModelConfigUi(
+                temperature = 0.5,
+                isFreshPreset = true,
+            ).applyProviderPresetDefaultsIfFresh(ApiProvider.ZAI)
+
+        assertEquals(0.5, normalized.temperature)
+        assertFalse(normalized.isFreshPreset)
+    }
+
+    @Test
+    fun `applyProviderPresetDefaultsIfFresh preserves user chosen generic temperature on ZAI`() {
+        val normalized =
+            ApiModelConfigUi(
+                temperature = 0.7,
+                isFreshPreset = false,
+            ).applyProviderPresetDefaultsIfFresh(ApiProvider.ZAI)
+
+        assertEquals(0.7, normalized.temperature)
+    }
+
+    @Test
+    fun `applyProviderPresetDefaultsIfFresh preserves saved preset with model selected`() {
+        val normalized =
+            ApiModelConfigUi(
+                id = ApiModelConfigurationId("preset-1"),
+                displayName = "Creative",
+                modelId = "glm-4.6",
+                temperature = 0.7,
+            ).applyProviderPresetDefaultsIfFresh(ApiProvider.ZAI)
+
+        assertEquals(0.7, normalized.temperature)
+    }
+}

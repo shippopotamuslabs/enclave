@@ -9,18 +9,25 @@ import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncAdapterR
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncContext
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncDaos
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncDependencies
+import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncEntityReconciler
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncEventApplier
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncEventDispatcher
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncEventFeedClient
+import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncFeedCallableClient
+import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncFeedIntegrityRecovery
+import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncFeedMetaClient
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncHydrationRecovery
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncStateStore
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreVaultClient
 import com.browntowndev.enclave.core.data.remote.firestore.StudioSyncDaos
+import com.browntowndev.enclave.core.data.remote.firestore.SyncFeedSequenceGapException
+import com.browntowndev.enclave.core.data.remote.firestore.handlers.SearchToolSettingsSyncHandler
 import com.browntowndev.enclave.core.data.repository.SettingsRepositoryImpl
 import com.browntowndev.enclave.core.data.security.ApiKeyManager
 import com.browntowndev.enclave.core.data.security.LocalDataEncryptionService
 import com.browntowndev.enclave.core.data.security.SensitivePersistenceSelfHealer
 import com.browntowndev.enclave.core.data.security.StaticSensitiveFieldCatalog
+import com.browntowndev.enclave.core.data.sync.CloudSyncTrigger
 import com.browntowndev.enclave.core.data.sync.EmbeddingRegenerationCoordinator
 import com.browntowndev.enclave.core.data.sync.SearchToolSettingsSyncQueue
 import com.browntowndev.enclave.domain.model.chat.Chat
@@ -32,6 +39,7 @@ import com.browntowndev.enclave.domain.port.repository.CloudSyncPort
 import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
 import com.browntowndev.enclave.domain.qualifier.ApplicationScope
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.functions.FirebaseFunctions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -53,6 +61,7 @@ class FirestoreDataSource
     constructor(
         dependencies: FirestoreSyncDependenciesFacade,
         @param:ApplicationScope private val externalScope: CoroutineScope,
+        private val syncTrigger: CloudSyncTrigger,
     ) : CloudSyncPort {
         private val syncDependencies = dependencies.toSyncDependencies()
         private val syncContext = syncDependencies.toContext()
@@ -61,6 +70,7 @@ class FirestoreDataSource
         private val syncEventApplier = dependencies.syncEventApplier
         private val syncStateStore = dependencies.syncStateStore
         private val documentCache = dependencies.documentCache
+        private val feedIntegrityRecovery = dependencies.feedIntegrityRecovery
         private val syncMutex = Mutex()
         private val eventApplyMutex = Mutex()
         private val listenerCoordinator =
@@ -72,6 +82,7 @@ class FirestoreDataSource
                 eventApplyMutex = eventApplyMutex,
                 externalScope = externalScope,
                 cache = documentCache,
+                feedIntegrityRecovery = feedIntegrityRecovery,
             )
         private val pendingSyncEngine =
             FirestorePendingSyncEngine(
@@ -108,8 +119,16 @@ class FirestoreDataSource
                 if (!syncContext.cryptoManager.hasCachedKey()) {
                     throw IllegalStateException("Vault locked")
                 }
-                eventApplyMutex.withLock {
-                    hydrationRecovery.resetStaleCursorIfLocalStoreEmpty(userId)
+                replayRemoteChangesPage(userId)
+            }
+
+        private suspend fun replayRemoteChangesPage(userId: String): CloudSyncEventReplayResult =
+            eventApplyMutex.withLock {
+                hydrationRecovery.resetStaleCursorIfLocalStoreEmpty(userId)
+                feedIntegrityRecovery.ensureFeedBootstrapped(userId)
+                feedIntegrityRecovery.recoverIfFeedEpochChanged(userId)
+                var retriedAfterRecovery = false
+                while (true) {
                     val lastApplied = syncStateStore.lastAppliedSequence(userId)
                     val page = syncEventFeedClient.fetchNextPage(userId, lastApplied)
                     try {
@@ -117,13 +136,21 @@ class FirestoreDataSource
                         var applied = 0
                         var newLast = lastApplied
                         for (event in page) {
-                            val result = syncEventApplier.apply(userId, event)
-                            applied += result.appliedCount
-                            if (result.lastAppliedSequence > newLast) newLast = result.lastAppliedSequence
+                            try {
+                                val result = syncEventApplier.apply(userId, event)
+                                applied += result.appliedCount
+                                if (result.lastAppliedSequence > newLast) newLast = result.lastAppliedSequence
+                            } catch (gap: SyncFeedSequenceGapException) {
+                                if (retriedAfterRecovery) throw gap
+                                feedIntegrityRecovery.recoverFromSequenceGap(userId, gap.expectedSequence)
+                                retriedAfterRecovery = true
+                                applied = 0
+                                break
+                            }
                         }
-                        // Persist the high-water mark so the next page query uses the correct
-                        // sequence lower bound even when the dispatcher (e.g., a test double)
-                        // does not update the state store itself.
+                        if (retriedAfterRecovery && applied == 0 && page.isNotEmpty()) {
+                            continue
+                        }
                         if (newLast > lastApplied) {
                             syncStateStore.setLastAppliedSequence(userId, newLast)
                         }
@@ -132,7 +159,7 @@ class FirestoreDataSource
                             "syncRemoteChangesFromCloud: replay from sequence > $lastApplied, " +
                                 "fetched=${page.size}, applied=$applied, lastApplied=$newLast",
                         )
-                        CloudSyncEventReplayResult(
+                        return@withLock CloudSyncEventReplayResult(
                             eventsApplied = applied,
                             lastAppliedSequence = newLast,
                             hasMore = page.size >= PAGE_SIZE_THRESHOLD,
@@ -141,12 +168,15 @@ class FirestoreDataSource
                         documentCache.clear()
                     }
                 }
+                error("replayRemoteChangesPage exhausted without returning a page result")
             }
 
         override suspend fun getRemainingEventsCount(): Result<Long> =
             runCatching {
                 val userId = syncContext.userIdProvider() ?: throw IllegalStateException("Not signed in")
-                hydrationRecovery.resetStaleCursorIfLocalStoreEmpty(userId)
+                eventApplyMutex.withLock {
+                    hydrationRecovery.resetStaleCursorIfLocalStoreEmpty(userId)
+                }
                 val lastApplied = syncStateStore.lastAppliedSequence(userId)
                 val countQuery =
                     syncContext.firestore
@@ -186,6 +216,31 @@ class FirestoreDataSource
                 }
                 pendingSyncEngine.syncPendingChanges(userId)
             }
+
+        override suspend fun bootstrapFeatureSettings(): Result<Unit> =
+            runCatching {
+                val userId = syncContext.userIdProvider() ?: throw IllegalStateException("Not signed in")
+                if (!syncContext.cryptoManager.hasCachedKey()) {
+                    throw IllegalStateException("Vault locked")
+                }
+                val handler =
+                    adapterRegistry.adapters
+                        .filterIsInstance<SearchToolSettingsSyncHandler>()
+                        .singleOrNull()
+                        ?: return@runCatching
+                val snapshot =
+                    syncContext.firestore
+                        .document("users/$userId/search_tool_settings/main")
+                        .get()
+                        .await()
+                if (!snapshot.exists()) return@runCatching
+                val record = handler.fromFirestore(snapshot) ?: return@runCatching
+                handler.upsertLocal(record, snapshot, overwrite = false)
+            }
+
+        override fun triggerSync() {
+            syncTrigger.trigger()
+        }
 
         override suspend fun updateVaultSalt(salt: String): Result<Unit> = vaultClient.updateVaultSalt(salt)
 
@@ -251,6 +306,7 @@ class FirestoreSyncDependenciesFacade
         internal val syncEventApplier: FirestoreSyncEventDispatcher,
         internal val syncStateStore: FirestoreSyncStateStore,
         internal val documentCache: com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncDocumentCache,
+        internal val feedIntegrityRecovery: FirestoreSyncFeedIntegrityRecovery,
     ) {
         @Inject
         @Suppress("LongParameterList")
@@ -270,6 +326,8 @@ class FirestoreSyncDependenciesFacade
             preferencesDataStore: androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences>,
             searchToolSettingsSyncQueue: SearchToolSettingsSyncQueue,
             settingsRepository: SettingsRepositoryImpl,
+            cloudSyncTrigger: com.browntowndev.enclave.core.data.sync.CloudSyncTrigger,
+            firebaseFunctions: FirebaseFunctions,
         ) : this(
             firestore = firestore,
             chatSyncDaos = chatSyncDaos,
@@ -287,6 +345,8 @@ class FirestoreSyncDependenciesFacade
             sharedStateStore = FirestoreSyncStateStore(preferencesDataStore),
             searchToolSettingsSyncQueue = searchToolSettingsSyncQueue,
             settingsRepository = settingsRepository,
+            mediaDownloadTrigger = cloudSyncTrigger::triggerMediaDownload,
+            firebaseFunctions = firebaseFunctions,
         )
 
         private constructor(
@@ -306,9 +366,11 @@ class FirestoreSyncDependenciesFacade
             sharedStateStore: FirestoreSyncStateStore,
             searchToolSettingsSyncQueue: SearchToolSettingsSyncQueue,
             settingsRepository: SettingsRepositoryImpl,
+            mediaDownloadTrigger: () -> Unit = {},
             cache: com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncDocumentCache =
                 com.browntowndev.enclave.core.data.remote.firestore
                     .FirestoreSyncDocumentCache(firestore),
+            firebaseFunctions: FirebaseFunctions,
         ) : this(
             firestore = firestore,
             chatSyncDaos = chatSyncDaos,
@@ -343,9 +405,30 @@ class FirestoreSyncDependenciesFacade
                     searchToolSettingsSyncQueue = searchToolSettingsSyncQueue,
                     settingsRepository = settingsRepository,
                     cache = cache,
+                    mediaDownloadTrigger = mediaDownloadTrigger,
                 ),
             syncStateStore = sharedStateStore,
             documentCache = cache,
+            feedIntegrityRecovery =
+                buildProductionIntegrityRecovery(
+                    firestore = firestore,
+                    firebaseFunctions = firebaseFunctions,
+                    chatSyncDaos = chatSyncDaos,
+                    configSyncDaos = configSyncDaos,
+                    studioSyncDaos = studioSyncDaos,
+                    localEncryption = localEncryption,
+                    cryptoManager = cryptoManager,
+                    loggingPort = loggingPort,
+                    apiKeyManager = apiKeyManager,
+                    embeddingCoordinator = embeddingCoordinator,
+                    userIdProvider = userIdProvider,
+                    database = database,
+                    stateStore = sharedStateStore,
+                    searchToolSettingsSyncQueue = searchToolSettingsSyncQueue,
+                    settingsRepository = settingsRepository,
+                    cache = cache,
+                    mediaDownloadTrigger = mediaDownloadTrigger,
+                ),
         )
 
         internal fun toSyncDependencies(): FirestoreSyncDependencies =
@@ -402,6 +485,7 @@ class FirestoreSyncDependenciesFacade
                 searchToolSettingsSyncQueue: SearchToolSettingsSyncQueue,
                 settingsRepository: SettingsRepositoryImpl,
                 cache: com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncDocumentCache,
+                mediaDownloadTrigger: () -> Unit,
             ): FirestoreSyncEventApplier {
                 val healer = SensitivePersistenceSelfHealer(localEncryption, loggingPort)
                 val repairer =
@@ -441,6 +525,7 @@ class FirestoreSyncDependenciesFacade
                                 com.browntowndev.enclave.core.data.remote.firestore
                                     .FirestoreSyncPendingSyncLookup(database),
                             cache = cache,
+                            mediaDownloadTrigger = mediaDownloadTrigger,
                         )
                 val sourceDocStore =
                     com.browntowndev.enclave.core.data.remote.firestore
@@ -449,6 +534,88 @@ class FirestoreSyncDependenciesFacade
                     sourceDocuments = sourceDocStore,
                     localStore = localStore,
                     stateStore = stateStore,
+                )
+            }
+
+            @Suppress("LongParameterList")
+            private fun buildProductionIntegrityRecovery(
+                firestore: FirebaseFirestore,
+                firebaseFunctions: FirebaseFunctions,
+                chatSyncDaos: ChatSyncDaos,
+                configSyncDaos: ConfigSyncDaos,
+                studioSyncDaos: StudioSyncDaos,
+                localEncryption: LocalDataEncryptionService,
+                cryptoManager: CryptoManagerPort,
+                loggingPort: LoggingPort,
+                apiKeyManager: ApiKeyManager,
+                embeddingCoordinator: EmbeddingRegenerationCoordinator,
+                userIdProvider: () -> String?,
+                database: com.browntowndev.enclave.core.data.local.EnclaveDatabase,
+                stateStore: FirestoreSyncStateStore,
+                searchToolSettingsSyncQueue: SearchToolSettingsSyncQueue,
+                settingsRepository: SettingsRepositoryImpl,
+                cache: com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncDocumentCache,
+                mediaDownloadTrigger: () -> Unit,
+            ): FirestoreSyncFeedIntegrityRecovery {
+                val healer = SensitivePersistenceSelfHealer(localEncryption, loggingPort)
+                val repairer =
+                    FirestoreSensitiveFieldRepairer(
+                        StaticSensitiveFieldCatalog(),
+                        healer,
+                    )
+                val syncContext =
+                    FirestoreSyncDependencies(
+                        firestore = firestore,
+                        daos = FirestoreSyncDaos.from(chatSyncDaos, configSyncDaos, studioSyncDaos),
+                        localEncryption = localEncryption,
+                        sensitiveSelfHealer = healer,
+                        firestoreSensitiveFieldRepairer = repairer,
+                        cryptoManager = cryptoManager,
+                        loggingPort = loggingPort,
+                        apiKeyManager = apiKeyManager,
+                        embeddingCoordinator = embeddingCoordinator,
+                        userIdProvider = userIdProvider,
+                        searchToolSettingsSyncQueue = searchToolSettingsSyncQueue,
+                        settingsRepository = settingsRepository,
+                    ).toContext()
+                val adapterLookup =
+                    FirestoreSyncAdapterRegistry(syncContext)
+                        .adapters
+                        .associateBy { it.collectionPath }
+                val localStore =
+                    com.browntowndev.enclave.core.data.remote.firestore
+                        .RoomFirestoreSyncLocalStore(
+                            database = database,
+                            firestore = firestore,
+                            userIdProvider = userIdProvider,
+                            adapterLookup = adapterLookup,
+                            repairer = repairer,
+                            embeddingCoordinator = embeddingCoordinator,
+                            loggingPort = loggingPort,
+                            syncStateStore = stateStore,
+                            pendingSyncLookup =
+                                com.browntowndev.enclave.core.data.remote.firestore
+                                    .FirestoreSyncPendingSyncLookup(database),
+                            cache = cache,
+                            mediaDownloadTrigger = mediaDownloadTrigger,
+                        )
+                val entityReconciler =
+                    FirestoreSyncEntityReconciler(
+                        firestore = firestore,
+                        ctx = syncContext,
+                        adapterLookup = adapterLookup,
+                        localStore = localStore,
+                        pendingSyncLookup =
+                            com.browntowndev.enclave.core.data.remote.firestore
+                                .FirestoreSyncPendingSyncLookup(database),
+                        loggingPort = loggingPort,
+                    )
+                return FirestoreSyncFeedIntegrityRecovery(
+                    metaClient = FirestoreSyncFeedMetaClient(firestore),
+                    callableClient = FirestoreSyncFeedCallableClient(firebaseFunctions, loggingPort),
+                    entityReconciler = entityReconciler,
+                    syncStateStore = stateStore,
+                    loggingPort = loggingPort,
                 )
             }
 
@@ -474,6 +641,7 @@ class FirestoreSyncDependenciesFacade
                 documentCache: com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncDocumentCache =
                     com.browntowndev.enclave.core.data.remote.firestore
                         .FirestoreSyncDocumentCache(firestore),
+                feedIntegrityRecovery: FirestoreSyncFeedIntegrityRecovery,
             ): FirestoreSyncDependenciesFacade =
                 FirestoreSyncDependenciesFacade(
                     firestore = firestore,
@@ -494,6 +662,7 @@ class FirestoreSyncDependenciesFacade
                     syncEventApplier = syncEventApplier,
                     syncStateStore = syncStateStore,
                     documentCache = documentCache,
+                    feedIntegrityRecovery = feedIntegrityRecovery,
                 )
         }
     }

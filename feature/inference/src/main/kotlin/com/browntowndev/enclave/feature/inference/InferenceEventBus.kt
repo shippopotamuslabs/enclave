@@ -102,7 +102,7 @@ class InferenceEventBus
             )
 
         private companion object {
-            private const val CHAT_REPLAY_CACHE_SIZE = 64
+            private const val CHAT_REPLAY_CACHE_SIZE = 1
             private const val CHAT_EXTRA_BUFFER_CAPACITY = 1024
         }
     }

@@ -11,6 +11,8 @@ import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.work.WorkManager
 import com.browntowndev.enclave.core.data.auth.FirebaseGoogleAuthManager
+import com.browntowndev.enclave.core.data.device.AndroidDeviceMemoryProbePort
+import com.browntowndev.enclave.core.data.device.SnapdragonTierPortImpl
 import com.browntowndev.enclave.core.data.download.DownloadNotificationManager
 import com.browntowndev.enclave.core.data.download.DownloadProgressTracker
 import com.browntowndev.enclave.core.data.download.DownloadSpeedTracker
@@ -18,6 +20,8 @@ import com.browntowndev.enclave.core.data.download.HashingService
 import com.browntowndev.enclave.core.data.download.ModelConfigFetcherImpl
 import com.browntowndev.enclave.core.data.download.ModelDownloadOrchestratorImpl
 import com.browntowndev.enclave.core.data.download.ModelFileScanner
+import com.browntowndev.enclave.core.data.download.ModelPackVerifierImpl
+import com.browntowndev.enclave.core.data.download.Sd15QnnPackInstaller
 import com.browntowndev.enclave.core.data.download.UtilityModelFileResolver
 import com.browntowndev.enclave.core.data.download.remote.DynamicModelUrlProvider
 import com.browntowndev.enclave.core.data.download.remote.HttpFileDownloader
@@ -31,7 +35,9 @@ import com.browntowndev.enclave.core.data.local.CleanupDao
 import com.browntowndev.enclave.core.data.local.DefaultModelsDao
 import com.browntowndev.enclave.core.data.local.EmbeddingDao
 import com.browntowndev.enclave.core.data.local.EnclaveDatabase
+import com.browntowndev.enclave.core.data.local.EnclaveDatabaseMigrations
 import com.browntowndev.enclave.core.data.local.FirestoreSyncPlaceholderDao
+import com.browntowndev.enclave.core.data.local.LiveVoiceProviderDao
 import com.browntowndev.enclave.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.enclave.core.data.local.LocalModelsDao
 import com.browntowndev.enclave.core.data.local.MediaProviderDao
@@ -57,6 +63,7 @@ import com.browntowndev.enclave.core.data.media.AndroidAudioRecordFactory
 import com.browntowndev.enclave.core.data.media.AndroidSaveBinaryToDownloadsAdapter
 import com.browntowndev.enclave.core.data.media.AndroidShareMediaAdapter
 import com.browntowndev.enclave.core.data.media.AndroidStreamingAudioPlayer
+import com.browntowndev.enclave.core.data.media.AndroidVoiceChatAudioRoute
 import com.browntowndev.enclave.core.data.media.AudioRecordFactory
 import com.browntowndev.enclave.core.data.media.CachedImageAttachmentStorage
 import com.browntowndev.enclave.core.data.remote.FirestoreDataSource
@@ -68,24 +75,26 @@ import com.browntowndev.enclave.core.data.repository.ActiveModelProviderImpl
 import com.browntowndev.enclave.core.data.repository.ApiModelRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.ChatRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.CompositeToolExecutor
-import com.browntowndev.enclave.core.data.repository.TrustedDomainRepositoryImpl
-import com.browntowndev.enclave.core.data.repository.ModerationReportRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.DefaultModelRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.DeviceEnvironmentRepository
 import com.browntowndev.enclave.core.data.repository.ExtractedUrlTracker
 import com.browntowndev.enclave.core.data.repository.InferenceTelemetryRepositoryImpl
+import com.browntowndev.enclave.core.data.repository.LiveVoiceProviderRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.LocalModelRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.MediaProviderRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.MemoriesRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.MessageRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.ModelConfigProviderImpl
+import com.browntowndev.enclave.core.data.repository.ModerationReportRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.PipelineStateRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.RoomTransactionProvider
 import com.browntowndev.enclave.core.data.repository.SettingsRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.StudioRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.TelemetryEventRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.ToolExecutionEventBus
+import com.browntowndev.enclave.core.data.repository.TrustedDomainRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.TtsProviderRepositoryImpl
+import com.browntowndev.enclave.core.data.repository.UiSelectionRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.UtilityModelRepositoryImpl
 import com.browntowndev.enclave.core.data.security.ApiKeyProviderImpl
 import com.browntowndev.enclave.core.data.security.CryptoAtRestEncryptionService
@@ -93,14 +102,19 @@ import com.browntowndev.enclave.core.data.security.LocalDataEncryptionService
 import com.browntowndev.enclave.core.data.security.LocalVaultMetadataStore
 import com.browntowndev.enclave.core.data.security.SensitiveFieldCatalog
 import com.browntowndev.enclave.core.data.security.StaticSensitiveFieldCatalog
+import com.browntowndev.enclave.core.data.sync.SyncOrchestratorImpl
 import com.browntowndev.enclave.core.data.sync.TelemetryUploadConfig
 import com.browntowndev.enclave.domain.port.auth.AuthManager
+import com.browntowndev.enclave.domain.port.device.DeviceMemoryProbePort
+import com.browntowndev.enclave.domain.port.device.SnapdragonTierPort
 import com.browntowndev.enclave.domain.port.download.DownloadSpeedTrackerPort
 import com.browntowndev.enclave.domain.port.download.FileDownloaderPort
 import com.browntowndev.enclave.domain.port.download.HashingPort
 import com.browntowndev.enclave.domain.port.download.ModelDownloadOrchestratorPort
 import com.browntowndev.enclave.domain.port.download.ModelFileScannerPort
+import com.browntowndev.enclave.domain.port.download.ModelPackVerifierPort
 import com.browntowndev.enclave.domain.port.download.ModelUrlProviderPort
+import com.browntowndev.enclave.domain.port.download.QnnPackInstallerPort
 import com.browntowndev.enclave.domain.port.inference.CommittedInferencePromptPort
 import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
@@ -112,6 +126,7 @@ import com.browntowndev.enclave.domain.port.media.ImageAttachmentStoragePort
 import com.browntowndev.enclave.domain.port.media.SaveBinaryToDownloadsPort
 import com.browntowndev.enclave.domain.port.media.ShareMediaPort
 import com.browntowndev.enclave.domain.port.media.StreamingAudioPlayerPort
+import com.browntowndev.enclave.domain.port.media.VoiceChatAudioRoutePort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.ChatRepository
@@ -120,27 +135,32 @@ import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPor
 import com.browntowndev.enclave.domain.port.repository.DeviceEnvironmentRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.ExtractedUrlTrackerPort
 import com.browntowndev.enclave.domain.port.repository.InferenceTelemetryRepositoryPort
+import com.browntowndev.enclave.domain.port.repository.LiveVoiceProviderRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.MemoriesRepository
 import com.browntowndev.enclave.domain.port.repository.MessageRepository
 import com.browntowndev.enclave.domain.port.repository.ModelConfigFetcherPort
 import com.browntowndev.enclave.domain.port.repository.ModelConfigProvider
+import com.browntowndev.enclave.domain.port.repository.ModerationReportRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.PipelineStateRepository
 import com.browntowndev.enclave.domain.port.repository.SettingsRepository
-import com.browntowndev.enclave.domain.port.repository.TrustedDomainRepositoryPort
-import com.browntowndev.enclave.domain.port.repository.ModerationReportRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
+import com.browntowndev.enclave.domain.port.repository.SyncOrchestrator
 import com.browntowndev.enclave.domain.port.repository.TransactionProvider
+import com.browntowndev.enclave.domain.port.repository.TrustedDomainRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.TtsProviderRepositoryPort
+import com.browntowndev.enclave.domain.port.repository.UiSelectionRepository
 import com.browntowndev.enclave.domain.port.repository.UtilityModelFilePort
 import com.browntowndev.enclave.domain.port.repository.UtilityModelRepositoryPort
 import com.browntowndev.enclave.domain.port.security.ApiKeyProviderPort
 import com.browntowndev.enclave.domain.port.security.VaultMetadataPort
 import com.browntowndev.enclave.domain.port.telemetry.TelemetryEventPort
 import com.browntowndev.enclave.domain.qualifier.ApplicationScope
+import com.browntowndev.enclave.domain.qualifier.DownloadHttpClient
 import com.browntowndev.enclave.domain.qualifier.InternalTelemetryLogging
 import com.browntowndev.enclave.domain.qualifier.PipelineDataStore
+import com.browntowndev.enclave.domain.qualifier.StudioActiveGenerationDataStore
 import com.browntowndev.enclave.domain.util.Clock
 import com.browntowndev.enclave.domain.util.SystemClock
 import com.google.firebase.auth.FirebaseAuth
@@ -159,6 +179,7 @@ import javax.inject.Singleton
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 private val Context.pipelineDataStore: DataStore<Preferences> by preferencesDataStore(name = "pipeline_state")
+private val Context.studioActiveGenerationDataStore: DataStore<Preferences> by preferencesDataStore(name = "studio_active_generation")
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -174,7 +195,8 @@ object DataModule {
                 context,
                 EnclaveDatabase::class.java,
                 "enclave.db",
-            ).fallbackToDestructiveMigration(dropAllTables = true)
+            ).addMigrations(EnclaveDatabaseMigrations.MIGRATION_2_3)
+            .fallbackToDestructiveMigration(dropAllTables = true)
             .openHelperFactory(SQLiteVecInstaller.createOpenHelperFactory(context))
             .addCallback(
                 object : RoomDatabase.Callback() {
@@ -278,6 +300,9 @@ object DataModule {
     fun provideTtsProviderDao(database: EnclaveDatabase): TtsProviderDao = database.ttsProviderDao()
 
     @Provides
+    fun provideLiveVoiceProviderDao(database: EnclaveDatabase): LiveVoiceProviderDao = database.liveVoiceProviderDao()
+
+    @Provides
     fun provideMediaProviderDao(database: EnclaveDatabase): MediaProviderDao = database.mediaProviderDao()
 
     @Provides
@@ -320,6 +345,13 @@ object DataModule {
 
     @Provides
     @Singleton
+    @StudioActiveGenerationDataStore
+    fun provideStudioActiveGenerationDataStore(
+        @ApplicationContext context: Context,
+    ): DataStore<Preferences> = context.studioActiveGenerationDataStore
+
+    @Provides
+    @Singleton
     fun provideWorkManager(
         @ApplicationContext context: Context,
     ): WorkManager = WorkManager.getInstance(context)
@@ -336,7 +368,7 @@ object DataModule {
     @Singleton
     fun provideFirebaseFunctions(): com.google.firebase.functions.FirebaseFunctions =
         com.google.firebase.functions.FirebaseFunctions
-            .getInstance()
+            .getInstance("us-central1")
 
     @Provides
     @Singleton
@@ -399,7 +431,7 @@ object DataModule {
     @Provides
     @Singleton
     fun provideHttpFileDownloader(
-        okHttpClient: OkHttpClient,
+        @DownloadHttpClient okHttpClient: OkHttpClient,
         logger: LoggingPort,
     ): FileDownloaderPort = HttpFileDownloader(okHttpClient, logger)
 
@@ -499,6 +531,10 @@ abstract class DataRepositoryModule {
 
     @Binds
     @Singleton
+    abstract fun bindVoiceChatAudioRoute(impl: AndroidVoiceChatAudioRoute): VoiceChatAudioRoutePort
+
+    @Binds
+    @Singleton
     abstract fun bindAudioRecordFactory(impl: AndroidAudioRecordFactory): AudioRecordFactory
 
     @Binds
@@ -531,6 +567,14 @@ abstract class DataRepositoryModule {
 
     @Binds
     @Singleton
+    abstract fun bindSnapdragonTierPort(impl: SnapdragonTierPortImpl): SnapdragonTierPort
+
+    @Binds
+    @Singleton
+    abstract fun bindDeviceMemoryProbePort(impl: AndroidDeviceMemoryProbePort): DeviceMemoryProbePort
+
+    @Binds
+    @Singleton
     abstract fun bindModelDownloadOrchestrator(impl: ModelDownloadOrchestratorImpl): ModelDownloadOrchestratorPort
 
     @Binds
@@ -540,6 +584,14 @@ abstract class DataRepositoryModule {
     @Binds
     @Singleton
     abstract fun bindModelConfigFetcher(impl: ModelConfigFetcherImpl): ModelConfigFetcherPort
+
+    @Binds
+    @Singleton
+    abstract fun bindModelPackVerifier(impl: ModelPackVerifierImpl): ModelPackVerifierPort
+
+    @Binds
+    @Singleton
+    abstract fun bindQnnPackInstaller(impl: Sd15QnnPackInstaller): QnnPackInstallerPort
 
     @Binds
     @Singleton
@@ -564,6 +616,10 @@ abstract class DataRepositoryModule {
     @Binds
     @Singleton
     abstract fun bindTtsProviderRepository(impl: TtsProviderRepositoryImpl): TtsProviderRepositoryPort
+
+    @Binds
+    @Singleton
+    abstract fun bindLiveVoiceProviderRepository(impl: LiveVoiceProviderRepositoryImpl): LiveVoiceProviderRepositoryPort
 
     @Binds
     @Singleton
@@ -646,4 +702,12 @@ abstract class DataRepositoryModule {
     abstract fun bindProfileAnalysisPort(
         impl: com.browntowndev.enclave.core.data.profile.analysis.ProfileAnalysisManager,
     ): com.browntowndev.enclave.domain.port.profile.ProfileAnalysisPort
+
+    @Binds
+    @Singleton
+    abstract fun bindSyncOrchestrator(impl: SyncOrchestratorImpl): SyncOrchestrator
+
+    @Binds
+    @Singleton
+    abstract fun bindUiSelectionRepository(impl: UiSelectionRepositoryImpl): UiSelectionRepository
 }

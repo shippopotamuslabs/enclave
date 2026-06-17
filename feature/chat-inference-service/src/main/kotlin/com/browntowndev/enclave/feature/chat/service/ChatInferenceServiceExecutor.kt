@@ -2,8 +2,10 @@ package com.browntowndev.enclave.feature.chat.service
 
 import android.app.ForegroundServiceStartNotAllowedException
 import com.browntowndev.enclave.domain.model.chat.ChatId
+import com.browntowndev.enclave.domain.model.chat.ChatModelOverride
 import com.browntowndev.enclave.domain.model.chat.MessageGenerationState
 import com.browntowndev.enclave.domain.model.chat.MessageId
+import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.ChatInferenceExecutorPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
@@ -76,6 +78,62 @@ class ChatInferenceServiceExecutor
                 } catch (e: Throwable) {
                     loggingPort.error(TAG, "Failed to start ChatInferenceService for chat=${chatId.value} due to system error", e)
                     emit(MessageGenerationState.Failed(RuntimeException(e), modelType))
+                }
+            }
+
+        override fun executeWithOverride(
+            prompt: String,
+            userMessageId: MessageId,
+            assistantMessageId: MessageId,
+            chatId: ChatId,
+            userHasImage: Boolean,
+            modelOverride: ChatModelOverride,
+            resolvedConfiguration: ActiveModelConfiguration,
+            backgroundInferenceEnabled: Boolean,
+        ): Flow<MessageGenerationState> =
+            flow {
+                loggingPort.info(
+                    TAG,
+                    "executeWithOverride() requested chat=${chatId.value} " +
+                        "assistantMessageId=${assistantMessageId.value} " +
+                        "override=${modelOverride.displayName} " +
+                        "resolvedConfig=${resolvedConfiguration.name} " +
+                        "backgroundInferenceEnabled=$backgroundInferenceEnabled",
+                )
+                try {
+                    loggingPort.debug(
+                        TAG,
+                        "starting ChatInferenceService override chat=${chatId.value} " +
+                            "assistantMessageId=${assistantMessageId.value}",
+                    )
+                    serviceStarter.startServiceWithOverride(
+                        prompt = prompt,
+                        userMessageId = userMessageId,
+                        assistantMessageId = assistantMessageId,
+                        chatId = chatId,
+                        userHasImage = userHasImage,
+                        modelOverride = modelOverride,
+                    )
+                    loggingPort.info(
+                        TAG,
+                        "override service start accepted chat=${chatId.value} " +
+                            "assistantMessageId=${assistantMessageId.value}",
+                    )
+                } catch (e: ForegroundServiceStartNotAllowedException) {
+                    loggingPort.error(TAG, "Foreground service start was rejected for chat=${chatId.value}", e)
+                    emit(MessageGenerationState.Failed(e, ModelType.FAST))
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    loggingPort.error(TAG, "Failed to start ChatInferenceService for chat=${chatId.value}", e)
+                    emit(MessageGenerationState.Failed(e, ModelType.FAST))
+                } catch (e: Throwable) {
+                    loggingPort.error(
+                        TAG,
+                        "Failed to start ChatInferenceService for chat=${chatId.value} due to system error",
+                        e,
+                    )
+                    emit(MessageGenerationState.Failed(RuntimeException(e), ModelType.FAST))
                 }
             }
 

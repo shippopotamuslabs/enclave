@@ -3,7 +3,6 @@ package com.browntowndev.enclave.core.data.media
 import androidx.test.core.app.ApplicationProvider
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import kotlinx.coroutines.test.runTest
-import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test

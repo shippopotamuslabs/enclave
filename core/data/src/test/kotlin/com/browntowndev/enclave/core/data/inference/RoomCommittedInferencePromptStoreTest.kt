@@ -12,6 +12,9 @@ import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -67,6 +70,23 @@ class RoomCommittedInferencePromptStoreTest {
         )
     }
 
+    /**
+     * RoomCommittedInferencePromptStore persists cache mutations via fire-and-forget
+     * `scope.launch(Dispatchers.IO)` coroutines that are children of this TestScope.
+     * Joining them deterministically flushes the pending DB writes without relying on
+     * wall-clock polling, which races against the real IO dispatcher under contention.
+     *
+     * The running test body is itself a child of the scope and is excluded so that the
+     * join never blocks on itself.
+     */
+    private suspend fun TestScope.awaitBackgroundWrites() {
+        val currentJob = kotlin.coroutines.coroutineContext[Job]
+        this.coroutineContext[Job]!!.children
+            .filter { it != currentJob }
+            .toList()
+            .joinAll()
+    }
+
     @Test
     fun scnPersist001_commitUpdatesCacheAndPersistsToDb() =
         runTest {
@@ -84,18 +104,15 @@ class RoomCommittedInferencePromptStoreTest {
 
             // When
             store.commit(messageId, "Expanded user query with RAG contexts")
+            // Deterministically flush the fire-and-forget DB insert before asserting on it.
+            awaitBackgroundWrites()
 
             // Then the in-memory cache must return immediately when calling store.get()
             assertEquals("Expanded user query with RAG contexts", store.get(messageId))
 
-            // And the database table must contain the record (wait for async insert to propagate)
-            var entity = database.messageCommittedInferencePromptDao().getByMessageId(messageId)
-            var attempts = 0
-            while (entity == null && attempts < 20) {
-                kotlinx.coroutines.delay(50)
-                entity = database.messageCommittedInferencePromptDao().getByMessageId(messageId)
-                attempts++
-            }
+            // And the database table must contain the record (the insert coroutine was joined above,
+            // so no wall-clock polling is required).
+            val entity = database.messageCommittedInferencePromptDao().getByMessageId(messageId)
             assertEquals("Expanded user query with RAG contexts", entity?.inferenceContent)
         }
 
@@ -145,21 +162,20 @@ class RoomCommittedInferencePromptStoreTest {
                     logger = logger,
                 )
             store.commit(messageId, "Stale prompt context")
+            // Deterministically flush the fire-and-forget DB insert so the prompt is actually
+            // persisted before exercising clear() (establishes the scenario's "persisted" given).
+            awaitBackgroundWrites()
 
             // When
             store.clear(messageId)
+            // Deterministically flush the fire-and-forget DB delete before asserting on it.
+            awaitBackgroundWrites()
 
-            // Then
+            // Then the in-memory cache must no longer hold the prompt
             assertNull(store.get(messageId))
-            // Wait for DB delete to propagate
-            var entity = database.messageCommittedInferencePromptDao().getByMessageId(messageId)
-            var attempts = 0
-            while (entity != null && attempts < 20) {
-                kotlinx.coroutines.delay(50)
-                entity = database.messageCommittedInferencePromptDao().getByMessageId(messageId)
-                attempts++
-            }
-            assertNull(entity)
+            // And the database record must be deleted (the delete coroutine was joined above,
+            // so no wall-clock polling is required).
+            assertNull(database.messageCommittedInferencePromptDao().getByMessageId(messageId))
         }
 
     @Test

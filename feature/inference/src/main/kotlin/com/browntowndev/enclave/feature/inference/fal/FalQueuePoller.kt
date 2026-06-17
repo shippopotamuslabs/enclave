@@ -18,7 +18,14 @@ class FalQueuePoller(
         request: FalRequest,
     ): JsonObject {
         try {
-            val streamStatus = runCatching { falService.awaitStatusStream(apiKey = apiKey, statusUrl = request.statusUrl) }.getOrNull()
+            val streamStatus =
+                try {
+                    falService.awaitStatusStream(apiKey = apiKey, statusUrl = request.statusUrl)
+                } catch (cancellation: CancellationException) {
+                    throw cancellation
+                } catch (_: Exception) {
+                    null
+                }
             if (streamStatus != null) {
                 when (falService.statusValue(streamStatus)?.lowercase()) {
                     "failed", "error", "cancelled" -> failGeneration(streamStatus)
@@ -81,7 +88,8 @@ class FalQueuePoller(
         val explicitResponseUrl = request.responseUrl
         val fetchUrl =
             explicitResponseUrl
-                ?: FalService.deriveResponseUrl(request.statusUrl)
+                ?: FalService
+                    .deriveResponseUrl(request.statusUrl)
                     .takeIf { falService.mediaUrls(status).isEmpty() }
         return if (fetchUrl != null) {
             val result = fetchQueueResult(apiKey = apiKey, fetchUrl = fetchUrl, request = request, status = status)
@@ -100,7 +108,14 @@ class FalQueuePoller(
         request: FalRequest,
         status: JsonObject,
     ): JsonObject? {
-        val resultOutcome = runCatching { falService.result(apiKey = apiKey, responseUrl = fetchUrl) }
+        val resultOutcome =
+            try {
+                Result.success(falService.result(apiKey = apiKey, responseUrl = fetchUrl))
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (error: Exception) {
+                Result.failure(error)
+            }
         resultOutcome.exceptionOrNull()?.let { error ->
             FalMediaResponseDiagnostics.logResultFetchFailure(
                 modelId = request.requestId ?: "unknown",
@@ -123,12 +138,11 @@ class FalQueuePoller(
     private fun failResultFetch(
         fetchUrl: String,
         cause: Throwable?,
-    ): Nothing {
+    ): Nothing =
         throw IllegalStateException(
             "$errorPrefix failed: could not fetch queue result from $fetchUrl" +
                 (cause?.message?.let { " ($it)" } ?: ""),
         )
-    }
 
     private fun failGenerationDetail(message: String): Nothing = throw IllegalStateException("$errorPrefix failed: $message")
 

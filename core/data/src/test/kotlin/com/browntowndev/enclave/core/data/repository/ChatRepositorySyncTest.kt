@@ -49,6 +49,7 @@ class ChatRepositorySyncTest {
                 transactionProvider = transactionProvider,
                 cleanupDao = mockk(relaxed = true),
                 messageInferenceTelemetryDao = mockk(relaxed = true),
+                messageFileDao = mockk(relaxed = true),
                 healer = testSensitiveSelfHealer(FakeLocalDataEncryptionService()),
                 readRepairApplier = readRepairApplier,
             )
@@ -101,6 +102,8 @@ class ChatRepositorySyncTest {
             repository.deleteChat(ChatId("id"))
 
             coVerify {
+                transactionProvider.runInTransaction<Any>(any())
+                messageDao.softDeleteAllActiveByChatId(ChatId("id"), any())
                 chatDao.softDeleteById(ChatId("id"), any())
                 documentDao.softDeleteByChatId(ChatId("id"), any())
                 syncTrigger.trigger()

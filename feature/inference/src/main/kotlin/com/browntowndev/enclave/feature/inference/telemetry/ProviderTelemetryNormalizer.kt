@@ -76,8 +76,8 @@ class ProviderTelemetryNormalizer
                 messageId = MessageId(input.messageId),
                 chatId = ChatId(input.chatId),
                 sequenceIndex = input.sequenceIndex,
-                providerKey = TelemetryProviderKey.ANTHROPIC,
-                providerLabel = "Anthropic",
+                providerKey = providerKeyForLabel(input.providerLabel),
+                providerLabel = input.providerLabel,
                 modelId = input.modelId,
                 modelLabel = input.modelLabel,
                 sourceKind = TelemetrySourceKind.REMOTE,
@@ -98,6 +98,7 @@ class ProviderTelemetryNormalizer
             )
         }
 
+        @Suppress("LongParameterList")
         fun normalizeLocalGeneration(
             rowId: String,
             messageId: String,
@@ -111,12 +112,16 @@ class ProviderTelemetryNormalizer
             appVersionName: String,
             appVersionCode: Long,
             telemetrySchemaVersion: Int,
+            sequenceIndex: Int = 0,
+            inputTokens: Int? = null,
+            cacheReadInputTokens: Int? = null,
+            reasoningTokens: Int? = null,
         ): TurnTelemetry =
             TurnTelemetry(
                 id = TurnTelemetryId(rowId),
                 messageId = MessageId(messageId),
                 chatId = ChatId(chatId),
-                sequenceIndex = 0,
+                sequenceIndex = sequenceIndex,
                 providerKey = providerKeyForLabel(providerLabel),
                 providerLabel = providerLabel,
                 modelId = modelLabel,
@@ -125,11 +130,11 @@ class ProviderTelemetryNormalizer
                 requestStartedAtMs = requestStartedAtMs,
                 firstOutputTokenAtMs = firstOutputTokenAtMs,
                 completedAtMs = completedAtMs,
-                inputTokens = null,
+                inputTokens = inputTokens,
                 outputTokens = outputTokens,
-                reasoningTokens = null,
+                reasoningTokens = reasoningTokens,
                 cachedInputTokens = null,
-                cacheReadInputTokens = null,
+                cacheReadInputTokens = cacheReadInputTokens,
                 cacheWriteInputTokens = null,
                 cacheCreationInputTokens = null,
                 costUsd = null,
@@ -144,13 +149,5 @@ class ProviderTelemetryNormalizer
             )
 
         private fun providerKeyForLabel(label: String): TelemetryProviderKey =
-            when (label) {
-                "OpenAI" -> TelemetryProviderKey.OPENAI
-                "Anthropic" -> TelemetryProviderKey.ANTHROPIC
-                "LiteRT" -> TelemetryProviderKey.LITERT
-                "OpenRouter" -> TelemetryProviderKey.OPENROUTER
-                "Google" -> TelemetryProviderKey.GOOGLE
-                "xAI" -> TelemetryProviderKey.XAI
-                else -> TelemetryProviderKey.OTHER
-            }
+            TelemetryProviderKey.fromLabel(label)
     }

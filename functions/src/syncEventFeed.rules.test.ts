@@ -101,6 +101,24 @@ describe('sync event feed (security rules)', () => {
         );
     });
 
+    it('allows owner writes to live_voice_providers', async () => {
+        const ownerFirestore = rulesEnv.authenticatedContext('alice').firestore();
+
+        await assertSucceeds(
+            ownerFirestore.doc('users/alice/live_voice_providers/lvp-1').set({
+                display_name: 'OpenAI Voice',
+                provider: 'OPENAI',
+                voice_name: 'alloy',
+                credential_alias: 'openai-default',
+                updated_at: 1700000001000,
+                deleted: false,
+                _sync_device_id: 'device-a',
+                _sync_client_mutation_id: 'mutation-a',
+                _sync_written_at: 1700000001000,
+            }),
+        );
+    });
+
     it('allows owner writes to utility_models', async () => {
         const ownerFirestore = rulesEnv.authenticatedContext('alice').firestore();
 

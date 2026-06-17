@@ -24,12 +24,14 @@ class StudioRepositorySyncTest {
     private val context = mockk<Context>(relaxed = true)
     private val healer = testSensitiveSelfHealer(FakeLocalDataEncryptionService())
     private val readRepairApplier = mockk<SensitiveRoomReadRepairApplier>(relaxed = true)
+    private val activeGenerationPersistence = mockk<ActiveStudioGenerationPersistence>(relaxed = true)
 
     private lateinit var repository: StudioRepositoryImpl
 
     @BeforeEach
     fun setup() {
         every { context.filesDir } returns File("/tmp")
+        coEvery { activeGenerationPersistence.load() } returns null
 
         repository =
             StudioRepositoryImpl(
@@ -40,6 +42,7 @@ class StudioRepositorySyncTest {
                 syncTrigger = syncTrigger,
                 healer = healer,
                 readRepairApplier = readRepairApplier,
+                activeGenerationPersistence = activeGenerationPersistence,
                 context = context,
             )
     }

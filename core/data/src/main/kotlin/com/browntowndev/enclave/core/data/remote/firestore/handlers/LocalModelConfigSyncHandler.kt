@@ -52,6 +52,7 @@ internal class LocalModelConfigSyncHandler(
             "max_tokens" to local.maxTokens,
             "context_window" to local.contextWindow,
             "thinking_enabled" to local.thinkingEnabled,
+            "reasoning_budget" to local.reasoningBudget,
             "is_system_preset" to local.isSystemPreset,
             "system_prompt" to
                 local.systemPrompt?.encryptedForFirestore(ctx, collectionPath, local.id.value, "system_prompt"),
@@ -72,6 +73,11 @@ internal class LocalModelConfigSyncHandler(
             maxTokens = doc.getLong("max_tokens")?.toInt() ?: 4096,
             contextWindow = doc.getLong("context_window")?.toInt() ?: 4096,
             thinkingEnabled = doc.getBoolean("thinking_enabled") ?: false,
+            reasoningBudget =
+                doc.getLong("reasoning_budget")?.toInt()
+                    ?: LocalModelConfiguration.defaultReasoningBudget(
+                        doc.getLong("context_window")?.toInt() ?: 4096,
+                    ),
             isSystemPreset = doc.getBoolean("is_system_preset") ?: false,
             systemPrompt = doc.getEncryptedField(ctx, "system_prompt"),
             updatedAt = doc.getLong("updated_at") ?: 0L,

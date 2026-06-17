@@ -13,6 +13,7 @@ import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.PipelineStep
 
 @Dao
+@Suppress("TooManyFunctions")
 interface MessageCommandDao {
     @Query(
         """
@@ -99,7 +100,7 @@ interface MessageCommandDao {
     @Query("UPDATE message SET deleted = 1, pending_sync = 1, updated_at = :timestamp WHERE id = :id")
     suspend fun softDeleteById(
         id: MessageId,
-        timestamp: Long = System.currentTimeMillis(),
+        timestamp: Long,
     )
 
     @Query("DELETE FROM message WHERE id IN (:ids) AND deleted = 1")

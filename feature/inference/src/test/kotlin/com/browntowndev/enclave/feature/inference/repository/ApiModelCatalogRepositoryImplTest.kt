@@ -121,6 +121,42 @@ class ApiModelCatalogRepositoryImplTest {
         }
 
     @Test
+    fun `fetchModels discovers Zai models via openai-compatible endpoint`() = runTest {
+        every { openAiClientProvider.getClient(apiKey = "key", baseUrl = "https://api.z.ai/api/paas/v4") } returns
+            mockk {
+                every { models() } returns
+                    mockk {
+                        every { list() } returns
+                            mockk {
+                                every { data() } returns
+                                    listOf(
+                                        mockk {
+                                            every { id() } returns "glm-4.6"
+                                            every { created() } returns 123L
+                                        },
+                                    )
+                            }
+                    }
+            }
+
+        val catalog =
+            repo.fetchModels(
+                provider = ApiProvider.ZAI,
+                apiKey = "key",
+                baseUrl = "https://api.z.ai/api/paas/v4",
+            )
+
+        assertEquals(1, catalog.models.size)
+        assertEquals("glm-4.6", catalog.models[0].id)
+        verify {
+            openAiClientProvider.getClient(
+                apiKey = "key",
+                baseUrl = "https://api.z.ai/api/paas/v4",
+            )
+        }
+    }
+
+    @Test
     fun `normalize trims version segment from Anthropic-compatible base URLs`() {
         assertEquals(
             "https://opencode.ai/zen/go",
@@ -518,8 +554,10 @@ class ApiModelCatalogRepositoryImplTest {
         assertEquals("FLUX.1 [dev]", flux.name)
         assertEquals(true, flux.isImageGenerationCapable)
         assertEquals(false, flux.isChatCapable)
+        assertEquals(setOf(com.browntowndev.enclave.domain.model.config.MediaTask.TEXT_TO_IMAGE), flux.tasks)
         assertEquals("Kling Video 2.1", kling.name)
         assertEquals(true, kling.isVideoGenerationCapable)
+        assertEquals(setOf(com.browntowndev.enclave.domain.model.config.MediaTask.IMAGE_TO_VIDEO), kling.tasks)
     }
 
     @Test

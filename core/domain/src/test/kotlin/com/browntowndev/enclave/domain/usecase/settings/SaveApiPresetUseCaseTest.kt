@@ -112,6 +112,13 @@ class SaveApiPresetUseCaseTest {
                     minP = 0.1,
                     frequencyPenalty = 0.2,
                     presencePenalty = 0.3,
+                    maxTokensDisabled = true,
+                    temperatureDisabled = true,
+                    topPDisabled = false,
+                    topKDisabled = true,
+                    minPDisabled = false,
+                    frequencyPenaltyDisabled = true,
+                    presencePenaltyDisabled = false,
                     systemPrompt = "System Prompt",
                     reasoningEffort = ApiReasoningEffort.HIGH,
                     customHeaders = listOf("X-Custom" to "Value"),
@@ -149,6 +156,13 @@ class SaveApiPresetUseCaseTest {
             assertEquals(draft.minP, config.minP)
             assertEquals(draft.frequencyPenalty, config.frequencyPenalty)
             assertEquals(draft.presencePenalty, config.presencePenalty)
+            assertEquals(draft.maxTokensDisabled, config.maxTokensDisabled)
+            assertEquals(draft.temperatureDisabled, config.temperatureDisabled)
+            assertEquals(draft.topPDisabled, config.topPDisabled)
+            assertEquals(draft.topKDisabled, config.topKDisabled)
+            assertEquals(draft.minPDisabled, config.minPDisabled)
+            assertEquals(draft.frequencyPenaltyDisabled, config.frequencyPenaltyDisabled)
+            assertEquals(draft.presencePenaltyDisabled, config.presencePenaltyDisabled)
             assertEquals(draft.systemPrompt, config.systemPrompt)
             assertEquals(draft.reasoningEffort, config.reasoningEffort)
             assertEquals(mapOf("X-Custom" to "Value"), config.customHeaders)
@@ -222,6 +236,42 @@ class SaveApiPresetUseCaseTest {
 
             val config = configSlot.captured
             assertEquals(OpenRouterRoutingConfiguration(), config.openRouterRouting) // Should be default
+        }
+
+    @Test
+    fun `SCN-USECASE-SAVE-PRESET-004 Save Preset Parameter Exclusions`() =
+        runTest {
+            val draft =
+                ApiPresetDraft(
+                    modelId = "o3-mini",
+                    displayName = "Reasoning",
+                    maxTokensDisabled = true,
+                    temperatureDisabled = true,
+                    topPDisabled = true,
+                    topKDisabled = true,
+                    minPDisabled = true,
+                    frequencyPenaltyDisabled = true,
+                    presencePenaltyDisabled = true,
+                )
+
+            val configSlot = slot<ApiModelConfiguration>()
+            coEvery { saveApiModelConfigurationUseCase(capture(configSlot)) } returns Result.success(draft.id)
+
+            saveApiPresetUseCase(
+                provider = ApiProvider.OPENAI,
+                parentCredentialsId = ApiCredentialsId("parent-cred-1"),
+                defaultReasoningEffort = null,
+                draft = draft,
+            ).getOrThrow()
+
+            val config = configSlot.captured
+            assertEquals(true, config.maxTokensDisabled)
+            assertEquals(true, config.temperatureDisabled)
+            assertEquals(true, config.topPDisabled)
+            assertEquals(true, config.topKDisabled)
+            assertEquals(true, config.minPDisabled)
+            assertEquals(true, config.frequencyPenaltyDisabled)
+            assertEquals(true, config.presencePenaltyDisabled)
         }
 
     @Test

@@ -22,6 +22,7 @@ import com.browntowndev.enclave.feature.chat.ChatMessage
 import com.browntowndev.enclave.feature.chat.IndicatorState
 import com.browntowndev.enclave.feature.chat.ToolCallBannerUi
 import com.browntowndev.enclave.feature.chat.components.detailbottomsheet.ThinkingDetailsBottomSheet
+import com.browntowndev.enclave.feature.chat.components.messagelist.liveThinkingTextForSheet
 
 @Suppress("LongParameterList")
 @Composable
@@ -42,6 +43,7 @@ internal fun AssistantResponseFinalMessage(
     onNavigateToStudio: (ids: List<String>, uris: List<String>, types: List<String>, prompts: List<String>) -> Unit,
     onShareClick: (MessageId) -> Unit,
     onStatsClick: (MessageId) -> Unit = {},
+    onReportClick: (MessageId) -> Unit = {},
     onShowSources: () -> Unit,
 ) {
     var transcriptSheetVisible by remember { mutableStateOf(false) }
@@ -50,11 +52,19 @@ internal fun AssistantResponseFinalMessage(
     var transcriptSheetStreaming by remember { mutableStateOf(false) }
     var transcriptSheetElapsedSeconds by remember { mutableIntStateOf(0) }
 
+    val liveThinkingTextForOpenSheet =
+        if (transcriptSheetVisible && transcriptSheetStreaming) {
+            liveThinkingTextForSheet(message.transcriptSegments, message.indicatorState)
+                .ifBlank { transcriptSheetText }
+        } else {
+            transcriptSheetText
+        }
+
     if (transcriptSheetVisible) {
         ThinkingDetailsBottomSheet(
             isVisible = transcriptSheetVisible,
             thinkingDurationSeconds = transcriptSheetDurationSeconds,
-            thinkingRaw = transcriptSheetText,
+            thinkingRaw = liveThinkingTextForOpenSheet,
             elapsedSeconds = transcriptSheetElapsedSeconds,
             isStreaming = transcriptSheetStreaming,
             onDismiss = { transcriptSheetVisible = false },
@@ -132,6 +142,7 @@ internal fun AssistantResponseFinalMessage(
         onPauseAudio = onPauseAudio,
         onShareClick = onShareClick,
         onStatsClick = onStatsClick,
+        onReportClick = onReportClick,
         onShowSources = onShowSources,
     )
 }

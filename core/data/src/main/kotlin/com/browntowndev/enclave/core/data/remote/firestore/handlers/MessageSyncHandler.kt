@@ -154,7 +154,7 @@ internal class MessageSyncHandler(
 
     override suspend fun deleteLocal(id: String) {
         val messageId = MessageId(id)
-        ctx.daos.messageDao.softDeleteById(messageId)
+        ctx.daos.messageDao.softDeleteById(messageId, System.currentTimeMillis())
         // Soft-delete linked documents too (documents are tied to messages via message_id).
         ctx.daos.documentDao.softDeleteByMessageId(messageId)
     }

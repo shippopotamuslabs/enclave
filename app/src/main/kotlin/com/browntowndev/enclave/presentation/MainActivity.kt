@@ -26,6 +26,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.browntowndev.enclave.core.ui.component.vault.VaultMismatchConfirmDialog
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.feature.download.DownloadPlanRefresher
 import com.browntowndev.enclave.feature.settings.components.UnlockVaultScreen
 import com.browntowndev.enclave.presentation.security.BiometricPromptCoordinator
 import com.browntowndev.enclave.presentation.security.BiometricPromptHelper
@@ -161,6 +162,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                 UnlockVaultScreen(
                                     authState = currentState.authState,
                                     isUnlocking = currentState.isUnlocking,
+                                    isVaultLocked = currentState.isVaultLocked,
+                                    isBiometricEnrollmentPending = currentState.isBiometricEnrollmentPending,
                                     isBiometricUnlockConfigured = currentState.isBiometricUnlockPossible,
                                     errorMessage = currentState.vaultErrorMessage,
                                     unlockSyncProgress = currentState.unlockSyncProgress,
@@ -187,6 +190,10 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                     modelsResult = currentState.modelsResult,
                                     errorMessage = currentState.initializationError,
                                     navigationIntent = latestIntent,
+                                    refreshDownloadPlan =
+                                        DownloadPlanRefresher {
+                                            viewModel.refreshDownloadModels()
+                                        },
                                 )
 
                                 currentState.pendingVaultReconciliation?.let { pending ->

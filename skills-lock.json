@@ -5,6 +5,11 @@
       "source": "/home/sean/.agents/skills/review-singularity",
       "sourceType": "local",
       "computedHash": "86a9f75584fba779e1c642e291188a41dacc363020cc31ce0b350155d8f9ae07"
+    },
+    "synthitect": {
+      "source": "/home/sean/.agents/skills/synthitect",
+      "sourceType": "local",
+      "computedHash": "751c4929d38f0eb38774245682b889ec69631250998e000da41a5ad5494c9052"
     }
   }
 }

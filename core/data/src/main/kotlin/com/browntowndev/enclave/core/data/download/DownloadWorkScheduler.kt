@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
+import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
@@ -31,6 +32,7 @@ class DownloadWorkScheduler
     ) : DownloadWorkSchedulerPort {
         companion object {
             private const val TAG = "DownloadWorkScheduler"
+            private const val MAX_WORK_DATA_BYTES = Data.MAX_DATA_BYTES
         }
 
         override fun enqueue(request: DownloadWorkRequest) {
@@ -46,14 +48,23 @@ class DownloadWorkScheduler
             // Serialize DownloadFileSpec list to JSON
             val downloadFilesJson = Json.encodeToString(request.files)
 
-            // Build download worker input
+            // Build download worker input — WorkManager rejects payloads over MAX_DATA_BYTES at enqueue time.
             val downloadInput =
-                workDataOf(
-                    DownloadWorkKeys.KEY_SESSION_ID to request.sessionId,
-                    DownloadWorkKeys.KEY_REQUEST_KIND to request.requestKind.name,
-                    DownloadWorkKeys.KEY_DOWNLOAD_FILES to downloadFilesJson,
-                    DownloadWorkKeys.KEY_TARGET_MODEL_ID to request.targetModelId?.value,
-                )
+                try {
+                    workDataOf(
+                        DownloadWorkKeys.KEY_SESSION_ID to request.sessionId,
+                        DownloadWorkKeys.KEY_REQUEST_KIND to request.requestKind.name,
+                        DownloadWorkKeys.KEY_DOWNLOAD_FILES to downloadFilesJson,
+                        DownloadWorkKeys.KEY_TARGET_MODEL_ID to request.targetModelId?.value,
+                    )
+                } catch (e: IllegalArgumentException) {
+                    Log.e(
+                        TAG,
+                        "Download work payload exceeds $MAX_WORK_DATA_BYTES bytes for ${request.files.size} file specs",
+                        e,
+                    )
+                    throw DownloadWorkPayloadTooLargeException(request.files.size, e)
+                }
 
             // Build download worker request
             val downloadRequest =
@@ -97,7 +108,7 @@ class DownloadWorkScheduler
             withContext(Dispatchers.IO) {
                 val modelsDir = File(context.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
                 modelsDir.listFiles()?.forEach { file ->
-                    if (file.extension == "tmp") {
+                    if (file.extension == "tmp" || file.name.endsWith(ModelConfig.TEMP_META_EXTENSION)) {
                         Log.d(TAG, "Deleting partial file: ${file.name}")
                         file.delete()
                     }

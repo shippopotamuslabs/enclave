@@ -1,8 +1,11 @@
 package com.browntowndev.enclave.feature.chat.service
 
 import com.browntowndev.enclave.domain.model.chat.ChatId
+import com.browntowndev.enclave.domain.model.chat.ChatModelOverride
 import com.browntowndev.enclave.domain.model.chat.MessageGenerationState
 import com.browntowndev.enclave.domain.model.chat.MessageId
+import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
+import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import io.mockk.every
@@ -70,6 +73,58 @@ class ChatInferenceServiceExecutorTest {
             assertTrue(results.single() is MessageGenerationState.Failed)
             verify(exactly = 1) {
                 serviceStarter.startService(any(), any(), any(), any(), any(), any())
+            }
+        }
+
+    @Test
+    fun `executeWithOverride emits no states when the service starts successfully`() =
+        runTest {
+            val override =
+                ChatModelOverride.Api(
+                    configId = ApiModelConfigurationId("api-claude"),
+                    displayName = "Claude Sonnet",
+                )
+            val config =
+                ActiveModelConfiguration(
+                    id = override.configId,
+                    isLocal = false,
+                    name = override.displayName,
+                    modelId = "claude-sonnet",
+                    systemPrompt = null,
+                    reasoningEffort = null,
+                    temperature = 0.7,
+                    topK = 40,
+                    topP = 0.95,
+                    maxTokens = 512,
+                    minP = 0.0,
+                    repetitionPenalty = 1.1,
+                    contextWindow = 4096,
+                    thinkingEnabled = true,
+                )
+
+            val results =
+                executor
+                    .executeWithOverride(
+                        prompt = "hello",
+                        userMessageId = MessageId("u1"),
+                        assistantMessageId = MessageId("a1"),
+                        chatId = ChatId("chat-1"),
+                        userHasImage = false,
+                        modelOverride = override,
+                        resolvedConfiguration = config,
+                        backgroundInferenceEnabled = true,
+                    ).toList()
+
+            assertTrue(results.isEmpty())
+            verify(exactly = 1) {
+                serviceStarter.startServiceWithOverride(
+                    prompt = "hello",
+                    userMessageId = MessageId("u1"),
+                    assistantMessageId = MessageId("a1"),
+                    chatId = ChatId("chat-1"),
+                    userHasImage = false,
+                    modelOverride = override,
+                )
             }
         }
 

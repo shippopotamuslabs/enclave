@@ -8,6 +8,7 @@ import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.model.inference.ToolDisclosureMode
+import com.openai.models.responses.EasyInputMessage
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -15,24 +16,7 @@ import org.junit.jupiter.api.Test
 
 class XaiRequestMapperTest {
     @Test
-    fun `mapToChatCompletionParams sets grok conversation header from chat id`() {
-        val params =
-            XaiRequestMapper.mapToChatCompletionParams(
-                modelId = "grok-4.3",
-                prompt = "hello",
-                history = emptyList(),
-                options =
-                    GenerationOptions(
-                        reasoningBudget = 0,
-                        chatId = ChatId("chat-123"),
-                    ),
-            )
-
-        assertEquals(listOf("chat-123"), params._headers().values("x-grok-conv-id"))
-    }
-
-    @Test
-    fun `mapToResponseParams sets prompt cache key from chat id`() {
+    fun `mapToResponseParams sets grok conversation header from chat id`() {
         val params =
             XaiRequestMapper.mapToResponseParams(
                 modelId = "grok-4.3",
@@ -94,6 +78,35 @@ class XaiRequestMapperTest {
                 .toString()
                 .contains("You are direct."),
         )
+    }
+
+    @Test
+    fun `mapToResponseParams uses easy assistant message for assistant history`() {
+        val params =
+            XaiRequestMapper.mapToResponseParams(
+                modelId = "grok-4.3",
+                prompt = "How are you?",
+                history =
+                    listOf(
+                        ChatMessage(Role.USER, "Hello"),
+                        ChatMessage(Role.ASSISTANT, "Hi there!"),
+                    ),
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+
+        val assistantItem =
+            params
+                .input()
+                .orElseThrow()
+                .asResponse()
+                .firstOrNull { item ->
+                    item.isEasyInputMessage() &&
+                        item.asEasyInputMessage().role() == EasyInputMessage.Role.ASSISTANT
+                }
+
+        assertTrue(assistantItem != null)
+        assertTrue(assistantItem!!.asEasyInputMessage().content().toString().contains("Hi there!"))
+        assertFalse(assistantItem.toString().contains("input_text"))
     }
 
     @Test
@@ -216,73 +229,6 @@ class XaiRequestMapperTest {
     }
 
     @Test
-    fun `mapToChatCompletionParams allows reasoning effort for grok 4_3`() {
-        val params =
-            XaiRequestMapper.mapToChatCompletionParams(
-                modelId = "grok-4.3",
-                prompt = "hello",
-                history = emptyList(),
-                options =
-                    GenerationOptions(
-                        reasoningBudget = 0,
-                        reasoningEffort = ApiReasoningEffort.MEDIUM,
-                    ),
-            )
-
-        assertTrue(params.reasoningEffort().isPresent)
-        assertEquals(
-            "medium",
-            params
-                .reasoningEffort()
-                .get()
-                .toString(),
-        )
-    }
-
-    @Test
-    fun `mapToChatCompletionParams removes reasoning effort for grok 3`() {
-        val params =
-            XaiRequestMapper.mapToChatCompletionParams(
-                modelId = "grok-3",
-                prompt = "hello",
-                history = emptyList(),
-                options =
-                    GenerationOptions(
-                        reasoningBudget = 0,
-                        reasoningEffort = ApiReasoningEffort.HIGH,
-                        maxTokens = 100,
-                    ),
-            )
-
-        assertFalse(params.reasoningEffort().isPresent)
-        assertTrue(params.maxCompletionTokens().isPresent)
-        assertEquals(100L, params.maxCompletionTokens().get())
-        assertFalse(params.presencePenalty().isPresent)
-        assertFalse(params.frequencyPenalty().isPresent)
-        assertFalse(params.stop().isPresent)
-    }
-
-    @Test
-    fun `mapToChatCompletionParams removes reasoning effort for grok 4 non reasoning family`() {
-        val params =
-            XaiRequestMapper.mapToChatCompletionParams(
-                modelId = "grok-4-1-fast-non-reasoning",
-                prompt = "hello",
-                history = emptyList(),
-                options =
-                    GenerationOptions(
-                        reasoningBudget = 0,
-                        reasoningEffort = ApiReasoningEffort.LOW,
-                        maxTokens = 100,
-                    ),
-            )
-
-        assertFalse(params.reasoningEffort().isPresent)
-        assertTrue(params.maxCompletionTokens().isPresent)
-        assertEquals(100L, params.maxCompletionTokens().get())
-    }
-
-    @Test
     fun `mapToResponseParams removes reasoning effort for grok 4 non reasoning family`() {
         val params =
             XaiRequestMapper.mapToResponseParams(
@@ -379,7 +325,7 @@ class XaiRequestMapperTest {
     @Test
     fun `LTD-04 xAI request mapper uses activeTools only`() {
         val params =
-            XaiRequestMapper.mapToChatCompletionParams(
+            XaiRequestMapper.mapToResponseParams(
                 modelId = "grok-3",
                 prompt = "Search and write",
                 history = emptyList(),
@@ -392,47 +338,15 @@ class XaiRequestMapperTest {
                                 catalogEntry("web_search", ToolDisclosureMode.PRELOADED),
                                 catalogEntry("append_blocks", ToolDisclosureMode.DISCLOSE_ON_DEMAND),
                             ),
-                        activeTools = listOf(ToolDefinition.DISCLOSE_TOOL_SCHEMAS, ToolDefinition.WEB_SEARCH),
+                        activeTools = listOf(ToolDefinition.SEARCH_TOOLS, ToolDefinition.WEB_SEARCH),
                     ),
             )
 
         val toolsPayload = params._additionalBodyProperties()["tools"].toString()
 
-        assertTrue(toolsPayload.contains("disclose_tool_schemas"))
+        assertTrue(toolsPayload.contains("tool_discovery_tool"))
         assertTrue(toolsPayload.contains("web_search"))
         assertFalse(toolsPayload.contains("\"append_blocks\""))
-    }
-
-    @Test
-    fun `mapToChatCompletionParams sends xai compatible non strict tool schema`() {
-        val params =
-            XaiRequestMapper.mapToChatCompletionParams(
-                modelId = "grok-3",
-                prompt = "hello",
-                history = emptyList(),
-                options =
-                    GenerationOptions(
-                        reasoningBudget = 0,
-                        toolingEnabled = true,
-                        activeTools = listOf(ToolDefinition.WEB_SEARCH),
-                    ),
-            )
-
-        val toolsPayload = params._additionalBodyProperties()["tools"].toString()
-        assertTrue(toolsPayload.contains("web_search"))
-    }
-
-    @Test
-    fun `mapToChatCompletionParams never sends logprobs for grok 420 family`() {
-        val params =
-            XaiRequestMapper.mapToChatCompletionParams(
-                modelId = "grok-4.20-reasoning",
-                prompt = "hello",
-                history = emptyList(),
-                options = GenerationOptions(reasoningBudget = 0),
-            )
-
-        assertFalse(params.logprobs().isPresent)
     }
 
     private fun catalogEntry(
@@ -488,47 +402,9 @@ class XaiRequestMapperTest {
     }
 
     @Test
-    fun `mapToChatCompletionParams includes image uris in user message`() {
-        val tempFile =
-            java.io.File.createTempFile("test", ".png").apply {
-                writeBytes(byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A))
-                deleteOnExit()
-            }
-        val params =
-            XaiRequestMapper.mapToChatCompletionParams(
-                modelId = "grok-4-1-fast-non-reasoning",
-                prompt = "describe image",
-                history = emptyList(),
-                options =
-                    GenerationOptions(
-                        reasoningBudget = 0,
-                        imageUris = listOf(tempFile.toURI().toString()),
-                    ),
-            )
-
-        val chatBody = params.toString()
-        assertTrue(chatBody.contains("describe image"))
-        assertTrue(chatBody.contains("image_url"))
-        assertTrue(chatBody.contains("data:image/png;base64,"))
-    }
-
-    @Test
     fun `mapToResponseParams sets store to false`() {
         val params =
             XaiRequestMapper.mapToResponseParams(
-                modelId = "grok-3",
-                prompt = "test",
-                history = emptyList(),
-                options = GenerationOptions(reasoningBudget = 0),
-            )
-
-        assertFalse(params.store().get())
-    }
-
-    @Test
-    fun `mapToChatCompletionParams sets store to false`() {
-        val params =
-            XaiRequestMapper.mapToChatCompletionParams(
                 modelId = "grok-3",
                 prompt = "test",
                 history = emptyList(),

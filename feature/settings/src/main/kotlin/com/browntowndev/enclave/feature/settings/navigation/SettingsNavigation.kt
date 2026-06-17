@@ -19,6 +19,7 @@ fun NavGraphBuilder.settingsGraph(
         settingsMainRoute(navController, onNavigateToProfileBuilder)
         settingsByokConfigureRoute(navController)
         settingsTtsConfigureRoute(navController)
+        settingsLiveVoiceConfigureRoute(navController)
         settingsMediaConfigureRoute(navController)
         settingsByokCustomHeadersRoute(navController)
         settingsLocalModelConfigureRoute(navController)

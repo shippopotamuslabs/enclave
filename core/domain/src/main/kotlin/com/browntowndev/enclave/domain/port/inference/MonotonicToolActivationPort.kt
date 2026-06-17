@@ -3,23 +3,19 @@ package com.browntowndev.enclave.domain.port.inference
 import com.browntowndev.enclave.domain.model.chat.ChatId
 
 /**
- * Session-scoped set of tools that have been intent-activated.
- * Once a tool name is added it is never removed for the lifetime of the session.
+ * Chat-scoped set of tools activated by intent classification or `tool_discovery_tool`.
+ * Once a tool name is recorded it stays until [clearSession].
  */
 interface MonotonicToolActivationPort {
-    /**
-     * Merges [newNames] into the persisted activated set for [chatId].
-     * Returns the full union (previously activated ∪ newNames).
-     * This set only grows; names are never removed within a session.
-     */
-    fun union(
+    /** Tools activated in prior turns for [chatId] (intent + search). */
+    fun activatedNames(chatId: ChatId): Set<String>
+
+    /** Merges [newNames] into the persisted set for [chatId]. */
+    fun recordActivation(
         chatId: ChatId,
         newNames: Set<String>,
-    ): Set<String>
+    )
 
-    /**
-     * Clears the record for [chatId].
-     * Called when the chat session ends or a new conversation starts.
-     */
+    /** Clears the record for [chatId] (chat deleted or session ended). */
     fun clearSession(chatId: ChatId)
 }

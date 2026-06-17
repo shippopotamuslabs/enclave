@@ -441,6 +441,7 @@ class Telemetry001InferenceTddRedTest {
         every { deltaUsage.inputTokens() } returns Optional.empty()
         every { deltaUsage.cacheCreationInputTokens() } returns Optional.empty()
         every { deltaUsage.cacheReadInputTokens() } returns Optional.empty()
+        every { deltaUsage._additionalProperties() } returns emptyMap()
 
         val textEvent =
             mockAnthropicStreamEvent(
@@ -512,6 +513,7 @@ class Telemetry001InferenceTddRedTest {
                     onTextToken: suspend (String) -> Unit,
                     onThinkingToken: suspend (String) -> Unit,
                     options: GenerationOptions,
+                    onLifecycleEvent: suspend (InferenceEvent) -> Unit,
                 ): AgentModelTurnResult = error("unused")
             }
         val toolExecutor =
@@ -530,6 +532,7 @@ class Telemetry001InferenceTddRedTest {
             rollingSummarizer = RollingSummarizer(loggingPort, JTokkitTokenCounter),
             resolveCompactionSummaryModel = mockk(relaxed = true),
             telemetryEventPort = telemetryPort,
+            embeddingEnginePort = com.browntowndev.enclave.domain.port.inference.Bm25OnlyEmbeddingEnginePort,
         )
     }
 

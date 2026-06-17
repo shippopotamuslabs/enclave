@@ -43,6 +43,7 @@ class DownloadViewModel
         @Assisted private val modelsResult: DownloadModelsResult,
         @Assisted private val initialErrorMessage: String?,
         @Assisted private val autoStartDownloads: Boolean = true,
+        @Assisted private val refreshDownloadPlan: DownloadPlanRefresher? = null,
     ) : ViewModel() {
         companion object {
             private const val TAG = "DownloadViewModel"
@@ -52,9 +53,11 @@ class DownloadViewModel
         private val utilityDisplayNameBySha256: Map<String, String> =
             modelsResult.utilityAssets
                 .mapNotNull { asset ->
-                    asset.metadata.utilityType?.let { utilityType ->
-                        asset.metadata.sha256 to utilityType.displayName()
-                    }
+                    // Prefer the asset's own label: variant-substituted assets (e.g. the SD1.5
+                    // CPU zip) carry a corrected name that the utilityType default would hide.
+                    val name = asset.metadata.displayName.takeIf { it.isNotBlank() }
+                        ?: asset.metadata.utilityType?.displayName()
+                    name?.let { asset.metadata.sha256 to it }
                 }.toMap()
 
         @AssistedFactory
@@ -63,6 +66,7 @@ class DownloadViewModel
                 modelsResult: DownloadModelsResult,
                 initialErrorMessage: String? = null,
                 autoStartDownloads: Boolean = true,
+                refreshDownloadPlan: DownloadPlanRefresher? = null,
             ): DownloadViewModel
         }
 
@@ -196,7 +200,8 @@ class DownloadViewModel
                         currentStatus != null &&
                             currentStatus != DownloadStatus.DOWNLOADING &&
                             currentStatus != DownloadStatus.PAUSED &&
-                            currentStatus != DownloadStatus.WIFI_BLOCKED
+                            currentStatus != DownloadStatus.WIFI_BLOCKED &&
+                            currentStatus != DownloadStatus.ERROR
                     if (downloadsStarted && isStalledStatus) {
                         Log.d(TAG, "checkModels: downloadsStarted=true but status=$currentStatus, resetting guard")
                         downloadsStarted = false
@@ -304,6 +309,8 @@ class DownloadViewModel
             Log.i(TAG, "User action: retry failed downloads")
             downloadsStarted = false
             viewModelScope.launch {
+                modelDownloadOrchestrator.pauseDownloads()
+                refreshDownloadPlan?.refresh()
                 modelDownloadOrchestrator.retryFailed()
                 observeWorkProgress()
             }

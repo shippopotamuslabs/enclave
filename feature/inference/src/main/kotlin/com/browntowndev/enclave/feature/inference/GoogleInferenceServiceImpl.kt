@@ -17,6 +17,11 @@ import com.browntowndev.enclave.domain.port.inference.ToolEnvelopeParserPort
 import com.browntowndev.enclave.domain.port.inference.ToolStreamGatePort
 import com.browntowndev.enclave.domain.port.telemetry.TelemetryEventPort
 import com.browntowndev.enclave.feature.inference.appendonly.ProviderAppendOnlyContext
+import com.browntowndev.enclave.feature.inference.appendonly.ProviderAppendOnlyContextFactory
+import com.browntowndev.enclave.feature.inference.appendonly.SessionIndexVolatilePlacement
+import com.browntowndev.enclave.feature.inference.appendonly.ensureAppendOnlyContext
+import com.browntowndev.enclave.feature.inference.appendonly.toProviderNormalizedMessages
+import com.browntowndev.enclave.feature.inference.appendonly.toToolsFingerprint
 import com.browntowndev.enclave.feature.inference.telemetry.InferenceTelemetrySupport
 import com.browntowndev.enclave.feature.inference.telemetry.emitInferenceExecutionOutcome
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -32,8 +37,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
-import java.util.concurrent.CopyOnWriteArrayList
-
 class GoogleInferenceServiceImpl(
     private val sdkClient: GoogleGenAiSdkClient,
     private val modelId: String,
@@ -47,15 +50,15 @@ class GoogleInferenceServiceImpl(
     private val telemetryEventPort: TelemetryEventPort? = null,
 ) : RustCompatibleInferenceService {
     companion object {
-        private const val MAX_LOG_BODY_CHARS = 4_000
+
         private const val TAG = "GoogleInferenceService"
         private const val PROVIDER = "GOOGLE"
         private val TOOL_ARGUMENT_JSON_MAPPER = ObjectMapper()
     }
 
-    private val conversationHistory = CopyOnWriteArrayList<ChatMessage>()
-
     private var appendOnlyContext: ProviderAppendOnlyContext? = null
+
+    internal fun appendOnlyContextForTests(): ProviderAppendOnlyContext? = appendOnlyContext
 
     @Volatile
     private var activeToolCatalogJson: String = AgentLoopToolCatalogJson.EMPTY_ARRAY
@@ -71,89 +74,15 @@ class GoogleInferenceServiceImpl(
     override fun sendPrompt(
         prompt: String,
         closeConversation: Boolean,
-    ): Flow<InferenceEvent> = sendPrompt(prompt, GenerationOptions(reasoningBudget = 0), closeConversation)
+    ): Flow<InferenceEvent> = error("sendPrompt not supported; all Google services are wrapped by RustLoopInferenceService")
 
     override fun sendPrompt(
         prompt: String,
         options: GenerationOptions,
         closeConversation: Boolean,
-    ): Flow<InferenceEvent> =
-        flow {
-            try {
-                require(options.imageUris.size <= 3600) {
-                    "Google API supports a maximum of 3600 images per request."
-                }
-                val requestHistory = buildRequestHistory(options)
-                loggingPort.debug(
-                    TAG,
-                    @Suppress("MaxLineLength")
-                    "sendPrompt start provider=$PROVIDER model=$modelId modelType=$modelType closeConversation=$closeConversation reasoningBudget=${options.reasoningBudget} reasoningEffort=${options.reasoningEffort} maxTokens=${options.maxTokens}",
-                )
-                executePrompt(prompt, options, requestHistory) { emit(it) }
-
-                conversationHistory.add(ChatMessage(Role.USER, prompt))
-                if (closeConversation) {
-                    closeSession()
-                }
-            } catch (e: CancellationException) {
-                loggingPort.debug(TAG, "sendPrompt cancelled provider=$PROVIDER model=$modelId")
-                emit(InferenceEvent.Finished(modelType))
-                throw e
-            } catch (e: IllegalArgumentException) {
-                loggingPort.error(TAG, "Tool request failed. exception=${e::class.java.simpleName} message=${e.message}", e)
-                emit(InferenceEvent.Error(e, modelType))
-                return@flow
-            } catch (e: IllegalStateException) {
-                loggingPort.error(TAG, "Tool request failed. exception=${e::class.java.simpleName} message=${e.message}", e)
-                emit(InferenceEvent.Error(e, modelType))
-                return@flow
-            } catch (e: Exception) {
-                val errorMsg = e.message ?: "Unknown error"
-                loggingPort.error(TAG, "API request failed. exception=${e::class.java.simpleName} message=$errorMsg", e)
-                emit(InferenceEvent.Error(Exception("API Error ($PROVIDER): $errorMsg", e), modelType))
-            }
-        }.flowOn(Dispatchers.IO)
-
-    private suspend fun executePrompt(
-        prompt: String,
-        options: GenerationOptions,
-        requestHistory: List<ChatMessage>,
-        emitEvent: suspend (InferenceEvent) -> Unit,
-    ) {
-        activeToolCatalogJson = AgentLoopToolCatalogJson.jsonForCatalog(options.toolCatalog)
-        logImagePayloads(options)
-
-        val request =
-            GoogleRequestMapper.mapToGenerateContentRequest(
-                prompt = prompt,
-                history = requestHistory,
-                options = options,
-            )
-
-        loggingPort.info(
-            TAG,
-            "Using Google GenAI SDK. model=$modelId reasoningBudget=${options.reasoningBudget} maxTokens=${options.maxTokens}",
-        )
-        loggingPort.debug(
-            TAG,
-            @Suppress("MaxLineLength")
-            "GenerateContent request provider=$PROVIDER model=$modelId baseUrl=${baseUrl ?: "<default>"} body=${truncateForLogs(
-                request.config.toString(),
-            )}",
-        )
-
-        sdkClient.generateContentStream(
-            modelId = modelId,
-            contents = request.contents,
-            config = request.config,
-            emitEvent = emitEvent,
-        )
-        emitEvent(InferenceEvent.Finished(modelType))
-    }
+    ): Flow<InferenceEvent> = error("sendPrompt not supported; all Google services are wrapped by RustLoopInferenceService")
 
     override suspend fun setHistory(messages: List<ChatMessage>) {
-        conversationHistory.clear()
-        conversationHistory.addAll(messages)
         resetAppendOnlyForNewPrompt()
     }
 
@@ -167,7 +96,6 @@ class GoogleInferenceServiceImpl(
     }
 
     override suspend fun closeSession() {
-        conversationHistory.clear()
         promptCacheSession.close()
         appendOnlyContext?.invalidate()
         appendOnlyContext = null
@@ -183,9 +111,11 @@ class GoogleInferenceServiceImpl(
         onTextToken: suspend (String) -> Unit,
         onThinkingToken: suspend (String) -> Unit,
         options: GenerationOptions,
+        onLifecycleEvent: suspend (InferenceEvent) -> Unit,
     ): AgentModelTurnResult {
         val startedAtMs = System.currentTimeMillis()
         try {
+            loggingPort.debug(TAG, "completeSingleTurn provider=$PROVIDER model=$modelId modelType=$modelType")
             activeToolCatalogJson = AgentLoopToolCatalogJson.jsonForCatalog(options.toolCatalog)
             val timing =
                 telemetrySupport?.let {
@@ -202,12 +132,25 @@ class GoogleInferenceServiceImpl(
                     ?: throw IllegalArgumentException("sessionMessages cannot be empty")
             val latestIndex = sessionMessages.lastIndex
 
+            appendOnlyContext =
+                ProviderAppendOnlyContextFactory.ensureAppendOnlyContext(
+                    current = appendOnlyContext,
+                    onLogCleared = { reason ->
+                        loggingPort.warning(TAG, "Append-only message log cleared: $reason")
+                    },
+                )
+            val appendOnly = requireNotNull(appendOnlyContext)
+            appendOnly.ensureStablePrefix(
+                systemPrompt = systemPrompt,
+                toolsFingerprint = availableTools.toToolsFingerprint(),
+            )
+            appendOnly.syncMessages(sessionMessages.toProviderNormalizedMessages())
+            val tailInsertIndex = SessionIndexVolatilePlacement.resolveTailInsertIndex(sessionMessages)
             val latestUserPrepends = contextSidecars?.trim()?.takeIf { it.isNotEmpty() }
 
             fun mapAtIndex(
                 message: AgentLoopMessage,
                 index: Int,
-                prependVolatile: Boolean,
                 attachImages: Boolean,
             ): Content? =
                 GoogleAgentLoopContentMapper.mapMessage(
@@ -215,8 +158,21 @@ class GoogleInferenceServiceImpl(
                     index = index,
                     lastUserIndex = if (attachImages) lastUserIndex else -1,
                     imageUris = if (attachImages) imageUris else emptyList(),
-                    prependedText = if (prependVolatile) latestUserPrepends else null,
+                    prependedText = if (index == latestIndex && !latestUserPrepends.isNullOrBlank()) latestUserPrepends else null,
                 )
+
+            fun appendMappedMessage(
+                target: MutableList<Content>,
+                message: AgentLoopMessage,
+                index: Int,
+                attachImages: Boolean,
+            ) {
+                mapAtIndex(
+                    message = message,
+                    index = index,
+                    attachImages = attachImages,
+                )?.let(target::add)
+            }
 
             val activeCacheName =
                 promptCacheSession.ensureCacheForStablePrefix(
@@ -225,7 +181,7 @@ class GoogleInferenceServiceImpl(
                     availableTools = availableTools,
                     mapToContent = { msg ->
                         val index = sessionMessages.indexOfFirst { it.id == msg.id }
-                        mapAtIndex(msg, index, prependVolatile = false, attachImages = false)
+                        mapAtIndex(msg, index, attachImages = false)
                     },
                 )
 
@@ -267,14 +223,19 @@ class GoogleInferenceServiceImpl(
                 buildList {
                     deltaHistory.forEach { msg ->
                         val index = sessionMessages.indexOfFirst { it.id == msg.id }
-                        mapAtIndex(msg, index, prependVolatile = false, attachImages = false)?.let(::add)
+                        appendMappedMessage(
+                            target = this,
+                            message = msg,
+                            index = index,
+                            attachImages = false,
+                        )
                     }
-                    mapAtIndex(
-                        latestMessage,
-                        latestIndex,
-                        prependVolatile = !latestUserPrepends.isNullOrBlank(),
+                    appendMappedMessage(
+                        target = this,
+                        message = latestMessage,
+                        index = latestIndex,
                         attachImages = true,
-                    )?.let(::add)
+                    )
                 }
 
             val response =
@@ -289,7 +250,10 @@ class GoogleInferenceServiceImpl(
                                 timing?.markFirstOutput()
                                 onTextToken(event.chunk)
                             }
-                            is InferenceEvent.Thinking -> onThinkingToken(event.chunk)
+                            is InferenceEvent.Thinking -> {
+                                timing?.markFirstOutput()
+                                onThinkingToken(event.chunk)
+                            }
                             else -> {}
                         }
                     },
@@ -322,16 +286,29 @@ class GoogleInferenceServiceImpl(
                     ?.let { text -> (text.length / 4).coerceAtLeast(1) }
             val telemetry =
                 if (telemetrySupport != null && timing != null && captureContext != null) {
-                    telemetrySupport.localTurnTelemetry(
+                    telemetrySupport.openAiTurnTelemetry(
                         context = captureContext,
                         providerLabel = "Google",
+                        modelId = modelId,
                         modelLabel = modelId,
                         timing = timing,
-                        outputTokens = outputTokenEstimate,
+                        inputTokens = response.promptTokens,
+                        outputTokens = response.completionTokens,
+                        reasoningTokens = response.thoughtsTokens,
+                        cacheReadInputTokens = response.cachedContentTokens,
+                        costUsd = null,
+                        savedPricing = options.apiModelPricing,
                     )
                 } else {
                     null
                 }
+
+            if (!contextSidecars.isNullOrBlank()) {
+                appendOnly.endTurnFreezeSidecar(
+                    sidecarText = contextSidecars,
+                    mappedInsertIndex = tailInsertIndex,
+                )
+            }
 
             return AgentModelTurnResult(
                 assistantText = assistantText,
@@ -349,7 +326,7 @@ class GoogleInferenceServiceImpl(
                     provider = "Google",
                     modelId = modelId,
                     success = true,
-                    tokenCount = outputTokenEstimate,
+                    tokenCount = response.completionTokens ?: outputTokenEstimate,
                     baseUrl = baseUrl,
                 )
             }
@@ -382,6 +359,14 @@ class GoogleInferenceServiceImpl(
             )
         } catch (e: Exception) {
             loggingPort.error(TAG, "completeSingleTurn failed: ${e.message}", e)
+            telemetryEventPort.emitInferenceExecutionOutcome(
+                startedAtMs = startedAtMs,
+                provider = "Google",
+                modelId = modelId,
+                success = false,
+                errorMessage = e.message,
+                baseUrl = baseUrl,
+            )
             throw e
         }
     }
@@ -410,57 +395,4 @@ class GoogleInferenceServiceImpl(
             ?: AgentFinishReason.Stop
     }
 
-    private fun buildRequestHistory(options: GenerationOptions): List<ChatMessage> {
-        val historyWithSystemPrompt = mergeSystemPrompt(conversationHistory, options.systemPrompt)
-        loggingPort.debug(
-            TAG,
-            @Suppress("MaxLineLength")
-            "Prepared request history provider=$PROVIDER model=$modelId modelType=$modelType historyCount=${historyWithSystemPrompt.size} systemPromptIncluded=${historyWithSystemPrompt.firstOrNull()?.role == Role.SYSTEM}",
-        )
-        return historyWithSystemPrompt
-    }
-
-    private fun mergeSystemPrompt(
-        history: List<ChatMessage>,
-        systemPrompt: String?,
-    ): List<ChatMessage> {
-        val normalizedPrompt = systemPrompt?.trim()?.takeIf { it.isNotEmpty() } ?: return history
-        if (history.any { it.role == Role.SYSTEM && it.content == normalizedPrompt }) {
-            return history
-        }
-        return listOf(ChatMessage(role = Role.SYSTEM, content = normalizedPrompt)) + history
-    }
-
-    private fun truncateForLogs(value: String): String {
-        if (value.length <= MAX_LOG_BODY_CHARS) {
-            return value
-        }
-        return value.take(MAX_LOG_BODY_CHARS) + "...<truncated>"
-    }
-
-    private fun logImagePayloads(options: GenerationOptions) {
-        if (options.imageUris.isEmpty()) {
-            return
-        }
-        val payloads =
-            runCatching {
-                ImagePayloads.fromUris(options.imageUris)
-            }.getOrElse { error ->
-                loggingPort.error(
-                    TAG,
-                    "Failed to load image payloads provider=$PROVIDER model=$modelId message=${error.message}",
-                    error,
-                )
-                return
-            }
-
-        val details =
-            payloads.joinToString(separator = "; ") { payload ->
-                "file=${payload.filename}, mime=${payload.mimeType}, bytes=${payload.byteCount}, sha256=${payload.sha256.take(8)}"
-            }
-        loggingPort.info(
-            TAG,
-            "Image payloads provider=$PROVIDER model=$modelId count=${payloads.size} $details",
-        )
-    }
 }

@@ -17,6 +17,8 @@ data class AgentLoopAgentConfig(
     val thresholdRatio: Float = 0.80f,
     val microKeepRecent: UInt = 4u,
     val toolRetryLimit: UInt = 3u,
+    val modelApiRetryLimit: UInt = 3u,
+    val modelApiRetryBaseDelayMs: ULong = 1_000uL,
     val toolResultBudgetCloudBytes: ULong = 16384uL,
     val toolResultBudgetRelaxedBytes: ULong = 131072uL,
     val toolResultTruncationPressureRatio: Float = 0.85f,
@@ -54,25 +56,26 @@ data class AgentLoopAgentConfig(
 )
 
 data class AgentLoopToolSemanticsConfig(
-    val disclosure: AgentLoopToolDisclosureSemantics?,
+    val discovery: AgentLoopToolDiscoverySemantics?,
     val artifact: AgentLoopArtifactToolSemantics?,
     val greedyExtensionTools: List<AgentLoopToolGreedyExtensionSemantics>,
 ) {
     companion object {
         fun agnostic(): AgentLoopToolSemanticsConfig =
             AgentLoopToolSemanticsConfig(
-                disclosure = null,
+                discovery = null,
                 artifact = null,
                 greedyExtensionTools = emptyList(),
             )
 
         fun enclaveDefault(): AgentLoopToolSemanticsConfig =
             AgentLoopToolSemanticsConfig(
-                disclosure =
-                    AgentLoopToolDisclosureSemantics(
-                        toolName = "disclose_tool_schemas",
-                        requestFieldName = "tool_names",
+                discovery =
+                    AgentLoopToolDiscoverySemantics(
+                        toolName = "tool_discovery_tool",
+                        requestFieldName = "capability",
                         alwaysCallable = true,
+                        companionCallableTools = listOf("read_context_reference"),
                     ),
                 artifact =
                     AgentLoopArtifactToolSemantics(
@@ -93,10 +96,11 @@ data class AgentLoopToolSemanticsConfig(
     }
 }
 
-data class AgentLoopToolDisclosureSemantics(
+data class AgentLoopToolDiscoverySemantics(
     val toolName: String,
     val requestFieldName: String,
     val alwaysCallable: Boolean,
+    val companionCallableTools: List<String> = emptyList(),
 )
 
 data class AgentLoopArtifactToolSemantics(

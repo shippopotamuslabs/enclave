@@ -9,6 +9,7 @@ import app.cash.turbine.test
 import com.browntowndev.enclave.core.ui.component.FullscreenMediaAction
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
+import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.config.MediaProviderAsset
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
@@ -26,6 +27,7 @@ import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPo
 import com.browntowndev.enclave.domain.port.repository.StudioAlbumAsset
 import com.browntowndev.enclave.domain.port.repository.StudioMediaAsset
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
+import com.browntowndev.enclave.domain.port.repository.UiSelectionRepository
 import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
 import com.browntowndev.enclave.domain.usecase.chat.ListenToSpeechUseCase
 import com.browntowndev.enclave.domain.usecase.media.ResolveMediaModelTypeUseCase
@@ -34,6 +36,8 @@ import com.browntowndev.enclave.feature.studio.coordinators.StudioAlbumSelection
 import com.browntowndev.enclave.feature.studio.coordinators.StudioCapabilitiesCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioGenerationCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioMediaActionsCoordinator
+import com.browntowndev.enclave.feature.studio.coordinators.StudioModelOverrideCoordinator
+import com.browntowndev.enclave.feature.studio.coordinators.StudioResolvedModelCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioPlaybackCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioPromptCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioRemoteCapabilitiesCoordinator
@@ -138,7 +142,7 @@ class StudioMediaTasksRedTest {
 
             viewModel.uiState.test {
                 awaitItem()
-                viewModel.promptCoordinator.onUpdateReferenceImage("file://reference.png")
+                viewModel.onUpdateReferenceImage("file://reference.png")
                 advanceUntilIdle()
 
                 assertEquals("image-edit", seenCapabilityProviderIds.last())
@@ -160,6 +164,25 @@ class StudioMediaTasksRedTest {
 
                 assertTrue(state.booleanFlag("hasImageEditModel"))
                 assertTrue(state.booleanFlag("hasImageToVideoModel"))
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `VM-02b local image edit default enables reference image affordance`() =
+        runTest {
+            defaultsFlow.value =
+                listOf(
+                    DefaultModelAssignment(
+                        modelType = ModelType.IMAGE_EDIT,
+                        localConfigId = LocalModelConfigurationId("sdxl-local-config"),
+                    ),
+                )
+
+            viewModel.uiState.test {
+                val state = awaitItem()
+
+                assertTrue(state.booleanFlag("hasImageEditModel"))
                 cancelAndIgnoreRemainingEvents()
             }
         }
@@ -187,8 +210,7 @@ class StudioMediaTasksRedTest {
                 val initialState = awaitItem()
                 assertEquals(VideoGenerationState.Idle, initialState.videoGenerationState)
 
-                viewModel.mediaActionsCoordinator.onAnimateMedia(
-                    prompt = viewModel.promptCoordinator,
+                viewModel.onAnimateMedia(
                     assetId = "asset-1",
                     autoAnimate = true,
                 )
@@ -205,14 +227,14 @@ class StudioMediaTasksRedTest {
                 cancelAndIgnoreRemainingEvents()
             }
 
-            verify(exactly = 0) { dispatcher.startGeneration(any(), any(), any()) }
+            verify(exactly = 0) { dispatcher.startGeneration(any(), any(), any(), any()) }
         }
 
     @Test
     fun `COORD-01 coordinator blocks detail video generation without image-to-video default`() {
         generationCoordinator.startDetailVideoGeneration(referenceAsset(), hasImageToVideoModel = false)
 
-        verify(exactly = 0) { dispatcher.startGeneration(any(), any(), any()) }
+        verify(exactly = 0) { dispatcher.startGeneration(any(), any(), any(), any()) }
         assertEquals(
             VideoGenerationState.Error(
                 sourceAssetId = "asset-1",
@@ -223,11 +245,11 @@ class StudioMediaTasksRedTest {
     }
 
     @Test
-    fun `UI-01 image reference picker hidden without edit model`() {
+    fun `UI-01 image reference picker shown but disabled without edit model`() {
         composeReferenceDock(mediaType = MediaCapability.IMAGE, hasImageEditModel = false)
 
-        composeTestRule.onNodeWithContentDescription("Reference image").assertDoesNotExist()
-        composeTestRule.onNodeWithText(STUDIO_REFERENCE_IMAGE_EDIT_UNAVAILABLE).assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Reference image").assertIsDisplayed()
+        composeTestRule.onNodeWithText(STUDIO_REFERENCE_IMAGE_EDIT_UNAVAILABLE).assertDoesNotExist()
     }
 
     @Test
@@ -239,11 +261,11 @@ class StudioMediaTasksRedTest {
     }
 
     @Test
-    fun `UI-03 video reference picker hidden without image-to-video model`() {
+    fun `UI-03 video reference picker shown but disabled without image-to-video model`() {
         composeReferenceDock(mediaType = MediaCapability.VIDEO, hasImageToVideoModel = false)
 
-        composeTestRule.onNodeWithContentDescription("Reference image").assertDoesNotExist()
-        composeTestRule.onNodeWithText(STUDIO_REFERENCE_I2V_UNAVAILABLE).assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Reference image").assertIsDisplayed()
+        composeTestRule.onNodeWithText(STUDIO_REFERENCE_I2V_UNAVAILABLE).assertDoesNotExist()
     }
 
     @Test
@@ -283,12 +305,17 @@ class StudioMediaTasksRedTest {
         val promptCoordinator = StudioPromptCoordinator(generationCoordinator, studioRepository)
         val mediaActionsCoordinator =
             StudioMediaActionsCoordinator(shareMediaPort, studioRepository, generationCoordinator)
+        val uiSelectionRepository =
+            mockk<UiSelectionRepository>(relaxed = true) {
+                every { selectedStudioMediaType } returns flowOf(MediaCapability.IMAGE)
+            }
         return MultimodalViewModel(
             defaultModelRepository = defaultModelRepository,
             mediaProviderRepository = mediaProviderRepository,
             moderatePromptUseCase = allowPromptModerationUseCase(),
             shouldModeratePromptUseCase = allowShouldModeratePromptUseCase(),
-            resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase(),
+            submitModerationReportUseCase = mockk(relaxed = true),
+            getImageGenerationCapabilitiesUseCase = mockk(relaxed = true),
             generationCoordinator = generationCoordinator,
             albumSelectionCoordinator = albumSelectionCoordinator,
             speechCoordinator = StudioSpeechCoordinator(chatUseCases),
@@ -298,6 +325,14 @@ class StudioMediaTasksRedTest {
             remoteCapabilitiesCoordinator = remoteCapabilitiesCoordinator,
             promptCoordinator = promptCoordinator,
             mediaActionsCoordinator = mediaActionsCoordinator,
+            uiSelectionRepository = uiSelectionRepository,
+            overrideCoordinator = StudioModelOverrideCoordinator(),
+            resolvedModelCoordinator =
+                StudioResolvedModelCoordinator(
+                    resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase(),
+                    mediaProviderRepository = mediaProviderRepository,
+                ),
+            getStudioCapablePresetsUseCase = mockk(relaxed = true),
         )
     }
 
@@ -321,7 +356,6 @@ class StudioMediaTasksRedTest {
                     onPromptChange = {},
                     onReferenceImageClick = {},
                     onClearReferenceImage = {},
-                    onSettingsClick = {},
                     onMicClick = {},
                     onGenerateClick = {},
                 )

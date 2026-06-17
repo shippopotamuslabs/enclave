@@ -49,7 +49,10 @@ class CreateUserMessageUseCase
          * @param message The message to save
          * @return [UserPromptResult] containing the user message ID and chat ID
          */
-        suspend operator fun invoke(message: Message): UserPromptResult =
+        suspend operator fun invoke(
+            message: Message,
+            scheduleCloudSync: Boolean = true,
+        ): UserPromptResult =
             transactionProvider.runInTransaction {
                 // If message.chatId is null, create a new chat and update message.chatId
                 if (message.chatId == null) {
@@ -63,7 +66,7 @@ class CreateUserMessageUseCase
                             lastModified = now,
                             pinned = false,
                         )
-                    val persistedChatId = chatRepository.createChat(newChat)
+                    val persistedChatId = chatRepository.createChat(newChat, scheduleCloudSync)
                     val newChatId =
                         if (persistedChatId == LEGACY_MOCK_CREATE_CHAT_RETURN) {
                             newChat.id

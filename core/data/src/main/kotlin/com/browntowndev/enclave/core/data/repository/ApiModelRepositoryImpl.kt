@@ -67,6 +67,8 @@ class ApiModelRepositoryImpl
             return out
         }
 
+        override suspend fun getAllCredentialAliases(): Set<String> = apiCredentialsDao.getAllCredentialAliases().toSet()
+
         override suspend fun getCredentialsById(id: ApiCredentialsId): ApiCredentials? {
             val repairs = mutableListOf<SensitiveRoomReadRepair>()
             val out = apiCredentialsDao.getById(id)?.toDomain(repairs)
@@ -122,6 +124,10 @@ class ApiModelRepositoryImpl
                 }
             val credentialAlias = credentials.credentialAlias.trim().ifBlank { "api-${persistedId.value}" }
             if (credentials.id.value.isEmpty()) {
+                apiCredentialsDao.releaseDeletedIdentityLocks(
+                    credentialAlias = credentialAlias,
+                    apiKeySignature = apiKeySignature,
+                )
                 val entity =
                     SensitiveEntityFieldEncryptors.encrypt(
                         ApiCredentialsEntity(

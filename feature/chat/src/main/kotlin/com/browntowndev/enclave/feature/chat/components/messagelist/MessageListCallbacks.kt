@@ -18,5 +18,5 @@ internal data class MessageListCallbacks(
     ) -> Unit = { _, _, _, _ -> },
     val onShareClick: (MessageId) -> Unit = {},
     val onStatsClick: (MessageId) -> Unit = {},
-    val onReportMessage: (String) -> Unit = {},
+    val onReportResponse: (MessageId) -> Unit = {},
 )

@@ -4,6 +4,7 @@ import com.browntowndev.enclave.domain.model.config.ApiCredentials
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.config.ApiModelConfiguration
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.config.TtsProviderId
@@ -31,6 +32,7 @@ class FakeSetDefaultModelUseCase : SetDefaultModelUseCase {
         apiConfigId: ApiModelConfigurationId?,
         ttsProviderId: TtsProviderId?,
         mediaProviderId: MediaProviderId?,
+        liveVoiceProviderId: LiveVoiceProviderId?,
     ) {
         recordedCalls.add(Call(modelType, localConfigId, apiConfigId))
     }

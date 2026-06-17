@@ -22,9 +22,12 @@ class DiscoverApiModelsUseCase
                 )
             val models = catalog.models
             val needsDetailFetch =
-                request.provider == ApiProvider.XAI &&
+                (request.provider == ApiProvider.XAI &&
                     request.selectedModelId != null &&
-                    models.none { it.id == request.selectedModelId && it.contextWindowTokens != null }
+                    models.none { it.id == request.selectedModelId && it.contextWindowTokens != null }) ||
+                (request.provider == ApiProvider.FAL &&
+                    request.selectedModelId != null &&
+                    models.none { it.id == request.selectedModelId && it.tasks.isNotEmpty() })
             val selectedModelDetail =
                 if (needsDetailFetch) {
                     fetchApiProviderModelDetailUseCase(

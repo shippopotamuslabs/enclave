@@ -35,7 +35,11 @@ interface DefaultModelsDao {
             mp.displayName as mediaAssetName,
             mp.provider as mediaProviderName,
             mp.modelName as mediaModelName,
-            mp.capability as mediaCapability
+            mp.capability as mediaCapability,
+            dm.live_voice_provider_id as liveVoiceProviderId,
+            lvp.displayName as liveVoiceAssetName,
+            lvp.provider as liveVoiceProviderName,
+            lvp.voiceName as liveVoiceVoiceName
         FROM default_models dm
         LEFT JOIN local_model_configurations lmc ON dm.local_config_id = lmc.id
         LEFT JOIN local_models lm ON lmc.local_model_id = lm.id
@@ -43,6 +47,7 @@ interface DefaultModelsDao {
         LEFT JOIN api_credentials ac ON amc.api_credentials_id = ac.id
         LEFT JOIN tts_providers tp ON dm.tts_provider_id = tp.id
         LEFT JOIN media_providers mp ON dm.media_provider_id = mp.id
+        LEFT JOIN live_voice_providers lvp ON dm.live_voice_provider_id = lvp.id
         WHERE dm.deleted = 0
     """,
     )

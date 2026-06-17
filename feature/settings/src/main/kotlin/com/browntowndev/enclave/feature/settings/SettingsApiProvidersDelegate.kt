@@ -10,13 +10,26 @@ import javax.inject.Inject
 /**
  * Facade over BYOK, TTS, and media provider coordinators for [SettingsViewModel].
  */
+@Suppress("TooManyFunctions")
 internal class SettingsApiProvidersDelegate
     @Inject
     constructor(
         private val byokCoordinator: ByokProvidersCoordinator,
         private val ttsCoordinator: TtsProvidersCoordinator,
+        private val liveVoiceCoordinator: LiveVoiceProvidersCoordinator,
         private val mediaCoordinator: MediaProvidersCoordinator,
     ) {
+        constructor(
+            byokCoordinator: ByokProvidersCoordinator,
+            ttsCoordinator: TtsProvidersCoordinator,
+            mediaCoordinator: MediaProvidersCoordinator,
+        ) : this(
+            byokCoordinator = byokCoordinator,
+            ttsCoordinator = ttsCoordinator,
+            liveVoiceCoordinator = defaultLiveVoiceProvidersCoordinator(),
+            mediaCoordinator = mediaCoordinator,
+        )
+
         fun onShowByokSheet(
             apiState: MutableStateFlow<ApiProvidersTransientState>,
             show: Boolean,
@@ -26,6 +39,11 @@ internal class SettingsApiProvidersDelegate
             ttsState: MutableStateFlow<TtsProvidersTransientState>,
             show: Boolean,
         ) = ttsCoordinator.onShowTtsProvidersSheet(ttsState, show)
+
+        fun onShowLiveVoiceProvidersSheet(
+            liveVoiceState: MutableStateFlow<LiveVoiceProvidersTransientState>,
+            show: Boolean,
+        ) = liveVoiceCoordinator.onShowLiveVoiceProvidersSheet(liveVoiceState, show)
 
         fun onShowMediaProvidersSheet(
             mediaState: MutableStateFlow<MediaProvidersTransientState>,
@@ -86,8 +104,19 @@ internal class SettingsApiProvidersDelegate
             currentApiKey: MutableStateFlow<String>,
         ) = ttsCoordinator.onFetchTtsModels(scope, tag, ttsState, currentApiKey)
 
+        fun onFetchLiveVoiceModels(
+            scope: CoroutineScope,
+            tag: String,
+            liveVoiceState: MutableStateFlow<LiveVoiceProvidersTransientState>,
+            currentApiKey: MutableStateFlow<String>,
+        ) = liveVoiceCoordinator.onFetchLiveVoiceModels(scope, tag, liveVoiceState, currentApiKey)
+
         fun onStartCreateTtsProviderAsset(ttsState: MutableStateFlow<TtsProvidersTransientState>) =
             ttsCoordinator.onStartCreateTtsProviderAsset(ttsState)
+
+        fun onStartCreateLiveVoiceProviderAsset(
+            liveVoiceState: MutableStateFlow<LiveVoiceProvidersTransientState>,
+        ) = liveVoiceCoordinator.onStartCreateLiveVoiceProviderAsset(liveVoiceState)
 
         fun onTtsAssetFieldChange(
             scope: CoroutineScope,
@@ -106,6 +135,23 @@ internal class SettingsApiProvidersDelegate
             asset: TtsProviderAssetUi?,
         ) = ttsCoordinator.onSelectTtsProviderAsset(scope, tag, ttsState, currentApiKey, asset)
 
+        fun onLiveVoiceAssetFieldChange(
+            scope: CoroutineScope,
+            tag: String,
+            liveVoiceState: MutableStateFlow<LiveVoiceProvidersTransientState>,
+            currentApiKey: MutableStateFlow<String>,
+            assignmentsUseCases: SettingsAssignmentUseCases,
+            asset: LiveVoiceProviderAssetUi,
+        ) = liveVoiceCoordinator.onLiveVoiceAssetFieldChange(scope, tag, liveVoiceState, currentApiKey, assignmentsUseCases, asset)
+
+        fun onSelectLiveVoiceProviderAsset(
+            scope: CoroutineScope,
+            tag: String,
+            liveVoiceState: MutableStateFlow<LiveVoiceProvidersTransientState>,
+            currentApiKey: MutableStateFlow<String>,
+            asset: LiveVoiceProviderAssetUi?,
+        ) = liveVoiceCoordinator.onSelectLiveVoiceProviderAsset(scope, tag, liveVoiceState, currentApiKey, asset)
+
         fun onSaveTtsProvider(
             scope: CoroutineScope,
             tag: String,
@@ -114,6 +160,15 @@ internal class SettingsApiProvidersDelegate
             assignmentsUseCases: SettingsAssignmentUseCases,
             onSuccess: () -> Unit,
         ) = ttsCoordinator.onSaveTtsProvider(scope, tag, ttsState, currentApiKey, assignmentsUseCases, onSuccess)
+
+        fun onSaveLiveVoiceProvider(
+            scope: CoroutineScope,
+            tag: String,
+            liveVoiceState: MutableStateFlow<LiveVoiceProvidersTransientState>,
+            currentApiKey: MutableStateFlow<String>,
+            assignmentsUseCases: SettingsAssignmentUseCases,
+            onSuccess: () -> Unit,
+        ) = liveVoiceCoordinator.onSaveLiveVoiceProvider(scope, tag, liveVoiceState, currentApiKey, assignmentsUseCases, onSuccess)
 
         fun onStartCreateMediaProviderAsset(mediaState: MutableStateFlow<MediaProvidersTransientState>) =
             mediaCoordinator.onStartCreateMediaProviderAsset(mediaState)
@@ -177,6 +232,13 @@ internal class SettingsApiProvidersDelegate
             tag: String,
             id: com.browntowndev.enclave.domain.model.config.TtsProviderId,
         ) = ttsCoordinator.onDeleteTtsProviderAsset(scope, tag, id)
+
+        fun onDeleteLiveVoiceProviderAsset(
+            scope: CoroutineScope,
+            tag: String,
+            id: com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId,
+            assignmentsUseCases: SettingsAssignmentUseCases,
+        ) = liveVoiceCoordinator.onDeleteLiveVoiceProviderAsset(scope, tag, id, assignmentsUseCases)
 
         fun onDeleteMediaProviderAsset(
             scope: CoroutineScope,
