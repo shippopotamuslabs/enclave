@@ -273,9 +273,10 @@ object TelemetrySummaryBuilder {
     internal fun inputDenominatorForCacheHitRate(row: TurnTelemetry): Int? {
         val input = row.inputTokens ?: return null
         val cacheRead = row.cacheReadInputTokens ?: 0
-        return when (row.providerKey) {
-            TelemetryProviderKey.ANTHROPIC -> input + cacheRead + (row.cacheCreationInputTokens ?: 0)
-            else -> input
+        return if (row.providerKey.reportsCacheExclusiveInput) {
+            input + cacheRead + (row.cacheCreationInputTokens ?: 0)
+        } else {
+            input
         }
     }
 
@@ -292,10 +293,10 @@ object TelemetrySummaryBuilder {
      */
     fun normalizedInputTokens(row: TurnTelemetry): Int? {
         val input = row.inputTokens ?: return null
-        return when (row.providerKey) {
-            TelemetryProviderKey.ANTHROPIC ->
-                input + (row.cacheReadInputTokens ?: 0) + (row.cacheCreationInputTokens ?: 0)
-            else -> input
+        return if (row.providerKey.reportsCacheExclusiveInput) {
+            input + (row.cacheReadInputTokens ?: 0) + (row.cacheCreationInputTokens ?: 0)
+        } else {
+            input
         }
     }
 

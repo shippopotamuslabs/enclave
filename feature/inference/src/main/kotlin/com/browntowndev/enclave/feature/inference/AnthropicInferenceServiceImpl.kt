@@ -37,6 +37,7 @@ import com.browntowndev.enclave.feature.inference.appendonly.SessionIndexVolatil
 import com.browntowndev.enclave.feature.inference.appendonly.ensureAppendOnlyContext
 import com.browntowndev.enclave.feature.inference.appendonly.toProviderNormalizedMessages
 import com.browntowndev.enclave.feature.inference.appendonly.toToolsFingerprint
+import com.browntowndev.enclave.feature.inference.telemetry.AnthropicReasoningTokenExtractor
 import com.browntowndev.enclave.feature.inference.telemetry.InferenceTelemetrySupport
 import com.browntowndev.enclave.feature.inference.telemetry.emitInferenceExecutionOutcome
 import com.fasterxml.jackson.core.type.TypeReference
@@ -67,6 +68,7 @@ class AnthropicInferenceServiceImpl(
     private val toolStreamGatePort: ToolStreamGatePort,
     private val telemetrySupport: InferenceTelemetrySupport? = null,
     private val telemetryEventPort: TelemetryEventPort? = null,
+    private val providerLabel: String = DEFAULT_PROVIDER_LABEL,
 ) : RustCompatibleInferenceService {
     private data class StreamedAnthropicResponse(
         val emittedAny: Boolean,
@@ -97,6 +99,7 @@ class AnthropicInferenceServiceImpl(
         private const val MAX_LOG_BODY_CHARS = 4_000
         private const val TAG = "AnthropicInferenceService"
         private const val PROVIDER = "ANTHROPIC"
+        const val DEFAULT_PROVIDER_LABEL = "Anthropic"
         private val TOOL_INPUT_JSON_MAPPER = ObjectMapper()
     }
 
@@ -451,6 +454,7 @@ class AnthropicInferenceServiceImpl(
                 if (telemetrySupport != null && timing != null && captureContext != null) {
                     telemetrySupport.anthropicTurnTelemetry(
                         context = captureContext,
+                        providerLabel = providerLabel,
                         modelId = modelId,
                         modelLabel = modelId,
                         timing = timing,
@@ -486,7 +490,7 @@ class AnthropicInferenceServiceImpl(
             ).also {
                 telemetryEventPort.emitInferenceExecutionOutcome(
                     startedAtMs = startedAtMs,
-                    provider = "Anthropic",
+                    provider = providerLabel,
                     modelId = resolvedModelId,
                     success = true,
                     tokenCount = response.outputTokens,
@@ -500,7 +504,7 @@ class AnthropicInferenceServiceImpl(
         } catch (e: InferenceNetworkException) {
             telemetryEventPort.emitInferenceExecutionOutcome(
                 startedAtMs = startedAtMs,
-                provider = "Anthropic",
+                provider = providerLabel,
                 modelId = resolvedModelId,
                 success = false,
                 errorMessage = e.message,
@@ -511,7 +515,7 @@ class AnthropicInferenceServiceImpl(
             loggingPort.error(TAG, "completeSingleTurn network failure: ${describeException(e)}", e)
             telemetryEventPort.emitInferenceExecutionOutcome(
                 startedAtMs = startedAtMs,
-                provider = "Anthropic",
+                provider = providerLabel,
                 modelId = resolvedModelId,
                 success = false,
                 errorMessage = e.message,
@@ -526,7 +530,7 @@ class AnthropicInferenceServiceImpl(
             loggingPort.error(TAG, "completeSingleTurn failed: ${describeException(e)}", e)
             telemetryEventPort.emitInferenceExecutionOutcome(
                 startedAtMs = startedAtMs,
-                provider = "Anthropic",
+                provider = providerLabel,
                 modelId = resolvedModelId,
                 success = false,
                 errorMessage = e.message,
@@ -642,13 +646,16 @@ class AnthropicInferenceServiceImpl(
                             .usage()
                     inputTokens = usage.inputTokens().toInt()
                     outputTokens = usage.outputTokens().toInt()
-                    reasoningTokens = null
+                    // messageStart is guaranteed-first in the Anthropic streaming protocol, so an
+                    // unconditional assignment here is intentional. Use the same guarded override
+                    // pattern as the cache fields below so the semantics are uniform.
+                    AnthropicReasoningTokenExtractor.extract(usage)?.let { reasoningTokens = it }
                     val cacheCreationOpt = usage.cacheCreationInputTokens()
                     val cacheReadOpt = usage.cacheReadInputTokens()
                     loggingPort.debug(
                         TAG,
                         @Suppress("MaxLineLength")
-                        "Anthropic messageStart usage model=$modelId inputTokens=$inputTokens outputTokens=$outputTokens cacheCreation=${cacheCreationOpt.map { it.toString() }.orElse("absent")} cacheRead=${cacheReadOpt.map { it.toString() }.orElse("absent")}",
+                        "Anthropic messageStart usage provider=$providerLabel model=$modelId inputTokens=$inputTokens outputTokens=$outputTokens reasoningTokens=$reasoningTokens cacheCreation=${cacheCreationOpt.map { it.toString() }.orElse("absent")} cacheRead=${cacheReadOpt.map { it.toString() }.orElse("absent")}",
                     )
                     cacheCreationInputTokens = cacheCreationOpt.map { it.toInt() }.orElse(null)
                     cacheReadInputTokens = cacheReadOpt.map { it.toInt() }.orElse(null)
@@ -741,6 +748,7 @@ class AnthropicInferenceServiceImpl(
                     if (cacheReadDeltaOpt.isPresent) {
                         cacheReadInputTokens = cacheReadDeltaOpt.get().toInt()
                     }
+                    AnthropicReasoningTokenExtractor.extract(usage)?.let { reasoningTokens = it }
                     loggingPort.debug(TAG, "Anthropic stream message delta model=$modelId")
                 }
             }

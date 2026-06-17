@@ -28,4 +28,5 @@ data class MessageSnapshot(
     val generatedMediaPrompts: List<String> = emptyList(),
     val transcriptSegments: List<MessageTranscriptSegment> = emptyList(),
     val telemetryRows: List<TurnTelemetry> = emptyList(),
+    val failureErrorCategory: ChatInferenceErrorCategory? = null,
 )

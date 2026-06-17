@@ -95,6 +95,10 @@ abstract class BaseOpenAiSdkInferenceService(
 
     protected open val useStrictToolSchemas: Boolean = false
 
+    protected open fun toApiTemperature(value: Float): Double = value.toDouble()
+
+    protected open fun toApiTopP(value: Float): Double = value.toDouble()
+
     private val appendOnlyContexts = mutableMapOf<String, ProviderAppendOnlyContext>()
     private var activeAppendOnlyKey: String? = null
 
@@ -326,10 +330,10 @@ abstract class BaseOpenAiSdkInferenceService(
                 options.reasoningEffort?.let { builder.reasoningEffort(ReasoningMapper.toSdkEffort(it)) }
             }
             if (!options.temperatureDisabled && parameterSupport?.supportsTemperature != false) {
-                options.temperature?.let { builder.temperature(it.toDouble()) }
+                options.temperature?.let { builder.temperature(toApiTemperature(it)) }
             }
             if (!options.topPDisabled && parameterSupport?.supportsTopP != false) {
-                options.topP?.let { builder.topP(it.toDouble()) }
+                options.topP?.let { builder.topP(toApiTopP(it)) }
             }
             if (!options.maxTokensDisabled && parameterSupport?.supportsMaxTokens != false) {
                 options.safeMaxCompletionTokens()?.let { builder.maxCompletionTokens(it.toLong()) }

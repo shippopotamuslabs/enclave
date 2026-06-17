@@ -29,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,6 +56,7 @@ import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.inference.ApiModelParameterSupport
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ApiReasoningControlStyle
+import com.browntowndev.enclave.domain.model.inference.ZaiEndpoint
 
 @Composable
 fun SearchSkillConfigurationForm(
@@ -143,8 +145,11 @@ fun ProviderSelectionField(
                     onClick = {
                         val nextBaseUrl =
                             when {
-                                asset.baseUrl == asset.provider.defaultBaseUrl() -> provider.defaultBaseUrl()
-                                asset.baseUrl.isNullOrBlank() -> provider.defaultBaseUrl()
+                                provider == ApiProvider.ZAI -> ZaiEndpoint.PUBLIC.baseUrl
+                                asset.provider == ApiProvider.ZAI -> provider.defaultBaseUrl()
+                                asset.baseUrl.isNullOrBlank() ||
+                                    asset.baseUrl == asset.provider.defaultBaseUrl() ->
+                                    provider.defaultBaseUrl()
                                 else -> asset.baseUrl
                             }
                         onAssetChange(
@@ -589,12 +594,19 @@ fun CredentialsConfigurationForm(
             onAssetChange = onAssetChange,
         )
 
-        NeoOutlinedTextField(
-            value = asset.baseUrl ?: "",
-            onValueChange = { onAssetChange(asset.copy(baseUrl = it)) },
-            label = { Text("Base URL (Optional)") },
-            modifier = Modifier.fillMaxWidth(),
-        )
+        if (asset.provider == ApiProvider.ZAI) {
+            ZaiEndpointSelectionField(
+                asset = asset,
+                onAssetChange = onAssetChange,
+            )
+        } else {
+            NeoOutlinedTextField(
+                value = asset.baseUrl ?: "",
+                onValueChange = { onAssetChange(asset.copy(baseUrl = it)) },
+                label = { Text("Base URL (Optional)") },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
 
         ApiKeyWithReuseSection(
             reusableCredentials = reusableCredentials,
@@ -992,6 +1004,13 @@ fun PresetConfigurationForm(
     onNavigateToCustomHeaders: () -> Unit,
     discoveryCallbacks: ModelDiscoveryFieldCallbacks,
 ) {
+    LaunchedEffect(provider, config.id, config.isFreshPreset) {
+        val normalized = config.applyProviderPresetDefaultsIfFresh(provider)
+        if (normalized != config) {
+            onConfigChange(normalized)
+        }
+    }
+
     val hasReadonlyContextWindow = selectedModelMetadata?.contextWindowTokens != null
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -1223,4 +1242,22 @@ fun PreviewByokConfigureOpenRouterPreset() {
             onSaveSearchSettings = {},
         )
     }
+}
+
+internal fun freshApiPresetDraft(provider: ApiProvider): ApiModelConfigUi =
+    ApiModelConfigUi(
+        temperature = provider.defaultPresetTemperature(),
+        isFreshPreset = true,
+    )
+
+internal fun ApiModelConfigUi.applyProviderPresetDefaultsIfFresh(provider: ApiProvider): ApiModelConfigUi {
+    if (!isFreshPreset) return this
+    val recommendedTemperature = provider.defaultPresetTemperature()
+    val updated =
+        if (temperature == ApiProvider.GENERIC_PRESET_TEMPERATURE && temperature != recommendedTemperature) {
+            copy(temperature = recommendedTemperature)
+        } else {
+            this
+        }
+    return updated.copy(isFreshPreset = false)
 }

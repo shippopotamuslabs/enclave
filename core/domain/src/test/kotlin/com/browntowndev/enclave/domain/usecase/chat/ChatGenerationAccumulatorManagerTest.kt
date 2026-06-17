@@ -4,6 +4,8 @@ import com.browntowndev.enclave.domain.model.artifact.ArtifactGenerationRequest
 import com.browntowndev.enclave.domain.model.artifact.MimeType
 import com.browntowndev.enclave.domain.model.chat.AccumulatedMessages
 import com.browntowndev.enclave.domain.model.chat.ChatId
+import com.browntowndev.enclave.domain.model.chat.ChatInferenceErrorCategory
+import com.browntowndev.enclave.domain.model.chat.ChatInferenceUserErrorMapper
 import com.browntowndev.enclave.domain.model.chat.MessageGenerationState
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.MessageState
@@ -578,9 +580,72 @@ class ChatGenerationAccumulatorManagerTest {
                 )
 
             val snapshot = result.messages.getValue(MessageId("assistant"))
-            assertTrue(snapshot.content.contains("Sorry, something went wrong"))
-            assertTrue(snapshot.content.contains("Model API unavailable: stream ended unexpectedly (attempts=3)"))
+            assertTrue(snapshot.content.contains("temporarily unavailable"))
+            assertFalse(snapshot.content.contains("attempts=3"))
+            assertEquals(ChatInferenceErrorCategory.TRANSPORT_FAILURE, snapshot.failureErrorCategory)
             assertEquals(MessageState.COMPLETE, snapshot.messageState)
+        }
+
+    @Test
+    fun `failed guardrail retry exhaustion surfaces provider reset detail`() =
+        runTest {
+            val manager =
+                ChatGenerationAccumulatorManager(
+                    mode = Mode.FAST,
+                    chatId = ChatId("chat"),
+                    userMessageId = MessageId("user"),
+                    defaultAssistantMessageId = MessageId("assistant"),
+                    chatRepository = mockk(relaxed = true),
+                )
+
+            val result =
+                manager.reduce(
+                    MessageGenerationState.Failed(
+                        error =
+                            RuntimeException(
+                                "Agent loop failed: Guardrail exceeded: model_api_retries_exhausted: " +
+                                    "RateLimitException: 429: Weekly/Monthly Limit Exhausted. " +
+                                    "Your limit will reset at 2026-06-21 05:51:46",
+                            ),
+                        modelType = ModelType.FAST,
+                    ),
+                )
+
+            val snapshot = result.messages.getValue(MessageId("assistant"))
+            assertEquals(ChatInferenceErrorCategory.RATE_LIMITED, snapshot.failureErrorCategory)
+            assertTrue(snapshot.content.contains("Weekly/Monthly Limit Exhausted"))
+            assertTrue(snapshot.content.contains("2026-06-21 05:51:46"))
+            assertFalse(snapshot.content.contains("model_api_retries_exhausted"))
+            assertEquals(MessageState.COMPLETE, snapshot.messageState)
+        }
+
+    @Test
+    fun `failed compaction ceiling sets prompt too large category on snapshot`() =
+        runTest {
+            val manager =
+                ChatGenerationAccumulatorManager(
+                    mode = Mode.FAST,
+                    chatId = ChatId("chat"),
+                    userMessageId = MessageId("user"),
+                    defaultAssistantMessageId = MessageId("assistant"),
+                    chatRepository = mockk(relaxed = true),
+                )
+
+            val result =
+                manager.reduce(
+                    MessageGenerationState.Failed(
+                        error =
+                            RuntimeException(
+                                "Compaction failed (tier=pipeline): " +
+                                    "Projected prompt exceeds hard ceiling",
+                            ),
+                        modelType = ModelType.FAST,
+                    ),
+                )
+
+            val snapshot = result.messages.getValue(MessageId("assistant"))
+            assertEquals(ChatInferenceErrorCategory.PROMPT_TOO_LARGE, snapshot.failureErrorCategory)
+            assertTrue(snapshot.content.contains(ChatInferenceUserErrorMapper.PROMPT_TOO_LARGE_TITLE))
         }
 
     @Test
@@ -604,7 +669,7 @@ class ChatGenerationAccumulatorManagerTest {
                 )
 
             val snapshot = result.messages.getValue(MessageId("assistant"))
-            assertEquals("Sorry, something went wrong. Please try again.", snapshot.content)
+            assertEquals("Something went wrong.\n\nPlease try again. If you use a cloud provider, check your API key and settings.", snapshot.content)
         }
 
     @Test

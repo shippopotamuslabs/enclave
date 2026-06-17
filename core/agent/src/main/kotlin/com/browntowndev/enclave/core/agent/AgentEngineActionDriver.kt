@@ -97,7 +97,12 @@ private fun FfiAgentMessage.toDomainMessage() =
 private fun AgentException.toDomainMessage(): String =
     when (this) {
         is AgentException.Internal -> detail
-        is AgentException.GuardrailExceeded -> "Guardrail exceeded: $kind"
+        is AgentException.GuardrailExceeded ->
+            if (detail.isNullOrBlank()) {
+                "Guardrail exceeded: $kind"
+            } else {
+                "Guardrail exceeded: $kind: $detail"
+            }
         is AgentException.ModelStopped -> "Model stopped before completion: $reason"
         is AgentException.RepairFailed -> "Tool repair failed for '$name': $reason"
         is AgentException.CompactionFailed -> "Compaction failed (tier=$tier): $reason"

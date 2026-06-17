@@ -39,6 +39,7 @@ import com.browntowndev.enclave.core.ui.component.neo.neoShadowColor
 import com.browntowndev.enclave.core.ui.component.neo.neoSurface
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
+import androidx.compose.ui.res.stringResource
 
 @Composable
 fun ChatTopBar(
@@ -150,7 +151,7 @@ fun ChatTopBar(
                 DropdownMenuItem(
                     text = {
                         Text(
-                            text = context.getString(R.string.mode_other),
+                            text = stringResource(R.string.mode_other),
                             style = MaterialTheme.typography.bodyLarge,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,

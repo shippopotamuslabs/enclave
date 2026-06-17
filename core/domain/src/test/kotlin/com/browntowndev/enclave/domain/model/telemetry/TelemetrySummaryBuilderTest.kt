@@ -4,6 +4,8 @@ import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.telemetry.TelemetryTestFixtures
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class TelemetrySummaryBuilderTest {
@@ -117,6 +119,47 @@ class TelemetrySummaryBuilderTest {
     }
 
     @Test
+    fun `normalizedInputTokens leaves ZAI input unchanged`() {
+        // Z.ai now uses the OpenAI path where prompt_tokens is cache-inclusive; cache read is a
+        // subset of input_tokens and must not be added back for display normalization.
+        val row =
+            TelemetryTestFixtures.telAnthropic1.copy(
+                providerKey = TelemetryProviderKey.ZAI,
+                providerLabel = "Z.ai",
+                inputTokens = 7_787,
+                cacheReadInputTokens = 16_000,
+                cacheCreationInputTokens = 3_000,
+            )
+
+        assertEquals(7_787, TelemetrySummaryBuilder.normalizedInputTokens(row))
+    }
+
+    @Test
+    fun `cache hit rate uses total input for ZAI compatible providers`() {
+        val row =
+            TelemetryTestFixtures.telOpenAi1.copy(
+                providerKey = TelemetryProviderKey.ZAI,
+                providerLabel = "Z.ai",
+                messageId = MessageId("m-zai-cache"),
+                inputTokens = 1_000,
+                cacheReadInputTokens = 400,
+            )
+        val summary =
+            TelemetrySummaryBuilder.buildMessageSummary(
+                messageId = MessageId("m-zai-cache"),
+                rows = listOf(row),
+            )
+
+        assertEquals(40.0, summary.cacheHitRatePercent)
+    }
+
+    @Test
+    fun `ZAI reports cache inclusive input like OpenAI`() {
+        assertFalse(TelemetryProviderKey.ZAI.reportsCacheExclusiveInput)
+        assertTrue(TelemetryProviderKey.ANTHROPIC.reportsCacheExclusiveInput)
+    }
+
+    @Test
     fun `normalizedInputTokens leaves OpenAI input unchanged`() {
         // OpenAI reports cache read as a subset of the total prompt; input is already the full count.
         val row = TelemetryTestFixtures.telOpenAi1
@@ -193,6 +236,67 @@ class TelemetrySummaryBuilderTest {
     }
 
     @Test
+    fun `mergeTelemetryRows coalesces null token fields from in-memory into persisted rows with same id`() {
+        val persisted =
+            TelemetryTestFixtures.telAnthropic1.copy(
+                inputTokens = 5_000,
+                reasoningTokens = null,
+                cacheReadInputTokens = null,
+                cacheCreationInputTokens = null,
+            )
+        val inMemory =
+            TelemetryTestFixtures.telAnthropic1.copy(
+                inputTokens = 1_000, // persisted wins
+                reasoningTokens = 256,
+                cacheReadInputTokens = 12_000,
+                cacheCreationInputTokens = 2_000,
+            )
+
+        val merged = TelemetrySummaryMerger.mergeTelemetryRows(listOf(persisted), listOf(inMemory))
+
+        assertEquals(1, merged.size)
+        val row = merged.single()
+        assertEquals(5_000, row.inputTokens) // persisted non-null wins
+        assertEquals(256, row.reasoningTokens) // in-memory fills the null gap
+        assertEquals(12_000, row.cacheReadInputTokens)
+        assertEquals(2_000, row.cacheCreationInputTokens)
+    }
+
+    @Test
+    fun `mergeChatSummary rebuilds totals from coalesced rows`() {
+        // Persisted summary has 0 reasoning/cache because the persisted row has nulls.
+        // In-memory row fills them via coalescing; the merged summary must reflect the real values.
+        val persistedRow =
+            TelemetryTestFixtures.telAnthropic1.copy(
+                inputTokens = 800,
+                outputTokens = 100,
+                reasoningTokens = null,
+                cacheReadInputTokens = null,
+                cacheWriteInputTokens = null,
+                cacheCreationInputTokens = null,
+            )
+        val persisted =
+            TelemetrySummaryBuilder.buildChatSummary(
+                chatId = ChatId("chat-coalesce"),
+                rows = listOf(persistedRow),
+            )
+        assertEquals(0, persisted.totalReasoningTokens) // baseline: persisted has nulls
+
+        val inMemoryRow =
+            persistedRow.copy(
+                reasoningTokens = 400,
+                cacheReadInputTokens = 10_000,
+                cacheCreationInputTokens = 2_000,
+            )
+
+        val merged = TelemetrySummaryMerger.mergeChatSummary(persisted, listOf(inMemoryRow))
+
+        assertEquals(400, merged.totalReasoningTokens)
+        assertEquals(10_000, merged.totalCacheReadInputTokens)
+        assertEquals(2_000, merged.totalCacheWriteInputTokens) // falls back to cacheCreation
+    }
+
+    @Test
     fun `mergeMessageSummary scopes in-memory rows to clicked message`() {
         val persisted =
             TelemetrySummaryBuilder.buildMessageSummary(
@@ -208,6 +312,44 @@ class TelemetrySummaryBuilderTest {
             )
 
         assertEquals(0, merged.requestCount)
+    }
+
+    @Test
+    fun `mergeMessageSummary rebuilds totals from coalesced rows`() {
+        val persistedRow =
+            TelemetryTestFixtures.telAnthropic1.copy(
+                messageId = TelemetryTestFixtures.mAnthropic1,
+                inputTokens = 800,
+                outputTokens = 100,
+                reasoningTokens = null,
+                cacheReadInputTokens = null,
+                cacheWriteInputTokens = null,
+                cacheCreationInputTokens = null,
+            )
+        val persisted =
+            TelemetrySummaryBuilder.buildMessageSummary(
+                messageId = TelemetryTestFixtures.mAnthropic1,
+                rows = listOf(persistedRow),
+            )
+        assertEquals(null, persisted.totalReasoningTokens)
+
+        val inMemoryRow =
+            persistedRow.copy(
+                reasoningTokens = 400,
+                cacheReadInputTokens = 10_000,
+                cacheCreationInputTokens = 2_000,
+            )
+
+        val merged =
+            TelemetrySummaryMerger.mergeMessageSummary(
+                persisted = persisted,
+                messageId = TelemetryTestFixtures.mAnthropic1,
+                inMemoryRows = listOf(inMemoryRow),
+            )
+
+        assertEquals(400, merged.totalReasoningTokens)
+        assertEquals(10_000, merged.totalCacheReadInputTokens)
+        assertEquals(2_000, merged.totalCacheWriteInputTokens)
     }
 
     @Test

@@ -101,6 +101,7 @@ class InferenceTelemetrySupport
 
         fun anthropicTurnTelemetry(
             context: CaptureContext,
+            providerLabel: String,
             modelId: String,
             modelLabel: String,
             timing: InferenceTurnTiming,
@@ -117,6 +118,7 @@ class InferenceTelemetrySupport
                     messageId = context.messageId.value,
                     chatId = context.chatId.value,
                     sequenceIndex = context.sequenceIndex,
+                    providerLabel = providerLabel,
                     modelId = modelId,
                     modelLabel = modelLabel,
                     requestStartedAtMs = timing.requestStartedAtMs,
@@ -165,6 +167,7 @@ class InferenceTelemetrySupport
             when (provider.uppercase()) {
                 ApiProvider.OPENAI.name -> "OpenAI"
                 ApiProvider.ANTHROPIC.name -> "Anthropic"
+                ApiProvider.ZAI.name -> "Z.ai"
                 ApiProvider.GOOGLE.name -> "Google"
                 ApiProvider.XAI.name -> "xAI"
                 "OPENROUTER" -> "OpenRouter"

@@ -80,6 +80,7 @@ class SaveApiProviderDraftUseCase
                                         generateUniquePresetName(
                                             persistedAsset.configurations.map(ApiModelConfiguration::displayName),
                                         ),
+                                    temperature = draft.provider.defaultPresetTemperature(),
                                     reasoningEffort = draft.defaultReasoningEffort,
                                 ),
                             ).getOrThrow()

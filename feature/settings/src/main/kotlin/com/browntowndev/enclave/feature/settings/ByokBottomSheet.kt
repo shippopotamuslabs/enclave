@@ -143,7 +143,7 @@ fun ByokBottomSheet(
                             },
                             onAddConfig = {
                                 hideAndNavigate {
-                                    onSelectApiModelConfig(ApiModelConfigUi())
+                                    onSelectApiModelConfig(freshApiPresetDraft(state.asset.provider))
                                     onNavigateToByokConfigure()
                                 }
                             },

@@ -106,6 +106,7 @@ data class ApiModelConfigUi(
     val promptPriceUsdPerMillion: String = "",
     val completionPriceUsdPerMillion: String = "",
     val cachedPromptPriceUsdPerMillion: String = "",
+    val isFreshPreset: Boolean = false,
 )
 
 @Immutable

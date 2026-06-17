@@ -76,8 +76,8 @@ class ProviderTelemetryNormalizer
                 messageId = MessageId(input.messageId),
                 chatId = ChatId(input.chatId),
                 sequenceIndex = input.sequenceIndex,
-                providerKey = TelemetryProviderKey.ANTHROPIC,
-                providerLabel = "Anthropic",
+                providerKey = providerKeyForLabel(input.providerLabel),
+                providerLabel = input.providerLabel,
                 modelId = input.modelId,
                 modelLabel = input.modelLabel,
                 sourceKind = TelemetrySourceKind.REMOTE,
@@ -149,14 +149,5 @@ class ProviderTelemetryNormalizer
             )
 
         private fun providerKeyForLabel(label: String): TelemetryProviderKey =
-            when (label) {
-                "OpenAI" -> TelemetryProviderKey.OPENAI
-                "Anthropic" -> TelemetryProviderKey.ANTHROPIC
-                "LiteRT" -> TelemetryProviderKey.LITERT
-                "llama.cpp" -> TelemetryProviderKey.LLAMA
-                "OpenRouter" -> TelemetryProviderKey.OPENROUTER
-                "Google" -> TelemetryProviderKey.GOOGLE
-                "xAI" -> TelemetryProviderKey.XAI
-                else -> TelemetryProviderKey.OTHER
-            }
+            TelemetryProviderKey.fromLabel(label)
     }

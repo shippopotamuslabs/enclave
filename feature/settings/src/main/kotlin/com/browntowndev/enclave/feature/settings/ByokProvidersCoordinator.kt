@@ -137,7 +137,7 @@ internal class ByokProvidersCoordinator
             config: ApiModelConfigUi,
         ) {
             apiState.update { state ->
-                val normalized = state.normalizeVisionCapability(config)
+                val normalized = state.normalizeVisionCapability(config.copy(isFreshPreset = false))
                 state.copy(
                     presetDraft = normalized,
                     discoveredApiModels = state.discoveredApiModels.mergeSelectedModel(normalized),
