@@ -3790,10 +3790,12 @@ sealed class AgentException: kotlin.Exception() {
     
     class GuardrailExceeded(
         
-        val `kind`: kotlin.String
+        val `kind`: kotlin.String, 
+        
+        val `detail`: kotlin.String?
         ) : AgentException() {
         override val message
-            get() = "kind=${ `kind` }"
+            get() = "kind=${ `kind` }, detail=${ `detail` }"
     }
     
     class ModelStopped(
@@ -3872,6 +3874,7 @@ public object FfiConverterTypeAgentException : FfiConverterRustBuffer<AgentExcep
                 )
             2 -> AgentException.GuardrailExceeded(
                 FfiConverterString.read(buf),
+                FfiConverterOptionalString.read(buf),
                 )
             3 -> AgentException.ModelStopped(
                 FfiConverterString.read(buf),
@@ -3910,6 +3913,7 @@ public object FfiConverterTypeAgentException : FfiConverterRustBuffer<AgentExcep
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 4UL
                 + FfiConverterString.allocationSize(value.`kind`)
+                + FfiConverterOptionalString.allocationSize(value.`detail`)
             )
             is AgentException.ModelStopped -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
@@ -3958,6 +3962,7 @@ public object FfiConverterTypeAgentException : FfiConverterRustBuffer<AgentExcep
             is AgentException.GuardrailExceeded -> {
                 buf.putInt(2)
                 FfiConverterString.write(value.`kind`, buf)
+                FfiConverterOptionalString.write(value.`detail`, buf)
                 Unit
             }
             is AgentException.ModelStopped -> {

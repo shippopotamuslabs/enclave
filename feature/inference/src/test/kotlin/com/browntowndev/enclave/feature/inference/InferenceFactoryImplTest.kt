@@ -616,6 +616,35 @@ class InferenceFactoryImplTest {
         }
 
     @Test
+    fun `withInferenceService routes zai credentials to openai client with default base url`() =
+        runTest {
+            val assignment = DefaultModelAssignment(modelType = ModelType.THINKING, apiConfigId = ApiModelConfigurationId("zai-config"))
+            val config =
+                apiModelConfiguration(
+                    id = ApiModelConfigurationId("zai-config"),
+                    modelId = "glm-4.6",
+                    displayName = "Z.ai preset",
+                )
+            val credentials = apiCredentials(provider = ApiProvider.ZAI, baseUrl = null)
+
+            coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns assignment
+            coEvery { apiModelRepository.getConfigurationById(ApiModelConfigurationId("zai-config")) } returns config
+            coEvery { apiModelRepository.getCredentialsById(ApiCredentialsId("11")) } returns credentials
+            coEvery { apiKeyProvider.getApiKey("alias") } returns "secret"
+
+            val service = factory.withInferenceService(ModelType.THINKING) { it }
+
+            assertTrue(service is RustLoopInferenceService)
+            verify {
+                openAiClientProvider.getClient(
+                    apiKey = "secret",
+                    baseUrl = "https://api.z.ai/api/paas/v4",
+                    headers = any(),
+                )
+            }
+        }
+
+    @Test
     fun `withInferenceService resolves default baseUrl for xAI when configured baseUrl is blank`() =
         runTest {
             val assignment = DefaultModelAssignment(modelType = ModelType.THINKING, apiConfigId = ApiModelConfigurationId("9"))

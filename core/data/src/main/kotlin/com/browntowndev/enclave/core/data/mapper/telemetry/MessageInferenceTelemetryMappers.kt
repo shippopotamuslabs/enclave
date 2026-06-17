@@ -106,6 +106,8 @@ fun MessageInferenceTelemetryEntity.toFirestoreFields(): Map<String, Any?> =
 /**
  * Merges optional token/timing fields from [existing] when this entity (typically a remote doc) omits them.
  * Used for equal-timestamp Firestore sync so null remote columns cannot clobber local values.
+ *
+ * Field coverage must stay aligned with [com.browntowndev.enclave.domain.model.telemetry.TurnTelemetry.coalesceTokenFieldsWith].
  */
 fun MessageInferenceTelemetryEntity.coalesceTokenFieldsWith(
     existing: MessageInferenceTelemetryEntity,

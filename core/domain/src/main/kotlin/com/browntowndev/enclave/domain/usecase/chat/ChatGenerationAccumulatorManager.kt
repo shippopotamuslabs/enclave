@@ -3,6 +3,8 @@ package com.browntowndev.enclave.domain.usecase.chat
 import com.browntowndev.enclave.domain.model.artifact.ArtifactGenerationRequest
 import com.browntowndev.enclave.domain.model.artifact.mergeArtifactGenerationRequests
 import com.browntowndev.enclave.domain.model.chat.AccumulatedMessages
+import com.browntowndev.enclave.domain.model.chat.ChatInferenceErrorCategory
+import com.browntowndev.enclave.domain.model.chat.ChatInferenceUserErrorMapper
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageGenerationState
 import com.browntowndev.enclave.domain.model.chat.MessageId
@@ -14,10 +16,7 @@ import com.browntowndev.enclave.domain.model.chat.WebSearchSource
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.PipelineStep
 import com.browntowndev.enclave.domain.model.telemetry.TurnTelemetry
-import com.browntowndev.enclave.domain.port.inference.InferenceBusyException
 import com.browntowndev.enclave.domain.port.repository.ChatRepository
-
-private const val MAX_ERROR_DETAIL_CHARS = 500
 
 internal class ChatGenerationAccumulatorManager(
     private val mode: Mode,
@@ -129,20 +128,9 @@ internal class ChatGenerationAccumulatorManager(
 
             is MessageGenerationState.Failed -> {
                 getOrCreateAccumulator(state.modelType).apply {
-                    val errorDetail =
-                        state.error.message
-                            ?.trim()
-                            ?.takeIf { it.isNotBlank() }
-                            ?.take(MAX_ERROR_DETAIL_CHARS)
-                    val errorText =
-                        when {
-                            state.error is InferenceBusyException ->
-                                state.error.message
-                                    ?: "Another message is in progress. Please wait until it completes."
-                            errorDetail != null ->
-                                "Sorry, something went wrong. Please try again.\n\nError: $errorDetail"
-                            else -> "Sorry, something went wrong. Please try again."
-                        }
+                    val userError = ChatInferenceUserErrorMapper.map(state.error)
+                    failureErrorCategory = userError.category
+                    val errorText = userError.formatForMessage()
                     // Append as a transcript segment so the error is visible in the
                     // rendered message, not just in the copied content. Partial streamed
                     // text stays in place above it.
@@ -181,6 +169,7 @@ internal class ChatGenerationAccumulatorManager(
                         thinkingEndTime = messageSnapshot.thinkingEndTime
                         isComplete = messageSnapshot.isComplete
                         currentState = messageSnapshot.messageState
+                        failureErrorCategory = messageSnapshot.failureErrorCategory
                     }
                 }
 
@@ -298,6 +287,7 @@ internal class MessageAccumulator(
     isComplete: Boolean = false,
     currentState: MessageState = MessageState.PROCESSING,
     pipelineStep: PipelineStep? = null,
+    failureErrorCategory: ChatInferenceErrorCategory? = null,
     webSearchSources: MutableList<WebSearchSource> = mutableListOf(),
     artifacts: MutableList<ArtifactGenerationRequest> = mutableListOf(),
     generatedMediaUris: MutableList<String> = mutableListOf(),
@@ -368,6 +358,14 @@ internal class MessageAccumulator(
         }
 
     var pipelineStep: PipelineStep? = pipelineStep
+        set(value) {
+            if (field != value) {
+                field = value
+                markScalarDirty()
+            }
+        }
+
+    var failureErrorCategory: ChatInferenceErrorCategory? = failureErrorCategory
         set(value) {
             if (field != value) {
                 field = value
@@ -639,6 +637,7 @@ internal class MessageAccumulator(
             generatedMediaPrompts = generatedMediaPromptsSnapshot.value(),
             transcriptSegments = toTranscriptSegments(finalizeOpenThinking = shouldFinalizeOpenThinking),
             telemetryRows = telemetryRows.toList(),
+            failureErrorCategory = failureErrorCategory,
         ).also { snapshot ->
             cachedSnapshot = snapshot
             cachedSnapshotVersion = snapshotVersion

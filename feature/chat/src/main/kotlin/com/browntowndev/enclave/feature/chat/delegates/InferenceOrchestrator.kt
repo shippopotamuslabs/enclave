@@ -4,6 +4,8 @@ import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.chat.AccumulatedMessages
+import com.browntowndev.enclave.domain.model.chat.ChatInferenceErrorCategory
+import com.browntowndev.enclave.domain.model.chat.ChatInferenceUserErrorMapper
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.ChatResponseMode
 import com.browntowndev.enclave.domain.model.chat.Content
@@ -379,9 +381,7 @@ private fun AccumulatedMessages.hasCompactionFailure(): Boolean =
     messages.values.any { snapshot ->
         snapshot.isComplete &&
             (
-                snapshot.content.contains("Compaction failed", ignoreCase = true) ||
-                    snapshot.content.contains("Agent loop failed:", ignoreCase = true) &&
-                    snapshot.content.contains("tier=", ignoreCase = true) &&
-                    snapshot.content.contains(", reason=", ignoreCase = true)
+                snapshot.failureErrorCategory == ChatInferenceErrorCategory.PROMPT_TOO_LARGE ||
+                    ChatInferenceUserErrorMapper.isPromptTooLarge(snapshot.content)
             )
     }

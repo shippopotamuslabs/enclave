@@ -46,6 +46,23 @@ internal object ApiInferenceServiceFactory {
                     toolStreamGatePort = toolStreamGatePort,
                     telemetrySupport = telemetrySupport,
                     telemetryEventPort = telemetryEventPort,
+                    providerLabel = telemetrySupport.providerLabel(ApiProvider.ANTHROPIC.name),
+                )
+            ApiProvider.ZAI ->
+                ZaiInferenceServiceImpl(
+                    client =
+                        openAiClientProvider.getClient(
+                            apiKey = apiKey,
+                            baseUrl = resolvedBaseUrl,
+                            headers = requestHeaders,
+                        ),
+                    modelId = apiConfig.modelId,
+                    modelType = modelType,
+                    baseUrl = resolvedBaseUrl,
+                    loggingPort = loggingPort,
+                    toolStreamGatePort = toolStreamGatePort,
+                    telemetrySupport = telemetrySupport,
+                    telemetryEventPort = telemetryEventPort,
                 )
             ApiProvider.GOOGLE -> {
                 val client =

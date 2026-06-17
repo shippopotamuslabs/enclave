@@ -30,6 +30,7 @@ data class AnthropicTelemetryUsageInput(
     val messageId: String,
     val chatId: String,
     val sequenceIndex: Int,
+    val providerLabel: String,
     val modelId: String,
     val modelLabel: String,
     val requestStartedAtMs: Long,

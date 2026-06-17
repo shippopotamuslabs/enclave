@@ -181,7 +181,7 @@ class ChatTelemetryCoordinatorTest {
         }
 
     @Test
-    fun `chat stats sheet drops in-memory rows once they are persisted`() =
+    fun `chat stats sheet keeps persisted non-null values when rows share an id`() =
         runTest {
             val persistedRow =
                 TelemetryTestFixtures.telOpenAi1.copy(
@@ -208,6 +208,101 @@ class ChatTelemetryCoordinatorTest {
 
             val sheet = coordinator.chatStatsSheet.value
             assertEquals("5000", sheet.summaryRows.first { it.label == "Input tokens" }.value)
+        }
+
+    @Test
+    fun `chat stats sheet fills persisted null token fields from in-memory rows`() =
+        runTest {
+            // Persisted row has null reasoning/cache columns (e.g. written before the final usage
+            // chunk was applied). The in-memory row carries the correct values. The chat summary
+            // must reflect the coalesced values, not 0.
+            val persistedRow =
+                TelemetryTestFixtures.telOpenAi1.copy(
+                    inputTokens = 5_000,
+                    outputTokens = 200,
+                    reasoningTokens = null,
+                    cacheReadInputTokens = null,
+                    cacheWriteInputTokens = null,
+                    cacheCreationInputTokens = null,
+                )
+            val inMemoryRow =
+                TelemetryTestFixtures.telOpenAi1.copy(
+                    inputTokens = 1_000, // persisted (5000) should win
+                    outputTokens = 200,
+                    reasoningTokens = 512,
+                    cacheReadInputTokens = 8_000,
+                    cacheWriteInputTokens = null,
+                    cacheCreationInputTokens = 3_000,
+                )
+            val repository =
+                FakeInferenceTelemetryRepositoryPort(
+                    chatRows = mapOf(TelemetryTestFixtures.chat1 to listOf(persistedRow)),
+                )
+            val coordinator =
+                ChatTelemetryCoordinator(
+                    observeMessageTelemetryUseCase = ObserveMessageTelemetryUseCase(repository),
+                    observeChatTelemetryUseCase = ObserveChatTelemetryUseCase(repository),
+                    mapper = mapper,
+                )
+
+            coordinator.onChatStatsClick(
+                chatId = TelemetryTestFixtures.chat1,
+                inMemoryTelemetryRows = listOf(inMemoryRow),
+                scope = this,
+            )
+            advanceUntilIdle()
+
+            val sheet = coordinator.chatStatsSheet.value
+            assertEquals("5000", sheet.summaryRows.first { it.label == "Input tokens" }.value)
+            assertEquals("512", sheet.summaryRows.first { it.label == "Reasoning tokens" }.value)
+            assertEquals("8000", sheet.summaryRows.first { it.label == "Cache read tokens" }.value)
+            assertEquals("3000", sheet.summaryRows.first { it.label == "Cache write tokens" }.value)
+        }
+
+    @Test
+    fun `response stats fills persisted null token fields from in-memory rows`() =
+        runTest {
+            val persistedRow =
+                TelemetryTestFixtures.telOpenAi1.copy(
+                    inputTokens = 5_000,
+                    outputTokens = 200,
+                    reasoningTokens = null,
+                    cacheReadInputTokens = null,
+                    cacheWriteInputTokens = null,
+                    cacheCreationInputTokens = null,
+                )
+            val inMemoryRow =
+                TelemetryTestFixtures.telOpenAi1.copy(
+                    inputTokens = 1_000,
+                    outputTokens = 200,
+                    reasoningTokens = 512,
+                    cacheReadInputTokens = 8_000,
+                    cacheWriteInputTokens = null,
+                    cacheCreationInputTokens = 3_000,
+                )
+            val repository =
+                FakeInferenceTelemetryRepositoryPort(
+                    messageRows = mapOf(TelemetryTestFixtures.mOpenAi1 to listOf(persistedRow)),
+                )
+            val coordinator =
+                ChatTelemetryCoordinator(
+                    observeMessageTelemetryUseCase = ObserveMessageTelemetryUseCase(repository),
+                    observeChatTelemetryUseCase = ObserveChatTelemetryUseCase(repository),
+                    mapper = mapper,
+                )
+
+            coordinator.onResponseStatsClick(
+                messageId = TelemetryTestFixtures.mOpenAi1,
+                inMemoryTelemetryRows = listOf(inMemoryRow),
+                scope = this,
+            )
+            advanceUntilIdle()
+
+            val sheet = coordinator.responseStatsSheet.value
+            assertEquals("5000", sheet.metricRows.first { it.label == "Input tokens" }.value)
+            assertEquals("512", sheet.metricRows.first { it.label == "Reasoning tokens" }.value)
+            assertEquals("8000", sheet.metricRows.first { it.label == "Cache read input tokens" }.value)
+            assertEquals("3000", sheet.metricRows.first { it.label == "Cache write input tokens" }.value)
         }
 
     @Test

@@ -441,6 +441,7 @@ class Telemetry001InferenceTddRedTest {
         every { deltaUsage.inputTokens() } returns Optional.empty()
         every { deltaUsage.cacheCreationInputTokens() } returns Optional.empty()
         every { deltaUsage.cacheReadInputTokens() } returns Optional.empty()
+        every { deltaUsage._additionalProperties() } returns emptyMap()
 
         val textEvent =
             mockAnthropicStreamEvent(

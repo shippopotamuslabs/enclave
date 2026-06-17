@@ -7,16 +7,18 @@ package com.browntowndev.enclave.domain.model.inference
  * or client-error bands are blacklisted from model-API retry.
  */
 object ModelApiTransportHeuristics {
-    private const val HTTP_REQUEST_TIMEOUT = 408
-    private const val HTTP_TOO_MANY_REQUESTS = 429
-    private const val HTTP_BAD_GATEWAY = 502
-    private const val HTTP_SERVICE_UNAVAILABLE = 503
-    private const val HTTP_GATEWAY_TIMEOUT = 504
-
-    private const val HTTP_UNAUTHORIZED = 401
-    private const val HTTP_FORBIDDEN = 403
-    private const val HTTP_NOT_FOUND = 404
-    private const val HTTP_CLIENT_ERROR_MIN = 400
+    const val HTTP_STATUS_MIN = 100
+    const val HTTP_STATUS_MAX = 599
+    const val HTTP_BAD_REQUEST = 400
+    const val HTTP_UNAUTHORIZED = 401
+    const val HTTP_FORBIDDEN = 403
+    const val HTTP_NOT_FOUND = 404
+    const val HTTP_REQUEST_TIMEOUT = 408
+    const val HTTP_TOO_MANY_REQUESTS = 429
+    const val HTTP_BAD_GATEWAY = 502
+    const val HTTP_SERVICE_UNAVAILABLE = 503
+    const val HTTP_GATEWAY_TIMEOUT = 504
+    private const val HTTP_CLIENT_ERROR_MIN = HTTP_BAD_REQUEST
     private const val HTTP_CLIENT_ERROR_MAX = 499
 
     fun isRecoverableStreamTermination(message: String?): Boolean {

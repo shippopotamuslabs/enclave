@@ -251,7 +251,7 @@ class GenerateChatResponseUseCaseBackgroundServicePersistenceTest {
                     thinkingEndTime = any(),
                     thinkingDuration = any(),
                     thinkingRaw = null,
-                    content = match { it.contains("Sorry, something went wrong") },
+                    content = match { it.contains("service start failed") },
                     messageState = MessageState.COMPLETE,
                     pipelineStep = any(),
                     webSearchSources = any(),

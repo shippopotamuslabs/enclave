@@ -28,4 +28,28 @@ data class TurnTelemetry(
     val costStatus: TelemetryCostStatus,
     val costSource: TelemetryCostSource,
     val clientBuild: TelemetryClientBuild,
-)
+) {
+    /**
+     * Returns a copy of this row with any null token/cost/timing fields filled in from [other].
+     * Non-null fields on this row are preserved (this row wins); [other] only fills gaps.
+     *
+     * Used by [TelemetrySummaryMerger] to reconcile persisted Room rows (which may have null
+     * reasoning/cache columns if written before a schema migration or before the final usage
+     * chunk was applied) against in-memory rows captured during the turn.
+     *
+     * Keep field coverage in sync with
+     * [com.browntowndev.enclave.core.data.mapper.telemetry.MessageInferenceTelemetryEntity.coalesceTokenFieldsWith].
+     */
+    fun coalesceTokenFieldsWith(other: TurnTelemetry): TurnTelemetry = copy(
+        firstOutputTokenAtMs = firstOutputTokenAtMs ?: other.firstOutputTokenAtMs,
+        completedAtMs = completedAtMs ?: other.completedAtMs,
+        inputTokens = inputTokens ?: other.inputTokens,
+        outputTokens = outputTokens ?: other.outputTokens,
+        reasoningTokens = reasoningTokens ?: other.reasoningTokens,
+        cachedInputTokens = cachedInputTokens ?: other.cachedInputTokens,
+        cacheReadInputTokens = cacheReadInputTokens ?: other.cacheReadInputTokens,
+        cacheWriteInputTokens = cacheWriteInputTokens ?: other.cacheWriteInputTokens,
+        cacheCreationInputTokens = cacheCreationInputTokens ?: other.cacheCreationInputTokens,
+        costUsd = costUsd ?: other.costUsd,
+    )
+}

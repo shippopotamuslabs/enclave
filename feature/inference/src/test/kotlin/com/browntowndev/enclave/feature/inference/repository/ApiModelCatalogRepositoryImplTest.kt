@@ -121,6 +121,42 @@ class ApiModelCatalogRepositoryImplTest {
         }
 
     @Test
+    fun `fetchModels discovers Zai models via openai-compatible endpoint`() = runTest {
+        every { openAiClientProvider.getClient(apiKey = "key", baseUrl = "https://api.z.ai/api/paas/v4") } returns
+            mockk {
+                every { models() } returns
+                    mockk {
+                        every { list() } returns
+                            mockk {
+                                every { data() } returns
+                                    listOf(
+                                        mockk {
+                                            every { id() } returns "glm-4.6"
+                                            every { created() } returns 123L
+                                        },
+                                    )
+                            }
+                    }
+            }
+
+        val catalog =
+            repo.fetchModels(
+                provider = ApiProvider.ZAI,
+                apiKey = "key",
+                baseUrl = "https://api.z.ai/api/paas/v4",
+            )
+
+        assertEquals(1, catalog.models.size)
+        assertEquals("glm-4.6", catalog.models[0].id)
+        verify {
+            openAiClientProvider.getClient(
+                apiKey = "key",
+                baseUrl = "https://api.z.ai/api/paas/v4",
+            )
+        }
+    }
+
+    @Test
     fun `normalize trims version segment from Anthropic-compatible base URLs`() {
         assertEquals(
             "https://opencode.ai/zen/go",

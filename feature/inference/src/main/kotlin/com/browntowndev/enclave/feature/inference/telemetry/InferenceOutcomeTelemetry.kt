@@ -2,6 +2,7 @@ package com.browntowndev.enclave.feature.inference.telemetry
 
 import com.browntowndev.enclave.domain.model.telemetry.InferenceOutcome
 import com.browntowndev.enclave.domain.model.telemetry.ProviderMetric
+import com.browntowndev.enclave.domain.model.telemetry.TelemetryProviderKey
 import com.browntowndev.enclave.domain.model.telemetry.TelemetrySeverity
 import com.browntowndev.enclave.domain.port.telemetry.TelemetryEventPort
 import java.math.BigDecimal
@@ -26,7 +27,8 @@ internal suspend fun TelemetryEventPort?.emitInferenceExecutionOutcome(
         cacheReadInputTokens?.let { cached ->
             val input = inputTokens ?: 0
             val total =
-                if (provider.equals("Anthropic", ignoreCase = true)) {
+                if (TelemetryProviderKey.fromLabel(provider).reportsCacheExclusiveInput) {
+                    // Only Anthropic reports input_tokens excluding cache; add cache read back.
                     input + cached
                 } else {
                     input

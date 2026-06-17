@@ -105,6 +105,38 @@ class OpenAiTelemetryCaptureTest {
     }
 
     @Test
+    fun `zai usage normalization uses cache inclusive provider key and preserves cache read`() {
+        val captured =
+            normalizer.normalizeOpenAiUsage(
+                OpenAiTelemetryUsageInput(
+                    rowId = "tel-zai-1",
+                    messageId = "msg-1",
+                    chatId = "chat-1",
+                    sequenceIndex = 0,
+                    providerLabel = "Z.ai",
+                    modelId = "glm-4.6",
+                    modelLabel = "glm-4.6",
+                    requestStartedAtMs = 1_000L,
+                    firstOutputTokenAtMs = 1_400L,
+                    completedAtMs = 5_000L,
+                    inputTokens = 1_000,
+                    outputTokens = 200,
+                    reasoningTokens = 80,
+                    cacheReadInputTokens = 400,
+                    cacheWriteInputTokens = null,
+                    costUsd = null,
+                    clientBuild = TelemetryTestFixtures.telOpenAi1.clientBuild,
+                ),
+            )
+
+        assertEquals(TelemetryProviderKey.ZAI, captured.providerKey)
+        assertEquals(1_000, captured.inputTokens)
+        assertEquals(400, captured.cacheReadInputTokens)
+        assertEquals(80, captured.reasoningTokens)
+        assertEquals(TelemetryCostStatus.UNAVAILABLE, captured.costStatus)
+    }
+
+    @Test
     fun `openrouter usage normalization captures exact provider cost and cache fields`() {
         val row = TelemetryTestFixtures.telOpenRouter1
         val captured = normalizer.normalizeOpenAiUsage(row.toOpenAiInput(providerLabel = "OpenRouter"))

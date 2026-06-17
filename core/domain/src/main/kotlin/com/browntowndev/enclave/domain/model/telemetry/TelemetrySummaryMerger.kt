@@ -8,8 +8,14 @@ object TelemetrySummaryMerger {
         inMemory: List<TurnTelemetry>,
     ): List<TurnTelemetry> {
         if (inMemory.isEmpty()) return persisted
+        // When a persisted and in-memory row share the same ID, coalesce: the persisted row's
+        // non-null fields win, but the in-memory row fills any null gaps (e.g. reasoning/cache
+        // columns that weren't populated when the persisted row was written).
+        val inMemoryById = inMemory.associateBy { it.id }
         val persistedIds = persisted.map { it.id }.toSet()
-        return persisted + inMemory.filter { it.id !in persistedIds }
+        return persisted.map { row ->
+            inMemoryById[row.id]?.let { row.coalesceTokenFieldsWith(it) } ?: row
+        } + inMemory.filter { it.id !in persistedIds }
     }
 
     fun mergeMessageSummary(
@@ -18,27 +24,23 @@ object TelemetrySummaryMerger {
         inMemoryRows: List<TurnTelemetry>,
     ): MessageTelemetrySummary {
         val scopedInMemory = inMemoryRows.filter { it.messageId == messageId }
-        return when {
-            persisted.requestCount > 0 -> persisted
-            scopedInMemory.isNotEmpty() ->
-                TelemetrySummaryBuilder.buildMessageSummary(messageId, scopedInMemory)
-            else -> persisted
-        }
+        if (scopedInMemory.isEmpty()) return persisted
+        val mergedRows = mergeTelemetryRows(persisted.requestRows, scopedInMemory)
+        return TelemetrySummaryBuilder.buildMessageSummary(messageId, mergedRows)
     }
 
     fun mergeChatSummary(
         persisted: ChatTelemetrySummary,
         inMemoryRows: List<TurnTelemetry>,
     ): ChatTelemetrySummary {
+        if (inMemoryRows.isEmpty()) return persisted
         val mergedRows = mergeTelemetryRows(persisted.rows, inMemoryRows)
-        return if (mergedRows.size == persisted.rows.size) {
-            persisted
-        } else {
-            TelemetrySummaryBuilder.buildChatSummary(
-                chatId = persisted.chatId,
-                rows = mergedRows,
-                assistantTurnCount = persisted.turnCount,
-            )
-        }
+        // Always rebuild — persisted rows may have null token fields that in-memory rows filled
+        // via coalescing, so the persisted summary's pre-computed totals are stale.
+        return TelemetrySummaryBuilder.buildChatSummary(
+            chatId = persisted.chatId,
+            rows = mergedRows,
+            assistantTurnCount = persisted.turnCount,
+        )
     }
 }

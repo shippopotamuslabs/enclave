@@ -606,6 +606,45 @@ class BaseOpenAiSdkInferenceServiceTest {
         }
 
     @Test
+    fun `completeSingleTurn rounds ZAI sampling parameters to two decimals`() =
+        runTest {
+            var capturedParams: ChatCompletionCreateParams? = null
+            val service =
+                createSingleTurnService(
+                    provider = "ZAI",
+                    modelId = "glm-4.6",
+                    onParams = { capturedParams = it },
+                    response = emptyTextResponse("ok"),
+                    responseFailure = null,
+                    zaiSampling = true,
+                )
+
+            service.completeSingleTurn(
+                sessionMessages = listOf(AgentLoopMessage(id = "u1", role = Role.USER, content = "hi", metadataJson = "null")),
+                systemPrompt = "",
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        apiProvider = ApiProvider.ZAI,
+                        modelId = "glm-4.6",
+                        temperature = 0.7f,
+                        topP = 0.95f,
+                        maxTokens = 4_096,
+                    ),
+            )
+
+            val params = requireNotNull(capturedParams)
+            assertTrue(params.temperature().isPresent)
+            assertTrue(params.topP().isPresent)
+            assertEquals(0.7, params.temperature().get())
+            assertEquals(0.95, params.topP().get())
+        }
+
+    @Test
     fun `completeSingleTurn omits unsupported OpenAI reasoning model sampling parameters`() =
         runTest {
             var capturedParams: ChatCompletionCreateParams? = null
@@ -1169,6 +1208,7 @@ class BaseOpenAiSdkInferenceServiceTest {
         onResponseParams: (ResponseCreateParams) -> Unit = {},
         responseFailure: Throwable? = RuntimeException("force chat fallback"),
         toolStreamGatePort: ToolStreamGatePort = FakeToolStreamGatePort(),
+        zaiSampling: Boolean = false,
     ): TestableSingleTurnService =
         TestableSingleTurnService(
             client = client,
@@ -1180,6 +1220,7 @@ class BaseOpenAiSdkInferenceServiceTest {
             onResponseParams = onResponseParams,
             responseFailure = responseFailure,
             toolStreamGatePort = toolStreamGatePort,
+            zaiSampling = zaiSampling,
         )
 
     private fun emptyTextResponse(text: String = "") =
@@ -1212,6 +1253,7 @@ class BaseOpenAiSdkInferenceServiceTest {
         private val onResponseParams: (ResponseCreateParams) -> Unit,
         private val responseFailure: Throwable?,
         toolStreamGatePort: ToolStreamGatePort,
+        private val zaiSampling: Boolean,
     ) : TestableBaseOpenAiSdkInferenceService(
             client = client,
             modelId = modelId,
@@ -1221,6 +1263,20 @@ class BaseOpenAiSdkInferenceServiceTest {
             loggingPort = loggingPort,
             toolStreamGatePort = toolStreamGatePort,
         ) {
+        override fun toApiTemperature(value: Float): Double =
+            if (zaiSampling) {
+                ZaiSamplingParams.toApiDouble(value)
+            } else {
+                super.toApiTemperature(value)
+            }
+
+        override fun toApiTopP(value: Float): Double =
+            if (zaiSampling) {
+                ZaiSamplingParams.toApiDouble(value)
+            } else {
+                super.toApiTopP(value)
+            }
+
         override suspend fun streamResponses(
             params: ResponseCreateParams,
             chatId: ChatId?,

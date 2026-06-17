@@ -157,6 +157,7 @@ class AnthropicCacheTokenCaptureTest {
         every {
             telemetrySupport.anthropicTurnTelemetry(
                 context = any(),
+                providerLabel = any(),
                 modelId = any(),
                 modelLabel = any(),
                 timing = any(),
@@ -169,11 +170,11 @@ class AnthropicCacheTokenCaptureTest {
             )
         } answers {
             val cc = firstArg<InferenceTelemetrySupport.CaptureContext>()
-            val inTok = arg<Int?>(4)
-            val outTok = arg<Int?>(5)
-            val reasonTok = arg<Int?>(6)
-            val cacheCreate = arg<Int?>(7)
-            val cacheRead = arg<Int?>(8)
+            val inTok = arg<Int?>(5)
+            val outTok = arg<Int?>(6)
+            val reasonTok = arg<Int?>(7)
+            val cacheCreate = arg<Int?>(8)
+            val cacheRead = arg<Int?>(9)
             TurnTelemetry(
                 id = com.browntowndev.enclave.domain.model.telemetry.TurnTelemetryId("test"),
                 messageId = cc.messageId,
@@ -223,6 +224,7 @@ class AnthropicCacheTokenCaptureTest {
         every { u.outputTokens() } returns outputTokens
         every { u.cacheCreationInputTokens() } returns Optional.ofNullable(cacheCreation)
         every { u.cacheReadInputTokens() } returns Optional.ofNullable(cacheRead)
+        every { u._additionalProperties() } returns emptyMap()
         return u
     }
 
@@ -237,6 +239,7 @@ class AnthropicCacheTokenCaptureTest {
         every { u.inputTokens() } returns Optional.ofNullable(inputTokens)
         every { u.cacheCreationInputTokens() } returns Optional.ofNullable(cacheCreation)
         every { u.cacheReadInputTokens() } returns Optional.ofNullable(cacheRead)
+        every { u._additionalProperties() } returns emptyMap()
         return u
     }
 
