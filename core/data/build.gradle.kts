@@ -25,6 +25,12 @@ android {
         }
     }
 
+    sourceSets {
+        getByName("test") {
+            assets.srcDir("$projectDir/schemas")
+        }
+    }
+
     buildFeatures {
         buildConfig = true
     }

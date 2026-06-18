@@ -387,6 +387,13 @@ class SettingsUiStateAssembler
                         presetDraft = normalizedPresetDraft,
                         connectionTestStatus = apiState.connectionTestStatus,
                         parameterSupport = parameterSupport,
+                        isOpenRouterProvidersSheetOpen = apiState.isOpenRouterProvidersSheetOpen,
+                        openRouterEndpointsState =
+                            OpenRouterEndpointsUiState(
+                                endpoints = apiState.openRouterEndpoints,
+                                isLoading = apiState.isLoadingEndpoints,
+                                hasError = apiState.endpointFetchError,
+                            ),
                         discovery =
                             ApiModelDiscoveryUiState(
                                 models = discoveredApiModels,

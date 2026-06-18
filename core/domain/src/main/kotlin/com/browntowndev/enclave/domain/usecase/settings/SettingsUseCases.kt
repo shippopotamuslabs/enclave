@@ -79,6 +79,7 @@ interface SettingsApiProviderUseCases {
     val discoverApiModels: DiscoverApiModelsUseCase
     val applyApiModelMetadataDefaults: ApplyApiModelMetadataDefaultsUseCase
     val testApiProviderConnection: TestApiProviderConnectionUseCase
+    val fetchOpenRouterModelEndpoints: com.browntowndev.enclave.domain.usecase.byok.FetchOpenRouterModelEndpointsUseCase
 }
 
 interface SettingsAssignmentUseCases {

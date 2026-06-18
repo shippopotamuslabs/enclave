@@ -1,0 +1,1662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Enclave Provider Wire Context — Full Trace</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <style>
+    :root {
+      --bg: #0b0f15;
+      --bg-2: #0f1419;
+      --surface: #161e2b;
+      --surface-2: #1a2433;
+      --border: #28344a;
+      --border-soft: #1f2937;
+      --text: #e9eff6;
+      --muted: #93a4bd;
+      --faint: #6b7c95;
+      --accent: #6cb6ff;
+      --accent-2: #a78bfa;
+      --green: #4ec97a;
+      --amber: #e3b341;
+      --red: #ff6b61;
+      --teal: #41d1c0;
+      --code-bg: #0e141d;
+      --shadow: 0 1px 0 rgba(255,255,255,0.02), 0 8px 24px rgba(0,0,0,0.35);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+      background:
+        radial-gradient(1200px 600px at 80% -10%, rgba(108,182,255,0.08), transparent 60%),
+        radial-gradient(900px 500px at -10% 0%, rgba(167,139,250,0.07), transparent 55%),
+        var(--bg);
+      color: var(--text);
+      line-height: 1.65;
+      max-width: 1160px;
+      margin: 0 auto;
+      padding: 2.5rem 1.5rem 6rem;
+      -webkit-font-smoothing: antialiased;
+    }
+    h1, h2, h3 { color: var(--text); line-height: 1.25; }
+    h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin: 0 0 0.4rem;
+    }
+    h2 {
+      font-size: 1.45rem;
+      font-weight: 650;
+      letter-spacing: -0.01em;
+      margin: 0 0 1rem;
+      color: var(--text);
+    }
+    h2 .num {
+      color: var(--accent);
+      font-variant-numeric: tabular-nums;
+      margin-right: 0.5rem;
+    }
+    h3 {
+      font-size: 1.08rem;
+      font-weight: 600;
+      color: var(--accent);
+      margin: 1.6rem 0 0.6rem;
+      letter-spacing: -0.005em;
+    }
+    p, li { color: #cdd8e6; }
+    strong { color: #f3f7fc; font-weight: 650; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .meta {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin: 0 0 2rem;
+      padding-bottom: 1.25rem;
+      border-bottom: 1px solid var(--border-soft);
+    }
+    .meta code { color: var(--accent-2); }
+
+    /* Section cards */
+    section {
+      position: relative;
+      background: linear-gradient(180deg, var(--surface) 0%, var(--bg-2) 140%);
+      border: 1px solid var(--border-soft);
+      border-radius: 14px;
+      padding: 1.6rem 1.75rem 1.9rem;
+      margin: 1.4rem 0;
+      box-shadow: var(--shadow);
+      scroll-margin-top: 1rem;
+    }
+    section::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 3px;
+      border-radius: 14px 14px 0 0;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2) 55%, transparent);
+      opacity: 0.7;
+    }
+    section.plain::before { display: none; }
+
+    .summary {
+      background: linear-gradient(180deg, rgba(108,182,255,0.06), rgba(108,182,255,0.01));
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      padding: 1rem 1.25rem;
+      border-radius: 10px;
+      margin: 1rem 0;
+    }
+    .summary p { margin: 0.55rem 0; }
+    .summary p:first-child { margin-top: 0; }
+    .summary p:last-child { margin-bottom: 0; }
+
+    /* Legend */
+    .legend {
+      display: flex; flex-wrap: wrap; gap: 0.45rem 0.9rem; align-items: center;
+      background: var(--code-bg); padding: 0.8rem 1rem; border-radius: 10px;
+      border: 1px solid var(--border-soft);
+      font-size: 0.84rem; margin: 1rem 0; color: var(--muted);
+    }
+    .legend b {
+      display: inline-block; padding: 0.1rem 0.45rem; border-radius: 5px;
+      background: var(--surface-2); color: var(--text); border: 1px solid var(--border);
+      font-family: "JetBrains Mono", monospace; font-size: 0.78rem; font-weight: 600;
+    }
+
+    /* Tables */
+    table {
+      width: 100%; border-collapse: separate; border-spacing: 0;
+      margin: 1.1rem 0; font-size: 0.87rem;
+      border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+    }
+    th, td {
+      border-bottom: 1px solid var(--border-soft);
+      border-right: 1px solid var(--border-soft);
+      padding: 0.6rem 0.8rem; text-align: left; vertical-align: top;
+    }
+    th { background: var(--surface-2); color: var(--accent); font-weight: 600; letter-spacing: 0.01em; }
+    td:last-child, th:last-child { border-right: none; }
+    tr:last-child td { border-bottom: none; }
+    tbody tr:nth-child(even) { background: rgba(255,255,255,0.018); }
+    tbody tr:hover { background: rgba(108,182,255,0.05); }
+    table code { white-space: nowrap; }
+
+    /* Code + wire blocks */
+    code, pre, .wire-block, .cite {
+      font-family: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+    }
+    code {
+      font-size: 0.82em;
+      background: var(--surface-2);
+      border: 1px solid var(--border-soft);
+      border-radius: 5px;
+      padding: 0.05rem 0.35rem;
+      color: #d6e3f2;
+    }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem 1.1rem;
+      overflow-x: auto;
+      font-size: 0.81rem;
+      line-height: 1.55;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.015);
+    }
+    pre code { background: none; border: none; padding: 0; font-size: inherit; color: #cfe0f2; }
+
+    .wire-block {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--teal);
+      border-radius: 10px;
+      padding: 1rem 1.1rem;
+      font-size: 0.8rem;
+      line-height: 1.6;
+      white-space: pre;
+      overflow-x: auto;
+      color: #cfe0f2;
+    }
+
+    /* Plain-text “model eye view” dumps */
+    .eye-view { margin: 1.5rem 0; }
+    .eye-view h3 {
+      margin: 0 0 0.35rem;
+      font-size: 1rem;
+      color: var(--teal);
+    }
+    .eye-view .sub {
+      color: var(--muted);
+      font-size: 0.85rem;
+      margin: 0 0 0.75rem;
+    }
+    .model-sees {
+      background: #080c12;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0;
+      overflow: hidden;
+      font-family: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+      font-size: 0.78rem;
+      line-height: 1.55;
+      color: #d4e4f7;
+    }
+    .model-sees .chunk {
+      padding: 0.85rem 1rem;
+      border-bottom: 1px solid var(--border-soft);
+    }
+    .model-sees .chunk:last-child { border-bottom: none; }
+    .model-sees .tag {
+      display: inline-block;
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      margin-bottom: 0.5rem;
+    }
+    .tag-sys   { background: rgba(108,182,255,0.15); color: #8ec5ff; border: 1px solid rgba(108,182,255,0.35); }
+    .tag-pr    { background: rgba(167,139,250,0.15); color: #c4b5fd; border: 1px solid rgba(167,139,250,0.35); }
+    .tag-sc    { background: rgba(65,209,192,0.12); color: #5eead4; border: 1px solid rgba(65,209,192,0.35); }
+    .tag-sc-f  { background: rgba(65,209,192,0.06); color: #94d9ce; border: 1px dashed rgba(65,209,192,0.4); }
+    .tag-u     { background: rgba(78,201,122,0.12); color: #86efac; border: 1px solid rgba(78,201,122,0.35); }
+    .tag-a     { background: rgba(227,179,65,0.12); color: #fcd34d; border: 1px solid rgba(227,179,65,0.35); }
+    .tag-t     { background: rgba(255,107,97,0.1); color: #fca5a5; border: 1px solid rgba(255,107,97,0.35); }
+    .tag-b     { background: rgba(255,107,97,0.06); color: #f0a8a3; border: 1px solid rgba(255,107,97,0.25); }
+    .tag-tools { background: rgba(147,164,189,0.12); color: #b8c5d9; border: 1px solid rgba(147,164,189,0.35); }
+    .model-sees .body { white-space: pre-wrap; word-break: break-word; margin: 0; color: #cdd8e6; }
+    .model-sees .dim { color: var(--faint); font-style: italic; }
+    .jump-here {
+      background: linear-gradient(135deg, rgba(65,209,192,0.12), rgba(108,182,255,0.08));
+      border: 1px solid rgba(65,209,192,0.35);
+      border-radius: 12px;
+      padding: 1rem 1.25rem;
+      margin: 0 0 1.5rem;
+    }
+    .jump-here p { margin: 0.4rem 0 0; font-size: 0.95rem; }
+    .jump-here strong { color: var(--teal); }
+
+    /* Cite chips */
+    .cite {
+      display: inline-block;
+      color: var(--faint);
+      font-size: 0.74rem;
+      background: var(--code-bg);
+      border: 1px solid var(--border-soft);
+      border-radius: 999px;
+      padding: 0.12rem 0.6rem;
+      margin: 0.35rem 0.3rem 0 0;
+      line-height: 1.5;
+    }
+    p.cite { display: block; border: none; background: none; padding: 0.3rem 0 0; margin: 0.3rem 0 0; }
+
+    /* Callouts */
+    .callout {
+      border-radius: 10px;
+      padding: 0.85rem 1.1rem;
+      margin: 1rem 0;
+      border: 1px solid var(--border);
+      border-left-width: 3px;
+      font-size: 0.92rem;
+    }
+    .callout .label {
+      display: inline-block; font-weight: 700; font-size: 0.72rem;
+      text-transform: uppercase; letter-spacing: 0.08em; margin-right: 0.5rem;
+    }
+    .callout p { margin: 0.35rem 0 0; }
+    .callout.note   { border-left-color: var(--accent); background: rgba(108,182,255,0.06); }
+    .callout.note .label { color: var(--accent); }
+    .callout.warn   { border-left-color: var(--amber); background: rgba(227,179,65,0.07); }
+    .callout.warn .label { color: var(--amber); }
+    .callout.danger { border-left-color: var(--red); background: rgba(255,107,97,0.07); }
+    .callout.danger .label { color: var(--red); }
+    .callout.ok     { border-left-color: var(--green); background: rgba(78,201,122,0.07); }
+    .callout.ok .label { color: var(--green); }
+
+    .verified { color: var(--green); font-weight: 600; }
+    .drift { color: var(--amber); }
+    .pill {
+      display: inline-block; font-family: "JetBrains Mono", monospace; font-size: 0.74rem;
+      padding: 0.08rem 0.5rem; border-radius: 999px; border: 1px solid var(--border);
+      background: var(--surface-2); color: var(--text); white-space: nowrap;
+    }
+    .pill.base { color: var(--accent); border-color: rgba(108,182,255,0.4); }
+    .pill.own  { color: var(--accent-2); border-color: rgba(167,139,250,0.4); }
+    .pill.local{ color: var(--teal); border-color: rgba(65,209,192,0.4); }
+    .pill.na   { color: var(--faint); }
+
+    .mermaid {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.1rem;
+      margin: 1.1rem 0;
+      text-align: center;
+    }
+
+    /* TOC */
+    nav.toc {
+      background: linear-gradient(180deg, var(--surface) 0%, var(--bg-2) 160%);
+      padding: 1.25rem 1.6rem;
+      border-radius: 14px;
+      border: 1px solid var(--border-soft);
+      margin: 1.5rem 0;
+      box-shadow: var(--shadow);
+    }
+    nav.toc strong { color: var(--text); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); }
+    nav.toc ol {
+      margin: 0.7rem 0 0; padding: 0;
+      list-style: none;
+      columns: 2; column-gap: 2rem;
+      counter-reset: toc;
+    }
+    nav.toc li { break-inside: avoid; margin: 0.18rem 0; counter-increment: toc; }
+    nav.toc li a::before {
+      content: counter(toc, decimal-leading-zero);
+      color: var(--faint); font-family: "JetBrains Mono", monospace;
+      font-size: 0.74rem; margin-right: 0.6rem;
+    }
+    nav.toc a { color: #cdd8e6; }
+    nav.toc a:hover { color: var(--accent); text-decoration: none; }
+    nav.toc li.hl a { color: var(--accent); font-weight: 600; }
+
+    .lead { font-size: 1.02rem; color: var(--muted); margin-top: 0; }
+    dl dt { font-weight: 650; color: var(--accent); margin-top: 0.7rem; font-family: "JetBrains Mono", monospace; font-size: 0.86rem; }
+    dl dd { margin: 0.15rem 0 0; color: #cdd8e6; }
+    hr { border: none; border-top: 1px solid var(--border-soft); margin: 1.4rem 0; }
+    .small { font-size: 0.85rem; color: var(--muted); }
+    @media (max-width: 720px) { nav.toc ol { columns: 1; } }
+  </style>
+</head>
+<body>
+
+<h1>Enclave Provider Wire Context — Full Trace</h1>
+<p class="meta">
+  Revision 2026-06-17 · Code-traced against <code>third_party/agent_core</code> (Rust), <code>feature/inference</code>,
+  <code>core/domain</code>, and <code>core/agent</code> · Specs are secondary; <strong>code wins on conflict</strong>.
+</p>
+
+<nav class="toc">
+  <strong>Contents</strong>
+  <ol>
+    <li><a href="#exec">Executive Summary</a></li>
+    <li class="hl"><a href="#matrix">Provider Matrix</a></li>
+    <li class="hl"><a href="#eyeview">Plain-Text Walkthrough (start here)</a></li>
+    <li><a href="#arch">Architecture (A)</a></li>
+    <li><a href="#wire">Wire Context Diagrams (B)</a></li>
+    <li><a href="#freeze">Freeze / Replay Mechanics (C)</a></li>
+    <li><a href="#tables">Reference Tables (D)</a></li>
+    <li><a href="#q1">§1 Multi-turn Context Construction</a></li>
+    <li><a href="#q2">§2 Tools Injection &amp; Replay</a></li>
+    <li><a href="#q3">§3 Tool Results</a></li>
+    <li><a href="#rust">Rust agent_core Source Map</a></li>
+    <li><a href="#q4">§4 Sidecar Contents</a></li>
+    <li><a href="#q5">§5 RAG / Pre-retrieval</a></li>
+    <li><a href="#q6">§6 Date/Time Metadata</a></li>
+    <li><a href="#cache">Cache Prefix Stability</a></li>
+    <li><a href="#issues">Open Issues (E)</a></li>
+    <li><a href="#glossary">Glossary</a></li>
+    <li><a href="#faq">Quick-Answer FAQ</a></li>
+    <li><a href="#revision">Revision Notes</a></li>
+    <li><a href="#tests">Test Evidence</a></li>
+  </ol>
+</nav>
+
+<!-- EXECUTIVE SUMMARY -->
+<section id="exec">
+<h2>Executive Summary</h2>
+<div class="summary">
+<p>Enclave runs every chat turn through <strong>RustLoopInferenceService</strong>, which owns the agent loop
+(Rust <code>agent_core</code> via UniFFI) and, at each model-call boundary, delegates to an <strong>inner provider service</strong>
+through <code>inner.completeSingleTurn(...)</code>. The inner service is provider-specific — <em>not</em> a single shared class.</p>
+
+<p><strong>Two implementation families share the <code>RustCompatibleInferenceService</code> contract:</strong></p>
+<p>• <strong>OpenAI-compatible family</strong> — <code>OpenRouterInferenceServiceImpl</code>, <code>XaiInferenceServiceImpl</code>,
+<code>DeepSeekInferenceServiceImpl</code>, <code>ZaiInferenceServiceImpl</code>, and <code>ApiInferenceServiceImpl</code> (OpenAI / generic) all
+extend <strong>BaseOpenAiSdkInferenceService</strong>. They deliver context sidecars as <em>separate <code>system</code> messages</em>
+placed immediately before the live tail anchor (<code>OpenAiCompatibleVolatilePlacement</code>), and replay frozen snapshots via
+<code>buildMappedBodyWithSidecars</code>.</p>
+<p>• <strong>Bespoke services</strong> — <code>AnthropicInferenceServiceImpl</code> and <code>GoogleInferenceServiceImpl</code> implement
+<code>RustCompatibleInferenceService</code> directly and <em>prepend</em> sidecars into the latest user message;
+<code>LlamaInferenceServiceImpl</code> (local GGUF) injects sidecars into the last user message inside <code>[context]…[/context]</code>
+markers and tracks a native KV-cache continuation instead of an append-only log.</p>
+
+<p><strong>Stable prefix</strong> = prepended system prompt + full <code>tools[]</code> array (schemas unchanged; <code>tool_choice</code>
+toggles auto/none). <strong>Volatile tail</strong> = context-management sidecars (state ledger, tool/file indexes, references,
+cache hints). For the OpenAI family these are <code>system</code> messages just before the live tail anchor — never pinned to wire index&nbsp;1.</p>
+
+<p><strong>Freeze/replay (OpenAI family):</strong> after each <code>completeSingleTurn</code>, live sidecar text is snapshotted via
+<code>endTurnFreezeSidecar(text, mappedInsertIndex)</code>; later calls replay frozen snapshots at the same <em>mapped</em> index.
+Within a tool loop, prefix bytes stay stable (<span class="verified">AOC_22: clearCount=0</span>).</p>
+
+<p><strong>Cross-turn risk:</strong> committed transcripts drop engine-internal rows (<code>agent_tool_budget</code>, etc.), but the
+append-only sync may have counted them during turn&nbsp;1 → turn-2 rehydration is shorter → <code>compaction_shorter_array</code>
+clears frozen sidecars. Rust appends budget as a synthetic <code>AgentRole::Tool</code> row (<code>agent_tool_budget.rs:151-177</code>)
+specifically to avoid in-place tool-result mutation.</p>
+
+<p><strong>Timestamps</strong> live in USER message bodies (<code>[Metadata: Sent at …]</code>), not in frozen sidecars — each new
+user message changes the volatile tail and breaks cache for bytes after the prior stable prefix.</p>
+<p style="margin-top:0.75rem"><a href="#eyeview"><strong>→ Plain-text walkthrough:</strong> see two full turns as the model reads them</a></p>
+</div>
+</section>
+
+<!-- PROVIDER MATRIX -->
+<section id="matrix">
+<h2>Provider Matrix</h2>
+<p class="lead">Which concrete service handles each provider, how it implements the contract, and how it ships
+context sidecars (SC) and pre-retrieval RAG (PR) on the wire.</p>
+
+<p>BYOK dispatch happens in <code>ApiInferenceServiceFactory.buildUncachedService</code>; the result is wrapped by
+<code>InferenceFactoryImpl.wrapWithRustLoop</code> only when it is a <code>RustCompatibleInferenceService</code>.</p>
+<p class="cite">ApiInferenceServiceFactory.kt:32-160 · InferenceFactoryImpl.wrapWithRustLoop:658-687</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Provider (<code>ApiProvider</code>)</th>
+      <th>Inner service</th>
+      <th>Contract impl</th>
+      <th>SC (context-mgmt) delivery</th>
+      <th>PR (RAG) delivery</th>
+      <th>Prompt-cache mechanism</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>OPENAI <span class="small">(default <code>else</code> branch)</span></td>
+      <td><code>ApiInferenceServiceImpl</code></td>
+      <td><span class="pill base">extends BaseOpenAiSdk</span></td>
+      <td><code>system</code> msg before tail anchor</td>
+      <td><span class="pill base">PR sidecar</span> (frozen turn 1)</td>
+      <td>Provider prompt cache (stable prefix)</td>
+    </tr>
+    <tr>
+      <td>OPENROUTER</td>
+      <td><code>OpenRouterInferenceServiceImpl</code></td>
+      <td><span class="pill base">extends BaseOpenAiSdk</span></td>
+      <td><code>system</code> msg before tail anchor</td>
+      <td><span class="pill base">PR sidecar</span> (frozen turn 1)</td>
+      <td><code>session_id</code> header/body + explicit <code>cache_control</code> on supported models</td>
+    </tr>
+    <tr>
+      <td>XAI</td>
+      <td><code>XaiInferenceServiceImpl</code></td>
+      <td><span class="pill base">extends BaseOpenAiSdk</span></td>
+      <td><code>system</code> msg before tail anchor</td>
+      <td><span class="pill base">PR sidecar</span> (frozen turn 1)</td>
+      <td><code>X-Conversation-Id</code> routing header</td>
+    </tr>
+    <tr>
+      <td>DEEPSEEK</td>
+      <td><code>DeepSeekInferenceServiceImpl</code></td>
+      <td><span class="pill base">extends BaseOpenAiSdk</span></td>
+      <td><code>system</code> msg before tail anchor</td>
+      <td><span class="pill own">USER prepend</span> (gate = false)</td>
+      <td>Implicit context cache (diagnostics on)</td>
+    </tr>
+    <tr>
+      <td>ZAI</td>
+      <td><code>ZaiInferenceServiceImpl</code></td>
+      <td><span class="pill base">extends BaseOpenAiSdk</span></td>
+      <td><code>system</code> msg before tail anchor</td>
+      <td><span class="pill own">USER prepend</span> (gate = false)</td>
+      <td>Implicit (<code>cached_tokens</code> usage)</td>
+    </tr>
+    <tr>
+      <td>ANTHROPIC</td>
+      <td><code>AnthropicInferenceServiceImpl</code></td>
+      <td><span class="pill own">own impl</span></td>
+      <td>Prepended to latest USER message</td>
+      <td><span class="pill own">USER prepend</span></td>
+      <td>Ephemeral <code>cache_control</code> breakpoints</td>
+    </tr>
+    <tr>
+      <td>GOOGLE</td>
+      <td><code>GoogleInferenceServiceImpl</code></td>
+      <td><span class="pill own">own impl</span></td>
+      <td>Prepended to latest USER message</td>
+      <td><span class="pill own">USER prepend</span></td>
+      <td><code>CachedContent</code> over stable prefix (<code>GooglePromptCacheSession</code>)</td>
+    </tr>
+    <tr>
+      <td>Local GGUF</td>
+      <td><code>LlamaInferenceServiceImpl</code> <span class="small">(provider = "LLAMA")</span></td>
+      <td><span class="pill local">own impl</span></td>
+      <td>Injected into last USER msg as <code>[context]…[/context]</code></td>
+      <td><span class="pill own">USER prepend</span></td>
+      <td>Native KV-cache prefix reuse (continuation)</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="callout note">
+  <span class="label">Not on the agent-loop wire</span>
+  <p><code>FAL</code> is media-only — <code>ApiInferenceServiceFactory</code> throws for chat. Local <code>litertlm</code> models resolve to
+  <code>LiteRtInferenceServiceImpl</code>, which is <strong>not</strong> wrapped by <code>RustLoopInferenceService</code> (it drives its own
+  conversation engine), so the append-only / sidecar machinery below does not apply to it.</p>
+</div>
+
+<div class="callout note">
+  <span class="label">Append-only reset differs by family</span>
+  <p>At the start of each <code>sendPrompt</code>, <code>RustLoopInferenceService</code> calls
+  <code>inner.resetAppendOnlyForNewPrompt()</code>. For the OpenAI family this is a <strong>no-op</strong>
+  (<code>BaseOpenAiSdkInferenceService.kt:302</code>), so frozen PR/SC snapshots persist across user turns (keyed by <code>chatId</code>).
+  For Anthropic and Google it <strong>invalidates</strong> the context, giving each new user prompt a fresh append-only log. Dispatch is
+  exhaustive in <code>AppendOnlyCompactionInvalidation.kt</code>.</p>
+</div>
+<p class="cite">RustLoopInferenceService.kt:165 · BaseOpenAiSdkInferenceService.kt:302 · AnthropicInferenceServiceImpl.kt:132-135 · GoogleInferenceServiceImpl.kt:93-96 · AppendOnlyCompactionInvalidation.kt:9-25</p>
+</section>
+
+<!-- PLAIN-TEXT WALKTHROUGH -->
+<section id="eyeview">
+<h2>Plain-Text Walkthrough — What the Model Actually Sees</h2>
+
+<div class="jump-here">
+  <strong>Start here if the diagrams feel dense.</strong>
+  <p>This section shows the <em>literal text</em> sent to a remote model on OpenRouter (OpenAI-compatible family).
+  Each colored tag is a separate <code>messages[]</code> entry (or the parallel <code>tools[]</code> field).
+  Scenario: user asks a question → one <code>web_search</code> tool call → assistant answers → user sends a follow-up.</p>
+</div>
+
+<div class="callout note">
+  <span class="label">Path shown</span>
+  <p><strong>OpenRouter</strong> → <code>OpenRouterInferenceServiceImpl</code> → <code>BaseOpenAiSdkInferenceService</code>.
+  RAG lands in a <strong>PR system sidecar</strong> (not inside the user message). On Anthropic/Google the same prose is
+  <em>prepended into the latest user message</em> instead. On DeepSeek/Z.ai, RAG is prepended into the user message body.</p>
+</div>
+
+<p class="lead">User story for this example</p>
+<ol>
+  <li><strong>Turn 1 (user):</strong> “What’s the weather in Portland? Also remind me what we decided about the API migration?”</li>
+  <li>Model calls <code>web_search</code> once, then answers.</li>
+  <li><strong>Turn 2 (user):</strong> “Thanks — should we use Redis for session cache too?”</li>
+</ol>
+
+<!-- TURN 1 CALL 1 -->
+<div class="eye-view">
+<h3>Turn 1 · Model call 1 — first request (no tools in history yet)</h3>
+<p class="sub">User message just sent. <code>allow_tool_call: true</code>. No frozen sidecars yet.</p>
+<div class="model-sees">
+<div class="chunk">
+<span class="tag tag-tools">tools[] — parallel field (not in messages)</span>
+<pre class="body">[
+  { "type": "function", "function": { "name": "web_search", "description": "Search the web…", "parameters": {…} } },
+  { "type": "function", "function": { "name": "web_extract", "description": "…", "parameters": {…} } },
+  { "type": "function", "function": { "name": "tool_discovery_tool", "description": "…", "parameters": {…} } }
+]
+tool_choice: "auto"
+parallel_tool_calls: false</pre>
+</div>
+<div class="chunk">
+<span class="tag tag-sys">messages[0] · role=system · STABLE SYSTEM PROMPT</span>
+<pre class="body"># ABOUT THE USER:
+## Identity &amp; Background:
+- Staff engineer on the Enclave Android team
+
+## Preferences &amp; Style:
+- Prefers concise answers with code citations when relevant
+
+You are Enclave, a helpful on-device-first assistant…
+
+# TEMPORAL CONTEXT:
+User messages include a `[Metadata: Sent at ...]` footer. Use this to understand the current time…
+IMPORTANT: DO NOT include metadata tags or mentions of the footer in your responses.
+
+Tool routing: answer stable facts directly. For current information call web_search directly…
+
+# ACTIVE TOOL EXAMPLES:
+…</pre>
+<p class="cite dim">Source: SearchToolPromptComposer.compose + config system prompt · ChatInferenceRequestPreparer.kt:516-536</p>
+</div>
+<div class="chunk">
+<span class="tag tag-pr">messages[1] · role=system · PRE-RETRIEVAL SIDECAR (PR) — frozen after this call</span>
+<pre class="body">Pre-retrieval context:
+# RELEVANT FACTS &amp; CONTEXT:
+The following information was retrieved from your long-term memory as relevant to the current conversation:
+- Decided in chat-7f3a: migrate auth tokens to EncryptedSharedPreferences before Q3
+- Project codename for the migration is ENCLAVE-AUTH-12
+
+# RELEVANT WEB SEARCH RESULTS:
+The following search results were automatically retrieved based on the user's query:
+1. Portland, OR — Current conditions: 58°F, partly cloudy (example.com/weather/portland)</pre>
+<p class="cite dim">Source: SearchToolPromptComposer.composeVolatileTurnContext → PreRetrievalContextSidecar.format · NOT in user message bytes on OpenRouter</p>
+</div>
+<div class="chunk">
+<span class="tag tag-sc">messages[2] · role=system · LIVE CONTEXT-MGMT SIDECAR (SC*) — frozen after this call</span>
+<pre class="body">Context management sidecars:
+Reference policy: IDs are exact lookups only—never browse. For conversation history use search_chat_history.
+References:
+- [TOOL_OUTPUT|turn:1|fresh] ctxref-tool-3 (842b): web_search prior @turn:1
+  preview: "{"results":[{"title":"Portland weather"…"
+  read_context_reference("ctxref-tool-3")
+State ledger JSON: {"objective":"answer weather and recall API migration decision","constraints":[],"decisions":[],"open_questions":[],"touched_files":[],"tool_decisions":[],"artifact_states":[],"summary_refs":[],"history_refs":[]}
+Tool context index JSON: {"advertised_tools":["web_search","web_extract"],"full_schema_ref":"tool-schema-1"}
+Cache hints: stable-prefix</pre>
+<p class="cite dim">Source: RustLoopInferenceService.buildContextSidecars · state/tool/file JSON from agent_core · ContextSidecarCompaction.kt</p>
+</div>
+<div class="chunk">
+<span class="tag tag-u">messages[3] · role=user · USER MESSAGE + TIMESTAMP</span>
+<pre class="body">What's the weather in Portland? Also remind me what we decided about the API migration?
+
+[Metadata: Sent at Tuesday, June 17, 2026 at 2:14 PM]</pre>
+<p class="cite dim">Source: ChatInferenceRequestPreparer.promptWithTemporalMetadata · volatile RAG is NOT duplicated here on OpenRouter</p>
+</div>
+</div>
+</div>
+
+<!-- TURN 1 CALL 2 -->
+<div class="eye-view">
+<h3>Turn 1 · Model call 2 — after one tool call (tool loop)</h3>
+<p class="sub">Session grew: assistant tool_calls + tool result. Prior PR and SC1 replay as <em>frozen</em> system messages. New live SC2* at tail. Budget not injected yet (34 tools remaining).</p>
+<div class="model-sees">
+<div class="chunk">
+<span class="tag tag-tools">tools[] — unchanged schemas</span>
+<pre class="body">…same three tool schemas as call 1…
+tool_choice: "auto"</pre>
+</div>
+<div class="chunk">
+<span class="tag tag-sys">messages[0] · STABLE SYSTEM PROMPT</span>
+<pre class="body dim">…byte-identical to call 1…</pre>
+</div>
+<div class="chunk">
+<span class="tag tag-pr tag-sc-f">messages[1] · PR — FROZEN REPLAY (turn 1 snapshot)</span>
+<pre class="body dim">…byte-identical Pre-retrieval context block from call 1…</pre>
+</div>
+<div class="chunk">
+<span class="tag tag-u">messages[2] · USER MESSAGE 1</span>
+<pre class="body dim">…byte-identical including [Metadata: Sent at Tuesday, June 17, 2026 at 2:14 PM]…</pre>
+</div>
+<div class="chunk">
+<span class="tag tag-a">messages[3] · role=assistant · TOOL CALL</span>
+<pre class="body">(empty or minimal text)
+tool_calls: [
+  { "id": "call_weather_1", "type": "function", "function": { "name": "web_search", "arguments": "{\"query\":\"Portland OR weather today\"}" } }
+]</pre>
+<p class="cite dim">Wire: OpenAI tool_calls array · Session metadata raw_tool_calls</p>
+</div>
+<div class="chunk">
+<span class="tag tag-t">messages[4] · role=tool · TOOL RESULT</span>
+<pre class="body">{"results":[{"title":"Portland, OR Weather","snippet":"58°F, partly cloudy…","url":"https://example.com/…"}]}</pre>
+<p class="cite dim">Rust stores AgentRole::Tool · Kotlin maps to wire via metadata call_id · engine/mod.rs:~984-989</p>
+</div>
+<div class="chunk">
+<span class="tag tag-sc tag-sc-f">messages[5] · SC1 — FROZEN (context after first model call)</span>
+<pre class="body">Context management sidecars:
+…
+State ledger JSON: {"objective":"answer weather and recall API migration decision",…}
+Cache hints: stable-prefix</pre>
+</div>
+<div class="chunk">
+<span class="tag tag-sc">messages[6] · SC2* — LIVE (updated ledger after tool result)</span>
+<pre class="body">Context management sidecars:
+…
+State ledger JSON: {"objective":"answer weather and recall API migration decision","decisions":[],"tool_decisions":["call:web_search","result:call_weather_1:ok"],…}
+Cache hints: stable-prefix</pre>
+</div>
+</div>
+<p class="cite">Placement proven by AOC_15 (sidecar after tool, not at index 1) · AOC_03 (frozen SC1 bytes preserved)</p>
+</div>
+
+<!-- TURN 1 CALL 3 -->
+<div class="eye-view">
+<h3>Turn 1 · Model call 3 — final answer (tools disabled)</h3>
+<p class="sub"><code>allow_tool_call: false</code> → <code>tool_choice: "none"</code> but <code>tools[]</code> schemas still sent. Budget message injected because tools are now disallowed.</p>
+<div class="model-sees">
+<div class="chunk">
+<span class="tag tag-tools">tools[] — same schemas</span>
+<pre class="body">…same three tool schemas…
+tool_choice: "none"    ← schemas present, calling disabled</pre>
+</div>
+<div class="chunk">
+<span class="tag tag-sys">messages[0..4]</span>
+<pre class="body dim">…stable prefix through tool result — unchanged from call 2…</pre>
+</div>
+<div class="chunk">
+<span class="tag tag-sc tag-sc-f">messages[5] · SC1 frozen</span>
+<pre class="body dim">…turn-1-first-call snapshot…</pre>
+</div>
+<div class="chunk">
+<span class="tag tag-sc tag-sc-f">messages[6] · SC2 frozen</span>
+<pre class="body dim">…post-tool snapshot…</pre>
+</div>
+<div class="chunk">
+<span class="tag tag-sc">messages[7] · SC3* — LIVE</span>
+<pre class="body">Context management sidecars:
+…
+State ledger JSON: {…,"decisions":["Portland is 58°F partly cloudy","API migration uses EncryptedSharedPreferences per chat-7f3a"]}
+Cache hints: stable-prefix</pre>
+</div>
+<div class="chunk">
+<span class="tag tag-b">messages[8] · role=system · ENGINE BUDGET (B)</span>
+<pre class="body">&lt;system_context&gt;
+Tool budget: 1/35 used (34 remaining). Tools disabled.
+&lt;/system_context&gt;</pre>
+<p class="cite dim">Sidecar anchors before budget tail · AOC_21 · Dropped from committed transcript</p>
+</div>
+</div>
+<p class="sub">Model streams final assistant text (not shown — it is the <em>output</em>, not input). Committed transcript after turn 1 ends:</p>
+<div class="model-sees">
+<div class="chunk">
+<span class="tag tag-u">committed · USER 1</span>
+<pre class="body">What's the weather in Portland?… [Metadata: Sent at Tuesday, June 17, 2026 at 2:14 PM]</pre>
+</div>
+<div class="chunk">
+<span class="tag tag-a">committed · ASSISTANT 1 (with tool metadata)</span>
+<pre class="body">Portland is 58°F and partly cloudy. On the API migration: you decided to move auth tokens to EncryptedSharedPreferences before Q3 (chat-7f3a).</pre>
+</div>
+</div>
+<p class="cite dim">Sidecars (PR, SCn) and budget (B) are NOT in committed transcript · RustLoopInferenceService.buildProviderTranscript:492-518</p>
+</div>
+
+<!-- TURN 2 -->
+<div class="eye-view">
+<h3>Turn 2 · Model call 1 — second user message (new sendPrompt)</h3>
+<p class="sub">History rehydrated from committed transcript. <strong>New timestamp</strong> on user 2. On OpenRouter, frozen PR + SC snapshots from turn 1 <em>replay</em> unless append-only was cleared (<code>compaction_shorter_array</code>). RAG for turn 2 is NOT rebuilt — turn-1 PR frozen snapshot still replays.</p>
+<div class="model-sees">
+<div class="chunk">
+<span class="tag tag-tools">tools[]</span>
+<pre class="body">…same schemas (fingerprint stable unless tool_discovery activated new tools)…
+tool_choice: "auto"</pre>
+</div>
+<div class="chunk">
+<span class="tag tag-sys">messages[0] · STABLE SYSTEM PROMPT</span>
+<pre class="body dim">…same system prompt if config unchanged…</pre>
+</div>
+<div class="chunk">
+<span class="tag tag-pr tag-sc-f">messages[1] · PR — FROZEN from turn 1 (not refreshed)</span>
+<pre class="body dim">…still the turn-1 pre-retrieval block (Portland weather snippet + memory facts)…</pre>
+<p class="cite dim">hasFrozenPreRetrievalSidecar() → live PR null on turn 2+</p>
+</div>
+<div class="chunk">
+<span class="tag tag-u">messages[2] · USER 1 (rehydrated)</span>
+<pre class="body">What's the weather in Portland? Also remind me what we decided about the API migration?
+
+[Metadata: Sent at Tuesday, June 17, 2026 at 2:14 PM]</pre>
+<p class="cite dim">Rehydrated timestamp from message createdAt · ChatHistoryRehydrator.kt:93-95</p>
+</div>
+<div class="chunk">
+<span class="tag tag-a">messages[3] · ASSISTANT 1 (rehydrated)</span>
+<pre class="body">Portland is 58°F and partly cloudy. On the API migration: you decided to move auth tokens to EncryptedSharedPreferences before Q3 (chat-7f3a).</pre>
+</div>
+<div class="chunk">
+<span class="tag tag-sc tag-sc-f">messages[4] · SC1 frozen (from turn 1, if append-only intact)</span>
+<pre class="body dim">…first-call sidecar snapshot…</pre>
+</div>
+<div class="chunk">
+<span class="tag tag-sc tag-sc-f">messages[5] · SC2 frozen</span>
+<pre class="body dim">…post-tool snapshot…</pre>
+</div>
+<div class="chunk">
+<span class="tag tag-sc tag-sc-f">messages[6] · SC3 frozen</span>
+<pre class="body dim">…final-answer snapshot from turn 1…</pre>
+</div>
+<div class="chunk">
+<span class="tag tag-sc">messages[7] · SC4* — LIVE for turn 2</span>
+<pre class="body">Context management sidecars:
+…
+State ledger JSON: {"objective":"advise on Redis for session cache","decisions":[],"tool_decisions":[],…}
+Cache hints: stable-prefix</pre>
+</div>
+<div class="chunk">
+<span class="tag tag-u">messages[8] · USER 2 — NEW MESSAGE + NEW TIMESTAMP</span>
+<pre class="body">Thanks — should we use Redis for session cache too?
+
+[Metadata: Sent at Tuesday, June 17, 2026 at 2:22 PM]</pre>
+<p class="cite dim">New footer breaks cache prefix from this byte onward · ChatInferenceRequestPreparer.kt:484-487</p>
+</div>
+</div>
+
+<div class="callout warn">
+  <span class="label">If append-only cleared between turns</span>
+  <p>If turn 1 had engine-internal rows on the wire (budget) that were stripped on commit, rehydration can be
+  <em>shorter</em> than the prior sync → <code>compaction_shorter_array</code> wipes all frozen SC/PR snapshots.
+  Turn 2 then looks like: SYS, U1, A1, SC* (live only), U2 — no frozen sidecars.</p>
+</div>
+</div>
+
+<h3>What is NOT in the model’s input</h3>
+<table>
+  <thead><tr><th>Artifact</th><th>Why absent</th></tr></thead>
+  <tbody>
+    <tr><td>Reasoning / thinking tokens</td><td>Streamed to UI; optional <code>reasoning_content</code> on assistant replay only when configured</td></tr>
+    <tr><td>Harness-sanitized harness tokens</td><td>Stripped in RustLoopInferenceService before UI emit</td></tr>
+    <tr><td>Superseded compaction rows</td><td>Filtered in Rust <code>build_model_request</code> (<code>metadata.superseded</code>)</td></tr>
+    <tr><td>Full tool schema registry blob</td><td>Stashed in ContextStore; index shows names + <code>full_schema_ref</code> id only</td></tr>
+    <tr><td>Images (when present)</td><td>Separate multimodal content parts on the target user message — not shown in this text-only example</td></tr>
+  </tbody>
+</table>
+
+<p class="cite">OpenRouter path · AOC_02, AOC_03, AOC_15, AOC_21 · buildContextSidecars · PreRetrievalContextSidecar · agent_tool_budget.rs</p>
+</section>
+
+<!-- ARCHITECTURE A -->
+<section id="arch">
+<h2><span class="num">A.</span>High-Level Architecture</h2>
+<p class="lead">RustLoop owns the loop; the inner provider service owns the wire format.</p>
+<div class="mermaid">
+flowchart TB
+  subgraph Domain["core/domain"]
+    CIP["ChatInferenceRequestPreparer<br/>systemPrompt + volatileTurnContext"]
+    CHH["ChatHistoryRehydrator<br/>setHistory + timestamps"]
+    TAR["ToolSessionActivationRegistry<br/>orderedActiveNames"]
+  end
+
+  subgraph Loop["feature/inference — RustLoopInferenceService (wrapper)"]
+    SP["sendPrompt"]
+    HCB["AgentLoopHostCallbacks.completeModelTurn"]
+    BCS["buildContextSidecars()"]
+    WTR["wireToolsForRequest()"]
+    BPT["buildProviderTranscript()"]
+    CIT["CommittedInferenceTranscriptPort.commit()"]
+  end
+
+  subgraph Rust["agent_core (FFI)"]
+    SE["Session engine<br/>session.messages, compaction"]
+    SL["state_ledger / tool_context_index<br/>file_context_index / cache_hints"]
+    CR["context_references"]
+  end
+
+  subgraph Inner["inner.completeSingleTurn — provider service"]
+    OAI["OpenAI family:<br/>Base(OpenRouter/XAI/DeepSeek/ZAI/OpenAI)<br/>append-only + system sidecars"]
+    ANT["AnthropicInferenceServiceImpl<br/>prepend SC to latest user"]
+    GGL["GoogleInferenceServiceImpl<br/>CachedContent + prepend"]
+    LLA["LlamaInferenceServiceImpl<br/>KV continuation + [context]"]
+  end
+
+  subgraph Provider["Remote / local API"]
+    REM["OpenAI · OpenRouter · xAI · DeepSeek · Z.ai · Anthropic · Google"]
+    LOC["llama.cpp (on-device)"]
+  end
+
+  CIP --> SP
+  CHH --> SP
+  SP --> SE
+  SE --> HCB
+  HCB --> BCS
+  HCB --> WTR
+  TAR --> WTR
+  SL --> BCS
+  CR --> BCS
+  BCS --> HCB
+  WTR --> HCB
+  HCB -->|inner.completeSingleTurn| OAI
+  HCB -->|inner.completeSingleTurn| ANT
+  HCB -->|inner.completeSingleTurn| GGL
+  HCB -->|inner.completeSingleTurn| LLA
+  OAI --> REM
+  ANT --> REM
+  GGL --> REM
+  LLA --> LOC
+  HCB --> BPT
+  BPT --> CIT
+</div>
+<p class="cite">InferenceFactoryImpl.wrapWithRustLoop:658-687 · RustLoopInferenceService.completeModelTurn:179-245 (delegates at :202-231) · ApiInferenceServiceFactory.kt:32-160</p>
+
+<h3>Full call-chain sequence</h3>
+<div class="mermaid">
+sequenceDiagram
+  participant UI as Chat / ViewModel
+  participant CIP as ChatInferenceRequestPreparer
+  participant RLS as RustLoopInferenceService
+  participant AC as agent_core
+  participant INN as inner provider service
+  participant API as Remote / local API
+
+  UI->>CIP: prepare(prompt, memories, search)
+  CIP-->>UI: GenerationOptions(systemPrompt, volatileTurnContext)
+  UI->>RLS: sendPrompt(userContent, options)
+  RLS->>RLS: inner.resetAppendOnlyForNewPrompt()
+  RLS->>RLS: buildHistory(chatId) + buildUserContent
+  RLS->>AC: execute(initialMessages, config, host)
+  loop Agent loop
+    AC->>RLS: completeModelTurn(sessionMessages, sidecar JSON, cacheHints…)
+    RLS->>RLS: buildContextSidecars + wireToolsForRequest
+    RLS->>INN: inner.completeSingleTurn(sessionMessages, systemPrompt, contextSidecars, tools)
+    Note over INN: family-specific wire build<br/>(append-only / prepend / KV)
+    INN->>API: provider request (messages + tools)
+    API-->>INN: stream / tool_calls
+    INN-->>RLS: AgentModelTurnResult
+    RLS->>RLS: latestProviderTranscript = buildProviderTranscript
+    alt tool calls
+      AC->>RLS: executeTools
+      RLS-->>AC: submitToolResults
+    end
+  end
+  AC->>RLS: AgentLoopEvent.Finished
+  RLS->>RLS: committedInferenceTranscripts.commit(latestProviderTranscript)
+</div>
+</section>
+
+<!-- WIRE DIAGRAMS B -->
+<section id="wire">
+<h2><span class="num">B.</span>Wire Context Diagrams (<code>messages[]</code>)</h2>
+<div class="callout note">
+  <span class="label">Scope</span>
+  <p>The diagrams below trace the <strong>OpenAI-compatible family</strong> (<code>BaseOpenAiSdkInferenceService</code> +
+  <code>OpenAiCompatibleVolatilePlacement</code>), where sidecars are discrete <code>system</code> messages. Anthropic and Google
+  prepend the same sidecar text into the latest user message (<code>SessionIndexVolatilePlacement</code>); Llama injects it inside
+  <code>[context]…[/context]</code>. See the <a href="#matrix">Provider Matrix</a>.</p>
+</div>
+
+<div class="legend">
+  <span><b>SYS</b> stable system profile</span>
+  <span><b>SCn</b> frozen context sidecar snapshot n</span>
+  <span><b>SC*</b> live context sidecar (this call only)</span>
+  <span><b>PR</b> pre-retrieval sidecar</span>
+  <span><b>U/A/T</b> user / assistant / tool</span>
+  <span><b>B</b> engine-internal budget (system role on wire)</span>
+  <span><b>mi</b> mappedInsertIndex</span>
+</div>
+
+<h3>B1 — First model call (single user message, no tools yet)</h3>
+<p>Proven by <span class="verified">AOC_02</span> (3 wire messages, sidecar at index 1).</p>
+<div class="wire-block">wire[0]  SYS   "You are a helpful assistant."
+wire[1]  SC1*  "State ledger JSON: {\"key\":\"value\"}"     ← mappedInsertIndex=0 (before U)
+wire[2]  U     "Hello"
+
+tools[]: (empty) or stable schemas if tooling enabled
+tool_choice: auto | none</div>
+<p class="cite">AppendOnlyOpenAiSidecarPlacementTest.kt:27-52 · BaseOpenAiSdkInferenceService.kt:475-480 (freeze after wire)</p>
+
+<h3>B2 — Same user message, after 1 tool call</h3>
+<p>Proven by <span class="verified">AOC_15</span> (5 messages; sidecar after tool result, not at index 1).</p>
+<div class="wire-block">wire[0]  SYS   stable system prompt
+wire[1]  U1    "Search for cats"
+wire[2]  A1    assistant + tool_calls[{id:call_1, name:web_search, …}]
+wire[3]  T1    tool result JSON (role=tool, tool_call_id=call_1)
+wire[4]  SC1*  "State ledger JSON: {\"turn\":1}"            ← mi=4 (after tool tail)
+
+Frozen from call 1 replays on call 2 at original mi (AOC_03).</div>
+<div class="mermaid">
+flowchart LR
+  subgraph Call2["Model call 2 — messages[]"]
+    direction TB
+    W0["[0] SYS"]
+    W1["[1] SC1 frozen turn:1"]
+    W2["[2] U1"]
+    W3["[3] A1 tool_calls"]
+    W4["[4] T1"]
+    W5["[5] SC2* live turn:2"]
+  end
+</div>
+<p class="cite">AOC_03 · AOC_15 · tailMappedInsertIndex(isToolResult=true) → mappedBodySize</p>
+
+<h3>B3 — Same user message, after 2 tool calls (accumulated frozen sidecars)</h3>
+<p>Proven by <span class="verified">wire_caps_frozen_sidecars_at_two_on_third_tool_loop_turn</span> (3 sidecar texts on wire).</p>
+<div class="wire-block">wire[0]  SYS
+wire[1]  SC1   frozen {"turn":1}     mi=0
+wire[2]  U1
+wire[3]  A1    (tool call 1)
+wire[4]  T1
+wire[5]  SC2   frozen {"turn":2}     mi after T1
+wire[6]  A2    (tool call 2)        [if second tool round]
+wire[7]  T2
+wire[8]  SC3*  live {"turn":3}
+wire[9]  A3    assistant summary    [optional]
+
+AOC_21: when agent_tool_budget trails session, SC inserts after T, before B.</div>
+<p class="cite">AppendOnlyOpenAiSidecarPlacementTest.kt:120-195 · AOC_21</p>
+
+<h3>B4 — Second user message (cross-turn boundary)</h3>
+<div class="wire-block">PERSISTS (OpenAI family — append-only NOT cleared, reset is no-op):
+  - SYS stable prompt (same bytes if systemPrompt unchanged)
+  - tools[] schemas (fingerprint stable unless activation grew)
+  - Prior U/A/T committed transcript messages
+  - Frozen SCn / PR snapshots (unless clearCount incremented)
+  Note: Anthropic & Google reset append-only per prompt → no cross-turn frozen replay.
+
+CLEARS / RESETS:
+  - closeSession() → session_invalidate (all append-only state)
+  - compaction_shorter_array / digest_mismatch / rust_compaction_boundary → frozen sidecars wiped
+  - New USER message with NEW timestamp footer (prefix break at that message)
+  - New live SC* at new tail anchor
+
+NOT in rehydrated history (dropped on commit):
+  - agent_tool_budget, tools_blocked_nudge, envelope_parse_failure
+  - Volatile sidecars (never in session.messages)</div>
+<p class="cite">buildProviderTranscript:492-518 · rehydrated_shorter_session · ChatHistoryRehydrator.kt</p>
+
+<div class="mermaid">
+stateDiagram-v2
+  [*] --> Turn1: sendPrompt user1
+  Turn1 --> ToolLoop: completeModelTurn × N
+  ToolLoop --> Commit1: AgentLoopEvent.Finished
+  Commit1 --> Turn2: sendPrompt user2
+  Turn2 --> Rehydrate: buildHistory / setHistory
+  Rehydrate --> SyncCheck: syncMessages
+  SyncCheck --> Cleared: shorter array / digest mismatch
+  SyncCheck --> Extended: prefix unchanged
+  Cleared --> FreshWire: clearCount++, frozenSidecars=[]
+  Extended --> ToolLoop2: frozen SCn replayed (OpenAI family)
+</div>
+</section>
+
+<!-- FREEZE REPLAY C -->
+<section id="freeze">
+<h2><span class="num">C.</span>Freeze / Replay Mechanics</h2>
+<p class="lead">OpenAI-compatible family. <code>ProviderAppendOnlyContext</code> enforces the Pi invariant
+(provider prefix never rewritten in place).</p>
+<div class="mermaid">
+flowchart TD
+  START["completeSingleTurn invoked"] --> ENSURE["ensureStablePrefix(systemPrompt, toolsFingerprint)"]
+  ENSURE --> SYNC["syncMessages(toProviderNormalizedMessages)"]
+  SYNC --> DIGEST{digest of prefix<br/>unchanged?}
+  DIGEST -->|no| CLEAR_DM["clearLogState(digest_mismatch)"]
+  DIGEST -->|yes| SHORTER{normalized.size<br/>&lt; lastSyncCount?}
+  SHORTER -->|yes| CLEAR_CS["clearLogState(compaction_shorter_array)"]
+  SHORTER -->|no| EXTEND["log.extend(new tail only)"]
+  CLEAR_DM --> FPR
+  CLEAR_CS --> FPR
+  EXTEND --> FPR{PR not yet frozen?}
+  FPR -->|yes| FREEZE_PR["endTurnFreezeSidecar(PR) BEFORE wire"]
+  FPR -->|no| BUILD
+  FREEZE_PR --> BUILD["buildMappedBodyWithSidecars<br/>(frozen replay + live SC* + live PR if unfrozen)"]
+  BUILD --> HTTP["HTTP request"]
+  HTTP --> FSC["endTurnFreezeSidecar(contextSidecars) AFTER wire"]
+  FSC --> DONE["return AgentModelTurnResult"]
+
+  RUST["AgentLoopEvent.CompactionBoundaryApplied<br/>or KvCacheInvalidated"] --> CLEAR_R["clearAppendOnlyOnRustCompactionBoundary()<br/>→ rust_compaction_boundary"]
+  CLOSE["closeSession()"] --> INV["invalidate() → session_invalidate"]
+</div>
+<p class="cite">ProviderAppendOnlyContext.kt:23-128 · BaseOpenAiSdkInferenceService.kt:384-480 · RustLoopInferenceService.kt:347-362</p>
+
+<h3>When <code>clearCount</code> increments</h3>
+<table>
+  <thead><tr><th>Reason</th><th>Trigger</th><th>Clears frozen sidecars?</th><th>Test evidence</th></tr></thead>
+  <tbody>
+    <tr><td><code>digest_mismatch</code></td><td>Same-length prefix, different bytes in normalized messages</td><td>Yes</td><td>AOC_05, digest_mismatch_clears_frozen_sidecar_snapshots</td></tr>
+    <tr><td><code>compaction_shorter_array</code></td><td><code>normalized.size &lt; lastSyncCount</code></td><td>Yes</td><td>rehydrated_shorter_session, AOC_13</td></tr>
+    <tr><td><code>rust_compaction_boundary</code></td><td>CompactionBoundaryApplied / KvCacheInvalidated events</td><td>Yes</td><td>RustLoopInferenceService.kt:347-362</td></tr>
+    <tr><td><code>session_invalidate</code></td><td><code>closeSession()</code></td><td>Yes</td><td>AOC_11</td></tr>
+    <tr><td><em>(no increment)</em></td><td>Session only grows; prefix bytes identical</td><td>No</td><td>AOC_22, append_only_clear_count_stays_zero_when_session_only_grows</td></tr>
+  </tbody>
+</table>
+<div class="callout warn">
+  <span class="label">Order matters</span>
+  <p>The <strong>PR</strong> sidecar is frozen <em>before</em> the wire is built (so the same call replays it from the frozen slot,
+  not the live slot); the <strong>SC</strong> sidecar is frozen <em>after</em> the wire is built. This is the prior-audit fix #5,
+  verified at <code>BaseOpenAiSdkInferenceService.kt:430-445</code> (PR) and <code>:475-480</code> (SC).</p>
+</div>
+</section>
+
+<!-- REFERENCE TABLES D -->
+<section id="tables">
+<h2><span class="num">D.</span>Reference Tables</h2>
+<table>
+  <thead>
+    <tr><th>Artifact</th><th>Produced by</th><th>Stored where</th><th>Mutates when</th><th>Replay mechanism</th><th>Cache impact</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Stable system prompt</td>
+      <td>ChatInferenceRequestPreparer → SearchToolPromptComposer.compose</td>
+      <td>GenerationOptions.systemPrompt; prepended wire SYS if not duplicate</td>
+      <td>Tool catalog / memories / strategy change</td>
+      <td>Same string each turn if unchanged; stablePrefix version bumps on change</td>
+      <td>Prefix anchor — cache-eligible</td>
+    </tr>
+    <tr>
+      <td><code>tools[]</code> array</td>
+      <td>wireToolsForRequest ∩ ToolSessionActivationRegistry</td>
+      <td>HTTP body per request</td>
+      <td>tool_discovery_tool activation; fingerprint change</td>
+      <td>Full schemas resent every call; tool_choice auto/none (AOC_06)</td>
+      <td>Stable if names+schemas unchanged; separate from messages[]</td>
+    </tr>
+    <tr>
+      <td>Context-mgmt sidecar (SC)</td>
+      <td>RustLoopInferenceService.buildContextSidecars</td>
+      <td>OpenAI: frozenSidecarSnapshots + system msgs; Anthropic/Google/Llama: prepended to latest user</td>
+      <td>Every completeModelTurn (ledger/refs/hints update)</td>
+      <td>OpenAI: endTurnFreezeSidecar → buildMappedBodyWithSidecars at mappedInsertIndex</td>
+      <td>Old SCn frozen = stable; new SC* = volatile tail</td>
+    </tr>
+    <tr>
+      <td>Pre-retrieval sidecar (PR)</td>
+      <td>composeVolatileTurnContext → PreRetrievalContextSidecar.format (marker <code>Pre-retrieval context:</code>)</td>
+      <td>OpenAI(OPENAI/XAI/OPENROUTER): frozenSidecarSnapshots (turn 1). Else: in USER body.</td>
+      <td>Turn 1 only for the gated providers; turn 2+ replays frozen</td>
+      <td>hasFrozenPreRetrievalSidecar → live null, frozen replay</td>
+      <td>USER bytes stay stable for gated providers</td>
+    </tr>
+    <tr>
+      <td>Tool calls (assistant)</td>
+      <td>agent_core → metadata raw_tool_calls</td>
+      <td>session.messages; committed transcript metadata</td>
+      <td>Each tool invocation</td>
+      <td>toAssistantChatParam rebuilds tool_calls array</td>
+      <td>Append-only growth — prefix stable if prior turns unchanged</td>
+    </tr>
+    <tr>
+      <td>Tool results</td>
+      <td>ToolExecutorPort → submitToolResults → Rust push</td>
+      <td>Rust: <code>AgentRole::Tool</code>; Kotlin domain: <code>Role.ASSISTANT</code> (FFI map); wire: <code>role=tool</code> via <code>call_id</code> metadata</td>
+      <td>Per tool execution</td>
+      <td>toToolResultChatParam → ChatCompletionToolMessageParam</td>
+      <td>Append-only; in-place content change → digest_mismatch risk</td>
+    </tr>
+    <tr>
+      <td>Budget message (B)</td>
+      <td>agent_core (agent_tool_budget.rs)</td>
+      <td>session.messages as synthetic <code>AgentRole::Tool</code>; wire as system via EngineInternalMessageMapper</td>
+      <td>After each tool batch when remaining ≤ 5 or tools disallowed</td>
+      <td>Wire each call; excluded from buildProviderTranscript</td>
+      <td>On wire but not committed → cross-turn shorter array risk</td>
+    </tr>
+    <tr>
+      <td>Timestamp metadata</td>
+      <td>promptWithTemporalMetadata; ChatHistoryRehydrator</td>
+      <td>USER message content string</td>
+      <td>Every new user message; rehydration uses createdAt</td>
+      <td>Not frozen — part of USER body</td>
+      <td>Breaks cache from that USER message onward</td>
+    </tr>
+    <tr>
+      <td>RAG payload</td>
+      <td>composeVolatileTurnContext</td>
+      <td>GenerationOptions.volatileTurnContext → PR sidecar or USER prepend (per deliverPreRetrievalAsOpenAiSidecar)</td>
+      <td>Per user send (retrieval runs at prepare time)</td>
+      <td>Gated providers: freeze PR turn 1; others: merged into USER</td>
+      <td>PR frozen after turn 1 on OPENAI/XAI/OPENROUTER</td>
+    </tr>
+    <tr>
+      <td>State ledger JSON</td>
+      <td>agent_core → state_ledger (full object on FFI)</td>
+      <td>Inside SC prose line</td>
+      <td>Each model turn</td>
+      <td>Compacted via ContextSidecarCompaction; frozen per turn (OpenAI family)</td>
+      <td>Never overwrites prior frozen SCn text</td>
+    </tr>
+  </tbody>
+</table>
+</section>
+
+<!-- Q1 -->
+<section id="q1">
+<h2><span class="num">§1</span>Full Multi-Turn Context Construction</h2>
+
+<h3>What lives where</h3>
+<ul>
+  <li><strong>Stable system prompt:</strong> tool contracts, core memories, temporal rules (metadataRules), discovery instructions —
+  <code>GenerationOptions.systemPrompt</code>. Not retrieved memories/search (those go to volatileTurnContext).</li>
+  <li><strong>Sidecars (SC/PR):</strong> context-management prose + pre-retrieval RAG. OpenAI family → separate <code>system</code>
+  messages; Anthropic/Google/Llama → folded into the latest user message. <span class="cite">buildContextSidecars:936-988</span></li>
+  <li><strong>Transcript messages:</strong> session.messages mapped to user/assistant/tool. <span class="cite">BaseOpenAiSdkInferenceService.kt:842-898</span></li>
+  <li><strong>tools array:</strong> parallel HTTP field; stable schemas with tool_choice gating.</li>
+</ul>
+
+<h3>History loading</h3>
+<pre>buildHistory(chatId) = committedInferenceTranscripts.get(chatId) ?: conversationHistory
+sendPrompt: history + ChatMessage(USER, buildUserContent(prompt))
+ChatHistoryRehydrator → service.setHistory (prior turns, summary SYSTEM, USER timestamps)</pre>
+<p class="cite">RustLoopInferenceService.kt:486-490, 167-169 · ChatHistoryRehydrator.kt</p>
+
+<h3>Commit path (AgentLoopEvent.Finished)</h3>
+<pre>latestProviderTranscript = session.messages (minus engine-internal) + assistant result
+committedInferenceTranscripts.commit(chatId, completedTranscript)
+conversationHistory ← completedTranscript</pre>
+<p class="cite">RustLoopInferenceService.kt:381-406, 492-518</p>
+
+<h3>Dropped on commit</h3>
+<ul>
+  <li><code>agent_tool_budget</code>, <code>tools_blocked_nudge</code>, <code>envelope_parse_failure</code> metadata</li>
+  <li>Content that is only <code>engine_payload</code> JSON envelope</li>
+  <li>Blank assistant with no tool calls and no provider reasoning</li>
+  <li>All sidecars (never in session.messages)</li>
+</ul>
+<p class="cite">EngineInternalMessageMapper.kt:13-23 · isEngineInternalSidecar:505-519 · toAssistantChatMessageOrNull:532-542</p>
+
+<h3>Compaction → append-only invalidation</h3>
+<p>Rust compaction rewrites <code>session.messages</code> (Summary/FIFO tiers in <code>compact/</code>). On a destructive boundary,
+Kotlin receives <code>AgentLoopEvent.CompactionBoundaryApplied</code> or <code>KvCacheInvalidated</code> →
+<code>inner.clearAppendOnlyOnRustCompactionBoundary()</code> → <code>rust_compaction_boundary</code>. Dispatch is exhaustive over the
+four <code>RustCompatibleInferenceService</code> impls. <span class="cite">RustLoopInferenceService.kt:347-362 · AppendOnlyCompactionInvalidation.kt:9-16</span></p>
+<p>Rust <code>build_model_request</code> filters messages with <code>metadata.superseded == true</code> before sending to Kotlin
+(<code>engine/mod.rs:1985-1992</code>), which can change normalized array length vs prior sync.</p>
+</section>
+
+<!-- Q2 -->
+<section id="q2">
+<h2><span class="num">§2</span>Tools: Injection and Replay</h2>
+
+<h3>When tools enter the wire</h3>
+<pre>sendPrompt → toolActivationRegistry.seedTurn(options.activeTools)
+completeModelTurn → wireToolsForRequest(options, toolContextIndexJson)
+  → parse advertised_tools from Rust index
+  → orderedActiveNames() from registry (preload ∪ discovery activations)
+  → intersect with toolDefinitionLookupPool</pre>
+<p class="cite">RustLoopInferenceService.kt:166, 730-748 · ToolSessionActivationRegistry</p>
+
+<h3>Stable prefix: toToolsFingerprint / ensureStablePrefix</h3>
+<pre>tools:empty  OR  tools:web_search,web_extract,...  (sorted names)
+ensureStablePrefix bumps version on systemPrompt or fingerprint change (does NOT clear log)</pre>
+<p class="cite">AgentLoopMessageNormalization.kt:23-26 · ProviderAppendOnlyContext.kt:23-44</p>
+
+<h3>Is tools[] part of cache prefix?</h3>
+<p>Yes for provider prompt caching — it is a top-level request field alongside messages[]. Enclave keeps the array present and
+varies <code>tool_choice</code> (auto vs none) per <code>allowToolCall</code> (<span class="verified">AOC_06</span>).</p>
+
+<h3>Model call N+1 within a tool loop — guaranteed identical bytes (OpenAI family)</h3>
+<table>
+  <thead><tr><th>Region</th><th>Call N → N+1</th></tr></thead>
+  <tbody>
+    <tr><td>SYS stable prompt</td><td>Identical if systemPrompt unchanged</td></tr>
+    <tr><td>tools[] schemas</td><td>Identical if no new activations (AOC_06)</td></tr>
+    <tr><td>messages[0..k] committed prefix</td><td>Identical — AOC_18 proves wire[0..4] byte-equal calls 2→3</td></tr>
+    <tr><td>Frozen SC1..SCn</td><td>Identical text at same mapped indices (AOC_19, AOC_20)</td></tr>
+    <tr><td>tool_choice</td><td>May differ (auto → none) — by design, not schema change</td></tr>
+    <tr><td>New tail (T, SC*, B)</td><td>Grows — not part of prior prefix</td></tr>
+  </tbody>
+</table>
+</section>
+
+<!-- Q3 -->
+<section id="q3">
+<h2><span class="num">§3</span>Tool Results: Injection and Replay</h2>
+
+<h3>Tool calls on wire</h3>
+<p>Assistant metadata <code>raw_tool_calls</code> → <code>toAssistantChatParam</code> builds the OpenAI <code>tool_calls</code> array.
+<span class="cite">BaseOpenAiSdkInferenceService.kt:1019-1059</span></p>
+
+<h3>Tool result messages</h3>
+<pre>// Rust session storage (production path):
+AgentMessage { role: AgentRole::Tool, content: result_json,
+               metadata: { call_id, tool_name, truncated } }   // engine/mod.rs:984-989
+
+// Kotlin FFI: FfiAgentRole.TOOL → Role.ASSISTANT                // RustAgentEngineAdapter.kt:381
+
+// Wire mapping (call_id metadata wins, checked before domain role):
+wire: role=tool, content=raw JSON, tool_call_id=call_id        // BaseOpenAiSdkInferenceService.kt:861-863, 987-1001
+orphan (no pending call_id): converted to USER "[Tool result]\n…"  // :1004-1016
+
+Note: unit tests often use Role.USER + call_id as a harness convention; that is NOT the production Rust→Kotlin path.</pre>
+<p class="cite">toToolResultChatParam:987-1017 · toOpenAiChatParam:842-898</p>
+
+<h3>agent_tool_budget (Rust: <code>agent_tool_budget.rs</code>)</h3>
+<p>After each tool batch, <code>inject_tool_budget_after_batch</code> (<code>engine/mod.rs:151-165</code>, called at <code>:402, :463, :759, :1129</code>)
+delegates to <code>inject_tool_budget_into_session</code> (<code>agent_tool_budget.rs:151-177</code>).</p>
+<pre>// Injection threshold: remaining &lt;= 5 OR tools disallowed
+should_inject_budget(meta)  // agent_tool_budget.rs:49-52
+
+// Synthetic message (APPENDED — not merged into tool result JSON on wire path):
+AgentMessage {
+  id: "tool-agent-budget-{turn_index}-{seq}",
+  role: AgentRole::Tool,
+  content: "&lt;system_context&gt;\nTool budget: 3/50 used (47 remaining). Tools enabled.\n&lt;/system_context&gt;",
+  metadata: { "agent_tool_budget": true }
+}
+// inject_tool_budget_into_session → session.messages.push(synthetic)  // agent_tool_budget.rs:175</pre>
+<p><strong>Spec vs code:</strong> the plan described an in-place <code>_agent</code> merge; the Rust comment at
+<code>agent_tool_budget.rs:146-150</code> documents that the merge was removed because it broke xAI/OpenAI prefix cache (the same
+tool-message index changed between consecutive <code>CallModel</code> actions). <code>merge_budget_into_tool_content</code> still exists
+(<code>:105-127</code>) but is unused on the inject path.</p>
+<p>On the Kotlin wire, a session message with <code>agent_tool_budget</code> metadata → <code>EngineInternalMessageMapper</code> →
+<strong>system</strong> role, and is <strong>excluded from <code>buildProviderTranscript</code></strong> → the primary cross-turn
+<code>compaction_shorter_array</code> source.</p>
+<p class="cite">agent_tool_budget.rs:49-177 · EngineInternalMessageMapper.kt:13-23 · RustLoopInferenceService.kt:505-518</p>
+
+<h3>2-tool-call wire timeline (mapped → wire)</h3>
+<div class="wire-block">session.messages indices:
+  [0] U  "question"
+  [1] A  raw_tool_calls (call_a)
+  [2] T  result_a  {call_id:call_a}   (Rust AgentRole::Tool → Kotlin Role.ASSISTANT)
+  [3] A  raw_tool_calls (call_b)
+  [4] T  result_b  {call_id:call_b}
+  [5] B  agent_tool_budget (engine-internal)
+
+Model call after result_b (AOC_21 pattern, OpenAI family):
+wire[0] SYS
+wire[1] U
+wire[2] A tool_calls(a)
+wire[3] T result_a       (role=tool via call_id)
+wire[4] A tool_calls(b)
+wire[5] T result_b       (role=tool via call_id)
+wire[6] SC* context sidecar   ← mi after tool tail, before budget
+wire[7] B  budget system text</div>
+
+<h3>digest_mismatch on tool results?</h3>
+<p>Yes — if the same message id appears with different content at the same sync index (in-place rewrite). Normal tool loops only
+append → clearCount stays 0.</p>
+</section>
+
+<!-- RUST SOURCE MAP -->
+<section id="rust">
+<h2>Rust <code>agent_core</code> Source Map</h2>
+<p>Schemas and engine behavior below are grounded in <code>third_party/agent_core/src/</code> (<strong>66</strong> <code>.rs</code>
+source files). Kotlin receives these via UniFFI <code>FfiModelRequest</code> in <code>RustAgentEngineAdapter.kt</code>.</p>
+
+<h3>Core structs (serde schemas)</h3>
+<table>
+  <thead><tr><th>Rust type</th><th>File</th><th>Key fields</th></tr></thead>
+  <tbody>
+    <tr><td><code>StateLedger</code></td><td><code>state_ledger.rs:20-31</code></td><td><code>objective</code>, <code>constraints[]</code>, <code>decisions[]</code>, <code>open_questions[]</code>, <code>touched_files[]</code>, <code>tool_decisions[]</code>, <code>artifact_states[]</code>, <code>summary_refs[]</code>, <code>history_refs[]</code></td></tr>
+    <tr><td><code>ArtifactStateAnchor</code></td><td><code>state_ledger.rs:13-18</code></td><td><code>artifact_id</code>, <code>total_blocks</code>, <code>last_block_preview</code>, <code>continuation_instruction</code></td></tr>
+    <tr><td><code>ToolContextIndex</code></td><td><code>tool_context.rs</code></td><td><code>full_schema_ref</code>, <code>advertised_tools[]</code></td></tr>
+    <tr><td><code>ToolContextSummary</code></td><td><code>tool_context.rs</code></td><td><code>name</code>, <code>description_preview</code>, <code>reproducible</code>, <code>deferrable</code>, <code>max_result_bytes?</code></td></tr>
+    <tr><td><code>FileContextIndex</code></td><td><code>file_context.rs</code></td><td><code>root_ref</code>, <code>included_paths[]</code></td></tr>
+    <tr><td><code>ContextReference</code></td><td><code>context_store.rs</code></td><td><code>id</code>, <code>kind</code>, <code>title</code>, <code>byte_len</code>, <code>token_estimate</code>, <code>preview</code>, <code>retrieval_hint</code></td></tr>
+    <tr><td><code>ModelRequest</code></td><td><code>turn_io.rs</code></td><td><code>session_messages</code>, <code>system_prompt</code>, sidecar fields, <code>cache_hints</code>, <code>provider_context</code>, delta JSON fields</td></tr>
+    <tr><td><code>ProviderContextSnapshot</code></td><td><code>engine/mod.rs:2101-2117</code></td><td><code>transcript_revision</code>, <code>sidecar_generation</code>, <code>sidecar_byte_len</code>, compaction telemetry</td></tr>
+  </tbody>
+</table>
+
+<h3>Engine → Kotlin data flow</h3>
+<pre>build_model_request()                     engine/mod.rs:1976-2133
+  ├─ session_messages (filters superseded metadata)        :1985-1992
+  ├─ state_ledger → full object on FFI (serialized to state_ledger_json by adapter)
+  ├─ tool_context_index / file_context_index → JSON strings
+  ├─ context_references (browsable kinds only)
+  ├─ cache_hints: ["stable-prefix"] when prompt_cache_supported &amp;&amp; threshold != u32::MAX
+  │     (assigned in step_idle for every CallModel, including post-tool continuation)
+  ├─ state_ledger_delta_json / tool_*_delta_json (generation &gt; 0 only)   :2119-2129
+  │     (present on FfiModelRequest but NOT forwarded by RustAgentEngineAdapter)
+  └─ provider_context.transcript_revision → Kotlin transcriptRevision
+
+submit_tool_results()                     engine/mod.rs:827-1177
+  ├─ spill/truncate tool results
+  ├─ push tool messages as AgentRole::Tool        engine/mod.rs:984-989
+  ├─ g.phase = EnginePhase::Idle                  engine/mod.rs:846
+  └─ inject_tool_budget_after_batch()             engine/mod.rs:1129 → 151-165
+
+next_action() phase=Idle → step_idle()    engine/mod.rs:303-312, 1807-1867
+  └─ builds CallModel with same cache_hints logic as first model call of cycle  :1826-1834, 1861</pre>
+
+<h3>Deliberate prefix-stability choices in Rust</h3>
+<ul>
+  <li><strong>No ledger anchor in session_messages[0]:</strong> <code>build_model_request</code> explicitly skips injecting the ledger
+  at position 0 — it ships only via tail sidecar JSON, because growing objective/decisions would mutate byte 0 of the prefix.
+  <span class="cite">engine/mod.rs:1994-1997</span></li>
+  <li><strong>Budget append, not in-place merge:</strong> <code>inject_tool_budget_into_session</code> pushes a synthetic
+  <code>AgentRole::Tool</code> row; the in-place <code>_agent</code> JSON merge was removed for cache stability.
+  <span class="cite">agent_tool_budget.rs:146-177</span></li>
+  <li><strong>Cache hints on every CallModel via <code>step_idle</code>:</strong> post-tool continuations set
+  <code>phase = Idle</code> (<code>:846</code>); <code>next_action</code> then routes to <code>step_idle</code>, which assigns the same
+  <code>cache_hints</code> (<code>["stable-prefix"]</code> when supported). The only <code>build_model_request(..., vec![])</code> caller is
+  the pending-work-reminder path. <span class="cite">engine/mod.rs:846, 303-312, 1826-1861, 1969</span></li>
+  <li><strong>FFI role mapping:</strong> Rust <code>AgentRole::Tool</code> → Kotlin <code>Role.ASSISTANT</code>; wire <code>role=tool</code>
+  is resolved by <code>metadata.call_id</code> in <code>toOpenAiChatParam</code>, not domain role alone.
+  <span class="cite">RustAgentEngineAdapter.kt:376-382 · BaseOpenAiSdkInferenceService.kt:861-863</span></li>
+  <li><strong>Append-only persistence is provider-dependent:</strong> for the OpenAI family
+  <code>resetAppendOnlyForNewPrompt()</code> is a no-op (<code>BaseOpenAiSdkInferenceService.kt:302</code>), so frozen PR/SCn replay
+  across user turns; Anthropic and Google invalidate per prompt. <span class="cite">RustLoopInferenceService.kt:165</span></li>
+</ul>
+</section>
+
+<!-- Q4 -->
+<section id="q4">
+<h2><span class="num">§4</span>Sidecar Contents — Concrete</h2>
+
+<h3>buildContextSidecars output structure</h3>
+<pre>Context management sidecars:
+Reference policy: IDs are exact lookups only—never browse. For conversation history use search_chat_history.
+[Internet status: Online/Offline …]   ← optional, Kotlin-derived
+References:
+- [TOOL_OUTPUT|turn:1|fresh] ref-id (1234b): title
+  preview: "…"
+  retrieval hint
+State ledger JSON: {"objective":"…","constraints":[…],…}
+Tool context index JSON: {"advertised_tools":["web_search",…],"full_schema_ref":"&lt;omitted:N chars&gt;"}
+File context index JSON: {"root_ref":"…","included_paths":[…]}
+Cache hints: hint1, hint2</pre>
+<p class="cite">RustLoopInferenceService.kt:88-94, 971-987, 1020-1038</p>
+
+<h3>Rust schemas (source of truth)</h3>
+<pre>// state_ledger.rs:20-31
+StateLedger {
+  objective: Option&lt;String&gt;,
+  constraints: Vec&lt;String&gt;,
+  decisions: Vec&lt;String&gt;,
+  open_questions: Vec&lt;String&gt;,
+  touched_files: Vec&lt;String&gt;,
+  tool_decisions: Vec&lt;String&gt;,
+  artifact_states: Vec&lt;ArtifactStateAnchor&gt;,
+  summary_refs: Vec&lt;String&gt;,
+  history_refs: Vec&lt;String&gt;,
+}
+
+// tool_context.rs
+ToolContextIndex { full_schema_ref, advertised_tools: Vec&lt;ToolContextSummary&gt; }
+
+// file_context.rs
+FileContextIndex { root_ref, included_paths: Vec&lt;FileContextSummary&gt; }
+
+// context_store.rs
+ContextReference { id, kind, title, byte_len, token_estimate, preview, retrieval_hint }
+// Turn suffix for freshness: CONTEXT_REFERENCE_TURN_SUFFIX = "@turn:"</pre>
+<p>Kotlin <code>buildContextSidecars</code> receives the <strong>full</strong> <code>state_ledger</code> / index objects from FFI, then
+compacts via <code>ContextSidecarCompaction</code>. Rust also emits delta JSON fields on generation &gt; 0
+(<code>engine/mod.rs:2119-2129</code>) but the <code>AgentLoopHostCallbacks.completeModelTurn</code> signature has no delta params, so
+Kotlin uses full JSON only.</p>
+<p class="cite">state_ledger.rs · tool_context.rs · file_context.rs · context_store.rs · ContextSidecarCompaction.kt:19-68</p>
+
+<h3>Compaction layers (Rust then Kotlin)</h3>
+<table>
+  <thead><tr><th>Layer</th><th>Where</th><th>What</th></tr></thead>
+  <tbody>
+    <tr><td>Rust <code>SidecarBuilder</code></td><td><code>sidecar_builder.rs</code></td><td>Ledger deltas after gen 0; byte budget enforcement; spill to <code>ContextStore</code> refs when over budget</td></tr>
+    <tr><td>Kotlin <code>ContextSidecarCompaction</code></td><td><code>ContextSidecarCompaction.kt:24-61</code></td><td>JSON minify; <code>advertised_tools</code> → name strings only; <code>full_schema_ref</code> → <code>&lt;omitted:N chars&gt;</code> when &gt; 64 chars</td></tr>
+    <tr><td>Kotlin references</td><td><code>RustLoopInferenceService.kt:1020-1058</code></td><td>Prose lines with fresh/stale; <code>CONTEXT_REFERENCE_TTL_TURNS=2</code> matches Rust <code>DEFAULT_TOOL_OUTPUT_TTL_TURNS</code></td></tr>
+  </tbody>
+</table>
+
+<h3>cache_hints</h3>
+<pre>// engine/mod.rs:1826-1834 — assigned inside step_idle() for every CallModel:
+let cache_hints = if self.capabilities.prompt_cache_supported {
+    if self.config.prompt_cache_anchor_threshold_tokens == u32::MAX { vec![] }
+    else { vec!["stable-prefix".to_string()] }
+} else { vec![] };
+
+// Post-tool: submit_tool_results sets phase=Idle (engine/mod.rs:846);
+// next_action → step_idle → same cache_hints logic (NOT vec![]).
+
+// Exception: pending-work-reminder injection only:
+self.build_model_request(allow, vec![])  // engine/mod.rs:1969</pre>
+<p>Kotlin renders this as <code>Cache hints: stable-prefix</code> inside the context-mgmt sidecar prose
+(<code>RustLoopInferenceService.kt:986</code>).</p>
+
+<h3>Example sidecar (from tests, annotated)</h3>
+<pre>Context management sidecars:
+Reference policy: IDs are exact lookups only—never browse. ...
+State ledger JSON: {"key":"value"}                    ← compacted ledger
+Tool context index JSON: {"advertised_tools":["web_search","web_extract"]}
+Cache hints: stable-prefix</pre>
+</section>
+
+<!-- Q5 -->
+<section id="q5">
+<h2><span class="num">§5</span>RAG / Pre-Retrieval Injection and Replay</h2>
+
+<h3>composeVolatileTurnContext section headers</h3>
+<pre># RELEVANT FACTS &amp; CONTEXT:
+# RELEVANT WEB SEARCH RESULTS:
+# RELEVANT X SEARCH RESULTS:</pre>
+<p class="cite">SearchToolPromptComposer.kt</p>
+
+<h3>Delivery gate</h3>
+<pre>deliverPreRetrievalAsOpenAiSidecar() = true for OPENAI, XAI, OPENROUTER
+  → buildUserContent passes volatileTurnContext=null (USER prefix stable)
+  → BaseOpenAiSdkInferenceService delivers RAG as a frozen PR system sidecar
+else (DEEPSEEK, ZAI, ANTHROPIC, GOOGLE, LLAMA)
+  → volatileTurnContext prepended into USER content by InferencePromptContentBuilder
+
+Turn 1 PR flow for the gated providers (BaseOpenAiSdkInferenceService.kt:425-445):
+  1. endTurnFreezeSidecar(PR) BEFORE wire build
+  2. hasFrozenPreRetrievalSidecar() → true → livePreRetrievalSidecarText = null
+  3. Wire carries PR via frozen sidecar replay (not the live slot)
+Turn 2+ within the same sendPrompt: frozen replay only.</pre>
+<p class="cite">RustLoopInferenceService.kt:990-1011 · PreRetrievalContextSidecar.kt:7-21 · BaseOpenAiSdkInferenceService.kt:425-445</p>
+
+<h3>Pre-retrieval vs context-management sidecar</h3>
+<table>
+  <thead><tr><th></th><th>PR (pre-retrieval)</th><th>SC (context-mgmt)</th></tr></thead>
+  <tbody>
+    <tr><td>Source</td><td>Kotlin RAG at prepare time</td><td>Rust agent_core per model turn</td></tr>
+    <tr><td>Marker</td><td><code>Pre-retrieval context:</code></td><td><code>Context management sidecars:</code></td></tr>
+    <tr><td>Insert anchor (OpenAI family)</td><td>Last USER (non-tool) mapped index</td><td>Last non-engine-internal tail</td></tr>
+    <tr><td>Freeze</td><td>Once per sendPrompt (gated providers)</td><td>Every completeModelTurn</td></tr>
+  </tbody>
+</table>
+
+<h3>Turn 2 of same user message — PR replayed?</h3>
+<p><strong>Yes</strong> (OPENAI/XAI/OPENROUTER) — from the frozen snapshot, not rebuilt. Live <code>volatileTurnContext</code> is ignored
+on the wire once frozen.</p>
+</section>
+
+<!-- Q6 -->
+<section id="q6">
+<h2><span class="num">§6</span>Date/Time Metadata</h2>
+<table>
+  <thead><tr><th>Injection point</th><th>Location</th><th>Stable prefix?</th></tr></thead>
+  <tbody>
+    <tr><td>promptWithTemporalMetadata</td><td>USER body: <code>\n\n[Metadata: Sent at …]</code></td><td>No — changes every send</td></tr>
+    <tr><td>metadataRules (system)</td><td>Instructions only — no timestamp bytes</td><td>Yes (part of SYS)</td></tr>
+    <tr><td>ChatHistoryRehydrator</td><td>Rehydrated USER messages from createdAt</td><td>Fixed per stored message</td></tr>
+  </tbody>
+</table>
+<p class="cite">ChatInferenceRequestPreparer.kt · SearchToolPromptComposer.kt · ChatHistoryRehydrator.kt</p>
+<p>Timestamps are <strong>not</strong> in frozen sidecars. Each new user message appends a fresh timestamp → cache invalidation from
+that message's first byte onward (expected).</p>
+</section>
+
+<!-- CACHE ANALYSIS -->
+<section id="cache">
+<h2>Cache Prefix Stability Analysis</h2>
+<p><strong>Stable within tool loop (OpenAI family):</strong> SYS + tools schemas + messages prefix through last frozen snapshot +
+committed transcript. Proven: AOC_03, AOC_18, AOC_22.</p>
+<p><strong>Intentionally volatile:</strong> SC* live tail, new tool results, budget B, tool_choice parameter.</p>
+<p><strong>Accumulation cost:</strong> O(turns) sidecar system messages (accepted in v1).</p>
+<p><strong>Index semantics matter:</strong> sidecars pin to <em>mappedInsertIndex</em>, not wire[1]. AOC_12, AOC_19 enforce this.</p>
+<p><strong>Other families:</strong> Anthropic uses ephemeral <code>cache_control</code> breakpoints at the stable history tail; Google
+caches the stable prefix as <code>CachedContent</code> and sends only the delta; Llama reuses the native KV cache when the rendered
+prefix matches (<code>kvContinuationValid</code>).</p>
+</section>
+
+<!-- OPEN ISSUES E -->
+<section id="issues">
+<h2><span class="num">E.</span>Open Issues / Prefix Instability Sources (ranked)</h2>
+
+<div class="callout danger">
+  <span class="label">High</span>
+  <p><strong>1. Cross-turn compaction_shorter_array.</strong> Engine-internal budget messages are on the wire during turn-1 sync;
+  the committed transcript omits them; turn-2 rehydration is shorter → frozen sidecars cleared (OpenAI family).</p>
+  <p class="cite">ProviderAppendOnlyContextTest.rehydrated_shorter_session · buildProviderTranscript:505-518</p>
+</div>
+
+<div class="callout danger">
+  <span class="label">High · by design</span>
+  <p><strong>2. USER timestamp on every new message.</strong> <code>[Metadata: Sent at …]</code> is appended at prepare time — new
+  bytes on every user send.</p>
+  <p class="cite">ChatInferenceRequestPreparer (promptWithTemporalMetadata)</p>
+</div>
+
+<div class="callout warn">
+  <span class="label">Medium</span>
+  <p><strong>3. rust_compaction_boundary.</strong> Destructive compaction wipes all append-only state including frozen SCn.</p>
+  <p class="cite">RustLoopInferenceService.kt:355-362</p>
+</div>
+
+<div class="callout warn">
+  <span class="label">Medium</span>
+  <p><strong>4. Tool activation growth.</strong> <code>tool_discovery_tool</code> adds tools mid-session → toolsFingerprint version
+  bump; new schemas break the tools prefix cache.</p>
+  <p class="cite">ToolSessionActivationRegistry.applySearchActivations · AOC_17</p>
+</div>
+
+<div class="callout warn">
+  <span class="label">Medium</span>
+  <p><strong>5. digest_mismatch on in-place edits.</strong> A same-index content rewrite (e.g. tool-result correction) clears
+  frozen snapshots.</p>
+  <p class="cite">ProviderAppendOnlyContextTest.AOC_05</p>
+</div>
+
+<div class="callout note">
+  <span class="label">Low · accepted</span>
+  <p><strong>6. Sidecar token growth O(turns).</strong> Multiple frozen SCn per assistant turn — stable prefix but higher token bill.</p>
+  <p class="cite">wire_caps_frozen_sidecars_at_two_on_third_tool_loop_turn</p>
+</div>
+
+<h3>Spec drift noted</h3>
+<ul>
+  <li class="drift">Older caching spec says sidecars sit "at end of history immediately preceding latest user" — superseded for the
+  OpenAI family by the tail-anchor + append-only design.</li>
+  <li class="drift"><code>resetAppendOnlyForNewPrompt()</code> is a no-op (<code>Unit</code>) <strong>for the OpenAI family</strong> — append-only
+  persists across sendPrompt until closeSession; Anthropic/Google reset it. <span class="cite">BaseOpenAiSdkInferenceService.kt:302</span></li>
+  <li class="drift">The tool-budget plan described an in-place <code>_agent</code> merge; Rust now <strong>appends</strong> a synthetic budget
+  message. The merge helper remains but is unused on the inject path. <span class="cite">agent_tool_budget.rs:146-177</span></li>
+  <li class="drift">Delta JSON fields exist on <code>ModelRequest</code> / <code>FfiModelRequest</code> (<code>engine/mod.rs:2119-2129</code>) but are
+  dropped at <code>RustAgentEngineAdapter</code> — <code>AgentLoopHostCallbacks.completeModelTurn</code> has no delta params;
+  <code>buildContextSidecars</code> uses full JSON only.</li>
+  <li class="drift"><code>toProviderNormalizedMessages</code> does NOT filter engine-internal messages — they participate in append-only
+  sync, enabling cross-turn <code>compaction_shorter_array</code> when commit strips them. <span class="cite">AgentLoopMessageNormalization.kt:10-21</span></li>
+</ul>
+</section>
+
+<!-- GLOSSARY -->
+<section id="glossary">
+<h2>Glossary</h2>
+<dl>
+  <dt>session index</dt><dd>Position in <code>sessionMessages: List&lt;AgentLoopMessage&gt;</code> from agent_core.</dd>
+  <dt>mapped index</dt><dd>Position in <code>mappedBody</code> after <code>toMappedSessionBody</code> filtering; stored in <code>FrozenSidecarSnapshot.mappedInsertIndex</code>.</dd>
+  <dt>wire index</dt><dd>Final <code>messages[]</code> including prepended SYS and injected sidecar system messages (OpenAI family).</dd>
+  <dt>mappedInsertIndex</dt><dd>Slot in mappedBody where frozen/live sidecars are inserted (before that index).</dd>
+  <dt>RustCompatibleInferenceService</dt><dd>Contract every inner provider service implements; <code>completeSingleTurn</code> renders one turn from the Rust-managed session.</dd>
+  <dt>StablePrefix</dt><dd><code>systemPrompt + toolsFingerprint</code> versioned snapshot; not the full wire bytes.</dd>
+  <dt>AppendOnlyLog</dt><dd>Provider-normalized messages that only grow via <code>syncMessages</code> tail extend (OpenAI / Anthropic / Google).</dd>
+  <dt>Pi invariant</dt><dd>Provider prefix never rewritten in place; compaction/clear is the only shrink path.</dd>
+</dl>
+</section>
+
+<!-- FAQ -->
+<section id="faq">
+<h2>Quick-Answer FAQ</h2>
+<table>
+  <thead><tr><th>Question</th><th>Answer</th></tr></thead>
+  <tbody>
+    <tr><td>Does every provider go through BaseOpenAiSdkInferenceService?</td><td><strong>No.</strong> Only the OpenAI-compatible family (OpenRouter, xAI, DeepSeek, Z.ai, OpenAI/generic). Anthropic, Google, and Llama implement <code>RustCompatibleInferenceService</code> directly. All of them are driven by <code>RustLoopInferenceService</code>.</td></tr>
+    <tr><td>After tool call 1, what is messages[3] on the next model call?</td><td><strong>Tool result</strong> (role=tool) — AOC_15: wire[3] is tool; SC at [4]. With a frozen SC1 from call 1, indices shift: [1]=SC1, [2]=U, [3]=A, [4]=T, [5]=SC2* (AOC_03).</td></tr>
+    <tr><td>Why did clearCount increment?</td><td>Check <code>lastClearReason</code>: digest_mismatch | compaction_shorter_array | rust_compaction_boundary | session_invalidate.</td></tr>
+    <tr><td>What is in the state ledger sidecar?</td><td>Compacted JSON of objective, constraints, decisions, open_questions, touched_files, tool_decisions, artifact_states, summary_refs, history_refs — prefixed by <code>State ledger JSON:</code> inside context-mgmt prose.</td></tr>
+    <tr><td>Where does the timestamp live?</td><td>USER message body footer <code>[Metadata: Sent at …]</code> — not in sidecars; breaks cache from that message onward.</td></tr>
+  </tbody>
+</table>
+</section>
+
+<!-- REVISION NOTES -->
+<section id="revision">
+<h2>Revision Notes (2026-06-17)</h2>
+<p><strong>Verdict after code review:</strong> <span class="verified">PASS — architecture reframed, all sampled claims verified</span></p>
+<p>This revision corrects a framing error and re-verifies every factual claim against
+<code>third_party/agent_core</code>, <code>feature/inference</code>, <code>core/domain</code>, and <code>core/agent</code>.</p>
+
+<h3>Corrected this revision</h3>
+<ol>
+  <li><strong>Multi-provider architecture (primary fix).</strong> The previous revision implied all provider calls flowed through
+  <code>BaseOpenAiSdkInferenceService</code>. In reality <code>RustLoopInferenceService.completeModelTurn</code> delegates to an inner
+  provider-specific <code>RustCompatibleInferenceService</code> (<code>:202-231</code>). Added the <a href="#matrix">Provider Matrix</a>,
+  reframed the architecture diagrams (RustLoop → inner service), and scoped the wire diagrams to the OpenAI family.</li>
+  <li><strong>Per-provider sidecar delivery.</strong> Documented that Anthropic/Google prepend sidecars into the latest user message and
+  Llama uses <code>[context]…[/context]</code> injection with KV continuation — only the OpenAI family uses discrete <code>system</code>
+  sidecars + <code>OpenAiCompatibleVolatilePlacement</code>.</li>
+  <li><strong>Append-only reset is provider-specific.</strong> No-op for the OpenAI family; invalidating for Anthropic/Google.</li>
+  <li><strong>Citation precision.</strong> <code>inject_tool_budget_after_batch</code> is in <code>engine/mod.rs:151-165</code>; it calls
+  <code>inject_tool_budget_into_session</code> in <code>agent_tool_budget.rs:151-177</code> (previously conflated).</li>
+</ol>
+
+<h3>Prior-audit fixes re-verified (still correct)</h3>
+<ul>
+  <li><span class="verified">cache_hints</span> — post-tool continuations use the same <code>step_idle</code> logic, not <code>vec![]</code>;
+  only the pending-work-reminder path uses empty hints. <span class="cite">engine/mod.rs:1826-1834, 1861, 1969</span></li>
+  <li><span class="verified">66</span> Rust source files under <code>src/</code> (not 108).</li>
+  <li><span class="verified">stable-prefix</span> is the emitted cache hint (not <code>segment_anchor_1</code>).</li>
+  <li><span class="verified">Tool-result roles</span> — Rust <code>AgentRole::Tool</code>; Kotlin FFI maps to <code>Role.ASSISTANT</code>; wire uses
+  <code>call_id</code> metadata. <span class="cite">RustAgentEngineAdapter.kt:381 · BaseOpenAiSdkInferenceService.kt:861-863</span></li>
+  <li><span class="verified">Turn-1 PR</span> — frozen via <code>endTurnFreezeSidecar</code> before wire build; same call replays from the frozen
+  slot, not the live slot.</li>
+  <li><span class="verified">Budget append-not-merge</span> and <span class="verified">no ledger anchor at session_messages[0]</span> —
+  confirmed in Rust comments and code.</li>
+</ul>
+</section>
+
+<!-- TESTS -->
+<section id="tests">
+<h2>Test Evidence</h2>
+<p>Append-only sidecar placement and prefix stability are covered by the <code>AppendOnly*</code> / <code>ProviderAppendOnly*</code>
+suites in <code>feature/inference</code>; provider-specific commit behavior by the per-provider
+<code>*VolatileTurnContextCommitTest</code> suites.</p>
+<table>
+  <thead><tr><th>Test</th><th>Proves</th></tr></thead>
+  <tbody>
+    <tr><td>AOC_02 – AOC_22 (Kotlin)</td><td>Append-only sidecar placement and prefix stability (OpenAI family)</td></tr>
+    <tr><td>rehydrated_shorter_session_clears_frozen_sidecars</td><td>compaction_shorter_array clears frozen</td></tr>
+    <tr><td>RustLoop/Anthropic/Google VolatileTurnContextCommitTest</td><td>Per-provider RAG placement &amp; commit (sidecar vs USER prepend)</td></tr>
+    <tr><td>ContextSidecarCompactionTest</td><td>Ledger minify, tool index name reduction, full_schema_ref omission</td></tr>
+    <tr><td><code>agent_tool_budget.rs</code> TB-04–TB-06, C1, MD-04/06</td><td>Budget JSON schema, inject threshold, prose XML format</td></tr>
+    <tr><td><code>state_ledger</code> tests</td><td>Ledger extraction from user/assistant text</td></tr>
+    <tr><td>Rust prefix-stability / compaction-boundary tests</td><td>Rust-level prefix invariants and session rewrite events</td></tr>
+  </tbody>
+</table>
+<p class="cite">Kotlin: feature/inference/src/test · Rust: third_party/agent_core/tests</p>
+</section>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    themeVariables: {
+      primaryColor: '#161e2b',
+      primaryTextColor: '#e9eff6',
+      primaryBorderColor: '#6cb6ff',
+      lineColor: '#93a4bd',
+      secondaryColor: '#0e141d',
+      tertiaryColor: '#0b0f15',
+      fontFamily: 'JetBrains Mono, monospace'
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,5 +1,7 @@
 package com.browntowndev.enclave.feature.inference
 
+import com.browntowndev.enclave.domain.model.config.OpenRouterDataCollectionPolicy
+import com.browntowndev.enclave.domain.model.config.OpenRouterProviderSort
 import com.browntowndev.enclave.domain.model.config.OpenRouterRoutingConfiguration
 import com.openai.core.JsonValue
 import com.openai.models.chat.completions.ChatCompletionCreateParams
@@ -26,14 +28,38 @@ internal object OpenRouterRoutingSupport {
         builder.putAdditionalBodyProperty("provider", providerRoutingJsonValue(routing))
     }
 
-    private fun providerRoutingJsonValue(routing: OpenRouterRoutingConfiguration): JsonValue =
-        JsonValue.from(
-            mapOf(
-                "sort" to routing.providerSort.wireValue,
-                "allow_fallbacks" to routing.allowFallbacks,
-                "require_parameters" to routing.requireParameters,
-                "data_collection" to routing.dataCollectionPolicy.wireValue,
-                "zdr" to routing.zeroDataRetention,
-            ),
-        )
+    private fun providerRoutingJsonValue(routing: OpenRouterRoutingConfiguration): JsonValue {
+        val hasPreferred = !routing.preferredProvider.isNullOrBlank()
+        val allowFallbacks = routing.allowFallbacks
+
+        val sort = if (hasPreferred && !allowFallbacks) {
+            OpenRouterProviderSort.THROUGHPUT.wireValue
+        } else {
+            routing.providerSort.wireValue
+        }
+        val requireParameters = if (hasPreferred && !allowFallbacks) {
+            false
+        } else {
+            routing.requireParameters
+        }
+        val dataCollection = if (hasPreferred && !allowFallbacks) {
+            OpenRouterDataCollectionPolicy.DENY.wireValue
+        } else {
+            routing.dataCollectionPolicy.wireValue
+        }
+        val zdr = if (hasPreferred && !allowFallbacks) false else routing.zeroDataRetention
+
+        val providerMap =
+            buildMap {
+                put("sort", sort)
+                put("allow_fallbacks", allowFallbacks)
+                put("require_parameters", requireParameters)
+                put("data_collection", dataCollection)
+                put("zdr", zdr)
+                routing.preferredProvider?.takeIf { it.isNotBlank() }?.let { preferred ->
+                    put("order", listOf(preferred))
+                }
+            }
+        return JsonValue.from(providerMap)
+    }
 }

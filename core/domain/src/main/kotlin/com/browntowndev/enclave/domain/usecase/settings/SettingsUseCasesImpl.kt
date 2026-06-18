@@ -87,6 +87,7 @@ class SettingsApiProviderUseCasesImpl
         override val discoverApiModels: DiscoverApiModelsUseCase,
         override val applyApiModelMetadataDefaults: ApplyApiModelMetadataDefaultsUseCase,
         override val testApiProviderConnection: TestApiProviderConnectionUseCase,
+        override val fetchOpenRouterModelEndpoints: com.browntowndev.enclave.domain.usecase.byok.FetchOpenRouterModelEndpointsUseCase,
     ) : SettingsApiProviderUseCases
 
 class SettingsAssignmentUseCasesImpl
