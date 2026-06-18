@@ -502,21 +502,8 @@ class RustLoopInferenceService(
             result.toAssistantChatMessageOrNull()?.let(::add)
         }
 
-    private fun AgentLoopMessage.isEngineInternalSidecar(): Boolean {
-        if (EngineInternalMessageMapper.isEngineInternalMessage(metadataJson)) {
-            return true
-        }
-
-        val contentObj =
-            runCatching {
-                Json.parseToJsonElement(content).jsonObject
-            }.getOrNull()
-        if (contentObj != null && contentObj.size == 1 && contentObj.containsKey(AgentLoopWireKeys.ENGINE_PAYLOAD_JSON_KEY)) {
-            return true
-        }
-
-        return false
-    }
+    private fun AgentLoopMessage.isEngineInternalSidecar(): Boolean =
+        EngineInternalMessageMapper.isExcludedFromCommittedProviderTranscript(this)
 
     private fun buildFallbackTranscript(
         userContent: String,

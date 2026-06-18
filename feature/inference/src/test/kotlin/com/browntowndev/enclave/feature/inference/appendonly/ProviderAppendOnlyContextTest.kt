@@ -170,4 +170,58 @@ class ProviderAppendOnlyContextTest {
         assertEquals(1, first.version)
         assertEquals(2, second.version)
     }
+
+    @Test
+    fun rehydrated_shorter_session_clears_frozen_sidecars() {
+        val context = ProviderAppendOnlyContext()
+        context.endTurnFreezeSidecar("frozen-ledger", mappedInsertIndex = 2)
+        context.syncMessages(
+            listOf(
+                ProviderNormalizedMessage(role = "user", content = "prompt"),
+                ProviderNormalizedMessage(role = "user", content = "budget"),
+                ProviderNormalizedMessage(role = "assistant", content = ""),
+                ProviderNormalizedMessage(role = "user", content = """{"results":[]}""", toolCallId = "call_1"),
+            ),
+        )
+        assertEquals(1, context.committedVolatileSidecarTexts().size)
+
+        context.syncMessages(
+            listOf(
+                ProviderNormalizedMessage(role = "user", content = "prompt"),
+                ProviderNormalizedMessage(role = "assistant", content = ""),
+                ProviderNormalizedMessage(role = "user", content = """{"results":[]}""", toolCallId = "call_1"),
+            ),
+        )
+
+        assertEquals(1, context.clearCount)
+        assertEquals("compaction_shorter_array", context.lastClearReason)
+        assertTrue(context.frozenSidecarsForWireReplay().isEmpty())
+    }
+
+    @Test
+    fun append_only_clear_count_stays_zero_when_session_only_grows() {
+        val context = ProviderAppendOnlyContext()
+        context.endTurnFreezeSidecar("s1", mappedInsertIndex = 0)
+        context.syncMessages(
+            listOf(ProviderNormalizedMessage(role = "user", content = "Search")),
+        )
+        context.syncMessages(
+            listOf(
+                ProviderNormalizedMessage(role = "user", content = "Search"),
+                ProviderNormalizedMessage(role = "assistant", content = ""),
+                ProviderNormalizedMessage(role = "user", content = """{"results":[]}""", toolCallId = "call_1"),
+            ),
+        )
+        context.syncMessages(
+            listOf(
+                ProviderNormalizedMessage(role = "user", content = "Search"),
+                ProviderNormalizedMessage(role = "assistant", content = ""),
+                ProviderNormalizedMessage(role = "user", content = """{"results":[]}""", toolCallId = "call_1"),
+                ProviderNormalizedMessage(role = "assistant", content = "Summary"),
+            ),
+        )
+
+        assertEquals(0, context.clearCount)
+        assertEquals(1, context.frozenSidecarsForWireReplay().size)
+    }
 }

@@ -56,6 +56,7 @@ import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.inference.ApiModelParameterSupport
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ApiReasoningControlStyle
+import com.browntowndev.enclave.domain.model.inference.DeepSeekEndpoint
 import com.browntowndev.enclave.domain.model.inference.ZaiEndpoint
 
 @Composable
@@ -145,6 +146,7 @@ fun ProviderSelectionField(
                     onClick = {
                         val nextBaseUrl =
                             when {
+                                provider == ApiProvider.DEEPSEEK -> DeepSeekEndpoint.OFFICIAL.baseUrl
                                 provider == ApiProvider.ZAI -> ZaiEndpoint.PUBLIC.baseUrl
                                 asset.provider == ApiProvider.ZAI -> provider.defaultBaseUrl()
                                 asset.baseUrl.isNullOrBlank() ||
@@ -594,18 +596,24 @@ fun CredentialsConfigurationForm(
             onAssetChange = onAssetChange,
         )
 
-        if (asset.provider == ApiProvider.ZAI) {
-            ZaiEndpointSelectionField(
-                asset = asset,
-                onAssetChange = onAssetChange,
-            )
-        } else {
-            NeoOutlinedTextField(
-                value = asset.baseUrl ?: "",
-                onValueChange = { onAssetChange(asset.copy(baseUrl = it)) },
-                label = { Text("Base URL (Optional)") },
-                modifier = Modifier.fillMaxWidth(),
-            )
+        when (asset.provider) {
+            ApiProvider.ZAI ->
+                ZaiEndpointSelectionField(
+                    asset = asset,
+                    onAssetChange = onAssetChange,
+                )
+            ApiProvider.DEEPSEEK ->
+                DeepSeekBaseUrlField(
+                    asset = asset,
+                    onAssetChange = onAssetChange,
+                )
+            else ->
+                NeoOutlinedTextField(
+                    value = asset.baseUrl ?: "",
+                    onValueChange = { onAssetChange(asset.copy(baseUrl = it)) },
+                    label = { Text("Base URL (Optional)") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
         }
 
         ApiKeyWithReuseSection(
@@ -1003,6 +1011,7 @@ fun PresetConfigurationForm(
     onConfigChange: (ApiModelConfigUi) -> Unit,
     onNavigateToCustomHeaders: () -> Unit,
     discoveryCallbacks: ModelDiscoveryFieldCallbacks,
+    onShowOpenRouterProvidersSheet: () -> Unit = {},
 ) {
     LaunchedEffect(provider, config.id, config.isFreshPreset) {
         val normalized = config.applyProviderPresetDefaultsIfFresh(provider)
@@ -1036,10 +1045,19 @@ fun PresetConfigurationForm(
             onConfigChange = onConfigChange,
         )
 
+        IncludeReasoningContentOnRequestSwitch(
+            checked = config.includeReasoningContentOnRequest,
+            onCheckedChange = { enabled ->
+                onConfigChange(config.copy(includeReasoningContentOnRequest = enabled))
+            },
+        )
+
         if (provider == ApiProvider.OPENROUTER) {
             OpenRouterRoutingCard(
                 routing = config.openRouterRouting,
                 onRoutingChange = { onConfigChange(config.copy(openRouterRouting = it)) },
+                canSelectTargetProvider = config.modelId.isNotBlank(),
+                onShowProvidersSheet = onShowOpenRouterProvidersSheet,
             )
         }
 
@@ -1260,4 +1278,19 @@ internal fun ApiModelConfigUi.applyProviderPresetDefaultsIfFresh(provider: ApiPr
             this
         }
     return updated.copy(isFreshPreset = false)
+}
+
+@Composable
+fun IncludeReasoningContentOnRequestSwitch(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    RoutingSwitchRow(
+        label = "Include reasoning content on request",
+        description =
+            "Replay stored provider reasoning content on follow-up requests. " +
+                "Enable for models that require reasoning_content after tool calls or in thinking mode.",
+        checked = checked,
+        onCheckedChange = onCheckedChange,
+    )
 }

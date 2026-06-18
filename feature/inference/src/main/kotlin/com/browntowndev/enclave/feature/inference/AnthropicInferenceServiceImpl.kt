@@ -35,7 +35,7 @@ import com.browntowndev.enclave.feature.inference.appendonly.ProviderAppendOnlyC
 import com.browntowndev.enclave.feature.inference.appendonly.ProviderAppendOnlyContextFactory
 import com.browntowndev.enclave.feature.inference.appendonly.SessionIndexVolatilePlacement
 import com.browntowndev.enclave.feature.inference.appendonly.ensureAppendOnlyContext
-import com.browntowndev.enclave.feature.inference.appendonly.toProviderNormalizedMessages
+import com.browntowndev.enclave.feature.inference.appendonly.toAppendOnlySyncMessages
 import com.browntowndev.enclave.feature.inference.appendonly.toToolsFingerprint
 import com.browntowndev.enclave.feature.inference.telemetry.AnthropicReasoningTokenExtractor
 import com.browntowndev.enclave.feature.inference.telemetry.InferenceTelemetrySupport
@@ -570,7 +570,7 @@ class AnthropicInferenceServiceImpl(
             systemPrompt = systemPrompt,
             toolsFingerprint = availableTools.toToolsFingerprint(),
         )
-        appendOnly.syncMessages(sessionMessages.toProviderNormalizedMessages())
+        appendOnly.syncMessages(sessionMessages.toAppendOnlySyncMessages())
         return appendOnly
     }
 

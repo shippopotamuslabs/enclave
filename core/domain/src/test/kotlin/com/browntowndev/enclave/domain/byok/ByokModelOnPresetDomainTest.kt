@@ -65,6 +65,7 @@ class ByokModelOnPresetDomainTest {
                     "openRouterRouting" ->
                         com.browntowndev.enclave.domain.model.config
                             .OpenRouterRoutingConfiguration()
+                    "includeReasoningContentOnRequest" -> false
                     "pricing" ->
                         com.browntowndev.enclave.domain.model.config
                             .ApiModelSavedPricing()

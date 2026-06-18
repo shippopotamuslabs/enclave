@@ -66,7 +66,45 @@ object ApiProviderModelPolicy {
             provider == ApiProvider.OPENROUTER ||
             provider == ApiProvider.XAI ||
             provider == ApiProvider.FAL ||
-            provider == ApiProvider.ZAI
+            provider == ApiProvider.ZAI ||
+            provider == ApiProvider.DEEPSEEK
+
+    fun isDeepSeekReasonerModel(modelId: String): Boolean =
+        normalizeDeepSeekModelId(modelId) == "deepseek-reasoner"
+
+    fun isDeepSeekChatModel(modelId: String): Boolean =
+        normalizeDeepSeekModelId(modelId) == "deepseek-chat"
+
+    fun isDeepSeekV4FamilyModel(modelId: String): Boolean =
+        normalizeDeepSeekModelId(modelId).startsWith("deepseek-v4")
+
+    fun isDeepSeekDirectReasoningEngaged(
+        modelId: String,
+        reasoningBudget: Int,
+    ): Boolean = isDeepSeekV4FamilyModel(modelId) && reasoningBudget > 0
+
+    fun supportsDeepSeekClientTools(modelId: String): Boolean =
+        !isDeepSeekReasonerModel(modelId)
+
+    fun shouldStripReasoningContentOnAssistantReplay(modelId: String): Boolean =
+        isDeepSeekReasonerModel(modelId)
+
+    fun shouldReplayExactReasoningContentOnToolTurns(
+        modelId: String,
+        reasoningBudget: Int,
+    ): Boolean = isDeepSeekDirectReasoningEngaged(modelId, reasoningBudget)
+
+    fun deepSeekReasoningEffortForApi(effort: ApiReasoningEffort): String =
+        when (effort) {
+            ApiReasoningEffort.XHIGH -> "max"
+            ApiReasoningEffort.LOW,
+            ApiReasoningEffort.MEDIUM,
+            ApiReasoningEffort.HIGH,
+            -> "high"
+            ApiReasoningEffort.NONE -> "high"
+        }
+
+    private fun normalizeDeepSeekModelId(modelId: String): String = modelId.substringAfterLast('/')
 
     fun isXaiMultiAgentModel(modelId: String): Boolean = modelId.matchesXaiMultiAgent()
 
@@ -105,9 +143,22 @@ object ApiProviderModelPolicy {
     fun parameterSupport(
         provider: ApiProvider,
         modelId: String,
+        reasoningBudget: Int = 0,
     ): ApiModelParameterSupport {
         val reasoningPolicy = reasoningPolicy(provider = provider, modelId = modelId)
         return when (provider) {
+            ApiProvider.DEEPSEEK -> {
+                val hideSampling =
+                    isDeepSeekReasonerModel(modelId) ||
+                        isDeepSeekDirectReasoningEngaged(modelId, reasoningBudget)
+                ApiModelParameterSupport(
+                    reasoningPolicy = reasoningPolicy,
+                    supportsTemperature = !hideSampling,
+                    supportsTopP = !hideSampling,
+                    supportsReasoningEffort = false,
+                    supportsMaxTokens = true,
+                )
+            }
             ApiProvider.ANTHROPIC ->
                 ApiModelParameterSupport(
                     reasoningPolicy = reasoningPolicy,

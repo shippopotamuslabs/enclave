@@ -55,6 +55,7 @@ class SaveApiPresetUseCase
                             OpenRouterRoutingConfiguration()
                         },
                     pricing = draft.pricing,
+                    includeReasoningContentOnRequest = draft.includeReasoningContentOnRequest,
                 ),
             )
     }

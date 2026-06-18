@@ -103,6 +103,7 @@ data class ApiModelConfigUi(
     val thinkingEnabled: Boolean = false,
     val systemPrompt: String = "",
     val reasoningEffort: ApiReasoningEffort? = null,
+    val includeReasoningContentOnRequest: Boolean = false,
     val promptPriceUsdPerMillion: String = "",
     val completionPriceUsdPerMillion: String = "",
     val cachedPromptPriceUsdPerMillion: String = "",

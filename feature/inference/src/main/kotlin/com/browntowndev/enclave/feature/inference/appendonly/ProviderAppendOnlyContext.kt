@@ -16,6 +16,10 @@ internal class ProviderAppendOnlyContext(
     var clearCount: Int = 0
         private set
 
+    /** Reason for the most recent [clearLogState] (excluding [invalidate]). */
+    var lastClearReason: String? = null
+        private set
+
     fun ensureStablePrefix(
         systemPrompt: String,
         toolsFingerprint: String,
@@ -115,6 +119,9 @@ internal class ProviderAppendOnlyContext(
         lastSyncCount = 0
         syncedDigest = 0u
         clearCount += 1
+        if (reason != "session_invalidate") {
+            lastClearReason = reason
+        }
         if (hadCommitted && reason != "session_invalidate") {
             onLogCleared?.invoke(reason)
         }

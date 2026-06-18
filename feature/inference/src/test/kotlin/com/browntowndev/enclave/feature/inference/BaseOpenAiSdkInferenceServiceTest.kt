@@ -30,6 +30,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.io.File
@@ -351,7 +352,11 @@ class BaseOpenAiSdkInferenceServiceTest {
                 allowToolCall = false,
                 onTextToken = {},
                 onThinkingToken = {},
-                options = GenerationOptions(reasoningBudget = 0),
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        includeReasoningContentOnRequest = true,
+                    ),
             )
 
             val assistant = requireNotNull(capturedParams).messages()[0].asAssistant()
@@ -603,6 +608,108 @@ class BaseOpenAiSdkInferenceServiceTest {
             assertTrue(params.topP().isPresent)
             assertFalse(params.maxOutputTokens().isPresent)
             assertFalse(params.parallelToolCalls().isPresent)
+        }
+
+    @Test
+    fun `SCN-HOOK-001 OpenAI retains max_completion_tokens`() =
+        runTest {
+            var capturedParams: ChatCompletionCreateParams? = null
+            val service =
+                createSingleTurnService(
+                    provider = "OPENAI",
+                    modelId = "gpt-4o",
+                    onParams = { capturedParams = it },
+                    response = emptyTextResponse("ok"),
+                )
+
+            service.completeSingleTurn(
+                sessionMessages = listOf(AgentLoopMessage(id = "u1", role = Role.USER, content = "hi", metadataJson = "null")),
+                systemPrompt = "",
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        apiProvider = ApiProvider.OPENAI,
+                        modelId = "gpt-4o",
+                        maxTokens = 1024,
+                    ),
+            )
+
+            val params = requireNotNull(capturedParams)
+            assertTrue(params.maxCompletionTokens().isPresent)
+            assertEquals(1024L, params.maxCompletionTokens().get())
+            assertNull(params._additionalBodyProperties()["max_tokens"])
+        }
+
+    @Test
+    fun `SCN-HOOK-002 ZAI sampling rounds to two decimals`() =
+        runTest {
+            var capturedParams: ChatCompletionCreateParams? = null
+            val service =
+                createSingleTurnService(
+                    provider = "ZAI",
+                    modelId = "glm-4.6",
+                    onParams = { capturedParams = it },
+                    response = emptyTextResponse("ok"),
+                    responseFailure = null,
+                    zaiSampling = true,
+                )
+
+            service.completeSingleTurn(
+                sessionMessages = listOf(AgentLoopMessage(id = "u1", role = Role.USER, content = "hi", metadataJson = "null")),
+                systemPrompt = "",
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        apiProvider = ApiProvider.ZAI,
+                        modelId = "glm-4.6",
+                        temperature = 0.123456f,
+                    ),
+            )
+
+            assertEquals(0.12, requireNotNull(capturedParams).temperature().get())
+        }
+
+    @Test
+    fun `SCN-REGRESSION-001 OpenAI with tools still sets tool_choice`() =
+        runTest {
+            var capturedParams: ChatCompletionCreateParams? = null
+            val service =
+                createSingleTurnService(
+                    provider = "OPENAI",
+                    modelId = "gpt-4o",
+                    onParams = { capturedParams = it },
+                    response = emptyTextResponse("ok"),
+                )
+
+            service.completeSingleTurn(
+                sessionMessages = listOf(AgentLoopMessage(id = "u1", role = Role.USER, content = "hi", metadataJson = "null")),
+                systemPrompt = "",
+                availableTools = listOf(ToolDefinition.WEB_SEARCH),
+                allowToolCall = true,
+                onTextToken = {},
+                onThinkingToken = {},
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        apiProvider = ApiProvider.OPENAI,
+                        modelId = "gpt-4o",
+                    ),
+            )
+
+            val params = requireNotNull(capturedParams)
+            assertTrue(params.toolChoice().isPresent)
+            assertFalse(
+                params.toolChoice().get().isAuto() &&
+                    params.toolChoice().get().asAuto() == com.openai.models.chat.completions.ChatCompletionToolChoiceOption.Auto.NONE,
+            )
         }
 
     @Test
@@ -1209,19 +1316,32 @@ class BaseOpenAiSdkInferenceServiceTest {
         responseFailure: Throwable? = RuntimeException("force chat fallback"),
         toolStreamGatePort: ToolStreamGatePort = FakeToolStreamGatePort(),
         zaiSampling: Boolean = false,
-    ): TestableSingleTurnService =
-        TestableSingleTurnService(
-            client = client,
-            modelId = modelId,
-            provider = provider,
-            loggingPort = loggingPort,
-            stubResponse = response,
-            onParams = onParams,
-            onResponseParams = onResponseParams,
-            responseFailure = responseFailure,
-            toolStreamGatePort = toolStreamGatePort,
-            zaiSampling = zaiSampling,
-        )
+    ): BaseOpenAiSdkInferenceService =
+        if (provider == "XAI") {
+            TestableXaiSingleTurnService(
+                client = client,
+                modelId = modelId,
+                loggingPort = loggingPort,
+                stubResponse = response,
+                onParams = onParams,
+                onResponseParams = onResponseParams,
+                responseFailure = responseFailure,
+                toolStreamGatePort = toolStreamGatePort,
+            )
+        } else {
+            TestableSingleTurnService(
+                client = client,
+                modelId = modelId,
+                provider = provider,
+                loggingPort = loggingPort,
+                stubResponse = response,
+                onParams = onParams,
+                onResponseParams = onResponseParams,
+                responseFailure = responseFailure,
+                toolStreamGatePort = toolStreamGatePort,
+                zaiSampling = zaiSampling,
+            )
+        }
 
     private fun emptyTextResponse(text: String = "") =
         StreamedOpenAiResponse(
@@ -1408,5 +1528,52 @@ class BaseOpenAiSdkInferenceServiceTest {
         override val tag: String = "BaseOpenAiSdkInferenceServiceTest"
 
         fun describe(throwable: Throwable): String = describeException(throwable as Exception)
+    }
+
+    private class TestableXaiSingleTurnService(
+        client: OpenAIClient,
+        modelId: String,
+        loggingPort: LoggingPort,
+        private val stubResponse: StreamedOpenAiResponse,
+        private val onParams: (ChatCompletionCreateParams) -> Unit,
+        private val onResponseParams: (ResponseCreateParams) -> Unit,
+        private val responseFailure: Throwable?,
+        toolStreamGatePort: ToolStreamGatePort,
+    ) : XaiInferenceServiceImpl(
+        client = client,
+        modelId = modelId,
+        modelType = ModelType.FAST,
+        baseUrl = null,
+        loggingPort = loggingPort,
+        toolStreamGatePort = toolStreamGatePort,
+    ) {
+        override suspend fun streamResponses(
+            params: ResponseCreateParams,
+            chatId: ChatId?,
+            userMessageId: MessageId?,
+            assistantMessageId: MessageId?,
+            emitEvent: suspend (InferenceEvent) -> Unit,
+        ): StreamedOpenAiResponse {
+            onResponseParams(params)
+            responseFailure?.let { throw it }
+            stubResponse.assistantMessageText.takeIf { it.isNotBlank() }?.let {
+                emitEvent(InferenceEvent.PartialResponse(it, ModelType.FAST))
+            }
+            return stubResponse
+        }
+
+        override suspend fun streamChatCompletions(
+            params: ChatCompletionCreateParams,
+            chatId: ChatId?,
+            userMessageId: MessageId?,
+            assistantMessageId: MessageId?,
+            emitEvent: suspend (InferenceEvent) -> Unit,
+        ): StreamedOpenAiResponse {
+            onParams(params)
+            stubResponse.assistantMessageText.takeIf { it.isNotBlank() }?.let {
+                emitEvent(InferenceEvent.PartialResponse(it, ModelType.FAST))
+            }
+            return stubResponse
+        }
     }
 }

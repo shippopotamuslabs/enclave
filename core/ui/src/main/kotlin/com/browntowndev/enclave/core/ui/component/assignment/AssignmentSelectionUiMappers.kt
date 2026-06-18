@@ -68,6 +68,7 @@ class ApiModelAssetUiMapper
                 thinkingEnabled = false,
                 systemPrompt = config.systemPrompt,
                 reasoningEffort = config.reasoningEffort,
+                includeReasoningContentOnRequest = config.includeReasoningContentOnRequest,
                 promptPriceUsdPerMillion =
                     config.pricing.promptUsdPerMillion
                         ?.let(ApiModelPricingFormat::formatUsdPerMillion)

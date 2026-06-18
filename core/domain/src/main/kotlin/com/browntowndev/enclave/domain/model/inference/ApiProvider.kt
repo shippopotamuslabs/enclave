@@ -13,6 +13,7 @@ enum class ApiProvider(
     GOOGLE("Google"),
     FAL("fal.ai"),
     ZAI("Z.ai"),
+    DEEPSEEK("DeepSeek"),
     ;
 
     fun defaultBaseUrl(): String? =
@@ -22,6 +23,7 @@ enum class ApiProvider(
             XAI -> "https://api.x.ai/v1"
             FAL -> "https://queue.fal.run"
             ZAI -> ZaiEndpoint.PUBLIC.baseUrl
+            DEEPSEEK -> DeepSeekEndpoint.OFFICIAL.baseUrl
             else -> null
         }
 
@@ -29,7 +31,7 @@ enum class ApiProvider(
         get() =
             when (this) {
                 FAL -> false
-                ANTHROPIC, OPENAI, OPENROUTER, XAI, GOOGLE, ZAI -> true
+                ANTHROPIC, OPENAI, OPENROUTER, XAI, GOOGLE, ZAI, DEEPSEEK -> true
             }
 
     /** Model list/detail APIs that include per-million token pricing for telemetry estimates. */
@@ -37,14 +39,14 @@ enum class ApiProvider(
         get() =
             when (this) {
                 OPENROUTER, XAI -> true
-                ANTHROPIC, OPENAI, GOOGLE, FAL, ZAI -> false
+                ANTHROPIC, OPENAI, GOOGLE, FAL, ZAI, DEEPSEEK -> false
             }
 
     val supportsRealtimeVoice: Boolean
         get() =
             when (this) {
                 OPENAI, GOOGLE, XAI -> true
-                ANTHROPIC, OPENROUTER, FAL, ZAI -> false
+                ANTHROPIC, OPENROUTER, FAL, ZAI, DEEPSEEK -> false
             }
 
     /** Default sampling temperature for a newly created BYOK preset. */
@@ -99,6 +101,26 @@ enum class ZaiEndpoint(
         fun storedUrlNeedsMigration(baseUrl: String?): Boolean {
             val trimmed = baseUrl?.trim()?.trimEnd('/') ?: return false
             return trimmed != PUBLIC.baseUrl && trimmed != CODING.baseUrl
+        }
+    }
+}
+
+/**
+ * DeepSeek BYOK exposes a single official OpenAI-compatible endpoint.
+ * Stored credentials with non-official URLs migrate to [OFFICIAL] on load.
+ */
+enum class DeepSeekEndpoint(
+    val baseUrl: String,
+) {
+    OFFICIAL("https://api.deepseek.com"),
+    ;
+
+    companion object {
+        fun resolveEndpoint(@Suppress("UNUSED_PARAMETER") baseUrl: String?): DeepSeekEndpoint = OFFICIAL
+
+        fun storedUrlNeedsMigration(baseUrl: String?): Boolean {
+            val trimmed = baseUrl?.trim()?.trimEnd('/') ?: return false
+            return trimmed != OFFICIAL.baseUrl
         }
     }
 }

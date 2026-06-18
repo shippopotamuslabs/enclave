@@ -58,6 +58,7 @@ class ByokModelOnPresetSettingsRedTest {
                 deletionHelper = deletionHelper,
                 apiModelAssetUiMapper = ApiModelAssetUiMapper(),
                 errorHandler = errorHandler,
+                loggingPort = mockk(relaxed = true),
             )
         mapper = ApiModelAssetUiMapper()
         uiStateFactory =

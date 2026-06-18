@@ -501,10 +501,9 @@ class XaiPromptCacheLiveContextTest {
         }.trimEnd()
 
     private fun capturingXaiService(captured: MutableList<ChatCompletionCreateParams>): BaseOpenAiSdkInferenceService =
-        object : BaseOpenAiSdkInferenceService(
+        object : XaiInferenceServiceImpl(
             client = mockk<OpenAIClient>(),
             modelId = "grok-4.3",
-            provider = "XAI",
             modelType = ModelType.FAST,
             loggingPort = loggingPort,
             toolStreamGatePort = FakeToolStreamGatePort(),

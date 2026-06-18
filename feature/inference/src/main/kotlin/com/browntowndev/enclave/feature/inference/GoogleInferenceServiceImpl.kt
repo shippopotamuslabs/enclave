@@ -20,7 +20,7 @@ import com.browntowndev.enclave.feature.inference.appendonly.ProviderAppendOnlyC
 import com.browntowndev.enclave.feature.inference.appendonly.ProviderAppendOnlyContextFactory
 import com.browntowndev.enclave.feature.inference.appendonly.SessionIndexVolatilePlacement
 import com.browntowndev.enclave.feature.inference.appendonly.ensureAppendOnlyContext
-import com.browntowndev.enclave.feature.inference.appendonly.toProviderNormalizedMessages
+import com.browntowndev.enclave.feature.inference.appendonly.toAppendOnlySyncMessages
 import com.browntowndev.enclave.feature.inference.appendonly.toToolsFingerprint
 import com.browntowndev.enclave.feature.inference.telemetry.InferenceTelemetrySupport
 import com.browntowndev.enclave.feature.inference.telemetry.emitInferenceExecutionOutcome
@@ -144,7 +144,7 @@ class GoogleInferenceServiceImpl(
                 systemPrompt = systemPrompt,
                 toolsFingerprint = availableTools.toToolsFingerprint(),
             )
-            appendOnly.syncMessages(sessionMessages.toProviderNormalizedMessages())
+            appendOnly.syncMessages(sessionMessages.toAppendOnlySyncMessages())
             val tailInsertIndex = SessionIndexVolatilePlacement.resolveTailInsertIndex(sessionMessages)
             val latestUserPrepends = contextSidecars?.trim()?.takeIf { it.isNotEmpty() }
 

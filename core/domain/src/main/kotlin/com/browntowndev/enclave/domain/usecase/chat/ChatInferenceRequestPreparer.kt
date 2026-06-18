@@ -9,7 +9,9 @@ import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
+import com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
+import com.browntowndev.enclave.domain.model.inference.ToolSearchIndexSnapshot
 import com.browntowndev.enclave.domain.model.inference.ToolExecutionResult
 import com.browntowndev.enclave.domain.model.inference.XSearchParams
 import com.browntowndev.enclave.domain.model.memory.MemoryRetrievalPolicy
@@ -411,44 +413,73 @@ class ChatInferenceRequestPreparer(
             preRetrievalSources = preRetrievalSources,
             preRetrievalXResultJson = retrievedXSearchResults,
             options =
-                GenerationOptions(
+                buildGenerationOptions(
                     reasoningBudget = reasoningBudget,
                     modelType = modelType,
-                    modelId = config?.modelId,
-                    apiProvider = config?.apiProvider,
-                    apiModelPricing = config?.apiModelPricing,
-                    systemPrompt = composedPrompts.systemPrompt,
-                    volatileTurnContext = composedPrompts.volatileTurnContext,
-                    imageUris =
-                        if (imageHandling == ChatImageHandling.DIRECT) {
-                            resolvedImageTarget?.imageUris.orEmpty()
-                        } else {
-                            emptyList()
-                        },
-                    reasoningEffort = config?.reasoningEffort,
-                    temperature = config?.temperature?.toFloat(),
-                    topK = config?.topK,
-                    topP = config?.topP?.toFloat(),
-                    maxTokens = config?.maxTokens,
-                    contextWindow = config?.contextWindow,
-                    maxTokensDisabled = config?.maxTokensDisabled ?: false,
-                    temperatureDisabled = config?.temperatureDisabled ?: false,
-                    topPDisabled = config?.topPDisabled ?: false,
-                    topKDisabled = config?.topKDisabled ?: false,
-                    minPDisabled = config?.minPDisabled ?: false,
-                    frequencyPenaltyDisabled = config?.frequencyPenaltyDisabled ?: false,
-                    presencePenaltyDisabled = config?.presencePenaltyDisabled ?: false,
+                    config = config,
+                    composedPrompts = composedPrompts,
+                    imageHandling = imageHandling,
+                    resolvedImageUris = resolvedImageTarget?.imageUris.orEmpty(),
                     toolingEnabled = toolingEnabled,
                     toolCatalog = toolCatalog,
                     activeTools = activeTools,
                     toolSearchIndex = toolSearchIndex,
-                    toolCallStrategy = strategy,
+                    strategy = strategy,
                     chatId = chatId,
                     userMessageId = userMessageId,
                     assistantMessageId = assistantMessageId,
                 ),
         )
     }
+
+    private fun buildGenerationOptions(
+        reasoningBudget: Int,
+        modelType: ModelType,
+        config: ActiveModelConfiguration?,
+        composedPrompts: ComposedInferencePrompts,
+        imageHandling: ChatImageHandling,
+        resolvedImageUris: List<String>,
+        toolingEnabled: Boolean,
+        toolCatalog: List<ToolCatalogEntry>,
+        activeTools: List<ToolDefinition>,
+        toolSearchIndex: ToolSearchIndexSnapshot?,
+        strategy: ToolCallStrategy,
+        chatId: ChatId,
+        userMessageId: MessageId,
+        assistantMessageId: MessageId,
+    ): GenerationOptions =
+        GenerationOptions(
+            reasoningBudget = reasoningBudget,
+            modelType = modelType,
+            modelId = config?.modelId,
+            apiProvider = config?.apiProvider,
+            apiModelPricing = config?.apiModelPricing,
+            systemPrompt = composedPrompts.systemPrompt,
+            volatileTurnContext = composedPrompts.volatileTurnContext,
+            imageUris = if (imageHandling == ChatImageHandling.DIRECT) resolvedImageUris else emptyList(),
+            reasoningEffort = config?.reasoningEffort,
+            includeReasoningContentOnRequest = config?.includeReasoningContentOnRequest ?: false,
+            temperature = config?.temperature?.toFloat(),
+            topK = config?.topK,
+            topP = config?.topP?.toFloat(),
+            maxTokens = config?.maxTokens,
+            contextWindow = config?.contextWindow,
+            maxTokensDisabled = config?.maxTokensDisabled ?: false,
+            temperatureDisabled = config?.temperatureDisabled ?: false,
+            topPDisabled = config?.topPDisabled ?: false,
+            topKDisabled = config?.topKDisabled ?: false,
+            minPDisabled = config?.minPDisabled ?: false,
+            frequencyPenaltyDisabled = config?.frequencyPenaltyDisabled ?: false,
+            presencePenaltyDisabled = config?.presencePenaltyDisabled ?: false,
+            toolingEnabled = toolingEnabled,
+            toolCatalog = toolCatalog,
+            activeTools = activeTools,
+            toolSearchIndex = toolSearchIndex,
+            toolCallStrategy = strategy,
+            chatId = chatId,
+            userMessageId = userMessageId,
+            assistantMessageId = assistantMessageId,
+        )
 
     private fun promptWithTemporalMetadata(prompt: String): String {
         val formattedTime = dateTimeFormatter.format(java.time.Instant.now())
