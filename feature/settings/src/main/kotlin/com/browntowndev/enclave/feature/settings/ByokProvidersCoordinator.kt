@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+import com.browntowndev.enclave.domain.port.inference.LoggingPort
+
 internal class ByokProvidersCoordinator
     @Inject
     constructor(
@@ -25,12 +27,69 @@ internal class ByokProvidersCoordinator
         private val deletionHelper: SettingsDeletionHelper,
         private val apiModelAssetUiMapper: ApiModelAssetUiMapper,
         private val errorHandler: ViewModelErrorHandler,
+        private val loggingPort: LoggingPort,
     ) {
         fun onShowByokSheet(
             apiState: MutableStateFlow<ApiProvidersTransientState>,
             show: Boolean,
         ) {
             apiState.update { it.copy(isSheetOpen = show) }
+        }
+
+        fun onShowOpenRouterProvidersSheet(
+            scope: CoroutineScope,
+            apiState: MutableStateFlow<ApiProvidersTransientState>,
+            show: Boolean,
+            modelId: String = "",
+            currentApiKey: String = "",
+            credentialAlias: String? = null,
+            baseUrl: String? = null,
+            onShowSnackbar: (String) -> Unit = {},
+        ) {
+            if (!show) {
+                apiState.update { it.copy(isOpenRouterProvidersSheetOpen = false) }
+                return
+            }
+
+            if (modelId.isBlank()) {
+                return
+            }
+
+            apiState.update {
+                it.copy(
+                    isOpenRouterProvidersSheetOpen = true,
+                    isLoadingEndpoints = true,
+                    endpointFetchError = false,
+                )
+            }
+
+            scope.launch {
+                try {
+                    val endpoints =
+                        apiProviderUseCases.fetchOpenRouterModelEndpoints(
+                            modelId = modelId,
+                            currentApiKey = currentApiKey,
+                            credentialAlias = credentialAlias,
+                            baseUrl = baseUrl,
+                        )
+                    apiState.update {
+                        it.copy(
+                            isLoadingEndpoints = false,
+                            openRouterEndpoints = endpoints,
+                            endpointFetchError = false,
+                        )
+                    }
+                } catch (e: Exception) {
+                    loggingPort.error(COORDINATOR_TAG, "Failed to fetch OpenRouter model endpoints", e)
+                    apiState.update {
+                        it.copy(
+                            isLoadingEndpoints = false,
+                            endpointFetchError = true,
+                        )
+                    }
+                    onShowSnackbar("Failed to fetch providers")
+                }
+            }
         }
 
         fun onSelectApiProviderAsset(
@@ -507,6 +566,7 @@ internal class ByokProvidersCoordinator
                 presencePenaltyDisabled = presencePenaltyDisabled,
                 systemPrompt = systemPrompt,
                 reasoningEffort = reasoningEffort,
+                includeReasoningContentOnRequest = includeReasoningContentOnRequest,
                 customHeaders = customHeaders.map { it.key to it.value },
                 openRouterRouting = openRouterRouting,
                 pricing =

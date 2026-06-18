@@ -30,6 +30,8 @@ internal object UnwiredSettingsApiProviderUseCases : SettingsApiProviderUseCases
         get() = unwired("applyApiModelMetadataDefaults")
     override val testApiProviderConnection: TestApiProviderConnectionUseCase
         get() = unwired("testApiProviderConnection")
+    override val fetchOpenRouterModelEndpoints: com.browntowndev.enclave.domain.usecase.byok.FetchOpenRouterModelEndpointsUseCase
+        get() = unwired("fetchOpenRouterModelEndpoints")
 }
 
 internal object NoOpViewModelErrorHandler : ViewModelErrorHandler {

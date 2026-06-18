@@ -62,4 +62,10 @@ abstract class ByokUseCasesModule {
     @Binds
     @Singleton
     abstract fun bindSetDefaultModelUseCase(impl: SetDefaultModelUseCaseImpl): SetDefaultModelUseCase
+
+    @Binds
+    @Singleton
+    abstract fun bindFetchOpenRouterModelEndpointsUseCase(
+        impl: com.browntowndev.enclave.domain.usecase.byok.FetchOpenRouterModelEndpointsUseCaseImpl,
+    ): com.browntowndev.enclave.domain.usecase.byok.FetchOpenRouterModelEndpointsUseCase
 }

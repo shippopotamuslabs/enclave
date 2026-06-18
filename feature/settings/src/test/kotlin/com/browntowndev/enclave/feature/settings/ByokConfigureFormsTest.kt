@@ -4,7 +4,9 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
+import com.browntowndev.enclave.domain.model.config.OpenRouterRoutingConfiguration
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -50,5 +52,61 @@ class ByokConfigureFormsTest {
 
         composeTestRule.onNodeWithTag("ApiContextWindowField", useUnmergedTree = true).assertIsDisplayed()
         composeTestRule.onNodeWithTag("ApiMaxTokensField", useUnmergedTree = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun openRouterRoutingSection_withCanSelectTargetProvider_isClickableAndTriggersCallback() {
+        var onShowProvidersSheetCalled = false
+        composeTestRule.setContent {
+            EnclaveTheme {
+                OpenRouterRoutingSection(
+                    routing = OpenRouterRoutingConfiguration(),
+                    onRoutingChange = {},
+                    canSelectTargetProvider = true,
+                    onShowProvidersSheet = { onShowProvidersSheetCalled = true }
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("OpenRouterPreferredProviderBox", useUnmergedTree = true)
+            .assertIsDisplayed()
+            .performClick()
+
+        assert(onShowProvidersSheetCalled)
+    }
+
+    @Test
+    fun openRouterRoutingSection_withoutCanSelectTargetProvider_isNotClickableAndDoesNotTriggerCallback() {
+        var onShowProvidersSheetCalled = false
+        composeTestRule.setContent {
+            EnclaveTheme {
+                OpenRouterRoutingSection(
+                    routing = OpenRouterRoutingConfiguration(),
+                    onRoutingChange = {},
+                    canSelectTargetProvider = false,
+                    onShowProvidersSheet = { onShowProvidersSheetCalled = true }
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithTag("OpenRouterPreferredProviderBox", useUnmergedTree = true)
+            .assertIsDisplayed()
+            .performClick()
+
+        assert(!onShowProvidersSheetCalled)
+    }
+
+    @Test
+    fun includeReasoningContentOnRequestSwitch_displaysToggleLabel() {
+        composeTestRule.setContent {
+            EnclaveTheme {
+                IncludeReasoningContentOnRequestSwitch(
+                    checked = false,
+                    onCheckedChange = {},
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Include reasoning content on request").assertIsDisplayed()
     }
 }

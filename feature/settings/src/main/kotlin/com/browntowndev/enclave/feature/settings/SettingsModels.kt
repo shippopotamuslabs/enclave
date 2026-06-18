@@ -8,6 +8,7 @@ import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.config.MediaTask
 import com.browntowndev.enclave.domain.model.config.ModelConfigurationId
+import com.browntowndev.enclave.domain.model.config.OpenRouterModelEndpoint
 import com.browntowndev.enclave.domain.model.config.OpenRouterRoutingConfiguration
 import com.browntowndev.enclave.domain.model.config.TtsProviderId
 import com.browntowndev.enclave.domain.model.inference.ApiModelParameterSupport
@@ -289,6 +290,13 @@ data class ModelDiscoveryFieldCallbacks(
 )
 
 @Immutable
+data class OpenRouterEndpointsUiState(
+    val endpoints: List<OpenRouterModelEndpoint> = emptyList(),
+    val isLoading: Boolean = false,
+    val hasError: Boolean = false,
+)
+
+@Immutable
 data class ApiProviderEditorUiState(
     val assetDraft: ApiModelAssetUi? = null,
     val selectedReusableCredential: ReusableApiCredentialUi? = null,
@@ -296,6 +304,8 @@ data class ApiProviderEditorUiState(
     val parameterSupport: ApiModelParameterSupport = ApiModelParameterSupport.DEFAULT,
     val discovery: ApiModelDiscoveryUiState = ApiModelDiscoveryUiState(),
     val connectionTestStatus: ApiConnectionTestStatus = ApiConnectionTestStatus.IDLE,
+    val isOpenRouterProvidersSheetOpen: Boolean = false,
+    val openRouterEndpointsState: OpenRouterEndpointsUiState = OpenRouterEndpointsUiState(),
 )
 
 @Immutable

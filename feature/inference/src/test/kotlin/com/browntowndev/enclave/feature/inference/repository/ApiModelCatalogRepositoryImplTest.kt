@@ -121,6 +121,44 @@ class ApiModelCatalogRepositoryImplTest {
         }
 
     @Test
+    fun `SCN-DISCOVERY-001 fetchModels discovers DeepSeek models via openai-compatible list`() = runTest {
+        every {
+            openAiClientProvider.getClient(apiKey = "ds-key", baseUrl = "https://api.deepseek.com")
+        } returns
+            mockk {
+                every { models() } returns
+                    mockk {
+                        every { list() } returns
+                            mockk {
+                                every { data() } returns
+                                    listOf(
+                                        mockk {
+                                            every { id() } returns "deepseek-chat"
+                                            every { created() } returns 123L
+                                        },
+                                    )
+                            }
+                    }
+            }
+
+        val catalog =
+            repo.fetchModels(
+                provider = ApiProvider.DEEPSEEK,
+                apiKey = "ds-key",
+                baseUrl = "https://api.deepseek.com",
+            )
+
+        assertEquals(1, catalog.models.size)
+        assertEquals("deepseek-chat", catalog.models[0].id)
+        verify {
+            openAiClientProvider.getClient(
+                apiKey = "ds-key",
+                baseUrl = "https://api.deepseek.com",
+            )
+        }
+    }
+
+    @Test
     fun `fetchModels discovers Zai models via openai-compatible endpoint`() = runTest {
         every { openAiClientProvider.getClient(apiKey = "key", baseUrl = "https://api.z.ai/api/paas/v4") } returns
             mockk {
@@ -608,6 +646,75 @@ class ApiModelCatalogRepositoryImplTest {
             verify(exactly = 50) { httpClient.newCall(any()) }
             assertTrue(catalog.isTruncated)
             assertTrue(catalog.models.isNotEmpty())
+        }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("SCN-INFRA-001")
+    fun scnInfra001_apiModelCatalogRepositoryFetchesAndParsesEndpointsFromOpenRouterApi() =
+        runTest {
+            val call = mockk<Call>()
+            val requestSlot = io.mockk.slot<Request>()
+            every { httpClient.newCall(capture(requestSlot)) } returns call
+            every { call.execute() } returns
+                jsonResponse(
+                    request =
+                        Request
+                            .Builder()
+                            .url("https://openrouter.ai/api/v1/models/meta-llama/llama-3.3-70b-instruct/endpoints")
+                            .build(),
+                    body =
+                        """
+                        {
+                          "data": {
+                            "endpoints": [
+                              {
+                                "provider_name": "Together",
+                                "context_length": 131072,
+                                "pricing": {
+                                  "prompt": "0.0000007",
+                                  "completion": "0.0000009"
+                                },
+                                "quantization": "fp8",
+                                "status": 0,
+                                "uptime_last_1d": 99.95,
+                                "latency_last_30m": {
+                                  "p50": 250.0
+                                },
+                                "throughput_last_30m": {
+                                  "p50": 45.0
+                                }
+                              }
+                            ]
+                          }
+                        }
+                        """.trimIndent(),
+                )
+
+            val result =
+                repo.fetchModelEndpoints(
+                    modelId = "meta-llama/llama-3.3-70b-instruct",
+                    apiKey = "sk-or-key",
+                    baseUrl = null,
+                )
+
+            assertEquals(
+                "https://openrouter.ai/api/v1/models/meta-llama/llama-3.3-70b-instruct/endpoints",
+                requestSlot.captured.url.toString(),
+            )
+            assertEquals("Bearer sk-or-key", requestSlot.captured.header("Authorization"))
+
+            assertEquals(1, result.size)
+            val endpoint = result[0]
+            assertEquals("Together", endpoint.providerName)
+            assertEquals("together", endpoint.providerSlug)
+            assertEquals(131072, endpoint.contextLength)
+            assertEquals(0.7, endpoint.promptPriceUsdPerMillion)
+            assertEquals(0.9, endpoint.completionPriceUsdPerMillion)
+            assertEquals("fp8", endpoint.quantization)
+            assertEquals(true, endpoint.isOperational)
+            assertEquals(99.95, endpoint.uptime1d)
+            assertEquals(0.25, endpoint.latency30m)
+            assertEquals(45.0, endpoint.throughput30m)
         }
 
     private fun jsonResponse(

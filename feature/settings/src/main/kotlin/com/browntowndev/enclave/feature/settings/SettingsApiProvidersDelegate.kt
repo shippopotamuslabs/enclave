@@ -35,6 +35,26 @@ internal class SettingsApiProvidersDelegate
             show: Boolean,
         ) = byokCoordinator.onShowByokSheet(apiState, show)
 
+        fun onShowOpenRouterProvidersSheet(
+            scope: CoroutineScope,
+            apiState: MutableStateFlow<ApiProvidersTransientState>,
+            show: Boolean,
+            modelId: String = "",
+            currentApiKey: String = "",
+            credentialAlias: String? = null,
+            baseUrl: String? = null,
+            onShowSnackbar: (String) -> Unit = {},
+        ) = byokCoordinator.onShowOpenRouterProvidersSheet(
+            scope = scope,
+            apiState = apiState,
+            show = show,
+            modelId = modelId,
+            currentApiKey = currentApiKey,
+            credentialAlias = credentialAlias,
+            baseUrl = baseUrl,
+            onShowSnackbar = onShowSnackbar,
+        )
+
         fun onShowTtsProvidersSheet(
             ttsState: MutableStateFlow<TtsProvidersTransientState>,
             show: Boolean,

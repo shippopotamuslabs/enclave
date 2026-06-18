@@ -63,6 +63,13 @@ class ByokPresetDefaultsTest {
     }
 
     @Test
+    fun `SCN-UI-005 fresh DeepSeek preset uses generic temperature 0 dot 7`() {
+        val draft = freshApiPresetDraft(ApiProvider.DEEPSEEK)
+        assertEquals(0.7, draft.temperature)
+        assertEquals(true, draft.isFreshPreset)
+    }
+
+    @Test
     fun `applyProviderPresetDefaultsIfFresh preserves saved preset with model selected`() {
         val normalized =
             ApiModelConfigUi(

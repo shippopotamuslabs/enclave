@@ -79,6 +79,10 @@ data class ApiModelConfigurationEntity(
     val openRouterDataCollectionPolicy: String? = null,
     @ColumnInfo(name = "openrouter_zdr")
     val openRouterZeroDataRetention: Boolean? = null,
+    @ColumnInfo(name = "openrouter_preferred_provider")
+    val openRouterPreferredProvider: String? = null,
+    @ColumnInfo(name = "include_reasoning_content_on_request")
+    val includeReasoningContentOnRequest: Boolean = false,
     @ColumnInfo(name = "prompt_price_usd_per_million")
     val promptPriceUsdPerMillion: Double? = null,
     @ColumnInfo(name = "completion_price_usd_per_million")

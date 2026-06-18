@@ -33,4 +33,18 @@ data class OpenRouterRoutingConfiguration(
     val requireParameters: Boolean = false,
     val dataCollectionPolicy: OpenRouterDataCollectionPolicy = OpenRouterDataCollectionPolicy.DENY,
     val zeroDataRetention: Boolean = false,
+    val preferredProvider: String? = null,
+)
+
+data class OpenRouterModelEndpoint(
+    val providerName: String,
+    val providerSlug: String,
+    val contextLength: Int,
+    val promptPriceUsdPerMillion: Double,
+    val completionPriceUsdPerMillion: Double,
+    val quantization: String,
+    val isOperational: Boolean,
+    val uptime1d: Double?,
+    val latency30m: Double?,
+    val throughput30m: Double?,
 )

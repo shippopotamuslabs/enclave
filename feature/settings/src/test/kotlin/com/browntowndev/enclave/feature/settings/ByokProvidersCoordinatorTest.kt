@@ -7,6 +7,7 @@ import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.config.ApiModelAsset
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
+import com.browntowndev.enclave.domain.usecase.byok.FetchOpenRouterModelEndpointsUseCase
 import com.browntowndev.enclave.domain.usecase.settings.ApiPresetDraft
 import com.browntowndev.enclave.domain.usecase.settings.ApiProviderDraft
 import com.browntowndev.enclave.domain.usecase.settings.ApiProviderDraftSaveResult
@@ -30,6 +31,7 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import org.junit.jupiter.api.extension.ExtendWith
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -38,6 +40,7 @@ class ByokProvidersCoordinatorTest {
     private val apiProviderUseCases = mockk<SettingsApiProviderUseCases>(relaxed = true)
     private val deletionHelper = mockk<SettingsDeletionHelper>(relaxed = true)
     private val errorHandler = mockk<ViewModelErrorHandler>()
+    private val loggingPort = mockk<LoggingPort>(relaxed = true)
 
     private lateinit var coordinator: ByokProvidersCoordinator
 
@@ -56,6 +59,7 @@ class ByokProvidersCoordinatorTest {
                 deletionHelper = deletionHelper,
                 apiModelAssetUiMapper = ApiModelAssetUiMapper(),
                 errorHandler = errorHandler,
+                loggingPort = loggingPort,
             )
     }
 
@@ -240,5 +244,140 @@ class ByokProvidersCoordinatorTest {
             assertEquals(false, draftSlot.captured.minPDisabled)
             assertEquals(true, draftSlot.captured.frequencyPenaltyDisabled)
             assertEquals(false, draftSlot.captured.presencePenaltyDisabled)
+        }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("SCN-UI-STATE-001")
+    fun scnUiState001_onShowOpenRouterProvidersSheetUpdatesUiStateOnSuccess() =
+        runTest {
+            val fetchUseCase = mockk<FetchOpenRouterModelEndpointsUseCase>()
+            every { apiProviderUseCases.fetchOpenRouterModelEndpoints } returns fetchUseCase
+
+            val mockEndpoints =
+                listOf(
+                    com.browntowndev.enclave.domain.model.config.OpenRouterModelEndpoint(
+                        providerName = "Together",
+                        providerSlug = "together",
+                        contextLength = 131072,
+                        promptPriceUsdPerMillion = 0.7,
+                        completionPriceUsdPerMillion = 0.9,
+                        quantization = "fp8",
+                        isOperational = true,
+                        uptime1d = 99.95,
+                        latency30m = 0.25,
+                        throughput30m = 45.0,
+                    ),
+                )
+
+            coEvery {
+                fetchUseCase(
+                    modelId = "meta-llama/llama-3.3-70b-instruct",
+                    currentApiKey = "sk-or-key",
+                    credentialAlias = "alias",
+                    baseUrl = "https://openrouter.ai",
+                )
+            } returns mockEndpoints
+
+            val apiState = MutableStateFlow(ApiProvidersTransientState())
+
+            coordinator.onShowOpenRouterProvidersSheet(
+                scope = this,
+                apiState = apiState,
+                show = true,
+                modelId = "meta-llama/llama-3.3-70b-instruct",
+                currentApiKey = "sk-or-key",
+                credentialAlias = "alias",
+                baseUrl = "https://openrouter.ai",
+            )
+
+            assertTrue(apiState.value.isOpenRouterProvidersSheetOpen)
+            assertTrue(apiState.value.isLoadingEndpoints)
+            assertFalse(apiState.value.endpointFetchError)
+
+            advanceUntilIdle()
+
+            assertFalse(apiState.value.isLoadingEndpoints)
+            assertEquals(mockEndpoints, apiState.value.openRouterEndpoints)
+            assertFalse(apiState.value.endpointFetchError)
+        }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("SCN-ERROR-001")
+    fun scnError001_onShowOpenRouterProvidersSheetEmitsErrorOnFailure() =
+        runTest {
+            val fetchUseCase = mockk<FetchOpenRouterModelEndpointsUseCase>()
+            every { apiProviderUseCases.fetchOpenRouterModelEndpoints } returns fetchUseCase
+
+            coEvery {
+                fetchUseCase(
+                    modelId = "meta-llama/llama-3.3-70b-instruct",
+                    currentApiKey = "sk-or-key",
+                    credentialAlias = "alias",
+                    baseUrl = "https://openrouter.ai",
+                )
+            } throws java.io.IOException("HTTP 500")
+
+            val apiState = MutableStateFlow(ApiProvidersTransientState())
+            var snackbarMessage: String? = null
+
+            coordinator.onShowOpenRouterProvidersSheet(
+                scope = this,
+                apiState = apiState,
+                show = true,
+                modelId = "meta-llama/llama-3.3-70b-instruct",
+                currentApiKey = "sk-or-key",
+                credentialAlias = "alias",
+                baseUrl = "https://openrouter.ai",
+                onShowSnackbar = { msg -> snackbarMessage = msg },
+            )
+
+            advanceUntilIdle()
+
+            assertFalse(apiState.value.isLoadingEndpoints)
+            assertTrue(apiState.value.endpointFetchError)
+            assertEquals("Failed to fetch providers", snackbarMessage)
+            coVerify(exactly = 1) {
+                loggingPort.error(
+                    tag = "ByokProvidersCoordinator",
+                    message = "Failed to fetch OpenRouter model endpoints",
+                    throwable = any<java.io.IOException>()
+                )
+            }
+        }
+
+    @Test
+    fun `onShowOpenRouterProvidersSheet with blank modelId does not fetch or open sheet`() =
+        runTest {
+            val fetchUseCase = mockk<FetchOpenRouterModelEndpointsUseCase>()
+            every { apiProviderUseCases.fetchOpenRouterModelEndpoints } returns fetchUseCase
+
+            val apiState = MutableStateFlow(ApiProvidersTransientState())
+            var snackbarMessage: String? = null
+
+            coordinator.onShowOpenRouterProvidersSheet(
+                scope = this,
+                apiState = apiState,
+                show = true,
+                modelId = "",
+                currentApiKey = "sk-or-key",
+                credentialAlias = "alias",
+                baseUrl = "https://openrouter.ai",
+                onShowSnackbar = { msg -> snackbarMessage = msg },
+            )
+
+            advanceUntilIdle()
+
+            assertFalse(apiState.value.isOpenRouterProvidersSheetOpen)
+            assertFalse(apiState.value.isLoadingEndpoints)
+            assertFalse(apiState.value.endpointFetchError)
+            assertNull(snackbarMessage)
+            coVerify(exactly = 0) {
+                fetchUseCase(
+                    modelId = any(),
+                    currentApiKey = any(),
+                    credentialAlias = any(),
+                    baseUrl = any(),
+                )
+            }
         }
 }
