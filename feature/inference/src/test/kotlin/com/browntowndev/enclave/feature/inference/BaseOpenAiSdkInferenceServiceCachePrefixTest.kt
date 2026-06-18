@@ -257,36 +257,95 @@ class BaseOpenAiSdkInferenceServiceCachePrefixTest {
         provider: String,
         openRouterRouting: OpenRouterRoutingConfiguration? = null,
     ): BaseOpenAiSdkInferenceService {
-        return object : BaseOpenAiSdkInferenceService(
-            client = mockk<OpenAIClient>(),
-            modelId = modelId,
-            provider = provider,
-            modelType = ModelType.FAST,
-            openRouterRouting = openRouterRouting,
-            loggingPort = loggingPort,
-            toolStreamGatePort = FakeToolStreamGatePort(),
-        ) {
-            override val tag: String = "TestBaseOpenAiSdkService"
+        return when (provider) {
+            "XAI" -> object : XaiInferenceServiceImpl(
+                client = mockk<OpenAIClient>(),
+                modelId = modelId,
+                modelType = ModelType.FAST,
+                loggingPort = loggingPort,
+                toolStreamGatePort = FakeToolStreamGatePort(),
+            ) {
+                override val tag: String = "TestBaseOpenAiSdkService"
 
-            override suspend fun streamChatCompletions(
-                params: ChatCompletionCreateParams,
-                chatId: ChatId?,
-                userMessageId: MessageId?,
-                assistantMessageId: MessageId?,
-                emitEvent: suspend (InferenceEvent) -> Unit,
-            ): StreamedOpenAiResponse {
-                capturedParams.add(params)
-                return StreamedOpenAiResponse(
-                    emittedAny = true,
-                    functionCalls = emptyList(),
-                    responseId = "resp_1",
-                    providerToolCallIds = emptyList(),
-                    providerToolItemIds = emptyList(),
-                    assistantMessageText = "mock-response",
-                )
+                override suspend fun streamChatCompletions(
+                    params: ChatCompletionCreateParams,
+                    chatId: ChatId?,
+                    userMessageId: MessageId?,
+                    assistantMessageId: MessageId?,
+                    emitEvent: suspend (InferenceEvent) -> Unit,
+                ): StreamedOpenAiResponse {
+                    capturedParams.add(params)
+                    return StreamedOpenAiResponse(
+                        emittedAny = true,
+                        functionCalls = emptyList(),
+                        responseId = "resp_1",
+                        providerToolCallIds = emptyList(),
+                        providerToolItemIds = emptyList(),
+                        assistantMessageText = "mock-response",
+                    )
+                }
+            }
+            "OPENROUTER" -> object : OpenRouterInferenceServiceImpl(
+                client = mockk<OpenAIClient>(),
+                modelId = modelId,
+                modelType = ModelType.FAST,
+                openRouterRouting = openRouterRouting ?: com.browntowndev.enclave.domain.model.config.OpenRouterRoutingConfiguration(),
+                loggingPort = loggingPort,
+                toolStreamGatePort = FakeToolStreamGatePort(),
+            ) {
+                override val tag: String = "TestBaseOpenAiSdkService"
+
+                override suspend fun streamChatCompletions(
+                    params: ChatCompletionCreateParams,
+                    chatId: ChatId?,
+                    userMessageId: MessageId?,
+                    assistantMessageId: MessageId?,
+                    emitEvent: suspend (InferenceEvent) -> Unit,
+                ): StreamedOpenAiResponse {
+                    capturedParams.add(params)
+                    return StreamedOpenAiResponse(
+                        emittedAny = true,
+                        functionCalls = emptyList(),
+                        responseId = "resp_1",
+                        providerToolCallIds = emptyList(),
+                        providerToolItemIds = emptyList(),
+                        assistantMessageText = "mock-response",
+                    )
+                }
+            }
+            else -> object : BaseOpenAiSdkInferenceService(
+                client = mockk<OpenAIClient>(),
+                modelId = modelId,
+                provider = provider,
+                modelType = ModelType.FAST,
+                openRouterRouting = openRouterRouting,
+                loggingPort = loggingPort,
+                toolStreamGatePort = FakeToolStreamGatePort(),
+            ) {
+                override val tag: String = "TestBaseOpenAiSdkService"
+
+                override suspend fun streamChatCompletions(
+                    params: ChatCompletionCreateParams,
+                    chatId: ChatId?,
+                    userMessageId: MessageId?,
+                    assistantMessageId: MessageId?,
+                    emitEvent: suspend (InferenceEvent) -> Unit,
+                ): StreamedOpenAiResponse {
+                    capturedParams.add(params)
+                    return StreamedOpenAiResponse(
+                        emittedAny = true,
+                        functionCalls = emptyList(),
+                        responseId = "resp_1",
+                        providerToolCallIds = emptyList(),
+                        providerToolItemIds = emptyList(),
+                        assistantMessageText = "mock-response",
+                    )
+                }
             }
         }
     }
+
+
 
     private fun ChatCompletionMessageParam.toComparisonString(): String =
         when {

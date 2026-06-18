@@ -23,6 +23,7 @@ internal fun createSettingsApiProvidersDelegate(
                 deletionHelper = deletionHelper,
                 apiModelAssetUiMapper = apiModelAssetUiMapper,
                 errorHandler = errorHandler,
+                loggingPort = mockk(relaxed = true),
             ),
         ttsCoordinator =
             TtsProvidersCoordinator(

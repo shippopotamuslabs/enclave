@@ -120,6 +120,7 @@ class ActiveModelProviderImpl
                             cachedPromptUsdPerMillion = config.cachedPromptPriceUsdPerMillion,
                         ).takeIf { it.hasPromptAndCompletionRates() },
                     apiBaseUrl = credentials.baseUrl ?: credentials.provider.defaultBaseUrl(),
+                    includeReasoningContentOnRequest = config.includeReasoningContentOnRequest,
                 )
             }
 
@@ -224,6 +225,7 @@ class ActiveModelProviderImpl
                         ).takeIf { p -> p.hasPromptAndCompletionRates() }
                     },
                 apiBaseUrl = credentials?.baseUrl ?: credentials?.provider?.defaultBaseUrl(),
+                includeReasoningContentOnRequest = config?.includeReasoningContentOnRequest ?: false,
             )
         }
 

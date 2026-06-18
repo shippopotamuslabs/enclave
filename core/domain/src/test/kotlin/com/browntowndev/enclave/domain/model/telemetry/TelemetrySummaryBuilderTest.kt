@@ -160,6 +160,17 @@ class TelemetrySummaryBuilderTest {
     }
 
     @Test
+    fun `SCN-TELEMETRY-002 TelemetryProviderKey fromLabel resolves DeepSeek`() {
+        assertEquals(TelemetryProviderKey.DEEPSEEK, TelemetryProviderKey.fromLabel("DeepSeek"))
+        assertEquals(TelemetryProviderKey.DEEPSEEK, TelemetryProviderKey.fromLabel("DEEPSEEK"))
+    }
+
+    @Test
+    fun `SCN-TELEMETRY-003 DEEPSEEK reports cache inclusive input`() {
+        assertFalse(TelemetryProviderKey.DEEPSEEK.reportsCacheExclusiveInput)
+    }
+
+    @Test
     fun `normalizedInputTokens leaves OpenAI input unchanged`() {
         // OpenAI reports cache read as a subset of the total prompt; input is already the full count.
         val row = TelemetryTestFixtures.telOpenAi1

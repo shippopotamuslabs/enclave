@@ -12,9 +12,11 @@ internal object OpenAiCompatibleVolatilePlacement {
      * Index in [mappedBody] where the live volatile sidecar is inserted (immediately before that slot).
      * Must use mapped indices — session indices diverge when messages are dropped or remapped.
      */
-    fun tailMappedInsertIndex(mappedBodySize: Int): Int =
+    fun tailMappedInsertIndex(mappedBodySize: Int, isToolResult: Boolean = false): Int =
         if (mappedBodySize == 0) {
             0
+        } else if (isToolResult) {
+            mappedBodySize
         } else {
             (mappedBodySize - 1).coerceAtLeast(0)
         }

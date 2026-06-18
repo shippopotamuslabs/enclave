@@ -105,6 +105,11 @@ class OpenAiTelemetryCaptureTest {
     }
 
     @Test
+    fun `SCN-TELEMETRY-001 InferenceTelemetrySupport providerLabel returns DeepSeek`() {
+        assertEquals("DeepSeek", testInferenceTelemetrySupport().providerLabel("DEEPSEEK"))
+    }
+
+    @Test
     fun `zai usage normalization uses cache inclusive provider key and preserves cache read`() {
         val captured =
             normalizer.normalizeOpenAiUsage(

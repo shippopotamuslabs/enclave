@@ -2,10 +2,16 @@ package com.browntowndev.enclave.feature.inference.appendonly
 
 import com.browntowndev.enclave.domain.model.inference.AgentLoopMessage
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
+import com.browntowndev.enclave.feature.inference.EngineInternalMessageMapper
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+
+/** Normalized messages for append-only sync; excludes engine-internal rows not in committed transcripts. */
+internal fun List<AgentLoopMessage>.toAppendOnlySyncMessages(): List<ProviderNormalizedMessage> =
+    filterNot(EngineInternalMessageMapper::isExcludedFromCommittedProviderTranscript)
+        .toProviderNormalizedMessages()
 
 internal fun List<AgentLoopMessage>.toProviderNormalizedMessages(): List<ProviderNormalizedMessage> =
     map { message ->

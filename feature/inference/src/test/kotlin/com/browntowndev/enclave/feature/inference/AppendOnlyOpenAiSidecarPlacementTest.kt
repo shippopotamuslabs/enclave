@@ -282,7 +282,7 @@ class AppendOnlyOpenAiSidecarPlacementTest {
             assertEquals("""State ledger JSON: {"turn":1}""", second[1].asSystem().content().asText())
             assertEquals(
                 """State ledger JSON: {"turn":2}""",
-                second[4].asSystem().content().asText(),
+                second[5].asSystem().content().asText(),
             )
             assertTrue(
                 second.indexOfFirst {
@@ -507,8 +507,8 @@ class AppendOnlyOpenAiSidecarPlacementTest {
             assertEquals("You are a helpful assistant.", messages[0].asSystem().content().asText())
             assertEquals("Search for cats", messages[1].asUser().content().asText())
             assertTrue(messages[2].isAssistant())
-            assertEquals(sidecars, messages[3].asSystem().content().asText())
-            assertTrue(messages[4].isTool())
+            assertTrue(messages[3].isTool())
+            assertEquals(sidecars, messages[4].asSystem().content().asText())
             assertFalse(messages[1].isSystem())
         }
 
@@ -746,11 +746,19 @@ class AppendOnlyOpenAiSidecarPlacementTest {
                         message.asSystem().content().asText() == sidecars
                 }
             val toolIndex = messages.indexOfFirst { it.isTool() }
+            val budgetIndex = messages.indexOfFirst {
+                it.isSystem() && it.asSystem().content().asText().contains("Tool budget")
+            }
             assertTrue(sidecarIndex >= 0, "sidecar must be present")
             assertTrue(toolIndex >= 0, "tool result must be present")
+            assertTrue(budgetIndex >= 0, "budget message must be present")
             assertTrue(
-                sidecarIndex < toolIndex,
-                "volatile sidecar must anchor before tool result, not after agent budget tail",
+                sidecarIndex > toolIndex,
+                "volatile sidecar must anchor after tool result to avoid breaking contiguity",
+            )
+            assertTrue(
+                sidecarIndex < budgetIndex,
+                "volatile sidecar must anchor before agent budget tail",
             )
         }
 
@@ -783,6 +791,54 @@ class AppendOnlyOpenAiSidecarPlacementTest {
             assertTrue(helloParts.any { it.isText() })
             assertEquals("Follow up", messages[3].asUser().content().asText())
             assertTrue(messages[2].isSystem())
+        }
+
+    @Test
+    fun AOC_22_tool_loop_does_not_increment_append_only_clear_count() =
+        runTest {
+            val captured = captureOpenAiParams(provider = "OPENROUTER", modelId = "deepseek/deepseek-v4-flash")
+            val fixture = toolLoopFixture()
+
+            captured.service.completeSingleTurn(
+                sessionMessages = listOf(fixture.userMessage),
+                systemPrompt = "You are a helpful assistant.",
+                contextSidecars = """State ledger JSON: {"turn":1}""",
+                availableTools = emptyList(),
+                allowToolCall = true,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+            captured.service.completeSingleTurn(
+                sessionMessages = listOf(fixture.userMessage, fixture.assistantWithTool, fixture.toolResult),
+                systemPrompt = "You are a helpful assistant.",
+                contextSidecars = """State ledger JSON: {"turn":2}""",
+                availableTools = emptyList(),
+                allowToolCall = true,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+            captured.service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        fixture.userMessage,
+                        fixture.assistantWithTool,
+                        fixture.toolResult,
+                        AgentLoopMessage(id = "a2", role = Role.ASSISTANT, content = "Summary"),
+                    ),
+                systemPrompt = "You are a helpful assistant.",
+                contextSidecars = """State ledger JSON: {"turn":3}""",
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+
+            val context = requireNotNull(captured.service.appendOnlyContextForTests())
+            assertEquals(0, context.clearCount)
+            assertEquals(3, context.frozenSidecarsForWireReplay().size)
         }
 
     private data class ToolLoopFixture(
@@ -833,11 +889,10 @@ class AppendOnlyOpenAiSidecarPlacementTest {
         modelId: String,
     ): CapturedOpenAiParams {
         val capturedParams = mutableListOf<ChatCompletionCreateParams>()
-        val service =
-            object : BaseOpenAiSdkInferenceService(
+        val service = when (provider) {
+            "XAI" -> object : XaiInferenceServiceImpl(
                 client = mockk<OpenAIClient>(),
                 modelId = modelId,
-                provider = provider,
                 modelType = ModelType.FAST,
                 loggingPort = loggingPort,
                 toolStreamGatePort = FakeToolStreamGatePort(),
@@ -845,13 +900,13 @@ class AppendOnlyOpenAiSidecarPlacementTest {
                 override val tag: String = "AppendOnlyOpenAiSidecarPlacementTest"
 
                 override suspend fun streamChatCompletions(
-                    requestParams: ChatCompletionCreateParams,
+                    params: ChatCompletionCreateParams,
                     chatId: com.browntowndev.enclave.domain.model.chat.ChatId?,
                     userMessageId: com.browntowndev.enclave.domain.model.chat.MessageId?,
                     assistantMessageId: com.browntowndev.enclave.domain.model.chat.MessageId?,
                     emitEvent: suspend (InferenceEvent) -> Unit,
                 ): StreamedOpenAiResponse {
-                    capturedParams.add(requestParams)
+                    capturedParams.add(params)
                     return StreamedOpenAiResponse(
                         emittedAny = true,
                         functionCalls = emptyList(),
@@ -862,6 +917,64 @@ class AppendOnlyOpenAiSidecarPlacementTest {
                     )
                 }
             }
+            "OPENROUTER" -> object : OpenRouterInferenceServiceImpl(
+                client = mockk<OpenAIClient>(),
+                modelId = modelId,
+                modelType = ModelType.FAST,
+                openRouterRouting = com.browntowndev.enclave.domain.model.config.OpenRouterRoutingConfiguration(),
+                loggingPort = loggingPort,
+                toolStreamGatePort = FakeToolStreamGatePort(),
+            ) {
+                override val tag: String = "AppendOnlyOpenAiSidecarPlacementTest"
+
+                override suspend fun streamChatCompletions(
+                    params: ChatCompletionCreateParams,
+                    chatId: com.browntowndev.enclave.domain.model.chat.ChatId?,
+                    userMessageId: com.browntowndev.enclave.domain.model.chat.MessageId?,
+                    assistantMessageId: com.browntowndev.enclave.domain.model.chat.MessageId?,
+                    emitEvent: suspend (InferenceEvent) -> Unit,
+                ): StreamedOpenAiResponse {
+                    capturedParams.add(params)
+                    return StreamedOpenAiResponse(
+                        emittedAny = true,
+                        functionCalls = emptyList(),
+                        responseId = "resp_1",
+                        providerToolCallIds = emptyList(),
+                        providerToolItemIds = emptyList(),
+                        assistantMessageText = "done",
+                    )
+                }
+            }
+            else -> object : BaseOpenAiSdkInferenceService(
+                client = mockk<OpenAIClient>(),
+                modelId = modelId,
+                provider = provider,
+                modelType = ModelType.FAST,
+                loggingPort = loggingPort,
+                toolStreamGatePort = FakeToolStreamGatePort(),
+            ) {
+                override val tag: String = "AppendOnlyOpenAiSidecarPlacementTest"
+
+                override suspend fun streamChatCompletions(
+                    params: ChatCompletionCreateParams,
+                    chatId: com.browntowndev.enclave.domain.model.chat.ChatId?,
+                    userMessageId: com.browntowndev.enclave.domain.model.chat.MessageId?,
+                    assistantMessageId: com.browntowndev.enclave.domain.model.chat.MessageId?,
+                    emitEvent: suspend (InferenceEvent) -> Unit,
+                ): StreamedOpenAiResponse {
+                    capturedParams.add(params)
+                    return StreamedOpenAiResponse(
+                        emittedAny = true,
+                        functionCalls = emptyList(),
+                        responseId = "resp_1",
+                        providerToolCallIds = emptyList(),
+                        providerToolItemIds = emptyList(),
+                        assistantMessageText = "done",
+                    )
+                }
+            }
+        }
         return CapturedOpenAiParams(service = service, params = capturedParams)
     }
+
 }

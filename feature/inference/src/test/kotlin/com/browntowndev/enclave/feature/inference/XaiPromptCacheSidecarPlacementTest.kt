@@ -67,17 +67,16 @@ class XaiPromptCacheSidecarPlacementTest {
             assertTrue(messages[1].isUser())
             assertEquals("Search for cats", messages[1].asUser().content().asText())
             assertTrue(messages[2].isAssistant())
-            assertTrue(messages[3].isSystem())
-            assertEquals(sidecars, messages[3].asSystem().content().asText())
-            assertTrue(messages[4].isTool())
+            assertTrue(messages[3].isTool())
+            assertTrue(messages[4].isSystem())
+            assertEquals(sidecars, messages[4].asSystem().content().asText())
             assertFalse(messages[1].isSystem())
         }
 
     private fun xaiSingleTurnService(capturedParams: MutableList<ChatCompletionCreateParams>): BaseOpenAiSdkInferenceService =
-        object : BaseOpenAiSdkInferenceService(
+        object : XaiInferenceServiceImpl(
             client = mockk<OpenAIClient>(),
             modelId = "grok-4.3",
-            provider = "XAI",
             modelType = ModelType.FAST,
             loggingPort = loggingPort,
             toolStreamGatePort = FakeToolStreamGatePort(),
