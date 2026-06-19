@@ -16,6 +16,7 @@ internal class ProviderAppendOnlyContext(
     private var pendingTurnBoundaryReanchor = false
     private var lastShippedSidecarText: String? = null
     private var lastSeenRevision: Long? = null
+    private var pendingLiveMarkerId: String? = null
     var clearCount: Int = 0
         private set
 
@@ -92,11 +93,16 @@ internal class ProviderAppendOnlyContext(
 
     fun frozenSidecarsForWireReplay(): List<FrozenSidecarSnapshot> = frozenSidecarSnapshots.toList()
 
-    fun resolveContextSidecarsForWire(built: String?): String? {
+    fun resolveContextSidecarsForWire(built: String?): ResolvedSidecar? {
         val trimmed = built?.trim()?.takeIf { it.isNotEmpty() } ?: return null
-        if (trimmed == lastShippedSidecarText) return null
+        if (trimmed == lastShippedSidecarText) {
+            pendingLiveMarkerId = null
+            return null
+        }
         lastShippedSidecarText = trimmed
-        return trimmed
+        val marker = SidecarMarkerFactory.newMarker(trimmed)
+        pendingLiveMarkerId = marker.markerId
+        return ResolvedSidecar(text = trimmed, markerId = marker.markerId)
     }
 
     fun hasFrozenPreRetrievalSidecar(): Boolean = frozenSidecarSnapshots.any { PreRetrievalContextSidecar.isSidecarText(it.text) }
@@ -108,6 +114,7 @@ internal class ProviderAppendOnlyContext(
 
     fun appendVolatileSidecar(
         sidecarText: String,
+        markerId: String,
         delivery: VolatileContextDelivery,
     ) {
         if (sidecarText.isBlank()) return
@@ -120,6 +127,7 @@ internal class ProviderAppendOnlyContext(
         frozenSidecarSnapshots.add(
             FrozenSidecarSnapshot(
                 text = sidecarText,
+                markerId = markerId,
                 mappedInsertIndex = mappedInsertIndex,
             ),
         )
@@ -127,12 +135,19 @@ internal class ProviderAppendOnlyContext(
 
     fun endTurnFreezeSidecar(
         sidecarText: String,
+        markerId: String,
         mappedInsertIndex: Int,
     ) {
         if (sidecarText.isBlank()) return
+        val resolvedMarkerId =
+            markerId.takeIf { it.isNotBlank() }
+                ?: pendingLiveMarkerId
+                ?: SidecarMarkerFactory.newMarker(sidecarText).markerId
+        pendingLiveMarkerId = null
         frozenSidecarSnapshots.add(
             FrozenSidecarSnapshot(
                 text = sidecarText,
+                markerId = resolvedMarkerId,
                 mappedInsertIndex = mappedInsertIndex,
             ),
         )
@@ -167,6 +182,7 @@ internal class ProviderAppendOnlyContext(
         log.clear()
         frozenSidecarSnapshots.clear()
         lastShippedSidecarText = null
+        pendingLiveMarkerId = null
         lastSyncCount = 0
         syncedDigest = 0u
         clearCount += 1

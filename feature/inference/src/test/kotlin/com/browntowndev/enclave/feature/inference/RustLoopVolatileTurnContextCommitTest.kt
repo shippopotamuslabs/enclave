@@ -247,22 +247,11 @@ class RustLoopVolatileTurnContextCommitTest {
                         ),
                 ).toList()
 
-            assertEquals(
-                barePrompt,
-                port1.capturedInitialMessages.last().content,
-                "CSPC-03a turn 1: Rust history stores bare user prompt without RAG prefix",
-            )
-            assertTrue(
-                providerCapture.params.last().messages().any { message ->
-                    message.isSystem() &&
-                        message
-                            .asSystem()
-                            .content()
-                            .asText()
-                            .contains("RELEVANT WEB SEARCH RESULTS")
-                },
-                "CSPC-03a turn 1: provider wire must include pre-retrieval system sidecar",
-            )
+            val turn1Messages = providerCapture.params.last().messages()
+            assertEquals(1, turn1Messages.size)
+            assertTrue(turn1Messages[0].isUser())
+            val userText1 = turn1Messages[0].asUser().content().asText()
+            assertTrue(userText1.contains("RELEVANT WEB SEARCH RESULTS"))
 
             val port2 =
                 FakeAgentLoopPort { host ->
@@ -288,26 +277,11 @@ class RustLoopVolatileTurnContextCommitTest {
                 ).toList()
 
             val turn2SessionMessages = providerCapture.params.last().messages()
-            assertEquals(
-                barePrompt,
-                turn2SessionMessages
-                    .first { it.isUser() }
-                    .asUser()
-                    .content()
-                    .asText(),
-                "CSPC-03a turn 2: first user wire content stays bare for cache prefix stability",
-            )
-            assertTrue(
-                turn2SessionMessages.any { message ->
-                    message.isSystem() &&
-                        message
-                            .asSystem()
-                            .content()
-                            .asText()
-                            .contains("RELEVANT WEB SEARCH RESULTS")
-                },
-                "CSPC-03a turn 2: frozen pre-retrieval sidecar replays on provider wire",
-            )
+            assertEquals(3, turn2SessionMessages.size)
+            val user1Text = turn2SessionMessages[0].asUser().content().asText()
+            assertTrue(user1Text.startsWith(barePrompt))
+            assertTrue(user1Text.contains("[Sidecar-"))
+            assertTrue(user1Text.contains("RELEVANT WEB SEARCH RESULTS"))
         }
 
     // ---------------------------------------------------------------------------
@@ -364,24 +338,11 @@ class RustLoopVolatileTurnContextCommitTest {
                 ).toList()
 
             val turn2Wire = providerCapture.params.last().messages()
-            assertEquals(
-                barePrompt,
-                turn2Wire
-                    .first { it.isUser() }
-                    .asUser()
-                    .content()
-                    .asText(),
-            )
-            assertTrue(
-                turn2Wire.any {
-                    it.isSystem() &&
-                        it
-                            .asSystem()
-                            .content()
-                            .asText()
-                            .contains("RELEVANT X SEARCH RESULTS")
-                },
-            )
+            assertEquals(3, turn2Wire.size)
+            val user1Text = turn2Wire[0].asUser().content().asText()
+            assertTrue(user1Text.startsWith(barePrompt))
+            assertTrue(user1Text.contains("[Sidecar-"))
+            assertTrue(user1Text.contains("RELEVANT X SEARCH RESULTS"))
         }
 
     // ---------------------------------------------------------------------------
@@ -438,24 +399,12 @@ class RustLoopVolatileTurnContextCommitTest {
                 ).toList()
 
             val turn2Wire = providerCapture.params.last().messages()
-            assertEquals(
-                barePrompt,
-                turn2Wire
-                    .first { it.isUser() }
-                    .asUser()
-                    .content()
-                    .asText(),
-            )
-            assertTrue(
-                turn2Wire.any {
-                    it.isSystem() &&
-                        it
-                            .asSystem()
-                            .content()
-                            .asText()
-                            .contains("RELEVANT WEB SEARCH RESULTS")
-                },
-            )
+            assertEquals(3, turn2Wire.size)
+            val user1Text = turn2Wire[0].asUser().content().asText()
+            assertTrue(user1Text.startsWith(barePrompt))
+            assertTrue(user1Text.contains("[Sidecar-"))
+            assertTrue(user1Text.contains("RELEVANT WEB SEARCH RESULTS"))
+            assertTrue(user1Text.contains("RELEVANT X SEARCH RESULTS"))
         }
 
     // ---------------------------------------------------------------------------
@@ -512,24 +461,11 @@ class RustLoopVolatileTurnContextCommitTest {
                 ).toList()
 
             val turn2Wire = providerCapture.params.last().messages()
-            assertEquals(
-                barePrompt,
-                turn2Wire
-                    .first { it.isUser() }
-                    .asUser()
-                    .content()
-                    .asText(),
-            )
-            assertTrue(
-                turn2Wire.any {
-                    it.isSystem() &&
-                        it
-                            .asSystem()
-                            .content()
-                            .asText()
-                            .contains("RELEVANT FACTS & CONTEXT")
-                },
-            )
+            assertEquals(3, turn2Wire.size)
+            val user1Text = turn2Wire[0].asUser().content().asText()
+            assertTrue(user1Text.startsWith(barePrompt))
+            assertTrue(user1Text.contains("[Sidecar-"))
+            assertTrue(user1Text.contains("RELEVANT FACTS & CONTEXT"))
         }
 
     // ---------------------------------------------------------------------------
@@ -592,21 +528,14 @@ class RustLoopVolatileTurnContextCommitTest {
                     options = GenerationOptions(reasoningBudget = 0),
                 ).toList()
 
-            val turn2WireSystemTexts =
-                providerCapture.params
-                    .last()
-                    .messages()
-                    .filter { message -> message.isSystem() }
-                    .map { message -> message.asSystem().content().asText() }
-            assertFalse(
-                turn2WireSystemTexts.any { text -> text.contains(turn1Needle) },
-                "CSPC-06: turn 2 provider wire must NOT replay turn 1 sidecar after compaction boundary",
-            )
-            assertEquals(
-                1,
-                turn2WireSystemTexts.count { text -> text.contains(turn2Needle) },
-                "CSPC-06: turn 2 provider wire must include only the current turn 2 sidecar",
-            )
+            val turn2Wire = providerCapture.params.last().messages()
+            assertEquals(3, turn2Wire.size)
+            val user1Text = turn2Wire[0].asUser().content().asText()
+            val user2Text = turn2Wire[2].asUser().content().asText()
+            assertFalse(user1Text.contains(turn1Needle))
+            assertFalse(user1Text.contains("[Sidecar-"))
+            assertTrue(user2Text.contains(turn2Needle))
+            assertTrue(user2Text.contains("[Sidecar-"))
         }
 
     // ---------------------------------------------------------------------------

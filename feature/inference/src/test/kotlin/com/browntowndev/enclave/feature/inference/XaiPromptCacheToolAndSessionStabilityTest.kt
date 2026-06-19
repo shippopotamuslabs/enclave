@@ -142,15 +142,15 @@ class XaiPromptCacheToolAndSessionStabilityTest {
             val wire = capturedParams.last().messages()
             assertTrue(
                 wire.any { message ->
-                    message.isSystem() &&
-                        message.asSystem().content().asText() == """State ledger JSON: {"turn":1}"""
+                    message.isUser() &&
+                        message.asUser().content().asText().contains("""State ledger JSON: {"turn":1}""")
                 },
                 "same-chat frozen sidecars must replay because xAI caches the real messages[] prefix",
             )
             assertTrue(
                 wire.any { message ->
-                    message.isSystem() &&
-                        message.asSystem().content().asText() == """State ledger JSON: {"turn":2}"""
+                    message.isUser() &&
+                        message.asUser().content().asText().contains("""State ledger JSON: {"turn":2}""")
                 },
             )
         }
@@ -187,15 +187,15 @@ class XaiPromptCacheToolAndSessionStabilityTest {
             val wire = capturedParams.last().messages()
             assertTrue(
                 wire.none { message ->
-                    message.isSystem() &&
-                        message.asSystem().content().asText() == """State ledger JSON: {"chat":1}"""
+                    message.isUser() &&
+                        message.asUser().content().asText().contains("""State ledger JSON: {"chat":1}""")
                 },
                 "frozen sidecars must not leak between x-grok-conv-id values",
             )
             assertTrue(
                 wire.any { message ->
-                    message.isSystem() &&
-                        message.asSystem().content().asText() == """State ledger JSON: {"chat":2}"""
+                    message.isUser() &&
+                        message.asUser().content().asText().contains("""State ledger JSON: {"chat":2}""")
                 },
             )
         }
@@ -254,8 +254,8 @@ class XaiPromptCacheToolAndSessionStabilityTest {
             val wire = capturedParams.last().messages()
             assertTrue(
                 wire.any { message ->
-                    message.isSystem() &&
-                        message.asSystem().content().asText() == """State ledger JSON: {"turn":1}"""
+                    message.isUser() &&
+                        message.asUser().content().asText().contains("""State ledger JSON: {"turn":1}""")
                 },
                 "frozen sidecars must still replay after cross-turn rehydrate without budget row",
             )
@@ -324,8 +324,8 @@ class XaiPromptCacheToolAndSessionStabilityTest {
             val wire = capturedParams.last().messages()
             assertTrue(
                 wire.any { message ->
-                    message.isSystem() &&
-                        message.asSystem().content().asText() == """State ledger JSON: {"turn":1}"""
+                    message.isUser() &&
+                        message.asUser().content().asText().contains("""State ledger JSON: {"turn":1}""")
                 },
                 "frozen turn:1 sidecar must replay after cross-turn rehydrate prefix drift",
             )

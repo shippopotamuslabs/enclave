@@ -35,6 +35,7 @@ import com.browntowndev.enclave.domain.port.telemetry.TelemetryEventPort
 import com.browntowndev.enclave.feature.inference.appendonly.ProviderAppendOnlyContext
 import com.browntowndev.enclave.feature.inference.appendonly.ProviderAppendOnlyContextFactory
 import com.browntowndev.enclave.feature.inference.appendonly.SessionIndexVolatilePlacement
+import com.browntowndev.enclave.feature.inference.appendonly.SidecarMarkerFactory
 import com.browntowndev.enclave.feature.inference.appendonly.ensureAppendOnlyContext
 import com.browntowndev.enclave.feature.inference.appendonly.toAppendOnlySyncMessages
 import com.browntowndev.enclave.feature.inference.appendonly.toToolsFingerprint
@@ -226,7 +227,7 @@ class AnthropicInferenceServiceImpl(
                 options = options,
             )
             val liveSidecarInsertIndex = lastUserIndex.coerceAtLeast(0)
-            val wireSidecar = appendOnly.resolveContextSidecarsForWire(contextSidecars)
+            val wireSidecar = appendOnly.resolveContextSidecarsForWire(contextSidecars)?.text
 
             fun prependIndexSidecars(
                 index: Int,
@@ -559,6 +560,7 @@ class AnthropicInferenceServiceImpl(
         if (!contextSidecars.isNullOrBlank()) {
             appendOnly.endTurnFreezeSidecar(
                 sidecarText = contextSidecars,
+                markerId = SidecarMarkerFactory.newMarker(contextSidecars).markerId,
                 mappedInsertIndex = tailInsertIndex,
             )
         }

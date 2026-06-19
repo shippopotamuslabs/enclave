@@ -9,6 +9,7 @@ import com.browntowndev.enclave.domain.port.inference.InferenceEvent
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.util.FakeToolStreamGatePort
 import com.browntowndev.enclave.feature.inference.openai.StreamedOpenAiResponse
+import com.browntowndev.enclave.feature.inference.appendonly.SidecarUserContentEmbedder
 import com.openai.client.OpenAIClient
 import com.openai.models.chat.completions.ChatCompletionCreateParams
 import io.mockk.mockk
@@ -44,13 +45,14 @@ class AppendOnlyOpenAiSidecarPlacementTest {
             )
 
             val messages = captured.params.single().messages()
-            assertEquals(3, messages.size)
+            assertEquals(2, messages.size)
             assertTrue(messages[0].isSystem())
             assertEquals("You are a helpful assistant.", messages[0].asSystem().content().asText())
-            assertTrue(messages[1].isSystem())
-            assertEquals("""State ledger JSON: {"key":"value"}""", messages[1].asSystem().content().asText())
-            assertTrue(messages[2].isUser())
-            assertEquals("Hello", messages[2].asUser().content().asText())
+            assertTrue(messages[1].isUser())
+            val userText = messages[1].asUser().content().asText()
+            assertTrue(userText.startsWith("Hello"))
+            assertTrue(userText.contains("[Sidecar-"))
+            assertTrue(userText.contains("""State ledger JSON: {"key":"value"}"""))
         }
 
     @Test
@@ -104,18 +106,20 @@ class AppendOnlyOpenAiSidecarPlacementTest {
 
             assertEquals(first[0].asSystem().content().asText(), second[0].asSystem().content().asText())
             assertEquals("You are a helpful assistant.", first[0].asSystem().content().asText())
-            assertTrue(second[1].isSystem())
-            assertEquals("""State ledger JSON: {"turn":1}""", second[1].asSystem().content().asText())
-            assertEquals("Search for cats", first[2].asUser().content().asText())
-            assertEquals("Search for cats", second[2].asUser().content().asText())
-            assertNotEquals("""State ledger JSON: {"turn":2}""", second[1].asSystem().content().asText())
-            val turnTwoSidecarIndex =
-                second.indexOfFirst { message ->
-                    message.isSystem() &&
-                        message.asSystem().content().asText() == """State ledger JSON: {"turn":2}"""
-                }
-            assertTrue(turnTwoSidecarIndex > 2)
-            assertFalse(second[1].isUser())
+            // Turn-1 frozen sidecar replays as a [Sidecar-<uuid>:] suffix on
+            // the first user message, not as a separate system message.
+            val firstUserSecond = second.first { it.isUser() }.asUser().content().asText()
+            assertTrue(firstUserSecond.contains("[Sidecar-"))
+            assertTrue(firstUserSecond.contains("""State ledger JSON: {"turn":1}"""))
+            assertEquals("Search for cats", first[1].asUser().content().asText().substringBefore("\n\n[Sidecar-"))
+            assertEquals("Search for cats", firstUserSecond.substringBefore("\n\n[Sidecar-"))
+            // Turn-2 live sidecar is on the tail user message (trailing anchor
+            // for tool-result tails attaches to the last user message).
+            val turnTwoSidecarPresent = second.any { message ->
+                message.isUser() &&
+                    message.asUser().content().asText().contains("""State ledger JSON: {"turn":2}""")
+            }
+            assertTrue(turnTwoSidecarPresent)
         }
 
     @Test
@@ -180,20 +184,18 @@ class AppendOnlyOpenAiSidecarPlacementTest {
             )
 
             val thirdTurn = captured.params.last().messages()
-            val sidecarTexts =
-                thirdTurn
-                    .filter { it.isSystem() }
-                    .map { it.asSystem().content().asText() }
-                    .filter { it.startsWith("State ledger JSON:") }
-            assertEquals(3, sidecarTexts.size)
-            assertEquals("""State ledger JSON: {"turn":1}""", sidecarTexts[0])
-            assertEquals("""State ledger JSON: {"turn":2}""", sidecarTexts[1])
-            assertEquals("""State ledger JSON: {"turn":3}""", sidecarTexts[2])
-            assertEquals(
-                "Search for cats",
-                thirdTurn[2].asUser().content().asText(),
-                "turn:1 sidecar must not front-prepend before user",
-            )
+            assertEquals(5, thirdTurn.size)
+            assertTrue(thirdTurn[0].isSystem())
+            assertTrue(thirdTurn[1].isUser())
+            assertTrue(thirdTurn[2].isAssistant())
+            assertTrue(thirdTurn[3].isTool())
+            assertTrue(thirdTurn[4].isAssistant())
+
+            val userText = thirdTurn[1].asUser().content().asText()
+            assertTrue(userText.startsWith("Search for cats"))
+            assertTrue(userText.contains("""State ledger JSON: {"turn":1}"""))
+            assertTrue(userText.contains("""State ledger JSON: {"turn":2}"""))
+            assertTrue(userText.contains("""State ledger JSON: {"turn":3}"""))
         }
 
     @Test
@@ -281,19 +283,15 @@ class AppendOnlyOpenAiSidecarPlacementTest {
                 options = GenerationOptions(reasoningBudget = 0),
             )
             val second = captured.params.last().messages()
-            assertEquals("""State ledger JSON: {"turn":1}""", second[1].asSystem().content().asText())
-            assertEquals(
-                """State ledger JSON: {"turn":2}""",
-                second[5].asSystem().content().asText(),
-            )
-            assertTrue(
-                second.indexOfFirst {
-                    it.isSystem() && it.asSystem().content().asText() == """State ledger JSON: {"turn":1}"""
-                } <
-                    second.indexOfFirst {
-                        it.isSystem() && it.asSystem().content().asText() == """State ledger JSON: {"turn":2}"""
-                    },
-            )
+            assertEquals(4, second.size)
+            assertTrue(second[0].isSystem())
+            assertTrue(second[1].isUser())
+            assertTrue(second[2].isAssistant())
+            assertTrue(second[3].isTool())
+
+            val userText = second[1].asUser().content().asText()
+            assertTrue(userText.contains("""State ledger JSON: {"turn":1}"""))
+            assertTrue(userText.contains("""State ledger JSON: {"turn":2}"""))
         }
 
     @Test
@@ -344,10 +342,13 @@ class AppendOnlyOpenAiSidecarPlacementTest {
             )
 
             val messages = captured.params.single().messages()
-            assertEquals(3, messages.size)
-            assertEquals("You are a helpful assistant.", messages[0].asSystem().content().asText())
-            assertEquals("""State ledger JSON: {"key":"value"}""", messages[1].asSystem().content().asText())
-            assertEquals("Hello", messages[2].asUser().content().asText())
+            assertEquals(2, messages.size)
+            assertTrue(messages[0].isSystem())
+            assertTrue(messages[1].isUser())
+            val userText = messages[1].asUser().content().asText()
+            assertTrue(userText.startsWith("Hello"))
+            assertTrue(userText.contains("[Sidecar-"))
+            assertTrue(userText.contains("""State ledger JSON: {"key":"value"}"""))
         }
 
     @Test
@@ -415,12 +416,12 @@ class AppendOnlyOpenAiSidecarPlacementTest {
             )
 
             val messages = captured.params.single().messages()
-            val sidecarIndex =
-                messages.indexOfFirst { message ->
-                    message.isSystem() && message.asSystem().content().asText() == sidecars
-                }
-            assertTrue(sidecarIndex > 1)
-            assertEquals(sidecars, messages[messages.lastIndex - 1].asSystem().content().asText())
+            assertEquals(4, messages.size)
+            val u1Text = messages[1].asUser().content().asText()
+            val u2Text = messages[3].asUser().content().asText()
+            assertFalse(u1Text.contains("[Sidecar-"))
+            assertTrue(u2Text.contains("[Sidecar-"))
+            assertTrue(u2Text.contains("""State ledger JSON: {"k":1}"""))
         }
 
     @Test
@@ -505,13 +506,14 @@ class AppendOnlyOpenAiSidecarPlacementTest {
             )
 
             val messages = captured.params.single().messages()
-            assertEquals(5, messages.size)
+            assertEquals(4, messages.size)
             assertEquals("You are a helpful assistant.", messages[0].asSystem().content().asText())
-            assertEquals("Search for cats", messages[1].asUser().content().asText())
+            val userText = messages[1].asUser().content().asText()
+            assertTrue(userText.startsWith("Search for cats"))
+            assertTrue(userText.contains("[Sidecar-"))
+            assertTrue(userText.contains(sidecars))
             assertTrue(messages[2].isAssistant())
             assertTrue(messages[3].isTool())
-            assertEquals(sidecars, messages[4].asSystem().content().asText())
-            assertFalse(messages[1].isSystem())
         }
 
     @Test
@@ -560,14 +562,16 @@ class AppendOnlyOpenAiSidecarPlacementTest {
             )
             val third = captured.params.last().messages()
 
-            assertTrue(third.size >= 5, "expected at least 5 messages on third call")
-            for (index in 0..4) {
-                assertEquals(
-                    second[index].asWireText(),
-                    third[index].asWireText(),
-                    "messages[$index] must be byte-equal between calls 2 and 3",
-                )
-            }
+            assertEquals(4, second.size)
+            assertEquals(5, third.size)
+            assertEquals(second[0].asWireText(), third[0].asWireText())
+            assertEquals(second[2].asWireText(), third[2].asWireText())
+            assertEquals(second[3].asWireText(), third[3].asWireText())
+
+            val secondUserClean = SidecarUserContentEmbedder.stripSidecarBlocks(second[1].asUser().content().asText())
+            val thirdUserClean = SidecarUserContentEmbedder.stripSidecarBlocks(third[1].asUser().content().asText())
+            assertEquals(secondUserClean, thirdUserClean)
+            assertEquals("Search for cats", secondUserClean)
         }
 
     @Test
@@ -597,12 +601,9 @@ class AppendOnlyOpenAiSidecarPlacementTest {
                 options = GenerationOptions(reasoningBudget = 0),
             )
             val second = captured.params.last().messages()
-            val turnTwoSidecarIndex =
-                second.indexOfFirst { message ->
-                    message.isSystem() &&
-                        message.asSystem().content().asText() == """State ledger JSON: {"turn":2}"""
-                }
-            assertTrue(turnTwoSidecarIndex > 1, "turn:2 sidecar must not be pinned at index 1 on call 2")
+            val userTextSecond = second[1].asUser().content().asText()
+            assertTrue(userTextSecond.contains("""State ledger JSON: {"turn":1}"""))
+            assertTrue(userTextSecond.contains("""State ledger JSON: {"turn":2}"""))
 
             captured.service.completeSingleTurn(
                 sessionMessages =
@@ -621,21 +622,10 @@ class AppendOnlyOpenAiSidecarPlacementTest {
                 options = GenerationOptions(reasoningBudget = 0),
             )
             val third = captured.params.last().messages()
-            val turnTwoSidecarIndexOnThird =
-                third.indexOfFirst { message ->
-                    message.isSystem() &&
-                        message.asSystem().content().asText() == """State ledger JSON: {"turn":2}"""
-                }
-            assertEquals(
-                turnTwoSidecarIndex,
-                turnTwoSidecarIndexOnThird,
-                "frozen turn:2 sidecar must replay at the same index as call 2",
-            )
-            assertNotEquals(
-                1,
-                turnTwoSidecarIndexOnThird,
-                "frozen turn:2 sidecar must not be front-prepended to index 1 on call 3",
-            )
+            val userTextThird = third[1].asUser().content().asText()
+            assertTrue(userTextThird.contains("""State ledger JSON: {"turn":1}"""))
+            assertTrue(userTextThird.contains("""State ledger JSON: {"turn":2}"""))
+            assertTrue(userTextThird.contains("""State ledger JSON: {"turn":3}"""))
         }
 
     @Test
@@ -742,26 +732,12 @@ class AppendOnlyOpenAiSidecarPlacementTest {
             )
 
             val messages = captured.params.single().messages()
-            val sidecarIndex =
-                messages.indexOfFirst { message ->
-                    message.isSystem() &&
-                        message.asSystem().content().asText() == sidecars
-                }
-            val toolIndex = messages.indexOfFirst { it.isTool() }
-            val budgetIndex = messages.indexOfFirst {
-                it.isSystem() && it.asSystem().content().asText().contains("Tool budget")
-            }
-            assertTrue(sidecarIndex >= 0, "sidecar must be present")
-            assertTrue(toolIndex >= 0, "tool result must be present")
-            assertTrue(budgetIndex >= 0, "budget message must be present")
-            assertTrue(
-                sidecarIndex > toolIndex,
-                "volatile sidecar must anchor after tool result to avoid breaking contiguity",
-            )
-            assertTrue(
-                sidecarIndex < budgetIndex,
-                "volatile sidecar must anchor before agent budget tail",
-            )
+            assertEquals(5, messages.size)
+            assertTrue(messages[1].asUser().content().asText().contains("[Sidecar-"))
+            assertTrue(messages[1].asUser().content().asText().contains(sidecars))
+            assertTrue(messages[3].isTool())
+            assertTrue(messages[4].isSystem())
+            assertTrue(messages[4].asSystem().content().asText().contains("Tool budget"))
         }
 
     @Test
@@ -788,11 +764,65 @@ class AppendOnlyOpenAiSidecarPlacementTest {
             )
 
             val messages = captured.params.single().messages()
-            assertEquals(4, messages.size)
+            assertEquals(3, messages.size)
             val helloParts = messages[1].asUser().content().asArrayOfContentParts()
             assertTrue(helloParts.any { it.isText() })
-            assertEquals("Follow up", messages[3].asUser().content().asText())
-            assertTrue(messages[2].isSystem())
+            assertEquals("Hello", helloParts.first { it.isText() }.asText().text())
+            val followUpText = messages[2].asUser().content().asText()
+            assertTrue(followUpText.startsWith("Follow up"))
+            assertTrue(followUpText.contains("[Sidecar-"))
+            assertTrue(followUpText.contains("""State ledger JSON: {"key":"value"}"""))
+        }
+
+    @Test
+    fun AOC_23_openrouter_frozen_sidecar_preserves_cache_control_on_prior_user_part() =
+        runTest {
+            val captured =
+                captureOpenAiParams(
+                    provider = "OPENROUTER",
+                    modelId = "anthropic/claude-3.5-sonnet",
+                )
+            val firstSidecar = """State ledger JSON: {"turn":1}"""
+            captured.service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        AgentLoopMessage(id = "u1", role = Role.USER, content = "Hello"),
+                    ),
+                systemPrompt = "You are a helpful assistant.",
+                contextSidecars = firstSidecar,
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+
+            captured.service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        AgentLoopMessage(id = "u1", role = Role.USER, content = "Hello"),
+                        AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "Hi"),
+                        AgentLoopMessage(id = "u2", role = Role.USER, content = "Follow up"),
+                    ),
+                systemPrompt = "You are a helpful assistant.",
+                contextSidecars = """State ledger JSON: {"turn":2}""",
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+
+            val messages = captured.params.last().messages()
+            assertEquals(4, messages.size)
+            val priorUserParts = messages[1].asUser().content().asArrayOfContentParts()
+            val priorUserText = priorUserParts.first { it.isText() }.asText()
+            assertEquals("Hello", priorUserText.text().substringBefore("\n\n[Sidecar-"))
+            assertTrue(priorUserText.text().contains(firstSidecar))
+            assertTrue(priorUserText._additionalProperties().containsKey("cache_control"))
+
+            val followUpText = messages[3].asUser().content().asText()
+            assertTrue(followUpText.contains("""State ledger JSON: {"turn":2}"""))
         }
 
     @Test
@@ -949,24 +979,13 @@ class AppendOnlyOpenAiSidecarPlacementTest {
             assertEquals(1, context.frozenSidecarsForWireReplay().size)
 
             val hop2Messages = captured.params[1].messages()
-            val hop2SidecarCount =
-                hop2Messages.count { message ->
-                    message.isSystem() &&
-                        message.asSystem().content().asText() == identicalSidecar
-                }
-            assertEquals(1, hop2SidecarCount)
+            assertEquals(3, hop2Messages.size)
+            assertTrue(hop2Messages[1].asUser().content().asText().contains(identicalSidecar))
 
             val hop3Messages = captured.params[2].messages()
-            val hop3SidecarCount =
-                hop3Messages.count { message ->
-                    message.isSystem() &&
-                        message.asSystem().content().asText() == identicalSidecar
-                }
-            assertEquals(1, hop3SidecarCount)
-            assertFalse(
-                hop3Messages.last().isSystem() &&
-                    hop3Messages.last().asSystem().content().asText() == identicalSidecar,
-            )
+            assertEquals(4, hop3Messages.size)
+            assertTrue(hop3Messages[1].asUser().content().asText().contains(identicalSidecar))
+            assertFalse(hop3Messages[3].asUser().content().asText().contains("[Sidecar-"))
         }
 
     @Test
@@ -1115,7 +1134,7 @@ class AppendOnlyOpenAiSidecarPlacementTest {
             val hop2Wire = captured.params.last().messages()
             assertTrue(
                 hop2Wire.any { message ->
-                    message.isSystem() && message.asSystem().content().asText() == sidecar
+                    message.isUser() && message.asUser().content().asText().contains(sidecar)
                 },
             )
         }
