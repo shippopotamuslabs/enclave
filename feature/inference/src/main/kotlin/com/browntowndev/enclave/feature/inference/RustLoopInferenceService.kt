@@ -72,8 +72,10 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -733,7 +735,12 @@ class RustLoopInferenceService(
                 .parseToJsonElement(toolContextIndexJson)
                 .jsonObject["advertised_tools"]
                 ?.jsonArray
-                ?.mapNotNull { element -> element.jsonObject["name"]?.jsonPrimitive?.content }
+                ?.mapNotNull { element ->
+                    when {
+                        element is JsonPrimitive -> element.contentOrNull
+                        else -> element.jsonObject["name"]?.jsonPrimitive?.contentOrNull
+                    }
+                }
         }.getOrNull()
 
     private suspend fun executeOneTool(
@@ -931,7 +938,9 @@ class RustLoopInferenceService(
     ): String? {
         val compactLedger = stateLedgerJson?.let(ContextSidecarCompaction::compactStateLedgerJson)
         val compactToolIndex =
-            toolContextIndexJson?.let(ContextSidecarCompaction::compactToolContextIndexJson)
+            toolContextIndexJson
+                ?.let(ContextSidecarCompaction::compactToolContextIndexJson)
+                ?.takeUnless { usesNativeToolCalling() && ContextSidecarCompaction.shouldOmitToolContextIndexFromWire(it) }
         val compactFileIndex =
             fileContextIndexJson?.let(ContextSidecarCompaction::compactFileContextIndexJson)
 
@@ -991,6 +1000,8 @@ class RustLoopInferenceService(
                 else -> false
             }
         }.getOrElse { false }
+
+    private fun usesNativeToolCalling(): Boolean = provider != "LLAMA"
 
     private fun buildUserContent(
         prompt: String,

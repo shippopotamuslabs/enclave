@@ -94,6 +94,14 @@ fun ApiProviderConfigureBottomSheet(
                 )
             }
 
+            NeoOutlinedTextField(
+                value = selectedModelId,
+                onValueChange = onModelSelected,
+                label = { Text("Model ID") },
+                placeholder = { Text("Type a model ID or pick one below") },
+                modifier = Modifier.fillMaxWidth(),
+            )
+
             if (discoveredModels.isNotEmpty()) {
                 Text(
                     text = "SELECT MODEL",

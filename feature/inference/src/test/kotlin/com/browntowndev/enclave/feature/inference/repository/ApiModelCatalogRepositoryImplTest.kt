@@ -122,24 +122,23 @@ class ApiModelCatalogRepositoryImplTest {
 
     @Test
     fun `SCN-DISCOVERY-001 fetchModels discovers DeepSeek models via openai-compatible list`() = runTest {
-        every {
-            openAiClientProvider.getClient(apiKey = "ds-key", baseUrl = "https://api.deepseek.com")
-        } returns
-            mockk {
-                every { models() } returns
-                    mockk {
-                        every { list() } returns
-                            mockk {
-                                every { data() } returns
-                                    listOf(
-                                        mockk {
-                                            every { id() } returns "deepseek-chat"
-                                            every { created() } returns 123L
-                                        },
-                                    )
-                            }
+        val call = mockk<Call>()
+        val requestSlot = io.mockk.slot<Request>()
+        every { httpClient.newCall(capture(requestSlot)) } returns call
+        every { call.execute() } returns
+            jsonResponse(
+                request = Request.Builder().url("https://api.deepseek.com/v1/models").build(),
+                body =
+                    """
+                    {
+                      "object": "list",
+                      "data": [
+                        {"id": "deepseek-chat", "object": "model", "owned_by": "deepseek"},
+                        {"id": "deepseek-reasoner", "object": "model", "owned_by": "deepseek", "created": 1700000000}
+                      ]
                     }
-            }
+                    """.trimIndent(),
+            )
 
         val catalog =
             repo.fetchModels(
@@ -148,34 +147,31 @@ class ApiModelCatalogRepositoryImplTest {
                 baseUrl = "https://api.deepseek.com",
             )
 
-        assertEquals(1, catalog.models.size)
+        assertEquals(2, catalog.models.size)
         assertEquals("deepseek-chat", catalog.models[0].id)
-        verify {
-            openAiClientProvider.getClient(
-                apiKey = "ds-key",
-                baseUrl = "https://api.deepseek.com",
-            )
-        }
+        assertEquals(null, catalog.models[0].created)
+        assertEquals("deepseek-reasoner", catalog.models[1].id)
+        assertEquals(1_700_000_000L, catalog.models[1].created)
+        assertEquals("https://api.deepseek.com/v1/models", requestSlot.captured.url.toString())
+        verify(exactly = 0) { openAiClientProvider.getClient(any(), any(), any()) }
     }
 
     @Test
     fun `fetchModels discovers Zai models via openai-compatible endpoint`() = runTest {
-        every { openAiClientProvider.getClient(apiKey = "key", baseUrl = "https://api.z.ai/api/paas/v4") } returns
-            mockk {
-                every { models() } returns
-                    mockk {
-                        every { list() } returns
-                            mockk {
-                                every { data() } returns
-                                    listOf(
-                                        mockk {
-                                            every { id() } returns "glm-4.6"
-                                            every { created() } returns 123L
-                                        },
-                                    )
-                            }
+        val call = mockk<Call>()
+        every { httpClient.newCall(any()) } returns call
+        every { call.execute() } returns
+            jsonResponse(
+                request = Request.Builder().url("https://api.z.ai/api/paas/v4/models").build(),
+                body =
+                    """
+                    {
+                      "data": [
+                        {"id": "glm-4.6"}
+                      ]
                     }
-            }
+                    """.trimIndent(),
+            )
 
         val catalog =
             repo.fetchModels(
@@ -186,12 +182,7 @@ class ApiModelCatalogRepositoryImplTest {
 
         assertEquals(1, catalog.models.size)
         assertEquals("glm-4.6", catalog.models[0].id)
-        verify {
-            openAiClientProvider.getClient(
-                apiKey = "key",
-                baseUrl = "https://api.z.ai/api/paas/v4",
-            )
-        }
+        verify(exactly = 0) { openAiClientProvider.getClient(any(), any(), any()) }
     }
 
     @Test
