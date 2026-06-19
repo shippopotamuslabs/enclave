@@ -3283,6 +3283,7 @@ data class FfiSessionCapabilities (
     var `toolResultBudgetTokens`: kotlin.UInt?, 
     var `contextPolicyTier`: FfiContextPolicyTier, 
     var `toolSchemaDeferralSupported`: kotlin.Boolean, 
+    var `nativeToolCallingSupported`: kotlin.Boolean, 
     var `fileBackedContextSupported`: kotlin.Boolean, 
     var `promptCacheSupported`: kotlin.Boolean, 
     var `historyRewriteSupported`: kotlin.Boolean, 
@@ -3307,6 +3308,7 @@ public object FfiConverterTypeFfiSessionCapabilities: FfiConverterRustBuffer<Ffi
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
         )
     }
 
@@ -3316,6 +3318,7 @@ public object FfiConverterTypeFfiSessionCapabilities: FfiConverterRustBuffer<Ffi
             FfiConverterOptionalUInt.allocationSize(value.`toolResultBudgetTokens`) +
             FfiConverterTypeFfiContextPolicyTier.allocationSize(value.`contextPolicyTier`) +
             FfiConverterBoolean.allocationSize(value.`toolSchemaDeferralSupported`) +
+            FfiConverterBoolean.allocationSize(value.`nativeToolCallingSupported`) +
             FfiConverterBoolean.allocationSize(value.`fileBackedContextSupported`) +
             FfiConverterBoolean.allocationSize(value.`promptCacheSupported`) +
             FfiConverterBoolean.allocationSize(value.`historyRewriteSupported`) +
@@ -3328,6 +3331,7 @@ public object FfiConverterTypeFfiSessionCapabilities: FfiConverterRustBuffer<Ffi
             FfiConverterOptionalUInt.write(value.`toolResultBudgetTokens`, buf)
             FfiConverterTypeFfiContextPolicyTier.write(value.`contextPolicyTier`, buf)
             FfiConverterBoolean.write(value.`toolSchemaDeferralSupported`, buf)
+            FfiConverterBoolean.write(value.`nativeToolCallingSupported`, buf)
             FfiConverterBoolean.write(value.`fileBackedContextSupported`, buf)
             FfiConverterBoolean.write(value.`promptCacheSupported`, buf)
             FfiConverterBoolean.write(value.`historyRewriteSupported`, buf)
@@ -4675,7 +4679,8 @@ enum class FfiContextReferenceKind {
     FILE_OUTLINE,
     FILE_CHUNK,
     TOOL_SCHEMA,
-    TOOL_CATALOG_INDEX;
+    TOOL_CATALOG_INDEX,
+    FILE_CATALOG_INDEX;
     companion object
 }
 

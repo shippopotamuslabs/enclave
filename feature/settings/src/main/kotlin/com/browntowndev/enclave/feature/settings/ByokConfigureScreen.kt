@@ -387,10 +387,20 @@ fun ByokConfigureScreen(
             openRouterEndpointsState = uiState.apiProviderEditor.openRouterEndpointsState,
             selectedPreferredProvider = selectedConfig.openRouterRouting.preferredProvider,
             onSelectPreferredProvider = { providerSlug ->
+                val openRouterRouting =
+                    if (providerSlug.isNullOrBlank()) {
+                        selectedConfig.openRouterRouting.copy(
+                            preferredProvider = null,
+                            allowFallbacks = true,
+                        )
+                    } else {
+                        selectedConfig.openRouterRouting.copy(
+                            preferredProvider = providerSlug,
+                            allowFallbacks = false,
+                        )
+                    }
                 onApiModelConfigFieldChange(
-                    selectedConfig.copy(
-                        openRouterRouting = selectedConfig.openRouterRouting.copy(preferredProvider = providerSlug),
-                    ),
+                    selectedConfig.copy(openRouterRouting = openRouterRouting),
                 )
             },
             onDismissRequest = onDismissOpenRouterProvidersSheet,

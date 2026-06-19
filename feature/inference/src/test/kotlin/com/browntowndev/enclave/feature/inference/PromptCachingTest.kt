@@ -28,16 +28,18 @@ import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 
 class PromptCachingTest {
     private val loggingPort = mockk<LoggingPort>(relaxed = true)
 
     @Test
-    fun test_PC_01_OpenAiSeparatesSystemPromptAndSidecars() =
+    @DisplayName("SC-REG-01 OpenAI separates stable system and sidecar")
+    fun SC_REG_01_test_PC_01_OpenAiSeparatesSystemPromptAndSidecars() =
         runTest {
             val client = mockk<OpenAIClient>()
-            val capturedParams = slot<ChatCompletionCreateParams>()
+            val capturedParams = mutableListOf<ChatCompletionCreateParams>()
 
             val service =
                 object : BaseOpenAiSdkInferenceService(
@@ -57,7 +59,7 @@ class PromptCachingTest {
                         assistantMessageId: com.browntowndev.enclave.domain.model.chat.MessageId?,
                         emitEvent: suspend (InferenceEvent) -> Unit,
                     ): StreamedOpenAiResponse {
-                        capturedParams.captured = params
+                        capturedParams.add(params)
                         return StreamedOpenAiResponse(
                             emittedAny = true,
                             functionCalls = emptyList(),
@@ -69,13 +71,14 @@ class PromptCachingTest {
                     }
                 }
 
+            val sidecar = """State ledger JSON: {"key":"value"}"""
             service.completeSingleTurn(
                 sessionMessages =
                     listOf(
                         AgentLoopMessage(id = "msg1", role = Role.USER, content = "Hello"),
                     ),
                 systemPrompt = "You are a helpful assistant.",
-                contextSidecars = "State ledger JSON: {\"key\":\"value\"}",
+                contextSidecars = sidecar,
                 availableTools = emptyList(),
                 allowToolCall = false,
                 onTextToken = {},
@@ -83,15 +86,39 @@ class PromptCachingTest {
                 options = GenerationOptions(reasoningBudget = 0),
             )
 
-            assertTrue(capturedParams.isCaptured)
-            val messages = capturedParams.captured.messages()
+            assertTrue(capturedParams.isNotEmpty())
+            val messages = capturedParams.first().messages()
             assertEquals(3, messages.size)
             assertTrue(messages[0].isSystem())
             assertEquals("You are a helpful assistant.", messages[0].asSystem().content().asText())
             assertTrue(messages[1].isSystem())
-            assertEquals("State ledger JSON: {\"key\":\"value\"}", messages[1].asSystem().content().asText())
+            assertEquals(sidecar, messages[1].asSystem().content().asText())
             assertTrue(messages[2].isUser())
             assertEquals("Hello", messages[2].asUser().content().asText())
+            assertEquals(
+                1,
+                requireNotNull(service.appendOnlyContextForTests()).frozenSidecarsForWireReplay().size,
+            )
+
+            service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        AgentLoopMessage(id = "msg1", role = Role.USER, content = "Hello"),
+                        AgentLoopMessage(id = "msg2", role = Role.ASSISTANT, content = "Hi"),
+                    ),
+                systemPrompt = "You are a helpful assistant.",
+                contextSidecars = sidecar,
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+
+            assertEquals(
+                1,
+                requireNotNull(service.appendOnlyContextForTests()).frozenSidecarsForWireReplay().size,
+            )
         }
 
     @Test
@@ -872,5 +899,395 @@ class PromptCachingTest {
                     ?.firstOrNull()
             assertTrue(u2Part?.text()?.orElse(null)?.contains("How are you?") == true)
             assertTrue(u2Part?.text()?.orElse(null)?.contains("Volatile sidecar content") == true)
+        }
+
+    @Test
+    @DisplayName("SC-AG-01 first hop prepends at tail index")
+    fun SC_AG_01_anthropicFirstHopSidecarAtFreezeIndex() =
+        runTest {
+            val client = mockk<AnthropicClient>()
+            val messageService = mockk<MessageService>()
+            val streamResponse = mockk<com.anthropic.core.http.StreamResponse<RawMessageStreamEvent>>()
+            val capturedParams = mutableListOf<MessageCreateParams>()
+            val service =
+                AnthropicInferenceServiceImpl(
+                    client = client,
+                    modelId = "claude-3-5-sonnet-20241022",
+                    modelType = ModelType.MAIN,
+                    loggingPort = loggingPort,
+                    toolEnvelopeParserPort = FakeToolEnvelopeParserPort(),
+                    toolStreamGatePort = FakeToolStreamGatePort(),
+                )
+            every { client.messages() } returns messageService
+            every { messageService.createStreaming(any<MessageCreateParams>()) } answers {
+                capturedParams.add(invocation.args[0] as MessageCreateParams)
+                streamResponse
+            }
+            every { streamResponse.stream() } answers { java.util.stream.Stream.of(anthropicMessageStopEvent()) }
+            every { streamResponse.close() } returns Unit
+
+            val sidecar = """State ledger JSON: {"key":"value"}"""
+            service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        AgentLoopMessage(id = "u1", role = Role.USER, content = "Hello"),
+                    ),
+                systemPrompt = "You are a helpful assistant.",
+                contextSidecars = sidecar,
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+            service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        AgentLoopMessage(id = "u1", role = Role.USER, content = "Hello"),
+                        AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "Hi"),
+                        AgentLoopMessage(id = "u2", role = Role.USER, content = "Follow up"),
+                    ),
+                systemPrompt = "You are a helpful assistant.",
+                contextSidecars = sidecar,
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+
+            fun anthropicUserText(params: MessageCreateParams, index: Int): String =
+                params.messages()[index].content().asBlockParams()[0].asText().text()
+
+            val hop1 = capturedParams.first()
+            assertTrue(anthropicUserText(hop1, 0).startsWith(sidecar))
+            assertTrue(anthropicUserText(hop1, 0).endsWith("Hello"))
+            val frozen = requireNotNull(service.appendOnlyContextForTests()).frozenSidecarsForWireReplay()
+            assertEquals(1, frozen.size)
+            assertEquals(0, frozen[0].mappedInsertIndex)
+
+            val hop2 = capturedParams[1]
+            assertTrue(anthropicUserText(hop2, 0).startsWith(sidecar))
+            assertEquals("Follow up", anthropicUserText(hop2, 2))
+            assertFalse(anthropicUserText(hop2, 2).startsWith(sidecar))
+        }
+
+    @Test
+    @DisplayName("SC-AG-02 three-hop identical sidecar multi-turn")
+    fun SC_AG_02_anthropicThreeHopIdenticalSidecarDedupes() =
+        runTest {
+            val client = mockk<AnthropicClient>()
+            val messageService = mockk<MessageService>()
+            val streamResponse = mockk<com.anthropic.core.http.StreamResponse<RawMessageStreamEvent>>()
+            val capturedParams = mutableListOf<MessageCreateParams>()
+            val service =
+                AnthropicInferenceServiceImpl(
+                    client = client,
+                    modelId = "claude-3-5-sonnet-20241022",
+                    modelType = ModelType.MAIN,
+                    loggingPort = loggingPort,
+                    toolEnvelopeParserPort = FakeToolEnvelopeParserPort(),
+                    toolStreamGatePort = FakeToolStreamGatePort(),
+                )
+            every { client.messages() } returns messageService
+            every { messageService.createStreaming(any<MessageCreateParams>()) } answers {
+                capturedParams.add(invocation.args[0] as MessageCreateParams)
+                streamResponse
+            }
+            every { streamResponse.stream() } answers { java.util.stream.Stream.of(anthropicMessageStopEvent()) }
+            every { streamResponse.close() } returns Unit
+
+            val sidecar = "Volatile sidecar content"
+            service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        AgentLoopMessage(id = "u1", role = Role.USER, content = "Hello"),
+                    ),
+                systemPrompt = "You are a helpful assistant.",
+                contextSidecars = sidecar,
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+            service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        AgentLoopMessage(id = "u1", role = Role.USER, content = "Hello"),
+                        AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "Hi"),
+                        AgentLoopMessage(id = "u2", role = Role.USER, content = "Explain the plan."),
+                    ),
+                systemPrompt = "You are a helpful assistant.",
+                contextSidecars = sidecar,
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+            service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        AgentLoopMessage(id = "u1", role = Role.USER, content = "Hello"),
+                        AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "Hi"),
+                        AgentLoopMessage(id = "u2", role = Role.USER, content = "Explain the plan."),
+                        AgentLoopMessage(id = "a2", role = Role.ASSISTANT, content = "Done"),
+                    ),
+                systemPrompt = "You are a helpful assistant.",
+                contextSidecars = sidecar,
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+
+            assertEquals(
+                1,
+                requireNotNull(service.appendOnlyContextForTests()).frozenSidecarsForWireReplay().size,
+            )
+            fun anthropicUserText(params: MessageCreateParams, index: Int): String =
+                params.messages()[index].content().asBlockParams()[0].asText().text()
+
+            val hop2 = capturedParams[1]
+            assertTrue(anthropicUserText(hop2, 0).startsWith(sidecar))
+            assertEquals("Explain the plan.", anthropicUserText(hop2, 2))
+            assertFalse(anthropicUserText(hop2, 2).startsWith(sidecar))
+
+            val hop3 = capturedParams[2]
+            assertTrue(anthropicUserText(hop3, 0).startsWith(sidecar))
+            assertFalse(anthropicUserText(hop3, 2).startsWith(sidecar))
+        }
+
+    @Test
+    @DisplayName("SC-AG-03 Google first hop sidecar at freeze index")
+    fun SC_AG_03_googleFirstHopSidecarAtFreezeIndex() =
+        runTest {
+            val sdkClient = mockk<GoogleGenAiSdkClient>()
+            val service =
+                GoogleInferenceServiceImpl(
+                    sdkClient = sdkClient,
+                    modelId = "gemini-2.5-flash",
+                    modelType = ModelType.MAIN,
+                    loggingPort = loggingPort,
+                    toolEnvelopeParserPort = FakeToolEnvelopeParserPort(),
+                    toolStreamGatePort = FakeToolStreamGatePort(),
+                )
+            coEvery { sdkClient.createCachedContent(any(), any(), any(), any(), any()) } returns "cachedContents/mock-cache-123"
+            val capturedContents = mutableListOf<List<Content>>()
+            coEvery { sdkClient.generateContentStream(any(), any(), any(), any(), any()) } coAnswers {
+                @Suppress("UNCHECKED_CAST")
+                capturedContents.add(invocation.args[1] as List<Content>)
+                GoogleSdkResult(
+                    emittedAny = true,
+                    functionCall = null,
+                    assistantContent = null,
+                    finishReason = "STOP",
+                )
+            }
+
+            val padding = "padding ".repeat(1200)
+            val hop1Messages =
+                listOf(
+                    AgentLoopMessage(id = "u1", role = Role.USER, content = "User message content 1 $padding"),
+                    AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "Assistant response 1"),
+                    AgentLoopMessage(id = "u2", role = Role.USER, content = "User message content 2 $padding"),
+                    AgentLoopMessage(id = "a2", role = Role.ASSISTANT, content = "Assistant response 2"),
+                    AgentLoopMessage(id = "u3", role = Role.USER, content = "User message content 3"),
+                )
+            val sidecar = "Sidecar key value json"
+            service.completeSingleTurn(
+                sessionMessages = hop1Messages,
+                systemPrompt = "System instruction prompt",
+                contextSidecars = sidecar,
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+
+            val hop2Messages =
+                hop1Messages +
+                    listOf(
+                        AgentLoopMessage(id = "a3", role = Role.ASSISTANT, content = "Assistant response 3"),
+                        AgentLoopMessage(id = "u4", role = Role.USER, content = "User message content 4"),
+                    )
+            service.completeSingleTurn(
+                sessionMessages = hop2Messages,
+                systemPrompt = "System instruction prompt",
+                contextSidecars = sidecar,
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+
+            val hop2Contents = capturedContents.last()
+            fun contentTextAt(contents: List<Content>, index: Int): String? =
+                contents.getOrNull(index)
+                    ?.parts()
+                    ?.orElse(null)
+                    ?.firstOrNull()
+                    ?.text()
+                    ?.orElse(null)
+            val frozen = requireNotNull(service.appendOnlyContextForTests()).frozenSidecarsForWireReplay()
+            assertEquals(1, frozen.size)
+            assertEquals(4, frozen[0].mappedInsertIndex)
+            assertTrue(contentTextAt(hop2Contents, 0)?.contains(sidecar) == true)
+            assertTrue(contentTextAt(hop2Contents, 0)?.contains("User message content 3") == true)
+            assertEquals("User message content 4", contentTextAt(hop2Contents, 2))
+            assertFalse(contentTextAt(hop2Contents, 2)?.contains(sidecar) == true)
+        }
+
+    @Test
+    @DisplayName("SC-AG-04 two distinct sidecars across turns")
+    fun SC_AG_04_googleFrozenSidecarIndexStability() =
+        runTest {
+            val sdkClient = mockk<GoogleGenAiSdkClient>()
+            val service =
+                GoogleInferenceServiceImpl(
+                    sdkClient = sdkClient,
+                    modelId = "gemini-2.5-flash",
+                    modelType = ModelType.MAIN,
+                    loggingPort = loggingPort,
+                    toolEnvelopeParserPort = FakeToolEnvelopeParserPort(),
+                    toolStreamGatePort = FakeToolStreamGatePort(),
+                )
+            coEvery { sdkClient.createCachedContent(any(), any(), any(), any(), any()) } returns "cachedContents/mock-cache-123"
+            val capturedContents = mutableListOf<List<Content>>()
+            coEvery { sdkClient.generateContentStream(any(), any(), any(), any(), any()) } coAnswers {
+                @Suppress("UNCHECKED_CAST")
+                capturedContents.add(invocation.args[1] as List<Content>)
+                GoogleSdkResult(
+                    emittedAny = true,
+                    functionCall = null,
+                    assistantContent = null,
+                    finishReason = "STOP",
+                )
+            }
+
+            val padding = "padding ".repeat(1200)
+            val hop1Messages =
+                listOf(
+                    AgentLoopMessage(id = "u1", role = Role.USER, content = "User message 1. $padding"),
+                    AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "Assistant response 1"),
+                    AgentLoopMessage(id = "u2", role = Role.USER, content = "User message 2. $padding"),
+                    AgentLoopMessage(id = "a2", role = Role.ASSISTANT, content = "Assistant response 2"),
+                    AgentLoopMessage(id = "u3", role = Role.USER, content = "User message 3"),
+                )
+            service.completeSingleTurn(
+                sessionMessages = hop1Messages,
+                systemPrompt = "System Prompt",
+                contextSidecars = "Sidecar 1",
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+
+            val hop2Messages =
+                hop1Messages +
+                    listOf(
+                        AgentLoopMessage(id = "a3", role = Role.ASSISTANT, content = "Assistant response 3"),
+                        AgentLoopMessage(id = "u4", role = Role.USER, content = "User message 4"),
+                    )
+            service.completeSingleTurn(
+                sessionMessages = hop2Messages,
+                systemPrompt = "System Prompt",
+                contextSidecars = "Sidecar 2",
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+
+            assertEquals(
+                2,
+                requireNotNull(service.appendOnlyContextForTests()).frozenSidecarsForWireReplay().size,
+            )
+            val hop2Contents = capturedContents.last()
+            fun contentTextAt(contents: List<Content>, index: Int): String? =
+                contents.getOrNull(index)
+                    ?.parts()
+                    ?.orElse(null)
+                    ?.firstOrNull()
+                    ?.text()
+                    ?.orElse(null)
+            assertTrue(contentTextAt(hop2Contents, 0)?.contains("Sidecar 1") == true)
+            assertFalse(contentTextAt(hop2Contents, 0)?.contains("Sidecar 2") == true)
+            assertTrue(contentTextAt(hop2Contents, 2)?.contains("Sidecar 2") == true)
+        }
+
+    @Test
+    @DisplayName("SC-AG-05 frozen at index 0 not prepended to index 2")
+    fun SC_AG_05_indexInterleavedReplayNotLatestUserOnly() =
+        runTest {
+            val client = mockk<AnthropicClient>()
+            val messageService = mockk<MessageService>()
+            val streamResponse = mockk<com.anthropic.core.http.StreamResponse<RawMessageStreamEvent>>()
+            val capturedParams = mutableListOf<MessageCreateParams>()
+            val service =
+                AnthropicInferenceServiceImpl(
+                    client = client,
+                    modelId = "claude-3-5-sonnet-20241022",
+                    modelType = ModelType.MAIN,
+                    loggingPort = loggingPort,
+                    toolEnvelopeParserPort = FakeToolEnvelopeParserPort(),
+                    toolStreamGatePort = FakeToolStreamGatePort(),
+                )
+            every { client.messages() } returns messageService
+            every { messageService.createStreaming(any<MessageCreateParams>()) } answers {
+                capturedParams.add(invocation.args[0] as MessageCreateParams)
+                streamResponse
+            }
+            every { streamResponse.stream() } answers { java.util.stream.Stream.of(anthropicMessageStopEvent()) }
+            every { streamResponse.close() } returns Unit
+
+            val frozenSidecar = "FROZEN_A"
+            service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        AgentLoopMessage(id = "u0", role = Role.USER, content = "First"),
+                    ),
+                systemPrompt = "You are a helpful assistant.",
+                contextSidecars = frozenSidecar,
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+            service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        AgentLoopMessage(id = "u0", role = Role.USER, content = "First"),
+                        AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "Hi"),
+                        AgentLoopMessage(id = "u2", role = Role.USER, content = "Second"),
+                    ),
+                systemPrompt = "You are a helpful assistant.",
+                contextSidecars = frozenSidecar,
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+
+            fun anthropicUserText(params: MessageCreateParams, index: Int): String =
+                params.messages()[index].content().asBlockParams()[0].asText().text()
+
+            val hop2 = capturedParams[1]
+            assertTrue(anthropicUserText(hop2, 0).startsWith(frozenSidecar))
+            assertEquals("Second", anthropicUserText(hop2, 2))
+            assertFalse(anthropicUserText(hop2, 2).startsWith(frozenSidecar))
+            assertEquals(
+                1,
+                requireNotNull(service.appendOnlyContextForTests()).frozenSidecarsForWireReplay().size,
+            )
         }
 }

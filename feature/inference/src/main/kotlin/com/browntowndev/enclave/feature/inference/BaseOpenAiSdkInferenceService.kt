@@ -202,6 +202,12 @@ abstract class BaseOpenAiSdkInferenceService(
                 frozenSidecarCount = diagnosticsContext.frozenSidecarCount,
                 liveSidecarPresent = diagnosticsContext.liveSidecarPresent,
             )
+        val currentBody =
+            PromptCachePrefixDiagnostics.renderWireBody(
+                systemPrompt = diagnosticsContext.systemPrompt,
+                toolNames = diagnosticsContext.toolNames,
+                messages = messages,
+            )
         val previous = promptCacheDiagnosticsState[stateKey]
         val comparison =
             PromptCachePrefixDiagnostics.compare(
@@ -210,10 +216,28 @@ abstract class BaseOpenAiSdkInferenceService(
                 previousInputTokens = previous?.inputTokens,
                 currentInputTokens = inputTokens,
             )
+        previous?.body?.let { previousBody ->
+            val breakReport =
+                PromptCachePrefixDiagnostics.computePrefixBreak(
+                    previousBody = previousBody,
+                    newBody = currentBody,
+                    windowChars = PromptCachePrefixDiagnostics.PREFIX_BREAK_WINDOW_CHARS,
+                )
+            loggingPort.debug(
+                tag,
+                "PROMPT_CACHE_BREAK seq=$sequenceIndex chat=$stateKey " +
+                    "match=${breakReport.matchChars}/${breakReport.newChars} (${breakReport.matchPct}%) " +
+                    "prevLen=${previousBody.length} " +
+                    "before=${PromptCachePrefixDiagnostics.sanitizeForLog(breakReport.contextBefore)} " +
+                    "old=${PromptCachePrefixDiagnostics.sanitizeForLog(breakReport.oldSnippet)} " +
+                    "new=${PromptCachePrefixDiagnostics.sanitizeForLog(breakReport.newSnippet)}",
+            )
+        }
         promptCacheDiagnosticsState[stateKey] =
             PromptCacheDiagnosticsState(
                 shape = currentShape,
                 inputTokens = inputTokens,
+                body = currentBody,
             )
         val cacheRead = cacheReadInputTokens ?: 0
         val input = inputTokens ?: 0
@@ -274,6 +298,7 @@ abstract class BaseOpenAiSdkInferenceService(
     private data class PromptCacheDiagnosticsState(
         val shape: PromptCachePrefixDiagnostics.PrefixShape,
         val inputTokens: Int?,
+        val body: String,
     )
 
     private val promptCacheDiagnosticsState = mutableMapOf<String, PromptCacheDiagnosticsState>()
@@ -299,7 +324,10 @@ abstract class BaseOpenAiSdkInferenceService(
         appendOnlyContexts.values.forEach { it.clearOnRustCompactionBoundary() }
     }
 
-    internal fun resetAppendOnlyForNewPrompt() = Unit
+    internal fun resetAppendOnlyForNewPrompt(chatId: ChatId? = null) {
+        val key = chatId?.value?.takeIf { it.isNotBlank() } ?: activeAppendOnlyKey
+        key?.let { appendOnlyContexts[it]?.markTurnBoundaryForReanchor() }
+    }
 
     override suspend fun closeSession() {
         appendOnlyContexts.values.forEach { it.invalidate() }
@@ -386,7 +414,11 @@ abstract class BaseOpenAiSdkInferenceService(
                 systemPrompt = systemPrompt,
                 toolsFingerprint = availableTools.toToolsFingerprint(),
             )
-            appendOnly.syncMessages(sessionMessages.toAppendOnlySyncMessages())
+            appendOnly.syncMessages(
+                sessionMessages.toAppendOnlySyncMessages(),
+                transcriptRevision = options.transcriptRevision,
+            )
+            val wireSidecar = appendOnly.resolveContextSidecarsForWire(contextSidecars)
 
             val systemPromptPrepended =
                 systemPrompt.isNotBlank() &&
@@ -452,7 +484,7 @@ abstract class BaseOpenAiSdkInferenceService(
                             frozenSidecars = appendOnly.frozenSidecarsForWireReplay(),
                             preRetrievalSidecarText = livePreRetrievalSidecarText,
                             preRetrievalInsertIndex = preRetrievalInsertIndex,
-                            currentSidecarText = contextSidecars,
+                            currentSidecarText = wireSidecar,
                             tailInsertIndex = tailInsertIndex,
                         ),
                     )
@@ -468,13 +500,13 @@ abstract class BaseOpenAiSdkInferenceService(
                         ),
                     preRetrievalSidecarText = livePreRetrievalSidecarText,
                     preRetrievalInsertIndex = responsePreRetrievalInsertIndex,
-                    currentSidecarText = contextSidecars,
+                    currentSidecarText = wireSidecar,
                     tailInsertIndex = responseTailInsertIndex,
                     prependedSystemPrompt = systemPrompt.takeIf { systemPromptPrepended },
                 )
-            if (!contextSidecars.isNullOrBlank()) {
+            if (wireSidecar != null) {
                 appendOnly.endTurnFreezeSidecar(
-                    sidecarText = contextSidecars,
+                    sidecarText = wireSidecar,
                     mappedInsertIndex = tailInsertIndex,
                 )
             }
@@ -959,10 +991,8 @@ abstract class BaseOpenAiSdkInferenceService(
         val text = asSystem().content().asText()
         return PreRetrievalContextSidecar.isSidecarText(text) ||
             text.startsWith("State ledger JSON:") ||
-            text.startsWith("Context management sidecars:") ||
             text.startsWith("Tool context index JSON:") ||
             text.startsWith("File context index JSON:") ||
-            text.startsWith("Cache hints:") ||
             EngineInternalMessageMapper.isEngineInternalWireText(text) ||
             text.startsWith("[Conversation summary]")
     }
@@ -971,10 +1001,8 @@ abstract class BaseOpenAiSdkInferenceService(
         if (role != Role.SYSTEM) return false
         return PreRetrievalContextSidecar.isSidecarText(content) ||
             content.startsWith("State ledger JSON:") ||
-            content.startsWith("Context management sidecars:") ||
             content.startsWith("Tool context index JSON:") ||
             content.startsWith("File context index JSON:") ||
-            content.startsWith("Cache hints:") ||
             EngineInternalMessageMapper.isEngineInternalWireText(content) ||
             content.startsWith("[Conversation summary]")
     }

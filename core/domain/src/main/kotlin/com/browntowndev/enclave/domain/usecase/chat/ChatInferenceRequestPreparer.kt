@@ -377,6 +377,7 @@ class ChatInferenceRequestPreparer(
         val activeToolNames =
             resolvePreloadedActiveToolNames(
                 webSearchConfigured = webSearchConfigured,
+                xSearchConfigured = xSearchConfigured,
                 imageHandling = imageHandling,
                 sessionActivatedNames = sessionActivatedNames,
             )
@@ -555,14 +556,28 @@ class ChatInferenceRequestPreparer(
 
     private fun resolvePreloadedActiveToolNames(
         webSearchConfigured: Boolean,
+        xSearchConfigured: Boolean,
         imageHandling: ChatImageHandling,
         sessionActivatedNames: Set<String>,
     ): Set<String> =
         buildSet {
             add(ToolDefinition.SEARCH_TOOLS.name)
+            // Preload read_context_reference: it is the universal affordance for reading spilled
+            // tool outputs, so it is almost always activated mid-session on the first spill. Adding
+            // it lazily inserts a new tool into the (alphabetically sorted) wire tools[] block, which
+            // sits before the system prompt + conversation and busts the entire provider prompt-cache
+            // prefix. Preloading keeps the active set stable from turn 1 for a tiny token cost.
+            add(ToolDefinition.READ_CONTEXT_REFERENCE.name)
             if (webSearchConfigured) {
                 add(ToolDefinition.WEB_SEARCH.name)
                 add(ToolDefinition.WEB_EXTRACT.name)
+            }
+            // Preload search_x_recent on par with web_search: it is high-frequency, and intent-only
+            // activation inserts it into the sorted wire tools[] block mid-session, busting the
+            // prompt-cache prefix. Preloading whenever X search is configured keeps the active set
+            // stable from turn 1. Companion X tools (threads/trending/etc.) stay discover-on-demand.
+            if (xSearchConfigured) {
+                add(ToolDefinition.X_SEARCH.name)
             }
             if (imageHandling == ChatImageHandling.TOOL) {
                 add(ToolDefinition.ATTACHED_IMAGE_INSPECT.name)
@@ -612,8 +627,10 @@ class ChatInferenceRequestPreparer(
         private val PRELOADED_TOOL_NAMES =
             setOf(
                 ToolDefinition.SEARCH_TOOLS.name,
+                ToolDefinition.READ_CONTEXT_REFERENCE.name,
                 ToolDefinition.WEB_SEARCH.name,
                 ToolDefinition.WEB_EXTRACT.name,
+                ToolDefinition.X_SEARCH.name,
                 ToolDefinition.ATTACHED_IMAGE_INSPECT.name,
             )
 

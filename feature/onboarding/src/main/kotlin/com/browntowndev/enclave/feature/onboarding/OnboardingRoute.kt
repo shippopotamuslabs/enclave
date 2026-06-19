@@ -34,6 +34,7 @@ fun OnboardingRoute(
         onModelChoiceSelected = viewModel::onModelChoiceSelected,
         onProviderSelected = viewModel::onProviderSelected,
         onApiKeyChanged = viewModel::onApiKeyChanged,
+        onBaseUrlChanged = viewModel::onBaseUrlChanged,
         onDiscoverModels = viewModel::onDiscoverModels,
         onModelSelected = viewModel::onModelSelected,
         onSkipMedia = viewModel::onSkipMedia,

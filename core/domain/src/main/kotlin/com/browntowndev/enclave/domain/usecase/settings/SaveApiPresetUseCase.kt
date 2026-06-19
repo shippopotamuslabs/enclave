@@ -4,6 +4,7 @@ import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.config.ApiModelConfiguration
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.OpenRouterRoutingConfiguration
+import com.browntowndev.enclave.domain.model.config.enforcePinningInvariant
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.enclave.domain.usecase.byok.SaveApiModelConfigurationUseCase
@@ -50,7 +51,7 @@ class SaveApiPresetUseCase
                             .associate { (key, value) -> key to value },
                     openRouterRouting =
                         if (provider == ApiProvider.OPENROUTER) {
-                            draft.openRouterRouting
+                            draft.openRouterRouting.enforcePinningInvariant()
                         } else {
                             OpenRouterRoutingConfiguration()
                         },

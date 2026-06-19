@@ -655,4 +655,75 @@ class OnboardingViewModelTest {
                 cancelAndIgnoreRemainingEvents()
             }
         }
+
+    @Test
+    @DisplayName("OB-BASEURL-01 — Base URL updates and resets correctly")
+    fun `OB-BASEURL-01 base url updates in state and resets on provider selected`() =
+        runTest {
+            viewModel.onBaseUrlChanged("https://custom-api.com")
+            assertEquals("https://custom-api.com", viewModel.uiState.value.baseUrl)
+
+            viewModel.onProviderSelected(ApiProvider.OPENAI)
+            assertEquals("", viewModel.uiState.value.baseUrl)
+        }
+
+    @Test
+    @DisplayName("OB-BASEURL-02 — Model discovery uses custom base URL if configured")
+    fun `OB-BASEURL-02 model discovery passes custom base URL to discovery use case`() =
+        runTest {
+            // Navigate to step 1
+            viewModel.onAgeConfirmedChange(true)
+            viewModel.onTosAcceptedChange(true)
+            viewModel.onNextStep()
+            advanceUntilIdle()
+
+            viewModel.onModelChoiceSelected(ModelChoice.API)
+            viewModel.onProviderSelected(ApiProvider.OPENAI)
+            viewModel.onApiKeyChanged("sk-test-key")
+            viewModel.onBaseUrlChanged("https://my-custom-endpoint.com")
+            viewModel.onDiscoverModels()
+            advanceUntilIdle()
+
+            coVerify {
+                mockDiscoverModels(
+                    match {
+                        it.provider == ApiProvider.OPENAI &&
+                            it.currentApiKey == "sk-test-key" &&
+                            it.baseUrl == "https://my-custom-endpoint.com"
+                    },
+                )
+            }
+        }
+
+    @Test
+    @DisplayName("OB-BASEURL-03 — Onboarding completion passes custom base URL to credentials")
+    fun `OB-BASEURL-03 onboarding completion passes custom base URL to credentials`() =
+        runTest {
+            fakeBulkAssign.resultToReturn = Result.success(ApiCredentialsId("creds-123"))
+
+            // Navigate to step 3 via API path
+            viewModel.onAgeConfirmedChange(true)
+            viewModel.onTosAcceptedChange(true)
+            viewModel.onNextStep()
+            advanceUntilIdle()
+            viewModel.onModelChoiceSelected(ModelChoice.API)
+            viewModel.onProviderSelected(ApiProvider.OPENAI)
+            viewModel.onApiKeyChanged("sk-valid-key")
+            viewModel.onBaseUrlChanged("https://my-custom-endpoint.com")
+            viewModel.onModelSelected("gpt-4o")
+            viewModel.onNextStep()
+            advanceUntilIdle()
+            viewModel.onSkipMedia()
+            advanceUntilIdle()
+
+            viewModel.events.test {
+                viewModel.onCompleteOnboarding()
+                advanceUntilIdle()
+
+                assertEquals(1, fakeBulkAssign.callCount)
+                val credentialsPassed = fakeBulkAssign.lastCredentials
+                assertEquals("https://my-custom-endpoint.com", credentialsPassed?.baseUrl)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
 }

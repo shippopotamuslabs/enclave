@@ -298,6 +298,7 @@ class XaiPromptCacheRoutingTest {
 
             val reasoningContent = assistantMessage._additionalProperties()["reasoning_content"]?.convert(String::class.java)
             assertEquals("let's search", reasoningContent)
-            assertEquals(".", assistantMessage.content().orElse(null))
+            assertTrue(assistantMessage.content().isPresent)
+            assertEquals(".", assistantMessage.content().get().asText())
         }
 }

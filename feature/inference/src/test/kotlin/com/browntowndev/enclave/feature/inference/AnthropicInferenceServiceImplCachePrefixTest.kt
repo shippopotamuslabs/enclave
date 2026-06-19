@@ -167,10 +167,10 @@ class AnthropicInferenceServiceImplCachePrefixTest {
                 "A1 should not have cache breakpoint in Turn 1",
             )
 
-            // Turn 2 messages assertions: U1 is now history (raw text), U2 is live user message (has sidecar 2)
+            // Turn 2 messages assertions: U1 replays frozen sidecar 1; U2 is live with sidecar 2
             assertEquals(4, msgs2.size)
             assertEquals(
-                "Hello Turn 1",
+                "Volatile Sidecar 1\n\nHello Turn 1",
                 msgs2[0]
                     .content()
                     .asBlockParams()

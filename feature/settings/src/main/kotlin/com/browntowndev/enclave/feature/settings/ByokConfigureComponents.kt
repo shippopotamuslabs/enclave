@@ -126,9 +126,15 @@ fun OpenRouterRoutingSection(
 
         RoutingSwitchRow(
             label = "Allow Fallbacks",
-            description = "OpenRouter may fall back to alternate providers when the primary one is unavailable.",
+            description =
+                if (routing.preferredProvider != null) {
+                    "Pinned to a provider — fallbacks disabled to keep the prompt cache warm."
+                } else {
+                    "OpenRouter may fall back to alternate providers when the primary one is unavailable."
+                },
             checked = routing.allowFallbacks,
             onCheckedChange = { onRoutingChange(routing.copy(allowFallbacks = it)) },
+            enabled = routing.preferredProvider == null,
         )
 
         if (showFallbackOptions) {
@@ -207,6 +213,7 @@ fun RoutingSwitchRow(
     description: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
+    enabled: Boolean = true,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -221,7 +228,11 @@ fun RoutingSwitchRow(
             Spacer(modifier = Modifier.width(4.dp))
             PersistentTooltip(description = description)
         }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            enabled = enabled,
+        )
     }
 }
 

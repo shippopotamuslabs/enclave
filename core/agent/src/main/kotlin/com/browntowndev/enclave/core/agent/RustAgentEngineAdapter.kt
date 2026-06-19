@@ -477,6 +477,7 @@ private fun com.browntowndev.enclave.domain.model.inference.AgentLoopSessionCapa
         toolResultBudgetTokens = toolResultBudgetTokens,
         contextPolicyTier = contextPolicyTier.toFfi(),
         toolSchemaDeferralSupported = toolSchemaDeferralSupported,
+        nativeToolCallingSupported = nativeToolCallingSupported,
         fileBackedContextSupported = fileBackedContextSupported,
         promptCacheSupported = promptCacheSupported,
         historyRewriteSupported = historyRewriteSupported,

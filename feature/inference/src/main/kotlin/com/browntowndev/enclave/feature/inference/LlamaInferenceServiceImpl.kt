@@ -403,7 +403,8 @@ class LlamaInferenceServiceImpl
             }
         }
 
-        internal fun clearAppendOnlyOnRustCompactionBoundary() {
+        @Suppress("UnusedParameter")
+        internal fun clearAppendOnlyOnRustCompactionBoundary(revisionAfter: Long? = null) {
             invalidateKvContinuation()
         }
 

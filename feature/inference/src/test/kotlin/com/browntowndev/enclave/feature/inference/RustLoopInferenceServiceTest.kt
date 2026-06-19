@@ -49,6 +49,7 @@ import com.browntowndev.enclave.feature.inference.conversation.LiteRtToolCallLoo
 import com.browntowndev.enclave.feature.inference.conversation.NoopAgentPolicyPort
 import io.mockk.coEvery
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.flow.Flow
@@ -71,6 +72,7 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Provider
@@ -438,6 +440,7 @@ class RustLoopInferenceServiceTest {
             assertFalse(config.capabilities.summarizationAllowed, "default dummy summarizer is not installed")
             assertTrue(config.capabilities.kvFixed)
             assertTrue(config.capabilities.toolSchemaDeferralSupported)
+            assertFalse(config.capabilities.nativeToolCallingSupported)
             assertEquals(AgentLoopContextPolicyTier.SMALL_CONTEXT, config.capabilities.contextPolicyTier)
             assertTrue(config.capabilities.lifecycleHooksSupported)
             assertEquals(
@@ -497,6 +500,7 @@ class RustLoopInferenceServiceTest {
 
             val config = requireNotNull(port.capturedConfig)
             assertTrue(config.capabilities.toolSchemaDeferralSupported)
+            assertTrue(config.capabilities.nativeToolCallingSupported)
             assertTrue(config.capabilities.fileBackedContextSupported)
             assertTrue(config.capabilities.promptCacheSupported)
             assertTrue(config.capabilities.lifecycleHooksSupported)
@@ -548,7 +552,7 @@ class RustLoopInferenceServiceTest {
                 ).toList()
 
             assertEquals(
-                listOf(ToolDefinition.WEB_SEARCH.name, ToolDefinition.APPEND_BLOCKS.name),
+                listOf(ToolDefinition.APPEND_BLOCKS.name, ToolDefinition.WEB_SEARCH.name),
                 inner.lastAvailableTools.map { it.name },
             )
         }
@@ -658,13 +662,58 @@ class RustLoopInferenceServiceTest {
                 ).toList()
 
             assertEquals(
-                listOf("web_search", "append_blocks"),
+                listOf("append_blocks", "web_search"),
                 inner.lastAvailableTools.map { it.name },
             )
         }
 
     @Test
-    fun completeModelTurn_forwardsContextSidecarsToProviderPrompt() =
+    fun wireTools_orderIsStableAcrossTurns_whenPreparerReordersSameToolSet() =
+        runTest {
+            val inner = RecordingRustCompatibleService()
+            val port =
+                CapturingAgentLoopPort { host ->
+                    host.completeModelTurn(
+                        sessionMessages = emptyList(),
+                        systemPrompt = "system",
+                        toolsSchemaJson = serializeToolNames(listOf("web_search", "append_blocks")),
+                        allowToolCall = true,
+                    )
+                    send(AgentLoopEvent.Finished)
+                }
+            val service = createService(agentLoopPort = port, inner = inner)
+            val expectedSorted = listOf("append_blocks", "web_search")
+
+            service
+                .sendPrompt(
+                    prompt = "turn-one",
+                    options =
+                        GenerationOptions(
+                            reasoningBudget = 0,
+                            activeTools = listOf(ToolDefinition.WEB_SEARCH, ToolDefinition.APPEND_BLOCKS),
+                        ),
+                ).toList()
+            val firstTurnTools = inner.toolsPerInvocation.single().map { it.name }
+
+            service
+                .sendPrompt(
+                    prompt = "turn-two",
+                    options =
+                        GenerationOptions(
+                            reasoningBudget = 0,
+                            activeTools = listOf(ToolDefinition.APPEND_BLOCKS, ToolDefinition.WEB_SEARCH),
+                        ),
+                ).toList()
+            val secondTurnTools = inner.toolsPerInvocation.last().map { it.name }
+
+            assertEquals(expectedSorted, firstTurnTools)
+            assertEquals(expectedSorted, secondTurnTools)
+            assertEquals(firstTurnTools, secondTurnTools)
+        }
+
+    @Test
+    @DisplayName("SC-FMT-01 completeModelTurn forwards cleaned sidecar")
+    fun SC_FMT_01_completeModelTurn_forwardsContextSidecarsToProviderPrompt() =
         runTest {
             val inner = RecordingRustCompatibleService()
             val port =
@@ -697,7 +746,6 @@ class RustLoopInferenceServiceTest {
 
             val sidecars = requireNotNull(inner.lastContextSidecars)
             assertAll(
-                { assertTrue(sidecars.contains("Context management sidecars")) },
                 {
                     assertTrue(
                         sidecars.contains(
@@ -706,15 +754,36 @@ class RustLoopInferenceServiceTest {
                         ),
                     )
                 },
-                { assertTrue(sidecars.contains("[FILE_OUTLINE|turn:1|fresh] file-outline-src/Main.kt (10b):")) },
+                {
+                    assertTrue(
+                        sidecars.contains("Tool-output references expire after 2 user turns."),
+                    )
+                },
+                {
+                    assertTrue(
+                        sidecars.contains(
+                            "[FILE_OUTLINE] file-outline-src/Main.kt (10b): outline:src/Main.kt @turn:1",
+                        ),
+                    )
+                },
                 { assertTrue(sidecars.contains("""preview: "fun main"""")) },
-                { assertTrue(sidecars.contains("read_context_reference(\"file-outline-src/Main.kt\")")) },
-                { assertTrue(sidecars.contains("File context index JSON")) },
+                {
+                    assertTrue(
+                        sidecars.contains("read_context_reference(\"file-outline-src/Main.kt\")"),
+                    )
+                },
+                { assertTrue(sidecars.contains("File context index JSON:")) },
+                { assertFalse(sidecars.contains("Context management sidecars:")) },
+                { assertFalse(sidecars.contains("Cache hints:")) },
+                { assertFalse(sidecars.contains("|fresh|")) },
+                { assertFalse(sidecars.contains("|stale|")) },
+                { assertFalse(sidecars.contains("|turn:1|")) },
             )
         }
 
     @Test
-    fun completeModelTurn_marksStaleContextReferencesInSidecars() =
+    @DisplayName("SC-FMT-02 tool output reference at turn 3")
+    fun SC_FMT_02_simplifiedReferenceLineFormat() =
         runTest {
             val inner = RecordingRustCompatibleService()
             val port =
@@ -742,14 +811,159 @@ class RustLoopInferenceServiceTest {
                 }
             val service = createService(agentLoopPort = port, inner = inner)
 
-            service.sendPrompt("stale refs").toList()
+            service.sendPrompt("refs").toList()
 
+            val sidecars = requireNotNull(inner.lastContextSidecars)
             assertTrue(
-                requireNotNull(inner.lastContextSidecars).contains(
-                    "[TOOL_OUTPUT|turn:2|stale] tool-output-call-1 (200b):",
+                sidecars.contains(
+                    "[TOOL_OUTPUT] tool-output-call-1 (200b): tool_output:call-1 @turn:2",
                 ),
             )
+            assertFalse(sidecars.contains("[TOOL_OUTPUT|turn:2|stale]"))
+            assertFalse(sidecars.contains("[TOOL_OUTPUT|turn:2|fresh]"))
+            assertFalse(sidecars.contains("|stale|"))
+            assertFalse(sidecars.contains("|fresh|"))
         }
+
+    @Test
+    @DisplayName("SC-FMT-03 cacheHints do not force sidecar hop")
+    fun SC_FMT_03_cacheHintsOnlyYieldsNullSidecar() =
+        runTest {
+            val inner = RecordingRustCompatibleService()
+            val port =
+                CapturingAgentLoopPort { host ->
+                    host.completeModelTurn(
+                        sessionMessages = emptyList(),
+                        systemPrompt = "base system",
+                        toolsSchemaJson = "[]",
+                        allowToolCall = false,
+                        cacheHints = listOf("breakpoint:system"),
+                    )
+                    send(AgentLoopEvent.Finished)
+                }
+            val service = createService(agentLoopPort = port, inner = inner)
+
+            service.sendPrompt("hints only").toList()
+
+            assertNull(inner.lastContextSidecars)
+        }
+
+    @Test
+    @DisplayName("SC-FMT-04 DEBUG log on cacheHints")
+    fun SC_FMT_04_logsCacheHintsAtDebugWithPromptCacheTag() =
+        runTest {
+            val mockLogger = mockk<LoggingPort>(relaxed = true)
+            val inner = RecordingRustCompatibleService()
+            val port =
+                CapturingAgentLoopPort { host ->
+                    host.completeModelTurn(
+                        sessionMessages = emptyList(),
+                        systemPrompt = "base system",
+                        toolsSchemaJson = "[]",
+                        allowToolCall = false,
+                        cacheHints = listOf("breakpoint:system", "reuse:prefix"),
+                    )
+                    send(AgentLoopEvent.Finished)
+                }
+            val service = createService(agentLoopPort = port, inner = inner, loggingPort = mockLogger)
+
+            service.sendPrompt("log hints").toList()
+
+            verify {
+                mockLogger.debug(
+                    tag = "PROMPT_CACHE",
+                    message = match { it.contains("breakpoint:system") && it.contains("reuse:prefix") },
+                )
+            }
+            assertNull(inner.lastContextSidecars)
+            inner.lastContextSidecars?.let { assertFalse(it.contains("Cache hints:")) }
+        }
+
+    @Test
+    @DisplayName("SC-FMT-05 empty payload except static preamble returns null")
+    fun SC_FMT_05_preambleOnlyReturnsNullSidecar() =
+        runTest {
+            val inner = RecordingRustCompatibleService()
+            val port =
+                CapturingAgentLoopPort { host ->
+                    host.completeModelTurn(
+                        sessionMessages = emptyList(),
+                        systemPrompt = "base system",
+                        toolsSchemaJson = "[]",
+                        allowToolCall = false,
+                    )
+                    send(AgentLoopEvent.Finished)
+                }
+            val service = createService(agentLoopPort = port, inner = inner)
+
+            service.sendPrompt("empty sidecars").toList()
+
+            assertNull(inner.lastContextSidecars)
+
+            // Paired with SC-FMT-01: compacted-empty JSON blobs must not force a preamble-only hop.
+            val innerCompactEmpty = RecordingRustCompatibleService()
+            val compactEmptyPort =
+                CapturingAgentLoopPort { host ->
+                    send(AgentLoopEvent.TurnStarted(index = 1))
+                    host.completeModelTurn(
+                        sessionMessages = emptyList(),
+                        systemPrompt = "base system",
+                        toolsSchemaJson = "[]",
+                        allowToolCall = false,
+                        stateLedgerJson = "{}",
+                    )
+                    send(AgentLoopEvent.Finished)
+                }
+            val compactEmptyService = createService(agentLoopPort = compactEmptyPort, inner = innerCompactEmpty)
+
+            compactEmptyService.sendPrompt("empty ledger blob").toList()
+
+            assertNull(innerCompactEmpty.lastContextSidecars)
+        }
+
+    @Test
+    @DisplayName("SC-FMT-MUT sidecar string forbidden patterns")
+    fun SC_FMT_MUT_sidecarWireFormatRegressionGuard() =
+        runTest {
+            val inner = RecordingRustCompatibleService()
+            val port =
+                CapturingAgentLoopPort { host ->
+                    send(AgentLoopEvent.TurnStarted(index = 1))
+                    host.completeModelTurn(
+                        sessionMessages = emptyList(),
+                        systemPrompt = "base system",
+                        toolsSchemaJson = "[]",
+                        allowToolCall = false,
+                        contextReferences =
+                            listOf(
+                                AgentContextReference(
+                                    id = "file-outline-src/Main.kt",
+                                    kind = "FILE_OUTLINE",
+                                    title = "outline:src/Main.kt @turn:1",
+                                    byteLen = 10u,
+                                    tokenEstimate = 2u,
+                                    preview = "fun main",
+                                    retrievalHint = "read_context_reference(\"file-outline-src/Main.kt\")",
+                                ),
+                            ),
+                        fileContextIndexJson = """{"root_ref":"file-context-root"}""",
+                    )
+                    send(AgentLoopEvent.Finished)
+                }
+            val service = createService(agentLoopPort = port, inner = inner)
+
+            service.sendPrompt("sidecars").toList()
+
+            assertSidecarWireFormatCompliant(inner.lastContextSidecars)
+        }
+
+    private fun assertSidecarWireFormatCompliant(side: String?) {
+        if (side == null) return
+        assertFalse(side.contains("Context management sidecars:"))
+        assertFalse(side.contains("Cache hints:"))
+        assertFalse(Regex("""\|(fresh|stale)\|""").containsMatchIn(side))
+        assertFalse(Regex("""\[(TOOL_OUTPUT|FILE_OUTLINE)\|turn:""").containsMatchIn(side))
+    }
 
     @Test
     fun completeModelTurn_doesNotActivateReadContextReferenceFromSidecarHints() =
@@ -1812,6 +2026,7 @@ class RustLoopInferenceServiceTest {
     private fun createService(
         agentLoopPort: AgentLoopPort,
         inner: RustCompatibleInferenceService = RecordingRustCompatibleService(),
+        loggingPort: LoggingPort = logger,
         toolExecutor: ToolExecutorPort =
             object : ToolExecutorPort {
                 override suspend fun execute(request: ToolCallRequest): ToolExecutionResult =
@@ -1834,7 +2049,7 @@ class RustLoopInferenceServiceTest {
             inner = inner,
             agentLoopPort = agentLoopPort,
             toolExecutor = toolExecutor,
-            loggingPort = logger,
+            loggingPort = loggingPort,
             provider = provider,
             modelType = ModelType.THINKING,
             inferenceFactoryProvider = inferenceFactoryProvider,

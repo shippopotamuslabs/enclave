@@ -170,6 +170,37 @@ class SaveApiPresetUseCaseTest {
         }
 
     @Test
+    fun `enforces pinning invariant when saving openrouter preset with preferred provider`() =
+        runTest {
+            val draft =
+                ApiPresetDraft(
+                    openRouterRouting =
+                        OpenRouterRoutingConfiguration(
+                            providerSort = OpenRouterProviderSort.LATENCY,
+                            allowFallbacks = true,
+                            requireParameters = true,
+                            preferredProvider = "alibaba",
+                        ),
+                )
+
+            val configSlot = slot<ApiModelConfiguration>()
+            coEvery { saveApiModelConfigurationUseCase(capture(configSlot)) } returns Result.success(draft.id)
+
+            saveApiPresetUseCase(
+                provider = ApiProvider.OPENROUTER,
+                parentCredentialsId = ApiCredentialsId("parent-cred-1"),
+                defaultReasoningEffort = null,
+                draft = draft,
+            ).getOrThrow()
+
+            val routing = configSlot.captured.openRouterRouting
+            assertEquals("alibaba", routing.preferredProvider)
+            assertEquals(false, routing.allowFallbacks)
+            assertEquals(OpenRouterProviderSort.LATENCY, routing.providerSort)
+            assertEquals(true, routing.requireParameters)
+        }
+
+    @Test
     fun `applies default values for invalid or empty fields`() =
         runTest {
             val parentCredentialsId = ApiCredentialsId("parent-cred")

@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.feature.inference
 
+import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.anthropic.client.AnthropicClient
 import com.anthropic.core.JsonValue
 import com.anthropic.models.messages.Base64ImageSource
@@ -125,11 +126,12 @@ class AnthropicInferenceServiceImpl(
         resetAppendOnlyForNewPrompt()
     }
 
-    internal fun clearAppendOnlyOnRustCompactionBoundary() {
-        appendOnlyContext?.clearOnRustCompactionBoundary()
+    internal fun clearAppendOnlyOnRustCompactionBoundary(revisionAfter: Long? = null) {
+        appendOnlyContext?.clearOnRustCompactionBoundary(revisionAfter)
     }
 
-    internal fun resetAppendOnlyForNewPrompt() {
+    @Suppress("UnusedParameter")
+    internal fun resetAppendOnlyForNewPrompt(chatId: ChatId? = null) {
         appendOnlyContext?.invalidate()
         appendOnlyContext = null
     }
@@ -221,8 +223,27 @@ class AnthropicInferenceServiceImpl(
                 sessionMessages = sessionMessages,
                 systemPrompt = systemPrompt,
                 availableTools = availableTools,
+                options = options,
             )
-            val tailInsertIndex = SessionIndexVolatilePlacement.resolveTailInsertIndex(sessionMessages)
+            val liveSidecarInsertIndex = lastUserIndex.coerceAtLeast(0)
+            val wireSidecar = appendOnly.resolveContextSidecarsForWire(contextSidecars)
+
+            fun prependIndexSidecars(
+                index: Int,
+                baseContent: String,
+            ): String {
+                val texts =
+                    SessionIndexVolatilePlacement.sidecarTextsBeforeSessionIndex(
+                        sessionIndex = index,
+                        frozenSidecars = appendOnly.frozenSidecarsForWireReplay(),
+                        preRetrievalSidecarText = null,
+                        preRetrievalInsertIndex = null,
+                        currentSidecarText = wireSidecar,
+                        tailInsertIndex = liveSidecarInsertIndex,
+                    )
+                if (texts.isEmpty()) return baseContent
+                return texts.joinToString(separator = "\n\n") + "\n\n" + baseContent
+            }
 
             sessionMessages.forEachIndexed { index, msg ->
                 val metadata =
@@ -235,17 +256,7 @@ class AnthropicInferenceServiceImpl(
                     useCaching &&
                         AnthropicPromptCacheSupport.shouldAttachMessageCacheBreakpoint(index, stableTailIndex)
 
-                val messageContent =
-                    if (index == lastUserIndex) {
-                        VolatileTurnContextWireSupport
-                            .combinedLatestUserPrepends(
-                                volatileTurnContext = null,
-                                contextSidecars = contextSidecars,
-                            )?.let { prepended -> "$prepended\n\n${msg.content}" }
-                            ?: msg.content
-                    } else {
-                        msg.content
-                    }
+                val messageContent = prependIndexSidecars(index, msg.content)
 
                 if (EngineInternalMessageMapper.isEngineInternalMessage(msg.metadataJson)) {
                     val wireText = EngineInternalMessageMapper.formatForProviderWire(msg.content)
@@ -471,8 +482,8 @@ class AnthropicInferenceServiceImpl(
 
             freezeContextSidecarIfPresent(
                 appendOnly = appendOnly,
-                contextSidecars = contextSidecars,
-                tailInsertIndex = tailInsertIndex,
+                contextSidecars = wireSidecar,
+                tailInsertIndex = liveSidecarInsertIndex,
             )
 
             return AgentModelTurnResult(
@@ -557,6 +568,7 @@ class AnthropicInferenceServiceImpl(
         sessionMessages: List<AgentLoopMessage>,
         systemPrompt: String,
         availableTools: List<ToolDefinition>,
+        options: GenerationOptions,
     ): ProviderAppendOnlyContext {
         appendOnlyContext =
             ProviderAppendOnlyContextFactory.ensureAppendOnlyContext(
@@ -570,7 +582,10 @@ class AnthropicInferenceServiceImpl(
             systemPrompt = systemPrompt,
             toolsFingerprint = availableTools.toToolsFingerprint(),
         )
-        appendOnly.syncMessages(sessionMessages.toAppendOnlySyncMessages())
+        appendOnly.syncMessages(
+            sessionMessages.toAppendOnlySyncMessages(),
+            transcriptRevision = options.transcriptRevision,
+        )
         return appendOnly
     }
 

@@ -261,6 +261,76 @@ class XaiPromptCacheToolAndSessionStabilityTest {
             )
         }
 
+    @Test
+    fun PC_XAI_09_cross_turn_rehydrate_prefix_drift_preserves_frozen_sidecars() =
+        runTest {
+            val capturedParams = mutableListOf<ChatCompletionCreateParams>()
+            val service = xaiService(capturedParams)
+            val options = GenerationOptions(reasoningBudget = 0, chatId = ChatId("chat-1"))
+            val fixture = toolLoopWithBudgetFixture()
+
+            service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        fixture.userMessage,
+                        fixture.assistantWithTool.copy(
+                            metadataJson =
+                                """
+                                {"raw_tool_calls":[{"id":"call_1","name":"web_search","arguments_json":"{}"}]}
+                                """.trimIndent(),
+                        ),
+                        fixture.toolResult,
+                        fixture.assistantSummary,
+                    ),
+                systemPrompt = "System",
+                contextSidecars = """State ledger JSON: {"turn":1}""",
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = options,
+            )
+            val appendOnly = requireNotNull(service.appendOnlyContextForTests())
+            assertEquals(1, appendOnly.committedVolatileSidecarTexts().size)
+
+            service.resetAppendOnlyForNewPrompt()
+
+            service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        fixture.userMessage,
+                        fixture.assistantWithTool.copy(
+                            metadataJson =
+                                """
+                                {"raw_tool_calls":[{"id":"call_1","name":"web_search","arguments_json":"{\"query\":\"cats\"}"}]}
+                                """.trimIndent(),
+                        ),
+                        fixture.toolResult,
+                        fixture.assistantSummary,
+                        AgentLoopMessage(id = "u2", role = Role.USER, content = "Second question"),
+                    ),
+                systemPrompt = "System",
+                contextSidecars = """State ledger JSON: {"turn":2}""",
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = options,
+            )
+
+            assertEquals(0, appendOnly.clearCount)
+            assertNull(appendOnly.lastClearReason)
+            assertEquals(2, appendOnly.committedVolatileSidecarTexts().size)
+            val wire = capturedParams.last().messages()
+            assertTrue(
+                wire.any { message ->
+                    message.isSystem() &&
+                        message.asSystem().content().asText() == """State ledger JSON: {"turn":1}"""
+                },
+                "frozen turn:1 sidecar must replay after cross-turn rehydrate prefix drift",
+            )
+        }
+
     private data class ToolLoopWithBudgetFixture(
         val userMessage: AgentLoopMessage,
         val assistantWithTool: AgentLoopMessage,

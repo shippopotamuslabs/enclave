@@ -16,6 +16,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
@@ -24,7 +28,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.browntowndev.enclave.core.ui.component.neo.NeoApiKeyField
 import com.browntowndev.enclave.core.ui.component.neo.NeoPanel
 import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
 import com.browntowndev.enclave.core.ui.component.neo.NeoSecondaryButton
@@ -41,6 +44,7 @@ fun ModelChoiceStep(
     selectedModelChoice: ModelChoice,
     selectedProvider: ApiProvider?,
     apiKey: String,
+    baseUrl: String,
     discoveredModels: List<DiscoveredApiModel>,
     selectedModelId: String,
     isDiscoveringModels: Boolean,
@@ -48,6 +52,7 @@ fun ModelChoiceStep(
     onModelChoiceSelected: (ModelChoice) -> Unit,
     onProviderSelected: (ApiProvider) -> Unit,
     onApiKeyChanged: (String) -> Unit,
+    onBaseUrlChanged: (String) -> Unit,
     onDiscoverModels: () -> Unit,
     onModelSelected: (String) -> Unit,
     onNext: () -> Unit,
@@ -56,11 +61,12 @@ fun ModelChoiceStep(
 ) {
     val borderColor = neoBorderColor()
     val scrollState = rememberScrollState()
+    var showConfigureSheet by remember { mutableStateOf(false) }
 
     val canContinue =
         when (selectedModelChoice) {
             ModelChoice.LOCAL -> true
-            ModelChoice.API -> selectedProvider != null && apiKey.isNotBlank() && selectedModelId.isNotBlank()
+            ModelChoice.API -> selectedProvider != null
             else -> false
         }
 
@@ -205,10 +211,15 @@ fun ModelChoiceStep(
                                         .neoSurface(
                                             backgroundColor = if (isSelected) bgSelected else MaterialTheme.colorScheme.surface,
                                             borderColor = if (isSelected) MaterialTheme.colorScheme.primary else borderColor,
-                                        ).clickable { onProviderSelected(provider) }
-                                        .semantics { contentDescription = label }
+                                        ).clickable {
+                                            onProviderSelected(provider)
+                                            if (isSelected) {
+                                                showConfigureSheet = true
+                                            }
+                                        }.semantics { contentDescription = label }
                                         .padding(horizontal = 16.dp, vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
                             ) {
                                 Text(
                                     text = label,
@@ -218,77 +229,12 @@ fun ModelChoiceStep(
                                         ),
                                     color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                                 )
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                NeoApiKeyField(
-                    value = apiKey,
-                    onValueChange = onApiKeyChanged,
-                    label = "Enter API Key",
-                    keyPresent = false,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                NeoPrimaryButton(
-                    text = if (isDiscoveringModels) "DISCOVERING..." else "DISCOVER MODELS",
-                    onClick = onDiscoverModels,
-                    enabled = !isDiscoveringModels && apiKey.isNotBlank() && selectedProvider != null,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-
-                discoveryError?.let {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = it,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(horizontal = 4.dp),
-                    )
-                }
-
-                if (discoveredModels.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "SELECT MODEL",
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onBackground,
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    NeoPanel(modifier = Modifier.fillMaxWidth()) {
-                        Column(
-                            modifier =
-                                Modifier
-                                    .fillMaxWidth()
-                                    .padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            discoveredModels.forEach { model ->
-                                val isSelected = selectedModelId == model.id
-                                val bgSelected = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                                Row(
-                                    modifier =
-                                        Modifier
-                                            .fillMaxWidth()
-                                            .neoSurface(
-                                                backgroundColor = if (isSelected) bgSelected else MaterialTheme.colorScheme.surface,
-                                                borderColor = if (isSelected) MaterialTheme.colorScheme.primary else borderColor,
-                                            ).clickable { onModelSelected(model.id) }
-                                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                                ) {
+                                if (isSelected) {
+                                    val isConfigured = apiKey.isNotBlank() && selectedModelId.isNotBlank()
                                     Text(
-                                        text = model.id,
-                                        style =
-                                            MaterialTheme.typography.bodyLarge.copy(
-                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                            ),
-                                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                        text = if (isConfigured) "Configured" else "Tap to configure",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary,
                                     )
                                 }
                             }
@@ -296,7 +242,6 @@ fun ModelChoiceStep(
                     }
                 }
             }
-
             Spacer(modifier = Modifier.height(24.dp))
         }
 
@@ -315,11 +260,42 @@ fun ModelChoiceStep(
             )
             NeoPrimaryButton(
                 text = "CONTINUE",
-                onClick = onNext,
+                onClick = {
+                    if (selectedModelChoice == ModelChoice.API) {
+                        if (apiKey.isBlank() || selectedModelId.isBlank()) {
+                            showConfigureSheet = true
+                        } else {
+                            onNext()
+                        }
+                    } else {
+                        onNext()
+                    }
+                },
                 enabled = canContinue,
                 modifier = Modifier.weight(1.5f),
             )
         }
+    }
+
+    if (showConfigureSheet && selectedProvider != null) {
+        ApiProviderConfigureBottomSheet(
+            provider = selectedProvider,
+            apiKey = apiKey,
+            baseUrl = baseUrl,
+            discoveredModels = discoveredModels,
+            selectedModelId = selectedModelId,
+            isDiscoveringModels = isDiscoveringModels,
+            discoveryError = discoveryError,
+            onApiKeyChanged = onApiKeyChanged,
+            onBaseUrlChanged = onBaseUrlChanged,
+            onDiscoverModels = onDiscoverModels,
+            onModelSelected = onModelSelected,
+            onDismiss = { showConfigureSheet = false },
+            onSave = {
+                showConfigureSheet = false
+                onNext()
+            },
+        )
     }
 }
 
@@ -331,6 +307,7 @@ internal fun ModelChoiceStepLightPreview() {
             selectedModelChoice = ModelChoice.LOCAL,
             selectedProvider = null,
             apiKey = "",
+            baseUrl = "",
             discoveredModels = emptyList(),
             selectedModelId = "",
             isDiscoveringModels = false,
@@ -338,6 +315,7 @@ internal fun ModelChoiceStepLightPreview() {
             onModelChoiceSelected = {},
             onProviderSelected = {},
             onApiKeyChanged = {},
+            onBaseUrlChanged = {},
             onDiscoverModels = {},
             onModelSelected = {},
             onNext = {},
@@ -354,6 +332,7 @@ internal fun ModelChoiceStepDarkPreview() {
             selectedModelChoice = ModelChoice.API,
             selectedProvider = ApiProvider.OPENROUTER,
             apiKey = "sk-test",
+            baseUrl = "",
             discoveredModels = listOf(DiscoveredApiModel(id = "openrouter/gpt-4o")),
             selectedModelId = "openrouter/gpt-4o",
             isDiscoveringModels = false,
@@ -361,6 +340,7 @@ internal fun ModelChoiceStepDarkPreview() {
             onModelChoiceSelected = {},
             onProviderSelected = {},
             onApiKeyChanged = {},
+            onBaseUrlChanged = {},
             onDiscoverModels = {},
             onModelSelected = {},
             onNext = {},

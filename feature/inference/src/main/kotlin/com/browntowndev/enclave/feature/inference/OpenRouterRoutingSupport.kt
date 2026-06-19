@@ -1,7 +1,6 @@
 package com.browntowndev.enclave.feature.inference
 
 import com.browntowndev.enclave.domain.model.config.OpenRouterDataCollectionPolicy
-import com.browntowndev.enclave.domain.model.config.OpenRouterProviderSort
 import com.browntowndev.enclave.domain.model.config.OpenRouterRoutingConfiguration
 import com.openai.core.JsonValue
 import com.openai.models.chat.completions.ChatCompletionCreateParams
@@ -31,27 +30,25 @@ internal object OpenRouterRoutingSupport {
     private fun providerRoutingJsonValue(routing: OpenRouterRoutingConfiguration): JsonValue {
         val hasPreferred = !routing.preferredProvider.isNullOrBlank()
         val allowFallbacks = routing.allowFallbacks
+        val pinnedProvider = hasPreferred && !allowFallbacks
 
-        val sort = if (hasPreferred && !allowFallbacks) {
-            OpenRouterProviderSort.THROUGHPUT.wireValue
-        } else {
-            routing.providerSort.wireValue
-        }
-        val requireParameters = if (hasPreferred && !allowFallbacks) {
+        val requireParameters = if (pinnedProvider) {
             false
         } else {
             routing.requireParameters
         }
-        val dataCollection = if (hasPreferred && !allowFallbacks) {
+        val dataCollection = if (pinnedProvider) {
             OpenRouterDataCollectionPolicy.DENY.wireValue
         } else {
             routing.dataCollectionPolicy.wireValue
         }
-        val zdr = if (hasPreferred && !allowFallbacks) false else routing.zeroDataRetention
+        val zdr = if (pinnedProvider) false else routing.zeroDataRetention
 
         val providerMap =
             buildMap {
-                put("sort", sort)
+                if (!pinnedProvider) {
+                    put("sort", routing.providerSort.wireValue)
+                }
                 put("allow_fallbacks", allowFallbacks)
                 put("require_parameters", requireParameters)
                 put("data_collection", dataCollection)

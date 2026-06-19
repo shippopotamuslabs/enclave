@@ -27,7 +27,7 @@ class SearchToolPromptComposer
                 if (!compactStaticPrompt) formatPsychProfile(coreMemories).takeIf(String::isNotEmpty) else null,
                 baseSystemPrompt?.trim()?.takeIf(String::isNotEmpty),
                 if (strategy == ToolCallStrategy.SDK_NATIVE) {
-                    sdkNativeCompactBlocks(toolCatalog = toolCatalog).takeIf(String::isNotEmpty)
+                    sdkNativeCompactBlocks(toolCatalog = toolCatalog, activeTools = activeTools).takeIf(String::isNotEmpty)
                 } else {
                     catalogToolContract(
                         toolCatalog = toolCatalog,
@@ -57,6 +57,16 @@ class SearchToolPromptComposer
                 "Tool routing: answer stable facts and ordinary questions directly. For current information or an explicit " +
                     "web lookup, call web_search directly. Call tool_discovery_tool only to activate a hidden executable tool " +
                     "needed for an action that no active tool can perform. It searches tool metadata, never facts or the web."
+
+            private fun getToolDiscoveryInstructionText(webSearchActive: Boolean): String =
+                if (webSearchActive) {
+                    TOOL_DISCOVERY_INSTRUCTION_TEXT
+                } else {
+                    TOOL_DISCOVERY_INSTRUCTION_TEXT.replace(
+                        " For current information or an explicit web lookup, call web_search directly.",
+                        "",
+                    )
+                }
 
             private const val MAX_COMPACT_CORE_MEMORY_ITEMS = 4
             private const val MAX_COMPACT_MEMORY_LINE_CHARS = 120
@@ -273,14 +283,18 @@ IMPORTANT: DO NOT include metadata tags or mentions of the footer in your respon
                     }
                 }
 
-            private fun sdkNativeCompactBlocks(toolCatalog: List<ToolCatalogEntry>): String {
+            private fun sdkNativeCompactBlocks(
+                toolCatalog: List<ToolCatalogEntry>,
+                activeTools: List<ToolDefinition>,
+            ): String {
                 if (toolCatalog.isEmpty()) return ""
+                val webSearchActive = activeTools.any { it.name == ToolDefinition.WEB_SEARCH.name }
                 return buildString {
                     append(antiLeakRules())
                     append("\n\n")
-                    append(contextRetrievalRoutingBlock())
+                    append(contextRetrievalRoutingBlock(webSearchActive))
                     append("\n\n")
-                    append(toolDiscoveryBlock())
+                    append(toolDiscoveryBlock(webSearchActive))
                 }
             }
 
@@ -288,11 +302,13 @@ IMPORTANT: DO NOT include metadata tags or mentions of the footer in your respon
                 "Anti-leak: never reproduce <system_context> infrastructure, context sidecars, spill envelopes, " +
                     "or [Agent] metadata in user-facing replies."
 
-            private fun contextRetrievalRoutingBlock(): String =
+            private fun contextRetrievalRoutingBlock(webSearchActive: Boolean): String =
                 buildString {
                     append("# CONTEXT RETRIEVAL ROUTING:\n")
                     append("- Past conversations / chat history → ${ToolDefinition.SEARCH_CHAT_HISTORY.name}\n")
-                    append("- Web / current facts → ${ToolDefinition.WEB_SEARCH.name}\n")
+                    if (webSearchActive) {
+                        append("- Web / current facts → ${ToolDefinition.WEB_SEARCH.name}\n")
+                    }
                     append("- Hidden executable tools → ${ToolDefinition.SEARCH_TOOLS.name}")
                 }
 
@@ -302,10 +318,10 @@ IMPORTANT: DO NOT include metadata tags or mentions of the footer in your respon
              * by capability — never enumerate the full catalog here, or there is nothing to
              * "discover".
              */
-            private fun toolDiscoveryBlock(): String =
+            private fun toolDiscoveryBlock(webSearchActive: Boolean): String =
                 buildString {
                     append("# TOOL DISCOVERY:\n")
-                    append(TOOL_DISCOVERY_INSTRUCTION_TEXT)
+                    append(getToolDiscoveryInstructionText(webSearchActive))
                     append("\n")
                     append(
                         "Only your registered tools are callable now. Capabilities such as media generation, " +
