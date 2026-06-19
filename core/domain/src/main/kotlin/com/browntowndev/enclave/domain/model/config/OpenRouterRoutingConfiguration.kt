@@ -36,6 +36,13 @@ data class OpenRouterRoutingConfiguration(
     val preferredProvider: String? = null,
 )
 
+fun OpenRouterRoutingConfiguration.enforcePinningInvariant(): OpenRouterRoutingConfiguration =
+    if (!preferredProvider.isNullOrBlank() && allowFallbacks) {
+        copy(allowFallbacks = false)
+    } else {
+        this
+    }
+
 data class OpenRouterModelEndpoint(
     val providerName: String,
     val providerSlug: String,

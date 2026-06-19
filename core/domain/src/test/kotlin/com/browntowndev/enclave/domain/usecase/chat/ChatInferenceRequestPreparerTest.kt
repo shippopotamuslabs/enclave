@@ -89,7 +89,7 @@ class ChatInferenceRequestPreparerTest {
                 },
                 {
                     assertEquals(
-                        listOf("tool_discovery_tool", "web_search", "web_extract"),
+                        listOf("tool_discovery_tool", "read_context_reference", "web_search", "web_extract"),
                         request.options.activeTools.map { it.name },
                     )
                 },

@@ -3,10 +3,10 @@ package com.browntowndev.enclave.domain.usecase.usecase
 import com.browntowndev.enclave.domain.model.config.ApiCredentials
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.config.TtsProviderId
-import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId
 import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
@@ -24,6 +24,7 @@ import com.browntowndev.enclave.domain.usecase.settings.ApiModelDiscoveryScope
 
 class FakeBulkAssignApiProviderUseCase : BulkAssignApiProviderUseCase {
     var callCount: Int = 0
+    var lastCredentials: ApiCredentials? = null
     var resultToReturn: Result<ApiCredentialsId> = Result.success(ApiCredentialsId("fake-creds"))
     val recordedSlots: MutableList<List<ModelType>> = mutableListOf()
 
@@ -35,6 +36,7 @@ class FakeBulkAssignApiProviderUseCase : BulkAssignApiProviderUseCase {
         targetSlots: List<ModelType>,
     ): Result<ApiCredentialsId> {
         callCount++
+        lastCredentials = credentials
         recordedSlots.add(targetSlots)
         return resultToReturn
     }

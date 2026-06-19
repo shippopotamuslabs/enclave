@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 
 class ProviderAppendOnlyContextTest {
@@ -122,6 +123,74 @@ class ProviderAppendOnlyContextTest {
     }
 
     @Test
+    fun cross_turn_reanchor_preserves_frozen_sidecars_on_prefix_digest_drift() {
+        val context = ProviderAppendOnlyContext()
+        context.endTurnFreezeSidecar("s1", mappedInsertIndex = 1)
+        context.syncMessages(
+            listOf(ProviderNormalizedMessage(role = "user", content = "Hello")),
+        )
+        context.markTurnBoundaryForReanchor()
+        context.syncMessages(
+            listOf(
+                ProviderNormalizedMessage(role = "user", content = "Hello"),
+                ProviderNormalizedMessage(
+                    role = "assistant",
+                    content = "",
+                    toolCalls = """[{"id":"call_1","name":"web_search"}]""",
+                ),
+            ),
+        )
+
+        assertEquals(0, context.clearCount)
+        assertEquals(1, context.frozenSidecarsForWireReplay().size)
+        assertEquals(2, context.committedMessageCount())
+    }
+
+    @Test
+    fun turn_boundary_reanchor_does_not_suppress_within_turn_digest_mismatch() {
+        val context = ProviderAppendOnlyContext()
+        context.syncMessages(
+            listOf(ProviderNormalizedMessage(role = "user", content = "Hello")),
+        )
+        context.markTurnBoundaryForReanchor()
+        context.syncMessages(
+            listOf(ProviderNormalizedMessage(role = "user", content = "Hello")),
+        )
+        context.syncMessages(
+            listOf(ProviderNormalizedMessage(role = "user", content = "Hello altered")),
+        )
+
+        assertEquals(1, context.clearCount)
+        assertEquals("digest_mismatch", context.lastClearReason)
+    }
+
+    @Test
+    fun turn_boundary_reanchor_still_clears_on_compaction_shorter_array() {
+        val context = ProviderAppendOnlyContext()
+        context.endTurnFreezeSidecar("frozen-ledger", mappedInsertIndex = 2)
+        context.syncMessages(
+            listOf(
+                ProviderNormalizedMessage(role = "user", content = "prompt"),
+                ProviderNormalizedMessage(role = "user", content = "budget"),
+                ProviderNormalizedMessage(role = "assistant", content = ""),
+                ProviderNormalizedMessage(role = "user", content = """{"results":[]}""", toolCallId = "call_1"),
+            ),
+        )
+        context.markTurnBoundaryForReanchor()
+        context.syncMessages(
+            listOf(
+                ProviderNormalizedMessage(role = "user", content = "prompt"),
+                ProviderNormalizedMessage(role = "assistant", content = ""),
+                ProviderNormalizedMessage(role = "user", content = """{"results":[]}""", toolCallId = "call_1"),
+            ),
+        )
+
+        assertEquals(1, context.clearCount)
+        assertEquals("compaction_shorter_array", context.lastClearReason)
+        assertTrue(context.frozenSidecarsForWireReplay().isEmpty())
+    }
+
+    @Test
     fun digest_mismatch_clears_frozen_sidecar_snapshots() {
         val context = ProviderAppendOnlyContext()
         context.endTurnFreezeSidecar("s1", mappedInsertIndex = 1)
@@ -223,5 +292,66 @@ class ProviderAppendOnlyContextTest {
 
         assertEquals(0, context.clearCount)
         assertEquals(1, context.frozenSidecarsForWireReplay().size)
+    }
+
+    @Test
+    @DisplayName("SC-DEDUPE-RESOLVE-01 first ship records lastShippedSidecarText")
+    fun SC_DEDUPE_RESOLVE_01_firstShipReturnsBuiltAndDedupesSecondCall() {
+        val context = ProviderAppendOnlyContext()
+        val built = """State ledger JSON: {"turn":1}"""
+
+        assertEquals(built, context.resolveContextSidecarsForWire(built))
+        assertNull(context.resolveContextSidecarsForWire(built))
+    }
+
+    @Test
+    @DisplayName("SC-DEDUPE-RESOLVE-02 semantic change ships again")
+    fun SC_DEDUPE_RESOLVE_02_changedStringShipsAgain() {
+        val context = ProviderAppendOnlyContext()
+        val v1 = """State ledger JSON: {"turn":1}"""
+        val v2 = """State ledger JSON: {"turn":2}"""
+
+        context.resolveContextSidecarsForWire(v1)
+        assertEquals(v2, context.resolveContextSidecarsForWire(v2))
+        assertNull(context.resolveContextSidecarsForWire(v2))
+    }
+
+    @Test
+    @DisplayName("SC-DEDUPE-RESOLVE-03 post-clear re-ship")
+    fun SC_DEDUPE_RESOLVE_03_clearLogStateAndInvalidateResetDedupeMemory() {
+        val context = ProviderAppendOnlyContext()
+        val sidecar = """State ledger JSON: {"v":1}"""
+        context.resolveContextSidecarsForWire(sidecar)
+        assertNull(context.resolveContextSidecarsForWire(sidecar))
+        context.syncMessages(
+            listOf(ProviderNormalizedMessage(role = "user", content = "Hello")),
+        )
+        context.syncMessages(
+            listOf(ProviderNormalizedMessage(role = "user", content = "Hello altered")),
+        )
+        assertEquals("digest_mismatch", context.lastClearReason)
+
+        assertEquals(sidecar, context.resolveContextSidecarsForWire(sidecar))
+
+        val invalidateContext = ProviderAppendOnlyContext()
+        invalidateContext.resolveContextSidecarsForWire(sidecar)
+        invalidateContext.invalidate()
+        assertEquals(sidecar, invalidateContext.resolveContextSidecarsForWire(sidecar))
+    }
+
+    @Test
+    @DisplayName("SC-DEDUPE-03 post-invalidate re-ship")
+    fun SC_DEDUPE_03_postInvalidateReShip() {
+        val context = ProviderAppendOnlyContext()
+        val sidecar = """State ledger JSON: {"k":1}"""
+        context.endTurnFreezeSidecar(sidecar, mappedInsertIndex = 0)
+        assertEquals(1, context.frozenSidecarsForWireReplay().size)
+        assertNull(context.resolveContextSidecarsForWire(sidecar))
+
+        context.invalidate()
+
+        assertTrue(context.frozenSidecarsForWireReplay().isEmpty())
+        assertEquals(sidecar, context.resolveContextSidecarsForWire(sidecar))
+        assertNull(context.resolveContextSidecarsForWire(sidecar))
     }
 }

@@ -185,20 +185,15 @@ class ChatInferenceRequestPreparerCacheStabilityTest {
         }
 
     // ---------------------------------------------------------------------------
-    // CSPC-04b — intent classifier activates search_x_recent on turn 2 but not 1 or 3;
-    //             monotonic store keeps catalog identical on turn 3
+    // CSPC-04b — artifact intent activates start_artifact on turn 2 but not 1; monotonic store
+    //             keeps the catalog identical on turn 3. (search_x_recent is now preloaded, so it
+    //             can no longer demonstrate a deferred->activated flip; start_artifact is the
+    //             intent-gated vehicle. A preloaded tool stays PRELOADED on every turn.)
     // ---------------------------------------------------------------------------
 
     @Test
     fun CSPC_04b_deferred_tool_flips_to_intent_activated_turn2_catalog_stable_monotonic_union() =
         runTest {
-            // Turn 1: requiresSearch=false; Turn 2: requiresSearch=true; Turn 3: requiresSearch=false
-            // The classifier is called twice per turn when xSearch is configured:
-            // once by ToolIntentActivationPolicy.resolve() and once by the xDeferred block.
-            val classifier =
-                ControlledSearchIntentClassifier(
-                    ArrayDeque(listOf(false, false, true, true, false, false)),
-                )
             val store = InMemoryMonotonicToolActivationStore()
             val preparer =
                 buildPreparer(
@@ -210,47 +205,43 @@ class ChatInferenceRequestPreparerCacheStabilityTest {
                             xApiKeyPresent = true,
                         ),
                     monotonicToolActivation = store,
-                    searchIntentClassifier = classifier,
                     activeModelProvider = mockLocalModelProvider(),
                 )
 
             val result1 = invoke(preparer, "plain text")
-            val disclosureModeTurn1 =
-                result1.options.toolCatalog
-                    .single { it.name == "search_x_recent" }
-                    .disclosureMode
-            val systemPromptTurn1 = result1.options.systemPrompt
 
             assertEquals(
                 ToolDisclosureMode.DISCLOSE_ON_DEMAND,
-                disclosureModeTurn1,
-                "CSPC-04b turn 1: search_x_recent should be DISCLOSE_ON_DEMAND",
+                disclosureModeOf(result1, "start_artifact"),
+                "CSPC-04b turn 1: start_artifact should be DISCLOSE_ON_DEMAND",
+            )
+            assertEquals(
+                ToolDisclosureMode.PRELOADED,
+                disclosureModeOf(result1, "search_x_recent"),
+                "CSPC-04b turn 1: search_x_recent should be PRELOADED (cache-stable from turn 1)",
             )
 
-            val result2 = invoke(preparer, "breaking news x")
-            val disclosureModeTurn2 =
-                result2.options.toolCatalog
-                    .single { it.name == "search_x_recent" }
-                    .disclosureMode
+            val result2 = invoke(preparer, "export this conversation as a markdown artifact")
             val systemPromptTurn2 = result2.options.systemPrompt
 
             assertEquals(
                 ToolDisclosureMode.INTENT_ACTIVATED,
-                disclosureModeTurn2,
-                "CSPC-04b turn 2: search_x_recent should be INTENT_ACTIVATED after classifier fires",
+                disclosureModeOf(result2, "start_artifact"),
+                "CSPC-04b turn 2: start_artifact should be INTENT_ACTIVATED after artifact intent fires",
             )
 
             val result3 = invoke(preparer, "plain text again")
-            val disclosureModeTurn3 =
-                result3.options.toolCatalog
-                    .single { it.name == "search_x_recent" }
-                    .disclosureMode
             val systemPromptTurn3 = result3.options.systemPrompt
 
             assertEquals(
                 ToolDisclosureMode.INTENT_ACTIVATED,
-                disclosureModeTurn3,
-                "CSPC-04b turn 3: search_x_recent must remain INTENT_ACTIVATED (monotonic union)",
+                disclosureModeOf(result3, "start_artifact"),
+                "CSPC-04b turn 3: start_artifact must remain INTENT_ACTIVATED (monotonic union)",
+            )
+            assertEquals(
+                ToolDisclosureMode.PRELOADED,
+                disclosureModeOf(result3, "search_x_recent"),
+                "CSPC-04b turn 3: search_x_recent stays PRELOADED across turns",
             )
             assertEquals(
                 systemPromptTurn2,
@@ -302,19 +293,15 @@ class ChatInferenceRequestPreparerCacheStabilityTest {
         }
 
     // ---------------------------------------------------------------------------
-    // CSPC-MUTDEF-01 — identity MonotonicToolActivationPort causes catalog to shrink on turn 3
+    // CSPC-MUTDEF-01 — identity MonotonicToolActivationPort causes catalog to shrink on turn 3.
+    //                  Uses start_artifact (intent-gated) as the vehicle; search_x_recent is now
+    //                  preloaded and would stay PRELOADED regardless of the store, so it cannot
+    //                  surface the regression.
     // ---------------------------------------------------------------------------
 
     @Test
     fun CSPC_MUTDEF_01_identity_monotonic_store_causes_catalog_regression_on_turn3() =
         runTest {
-            // Turn 2: requiresSearch=true; Turn 3: requiresSearch=false
-            // The classifier is called twice per turn when xSearch is configured:
-            // once by ToolIntentActivationPolicy.resolve() and once by the xDeferred block.
-            val classifier =
-                ControlledSearchIntentClassifier(
-                    ArrayDeque(listOf(true, true, false, false)),
-                )
             val preparer =
                 buildPreparer(
                     settings =
@@ -325,33 +312,24 @@ class ChatInferenceRequestPreparerCacheStabilityTest {
                             xApiKeyPresent = true,
                         ),
                     monotonicToolActivation = IdentityMonotonicToolActivationPort,
-                    searchIntentClassifier = classifier,
                     activeModelProvider = mockLocalModelProvider(),
                 )
 
-            val result2 = invoke(preparer, "breaking news x")
-            val disclosureModeTurn2 =
-                result2.options.toolCatalog
-                    .single { it.name == "search_x_recent" }
-                    .disclosureMode
+            val result2 = invoke(preparer, "export this conversation as a markdown artifact")
             val toolCatalogTurn2 = result2.options.toolCatalog
 
             assertEquals(
                 ToolDisclosureMode.INTENT_ACTIVATED,
-                disclosureModeTurn2,
-                "CSPC-MUTDEF-01 turn 2: search_x_recent should be INTENT_ACTIVATED",
+                disclosureModeOf(result2, "start_artifact"),
+                "CSPC-MUTDEF-01 turn 2: start_artifact should be INTENT_ACTIVATED",
             )
 
             val result3 = invoke(preparer, "plain text")
-            val disclosureModeTurn3 =
-                result3.options.toolCatalog
-                    .single { it.name == "search_x_recent" }
-                    .disclosureMode
             val toolCatalogTurn3 = result3.options.toolCatalog
 
             assertEquals(
                 ToolDisclosureMode.DISCLOSE_ON_DEMAND,
-                disclosureModeTurn3,
+                disclosureModeOf(result3, "start_artifact"),
                 "CSPC-MUTDEF-01 turn 3: identity stub returns DISCLOSE_ON_DEMAND (regressed — confirms stub is broken)",
             )
             assertNotEquals(
@@ -365,19 +343,13 @@ class ChatInferenceRequestPreparerCacheStabilityTest {
     // Test helpers
     // ---------------------------------------------------------------------------
 
-    /**
-     * Controlled classifier that pops from a deque of booleans for requiresSearch.
-     */
-    private class ControlledSearchIntentClassifier(
-        private val decisions: ArrayDeque<Boolean>,
-    ) : SearchIntentClassifierPort {
-        override fun requiresSearch(
-            embedding: FloatArray,
-            threshold: Float,
-        ): Boolean = decisions.removeFirstOrNull() ?: false
-
-        override fun getSearchIntentProbability(embedding: FloatArray): Float = if (decisions.firstOrNull() == true) 0.95f else 0.05f
-    }
+    private fun disclosureModeOf(
+        result: PreparedChatInferenceRequest,
+        toolName: String,
+    ): ToolDisclosureMode =
+        result.options.toolCatalog
+            .single { it.name == toolName }
+            .disclosureMode
 
     /**
      * Identity stub — always returns [newNames] unchanged (does NOT accumulate).

@@ -1,6 +1,10 @@
 package com.browntowndev.enclave.feature.inference.telemetry
 
+import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam
 import com.openai.models.chat.completions.ChatCompletionMessageParam
+import com.openai.models.chat.completions.ChatCompletionSystemMessageParam
+import com.openai.models.chat.completions.ChatCompletionToolMessageParam
+import com.openai.models.chat.completions.ChatCompletionUserMessageParam
 import java.security.MessageDigest
 
 /**
@@ -11,6 +15,18 @@ import java.security.MessageDigest
  * Reasonix [PrefixShape] / [CompareShape].
  */
 internal object PromptCachePrefixDiagnostics {
+    const val PREFIX_BREAK_WINDOW_CHARS = 120
+
+    data class PrefixBreakReport(
+        val matchChars: Int,
+        val newChars: Int,
+        val matchPct: Int,
+        val divergenceIndex: Int,
+        val contextBefore: String,
+        val oldSnippet: String,
+        val newSnippet: String,
+    )
+
     data class PrefixShape(
         val systemHash: String,
         val toolsHash: String,
@@ -88,13 +104,74 @@ internal object PromptCachePrefixDiagnostics {
         )
     }
 
+    fun renderWireBody(
+        systemPrompt: String,
+        toolNames: List<String>,
+        messages: List<ChatCompletionMessageParam>,
+    ): String {
+        val messageFingerprint = messages.toWireFingerprint()
+        return buildString {
+            append("TOOLS:")
+            append(toolNames.joinToString(","))
+            append('\n')
+            append("S:")
+            append(systemPrompt)
+            if (messageFingerprint.isNotEmpty()) {
+                append('\n')
+                append(messageFingerprint)
+            }
+        }
+    }
+
+    fun computePrefixBreak(
+        previousBody: String,
+        newBody: String,
+        windowChars: Int,
+    ): PrefixBreakReport {
+        var matchChars = 0
+        val sharedLength = minOf(previousBody.length, newBody.length)
+        while (matchChars < sharedLength && previousBody[matchChars] == newBody[matchChars]) {
+            matchChars++
+        }
+        val divergenceIndex = matchChars
+        val newChars = newBody.length
+        val matchPct =
+            if (newChars == 0) {
+                100
+            } else {
+                (matchChars * 100) / newChars
+            }
+        val contextStart = (divergenceIndex - windowChars).coerceAtLeast(0)
+        val contextBefore = previousBody.substring(contextStart, divergenceIndex)
+        val halfWindow = windowChars / 2
+        val oldStart = (divergenceIndex - halfWindow).coerceAtLeast(0)
+        val oldEnd = (divergenceIndex + halfWindow).coerceAtMost(previousBody.length)
+        val oldSnippet = previousBody.substring(oldStart, oldEnd)
+        val newStart = (divergenceIndex - halfWindow).coerceAtLeast(0)
+        val newEnd = (divergenceIndex + halfWindow).coerceAtMost(newBody.length)
+        val newSnippet = newBody.substring(newStart, newEnd)
+        return PrefixBreakReport(
+            matchChars = matchChars,
+            newChars = newChars,
+            matchPct = matchPct,
+            divergenceIndex = divergenceIndex,
+            contextBefore = contextBefore,
+            oldSnippet = oldSnippet,
+            newSnippet = newSnippet,
+        )
+    }
+
+    fun sanitizeForLog(text: String): String = text.replace(Regex("\\s+"), " ").trim()
+
     fun formatWireHead(messages: List<ChatCompletionMessageParam>, maxMessages: Int = 4): String =
         messages
             .take(maxMessages)
             .joinToString(" | ") { param ->
                 when {
-                    param.isSystem() -> "sys:${param.asSystem().content().asText().take(WIRE_HEAD_PREVIEW_CHARS)}"
-                    param.isUser() -> "user:${param.asUser().content().asText().take(WIRE_HEAD_PREVIEW_CHARS)}"
+                    param.isSystem() ->
+                        "sys:${param.asSystem().content().wireContentText().take(WIRE_HEAD_PREVIEW_CHARS)}"
+                    param.isUser() ->
+                        "user:${param.asUser().content().wireContentText().take(WIRE_HEAD_PREVIEW_CHARS)}"
                     param.isAssistant() -> "asst"
                     param.isTool() -> "tool"
                     else -> "other"
@@ -104,8 +181,8 @@ internal object PromptCachePrefixDiagnostics {
     private fun List<ChatCompletionMessageParam>.toWireFingerprint(): String =
         joinToString("\n") { param ->
             when {
-                param.isSystem() -> "S:${param.asSystem().content().asText()}"
-                param.isUser() -> "U:${param.asUser().content().asText()}"
+                param.isSystem() -> "S:${param.asSystem().content().wireContentText()}"
+                param.isUser() -> "U:${param.asUser().content().wireContentText()}"
                 param.isAssistant() -> {
                     val assistant = param.asAssistant()
                     val toolCallsText =
@@ -118,16 +195,46 @@ internal object PromptCachePrefixDiagnostics {
                         }
                     val text =
                         if (assistant.content().isPresent) {
-                            val content = assistant.content().get()
-                            if (content.isText()) content.asText() else "content_parts"
+                            assistant.content().get().wireContentText()
                         } else {
                             ""
                         }
                     "A:text=$text;tools=$toolCallsText"
                 }
-                param.isTool() -> "T:${param.asTool().content().asText()}#${param.asTool().toolCallId()}"
+                param.isTool() -> "T:${param.asTool().content().wireContentText()}#${param.asTool().toolCallId()}"
                 else -> param.toString()
             }
+        }
+
+    private fun ChatCompletionSystemMessageParam.Content.wireContentText(): String =
+        when {
+            isText() -> asText()
+            isArrayOfContentParts() -> asArrayOfContentParts().joinToString("|") { it.text() }
+            else -> "content_parts"
+        }
+
+    private fun ChatCompletionUserMessageParam.Content.wireContentText(): String =
+        when {
+            isText() -> asText()
+            isArrayOfContentParts() ->
+                asArrayOfContentParts().joinToString("|") { part ->
+                    if (part.isText()) part.asText().text() else "content_part"
+                }
+            else -> "content_parts"
+        }
+
+    private fun ChatCompletionAssistantMessageParam.Content.wireContentText(): String =
+        when {
+            isText() -> asText()
+            isArrayOfContentParts() -> "content_parts"
+            else -> "content_parts"
+        }
+
+    private fun ChatCompletionToolMessageParam.Content.wireContentText(): String =
+        when {
+            isText() -> asText()
+            isArrayOfContentParts() -> asArrayOfContentParts().joinToString("|") { it.text() }
+            else -> "content_parts"
         }
 
     private fun shortHash(value: String): String {

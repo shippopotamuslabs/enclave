@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.feature.inference
 
+import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.ChatMessage
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.AgentFinishReason
@@ -86,11 +87,12 @@ class GoogleInferenceServiceImpl(
         resetAppendOnlyForNewPrompt()
     }
 
-    internal fun clearAppendOnlyOnRustCompactionBoundary() {
-        appendOnlyContext?.clearOnRustCompactionBoundary()
+    internal fun clearAppendOnlyOnRustCompactionBoundary(revisionAfter: Long? = null) {
+        appendOnlyContext?.clearOnRustCompactionBoundary(revisionAfter)
     }
 
-    internal fun resetAppendOnlyForNewPrompt() {
+    @Suppress("UnusedParameter")
+    internal fun resetAppendOnlyForNewPrompt(chatId: ChatId? = null) {
         appendOnlyContext?.invalidate()
         appendOnlyContext = null
     }
@@ -144,9 +146,24 @@ class GoogleInferenceServiceImpl(
                 systemPrompt = systemPrompt,
                 toolsFingerprint = availableTools.toToolsFingerprint(),
             )
-            appendOnly.syncMessages(sessionMessages.toAppendOnlySyncMessages())
-            val tailInsertIndex = SessionIndexVolatilePlacement.resolveTailInsertIndex(sessionMessages)
-            val latestUserPrepends = contextSidecars?.trim()?.takeIf { it.isNotEmpty() }
+            appendOnly.syncMessages(
+                sessionMessages.toAppendOnlySyncMessages(),
+                transcriptRevision = options.transcriptRevision,
+            )
+            val liveSidecarInsertIndex = lastUserIndex.coerceAtLeast(0)
+            val wireSidecar = appendOnly.resolveContextSidecarsForWire(contextSidecars)
+
+            fun sidecarPrependTextForIndex(index: Int): String? =
+                SessionIndexVolatilePlacement
+                    .sidecarTextsBeforeSessionIndex(
+                        sessionIndex = index,
+                        frozenSidecars = appendOnly.frozenSidecarsForWireReplay(),
+                        preRetrievalSidecarText = null,
+                        preRetrievalInsertIndex = null,
+                        currentSidecarText = wireSidecar,
+                        tailInsertIndex = liveSidecarInsertIndex,
+                    ).joinToString(separator = "\n\n")
+                    .takeIf { it.isNotBlank() }
 
             fun mapAtIndex(
                 message: AgentLoopMessage,
@@ -158,7 +175,7 @@ class GoogleInferenceServiceImpl(
                     index = index,
                     lastUserIndex = if (attachImages) lastUserIndex else -1,
                     imageUris = if (attachImages) imageUris else emptyList(),
-                    prependedText = if (index == latestIndex && !latestUserPrepends.isNullOrBlank()) latestUserPrepends else null,
+                    prependedText = sidecarPrependTextForIndex(index),
                 )
 
             fun appendMappedMessage(
@@ -303,10 +320,10 @@ class GoogleInferenceServiceImpl(
                     null
                 }
 
-            if (!contextSidecars.isNullOrBlank()) {
+            if (wireSidecar != null) {
                 appendOnly.endTurnFreezeSidecar(
-                    sidecarText = contextSidecars,
-                    mappedInsertIndex = tailInsertIndex,
+                    sidecarText = wireSidecar,
+                    mappedInsertIndex = liveSidecarInsertIndex,
                 )
             }
 

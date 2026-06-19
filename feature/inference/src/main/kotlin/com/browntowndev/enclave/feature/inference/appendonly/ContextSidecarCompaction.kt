@@ -19,9 +19,30 @@ import kotlinx.serialization.json.jsonPrimitive
 internal object ContextSidecarCompaction {
     private const val FULL_SCHEMA_REF_OMIT_THRESHOLD = 64
 
+    /**
+     * State-ledger fields that are pure bookkeeping: they grow on every tool hop (or
+     * compaction) yet duplicate information already present in the transcript (tool
+     * calls/results) or the context store (summary/history refs). Re-emitting them
+     * mutates the wire sidecar every hop, which defeats the append-only dedupe gate and
+     * caps the provider prompt-cache prefix at the static system+tools header.
+     */
+    private val VOLATILE_LEDGER_FIELDS = setOf("tool_decisions", "summary_refs", "history_refs")
+
     private val json = Json { ignoreUnknownKeys = true }
 
-    fun compactStateLedgerJson(raw: String): String = compactJsonObject(raw)
+    fun compactStateLedgerJson(raw: String): String =
+        runCatching {
+            val root = json.parseToJsonElement(raw).jsonObject
+            val durable =
+                buildMap<String, JsonElement> {
+                    root.forEach { (key, value) ->
+                        if (key !in VOLATILE_LEDGER_FIELDS) {
+                            put(key, value)
+                        }
+                    }
+                }
+            JsonObject(durable).toString()
+        }.getOrElse { compactJsonObject(raw) }
 
     fun compactToolContextIndexJson(raw: String): String =
         runCatching {

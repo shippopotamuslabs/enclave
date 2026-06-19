@@ -138,11 +138,28 @@ class OnboardingViewModel
         }
 
         fun onProviderSelected(provider: ApiProvider) {
-            _uiState.update { it.copy(selectedProvider = provider) }
+            _uiState.update { state ->
+                if (state.selectedProvider != provider) {
+                    state.copy(
+                        selectedProvider = provider,
+                        apiKey = "",
+                        baseUrl = "",
+                        discoveredModels = emptyList(),
+                        selectedModelId = "",
+                        discoveryError = null,
+                    )
+                } else {
+                    state
+                }
+            }
         }
 
         fun onApiKeyChanged(key: String) {
             _uiState.update { it.copy(apiKey = key) }
+        }
+
+        fun onBaseUrlChanged(url: String) {
+            _uiState.update { it.copy(baseUrl = url) }
         }
 
         fun onDiscoverModels() {
@@ -156,7 +173,7 @@ class OnboardingViewModel
                             provider = provider,
                             currentApiKey = state.apiKey,
                             credentialAlias = null,
-                            baseUrl = null,
+                            baseUrl = state.baseUrl.takeIf { it.isNotBlank() },
                             selectedModelId = null,
                         )
                     val result = discoverApiModelsUseCase(request)
@@ -229,6 +246,7 @@ class OnboardingViewModel
                                     .ApiCredentialsId(""),
                             displayName = provider.name,
                             provider = provider,
+                            baseUrl = latestState.baseUrl.takeIf { it.isNotBlank() },
                             credentialAlias = provider.name.lowercase(),
                         )
                     val result =

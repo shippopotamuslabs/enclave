@@ -45,7 +45,7 @@ class ChatInferenceRequestPreparerToolSearchTest {
             assertAll(
                 {
                     assertEquals(
-                        listOf("tool_discovery_tool", "web_search", "web_extract"),
+                        listOf("tool_discovery_tool", "read_context_reference", "web_search", "web_extract"),
                         request.options.activeTools.map { it.name },
                     )
                 },
@@ -72,7 +72,7 @@ class ChatInferenceRequestPreparerToolSearchTest {
         }
 
     @Test
-    fun `TSD-20 read_context_reference is catalog-visible but not preloaded`() =
+    fun `TSD-20 read_context_reference is preloaded for prompt-cache prefix stability`() =
         runTest {
             val request =
                 preparer(searchEnabled = true, imageTarget = null)(
@@ -90,7 +90,9 @@ class ChatInferenceRequestPreparerToolSearchTest {
                     )
                 },
                 {
-                    assertFalse(
+                    // Preloaded from turn 1 so its first mid-session spill activation does not
+                    // insert a new tool into the wire tools[] block and bust the whole cache prefix.
+                    assertTrue(
                         request.options.activeTools.map { it.name }.contains("read_context_reference"),
                     )
                 },
@@ -117,7 +119,7 @@ class ChatInferenceRequestPreparerToolSearchTest {
                 },
                 {
                     assertEquals(
-                        listOf("tool_discovery_tool"),
+                        listOf("tool_discovery_tool", "read_context_reference"),
                         request.options.activeTools.map { it.name },
                     )
                 },

@@ -17,7 +17,9 @@ import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 
 class AppendOnlyOpenAiSidecarPlacementTest {
@@ -794,7 +796,8 @@ class AppendOnlyOpenAiSidecarPlacementTest {
         }
 
     @Test
-    fun AOC_22_tool_loop_does_not_increment_append_only_clear_count() =
+    @DisplayName("SC-REG-02 AOC_22 semantic progression preserved")
+    fun SC_REG_02_AOC_22_tool_loop_does_not_increment_append_only_clear_count() =
         runTest {
             val captured = captureOpenAiParams(provider = "OPENROUTER", modelId = "deepseek/deepseek-v4-flash")
             val fixture = toolLoopFixture()
@@ -839,6 +842,282 @@ class AppendOnlyOpenAiSidecarPlacementTest {
             val context = requireNotNull(captured.service.appendOnlyContextForTests())
             assertEquals(0, context.clearCount)
             assertEquals(3, context.frozenSidecarsForWireReplay().size)
+
+            val identicalCaptured = captureOpenAiParams(provider = "OPENROUTER", modelId = "deepseek/deepseek-v4-flash")
+            val identicalFixture = toolLoopFixture()
+            val identicalSidecar = """State ledger JSON: {"turn":1}"""
+            identicalCaptured.service.completeSingleTurn(
+                sessionMessages = listOf(identicalFixture.userMessage),
+                systemPrompt = "You are a helpful assistant.",
+                contextSidecars = identicalSidecar,
+                availableTools = emptyList(),
+                allowToolCall = true,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+            identicalCaptured.service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        identicalFixture.userMessage,
+                        identicalFixture.assistantWithTool,
+                        identicalFixture.toolResult,
+                    ),
+                systemPrompt = "You are a helpful assistant.",
+                contextSidecars = identicalSidecar,
+                availableTools = emptyList(),
+                allowToolCall = true,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+            identicalCaptured.service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        identicalFixture.userMessage,
+                        identicalFixture.assistantWithTool,
+                        identicalFixture.toolResult,
+                        AgentLoopMessage(id = "a2", role = Role.ASSISTANT, content = "Summary"),
+                    ),
+                systemPrompt = "You are a helpful assistant.",
+                contextSidecars = identicalSidecar,
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+            assertEquals(
+                1,
+                requireNotNull(identicalCaptured.service.appendOnlyContextForTests())
+                    .frozenSidecarsForWireReplay()
+                    .size,
+            )
+        }
+
+    @Test
+    @DisplayName("SC-DEDUPE-01 three hops identical contextSidecars")
+    fun SC_DEDUPE_01_threeHopsIdenticalSidecarDedupesFreeze() =
+        runTest {
+            val captured = captureOpenAiParams(provider = "OPENAI", modelId = "gpt-4o")
+            val identicalSidecar = """State ledger JSON: {"turn":1}"""
+
+            captured.service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        AgentLoopMessage(id = "u1", role = Role.USER, content = "Hello"),
+                    ),
+                systemPrompt = "You are a helpful assistant.",
+                contextSidecars = identicalSidecar,
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+            captured.service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        AgentLoopMessage(id = "u1", role = Role.USER, content = "Hello"),
+                        AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "Hi"),
+                    ),
+                systemPrompt = "You are a helpful assistant.",
+                contextSidecars = identicalSidecar,
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+            captured.service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        AgentLoopMessage(id = "u1", role = Role.USER, content = "Hello"),
+                        AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "Hi"),
+                        AgentLoopMessage(id = "u2", role = Role.USER, content = "Follow up"),
+                    ),
+                systemPrompt = "You are a helpful assistant.",
+                contextSidecars = identicalSidecar,
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+
+            val context = requireNotNull(captured.service.appendOnlyContextForTests())
+            assertEquals(1, context.frozenSidecarsForWireReplay().size)
+
+            val hop2Messages = captured.params[1].messages()
+            val hop2SidecarCount =
+                hop2Messages.count { message ->
+                    message.isSystem() &&
+                        message.asSystem().content().asText() == identicalSidecar
+                }
+            assertEquals(1, hop2SidecarCount)
+
+            val hop3Messages = captured.params[2].messages()
+            val hop3SidecarCount =
+                hop3Messages.count { message ->
+                    message.isSystem() &&
+                        message.asSystem().content().asText() == identicalSidecar
+                }
+            assertEquals(1, hop3SidecarCount)
+            assertFalse(
+                hop3Messages.last().isSystem() &&
+                    hop3Messages.last().asSystem().content().asText() == identicalSidecar,
+            )
+        }
+
+    @Test
+    @DisplayName("SC-DEDUPE-MUT three identical hops must not triple-freeze")
+    fun SC_DEDUPE_MUT_threeIdenticalHopsMustNotTripleFreeze() =
+        runTest {
+            val captured = captureOpenAiParams(provider = "OPENAI", modelId = "gpt-4o")
+            val sidecar = """State ledger JSON: {"frozen":true}"""
+
+            repeat(3) { hop ->
+                val session =
+                    buildList {
+                        add(AgentLoopMessage(id = "u1", role = Role.USER, content = "Hello"))
+                        repeat(hop) { turn ->
+                            add(
+                                AgentLoopMessage(
+                                    id = "a$turn",
+                                    role = Role.ASSISTANT,
+                                    content = "Reply $turn",
+                                ),
+                            )
+                            add(
+                                AgentLoopMessage(
+                                    id = "u${turn + 2}",
+                                    role = Role.USER,
+                                    content = "Follow up $turn",
+                                ),
+                            )
+                        }
+                    }
+                captured.service.completeSingleTurn(
+                    sessionMessages = session,
+                    systemPrompt = "You are a helpful assistant.",
+                    contextSidecars = sidecar,
+                    availableTools = emptyList(),
+                    allowToolCall = false,
+                    onTextToken = {},
+                    onThinkingToken = {},
+                    options = GenerationOptions(reasoningBudget = 0),
+                )
+            }
+
+            val context = requireNotNull(captured.service.appendOnlyContextForTests())
+            assertEquals(1, context.frozenSidecarsForWireReplay().size)
+            assertNotEquals(3, context.frozenSidecarsForWireReplay().size)
+        }
+
+    @Test
+    @DisplayName("SC-DEDUPE-02 ledger version progression")
+    fun SC_DEDUPE_02_v1ThenV2ThenV2ProducesTwoFrozenSnapshots() =
+        runTest {
+            val captured = captureOpenAiParams(provider = "OPENAI", modelId = "gpt-4o")
+            val v1 = """State ledger JSON: {"v":1}"""
+            val v2 = """State ledger JSON: {"v":2}"""
+
+            captured.service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        AgentLoopMessage(id = "u1", role = Role.USER, content = "Hello"),
+                    ),
+                systemPrompt = "You are a helpful assistant.",
+                contextSidecars = v1,
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+            captured.service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        AgentLoopMessage(id = "u1", role = Role.USER, content = "Hello"),
+                        AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "Hi"),
+                    ),
+                systemPrompt = "You are a helpful assistant.",
+                contextSidecars = v2,
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+            captured.service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        AgentLoopMessage(id = "u1", role = Role.USER, content = "Hello"),
+                        AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "Hi"),
+                        AgentLoopMessage(id = "u2", role = Role.USER, content = "Follow up"),
+                    ),
+                systemPrompt = "You are a helpful assistant.",
+                contextSidecars = v2,
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+
+            val frozen = requireNotNull(captured.service.appendOnlyContextForTests()).frozenSidecarsForWireReplay()
+            assertEquals(2, frozen.size)
+            assertEquals(v1, frozen[0].text)
+            assertEquals(v2, frozen[1].text)
+        }
+
+    @Test
+    @DisplayName("SC-DEDUPE-04 reanchor boundary with identical sidecar")
+    fun SC_DEDUPE_04_reanchorWithIdenticalSidecarDedupes() =
+        runTest {
+            val captured = captureOpenAiParams(provider = "OPENAI", modelId = "gpt-4o")
+            val sidecar = """State ledger JSON: {"turn":1}"""
+
+            captured.service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        AgentLoopMessage(id = "u1", role = Role.USER, content = "Hello"),
+                    ),
+                systemPrompt = "You are a helpful assistant.",
+                contextSidecars = sidecar,
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+            val context = requireNotNull(captured.service.appendOnlyContextForTests())
+            context.markTurnBoundaryForReanchor()
+
+            captured.service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        AgentLoopMessage(id = "u1", role = Role.USER, content = "Hello"),
+                        AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "Hi"),
+                        AgentLoopMessage(id = "u2", role = Role.USER, content = "Next question"),
+                    ),
+                systemPrompt = "You are a helpful assistant.",
+                contextSidecars = sidecar,
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0),
+            )
+
+            assertEquals(1, context.frozenSidecarsForWireReplay().size)
+            assertNull(context.resolveContextSidecarsForWire(sidecar))
+            val hop2Wire = captured.params.last().messages()
+            assertTrue(
+                hop2Wire.any { message ->
+                    message.isSystem() && message.asSystem().content().asText() == sidecar
+                },
+            )
         }
 
     private data class ToolLoopFixture(

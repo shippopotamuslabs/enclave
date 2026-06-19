@@ -41,7 +41,9 @@ internal object LiteRtNativeToolsets {
         context: LiteRtToolContext,
     ): List<ToolSet> =
         buildList {
-            activeToolNames.forEach { name ->
+            // Sort alphabetically so native toolset order is stable for KV-cache prefix
+            // (same rationale as API wire tools[] sort — activation order must not affect placement).
+            activeToolNames.sorted().forEach { name ->
                 val set: ToolSet? =
                     when (name) {
                         "tool_discovery_tool" -> LocalSearchToolsToolset(context)

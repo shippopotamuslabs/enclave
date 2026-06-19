@@ -5,6 +5,7 @@ import com.browntowndev.enclave.domain.model.config.OpenRouterProviderSort
 import com.browntowndev.enclave.domain.model.config.OpenRouterRoutingConfiguration
 import com.openai.models.chat.completions.ChatCompletionCreateParams
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -79,7 +80,7 @@ class OpenRouterRoutingSupportTest {
         val body = params._additionalBodyProperties()
         assertTrue(body.containsKey("provider"), "Provider routing must be present")
         val provider = body["provider"]!!.convert(Map::class.javaObjectType) as Map<*, *>
-        assertEquals("throughput", provider["sort"])
+        assertFalse(provider.containsKey("sort"), "Pinned provider must omit sort for sticky routing")
         assertEquals(false, provider["allow_fallbacks"])
         assertEquals(false, provider["require_parameters"])
         assertEquals("deny", provider["data_collection"])
@@ -148,11 +149,45 @@ class OpenRouterRoutingSupportTest {
         val body = params._additionalBodyProperties()
         assertTrue(body.containsKey("provider"), "Provider routing must be present")
         val provider = body["provider"]!!.convert(Map::class.javaObjectType) as Map<*, *>
-        assertEquals("throughput", provider["sort"])
+        assertFalse(provider.containsKey("sort"), "Pinned provider must omit sort for sticky routing")
         assertEquals(false, provider["allow_fallbacks"])
         assertEquals(false, provider["require_parameters"])
         assertEquals("deny", provider["data_collection"])
         assertEquals(false, provider["zdr"])
         assertEquals(listOf("deepinfra"), provider["order"])
+    }
+
+    @Test
+    fun pinnedProviderOmitsSortForStickyRouting() {
+        val builder =
+            ChatCompletionCreateParams
+                .builder()
+                .model("anthropic/claude-sonnet-4")
+                .addMessage(
+                    com.openai.models.chat.completions.ChatCompletionMessageParam.ofUser(
+                        com.openai.models.chat.completions.ChatCompletionUserMessageParam
+                            .builder()
+                            .content("hello")
+                            .build(),
+                    ),
+                )
+
+        OpenRouterRoutingSupport.applyToChatCompletionBuilder(
+            builder,
+            OpenRouterRoutingConfiguration(
+                providerSort = OpenRouterProviderSort.PRICE,
+                allowFallbacks = false,
+                preferredProvider = "fireworks",
+            ),
+        )
+
+        val params = builder.build()
+        val provider =
+            params
+                ._additionalBodyProperties()["provider"]!!
+                .convert(Map::class.javaObjectType) as Map<*, *>
+        assertFalse(provider.containsKey("sort"))
+        assertEquals(listOf("fireworks"), provider["order"])
+        assertEquals(false, provider["allow_fallbacks"])
     }
 }

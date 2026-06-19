@@ -70,6 +70,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
@@ -87,14 +89,13 @@ private const val HIGH_CONTEXT_WINDOW_THRESHOLD = 128_000
 private const val CONTEXT_REFERENCE_TTL_TURNS = 2
 private const val CONTEXT_REFERENCE_POLICY_PREAMBLE =
     "Reference policy: IDs are exact lookups only—never browse. " +
-        "For conversation history use search_chat_history."
+        "For conversation history use search_chat_history. " +
+        "Tool-output references expire after $CONTEXT_REFERENCE_TTL_TURNS user turns. " +
+        "The file context index is incremental (ref + delta); read the ref for the full catalog."
 private const val CONTEXT_REFERENCE_NOT_FOUND_JSON =
     """{"error":"context_reference_not_found","hint":"This tool is not a search tool. """ +
         """Use search_chat_history for past conversations, web_search for web facts, """ +
         """or tool_discovery_tool for hidden tools."}"""
-
-private val contextReferenceTurnSuffix =
-    Regex("""${Regex.escape(AgentLoopWireKeys.CONTEXT_REFERENCE_TURN_SUFFIX)}(\d+)\s*$""")
 
 private val INTERNET_DEPENDENT_TOOL_NAMES =
     setOf(
@@ -162,7 +163,7 @@ class RustLoopInferenceService(
         channelFlow {
             val startedAtMs = System.currentTimeMillis()
             try {
-                inner.resetAppendOnlyForNewPrompt()
+                inner.resetAppendOnlyForNewPrompt(options.chatId)
                 toolActivationRegistry.seedTurn(options.activeTools.map { it.name })
                 val history = buildHistory(options.chatId)
                 val userContent = buildUserContent(prompt, options)
@@ -191,7 +192,6 @@ class RustLoopInferenceService(
                             onThinkingToken: suspend (String) -> Unit,
                         ): AgentModelTurnResult {
                             modelTurnInProgress.set(true)
-                            val currentTurnIndex = sessionTurnIndex.get()
                             val turnOptions =
                                 options.copy(
                                     assistantMessageId = options.assistantMessageId,
@@ -199,6 +199,7 @@ class RustLoopInferenceService(
                                     telemetrySequenceIndex = telemetrySequenceIndex,
                                     transcriptRevision = transcriptRevision,
                                 )
+                            logCacheHintsIfPresent(cacheHints)
                             val result =
                                 try {
                                     inner.completeSingleTurn(
@@ -211,7 +212,6 @@ class RustLoopInferenceService(
                                                 toolContextIndexJson = toolContextIndexJson,
                                                 fileContextIndexJson = fileContextIndexJson,
                                                 cacheHints = cacheHints,
-                                                currentTurnIndex = currentTurnIndex,
                                             ),
                                         availableTools =
                                             wireToolsForRequest(
@@ -353,7 +353,7 @@ class RustLoopInferenceService(
                                     loggingPort.debug(TAG, "pre_compact trigger=${event.trigger}")
                                 }
                             is AgentLoopEvent.CompactionBoundaryApplied -> {
-                                inner.clearAppendOnlyOnRustCompactionBoundary()
+                                inner.clearAppendOnlyOnRustCompactionBoundary(event.revisionAfter)
                                 lastSeenRevision = event.revisionAfter
                                 loggingPort.debug(
                                     TAG,
@@ -626,6 +626,7 @@ class RustLoopInferenceService(
                                     AgentLoopContextPolicyTier.FIXED_KV
                                 },
                             toolSchemaDeferralSupported = true,
+                            nativeToolCallingSupported = false,
                             historyRewriteSupported = true,
                             lifecycleHooksSupported = true,
                         )
@@ -639,6 +640,7 @@ class RustLoopInferenceService(
                                     AgentLoopContextPolicyTier.HOSTED_MUTABLE
                                 },
                             toolSchemaDeferralSupported = true,
+                            nativeToolCallingSupported = true,
                             fileBackedContextSupported = true,
                             promptCacheSupported = true,
                             lifecycleHooksSupported = true,
@@ -722,7 +724,7 @@ class RustLoopInferenceService(
             return emptyList()
         }
         val poolByName = toolDefinitionLookupPool(options).associateBy { it.name }
-        return toolActivationRegistry.orderedActiveNames().mapNotNull { poolByName[it] }
+        return toolActivationRegistry.orderedActiveNames().sorted().mapNotNull { poolByName[it] }
     }
 
     private fun toolNamesFromContextIndex(toolContextIndexJson: String): List<String>? =
@@ -925,8 +927,7 @@ class RustLoopInferenceService(
         stateLedgerJson: String?,
         toolContextIndexJson: String?,
         fileContextIndexJson: String?,
-        cacheHints: List<String>,
-        currentTurnIndex: Int,
+        @Suppress("UNUSED_PARAMETER") cacheHints: List<String>,
     ): String? {
         val compactLedger = stateLedgerJson?.let(ContextSidecarCompaction::compactStateLedgerJson)
         val compactToolIndex =
@@ -949,14 +950,15 @@ class RustLoopInferenceService(
                     "x_user_tweets, x_mention_search. Do not attempt to use them."
             }
 
-        val jsonSidecars = listOfNotNull(compactLedger, compactToolIndex, compactFileIndex)
-        val isAllEmpty = contextReferences.isEmpty() && jsonSidecars.isEmpty() && cacheHints.isEmpty()
+        val jsonSidecars =
+            listOfNotNull(compactLedger, compactToolIndex, compactFileIndex)
+                .filterNot(::isEmptyJsonSidecarBlob)
+        val isAllEmpty = contextReferences.isEmpty() && jsonSidecars.isEmpty()
         if (isAllEmpty && networkStatus.isBlank()) {
             return null
         }
 
         return buildString {
-            appendLine("Context management sidecars:")
             appendLine(CONTEXT_REFERENCE_POLICY_PREAMBLE)
             if (networkStatus.isNotBlank()) {
                 appendLine(networkStatus)
@@ -964,15 +966,31 @@ class RustLoopInferenceService(
             if (contextReferences.isNotEmpty()) {
                 appendLine("References:")
                 contextReferences.forEach { reference ->
-                    append(formatContextReferenceLine(reference, currentTurnIndex))
+                    append(formatContextReferenceLine(reference))
                 }
             }
-            compactLedger?.let { appendLine("State ledger JSON: $it") }
-            compactToolIndex?.let { appendLine("Tool context index JSON: $it") }
-            compactFileIndex?.let { appendLine("File context index JSON: $it") }
-            if (cacheHints.isNotEmpty()) appendLine("Cache hints: ${cacheHints.joinToString()}")
+            compactLedger?.takeUnless(::isEmptyJsonSidecarBlob)?.let { appendLine("State ledger JSON: $it") }
+            compactToolIndex?.takeUnless(::isEmptyJsonSidecarBlob)?.let { appendLine("Tool context index JSON: $it") }
+            compactFileIndex?.takeUnless(::isEmptyJsonSidecarBlob)?.let { appendLine("File context index JSON: $it") }
         }.trimEnd()
     }
+
+    private fun logCacheHintsIfPresent(cacheHints: List<String>) {
+        if (cacheHints.isEmpty()) return
+        loggingPort.debug(
+            tag = "PROMPT_CACHE",
+            message = cacheHints.joinToString(),
+        )
+    }
+
+    private fun isEmptyJsonSidecarBlob(compacted: String): Boolean =
+        runCatching {
+            when (val element = Json.parseToJsonElement(compacted)) {
+                is JsonObject -> element.isEmpty()
+                is JsonArray -> element.isEmpty()
+                else -> false
+            }
+        }.getOrElse { false }
 
     private fun buildUserContent(
         prompt: String,
@@ -1004,45 +1022,14 @@ class RustLoopInferenceService(
             metadataJson = metadataJson,
         )
 
-    private fun formatContextReferenceLine(
-        reference: AgentContextReference,
-        currentTurnIndex: Int,
-    ): String {
-        val referenceTurn = parseTurnFromTitle(reference.title)
-        val freshness =
-            if (isStaleContextReference(reference.kind, referenceTurn, currentTurnIndex)) {
-                "stale"
-            } else {
-                "fresh"
-            }
-        return buildString {
+    private fun formatContextReferenceLine(reference: AgentContextReference): String =
+        buildString {
             appendLine(
-                "- [${reference.kind}|turn:${referenceTurn ?: "unknown"}|$freshness] " +
-                    "${reference.id} (${reference.byteLen}b): ${reference.title}",
+                "- [${reference.kind}] ${reference.id} (${reference.byteLen}b): ${reference.title}",
             )
             appendLine("""  preview: "${reference.preview}"""")
             appendLine("  ${reference.retrievalHint}")
         }
-    }
-
-    private fun parseTurnFromTitle(title: String): Int? =
-        contextReferenceTurnSuffix
-            .find(title.trim())
-            ?.groupValues
-            ?.getOrNull(1)
-            ?.toIntOrNull()
-
-    private fun isStaleContextReference(
-        kind: String,
-        referenceTurn: Int?,
-        currentTurnIndex: Int,
-    ): Boolean {
-        if (kind != "TOOL_OUTPUT" || referenceTurn == null) {
-            return false
-        }
-        val age = currentTurnIndex - referenceTurn
-        return age >= CONTEXT_REFERENCE_TTL_TURNS - 1 && age < CONTEXT_REFERENCE_TTL_TURNS
-    }
 
     private fun errorJson(
         call: AgentToolCall,

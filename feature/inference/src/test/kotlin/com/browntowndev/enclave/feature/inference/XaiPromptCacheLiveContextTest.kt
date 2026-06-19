@@ -19,6 +19,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 
 /**
@@ -495,7 +496,6 @@ class XaiPromptCacheLiveContextTest {
         toolIndex: String? = null,
     ): String =
         buildString {
-            appendLine("Context management sidecars:")
             appendLine("State ledger JSON: {\"turn\":$ledgerTurn}")
             toolIndex?.let { appendLine("Tool context index JSON: $it") }
         }.trimEnd()
@@ -537,10 +537,62 @@ class XaiPromptCacheLiveContextTest {
         val text = asSystem().content().asText()
         return PreRetrievalContextSidecar.isSidecarText(text) ||
             text.startsWith("State ledger JSON:") ||
-            text.startsWith("Context management sidecars:") ||
             text.startsWith("Tool context index JSON:") ||
-            text.startsWith("File context index JSON:") ||
-            text.startsWith("Cache hints:")
+            text.startsWith("File context index JSON:")
+    }
+
+    private fun ChatCompletionMessageParam.isStableSessionSystemMessage(): Boolean =
+        isSystem() && !isVolatileSidecar()
+
+    @Test
+    @DisplayName("SC-VOL-01 prefix set after format cleanup")
+    fun SC_VOL_01_volatileSidecarDetectionAlignment() {
+        fun systemMessage(text: String): ChatCompletionMessageParam =
+            ChatCompletionMessageParam.ofSystem(
+                com.openai.models.chat.completions.ChatCompletionSystemMessageParam
+                    .builder()
+                    .content(text)
+                    .build(),
+            )
+
+        assertTrue(systemMessage("""State ledger JSON: {"k":1}""").isVolatileSidecar())
+        assertFalse(systemMessage("Context management sidecars:").isVolatileSidecar())
+        assertFalse(systemMessage("Cache hints: breakpoint:system").isVolatileSidecar())
+    }
+
+    @Test
+    @DisplayName("SC-VOL-02 pre-retrieval sidecar")
+    fun SC_VOL_02_preRetrievalVolatileDetectionUnchanged() {
+        val text = "${PreRetrievalContextSidecar.MARKER}\nmemory hits"
+        val message =
+            ChatCompletionMessageParam.ofSystem(
+                com.openai.models.chat.completions.ChatCompletionSystemMessageParam
+                    .builder()
+                    .content(text)
+                    .build(),
+            )
+
+        assertTrue(message.isVolatileSidecar())
+        assertFalse(message.isStableSessionSystemMessage())
+    }
+
+    @Test
+    @DisplayName("SC-FMT-MUT sidecar string forbidden patterns")
+    fun SC_FMT_MUT_xaiDuplicateBuilderForbiddenPatterns() {
+        val side =
+            buildContextSidecars(
+                ledgerTurn = 1,
+                toolIndex = """{"advertised_tools":["web_search"]}""",
+            )
+        assertSidecarWireFormatCompliant(side)
+    }
+
+    private fun assertSidecarWireFormatCompliant(side: String?) {
+        if (side == null) return
+        assertFalse(side.contains("Context management sidecars:"))
+        assertFalse(side.contains("Cache hints:"))
+        assertFalse(Regex("""\|(fresh|stale)\|""").containsMatchIn(side))
+        assertFalse(Regex("""\[(TOOL_OUTPUT|FILE_OUTLINE)\|turn:""").containsMatchIn(side))
     }
 
     private fun ChatCompletionMessageParam.toCacheEligibleWireLine(): String =

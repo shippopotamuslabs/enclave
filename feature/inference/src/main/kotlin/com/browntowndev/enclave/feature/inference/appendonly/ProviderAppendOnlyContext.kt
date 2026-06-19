@@ -13,6 +13,9 @@ internal class ProviderAppendOnlyContext(
     private val frozenSidecarSnapshots = mutableListOf<FrozenSidecarSnapshot>()
     private var lastSyncCount = 0
     private var syncedDigest: UInt = 0u
+    private var pendingTurnBoundaryReanchor = false
+    private var lastShippedSidecarText: String? = null
+    private var lastSeenRevision: Long? = null
     var clearCount: Int = 0
         private set
 
@@ -43,12 +46,35 @@ internal class ProviderAppendOnlyContext(
         return snapshot
     }
 
-    fun syncMessages(normalized: List<ProviderNormalizedMessage>) {
-        if (
-            lastSyncCount > 0 &&
-            lastSyncCount <= normalized.size &&
-            ProviderMessageDigest.compute(normalized.take(lastSyncCount)) != syncedDigest
-        ) {
+    /**
+     * Re-anchor digest cursor at a user-turn boundary without clearing frozen sidecars or the log.
+     * The next [syncMessages] skips prefix [digest_mismatch] detection (committed rehydrate drift).
+     */
+    fun markTurnBoundaryForReanchor() {
+        pendingTurnBoundaryReanchor = true
+    }
+
+    fun syncMessages(
+        normalized: List<ProviderNormalizedMessage>,
+        transcriptRevision: Long? = null,
+    ) {
+        // Proactively clear on Rust compaction boundary before comparing digests.
+        // The async CompactionBoundaryApplied event may not have been processed yet
+        // when completeSingleTurn delivers the compacted messages, so we detect
+        // the revision bump here to avoid a false-positive digest_mismatch that
+        // would wipe all frozen sidecars and destroy the prompt-cache prefix.
+        if (transcriptRevision != null) {
+            val last = lastSeenRevision
+            if (last != null && transcriptRevision > last) {
+                clearLogState(reason = "rust_compaction_boundary")
+            }
+            lastSeenRevision = transcriptRevision
+        }
+        val skipDigestMismatchOnReanchor = pendingTurnBoundaryReanchor
+        if (pendingTurnBoundaryReanchor) {
+            pendingTurnBoundaryReanchor = false
+        }
+        if (shouldClearOnDigestMismatch(skipDigestMismatchOnReanchor, normalized)) {
             clearLogState(reason = "digest_mismatch")
         }
         if (normalized.size < lastSyncCount) {
@@ -66,9 +92,17 @@ internal class ProviderAppendOnlyContext(
 
     fun frozenSidecarsForWireReplay(): List<FrozenSidecarSnapshot> = frozenSidecarSnapshots.toList()
 
+    fun resolveContextSidecarsForWire(built: String?): String? {
+        val trimmed = built?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        if (trimmed == lastShippedSidecarText) return null
+        lastShippedSidecarText = trimmed
+        return trimmed
+    }
+
     fun hasFrozenPreRetrievalSidecar(): Boolean = frozenSidecarSnapshots.any { PreRetrievalContextSidecar.isSidecarText(it.text) }
 
-    fun clearOnRustCompactionBoundary() {
+    fun clearOnRustCompactionBoundary(revisionAfter: Long? = null) {
+        if (revisionAfter != null) lastSeenRevision = revisionAfter
         clearLogState(reason = "rust_compaction_boundary")
     }
 
@@ -102,6 +136,7 @@ internal class ProviderAppendOnlyContext(
                 mappedInsertIndex = mappedInsertIndex,
             ),
         )
+        lastShippedSidecarText = sidecarText.trim()
     }
 
     fun logMessages(): List<ProviderNormalizedMessage> = log.toMessages()
@@ -110,12 +145,28 @@ internal class ProviderAppendOnlyContext(
         stablePrefix = null
         clearLogState(reason = "session_invalidate")
         frozenSidecarSnapshots.clear()
+        lastSeenRevision = null
+    }
+
+    private fun shouldClearOnDigestMismatch(
+        skipDigestMismatchOnReanchor: Boolean,
+        normalized: List<ProviderNormalizedMessage>,
+    ): Boolean {
+        if (skipDigestMismatchOnReanchor || lastSyncCount <= 0) {
+            return false
+        }
+        if (lastSyncCount > normalized.size) {
+            return false
+        }
+        val prefixDigest = ProviderMessageDigest.compute(normalized.take(lastSyncCount))
+        return prefixDigest != syncedDigest
     }
 
     private fun clearLogState(reason: String) {
         val hadCommitted = log.size > 0 || lastSyncCount > 0
         log.clear()
         frozenSidecarSnapshots.clear()
+        lastShippedSidecarText = null
         lastSyncCount = 0
         syncedDigest = 0u
         clearCount += 1
