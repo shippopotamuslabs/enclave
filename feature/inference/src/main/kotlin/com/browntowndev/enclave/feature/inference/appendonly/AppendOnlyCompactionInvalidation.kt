@@ -9,7 +9,7 @@ import com.browntowndev.enclave.feature.inference.RustCompatibleInferenceService
 
 internal fun RustCompatibleInferenceService.clearAppendOnlyOnRustCompactionBoundary(revisionAfter: Long? = null) {
     when (this) {
-        is BaseOpenAiSdkInferenceService -> this.clearAppendOnlyOnRustCompactionBoundary()
+        is BaseOpenAiSdkInferenceService -> this.clearAppendOnlyOnRustCompactionBoundary(revisionAfter)
         is AnthropicInferenceServiceImpl -> this.clearAppendOnlyOnRustCompactionBoundary(revisionAfter)
         is GoogleInferenceServiceImpl -> this.clearAppendOnlyOnRustCompactionBoundary(revisionAfter)
         is LlamaInferenceServiceImpl -> this.clearAppendOnlyOnRustCompactionBoundary(revisionAfter)

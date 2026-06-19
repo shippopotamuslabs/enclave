@@ -394,8 +394,8 @@ abstract class BaseOpenAiSdkInferenceService(
         resetAppendOnlyForNewPrompt()
     }
 
-    internal fun clearAppendOnlyOnRustCompactionBoundary() {
-        appendOnlyContexts.values.forEach { it.clearOnRustCompactionBoundary() }
+    internal fun clearAppendOnlyOnRustCompactionBoundary(revisionAfter: Long? = null) {
+        appendOnlyContexts.values.forEach { it.clearOnRustCompactionBoundary(revisionAfter) }
     }
 
     internal fun resetAppendOnlyForNewPrompt(chatId: ChatId? = null) {
@@ -1127,7 +1127,12 @@ abstract class BaseOpenAiSdkInferenceService(
     private fun ChatCompletionMessageParam.isVolatileOrEngineSystemMessage(): Boolean {
         if (!isSystem()) return false
         val text = asSystem().content().asText()
-        return PreRetrievalContextSidecar.isSidecarText(text) ||
+        // formatForProviderWire collapses _agent payloads to ""; a real stable session
+        // system message is never blank. Treat blank as volatile so it cannot suppress
+        // the stable system-prompt prepend (which would drop the system message off the
+        // wire and break prefix-based prompt caching on tool-result sub-turns).
+        return text.isBlank() ||
+            PreRetrievalContextSidecar.isSidecarText(text) ||
             text.startsWith("State ledger JSON:") ||
             text.startsWith("Tool context index JSON:") ||
             text.startsWith("File context index JSON:") ||
@@ -1137,7 +1142,11 @@ abstract class BaseOpenAiSdkInferenceService(
 
     private fun AgentLoopMessage.isVolatileOrEngineSystemMessage(): Boolean {
         if (role != Role.SYSTEM) return false
-        return PreRetrievalContextSidecar.isSidecarText(content) ||
+        // formatForProviderWire collapses _agent payloads to ""; a real stable session
+        // system message is never blank. Treat blank as volatile so it cannot suppress
+        // the stable system-prompt prepend.
+        return content.isBlank() ||
+            PreRetrievalContextSidecar.isSidecarText(content) ||
             content.startsWith("State ledger JSON:") ||
             content.startsWith("Tool context index JSON:") ||
             content.startsWith("File context index JSON:") ||
