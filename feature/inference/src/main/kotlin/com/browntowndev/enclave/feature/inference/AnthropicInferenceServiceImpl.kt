@@ -34,8 +34,9 @@ import com.browntowndev.enclave.domain.port.inference.ToolStreamGatePort
 import com.browntowndev.enclave.domain.port.telemetry.TelemetryEventPort
 import com.browntowndev.enclave.feature.inference.appendonly.ProviderAppendOnlyContext
 import com.browntowndev.enclave.feature.inference.appendonly.ProviderAppendOnlyContextFactory
+import com.browntowndev.enclave.feature.inference.appendonly.ResolvedSidecar
 import com.browntowndev.enclave.feature.inference.appendonly.SessionIndexVolatilePlacement
-import com.browntowndev.enclave.feature.inference.appendonly.SidecarMarkerFactory
+import com.browntowndev.enclave.feature.inference.appendonly.SidecarUserContentEmbedder
 import com.browntowndev.enclave.feature.inference.appendonly.ensureAppendOnlyContext
 import com.browntowndev.enclave.feature.inference.appendonly.toAppendOnlySyncMessages
 import com.browntowndev.enclave.feature.inference.appendonly.toToolsFingerprint
@@ -227,23 +228,22 @@ class AnthropicInferenceServiceImpl(
                 options = options,
             )
             val liveSidecarInsertIndex = lastUserIndex.coerceAtLeast(0)
-            val wireSidecar = appendOnly.resolveContextSidecarsForWire(contextSidecars)?.text
+            val wireSidecar = appendOnly.resolveContextSidecarsForWire(contextSidecars)
 
-            fun prependIndexSidecars(
+            fun embedIndexSidecars(
                 index: Int,
                 baseContent: String,
             ): String {
-                val texts =
-                    SessionIndexVolatilePlacement.sidecarTextsBeforeSessionIndex(
+                val markers =
+                    SessionIndexVolatilePlacement.sidecarMarkersForSessionIndex(
                         sessionIndex = index,
                         frozenSidecars = appendOnly.frozenSidecarsForWireReplay(),
-                        preRetrievalSidecarText = null,
+                        preRetrievalSidecar = null,
                         preRetrievalInsertIndex = null,
-                        currentSidecarText = wireSidecar,
+                        liveSidecar = wireSidecar,
                         tailInsertIndex = liveSidecarInsertIndex,
                     )
-                if (texts.isEmpty()) return baseContent
-                return texts.joinToString(separator = "\n\n") + "\n\n" + baseContent
+                return SidecarUserContentEmbedder.embed(baseContent, markers)
             }
 
             sessionMessages.forEachIndexed { index, msg ->
@@ -257,7 +257,7 @@ class AnthropicInferenceServiceImpl(
                     useCaching &&
                         AnthropicPromptCacheSupport.shouldAttachMessageCacheBreakpoint(index, stableTailIndex)
 
-                val messageContent = prependIndexSidecars(index, msg.content)
+                val messageContent = embedIndexSidecars(index, msg.content)
 
                 if (EngineInternalMessageMapper.isEngineInternalMessage(msg.metadataJson)) {
                     val wireText = EngineInternalMessageMapper.formatForProviderWire(msg.content)
@@ -554,13 +554,13 @@ class AnthropicInferenceServiceImpl(
 
     private fun freezeContextSidecarIfPresent(
         appendOnly: ProviderAppendOnlyContext,
-        contextSidecars: String?,
+        contextSidecars: ResolvedSidecar?,
         tailInsertIndex: Int,
     ) {
-        if (!contextSidecars.isNullOrBlank()) {
+        if (contextSidecars != null) {
             appendOnly.endTurnFreezeSidecar(
-                sidecarText = contextSidecars,
-                markerId = SidecarMarkerFactory.newMarker(contextSidecars).markerId,
+                sidecarText = contextSidecars.text,
+                markerId = contextSidecars.markerId,
                 mappedInsertIndex = tailInsertIndex,
             )
         }
