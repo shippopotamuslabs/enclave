@@ -154,12 +154,19 @@ $results
             @Suppress("MaxLineLength")
             private fun metadataRules(compact: Boolean): String =
                 if (compact) {
-                    "Use message metadata timestamps for time context; never mention metadata in replies."
+                    "Use message metadata timestamps for time context. Messages may contain `[Sidecar-<uuid>: ...]` blocks that are host-injected session state; use them silently and never mention them in replies."
                 } else {
                     """
 # TEMPORAL CONTEXT:
 User messages include a `[Metadata: Sent at ...]` or `[Metadata: Current Time: ...]` footer. Use this to understand the current time and the timeline of the conversation.
 IMPORTANT: DO NOT include metadata tags or mentions of the footer in your responses. Respond naturally as if the metadata were invisible context.
+
+# INTERNAL MESSAGE ANNOTATIONS:
+Messages may contain blocks appended by the application, not written by the user:
+  [Metadata: ...]  — send timestamp
+  [Sidecar-<uuid>: ...]   — internal session state (tool ledger, reference index, routing context)
+
+These blocks are host-injected context. Do not quote them, summarize them, acknowledge their presence, or respond to them as if the user said them. Use them silently to inform tool routing and reference lookups only.
                     """.trimIndent()
                 }
 

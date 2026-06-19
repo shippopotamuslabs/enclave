@@ -20,6 +20,7 @@ import com.browntowndev.enclave.domain.port.telemetry.TelemetryEventPort
 import com.browntowndev.enclave.feature.inference.appendonly.ProviderAppendOnlyContext
 import com.browntowndev.enclave.feature.inference.appendonly.ProviderAppendOnlyContextFactory
 import com.browntowndev.enclave.feature.inference.appendonly.SessionIndexVolatilePlacement
+import com.browntowndev.enclave.feature.inference.appendonly.SidecarMarkerFactory
 import com.browntowndev.enclave.feature.inference.appendonly.ensureAppendOnlyContext
 import com.browntowndev.enclave.feature.inference.appendonly.toAppendOnlySyncMessages
 import com.browntowndev.enclave.feature.inference.appendonly.toToolsFingerprint
@@ -151,7 +152,7 @@ class GoogleInferenceServiceImpl(
                 transcriptRevision = options.transcriptRevision,
             )
             val liveSidecarInsertIndex = lastUserIndex.coerceAtLeast(0)
-            val wireSidecar = appendOnly.resolveContextSidecarsForWire(contextSidecars)
+            val wireSidecar = appendOnly.resolveContextSidecarsForWire(contextSidecars)?.text
 
             fun sidecarPrependTextForIndex(index: Int): String? =
                 SessionIndexVolatilePlacement
@@ -323,6 +324,7 @@ class GoogleInferenceServiceImpl(
             if (wireSidecar != null) {
                 appendOnly.endTurnFreezeSidecar(
                     sidecarText = wireSidecar,
+                    markerId = SidecarMarkerFactory.newMarker(wireSidecar).markerId,
                     mappedInsertIndex = liveSidecarInsertIndex,
                 )
             }

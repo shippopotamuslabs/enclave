@@ -88,13 +88,14 @@ class PromptCachingTest {
 
             assertTrue(capturedParams.isNotEmpty())
             val messages = capturedParams.first().messages()
-            assertEquals(3, messages.size)
+            assertEquals(2, messages.size)
             assertTrue(messages[0].isSystem())
             assertEquals("You are a helpful assistant.", messages[0].asSystem().content().asText())
-            assertTrue(messages[1].isSystem())
-            assertEquals(sidecar, messages[1].asSystem().content().asText())
-            assertTrue(messages[2].isUser())
-            assertEquals("Hello", messages[2].asUser().content().asText())
+            assertTrue(messages[1].isUser())
+            val userText = messages[1].asUser().content().asText()
+            assertTrue(userText.startsWith("Hello"))
+            assertTrue(userText.contains("[Sidecar-"))
+            assertTrue(userText.contains(sidecar))
             assertEquals(
                 1,
                 requireNotNull(service.appendOnlyContextForTests()).frozenSidecarsForWireReplay().size,
@@ -173,11 +174,13 @@ class PromptCachingTest {
             )
 
             val messages = capturedParams.captured.messages()
-            assertEquals(4, messages.size)
+            assertEquals(3, messages.size)
             assertEquals("You are a helpful assistant.", messages[0].asSystem().content().asText())
             assertEquals("Hello", messages[1].asUser().content().asText())
-            assertEquals("State ledger JSON: {\"key\":\"value\"}", messages[2].asSystem().content().asText())
-            assertEquals("Follow up", messages[3].asUser().content().asText())
+            val followUpText = messages[2].asUser().content().asText()
+            assertTrue(followUpText.startsWith("Follow up"))
+            assertTrue(followUpText.contains("[Sidecar-"))
+            assertTrue(followUpText.contains("""State ledger JSON: {"key":"value"}"""))
             assertFalse(messages[1].isSystem())
         }
 

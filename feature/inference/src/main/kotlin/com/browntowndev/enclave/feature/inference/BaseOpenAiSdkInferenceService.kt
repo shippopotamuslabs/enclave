@@ -24,6 +24,8 @@ import com.browntowndev.enclave.domain.port.telemetry.TelemetryEventPort
 import com.browntowndev.enclave.feature.inference.appendonly.OpenAiCompatibleVolatilePlacement
 import com.browntowndev.enclave.feature.inference.appendonly.ProviderAppendOnlyContext
 import com.browntowndev.enclave.feature.inference.appendonly.ProviderAppendOnlyContextFactory
+import com.browntowndev.enclave.feature.inference.appendonly.ResolvedSidecar
+import com.browntowndev.enclave.feature.inference.appendonly.SidecarMarkerFactory
 import com.browntowndev.enclave.feature.inference.appendonly.toAppendOnlySyncMessages
 import com.browntowndev.enclave.feature.inference.appendonly.toToolsFingerprint
 import com.browntowndev.enclave.feature.inference.openai.OpenAiResponseStreamHandler
@@ -427,7 +429,7 @@ abstract class BaseOpenAiSdkInferenceService(
 
     private fun captureSidecarWireState(
         appendOnly: ProviderAppendOnlyContext,
-        wireSidecar: String?,
+        wireSidecar: ResolvedSidecar?,
         livePreRetrievalSidecarText: String?,
         tailInsertIndex: Int,
         mappedBodySize: Int,
@@ -441,7 +443,7 @@ abstract class BaseOpenAiSdkInferenceService(
             }
         return PromptCacheSidecarDiagnostics.SidecarWireCapture(
             frozenOnWire = frozenOnWire,
-            liveSidecarText = wireSidecar,
+            liveSidecarText = wireSidecar?.text,
             preRetrievalSidecarText = livePreRetrievalSidecarText,
             tailInsertIndex = tailInsertIndex,
             mappedBodySize = mappedBodySize,
@@ -451,13 +453,14 @@ abstract class BaseOpenAiSdkInferenceService(
 
     private fun finalizeSidecarFreeze(
         appendOnly: ProviderAppendOnlyContext,
-        wireSidecar: String?,
+        wireSidecar: ResolvedSidecar?,
         tailInsertIndex: Int,
         sidecarWireCapture: PromptCacheSidecarDiagnostics.SidecarWireCapture,
     ): PromptCacheSidecarDiagnostics.SidecarWireCapture {
         if (wireSidecar != null) {
             appendOnly.endTurnFreezeSidecar(
-                sidecarText = wireSidecar,
+                sidecarText = wireSidecar.text,
+                markerId = wireSidecar.markerId,
                 mappedInsertIndex = tailInsertIndex,
             )
         }
@@ -466,7 +469,7 @@ abstract class BaseOpenAiSdkInferenceService(
         )
     }
 
-    @Suppress("CyclomaticComplexMethod")
+    @Suppress("CyclomaticComplexMethod", "LongMethod")
     override suspend fun completeSingleTurn(
         sessionMessages: List<AgentLoopMessage>,
         systemPrompt: String,
@@ -572,32 +575,43 @@ abstract class BaseOpenAiSdkInferenceService(
                     ?.trim()
                     ?.takeIf { it.isNotEmpty() }
                     ?.let(PreRetrievalContextSidecar::format)
+            val preRetrievalSidecarMarker =
+                preRetrievalSidecarText?.let { SidecarMarkerFactory.newMarker(it) }
             if (
-                !preRetrievalSidecarText.isNullOrBlank() &&
+                preRetrievalSidecarMarker != null &&
                 preRetrievalInsertIndex != null &&
                 !appendOnly.hasFrozenPreRetrievalSidecar()
             ) {
                 appendOnly.endTurnFreezeSidecar(
                     sidecarText = preRetrievalSidecarText,
+                    markerId = preRetrievalSidecarMarker.markerId,
                     mappedInsertIndex = preRetrievalInsertIndex,
                 )
             }
-            val livePreRetrievalSidecarText =
-                if (appendOnly.hasFrozenPreRetrievalSidecar()) {
+            val livePreRetrievalSidecar: ResolvedSidecar? =
+                if (
+                    appendOnly.hasFrozenPreRetrievalSidecar() ||
+                    preRetrievalSidecarMarker == null ||
+                    preRetrievalSidecarText == null
+                ) {
                     null
                 } else {
-                    preRetrievalSidecarText
+                    ResolvedSidecar(
+                        text = preRetrievalSidecarText,
+                        markerId = preRetrievalSidecarMarker.markerId,
+                    )
                 }
+            val livePreRetrievalSidecarText = livePreRetrievalSidecar?.text
             val messages =
                 buildList {
                     stableSystemMessage?.let(::add)
                     addAll(
-                        OpenAiCompatibleVolatilePlacement.buildMappedBodyWithSidecars(
+                        OpenAiCompatibleVolatilePlacement.embedSidecarsIntoUserMessages(
                             mappedBody = mappedBody,
                             frozenSidecars = appendOnly.frozenSidecarsForWireReplay(),
-                            preRetrievalSidecarText = livePreRetrievalSidecarText,
+                            preRetrievalSidecar = livePreRetrievalSidecar,
                             preRetrievalInsertIndex = preRetrievalInsertIndex,
-                            currentSidecarText = wireSidecar,
+                            liveSidecar = wireSidecar,
                             tailInsertIndex = tailInsertIndex,
                         ),
                     )
@@ -611,9 +625,9 @@ abstract class BaseOpenAiSdkInferenceService(
                             chatSessionIndexToMappedIndex = mappedSession.sessionIndexToMappedIndex,
                             responseSessionIndexToMappedIndex = mappedResponseSession.sessionIndexToMappedIndex,
                         ),
-                    preRetrievalSidecarText = livePreRetrievalSidecarText,
+                    preRetrievalSidecar = livePreRetrievalSidecar,
                     preRetrievalInsertIndex = responsePreRetrievalInsertIndex,
-                    currentSidecarText = wireSidecar,
+                    currentSidecar = wireSidecar,
                     tailInsertIndex = responseTailInsertIndex,
                     prependedSystemPrompt = systemPrompt.takeIf { systemPromptPrepended },
                 )

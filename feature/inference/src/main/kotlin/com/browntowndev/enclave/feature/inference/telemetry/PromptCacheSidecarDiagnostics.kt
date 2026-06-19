@@ -1,5 +1,7 @@
 package com.browntowndev.enclave.feature.inference.telemetry
 
+import com.browntowndev.enclave.feature.inference.appendonly.SidecarMarkerSpan
+import com.browntowndev.enclave.feature.inference.appendonly.findNextSidecarMarkerSpan
 import com.openai.models.chat.completions.ChatCompletionMessageParam
 import com.openai.models.chat.completions.ChatCompletionSystemMessageParam
 import java.security.MessageDigest
@@ -48,6 +50,20 @@ internal object PromptCacheSidecarDiagnostics {
         val frozenAfterFreezeCount: Int,
         val wirePlacements: List<WireSystemPlacement>,
         val wireSystemCount: Int,
+        val userContentSpans: List<UserContentSidecarSpan>,
+    )
+
+    data class UserContentSidecarSpan(
+        val wireIndex: Int,
+        val markerId: String,
+        val bodyHash: String,
+        val length: Int,
+    )
+
+    data class UserContentSpanDelta(
+        val newSpans: List<UserContentSidecarSpan>,
+        val unchangedSpans: List<UserContentSidecarSpan>,
+        val removedSpans: List<UserContentSidecarSpan>,
     )
 
     data class SystemJsonSpan(
@@ -68,6 +84,7 @@ internal object PromptCacheSidecarDiagnostics {
         val frozenAfterFreezeDelta: Int,
         val newWireSystemKinds: List<String>,
         val wireSystemIndexShifts: List<String>,
+        val userContentSpanDelta: UserContentSpanDelta,
     )
 
     fun captureFrom(
@@ -116,7 +133,39 @@ internal object PromptCacheSidecarDiagnostics {
             frozenAfterFreezeCount = frozenAfterFreezeCount,
             wirePlacements = wirePlacements,
             wireSystemCount = wirePlacements.size,
+            userContentSpans = classifyUserContentSpans(messages),
         )
+    }
+
+    private fun classifyUserContentSpans(
+        messages: List<ChatCompletionMessageParam>,
+    ): List<UserContentSidecarSpan> {
+        val spans = mutableListOf<UserContentSidecarSpan>()
+        messages.forEachIndexed { wireIndex, param ->
+            if (!param.isUser()) return@forEachIndexed
+            val content = param.asUser().content()
+            val text = when {
+                content.isText() -> content.asText()
+                content.isArrayOfContentParts() ->
+                    content.asArrayOfContentParts()
+                        .filter { it.isText() }
+                        .joinToString("") { it.asText().text() }
+                else -> return@forEachIndexed
+            }
+            var span: SidecarMarkerSpan? = findNextSidecarMarkerSpan(text, startIndex = 0)
+            while (span != null) {
+                val currentSpan = span
+                val blockText = text.substring(currentSpan.blockStart, currentSpan.blockEndInclusive + 1)
+                spans += UserContentSidecarSpan(
+                    wireIndex = wireIndex,
+                    markerId = currentSpan.markerId,
+                    bodyHash = shortHash(blockText),
+                    length = blockText.length,
+                )
+                span = findNextSidecarMarkerSpan(text, startIndex = currentSpan.blockEndInclusive + 1)
+            }
+        }
+        return spans
     }
 
     fun diff(
@@ -158,6 +207,11 @@ internal object PromptCacheSidecarDiagnostics {
                         "${prevPlacement.kind}@${prevPlacement.wireIndex}->${curr.wireIndex}"
                     }
                 }
+        val prevSpansByKey = previous.userContentSpans.associateBy { it.markerId }
+        val currSpansByKey = current.userContentSpans.associateBy { it.markerId }
+        val newSpans = current.userContentSpans.filter { it.markerId !in prevSpansByKey }
+        val removedSpans = previous.userContentSpans.filter { it.markerId !in currSpansByKey }
+        val unchangedSpans = current.userContentSpans.filter { prevSpansByKey[it.markerId]?.bodyHash == it.bodyHash }
         return SidecarDelta(
             newFrozenSlots = newFrozen,
             removedFrozenSlots = removedFrozen,
@@ -170,6 +224,11 @@ internal object PromptCacheSidecarDiagnostics {
             frozenAfterFreezeDelta = current.frozenAfterFreezeCount - previous.frozenAfterFreezeCount,
             newWireSystemKinds = newWireSystemKinds,
             wireSystemIndexShifts = wireSystemIndexShifts,
+            userContentSpanDelta = UserContentSpanDelta(
+                newSpans = newSpans,
+                unchangedSpans = unchangedSpans,
+                removedSpans = removedSpans,
+            ),
         )
     }
 
@@ -278,6 +337,10 @@ internal object PromptCacheSidecarDiagnostics {
             if (delta.wireSystemIndexShifts.isNotEmpty()) {
                 append(" wireShifts=[${delta.wireSystemIndexShifts.joinToString(",")}]")
             }
+            val newSz = delta.userContentSpanDelta.newSpans.size
+            val remSz = delta.userContentSpanDelta.removedSpans.size
+            val uncSz = delta.userContentSpanDelta.unchangedSpans.size
+            append(" userContentSpansDelta=new:$newSz,removed:$remSz,unchanged:$uncSz")
         }
 
     fun formatBlock0(wireJsonBody: String): String {

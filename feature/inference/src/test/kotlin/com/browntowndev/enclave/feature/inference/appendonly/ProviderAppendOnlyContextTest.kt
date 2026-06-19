@@ -2,6 +2,7 @@ package com.browntowndev.enclave.feature.inference.appendonly
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
@@ -33,10 +34,12 @@ class ProviderAppendOnlyContextTest {
         val context = ProviderAppendOnlyContext()
         context.appendVolatileSidecar(
             sidecarText = """State ledger JSON: {"v":1}""",
+            markerId = "11111111-2222-3333-4444-555555555555",
             delivery = VolatileContextDelivery.MergeIntoSystemPrompt,
         )
         context.appendVolatileSidecar(
             sidecarText = """State ledger JSON: {"v":2}""",
+            markerId = "66666666-7777-8888-9999-aaaaaaaaaaaa",
             delivery = VolatileContextDelivery.MergeIntoSystemPrompt,
         )
 
@@ -108,9 +111,9 @@ class ProviderAppendOnlyContextTest {
     @Test
     fun frozen_sidecars_accumulate_with_mapped_indices() {
         val context = ProviderAppendOnlyContext()
-        context.endTurnFreezeSidecar("s1", mappedInsertIndex = 0)
-        context.endTurnFreezeSidecar("s2", mappedInsertIndex = 2)
-        context.endTurnFreezeSidecar("s3", mappedInsertIndex = 4)
+        context.endTurnFreezeSidecar("s1", markerId = "11111111-2222-3333-4444-555555555555", mappedInsertIndex = 0)
+        context.endTurnFreezeSidecar("s2", markerId = "22222222-3333-4444-5555-666666666666", mappedInsertIndex = 2)
+        context.endTurnFreezeSidecar("s3", markerId = "33333333-4444-5555-6666-777777777777", mappedInsertIndex = 4)
 
         val snapshots = context.frozenSidecarsForWireReplay()
         assertEquals(3, snapshots.size)
@@ -125,7 +128,7 @@ class ProviderAppendOnlyContextTest {
     @Test
     fun cross_turn_reanchor_preserves_frozen_sidecars_on_prefix_digest_drift() {
         val context = ProviderAppendOnlyContext()
-        context.endTurnFreezeSidecar("s1", mappedInsertIndex = 1)
+        context.endTurnFreezeSidecar("s1", markerId = "11111111-2222-3333-4444-555555555555", mappedInsertIndex = 1)
         context.syncMessages(
             listOf(ProviderNormalizedMessage(role = "user", content = "Hello")),
         )
@@ -167,7 +170,7 @@ class ProviderAppendOnlyContextTest {
     @Test
     fun turn_boundary_reanchor_still_clears_on_compaction_shorter_array() {
         val context = ProviderAppendOnlyContext()
-        context.endTurnFreezeSidecar("frozen-ledger", mappedInsertIndex = 2)
+        context.endTurnFreezeSidecar("frozen-ledger", markerId = "11111111-2222-3333-4444-555555555555", mappedInsertIndex = 2)
         context.syncMessages(
             listOf(
                 ProviderNormalizedMessage(role = "user", content = "prompt"),
@@ -193,7 +196,7 @@ class ProviderAppendOnlyContextTest {
     @Test
     fun digest_mismatch_clears_frozen_sidecar_snapshots() {
         val context = ProviderAppendOnlyContext()
-        context.endTurnFreezeSidecar("s1", mappedInsertIndex = 1)
+        context.endTurnFreezeSidecar("s1", markerId = "11111111-2222-3333-4444-555555555555", mappedInsertIndex = 1)
         context.syncMessages(
             listOf(ProviderNormalizedMessage(role = "user", content = "Hello")),
         )
@@ -243,7 +246,7 @@ class ProviderAppendOnlyContextTest {
     @Test
     fun rehydrated_shorter_session_clears_frozen_sidecars() {
         val context = ProviderAppendOnlyContext()
-        context.endTurnFreezeSidecar("frozen-ledger", mappedInsertIndex = 2)
+        context.endTurnFreezeSidecar("frozen-ledger", markerId = "11111111-2222-3333-4444-555555555555", mappedInsertIndex = 2)
         context.syncMessages(
             listOf(
                 ProviderNormalizedMessage(role = "user", content = "prompt"),
@@ -270,7 +273,7 @@ class ProviderAppendOnlyContextTest {
     @Test
     fun append_only_clear_count_stays_zero_when_session_only_grows() {
         val context = ProviderAppendOnlyContext()
-        context.endTurnFreezeSidecar("s1", mappedInsertIndex = 0)
+        context.endTurnFreezeSidecar("s1", markerId = "11111111-2222-3333-4444-555555555555", mappedInsertIndex = 0)
         context.syncMessages(
             listOf(ProviderNormalizedMessage(role = "user", content = "Search")),
         )
@@ -300,7 +303,7 @@ class ProviderAppendOnlyContextTest {
         val context = ProviderAppendOnlyContext()
         val built = """State ledger JSON: {"turn":1}"""
 
-        assertEquals(built, context.resolveContextSidecarsForWire(built))
+        assertEquals(built, context.resolveContextSidecarsForWire(built)?.text)
         assertNull(context.resolveContextSidecarsForWire(built))
     }
 
@@ -312,7 +315,7 @@ class ProviderAppendOnlyContextTest {
         val v2 = """State ledger JSON: {"turn":2}"""
 
         context.resolveContextSidecarsForWire(v1)
-        assertEquals(v2, context.resolveContextSidecarsForWire(v2))
+        assertEquals(v2, context.resolveContextSidecarsForWire(v2)?.text)
         assertNull(context.resolveContextSidecarsForWire(v2))
     }
 
@@ -331,12 +334,12 @@ class ProviderAppendOnlyContextTest {
         )
         assertEquals("digest_mismatch", context.lastClearReason)
 
-        assertEquals(sidecar, context.resolveContextSidecarsForWire(sidecar))
+        assertEquals(sidecar, context.resolveContextSidecarsForWire(sidecar)?.text)
 
         val invalidateContext = ProviderAppendOnlyContext()
         invalidateContext.resolveContextSidecarsForWire(sidecar)
         invalidateContext.invalidate()
-        assertEquals(sidecar, invalidateContext.resolveContextSidecarsForWire(sidecar))
+        assertEquals(sidecar, invalidateContext.resolveContextSidecarsForWire(sidecar)?.text)
     }
 
     @Test
@@ -344,14 +347,81 @@ class ProviderAppendOnlyContextTest {
     fun SC_DEDUPE_03_postInvalidateReShip() {
         val context = ProviderAppendOnlyContext()
         val sidecar = """State ledger JSON: {"k":1}"""
-        context.endTurnFreezeSidecar(sidecar, mappedInsertIndex = 0)
+        context.endTurnFreezeSidecar(sidecar, markerId = "11111111-2222-3333-4444-555555555555", mappedInsertIndex = 0)
         assertEquals(1, context.frozenSidecarsForWireReplay().size)
         assertNull(context.resolveContextSidecarsForWire(sidecar))
 
         context.invalidate()
 
         assertTrue(context.frozenSidecarsForWireReplay().isEmpty())
-        assertEquals(sidecar, context.resolveContextSidecarsForWire(sidecar))
+        assertEquals(sidecar, context.resolveContextSidecarsForWire(sidecar)?.text)
         assertNull(context.resolveContextSidecarsForWire(sidecar))
+    }
+
+    @Test
+    @DisplayName("S-FREEZE-01 FrozenSidecarSnapshot carries markerId")
+    fun S_FREEZE_01_snapshot_carries_markerId() {
+        val context = ProviderAppendOnlyContext()
+        context.endTurnFreezeSidecar(
+            sidecarText = """State ledger JSON: {"v":1}""",
+            markerId = "11111111-2222-3333-4444-555555555555",
+            mappedInsertIndex = 2,
+        )
+        val snapshots = context.frozenSidecarsForWireReplay()
+        assertEquals(1, snapshots.size)
+        assertEquals("""State ledger JSON: {"v":1}""", snapshots[0].text)
+        assertEquals("11111111-2222-3333-4444-555555555555", snapshots[0].markerId)
+        assertEquals(2, snapshots[0].mappedInsertIndex)
+    }
+
+    @Test
+    @DisplayName("S-FREEZE-02 resolveContextSidecarsForWire returns ResolvedSidecar with fresh markerId")
+    fun S_FREEZE_02_resolve_returns_ResolvedSidecar_with_fresh_markerId() {
+        val context = ProviderAppendOnlyContext()
+        val resolved = context.resolveContextSidecarsForWire("""State ledger JSON: {"v":1}""")
+        assertNotNull(resolved)
+        assertEquals("""State ledger JSON: {"v":1}""", resolved!!.text)
+        assertTrue(resolved.markerId.matches(Regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")))
+    }
+
+    @Test
+    @DisplayName("S-FREEZE-03 dedupe path returns null and allocates no markerId")
+    fun S_FREEZE_03_dedupe_returns_null() {
+        val context = ProviderAppendOnlyContext()
+        context.resolveContextSidecarsForWire("""State ledger JSON: {"v":1}""")
+        assertNull(context.resolveContextSidecarsForWire("""State ledger JSON: {"v":1}"""))
+    }
+
+    @Test
+    @DisplayName("S-FREEZE-04 live to frozen transition reuses same markerId")
+    fun S_FREEZE_04_live_to_frozen_reuses_markerId() {
+        val context = ProviderAppendOnlyContext()
+        val resolved = context.resolveContextSidecarsForWire("""State ledger JSON: {"v":1}""")
+        assertNotNull(resolved)
+        val markerId = resolved!!.markerId
+        context.endTurnFreezeSidecar(
+            sidecarText = """State ledger JSON: {"v":1}""",
+            markerId = markerId,
+            mappedInsertIndex = 1,
+        )
+        val snapshots = context.frozenSidecarsForWireReplay()
+        assertEquals(1, snapshots.size)
+        assertEquals(markerId, snapshots[0].markerId)
+        assertEquals("""State ledger JSON: {"v":1}""", snapshots[0].text)
+    }
+
+    @Test
+    @DisplayName("S-FREEZE-05 appendVolatileSidecar stores markerId")
+    fun S_FREEZE_05_appendVolatileSidecar_stores_markerId() {
+        val context = ProviderAppendOnlyContext()
+        context.appendVolatileSidecar(
+            sidecarText = "ledger",
+            markerId = "11111111-2222-3333-4444-555555555555",
+            delivery = VolatileContextDelivery.OpenAiTailBeforeLastSessionMessage(sessionLastIndex = 3),
+        )
+        val snapshots = context.frozenSidecarsForWireReplay()
+        assertEquals(1, snapshots.size)
+        assertEquals("11111111-2222-3333-4444-555555555555", snapshots[0].markerId)
+        assertEquals(3, snapshots[0].mappedInsertIndex)
     }
 }
