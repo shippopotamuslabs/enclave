@@ -4,6 +4,8 @@ import com.browntowndev.enclave.core.data.local.ApiCredentialsDao
 import com.browntowndev.enclave.core.data.local.ApiModelConfigurationsDao
 import com.browntowndev.enclave.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.enclave.core.data.local.LocalModelsDao
+import com.browntowndev.enclave.core.data.local.MediaProviderDao
+import com.browntowndev.enclave.core.data.local.TtsProviderDao
 import com.browntowndev.enclave.core.data.security.AadContext
 import com.browntowndev.enclave.core.data.security.LocalDataEncryptionService
 import com.browntowndev.enclave.domain.model.chat.ChatModelOverride
@@ -25,6 +27,8 @@ class ActiveModelProviderImpl
         private val localConfigsDao: LocalModelConfigurationsDao,
         private val apiCredentialsDao: ApiCredentialsDao,
         private val apiConfigsDao: ApiModelConfigurationsDao,
+        private val mediaProviderDao: MediaProviderDao,
+        private val ttsProviderDao: TtsProviderDao,
         private val localEncryption: LocalDataEncryptionService,
     ) : ActiveModelProviderPort {
         @Suppress("ReturnCount")
@@ -121,6 +125,68 @@ class ActiveModelProviderImpl
                         ).takeIf { it.hasPromptAndCompletionRates() },
                     apiBaseUrl = credentials.baseUrl ?: credentials.provider.defaultBaseUrl(),
                     includeReasoningContentOnRequest = config.includeReasoningContentOnRequest,
+                )
+            }
+
+            val mediaProviderId = defaultAssignment.mediaProviderId
+            if (mediaProviderId != null) {
+                val provider = mediaProviderDao.getMediaProvider(mediaProviderId.value) ?: return null
+                val decryptedName = decryptStringOrNull(
+                    provider.displayName,
+                    AadContext("MediaProviderEntity", "displayName", provider.id).toBytes()
+                ) ?: provider.displayName
+                val decryptedModelName = provider.modelName?.let {
+                    decryptStringOrNull(
+                        it,
+                        AadContext("MediaProviderEntity", "modelName", provider.id).toBytes()
+                    )
+                } ?: ""
+                return ActiveModelConfiguration(
+                    id = com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId(provider.id),
+                    isLocal = false,
+                    name = decryptedName,
+                    modelId = decryptedModelName,
+                    systemPrompt = null,
+                    apiProvider = provider.provider,
+                    apiBaseUrl = provider.baseUrl ?: provider.provider.defaultBaseUrl(),
+                    thinkingEnabled = false,
+                    temperature = null,
+                    topP = null,
+                    topK = null,
+                    maxTokens = null,
+                    minP = null,
+                    repetitionPenalty = null,
+                    contextWindow = null,
+                )
+            }
+
+            val ttsProviderId = defaultAssignment.ttsProviderId
+            if (ttsProviderId != null) {
+                val provider = ttsProviderDao.getTtsProvider(ttsProviderId.value) ?: return null
+                val decryptedName = decryptStringOrNull(
+                    provider.displayName,
+                    AadContext("TtsProviderEntity", "displayName", provider.id).toBytes()
+                ) ?: provider.displayName
+                val decryptedVoiceName = decryptStringOrNull(
+                    provider.voiceName,
+                    AadContext("TtsProviderEntity", "voiceName", provider.id).toBytes()
+                ) ?: provider.voiceName
+                return ActiveModelConfiguration(
+                    id = com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId(provider.id),
+                    isLocal = false,
+                    name = decryptedName,
+                    modelId = decryptedVoiceName,
+                    systemPrompt = null,
+                    apiProvider = provider.provider,
+                    apiBaseUrl = provider.baseUrl ?: provider.provider.defaultBaseUrl(),
+                    thinkingEnabled = false,
+                    temperature = null,
+                    topP = null,
+                    topK = null,
+                    maxTokens = null,
+                    minP = null,
+                    repetitionPenalty = null,
+                    contextWindow = null,
                 )
             }
 
