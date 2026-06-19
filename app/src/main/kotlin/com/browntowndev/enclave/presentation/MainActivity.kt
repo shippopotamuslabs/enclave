@@ -53,6 +53,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        window.isNavigationBarContrastEnforced = false
         latestIntent = intent
         biometricHelper = BiometricPromptHelper(this)
 

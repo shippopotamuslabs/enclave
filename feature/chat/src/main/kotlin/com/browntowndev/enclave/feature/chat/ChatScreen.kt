@@ -148,8 +148,7 @@ fun ChatScreen(
                     modifier =
                         Modifier
                             .fillMaxSize()
-                            .padding(top = innerPadding.calculateTopPadding())
-                            .imePadding(),
+                            .padding(top = innerPadding.calculateTopPadding()),
                 ) {
                     // Message area — shrinks via weight(1f) when keyboard opens
                     Box(modifier = Modifier.weight(1f)) {

@@ -52,12 +52,12 @@ class SearchToolPromptComposerToolSearchTest {
 
         assertAll(
             { assertTrue(prompt.contains("Anti-leak:")) },
-            { assertTrue(prompt.contains("# CONTEXT RETRIEVAL ROUTING:")) },
-            { assertTrue(prompt.contains("Past conversations")) },
-            { assertTrue(prompt.contains("search_chat_history")) },
-            { assertTrue(prompt.contains("web_search")) },
+            { assertTrue(prompt.contains("# TOOL ROUTING:")) },
+            { assertTrue(prompt.contains("request tools parameter")) },
             { assertTrue(prompt.contains("tool_discovery_tool")) },
-            { assertTrue(prompt.contains("# TOOL DISCOVERY:")) },
+            { assertFalse(prompt.contains("# CONTEXT RETRIEVAL ROUTING:")) },
+            { assertFalse(prompt.contains("registered tools")) },
+            { assertFalse(prompt.contains("advertised_tools")) },
             // Discovery is real: the deferred catalog tool must not be listed up front.
             { assertFalse(prompt.contains("append_blocks")) },
             { assertFalse(prompt.contains("# TOOL GROUPS:")) },

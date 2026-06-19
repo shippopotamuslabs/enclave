@@ -62,6 +62,14 @@ internal object ContextSidecarCompaction {
 
     fun compactFileContextIndexJson(raw: String): String = compactJsonObject(raw)
 
+    /** Native cloud providers: omit tool index sidecar when only deferral metadata remains. */
+    fun shouldOmitToolContextIndexFromWire(compacted: String): Boolean =
+        runCatching {
+            val root = json.parseToJsonElement(compacted).jsonObject
+            val advertised = root["advertised_tools"]?.jsonArray ?: return false
+            advertised.isEmpty()
+        }.getOrElse { false }
+
     private fun compactAdvertisedTools(value: JsonElement): JsonElement {
         val advertised = value.jsonArray
         val names =

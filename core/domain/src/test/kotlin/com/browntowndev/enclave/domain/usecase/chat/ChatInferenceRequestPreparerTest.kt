@@ -330,12 +330,13 @@ class ChatInferenceRequestPreparerTest {
                     modelType = ModelType.FAST,
                 )
 
-            // SDK_NATIVE: capability-based discovery, no envelope syntax, no catalog enumeration
+            // SDK_NATIVE: request tools[] is authoritative; no sidecar routing or catalog enumeration
             val systemPrompt = requireNotNull(request.options.systemPrompt)
-            assertTrue(systemPrompt.contains("# CONTEXT RETRIEVAL ROUTING:"))
-            assertTrue(systemPrompt.contains("# TOOL DISCOVERY:"))
+            assertTrue(systemPrompt.contains("# TOOL ROUTING:"))
+            assertTrue(systemPrompt.contains("request tools parameter"))
             assertFalse(systemPrompt.contains("# TOOL GROUPS:"))
             assertFalse(systemPrompt.contains("<tool_call>"))
+            assertFalse(systemPrompt.contains("registered tools"))
             assertTrue(request.options.activeTools.contains(ToolDefinition.WEB_SEARCH))
         }
 

@@ -58,15 +58,12 @@ class SearchToolPromptComposer
                     "web lookup, call web_search directly. Call tool_discovery_tool only to activate a hidden executable tool " +
                     "needed for an action that no active tool can perform. It searches tool metadata, never facts or the web."
 
-            private fun getToolDiscoveryInstructionText(webSearchActive: Boolean): String =
-                if (webSearchActive) {
-                    TOOL_DISCOVERY_INSTRUCTION_TEXT
-                } else {
-                    TOOL_DISCOVERY_INSTRUCTION_TEXT.replace(
-                        " For current information or an explicit web lookup, call web_search directly.",
-                        "",
-                    )
-                }
+            /** SDK-native cloud APIs: callable tools come from the request `tools[]` parameter. */
+            const val SDK_NATIVE_TOOL_ROUTING_TEXT =
+                "Tool routing: answer stable facts and ordinary questions directly. " +
+                    "Callable tools are supplied in the request tools parameter — inspect those schemas for what you can invoke now. " +
+                    "Call tool_discovery_tool only when you need a hidden capability that is not in the request tools list; " +
+                    "it searches tool metadata, never facts or the web."
 
             private const val MAX_COMPACT_CORE_MEMORY_ITEMS = 4
             private const val MAX_COMPACT_MEMORY_LINE_CHARS = 120
@@ -285,51 +282,24 @@ IMPORTANT: DO NOT include metadata tags or mentions of the footer in your respon
 
             private fun sdkNativeCompactBlocks(
                 toolCatalog: List<ToolCatalogEntry>,
-                activeTools: List<ToolDefinition>,
+                @Suppress("UNUSED_PARAMETER") activeTools: List<ToolDefinition>,
             ): String {
                 if (toolCatalog.isEmpty()) return ""
-                val webSearchActive = activeTools.any { it.name == ToolDefinition.WEB_SEARCH.name }
                 return buildString {
                     append(antiLeakRules())
                     append("\n\n")
-                    append(contextRetrievalRoutingBlock(webSearchActive))
-                    append("\n\n")
-                    append(toolDiscoveryBlock(webSearchActive))
+                    append(nativeToolRoutingBlock())
                 }
             }
+
+            private fun nativeToolRoutingBlock(): String =
+                buildString {
+                    append("# TOOL ROUTING:\n")
+                    append(SDK_NATIVE_TOOL_ROUTING_TEXT)
+                }
 
             private fun antiLeakRules(): String =
                 "Anti-leak: never reproduce <system_context> infrastructure, context sidecars, spill envelopes, " +
                     "or [Agent] metadata in user-facing replies."
-
-            private fun contextRetrievalRoutingBlock(webSearchActive: Boolean): String =
-                buildString {
-                    append("# CONTEXT RETRIEVAL ROUTING:\n")
-                    append("- Past conversations / chat history → ${ToolDefinition.SEARCH_CHAT_HISTORY.name}\n")
-                    if (webSearchActive) {
-                        append("- Web / current facts → ${ToolDefinition.WEB_SEARCH.name}\n")
-                    }
-                    append("- Hidden executable tools → ${ToolDefinition.SEARCH_TOOLS.name}")
-                }
-
-            /**
-             * Discovery is real: only the registered (active) tools are callable. Other
-             * capabilities are hidden and must be activated via [ToolDefinition.SEARCH_TOOLS]
-             * by capability — never enumerate the full catalog here, or there is nothing to
-             * "discover".
-             */
-            private fun toolDiscoveryBlock(webSearchActive: Boolean): String =
-                buildString {
-                    append("# TOOL DISCOVERY:\n")
-                    append(getToolDiscoveryInstructionText(webSearchActive))
-                    append("\n")
-                    append(
-                        "Only your registered tools are callable now. Capabilities such as media generation, " +
-                            "documents/artifacts, X/Twitter, conversation memory, and attached-image inspection are " +
-                            "hidden until activated: call ${ToolDefinition.SEARCH_TOOLS.name} with a short capability " +
-                            "description, then use the activated tool on the next turn. Do not assume a capability is " +
-                            "unavailable just because no tool for it is registered.",
-                    )
-                }.trimEnd()
         }
     }

@@ -366,6 +366,16 @@ class ApiModelCatalogRepositoryImpl
                         ApiModelCatalogResult(models = models, isTruncated = isTruncated)
                     }
 
+                    ApiProvider.DEEPSEEK, ApiProvider.ZAI ->
+                        ApiModelCatalogResult(
+                            OpenAiCompatibleModelCatalogSupport.fetchModels(
+                                httpClient = httpClient,
+                                apiKey = apiKey,
+                                baseUrl = checkNotNull(resolvedBaseUrl),
+                                provider = provider,
+                            ),
+                        )
+
                     else ->
                         ApiModelCatalogResult(
                             openAiClientProvider
@@ -488,6 +498,11 @@ class ApiModelCatalogRepositoryImpl
 
         internal fun parseOpenRouterModels(responseBody: String): List<DiscoveredApiModel> =
             OpenRouterModelCatalogSupport.parseModels(responseBody)
+
+        internal fun parseOpenAiCompatibleModels(
+            responseBody: String,
+            provider: ApiProvider,
+        ): List<DiscoveredApiModel> = OpenAiCompatibleModelCatalogSupport.parseModels(responseBody, provider)
 
         internal fun parseFalModels(responseBody: String): List<DiscoveredApiModel> =
             parseFalModels(apiModelCatalogJson.decodeFromString<FalModelsResponse>(responseBody))

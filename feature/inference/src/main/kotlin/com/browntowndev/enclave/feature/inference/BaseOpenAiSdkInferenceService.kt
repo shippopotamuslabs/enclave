@@ -28,6 +28,7 @@ import com.browntowndev.enclave.feature.inference.appendonly.toAppendOnlySyncMes
 import com.browntowndev.enclave.feature.inference.appendonly.toToolsFingerprint
 import com.browntowndev.enclave.feature.inference.openai.OpenAiResponseStreamHandler
 import com.browntowndev.enclave.feature.inference.openai.OpenAiStreamUsageAccumulator
+import com.browntowndev.enclave.feature.inference.openai.OpenAiWireJsonSerializer
 import com.browntowndev.enclave.feature.inference.openai.PreRetrievalContextSidecar
 import com.browntowndev.enclave.feature.inference.openai.StreamState
 import com.browntowndev.enclave.feature.inference.openai.StreamedOpenAiResponse
@@ -37,6 +38,7 @@ import com.browntowndev.enclave.feature.inference.telemetry.InferenceTelemetrySu
 import com.browntowndev.enclave.feature.inference.telemetry.InferenceTurnTiming
 import com.browntowndev.enclave.feature.inference.telemetry.PromptCacheDiagnosticsContext
 import com.browntowndev.enclave.feature.inference.telemetry.PromptCachePrefixDiagnostics
+import com.browntowndev.enclave.feature.inference.telemetry.PromptCacheSidecarDiagnostics
 import com.browntowndev.enclave.feature.inference.telemetry.emitInferenceExecutionOutcome
 import com.fasterxml.jackson.core.type.TypeReference
 import com.openai.client.OpenAIClient
@@ -189,6 +191,8 @@ abstract class BaseOpenAiSdkInferenceService(
         appendOnlyClears: Int,
         appendOnlyLastClearReason: String?,
         diagnosticsContext: PromptCacheDiagnosticsContext,
+        wireJsonBody: String,
+        sidecarCapture: PromptCacheSidecarDiagnostics.SidecarWireCapture,
     ) {
         if (!enablePromptCacheDiagnostics()) {
             return
@@ -209,6 +213,52 @@ abstract class BaseOpenAiSdkInferenceService(
                 messages = messages,
             )
         val previous = promptCacheDiagnosticsState[stateKey]
+        val sidecarManifest =
+            PromptCacheSidecarDiagnostics.captureFrom(
+                frozenOnWire = sidecarCapture.frozenOnWire,
+                liveSidecarText = sidecarCapture.liveSidecarText,
+                preRetrievalSidecarText = sidecarCapture.preRetrievalSidecarText,
+                tailInsertIndex = sidecarCapture.tailInsertIndex,
+                mappedBodySize = sidecarCapture.mappedBodySize,
+                frozenAfterFreezeCount = sidecarCapture.frozenAfterFreezeCount,
+                stableSystemPrompt = diagnosticsContext.systemPrompt,
+                messages = messages,
+            )
+        val sidecarDelta = PromptCacheSidecarDiagnostics.diff(previous?.sidecarManifest, sidecarManifest)
+        val systemJsonSpans = PromptCacheSidecarDiagnostics.extractSystemJsonSpans(wireJsonBody)
+        loggingPort.debug(
+            tag,
+            "PROMPT_CACHE_SIDECAR seq=$sequenceIndex chat=$stateKey " +
+                PromptCacheSidecarDiagnostics.formatManifest(sidecarManifest),
+        )
+        sidecarDelta?.let { delta ->
+            loggingPort.debug(
+                tag,
+                "PROMPT_CACHE_SIDECAR_DELTA seq=$sequenceIndex chat=$stateKey " +
+                    PromptCacheSidecarDiagnostics.formatDelta(delta),
+            )
+        }
+        loggingPort.debug(
+            tag,
+            "PROMPT_CACHE_SIDECAR_JSON seq=$sequenceIndex chat=$stateKey " +
+                PromptCacheSidecarDiagnostics.formatBlock0(wireJsonBody) +
+                " sysSpans=" +
+                systemJsonSpans.joinToString("|") { span ->
+                    "@${span.roleCharOffset}:${span.contentHash.take(8)}(len=${span.contentLength})"
+                },
+        )
+        previous?.wireJsonBody?.let { previousJson ->
+            loggingPort.debug(
+                tag,
+                "PROMPT_CACHE_SIDECAR_JSON_DELTA seq=$sequenceIndex chat=$stateKey " +
+                    PromptCacheSidecarDiagnostics.formatEarlyJsonBreak(previousJson, wireJsonBody) +
+                    " sysJsonDelta=" +
+                    PromptCacheSidecarDiagnostics.diffSystemJsonSpans(
+                        previous = PromptCacheSidecarDiagnostics.extractSystemJsonSpans(previousJson),
+                        current = systemJsonSpans,
+                    ),
+            )
+        }
         val comparison =
             PromptCachePrefixDiagnostics.compare(
                 previous = previous?.shape,
@@ -233,11 +283,30 @@ abstract class BaseOpenAiSdkInferenceService(
                     "new=${PromptCachePrefixDiagnostics.sanitizeForLog(breakReport.newSnippet)}",
             )
         }
+        previous?.wireJsonBody?.let { previousJson ->
+            val jsonBreakReport =
+                PromptCachePrefixDiagnostics.computePrefixBreak(
+                    previousBody = previousJson,
+                    newBody = wireJsonBody,
+                    windowChars = PromptCachePrefixDiagnostics.PREFIX_BREAK_WINDOW_CHARS,
+                )
+            loggingPort.debug(
+                tag,
+                "PROMPT_CACHE_JSON_BREAK seq=$sequenceIndex chat=$stateKey " +
+                    "match=${jsonBreakReport.matchChars}/${jsonBreakReport.newChars} (${jsonBreakReport.matchPct}%) " +
+                    "prevLen=${previousJson.length} " +
+                    "before=${PromptCachePrefixDiagnostics.sanitizeForLog(jsonBreakReport.contextBefore)} " +
+                    "old=${PromptCachePrefixDiagnostics.sanitizeForLog(jsonBreakReport.oldSnippet)} " +
+                    "new=${PromptCachePrefixDiagnostics.sanitizeForLog(jsonBreakReport.newSnippet)}",
+            )
+        }
         promptCacheDiagnosticsState[stateKey] =
             PromptCacheDiagnosticsState(
                 shape = currentShape,
                 inputTokens = inputTokens,
                 body = currentBody,
+                wireJsonBody = wireJsonBody,
+                sidecarManifest = sidecarManifest,
             )
         val cacheRead = cacheReadInputTokens ?: 0
         val input = inputTokens ?: 0
@@ -254,7 +323,8 @@ abstract class BaseOpenAiSdkInferenceService(
             "PROMPT_CACHE seq=$sequenceIndex chat=$stateKey model=${diagnosticsContext.requestModelId} " +
                 "allowToolCall=$allowToolCall toolCalls=${toolCalls.size} " +
                 "sessionMsgs=${diagnosticsContext.sessionMessageCount} wireMsgs=${messages.size} " +
-                "tools=${currentShape.toolCount} frozenSidecars=${currentShape.frozenSidecarCount} " +
+                "tools=${currentShape.toolCount} frozenOnWire=${sidecarCapture.frozenOnWire.size} " +
+                "frozenAfterFreeze=${sidecarCapture.frozenAfterFreezeCount} " +
                 "liveSidecar=${currentShape.liveSidecarPresent} appendOnlyClears=$appendOnlyClears " +
                 "appendOnlyLastClear=${appendOnlyLastClearReason ?: "none"} " +
                 "input=$input cacheRead=$cacheRead hitPct=$hitPct " +
@@ -299,6 +369,8 @@ abstract class BaseOpenAiSdkInferenceService(
         val shape: PromptCachePrefixDiagnostics.PrefixShape,
         val inputTokens: Int?,
         val body: String,
+        val wireJsonBody: String,
+        val sidecarManifest: PromptCacheSidecarDiagnostics.SidecarManifest,
     )
 
     private val promptCacheDiagnosticsState = mutableMapOf<String, PromptCacheDiagnosticsState>()
@@ -352,6 +424,47 @@ abstract class BaseOpenAiSdkInferenceService(
     }
 
     private fun appendOnlyKey(chatId: ChatId?): String = chatId?.value ?: "__no_chat__"
+
+    private fun captureSidecarWireState(
+        appendOnly: ProviderAppendOnlyContext,
+        wireSidecar: String?,
+        livePreRetrievalSidecarText: String?,
+        tailInsertIndex: Int,
+        mappedBodySize: Int,
+    ): PromptCacheSidecarDiagnostics.SidecarWireCapture {
+        val frozenOnWire =
+            appendOnly.frozenSidecarsForWireReplay().map { snapshot ->
+                PromptCacheSidecarDiagnostics.slotFrom(
+                    mappedInsertIndex = snapshot.mappedInsertIndex,
+                    text = snapshot.text,
+                )
+            }
+        return PromptCacheSidecarDiagnostics.SidecarWireCapture(
+            frozenOnWire = frozenOnWire,
+            liveSidecarText = wireSidecar,
+            preRetrievalSidecarText = livePreRetrievalSidecarText,
+            tailInsertIndex = tailInsertIndex,
+            mappedBodySize = mappedBodySize,
+            frozenAfterFreezeCount = appendOnly.frozenSidecarsForWireReplay().size,
+        )
+    }
+
+    private fun finalizeSidecarFreeze(
+        appendOnly: ProviderAppendOnlyContext,
+        wireSidecar: String?,
+        tailInsertIndex: Int,
+        sidecarWireCapture: PromptCacheSidecarDiagnostics.SidecarWireCapture,
+    ): PromptCacheSidecarDiagnostics.SidecarWireCapture {
+        if (wireSidecar != null) {
+            appendOnly.endTurnFreezeSidecar(
+                sidecarText = wireSidecar,
+                mappedInsertIndex = tailInsertIndex,
+            )
+        }
+        return sidecarWireCapture.copy(
+            frozenAfterFreezeCount = appendOnly.frozenSidecarsForWireReplay().size,
+        )
+    }
 
     @Suppress("CyclomaticComplexMethod")
     override suspend fun completeSingleTurn(
@@ -504,12 +617,21 @@ abstract class BaseOpenAiSdkInferenceService(
                     tailInsertIndex = responseTailInsertIndex,
                     prependedSystemPrompt = systemPrompt.takeIf { systemPromptPrepended },
                 )
-            if (wireSidecar != null) {
-                appendOnly.endTurnFreezeSidecar(
-                    sidecarText = wireSidecar,
-                    mappedInsertIndex = tailInsertIndex,
+            val sidecarWireCapture =
+                captureSidecarWireState(
+                    appendOnly = appendOnly,
+                    wireSidecar = wireSidecar,
+                    livePreRetrievalSidecarText = livePreRetrievalSidecarText,
+                    tailInsertIndex = tailInsertIndex,
+                    mappedBodySize = mappedBody.size,
                 )
-            }
+            val sidecarCaptureForDiagnostics =
+                finalizeSidecarFreeze(
+                    appendOnly = appendOnly,
+                    wireSidecar = wireSidecar,
+                    tailInsertIndex = tailInsertIndex,
+                    sidecarWireCapture = sidecarWireCapture,
+                )
 
             val parameterSupport = parameterSupport(options = options, requestModelId = requestModelId)
 
@@ -603,7 +725,7 @@ abstract class BaseOpenAiSdkInferenceService(
                     chatId = options.chatId,
                     systemPrompt = systemPrompt,
                     toolNames = availableTools.map { it.name },
-                    frozenSidecarCount = appendOnly.frozenSidecarsForWireReplay().size,
+                    frozenSidecarCount = sidecarCaptureForDiagnostics.frozenOnWire.size,
                     liveSidecarPresent = !contextSidecars.isNullOrBlank(),
                     sessionMessageCount = sessionMessages.size,
                 )
@@ -617,6 +739,8 @@ abstract class BaseOpenAiSdkInferenceService(
                 appendOnlyClears = appendOnly.clearCount,
                 appendOnlyLastClearReason = appendOnly.lastClearReason,
                 diagnosticsContext = diagnosticsContext,
+                wireJsonBody = OpenAiWireJsonSerializer.serializeBody(chatParams._body()),
+                sidecarCapture = sidecarCaptureForDiagnostics,
             )
 
             val telemetry =
@@ -1487,7 +1611,7 @@ abstract class BaseOpenAiSdkInferenceService(
                 ""
             }
 
-    private fun serializeBody(body: Any): String = body.toString()
+    private fun serializeBody(body: Any): String = OpenAiWireJsonSerializer.serializeBody(body)
 
     protected fun truncateForLogs(value: String): String {
         if (value.length <= MAX_LOG_BODY_CHARS) {

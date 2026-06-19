@@ -29,6 +29,24 @@ class ContextSidecarCompactionTest {
     }
 
     @Test
+    fun shouldOmitToolContextIndexFromWire_when_advertised_tools_empty() {
+        val compacted =
+            ContextSidecarCompaction.compactToolContextIndexJson(
+                """{"advertised_tools":[],"full_schema_ref":"tool-schema-1"}""",
+            )
+        assertTrue(ContextSidecarCompaction.shouldOmitToolContextIndexFromWire(compacted))
+    }
+
+    @Test
+    fun shouldOmitToolContextIndexFromWire_false_when_advertised_tools_present() {
+        val compacted =
+            ContextSidecarCompaction.compactToolContextIndexJson(
+                """{"advertised_tools":[{"name":"web_search"}]}""",
+            )
+        assertFalse(ContextSidecarCompaction.shouldOmitToolContextIndexFromWire(compacted))
+    }
+
+    @Test
     fun compactStateLedgerJson_strips_transcript_redundant_bookkeeping() {
         val raw =
             """
