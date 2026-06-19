@@ -7,7 +7,9 @@ import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.config.TtsProviderId
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
+import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.onboarding.OnboardingFlowMode
+import com.browntowndev.enclave.domain.usecase.onboarding.BulkAssignApiProviderUseCase
 import com.browntowndev.enclave.domain.usecase.FakeSettingsRepository
 import com.browntowndev.enclave.domain.usecase.media.SaveMediaProviderUseCase
 import com.browntowndev.enclave.domain.usecase.onboarding.ResolveOnboardingFlowModeUseCase
@@ -319,8 +321,10 @@ class OnboardingViewModelTest {
                 assertTrue(fakeSettingsRepository.ageConfirmed)
                 assertTrue(fakeSettingsRepository.onboardingCompleted)
 
-                val event = awaitItem()
-                assertTrue(event is OnboardingEvent.NavigateToChat)
+                val event = awaitItem() as OnboardingEvent.NavigateToChat
+                assertEquals(ModelChoice.API, event.modelChoice)
+                val expectedSlots = BulkAssignApiProviderUseCase.TEXT_SLOTS.toSet() + ModelType.VISION
+                assertEquals(expectedSlots, event.apiSlots)
 
                 val state = viewModel.uiState.value
                 assertFalse(state.isSaving)
@@ -354,8 +358,9 @@ class OnboardingViewModelTest {
                 assertEquals(0, fakeBulkAssign.callCount)
                 assertTrue(fakeSettingsRepository.onboardingCompleted)
 
-                val event = awaitItem()
-                assertTrue(event is OnboardingEvent.NavigateToChat)
+                val event = awaitItem() as OnboardingEvent.NavigateToChat
+                assertEquals(ModelChoice.LOCAL, event.modelChoice)
+                assertEquals(emptySet<ModelType>(), event.apiSlots)
 
                 cancelAndIgnoreRemainingEvents()
             }
@@ -459,6 +464,8 @@ class OnboardingViewModelTest {
 
                 val event = awaitItem() as OnboardingEvent.NavigateToChat
                 assertEquals(ModelChoice.API, event.modelChoice)
+                val expectedSlots = BulkAssignApiProviderUseCase.TEXT_SLOTS.toSet() + ModelType.VISION
+                assertEquals(expectedSlots, event.apiSlots)
 
                 cancelAndIgnoreRemainingEvents()
             }
@@ -482,6 +489,7 @@ class OnboardingViewModelTest {
 
                 val event = awaitItem() as OnboardingEvent.NavigateToChat
                 assertEquals(ModelChoice.LOCAL, event.modelChoice)
+                assertEquals(emptySet<ModelType>(), event.apiSlots)
 
                 cancelAndIgnoreRemainingEvents()
             }
@@ -551,7 +559,11 @@ class OnboardingViewModelTest {
                 coVerify(exactly = 1) { mockSaveMedia(match { it.id == mediaDraft.id }, "media-key") }
 
                 assertTrue(fakeSettingsRepository.onboardingCompleted)
-                assertTrue(awaitItem() is OnboardingEvent.NavigateToChat)
+                val event = awaitItem() as OnboardingEvent.NavigateToChat
+                assertEquals(ModelChoice.API, event.modelChoice)
+                val expectedSlots = BulkAssignApiProviderUseCase.TEXT_SLOTS.toSet() +
+                    ModelType.VISION + ModelType.IMAGE_GENERATION + ModelType.IMAGE_EDIT
+                assertEquals(expectedSlots, event.apiSlots)
                 cancelAndIgnoreRemainingEvents()
             }
         }
@@ -589,6 +601,7 @@ class OnboardingViewModelTest {
                 assertTrue(fakeSettingsRepository.ageConfirmed)
                 val event = awaitItem() as OnboardingEvent.NavigateToChat
                 assertEquals(ModelChoice.RESTORED, event.modelChoice)
+                assertEquals(emptySet<ModelType>(), event.apiSlots)
                 assertEquals(0, fakeBulkAssign.callCount)
                 cancelAndIgnoreRemainingEvents()
             }

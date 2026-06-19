@@ -119,6 +119,55 @@ class DownloadViewModelStartupTest {
         }
 
     @Test
+    @DisplayName("init re-initializes orchestrator with the (filtered) modelsResult before downloads start")
+    fun init_reInitializesOrchestratorWithFilteredResult() =
+        runTest {
+            val viewModel = createViewModel(autoStartDownloads = false)
+            advanceUntilIdle()
+
+            // The VM must push its modelsResult back into the orchestrator so the cached
+            // startupModelsResult and currentDownloads reflect API-onboarding suppression.
+            verify(exactly = 1) { orchestrator.initializeWithStartupResult(modelsResult) }
+            assertEquals(DownloadStatus.IDLE, viewModel.downloadState.value.status)
+        }
+
+    @Test
+    @DisplayName("init does not re-initialize orchestrator while downloads are in flight")
+    fun init_skipsReInitWhenDownloadsInProgress() =
+        runTest {
+            // Simulate an orchestrator already mid-download (e.g. VM recreated by a running app).
+            downloadStateFlow.value = DownloadState(status = DownloadStatus.DOWNLOADING)
+            val viewModel = createViewModel(autoStartDownloads = false)
+            advanceUntilIdle()
+
+            // Re-init must be skipped to avoid cancelling in-flight WorkManager jobs.
+            verify(exactly = 0) { orchestrator.initializeWithStartupResult(any()) }
+            assertEquals(DownloadStatus.DOWNLOADING, viewModel.downloadState.value.status)
+        }
+
+    @Test
+    @DisplayName("init re-initializes orchestrator even when an initial error is present")
+    fun init_reInitializesOrchestratorOnErrorMessagePath() =
+        runTest {
+            val viewModel =
+                DownloadViewModel(
+                    modelDownloadOrchestrator = orchestrator,
+                    downloadWorkRepository = workRepo,
+                    progressParser = parser,
+                    errorHandler = errorHandler,
+                    modelsResult = modelsResult,
+                    initialErrorMessage = "boom",
+                    autoStartDownloads = false,
+                )
+            advanceUntilIdle()
+
+            // Even on the error path, the cache must be refreshed so a later Retry uses the
+            // filtered set rather than the unfiltered startup snapshot.
+            verify(exactly = 1) { orchestrator.initializeWithStartupResult(modelsResult) }
+            verify { orchestrator.setError("boom") }
+        }
+
+    @Test
     @DisplayName("work progress flow updates downloadState to DOWNLOADING via parser and orchestrator")
     fun observeWorkProgress_parserDownloadingUpdate_reflectsDownloadingState() =
         runTest {
