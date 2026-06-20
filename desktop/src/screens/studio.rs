@@ -78,17 +78,23 @@ pub fn view<'a>(
 ) -> Element<'a, Message, Theme, iced::Renderer> {
     let is_dark = app_theme == AppTheme::Dark;
 
+    let text_color = if is_dark {
+        theme::DARK_TEXT
+    } else {
+        theme::LIGHT_TEXT
+    };
+
     // --- 1. Studio Top Bar ---
     let menu_btn = button(
-        text(icons::ICON_MENU)
-            .font(icons::ICON_FONT)
-            .size(20)
-            .shaping(iced::widget::text::Shaping::Advanced)
-            .style(if is_dark {
-                theme::DARK_TEXT
-            } else {
-                theme::LIGHT_TEXT
-            }),
+        container(
+            icons::render_svg(&icons::HANDLE_MENU, text_color)
+                .width(Length::Fixed(18.0))
+                .height(Length::Fixed(18.0)),
+        )
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .center_x()
+        .center_y(),
     )
     .padding(8)
     .width(Length::Fixed(40.0))
@@ -112,15 +118,16 @@ pub fn view<'a>(
                 } else {
                     theme::LIGHT_TEXT
                 }),
-            text(icons::ICON_CHEVRON_DOWN)
-                .font(icons::ICON_FONT)
-                .size(16)
-                .shaping(iced::widget::text::Shaping::Advanced)
-                .style(if app_theme == AppTheme::Dark {
+            icons::render_svg(
+                &icons::HANDLE_CHEVRON_DOWN,
+                if app_theme == AppTheme::Dark {
                     theme::DARK_TEXT_MUTED
                 } else {
                     theme::LIGHT_TEXT_MUTED
-                })
+                },
+            )
+            .width(Length::Fixed(16.0))
+            .height(Length::Fixed(16.0))
         ]
         .spacing(8)
         .align_items(alignment::Alignment::Center),
@@ -134,15 +141,15 @@ pub fn view<'a>(
     .on_press(Message::NavigateTo(crate::Screen::Settings));
 
     let gallery_btn = button(
-        text(icons::ICON_GALLERY)
-            .font(icons::ICON_FONT)
-            .size(20)
-            .shaping(iced::widget::text::Shaping::Advanced)
-            .style(if is_dark {
-                theme::DARK_TEXT
-            } else {
-                theme::LIGHT_TEXT
-            }),
+        container(
+            icons::render_svg(&icons::HANDLE_GALLERY, text_color)
+                .width(Length::Fixed(18.0))
+                .height(Length::Fixed(18.0)),
+        )
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .center_x()
+        .center_y(),
     )
     .padding(8)
     .width(Length::Fixed(40.0))
@@ -277,11 +284,9 @@ pub fn view<'a>(
                 }),
             horizontal_space().width(Length::Fill),
             button(
-                text(icons::ICON_CLOSE)
-                    .font(icons::ICON_FONT)
-                    .size(14)
-                    .shaping(iced::widget::text::Shaping::Advanced)
-                    .style(theme::COLOR_ACCENT)
+                icons::render_svg(&icons::HANDLE_CLOSE, theme::COLOR_ACCENT)
+                    .width(Length::Fixed(14.0))
+                    .height(Length::Fixed(14.0))
             )
             .style(iced::theme::Button::Text)
             .on_press(Message::StudioPromptChanged(String::new())) // Reset/dismiss
@@ -305,15 +310,15 @@ pub fn view<'a>(
 
     // --- 3. Bottom Input Dock (StudioInputDock) ---
     let mic_btn = button(
-        text(icons::ICON_MIC)
-            .font(icons::ICON_FONT)
-            .size(20)
-            .shaping(iced::widget::text::Shaping::Advanced)
-            .style(if is_dark {
-                theme::DARK_TEXT
-            } else {
-                theme::LIGHT_TEXT
-            }),
+        container(
+            icons::render_svg(&icons::HANDLE_MIC, text_color)
+                .width(Length::Fixed(18.0))
+                .height(Length::Fixed(18.0)),
+        )
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .center_x()
+        .center_y(),
     )
     .padding(8)
     .width(Length::Fixed(40.0))
@@ -326,15 +331,15 @@ pub fn view<'a>(
     .on_press(Message::NavigateTo(crate::Screen::Settings));
 
     let image_btn = button(
-        text(icons::ICON_IMAGE)
-            .font(icons::ICON_FONT)
-            .size(20)
-            .shaping(iced::widget::text::Shaping::Advanced)
-            .style(if is_dark {
-                theme::DARK_TEXT
-            } else {
-                theme::LIGHT_TEXT
-            }),
+        container(
+            icons::render_svg(&icons::HANDLE_IMAGE, text_color)
+                .width(Length::Fixed(18.0))
+                .height(Length::Fixed(18.0)),
+        )
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .center_x()
+        .center_y(),
     )
     .padding(8)
     .width(Length::Fixed(40.0))
@@ -358,10 +363,9 @@ pub fn view<'a>(
 
     let generate_btn = button(
         row![
-            text(icons::ICON_SEND)
-                .font(icons::ICON_FONT)
-                .size(16)
-                .style(iced::Color::BLACK),
+            icons::render_svg(&icons::HANDLE_SEND, iced::Color::BLACK)
+                .width(Length::Fixed(16.0))
+                .height(Length::Fixed(16.0)),
             text("Generate")
                 .font(icons::FONT_BOLD)
                 .size(14)

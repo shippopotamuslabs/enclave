@@ -32,20 +32,22 @@ pub fn view<'a>(
             theme::LIGHT_TEXT
         });
 
+    let text_color = if is_dark {
+        theme::DARK_TEXT
+    } else {
+        theme::LIGHT_TEXT
+    };
+
     let close_btn = button(
-        text(icons::ICON_CLOSE)
-            .font(icons::ICON_FONT)
-            .size(20)
-            .shaping(iced::widget::text::Shaping::Advanced)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .horizontal_alignment(alignment::Horizontal::Center)
-            .vertical_alignment(alignment::Vertical::Center)
-            .style(if is_dark {
-                theme::DARK_TEXT
-            } else {
-                theme::LIGHT_TEXT
-            }),
+        container(
+            icons::render_svg(&icons::HANDLE_CLOSE, text_color)
+                .width(Length::Fixed(18.0))
+                .height(Length::Fixed(18.0)),
+        )
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .center_x()
+        .center_y(),
     )
     .padding(8)
     .width(Length::Fixed(40.0))
@@ -195,14 +197,12 @@ pub fn view<'a>(
         settings_list.push(column![make_section_header("APPEARANCE"), theme_row].spacing(8));
 
     // --- Models / Assignments Rows ---
-    let make_nav_row = |title: &str, subtitle: &str, icon_str: &str| {
+    let make_nav_row = |title: &str, subtitle: &str, icon_handle: &iced::widget::svg::Handle| {
         container(
             row![
-                text(icon_str)
-                    .font(icons::ICON_FONT)
-                    .size(20)
-                    .shaping(iced::widget::text::Shaping::Advanced)
-                    .style(theme::COLOR_ACCENT),
+                icons::render_svg(icon_handle, theme::COLOR_ACCENT)
+                    .width(Length::Fixed(20.0))
+                    .height(Length::Fixed(20.0)),
                 horizontal_space().width(Length::Fixed(12.0)),
                 column![
                     text(title)
@@ -247,17 +247,17 @@ pub fn view<'a>(
         make_nav_row(
             "Model Role Assignments",
             "Set models for chat, media, and TTS",
-            icons::ICON_MENU
+            &icons::HANDLE_MENU
         ),
         make_nav_row(
             "Local Models",
             "Manage on-device inference packs",
-            icons::ICON_MENU
+            &icons::HANDLE_MENU
         ),
         make_nav_row(
             "API Presets",
             "Configure Bring-Your-Own-Keys",
-            icons::ICON_GALLERY
+            &icons::HANDLE_GALLERY
         )
     ]
     .spacing(8);
@@ -270,12 +270,12 @@ pub fn view<'a>(
         make_nav_row(
             "Terms of Service",
             "Read Enclave user guidelines",
-            icons::ICON_SETTINGS
+            &icons::HANDLE_SETTINGS
         ),
         make_nav_row(
             "Licenses & Attributions",
             "Credits for open source packages",
-            icons::ICON_SETTINGS
+            &icons::HANDLE_SETTINGS
         )
     ]
     .spacing(8);

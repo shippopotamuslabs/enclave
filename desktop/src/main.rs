@@ -14,7 +14,6 @@ pub fn main() -> iced::Result {
     // Default font setup
     settings.default_font = icons::FONT_REGULAR;
     settings.fonts = vec![
-        std::borrow::Cow::Borrowed(icons::ICON_FONT_BYTES),
         std::borrow::Cow::Borrowed(icons::FONT_REGULAR_BYTES),
         std::borrow::Cow::Borrowed(icons::FONT_BOLD_BYTES),
     ];
@@ -102,23 +101,25 @@ impl EnclaveApp {
         // Wrap the draggable title in a mouse area to handle window dragging
         let drag_area = mouse_area(title_content).on_press(Message::WindowDrag);
 
+        let control_color = if is_dark {
+            theme::DARK_TEXT
+        } else {
+            theme::LIGHT_TEXT
+        };
+
         // Custom styled window controls
         let window_controls = row![
             // Minimize
             button(
-                text(icons::ICON_MINIMIZE)
-                    .font(icons::ICON_FONT)
-                    .size(14)
-                    .shaping(iced::widget::text::Shaping::Advanced)
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .horizontal_alignment(iced::alignment::Horizontal::Center)
-                    .vertical_alignment(iced::alignment::Vertical::Center)
-                    .style(if is_dark {
-                        theme::DARK_TEXT
-                    } else {
-                        theme::LIGHT_TEXT
-                    }),
+                container(
+                    icons::render_svg(&icons::HANDLE_MINIMIZE, control_color)
+                        .width(Length::Fixed(12.0))
+                        .height(Length::Fixed(12.0))
+                )
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .center_x()
+                .center_y()
             )
             .width(Length::Fixed(32.0))
             .height(Length::Fixed(32.0))
@@ -131,19 +132,15 @@ impl EnclaveApp {
             .on_press(Message::WindowMinimize),
             // Maximize
             button(
-                text(icons::ICON_MAXIMIZE)
-                    .font(icons::ICON_FONT)
-                    .size(14)
-                    .shaping(iced::widget::text::Shaping::Advanced)
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .horizontal_alignment(iced::alignment::Horizontal::Center)
-                    .vertical_alignment(iced::alignment::Vertical::Center)
-                    .style(if is_dark {
-                        theme::DARK_TEXT
-                    } else {
-                        theme::LIGHT_TEXT
-                    }),
+                container(
+                    icons::render_svg(&icons::HANDLE_MAXIMIZE, control_color)
+                        .width(Length::Fixed(12.0))
+                        .height(Length::Fixed(12.0))
+                )
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .center_x()
+                .center_y()
             )
             .width(Length::Fixed(32.0))
             .height(Length::Fixed(32.0))
@@ -156,15 +153,15 @@ impl EnclaveApp {
             .on_press(Message::WindowMaximize),
             // Close
             button(
-                text(icons::ICON_CLOSE)
-                    .font(icons::ICON_FONT)
-                    .size(14)
-                    .shaping(iced::widget::text::Shaping::Advanced)
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .horizontal_alignment(iced::alignment::Horizontal::Center)
-                    .vertical_alignment(iced::alignment::Vertical::Center)
-                    .style(iced::Color::BLACK),
+                container(
+                    icons::render_svg(&icons::HANDLE_CLOSE, iced::Color::BLACK)
+                        .width(Length::Fixed(12.0))
+                        .height(Length::Fixed(12.0))
+                )
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .center_x()
+                .center_y()
             )
             .width(Length::Fixed(32.0))
             .height(Length::Fixed(32.0))

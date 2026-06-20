@@ -99,21 +99,23 @@ pub fn view<'a>(
         .as_ref()
         .and_then(|id| state.albums.iter().find(|a| a.id == *id));
 
+    let text_color = if is_dark {
+        theme::DARK_TEXT
+    } else {
+        theme::LIGHT_TEXT
+    };
+
     // --- 1. Gallery Top Bar ---
     let back_btn = button(
-        text(icons::ICON_CLOSE) // close icon
-            .font(icons::ICON_FONT)
-            .size(20)
-            .shaping(iced::widget::text::Shaping::Advanced)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .horizontal_alignment(alignment::Horizontal::Center)
-            .vertical_alignment(alignment::Vertical::Center)
-            .style(if is_dark {
-                theme::DARK_TEXT
-            } else {
-                theme::LIGHT_TEXT
-            }),
+        container(
+            icons::render_svg(&icons::HANDLE_CLOSE, text_color)
+                .width(Length::Fixed(18.0))
+                .height(Length::Fixed(18.0)),
+        )
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .center_x()
+        .center_y(),
     )
     .padding(8)
     .width(Length::Fixed(40.0))
@@ -260,18 +262,18 @@ pub fn view<'a>(
         for row_chunk in state.albums.chunks(columns) {
             let mut row_layout = Row::new().spacing(20);
             for album in row_chunk {
+                let text_color = if is_dark {
+                    theme::DARK_TEXT
+                } else {
+                    theme::LIGHT_TEXT
+                };
+
                 // Folder Cover mockup block
                 let folder_cover = container(
                     column![
-                        text(icons::ICON_FOLDER)
-                            .font(icons::ICON_FONT)
-                            .size(36)
-                            .shaping(iced::widget::text::Shaping::Advanced)
-                            .style(if is_dark {
-                                theme::DARK_TEXT
-                            } else {
-                                theme::LIGHT_TEXT
-                            }),
+                        icons::render_svg(&icons::HANDLE_FOLDER, text_color)
+                            .width(Length::Fixed(36.0))
+                            .height(Length::Fixed(36.0)),
                         text(format!("{} items", album.items.len()))
                             .font(icons::FONT_REGULAR)
                             .size(12)

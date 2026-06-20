@@ -84,22 +84,24 @@ pub fn view<'a>(
     // --- Render Left History Sidebar ---
     let history_sidebar = crate::screens::history::view(history_state, app_theme);
 
+    let text_color = if is_dark {
+        theme::DARK_TEXT
+    } else {
+        theme::LIGHT_TEXT
+    };
+
     // --- Render Chat Pane (Right side) ---
     // Top Bar
     let menu_btn = button(
-        text(icons::ICON_MENU)
-            .font(icons::ICON_FONT)
-            .size(20)
-            .shaping(iced::widget::text::Shaping::Advanced)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .horizontal_alignment(alignment::Horizontal::Center)
-            .vertical_alignment(alignment::Vertical::Center)
-            .style(if is_dark {
-                theme::DARK_TEXT
-            } else {
-                theme::LIGHT_TEXT
-            }),
+        container(
+            icons::render_svg(&icons::HANDLE_MENU, text_color)
+                .width(Length::Fixed(18.0))
+                .height(Length::Fixed(18.0)),
+        )
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .center_x()
+        .center_y(),
     )
     .padding(8)
     .width(Length::Fixed(40.0))
@@ -212,19 +214,15 @@ pub fn view<'a>(
 
     // Bottom Input Bar
     let mic_btn = button(
-        text(icons::ICON_MIC)
-            .font(icons::ICON_FONT)
-            .size(20)
-            .shaping(iced::widget::text::Shaping::Advanced)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .horizontal_alignment(alignment::Horizontal::Center)
-            .vertical_alignment(alignment::Vertical::Center)
-            .style(if is_dark {
-                theme::DARK_TEXT
-            } else {
-                theme::LIGHT_TEXT
-            }),
+        container(
+            icons::render_svg(&icons::HANDLE_MIC, text_color)
+                .width(Length::Fixed(18.0))
+                .height(Length::Fixed(18.0)),
+        )
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .center_x()
+        .center_y(),
     )
     .padding(8)
     .width(Length::Fixed(40.0))
@@ -237,19 +235,15 @@ pub fn view<'a>(
     .on_press(Message::ChatMicPressed);
 
     let file_btn = button(
-        text(icons::ICON_ATTACH)
-            .font(icons::ICON_FONT)
-            .size(20)
-            .shaping(iced::widget::text::Shaping::Advanced)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .horizontal_alignment(alignment::Horizontal::Center)
-            .vertical_alignment(alignment::Vertical::Center)
-            .style(if is_dark {
-                theme::DARK_TEXT
-            } else {
-                theme::LIGHT_TEXT
-            }),
+        container(
+            icons::render_svg(&icons::HANDLE_ATTACH, text_color)
+                .width(Length::Fixed(18.0))
+                .height(Length::Fixed(18.0)),
+        )
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .center_x()
+        .center_y(),
     )
     .padding(8)
     .width(Length::Fixed(40.0))
@@ -270,13 +264,15 @@ pub fn view<'a>(
         })));
 
     let send_btn = button(
-        text(icons::ICON_SEND)
-            .font(icons::ICON_FONT)
-            .size(16)
-            .shaping(iced::widget::text::Shaping::Advanced)
-            .horizontal_alignment(alignment::Horizontal::Center)
-            .vertical_alignment(alignment::Vertical::Center)
-            .style(iced::Color::BLACK),
+        container(
+            icons::render_svg(&icons::HANDLE_SEND, iced::Color::BLACK)
+                .width(Length::Fixed(18.0))
+                .height(Length::Fixed(18.0)),
+        )
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .center_x()
+        .center_y(),
     )
     .padding(10)
     .width(Length::Fixed(44.0))
