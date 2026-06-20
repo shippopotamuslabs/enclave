@@ -278,6 +278,87 @@ class ApiProviderModelPolicyTest {
     }
 
     @Test
+    fun `SCN-POLICY-001 deepseek-reasoner classified as reasoner model`() {
+        val modelId = "deepseek-reasoner"
+        assertTrue(ApiProviderModelPolicy.isDeepSeekReasonerModel(modelId))
+        assertFalse(ApiProviderModelPolicy.supportsDeepSeekClientTools(modelId))
+        assertTrue(ApiProviderModelPolicy.shouldStripReasoningContentOnAssistantReplay(modelId))
+    }
+
+    @Test
+    fun `SCN-POLICY-002 deepseek-chat classified as chat model`() {
+        val modelId = "deepseek-chat"
+        assertTrue(ApiProviderModelPolicy.isDeepSeekChatModel(modelId))
+        assertTrue(ApiProviderModelPolicy.supportsDeepSeekClientTools(modelId))
+        assertFalse(ApiProviderModelPolicy.shouldStripReasoningContentOnAssistantReplay(modelId))
+    }
+
+    @Test
+    fun `SCN-POLICY-003 deepseek-v4-pro classified as V4 family`() {
+        val modelId = "deepseek-v4-pro"
+        assertTrue(ApiProviderModelPolicy.isDeepSeekV4FamilyModel(modelId))
+        assertTrue(ApiProviderModelPolicy.isDeepSeekDirectReasoningEngaged(modelId, reasoningBudget = 2048))
+        assertFalse(ApiProviderModelPolicy.isDeepSeekDirectReasoningEngaged(modelId, reasoningBudget = 0))
+    }
+
+    @Test
+    fun `SCN-POLICY-004 reasoner parameter support hides temperature and top_p`() {
+        val support =
+            ApiProviderModelPolicy.parameterSupport(
+                provider = ApiProvider.DEEPSEEK,
+                modelId = "deepseek-reasoner",
+            )
+        assertFalse(support.supportsTemperature)
+        assertFalse(support.supportsTopP)
+        assertFalse(support.supportsReasoningEffort)
+        assertTrue(support.supportsMaxTokens)
+    }
+
+    @Test
+    fun `SCN-POLICY-005 chat parameter support exposes temperature and top_p`() {
+        val support =
+            ApiProviderModelPolicy.parameterSupport(
+                provider = ApiProvider.DEEPSEEK,
+                modelId = "deepseek-chat",
+            )
+        assertTrue(support.supportsTemperature)
+        assertTrue(support.supportsTopP)
+        assertTrue(support.supportsMaxTokens)
+    }
+
+    @Test
+    fun `SCN-POLICY-006 V4 reasoning engaged parameter support hides temperature and top_p`() {
+        val support =
+            ApiProviderModelPolicy.parameterSupport(
+                provider = ApiProvider.DEEPSEEK,
+                modelId = "deepseek-v4-pro",
+                reasoningBudget = 2048,
+            )
+        assertFalse(support.supportsTemperature)
+        assertFalse(support.supportsTopP)
+        assertTrue(support.supportsMaxTokens)
+    }
+
+    @Test
+    fun `SCN-POLICY-007 model discovery enabled for DEEPSEEK`() {
+        assertTrue(ApiProviderModelPolicy.supportsModelDiscovery(ApiProvider.DEEPSEEK))
+    }
+
+    @Test
+    fun `SCN-POLICY-008 deepseek reasoning effort maps LOW to high and XHIGH to max`() {
+        val modelId = "deepseek-v4-pro"
+        assertEquals("high", ApiProviderModelPolicy.deepSeekReasoningEffortForApi(ApiReasoningEffort.LOW))
+        assertEquals("max", ApiProviderModelPolicy.deepSeekReasoningEffortForApi(ApiReasoningEffort.XHIGH))
+        assertTrue(ApiProviderModelPolicy.isDeepSeekDirectReasoningEngaged(modelId, reasoningBudget = 1024))
+    }
+
+    @Test
+    fun `SCN-INFER-EDGE-001 openrouter prefixed model ids normalize without false reasoner match`() {
+        val modelId = "openrouter/deepseek/deepseek-r1"
+        assertFalse(ApiProviderModelPolicy.isDeepSeekReasonerModel(modelId))
+    }
+
+    @Test
     fun `xai parameter support reflects model family rules`() {
         val multiAgent =
             ApiProviderModelPolicy.parameterSupport(

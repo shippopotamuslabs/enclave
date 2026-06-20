@@ -151,6 +151,27 @@ class DownloadViewModel
         val wifiOnly: StateFlow<Boolean> = _wifiOnly.asStateFlow()
 
         init {
+            // The orchestrator was initialized once at cold start with the unfiltered
+            // DownloadModelsResult (InitializeModelsUseCase -> initializeWithStartupResult).
+            // Onboarding may have later filtered that result for API users (see
+            // EnclaveNavGraph#filterDownloadModelsResultForApiOnboarding). Re-feed the
+            // filtered result here so the orchestrator's cached startupModelsResult and
+            // currentDownloads reflect the suppressed set — otherwise resume/retry/
+            // downloadOnMobileData would fall back to the unfiltered cache and re-enqueue
+            // local LLMs that the user's API choice was meant to skip, and the download
+            // screen would keep showing those LLMs as QUEUED. This must run on every path
+            // (including the error branch) so retry on an error screen also respects the
+            // filter. Guard against cancelling in-flight work: only re-init before any
+            // download has started.
+            val currentStatus = modelDownloadOrchestrator.downloadState.value.status
+            val downloadsInProgress =
+                currentStatus == DownloadStatus.DOWNLOADING ||
+                    currentStatus == DownloadStatus.FINALIZING ||
+                    currentStatus == DownloadStatus.PAUSED
+            if (!downloadsInProgress) {
+                modelDownloadOrchestrator.initializeWithStartupResult(modelsResult)
+            }
+
             // If there's an initial error from app initialization, set it and skip download logic
             // Don't try to download - let the user retry manually
             if (initialErrorMessage != null) {

@@ -27,6 +27,20 @@ data class TurnTelemetry(
     val costUsd: BigDecimal?,
     val costStatus: TelemetryCostStatus,
     val costSource: TelemetryCostSource,
+    /**
+     * The upstream provider that actually served the request, when discoverable. For OpenRouter
+     * this is the `openrouter-provider` response header (e.g. "Alibaba", "SiliconFlow"); for
+     * direct providers it is null. Distinct from [providerLabel], which is the configured service.
+     *
+     * In-memory only — not persisted to Room. Used for live-session cache-hit triage so a low
+     * cache hit can be attributed to a cold replica (serving provider switched) vs. a prefix break.
+     */
+    val servingProvider: String? = null,
+    /**
+     * The provider-assigned response id (e.g. OpenRouter's `gen-…`), for correlating in-app
+     * telemetry rows with the provider dashboard. In-memory only.
+     */
+    val providerResponseId: String? = null,
     val clientBuild: TelemetryClientBuild,
 ) {
     /**

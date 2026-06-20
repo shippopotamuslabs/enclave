@@ -16,6 +16,7 @@ data class OnboardingUiState(
     val selectedModelChoice: ModelChoice = ModelChoice.UNDECIDED,
     val selectedProvider: ApiProvider? = null,
     val apiKey: String = "",
+    val baseUrl: String = "",
     val discoveredModels: List<DiscoveredApiModel> = emptyList(),
     val selectedModelId: String = "",
     val isDiscoveringModels: Boolean = false,

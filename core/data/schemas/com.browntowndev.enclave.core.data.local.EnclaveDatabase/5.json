@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 5,
-    "identityHash": "75fd95d6affc478297bc1a4fea0f2894",
+    "identityHash": "24f6615d2f3cfa90576f88278662af4c",
     "entities": [
       {
         "tableName": "chat",
@@ -570,7 +570,7 @@
       },
       {
         "tableName": "local_model_configurations",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `local_model_id` TEXT NOT NULL, `display_name` TEXT NOT NULL, `temperature` REAL NOT NULL, `top_k` INTEGER NOT NULL, `top_p` REAL NOT NULL, `min_p` REAL NOT NULL, `repetition_penalty` REAL NOT NULL, `max_tokens` INTEGER NOT NULL, `context_window` INTEGER NOT NULL, `thinking_enabled` INTEGER NOT NULL, `system_prompt` TEXT, `is_system_preset` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `pending_sync` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`local_model_id`) REFERENCES `local_models`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `local_model_id` TEXT NOT NULL, `display_name` TEXT NOT NULL, `temperature` REAL NOT NULL, `top_k` INTEGER NOT NULL, `top_p` REAL NOT NULL, `min_p` REAL NOT NULL, `repetition_penalty` REAL NOT NULL, `max_tokens` INTEGER NOT NULL, `context_window` INTEGER NOT NULL, `thinking_enabled` INTEGER NOT NULL, `reasoning_budget` INTEGER NOT NULL DEFAULT 1024, `system_prompt` TEXT, `is_system_preset` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `pending_sync` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`local_model_id`) REFERENCES `local_models`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
@@ -639,6 +639,13 @@
             "notNull": true
           },
           {
+            "fieldPath": "reasoningBudget",
+            "columnName": "reasoning_budget",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "1024"
+          },
+          {
             "fieldPath": "systemPrompt",
             "columnName": "system_prompt",
             "affinity": "TEXT"
@@ -702,7 +709,7 @@
       },
       {
         "tableName": "api_model_configurations",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `api_credentials_id` TEXT NOT NULL, `display_name` TEXT NOT NULL, `model_id` TEXT NOT NULL, `is_multimodal` INTEGER NOT NULL, `custom_headers` TEXT NOT NULL, `max_tokens` INTEGER NOT NULL, `context_window` INTEGER NOT NULL, `temperature` REAL NOT NULL, `top_p` REAL NOT NULL, `top_k` INTEGER, `min_p` REAL NOT NULL, `frequency_penalty` REAL NOT NULL, `presence_penalty` REAL NOT NULL, `system_prompt` TEXT NOT NULL, `max_tokens_disabled` INTEGER NOT NULL, `temperature_disabled` INTEGER NOT NULL, `top_p_disabled` INTEGER NOT NULL, `top_k_disabled` INTEGER NOT NULL, `min_p_disabled` INTEGER NOT NULL, `frequency_penalty_disabled` INTEGER NOT NULL, `presence_penalty_disabled` INTEGER NOT NULL, `reasoning_effort` TEXT, `openrouter_provider_sort` TEXT, `openrouter_allow_fallbacks` INTEGER, `openrouter_require_parameters` INTEGER, `openrouter_data_collection` TEXT, `openrouter_zdr` INTEGER, `prompt_price_usd_per_million` REAL, `completion_price_usd_per_million` REAL, `cached_prompt_price_usd_per_million` REAL, `updated_at` INTEGER NOT NULL, `pending_sync` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`api_credentials_id`) REFERENCES `api_credentials`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `api_credentials_id` TEXT NOT NULL, `display_name` TEXT NOT NULL, `model_id` TEXT NOT NULL, `is_multimodal` INTEGER NOT NULL, `custom_headers` TEXT NOT NULL, `max_tokens` INTEGER NOT NULL, `context_window` INTEGER NOT NULL, `temperature` REAL NOT NULL, `top_p` REAL NOT NULL, `top_k` INTEGER, `min_p` REAL NOT NULL, `frequency_penalty` REAL NOT NULL, `presence_penalty` REAL NOT NULL, `system_prompt` TEXT NOT NULL, `max_tokens_disabled` INTEGER NOT NULL, `temperature_disabled` INTEGER NOT NULL, `top_p_disabled` INTEGER NOT NULL, `top_k_disabled` INTEGER NOT NULL, `min_p_disabled` INTEGER NOT NULL, `frequency_penalty_disabled` INTEGER NOT NULL, `presence_penalty_disabled` INTEGER NOT NULL, `reasoning_effort` TEXT, `openrouter_provider_sort` TEXT, `openrouter_allow_fallbacks` INTEGER, `openrouter_require_parameters` INTEGER, `openrouter_data_collection` TEXT, `openrouter_zdr` INTEGER, `openrouter_preferred_provider` TEXT, `include_reasoning_content_on_request` INTEGER NOT NULL, `prompt_price_usd_per_million` REAL, `completion_price_usd_per_million` REAL, `cached_prompt_price_usd_per_million` REAL, `updated_at` INTEGER NOT NULL, `pending_sync` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`api_credentials_id`) REFERENCES `api_credentials`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
@@ -864,6 +871,17 @@
             "fieldPath": "openRouterZeroDataRetention",
             "columnName": "openrouter_zdr",
             "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "openRouterPreferredProvider",
+            "columnName": "openrouter_preferred_provider",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "includeReasoningContentOnRequest",
+            "columnName": "include_reasoning_content_on_request",
+            "affinity": "INTEGER",
+            "notNull": true
           },
           {
             "fieldPath": "promptPriceUsdPerMillion",
@@ -1028,7 +1046,7 @@
       },
       {
         "tableName": "default_models",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`model_type` TEXT NOT NULL, `local_config_id` TEXT, `api_config_id` TEXT, `tts_provider_id` TEXT, `media_provider_id` TEXT, `updated_at` INTEGER NOT NULL, `pending_sync` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, PRIMARY KEY(`model_type`), FOREIGN KEY(`local_config_id`) REFERENCES `local_model_configurations`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT , FOREIGN KEY(`api_config_id`) REFERENCES `api_model_configurations`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT , FOREIGN KEY(`tts_provider_id`) REFERENCES `tts_providers`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT , FOREIGN KEY(`media_provider_id`) REFERENCES `media_providers`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`model_type` TEXT NOT NULL, `local_config_id` TEXT, `api_config_id` TEXT, `tts_provider_id` TEXT, `media_provider_id` TEXT, `live_voice_provider_id` TEXT, `updated_at` INTEGER NOT NULL, `pending_sync` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, PRIMARY KEY(`model_type`), FOREIGN KEY(`local_config_id`) REFERENCES `local_model_configurations`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT , FOREIGN KEY(`api_config_id`) REFERENCES `api_model_configurations`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT , FOREIGN KEY(`tts_provider_id`) REFERENCES `tts_providers`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT , FOREIGN KEY(`media_provider_id`) REFERENCES `media_providers`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT , FOREIGN KEY(`live_voice_provider_id`) REFERENCES `live_voice_providers`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
         "fields": [
           {
             "fieldPath": "modelType",
@@ -1054,6 +1072,11 @@
           {
             "fieldPath": "mediaProviderId",
             "columnName": "media_provider_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "liveVoiceProviderId",
+            "columnName": "live_voice_provider_id",
             "affinity": "TEXT"
           },
           {
@@ -1117,6 +1140,15 @@
             ],
             "orders": [],
             "createSql": "CREATE INDEX IF NOT EXISTS `index_default_models_media_provider_id` ON `${TABLE_NAME}` (`media_provider_id`)"
+          },
+          {
+            "name": "index_default_models_live_voice_provider_id",
+            "unique": false,
+            "columnNames": [
+              "live_voice_provider_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_default_models_live_voice_provider_id` ON `${TABLE_NAME}` (`live_voice_provider_id`)"
           }
         ],
         "foreignKeys": [
@@ -1159,6 +1191,17 @@
             "onUpdate": "NO ACTION",
             "columns": [
               "media_provider_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          },
+          {
+            "table": "live_voice_providers",
+            "onDelete": "RESTRICT",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "live_voice_provider_id"
             ],
             "referencedColumns": [
               "id"
@@ -1470,6 +1513,76 @@
         }
       },
       {
+        "tableName": "live_voice_providers",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `displayName` TEXT NOT NULL, `provider` TEXT NOT NULL, `voiceName` TEXT NOT NULL, `modelName` TEXT, `baseUrl` TEXT, `credentialAlias` TEXT NOT NULL, `pending_sync` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "displayName",
+            "columnName": "displayName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "provider",
+            "columnName": "provider",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "voiceName",
+            "columnName": "voiceName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "modelName",
+            "columnName": "modelName",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "baseUrl",
+            "columnName": "baseUrl",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "credentialAlias",
+            "columnName": "credentialAlias",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pendingSync",
+            "columnName": "pending_sync",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updated_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "deleted",
+            "columnName": "deleted",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
         "tableName": "memories",
         "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `category` TEXT NOT NULL, `content` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `pending_sync` INTEGER NOT NULL DEFAULT 0, `deleted` INTEGER NOT NULL, PRIMARY KEY(`id`))",
         "fields": [
@@ -1526,7 +1639,7 @@
       },
       {
         "tableName": "media_providers",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `displayName` TEXT NOT NULL, `provider` TEXT NOT NULL, `capability` TEXT NOT NULL, `modelName` TEXT, `baseUrl` TEXT, `credentialAlias` TEXT NOT NULL, `pending_sync` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `displayName` TEXT NOT NULL, `provider` TEXT NOT NULL, `capability` TEXT NOT NULL, `modelName` TEXT, `baseUrl` TEXT, `credentialAlias` TEXT NOT NULL, `tasks_mask` INTEGER NOT NULL, `pending_sync` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -1566,6 +1679,12 @@
             "fieldPath": "credentialAlias",
             "columnName": "credentialAlias",
             "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tasksMask",
+            "columnName": "tasks_mask",
+            "affinity": "INTEGER",
             "notNull": true
           },
           {
@@ -2395,11 +2514,306 @@
             "createSql": "CREATE INDEX IF NOT EXISTS `index_telemetry_events_created_at` ON `${TABLE_NAME}` (`created_at`)"
           }
         ]
+      },
+      {
+        "tableName": "profile_corpus_conversations",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `corpus_run_id` TEXT NOT NULL, `external_id` TEXT NOT NULL, `title` TEXT NOT NULL, `provider` TEXT NOT NULL, `created_at_ms` INTEGER, `user_token_count` INTEGER NOT NULL, `assistant_token_count` INTEGER NOT NULL, `message_count` INTEGER NOT NULL, `user_message_count` INTEGER NOT NULL, `embedding_seed_text` TEXT NOT NULL, `signal_score` REAL, `cluster_id` INTEGER, `selected_for_analysis` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "corpusRunId",
+            "columnName": "corpus_run_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "externalId",
+            "columnName": "external_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "provider",
+            "columnName": "provider",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAtMs",
+            "columnName": "created_at_ms",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "userTokenCount",
+            "columnName": "user_token_count",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "assistantTokenCount",
+            "columnName": "assistant_token_count",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "messageCount",
+            "columnName": "message_count",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "userMessageCount",
+            "columnName": "user_message_count",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "embeddingSeedText",
+            "columnName": "embedding_seed_text",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "signalScore",
+            "columnName": "signal_score",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "clusterId",
+            "columnName": "cluster_id",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "selectedForAnalysis",
+            "columnName": "selected_for_analysis",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_profile_corpus_conversations_corpus_run_id",
+            "unique": false,
+            "columnNames": [
+              "corpus_run_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_profile_corpus_conversations_corpus_run_id` ON `${TABLE_NAME}` (`corpus_run_id`)"
+          }
+        ]
+      },
+      {
+        "tableName": "profile_corpus_messages",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `conversation_id` TEXT NOT NULL, `corpus_run_id` TEXT NOT NULL, `role` TEXT NOT NULL, `content` TEXT NOT NULL, `created_at_ms` INTEGER, `order_index` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`conversation_id`) REFERENCES `profile_corpus_conversations`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "conversationId",
+            "columnName": "conversation_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "corpusRunId",
+            "columnName": "corpus_run_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "role",
+            "columnName": "role",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "content",
+            "columnName": "content",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAtMs",
+            "columnName": "created_at_ms",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "orderIndex",
+            "columnName": "order_index",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_profile_corpus_messages_conversation_id",
+            "unique": false,
+            "columnNames": [
+              "conversation_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_profile_corpus_messages_conversation_id` ON `${TABLE_NAME}` (`conversation_id`)"
+          },
+          {
+            "name": "index_profile_corpus_messages_corpus_run_id",
+            "unique": false,
+            "columnNames": [
+              "corpus_run_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_profile_corpus_messages_corpus_run_id` ON `${TABLE_NAME}` (`corpus_run_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "profile_corpus_conversations",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "conversation_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "profile_corpus_findings",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `corpus_run_id` TEXT NOT NULL, `category` TEXT NOT NULL, `content` TEXT NOT NULL, `created_at_ms` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "corpusRunId",
+            "columnName": "corpus_run_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "category",
+            "columnName": "category",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "content",
+            "columnName": "content",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAtMs",
+            "columnName": "created_at_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_profile_corpus_findings_corpus_run_id",
+            "unique": false,
+            "columnNames": [
+              "corpus_run_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_profile_corpus_findings_corpus_run_id` ON `${TABLE_NAME}` (`corpus_run_id`)"
+          }
+        ]
+      },
+      {
+        "tableName": "profile_analysis_runs",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`corpus_run_id` TEXT NOT NULL, `config_id` TEXT NOT NULL, `status` TEXT NOT NULL, `current_pass_index` INTEGER NOT NULL, `error_message` TEXT, `created_at_ms` INTEGER NOT NULL, `completed_at_ms` INTEGER, PRIMARY KEY(`corpus_run_id`))",
+        "fields": [
+          {
+            "fieldPath": "corpusRunId",
+            "columnName": "corpus_run_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "configId",
+            "columnName": "config_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "currentPassIndex",
+            "columnName": "current_pass_index",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "errorMessage",
+            "columnName": "error_message",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "createdAtMs",
+            "columnName": "created_at_ms",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "completedAtMs",
+            "columnName": "completed_at_ms",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "corpus_run_id"
+          ]
+        }
       }
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '75fd95d6affc478297bc1a4fea0f2894')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '24f6615d2f3cfa90576f88278662af4c')"
     ]
   }
 }

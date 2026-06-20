@@ -1,27 +1,16 @@
 package com.browntowndev.enclave.feature.inference
 
+import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.anthropic.client.AnthropicClient
 import com.anthropic.core.JsonValue
-import com.anthropic.models.messages.Base64ImageSource
-import com.anthropic.models.messages.ContentBlockParam
-import com.anthropic.models.messages.ImageBlockParam
 import com.anthropic.models.messages.MessageCreateParams
-import com.anthropic.models.messages.MessageParam
 import com.anthropic.models.messages.RawMessageStreamEvent
-import com.anthropic.models.messages.TextBlockParam
-import com.anthropic.models.messages.ThinkingConfigEnabled
-import com.anthropic.models.messages.ToolChoice
-import com.anthropic.models.messages.ToolChoiceNone
-import com.anthropic.models.messages.ToolResultBlockParam
-import com.anthropic.models.messages.ToolUseBlockParam
 import com.browntowndev.enclave.domain.model.chat.ChatMessage
-import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.AgentFinishReason
 import com.browntowndev.enclave.domain.model.inference.AgentLoopMessage
 import com.browntowndev.enclave.domain.model.inference.AgentLoopToolCatalogJson
 import com.browntowndev.enclave.domain.model.inference.AgentModelTurnResult
 import com.browntowndev.enclave.domain.model.inference.AgentRawToolCall
-import com.browntowndev.enclave.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.InferenceNetworkException
 import com.browntowndev.enclave.domain.model.inference.ModelType
@@ -33,13 +22,16 @@ import com.browntowndev.enclave.domain.port.inference.ToolStreamGatePort
 import com.browntowndev.enclave.domain.port.telemetry.TelemetryEventPort
 import com.browntowndev.enclave.feature.inference.appendonly.ProviderAppendOnlyContext
 import com.browntowndev.enclave.feature.inference.appendonly.ProviderAppendOnlyContextFactory
-import com.browntowndev.enclave.feature.inference.appendonly.SessionIndexVolatilePlacement
+import com.browntowndev.enclave.feature.inference.appendonly.ResolvedSidecar
 import com.browntowndev.enclave.feature.inference.appendonly.ensureAppendOnlyContext
-import com.browntowndev.enclave.feature.inference.appendonly.toProviderNormalizedMessages
+import com.browntowndev.enclave.feature.inference.appendonly.toAppendOnlySyncMessages
 import com.browntowndev.enclave.feature.inference.appendonly.toToolsFingerprint
 import com.browntowndev.enclave.feature.inference.telemetry.AnthropicReasoningTokenExtractor
 import com.browntowndev.enclave.feature.inference.telemetry.InferenceTelemetrySupport
 import com.browntowndev.enclave.feature.inference.telemetry.emitInferenceExecutionOutcome
+import com.browntowndev.enclave.feature.inference.wire.describeInferenceException
+import com.browntowndev.enclave.feature.inference.wire.lastNonToolResultUserIndex
+import com.browntowndev.enclave.feature.inference.wire.truncateForLogs
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
 import kotlinx.coroutines.CancellationException
@@ -50,11 +42,6 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.runInterruptible
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 
 @Suppress("MaxLineLength", "MagicNumber", "LargeClass")
 class AnthropicInferenceServiceImpl(
@@ -95,8 +82,6 @@ class AnthropicInferenceServiceImpl(
     )
 
     companion object {
-        private const val DEFAULT_MAX_TOKENS = 4096L
-        private const val MAX_LOG_BODY_CHARS = 4_000
         private const val TAG = "AnthropicInferenceService"
         private const val PROVIDER = "ANTHROPIC"
         const val DEFAULT_PROVIDER_LABEL = "Anthropic"
@@ -125,11 +110,12 @@ class AnthropicInferenceServiceImpl(
         resetAppendOnlyForNewPrompt()
     }
 
-    internal fun clearAppendOnlyOnRustCompactionBoundary() {
-        appendOnlyContext?.clearOnRustCompactionBoundary()
+    internal fun clearAppendOnlyOnRustCompactionBoundary(revisionAfter: Long? = null) {
+        appendOnlyContext?.clearOnRustCompactionBoundary(revisionAfter)
     }
 
-    internal fun resetAppendOnlyForNewPrompt() {
+    @Suppress("UnusedParameter")
+    internal fun resetAppendOnlyForNewPrompt(chatId: ChatId? = null) {
         appendOnlyContext?.invalidate()
         appendOnlyContext = null
     }
@@ -161,270 +147,29 @@ class AnthropicInferenceServiceImpl(
                         .InferenceTurnTiming()
                 }
             val captureContext = telemetrySupport?.captureContext(options)
-            val lastUserIndex =
-                sessionMessages.indexOfLast { msg ->
-                    msg.role == Role.USER &&
-                        run {
-                            val meta = msg.metadataJson
-                            if (meta == "null" || meta.isBlank()) return@run true
-                            val obj = runCatching { Json.parseToJsonElement(meta).jsonObject }.getOrNull()
-                            obj?.get("call_id")?.jsonPrimitive?.contentOrNull == null
-                        }
-                }
-            val imageUris = options.imageUris.take(20)
-            val builder =
-                MessageCreateParams
-                    .builder()
-                    .model(options.modelId ?: modelId)
-
-            var maxTokens =
-                if (!options.maxTokensDisabled) {
-                    options.maxTokens?.toLong() ?: DEFAULT_MAX_TOKENS
-                } else {
-                    DEFAULT_MAX_TOKENS
-                }
-            val thinkingBudget = resolveThinkingBudget(options)
-            if (thinkingBudget != null) {
-                if (maxTokens <= thinkingBudget) {
-                    // Thinking tokens count against max_tokens; +1 would leave a single
-                    // token for the visible answer and the turn would end mid-thought
-                    // with stop_reason=max_tokens.
-                    maxTokens = thinkingBudget + DEFAULT_MAX_TOKENS
-                }
-                val clampedBudget = thinkingBudget.coerceAtMost(maxTokens - 1)
-                builder.thinking(
-                    ThinkingConfigEnabled
-                        .builder()
-                        .budgetTokens(clampedBudget)
-                        .build(),
-                )
-            }
-            builder.maxTokens(maxTokens)
-
-            val useCaching = AnthropicPromptCacheSupport.supportsPromptCaching(options.modelId ?: modelId)
-            val stableTailIndex = AnthropicPromptCacheSupport.stableHistoryTailIndex(sessionMessages)
-            loggingPort.debug(
-                TAG,
-                @Suppress("MaxLineLength")
-                "Anthropic prompt cache config provider=$PROVIDER model=${options.modelId ?: modelId} useCaching=$useCaching stableTailIndex=$stableTailIndex sessionMessageCount=${sessionMessages.size} availableToolCount=${availableTools.size} hasSystemPrompt=${systemPrompt.isNotBlank()}",
-            )
-
-            if (systemPrompt.isNotBlank()) {
-                val systemBlockBuilder = TextBlockParam.builder().text(systemPrompt)
-                if (useCaching) {
-                    systemBlockBuilder.cacheControl(AnthropicPromptCacheSupport.ephemeralCacheControl())
-                }
-                builder.systemOfTextBlockParams(listOf(systemBlockBuilder.build()))
-            }
-
             val appendOnly = wireAppendOnlyForTurn(
                 sessionMessages = sessionMessages,
                 systemPrompt = systemPrompt,
                 availableTools = availableTools,
+                options = options,
             )
-            val tailInsertIndex = SessionIndexVolatilePlacement.resolveTailInsertIndex(sessionMessages)
+            val wireSidecar = appendOnly.resolveContextSidecarsForWire(contextSidecars)
 
-            sessionMessages.forEachIndexed { index, msg ->
-                val metadata =
-                    if (msg.metadataJson != "null" && msg.metadataJson.isNotBlank()) {
-                        runCatching { Json.parseToJsonElement(msg.metadataJson).jsonObject }.getOrNull()
-                    } else {
-                        null
-                    }
-                val attachCacheBreakpoint =
-                    useCaching &&
-                        AnthropicPromptCacheSupport.shouldAttachMessageCacheBreakpoint(index, stableTailIndex)
-
-                val messageContent =
-                    if (index == lastUserIndex) {
-                        VolatileTurnContextWireSupport
-                            .combinedLatestUserPrepends(
-                                volatileTurnContext = null,
-                                contextSidecars = contextSidecars,
-                            )?.let { prepended -> "$prepended\n\n${msg.content}" }
-                            ?: msg.content
-                    } else {
-                        msg.content
-                    }
-
-                if (EngineInternalMessageMapper.isEngineInternalMessage(msg.metadataJson)) {
-                    val wireText = EngineInternalMessageMapper.formatForProviderWire(msg.content)
-                    if (wireText.isNotBlank()) {
-                        val textBlockBuilder = TextBlockParam.builder().text(wireText)
-                        if (attachCacheBreakpoint) {
-                            textBlockBuilder.cacheControl(AnthropicPromptCacheSupport.ephemeralCacheControl())
-                        }
-                        builder.addMessage(
-                            MessageParam
-                                .builder()
-                                .role(MessageParam.Role.USER)
-                                .contentOfBlockParams(listOf(ContentBlockParam.ofText(textBlockBuilder.build())))
-                                .build(),
-                        )
-                    }
-                    return@forEachIndexed
-                }
-
-                when (msg.role) {
-                    Role.SYSTEM -> {} // systemPrompt mapped above
-                    Role.USER -> {
-                        val attachImages = index == lastUserIndex && imageUris.isNotEmpty()
-                        if (!attachImages) {
-                            val textBlockBuilder = TextBlockParam.builder().text(messageContent)
-                            if (attachCacheBreakpoint) {
-                                textBlockBuilder.cacheControl(AnthropicPromptCacheSupport.ephemeralCacheControl())
-                            }
-                            builder.addMessage(
-                                MessageParam
-                                    .builder()
-                                    .role(MessageParam.Role.USER)
-                                    .contentOfBlockParams(listOf(ContentBlockParam.ofText(textBlockBuilder.build())))
-                                    .build(),
-                            )
-                        } else {
-                            val contentBlocks = mutableListOf<ContentBlockParam>()
-                            ImagePayloads.fromUris(imageUris).forEach { payload ->
-                                val mediaType =
-                                    when (payload.mimeType) {
-                                        "image/png" -> Base64ImageSource.MediaType.IMAGE_PNG
-                                        "image/gif" -> Base64ImageSource.MediaType.IMAGE_GIF
-                                        "image/webp" -> Base64ImageSource.MediaType.IMAGE_WEBP
-                                        else -> Base64ImageSource.MediaType.IMAGE_JPEG
-                                    }
-                                contentBlocks.add(
-                                    ContentBlockParam.ofImage(
-                                        ImageBlockParam
-                                            .builder()
-                                            .source(
-                                                Base64ImageSource
-                                                    .builder()
-                                                    .data(payload.base64)
-                                                    .mediaType(mediaType)
-                                                    .build(),
-                                            ).build(),
-                                    ),
-                                )
-                            }
-                            val textBlockBuilder = TextBlockParam.builder().text(messageContent)
-                            if (attachCacheBreakpoint) {
-                                textBlockBuilder.cacheControl(AnthropicPromptCacheSupport.ephemeralCacheControl())
-                            }
-                            contentBlocks.add(
-                                ContentBlockParam.ofText(textBlockBuilder.build()),
-                            )
-                            builder.addMessage(
-                                MessageParam
-                                    .builder()
-                                    .role(MessageParam.Role.USER)
-                                    .contentOfBlockParams(contentBlocks)
-                                    .build(),
-                            )
-                        }
-                    }
-                    Role.ASSISTANT -> {
-                        if (msg.id.startsWith("compact-summary-")) {
-                            val textBlockBuilder = TextBlockParam.builder().text("[Conversation summary]\n$messageContent")
-                            if (attachCacheBreakpoint) {
-                                textBlockBuilder.cacheControl(AnthropicPromptCacheSupport.ephemeralCacheControl())
-                            }
-                            builder.addMessage(
-                                MessageParam
-                                    .builder()
-                                    .role(MessageParam.Role.USER)
-                                    .contentOfBlockParams(listOf(ContentBlockParam.ofText(textBlockBuilder.build())))
-                                    .build(),
-                            )
-                            return@forEachIndexed
-                        }
-                        val callId = metadata?.get("call_id")?.jsonPrimitive?.content
-                        if (callId != null) {
-                            val toolResultBuilder = ToolResultBlockParam.builder().toolUseId(callId).content(messageContent)
-                            if (attachCacheBreakpoint) {
-                                toolResultBuilder.cacheControl(AnthropicPromptCacheSupport.ephemeralCacheControl())
-                            }
-                            builder.addMessage(
-                                MessageParam
-                                    .builder()
-                                    .role(MessageParam.Role.USER)
-                                    .contentOfBlockParams(
-                                        listOf(
-                                            ContentBlockParam.ofToolResult(toolResultBuilder.build()),
-                                        ),
-                                    ).build(),
-                            )
-                            return@forEachIndexed
-                        }
-                        val rawCalls = metadata?.get("raw_tool_calls")
-                        val contentBlocks = mutableListOf<ContentBlockParam>()
-                        if (messageContent.isNotBlank()) {
-                            val textBlockBuilder = TextBlockParam.builder().text(messageContent)
-                            val isTextLastBlock =
-                                attachCacheBreakpoint &&
-                                    (rawCalls == null || rawCalls !is JsonArray || rawCalls.isEmpty())
-                            if (isTextLastBlock) {
-                                textBlockBuilder.cacheControl(AnthropicPromptCacheSupport.ephemeralCacheControl())
-                            }
-                            contentBlocks.add(ContentBlockParam.ofText(textBlockBuilder.build()))
-                        }
-                        if (rawCalls is JsonArray) {
-                            rawCalls.forEachIndexed { tcIndex, tc ->
-                                val obj = runCatching { tc.jsonObject }.getOrNull() ?: return@forEachIndexed
-                                val callName = obj["name"]?.jsonPrimitive?.content ?: return@forEachIndexed
-                                val rawCallId = obj["id"]?.jsonPrimitive?.contentOrNull ?: ""
-                                val argsJson = obj["arguments_json"]?.jsonPrimitive?.content ?: "{}"
-
-                                val toolUseBuilder =
-                                    ToolUseBlockParam
-                                        .builder()
-                                        .id(rawCallId)
-                                        .name(callName)
-                                        .input(
-                                            ToolUseBlockParam.Input
-                                                .builder()
-                                                .putAllAdditionalProperties(toolUseInputProperties(argsJson))
-                                                .build(),
-                                        )
-                                val isToolUseLastBlock = attachCacheBreakpoint && (tcIndex == rawCalls.size - 1)
-                                if (isToolUseLastBlock) {
-                                    toolUseBuilder.cacheControl(AnthropicPromptCacheSupport.ephemeralCacheControl())
-                                }
-                                contentBlocks.add(
-                                    ContentBlockParam.ofToolUse(toolUseBuilder.build()),
-                                )
-                            }
-                        }
-                        if (contentBlocks.isNotEmpty()) {
-                            builder.addMessage(
-                                MessageParam
-                                    .builder()
-                                    .role(MessageParam.Role.ASSISTANT)
-                                    .contentOfBlockParams(contentBlocks)
-                                    .build(),
-                            )
-                        }
-                    }
-                }
-            }
-
-            if (availableTools.isNotEmpty()) {
-                availableTools.forEachIndexed { idx, toolDef ->
-                    val isLast = idx == availableTools.size - 1
-                    val cacheControl =
-                        if (useCaching && isLast) {
-                            AnthropicPromptCacheSupport.ephemeralCacheControl()
-                        } else {
-                            null
-                        }
-                    builder.addTool(toolDef.toAnthropicTool(cacheControl))
-                }
-                if (!allowToolCall) {
-                    builder.toolChoice(ToolChoice.ofNone(ToolChoiceNone.builder().build()))
-                }
-            }
+            val params = AnthropicRequestMapper.mapSessionToMessageParams(
+                modelId = modelId,
+                sessionMessages = sessionMessages,
+                systemPrompt = systemPrompt,
+                availableTools = availableTools,
+                allowToolCall = allowToolCall,
+                options = options,
+                appendOnly = appendOnly,
+                wireSidecar = wireSidecar,
+                toolInputProperties = ::toolUseInputProperties,
+            )
 
             val accumulatedText = StringBuilder()
             val response =
-                streamMessages(builder.build()) { event ->
+                streamMessages(params) { event ->
                     when (event) {
                         is InferenceEvent.PartialResponse -> {
                             timing?.markFirstOutput()
@@ -438,6 +183,7 @@ class AnthropicInferenceServiceImpl(
                         else -> {}
                     }
                 }
+            val useCaching = AnthropicPromptCacheSupport.supportsPromptCaching(options.modelId ?: modelId)
             loggingPort.debug(
                 TAG,
                 @Suppress("MaxLineLength")
@@ -471,8 +217,8 @@ class AnthropicInferenceServiceImpl(
 
             freezeContextSidecarIfPresent(
                 appendOnly = appendOnly,
-                contextSidecars = contextSidecars,
-                tailInsertIndex = tailInsertIndex,
+                contextSidecars = wireSidecar,
+                tailInsertIndex = sessionMessages.lastNonToolResultUserIndex().coerceAtLeast(0),
             )
 
             return AgentModelTurnResult(
@@ -542,12 +288,13 @@ class AnthropicInferenceServiceImpl(
 
     private fun freezeContextSidecarIfPresent(
         appendOnly: ProviderAppendOnlyContext,
-        contextSidecars: String?,
+        contextSidecars: ResolvedSidecar?,
         tailInsertIndex: Int,
     ) {
-        if (!contextSidecars.isNullOrBlank()) {
+        if (contextSidecars != null) {
             appendOnly.endTurnFreezeSidecar(
-                sidecarText = contextSidecars,
+                sidecarText = contextSidecars.text,
+                markerId = contextSidecars.markerId,
                 mappedInsertIndex = tailInsertIndex,
             )
         }
@@ -557,6 +304,7 @@ class AnthropicInferenceServiceImpl(
         sessionMessages: List<AgentLoopMessage>,
         systemPrompt: String,
         availableTools: List<ToolDefinition>,
+        options: GenerationOptions,
     ): ProviderAppendOnlyContext {
         appendOnlyContext =
             ProviderAppendOnlyContextFactory.ensureAppendOnlyContext(
@@ -570,50 +318,22 @@ class AnthropicInferenceServiceImpl(
             systemPrompt = systemPrompt,
             toolsFingerprint = availableTools.toToolsFingerprint(),
         )
-        appendOnly.syncMessages(sessionMessages.toProviderNormalizedMessages())
+        appendOnly.syncMessages(
+            sessionMessages.toAppendOnlySyncMessages(),
+            transcriptRevision = options.transcriptRevision,
+        )
         return appendOnly
     }
 
-    private fun resolveThinkingBudget(options: GenerationOptions): Long? =
-        when {
-            options.reasoningBudget > 0 -> options.reasoningBudget.toLong().coerceAtLeast(1024L)
-            else ->
-                when (options.reasoningEffort) {
-                    null -> null
-                    ApiReasoningEffort.NONE -> null
-                    ApiReasoningEffort.LOW -> 1024L
-                    ApiReasoningEffort.MEDIUM -> ProviderInferenceConstants.ANTHROPIC_THINKING_BUDGET_MEDIUM
-                    ApiReasoningEffort.HIGH -> 2048L
-                    ApiReasoningEffort.XHIGH -> ProviderInferenceConstants.ANTHROPIC_THINKING_BUDGET_XHIGH
-                }
-        }
-
-    private fun describeException(throwable: Throwable): String =
-        buildString {
-            append("exception=")
-            append(throwable::class.java.simpleName)
-            throwable.message?.takeIf { it.isNotBlank() }?.let {
-                append(" message=")
-                append(it)
-            }
-        }
+    private fun describeException(throwable: Throwable): String = describeInferenceException(throwable)
 
     private fun logRequest(params: com.anthropic.models.messages.MessageCreateParams) {
         loggingPort.debug(
             TAG,
             "Messages API request provider=$PROVIDER model=$modelId baseUrl=${baseUrl ?: "<default>"} body=${
-                truncateForLogs(
-                    params.toString(),
-                )
+                truncateForLogs(params.toString())
             }",
         )
-    }
-
-    private fun truncateForLogs(value: String): String {
-        if (value.length <= MAX_LOG_BODY_CHARS) {
-            return value
-        }
-        return value.take(MAX_LOG_BODY_CHARS) + "...<truncated>"
     }
 
     private suspend fun streamMessages(

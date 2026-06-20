@@ -168,6 +168,7 @@ class InferenceTelemetrySupport
                 ApiProvider.OPENAI.name -> "OpenAI"
                 ApiProvider.ANTHROPIC.name -> "Anthropic"
                 ApiProvider.ZAI.name -> "Z.ai"
+                ApiProvider.DEEPSEEK.name -> "DeepSeek"
                 ApiProvider.GOOGLE.name -> "Google"
                 ApiProvider.XAI.name -> "xAI"
                 "OPENROUTER" -> "OpenRouter"

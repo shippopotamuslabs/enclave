@@ -27,5 +27,7 @@ data class ApiModelConfiguration(
     val presencePenaltyDisabled: Boolean = false,
     val customHeaders: Map<String, String> = emptyMap(),
     val openRouterRouting: OpenRouterRoutingConfiguration = OpenRouterRoutingConfiguration(),
+    /** When enabled, replays stored provider reasoning content on follow-up chat requests. */
+    val includeReasoningContentOnRequest: Boolean = false,
     val pricing: ApiModelSavedPricing = ApiModelSavedPricing(),
 ) : ModelTuningConfiguration

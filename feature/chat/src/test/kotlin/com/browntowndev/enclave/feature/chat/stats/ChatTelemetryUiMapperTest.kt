@@ -1,6 +1,8 @@
 package com.browntowndev.enclave.feature.chat.stats
 
+import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.telemetry.TelemetrySummaryBuilder
+import com.browntowndev.enclave.domain.model.telemetry.TurnTelemetryId
 import com.browntowndev.enclave.domain.telemetry.TelemetryTestFixtures
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
@@ -88,6 +90,37 @@ class ChatTelemetryUiMapperTest {
     }
 
     @Test
+    fun `chat stats summary includes peak input tokens and billing prompt total rows`() {
+        val messageId = MessageId("m-tool-loop")
+        val hop1 =
+            TelemetryTestFixtures.telOpenAi1.copy(
+                id = TurnTelemetryId("tel-hop-1"),
+                messageId = messageId,
+                chatId = TelemetryTestFixtures.chat1,
+                inputTokens = 20_000,
+            )
+        val hop2 =
+            TelemetryTestFixtures.telOpenAi1.copy(
+                id = TurnTelemetryId("tel-hop-2"),
+                messageId = messageId,
+                chatId = TelemetryTestFixtures.chat1,
+                inputTokens = 26_240,
+            )
+        val summary =
+            TelemetrySummaryBuilder.buildChatSummary(
+                chatId = TelemetryTestFixtures.chat1,
+                rows = listOf(hop1, hop2),
+            )
+        val sheet = mapper.mapChatStats(summary)
+
+        assertEquals("26240", sheet.summaryRows.first { it.label == "Input tokens" }.value)
+        assertEquals(
+            "46240",
+            sheet.summaryRows.first { it.label == "Total prompt tokens (all API calls)" }.value,
+        )
+    }
+
+    @Test
     fun `chat stats summary includes normalized input tokens row`() {
         val summary =
             TelemetrySummaryBuilder.buildChatSummary(
@@ -153,5 +186,61 @@ class ChatTelemetryUiMapperTest {
 
         // OpenAI: cache read is a subset of input; normalized equals raw input.
         assertEquals("1000", sheet.metricRows.first { it.label == "Input tokens" }.value)
+    }
+
+    @Test
+    fun `response stats Input tokens row peaks across tool-loop hops`() {
+        val messageId = TelemetryTestFixtures.mOpenAi1
+        val hop1 =
+            TelemetryTestFixtures.telOpenAi1.copy(
+                id = TurnTelemetryId("tel-hop-1"),
+                messageId = messageId,
+                inputTokens = 20_000,
+            )
+        val hop2 =
+            TelemetryTestFixtures.telOpenAi1.copy(
+                id = TurnTelemetryId("tel-hop-2"),
+                messageId = messageId,
+                inputTokens = 26_240,
+            )
+        val summary =
+            TelemetrySummaryBuilder.buildMessageSummary(
+                messageId = messageId,
+                rows = listOf(hop1, hop2),
+            )
+        val sheet = mapper.mapResponseStats(summary)
+
+        assertEquals("26240", sheet.metricRows.first { it.label == "Input tokens" }.value)
+    }
+
+    @Test
+    fun `response stats cache read peaks on largest prompt hop and surfaces billing total`() {
+        val messageId = MessageId("m-cache-ui")
+        val hop1 =
+            TelemetryTestFixtures.telOpenAi1.copy(
+                id = TurnTelemetryId("tel-cache-ui-1"),
+                messageId = messageId,
+                inputTokens = 10_129,
+                cacheReadInputTokens = 7_552,
+            )
+        val hop2 =
+            TelemetryTestFixtures.telOpenAi1.copy(
+                id = TurnTelemetryId("tel-cache-ui-2"),
+                messageId = messageId,
+                inputTokens = 36_417,
+                cacheReadInputTokens = 0,
+            )
+        val summary =
+            TelemetrySummaryBuilder.buildMessageSummary(
+                messageId = messageId,
+                rows = listOf(hop1, hop2),
+            )
+        val sheet = mapper.mapResponseStats(summary)
+
+        assertEquals("0", sheet.metricRows.first { it.label == "Cache read input tokens" }.value)
+        assertEquals(
+            "7552",
+            sheet.metricRows.first { it.label == "Total cache read (all API calls)" }.value,
+        )
     }
 }

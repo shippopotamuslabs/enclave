@@ -134,6 +134,7 @@ data class ApiPresetDraft(
     val reasoningEffort: ApiReasoningEffort? = null,
     val customHeaders: List<Pair<String, String>> = emptyList(),
     val openRouterRouting: OpenRouterRoutingConfiguration = OpenRouterRoutingConfiguration(),
+    val includeReasoningContentOnRequest: Boolean = false,
     val pricing: ApiModelSavedPricing = ApiModelSavedPricing(),
 )
 

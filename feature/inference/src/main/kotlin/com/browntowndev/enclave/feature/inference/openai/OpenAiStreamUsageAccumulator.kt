@@ -49,6 +49,15 @@ internal fun accumulateOpenAiStreamUsage(
             state.cacheReadInputTokens =
                 coalesceMax(state.cacheReadInputTokens, details.cachedTokens().get().toInt())
         }
+        parseJsonValueToInt(details._additionalProperties()["cache_write_tokens"])?.let { writeTokens ->
+            state.cacheWriteInputTokens = coalesceMax(state.cacheWriteInputTokens, writeTokens)
+        }
+    }
+    parseJsonValueToInt(usage._additionalProperties()["cache_read_tokens"])?.let { readTokens ->
+        state.cacheReadInputTokens = coalesceMax(state.cacheReadInputTokens, readTokens)
+    }
+    parseJsonValueToInt(usage._additionalProperties()["cache_write_tokens"])?.let { writeTokens ->
+        state.cacheWriteInputTokens = coalesceMax(state.cacheWriteInputTokens, writeTokens)
     }
     parseOpenRouterUsageCost(usage)?.let { state.costUsd = it }
 }
@@ -73,6 +82,15 @@ internal fun accumulateResponseStreamUsage(
     }
     state.cacheReadInputTokens =
         coalesceMax(state.cacheReadInputTokens, usage.inputTokensDetails().cachedTokens().toInt())
+    parseJsonValueToInt(usage.inputTokensDetails()._additionalProperties()["cache_write_tokens"])?.let { writeTokens ->
+        state.cacheWriteInputTokens = coalesceMax(state.cacheWriteInputTokens, writeTokens)
+    }
+    parseJsonValueToInt(usage._additionalProperties()["cache_read_tokens"])?.let { readTokens ->
+        state.cacheReadInputTokens = coalesceMax(state.cacheReadInputTokens, readTokens)
+    }
+    parseJsonValueToInt(usage._additionalProperties()["cache_write_tokens"])?.let { writeTokens ->
+        state.cacheWriteInputTokens = coalesceMax(state.cacheWriteInputTokens, writeTokens)
+    }
     parseOpenRouterUsageCost(usage)?.let { state.costUsd = it }
 }
 
@@ -88,3 +106,13 @@ private fun parseUsageCostJsonValue(value: JsonValue?): BigDecimal? {
             ?: return null
     return BigDecimal.valueOf(raw).setScale(6, RoundingMode.HALF_UP)
 }
+
+private fun parseJsonValueToInt(value: JsonValue?): Int? {
+    if (value == null) return null
+    val raw =
+        runCatching { value.convert(Double::class.javaObjectType) }.getOrNull()
+            ?: runCatching { value.convert(String::class.javaObjectType) }.getOrNull()?.toDoubleOrNull()
+            ?: return null
+    return raw.toInt()
+}
+

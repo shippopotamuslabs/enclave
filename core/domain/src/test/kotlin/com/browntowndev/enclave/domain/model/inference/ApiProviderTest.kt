@@ -65,4 +65,37 @@ class ApiProviderTest {
     fun `non ZAI providers keep generic preset temperature default`() {
         assertEquals(0.7, ApiProvider.OPENAI.defaultPresetTemperature())
     }
+
+    @Test
+    fun `SCN-DOMAIN-001 DEEPSEEK display name is DeepSeek`() {
+        assertEquals("DeepSeek", ApiProvider.DEEPSEEK.displayName)
+    }
+
+    @Test
+    fun `SCN-DOMAIN-002 DEEPSEEK default base url is official endpoint`() {
+        assertEquals("https://api.deepseek.com", ApiProvider.DEEPSEEK.defaultBaseUrl())
+    }
+
+    @Test
+    fun `SCN-DOMAIN-003 DEEPSEEK supports chat`() {
+        assertTrue(ApiProvider.DEEPSEEK.supportsChat)
+    }
+
+    @Test
+    fun `SCN-DOMAIN-004 DEEPSEEK does not expose discovery model pricing`() {
+        assertFalse(ApiProvider.DEEPSEEK.exposesDiscoveryModelPricing)
+    }
+
+    @Test
+    fun `SCN-UI-001 provider dropdown includes DeepSeek`() {
+        val chatProviders = ApiProvider.entries.filter(ApiProvider::supportsChat)
+        assertTrue(chatProviders.contains(ApiProvider.DEEPSEEK))
+        assertEquals("DeepSeek", ApiProvider.DEEPSEEK.displayName)
+    }
+
+    @Test
+    fun `SCN-ONBOARD-001 onboarding chat provider list includes DeepSeek`() {
+        val chatProviders = ApiProvider.entries.filter(ApiProvider::supportsChat)
+        assertTrue(chatProviders.any { it.displayName == "DeepSeek" })
+    }
 }

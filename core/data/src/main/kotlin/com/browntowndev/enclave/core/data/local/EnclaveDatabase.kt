@@ -35,7 +35,7 @@ import androidx.room.TypeConverters
         ProfileFindingsEntity::class,
         ProfileAnalysisRunEntity::class,
     ],
-    version = 3,
+    version = 5,
 )
 @TypeConverters(ModelTypeConverters::class)
 @Suppress("TooManyFunctions")

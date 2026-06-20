@@ -9,7 +9,9 @@ import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
+import com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
+import com.browntowndev.enclave.domain.model.inference.ToolSearchIndexSnapshot
 import com.browntowndev.enclave.domain.model.inference.ToolExecutionResult
 import com.browntowndev.enclave.domain.model.inference.XSearchParams
 import com.browntowndev.enclave.domain.model.memory.MemoryRetrievalPolicy
@@ -375,6 +377,7 @@ class ChatInferenceRequestPreparer(
         val activeToolNames =
             resolvePreloadedActiveToolNames(
                 webSearchConfigured = webSearchConfigured,
+                xSearchConfigured = xSearchConfigured,
                 imageHandling = imageHandling,
                 sessionActivatedNames = sessionActivatedNames,
             )
@@ -411,44 +414,73 @@ class ChatInferenceRequestPreparer(
             preRetrievalSources = preRetrievalSources,
             preRetrievalXResultJson = retrievedXSearchResults,
             options =
-                GenerationOptions(
+                buildGenerationOptions(
                     reasoningBudget = reasoningBudget,
                     modelType = modelType,
-                    modelId = config?.modelId,
-                    apiProvider = config?.apiProvider,
-                    apiModelPricing = config?.apiModelPricing,
-                    systemPrompt = composedPrompts.systemPrompt,
-                    volatileTurnContext = composedPrompts.volatileTurnContext,
-                    imageUris =
-                        if (imageHandling == ChatImageHandling.DIRECT) {
-                            resolvedImageTarget?.imageUris.orEmpty()
-                        } else {
-                            emptyList()
-                        },
-                    reasoningEffort = config?.reasoningEffort,
-                    temperature = config?.temperature?.toFloat(),
-                    topK = config?.topK,
-                    topP = config?.topP?.toFloat(),
-                    maxTokens = config?.maxTokens,
-                    contextWindow = config?.contextWindow,
-                    maxTokensDisabled = config?.maxTokensDisabled ?: false,
-                    temperatureDisabled = config?.temperatureDisabled ?: false,
-                    topPDisabled = config?.topPDisabled ?: false,
-                    topKDisabled = config?.topKDisabled ?: false,
-                    minPDisabled = config?.minPDisabled ?: false,
-                    frequencyPenaltyDisabled = config?.frequencyPenaltyDisabled ?: false,
-                    presencePenaltyDisabled = config?.presencePenaltyDisabled ?: false,
+                    config = config,
+                    composedPrompts = composedPrompts,
+                    imageHandling = imageHandling,
+                    resolvedImageUris = resolvedImageTarget?.imageUris.orEmpty(),
                     toolingEnabled = toolingEnabled,
                     toolCatalog = toolCatalog,
                     activeTools = activeTools,
                     toolSearchIndex = toolSearchIndex,
-                    toolCallStrategy = strategy,
+                    strategy = strategy,
                     chatId = chatId,
                     userMessageId = userMessageId,
                     assistantMessageId = assistantMessageId,
                 ),
         )
     }
+
+    private fun buildGenerationOptions(
+        reasoningBudget: Int,
+        modelType: ModelType,
+        config: ActiveModelConfiguration?,
+        composedPrompts: ComposedInferencePrompts,
+        imageHandling: ChatImageHandling,
+        resolvedImageUris: List<String>,
+        toolingEnabled: Boolean,
+        toolCatalog: List<ToolCatalogEntry>,
+        activeTools: List<ToolDefinition>,
+        toolSearchIndex: ToolSearchIndexSnapshot?,
+        strategy: ToolCallStrategy,
+        chatId: ChatId,
+        userMessageId: MessageId,
+        assistantMessageId: MessageId,
+    ): GenerationOptions =
+        GenerationOptions(
+            reasoningBudget = reasoningBudget,
+            modelType = modelType,
+            modelId = config?.modelId,
+            apiProvider = config?.apiProvider,
+            apiModelPricing = config?.apiModelPricing,
+            systemPrompt = composedPrompts.systemPrompt,
+            volatileTurnContext = composedPrompts.volatileTurnContext,
+            imageUris = if (imageHandling == ChatImageHandling.DIRECT) resolvedImageUris else emptyList(),
+            reasoningEffort = config?.reasoningEffort,
+            includeReasoningContentOnRequest = config?.includeReasoningContentOnRequest ?: false,
+            temperature = config?.temperature?.toFloat(),
+            topK = config?.topK,
+            topP = config?.topP?.toFloat(),
+            maxTokens = config?.maxTokens,
+            contextWindow = config?.contextWindow,
+            maxTokensDisabled = config?.maxTokensDisabled ?: false,
+            temperatureDisabled = config?.temperatureDisabled ?: false,
+            topPDisabled = config?.topPDisabled ?: false,
+            topKDisabled = config?.topKDisabled ?: false,
+            minPDisabled = config?.minPDisabled ?: false,
+            frequencyPenaltyDisabled = config?.frequencyPenaltyDisabled ?: false,
+            presencePenaltyDisabled = config?.presencePenaltyDisabled ?: false,
+            toolingEnabled = toolingEnabled,
+            toolCatalog = toolCatalog,
+            activeTools = activeTools,
+            toolSearchIndex = toolSearchIndex,
+            toolCallStrategy = strategy,
+            chatId = chatId,
+            userMessageId = userMessageId,
+            assistantMessageId = assistantMessageId,
+        )
 
     private fun promptWithTemporalMetadata(prompt: String): String {
         val formattedTime = dateTimeFormatter.format(java.time.Instant.now())
@@ -524,14 +556,28 @@ class ChatInferenceRequestPreparer(
 
     private fun resolvePreloadedActiveToolNames(
         webSearchConfigured: Boolean,
+        xSearchConfigured: Boolean,
         imageHandling: ChatImageHandling,
         sessionActivatedNames: Set<String>,
     ): Set<String> =
         buildSet {
             add(ToolDefinition.SEARCH_TOOLS.name)
+            // Preload read_context_reference: it is the universal affordance for reading spilled
+            // tool outputs, so it is almost always activated mid-session on the first spill. Adding
+            // it lazily inserts a new tool into the (alphabetically sorted) wire tools[] block, which
+            // sits before the system prompt + conversation and busts the entire provider prompt-cache
+            // prefix. Preloading keeps the active set stable from turn 1 for a tiny token cost.
+            add(ToolDefinition.READ_CONTEXT_REFERENCE.name)
             if (webSearchConfigured) {
                 add(ToolDefinition.WEB_SEARCH.name)
                 add(ToolDefinition.WEB_EXTRACT.name)
+            }
+            // Preload search_x_recent on par with web_search: it is high-frequency, and intent-only
+            // activation inserts it into the sorted wire tools[] block mid-session, busting the
+            // prompt-cache prefix. Preloading whenever X search is configured keeps the active set
+            // stable from turn 1. Companion X tools (threads/trending/etc.) stay discover-on-demand.
+            if (xSearchConfigured) {
+                add(ToolDefinition.X_SEARCH.name)
             }
             if (imageHandling == ChatImageHandling.TOOL) {
                 add(ToolDefinition.ATTACHED_IMAGE_INSPECT.name)
@@ -581,8 +627,10 @@ class ChatInferenceRequestPreparer(
         private val PRELOADED_TOOL_NAMES =
             setOf(
                 ToolDefinition.SEARCH_TOOLS.name,
+                ToolDefinition.READ_CONTEXT_REFERENCE.name,
                 ToolDefinition.WEB_SEARCH.name,
                 ToolDefinition.WEB_EXTRACT.name,
+                ToolDefinition.X_SEARCH.name,
                 ToolDefinition.ATTACHED_IMAGE_INSPECT.name,
             )
 

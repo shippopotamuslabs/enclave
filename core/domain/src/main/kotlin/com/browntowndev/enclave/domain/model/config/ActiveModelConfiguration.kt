@@ -32,4 +32,5 @@ data class ActiveModelConfiguration(
     val apiProvider: ApiProvider? = null,
     val apiModelPricing: ApiModelSavedPricing? = null,
     val apiBaseUrl: String? = null,
+    val includeReasoningContentOnRequest: Boolean = false,
 )

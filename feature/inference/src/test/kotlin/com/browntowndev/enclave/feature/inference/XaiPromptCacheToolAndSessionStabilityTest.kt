@@ -15,6 +15,7 @@ import com.openai.models.chat.completions.ChatCompletionCreateParams
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -141,15 +142,15 @@ class XaiPromptCacheToolAndSessionStabilityTest {
             val wire = capturedParams.last().messages()
             assertTrue(
                 wire.any { message ->
-                    message.isSystem() &&
-                        message.asSystem().content().asText() == """State ledger JSON: {"turn":1}"""
+                    message.isUser() &&
+                        message.asUser().content().asText().contains("""State ledger JSON: {"turn":1}""")
                 },
                 "same-chat frozen sidecars must replay because xAI caches the real messages[] prefix",
             )
             assertTrue(
                 wire.any { message ->
-                    message.isSystem() &&
-                        message.asSystem().content().asText() == """State ledger JSON: {"turn":2}"""
+                    message.isUser() &&
+                        message.asUser().content().asText().contains("""State ledger JSON: {"turn":2}""")
                 },
             )
         }
@@ -186,24 +187,194 @@ class XaiPromptCacheToolAndSessionStabilityTest {
             val wire = capturedParams.last().messages()
             assertTrue(
                 wire.none { message ->
-                    message.isSystem() &&
-                        message.asSystem().content().asText() == """State ledger JSON: {"chat":1}"""
+                    message.isUser() &&
+                        message.asUser().content().asText().contains("""State ledger JSON: {"chat":1}""")
                 },
                 "frozen sidecars must not leak between x-grok-conv-id values",
             )
             assertTrue(
                 wire.any { message ->
-                    message.isSystem() &&
-                        message.asSystem().content().asText() == """State ledger JSON: {"chat":2}"""
+                    message.isUser() &&
+                        message.asUser().content().asText().contains("""State ledger JSON: {"chat":2}""")
                 },
             )
         }
 
+    @Test
+    fun PC_XAI_08_cross_turn_tool_budget_does_not_clear_append_only_log() =
+        runTest {
+            val capturedParams = mutableListOf<ChatCompletionCreateParams>()
+            val service = xaiService(capturedParams)
+            val options = GenerationOptions(reasoningBudget = 0, chatId = ChatId("chat-1"))
+            val fixture = toolLoopWithBudgetFixture()
+
+            service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        fixture.userMessage,
+                        fixture.assistantWithTool,
+                        fixture.toolResult,
+                        fixture.agentBudgetMessage,
+                        fixture.assistantSummary,
+                    ),
+                systemPrompt = "System",
+                contextSidecars = """State ledger JSON: {"turn":1}""",
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = options,
+            )
+            val appendOnly = requireNotNull(service.appendOnlyContextForTests())
+            assertTrue(appendOnly.committedVolatileSidecarTexts().isNotEmpty())
+
+            service.resetAppendOnlyForNewPrompt()
+
+            service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        fixture.userMessage,
+                        fixture.assistantWithTool,
+                        fixture.toolResult,
+                        fixture.assistantSummary,
+                        AgentLoopMessage(id = "u2", role = Role.USER, content = "Second question"),
+                    ),
+                systemPrompt = "System",
+                contextSidecars = """State ledger JSON: {"turn":2}""",
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = options,
+            )
+
+            assertEquals(0, appendOnly.clearCount)
+            assertNull(appendOnly.lastClearReason)
+            assertTrue(appendOnly.committedVolatileSidecarTexts().isNotEmpty())
+            val wire = capturedParams.last().messages()
+            assertTrue(
+                wire.any { message ->
+                    message.isUser() &&
+                        message.asUser().content().asText().contains("""State ledger JSON: {"turn":1}""")
+                },
+                "frozen sidecars must still replay after cross-turn rehydrate without budget row",
+            )
+        }
+
+    @Test
+    fun PC_XAI_09_cross_turn_rehydrate_prefix_drift_preserves_frozen_sidecars() =
+        runTest {
+            val capturedParams = mutableListOf<ChatCompletionCreateParams>()
+            val service = xaiService(capturedParams)
+            val options = GenerationOptions(reasoningBudget = 0, chatId = ChatId("chat-1"))
+            val fixture = toolLoopWithBudgetFixture()
+
+            service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        fixture.userMessage,
+                        fixture.assistantWithTool.copy(
+                            metadataJson =
+                                """
+                                {"raw_tool_calls":[{"id":"call_1","name":"web_search","arguments_json":"{}"}]}
+                                """.trimIndent(),
+                        ),
+                        fixture.toolResult,
+                        fixture.assistantSummary,
+                    ),
+                systemPrompt = "System",
+                contextSidecars = """State ledger JSON: {"turn":1}""",
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = options,
+            )
+            val appendOnly = requireNotNull(service.appendOnlyContextForTests())
+            assertEquals(1, appendOnly.committedVolatileSidecarTexts().size)
+
+            service.resetAppendOnlyForNewPrompt()
+
+            service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        fixture.userMessage,
+                        fixture.assistantWithTool.copy(
+                            metadataJson =
+                                """
+                                {"raw_tool_calls":[{"id":"call_1","name":"web_search","arguments_json":"{\"query\":\"cats\"}"}]}
+                                """.trimIndent(),
+                        ),
+                        fixture.toolResult,
+                        fixture.assistantSummary,
+                        AgentLoopMessage(id = "u2", role = Role.USER, content = "Second question"),
+                    ),
+                systemPrompt = "System",
+                contextSidecars = """State ledger JSON: {"turn":2}""",
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = options,
+            )
+
+            assertEquals(0, appendOnly.clearCount)
+            assertNull(appendOnly.lastClearReason)
+            assertEquals(2, appendOnly.committedVolatileSidecarTexts().size)
+            val wire = capturedParams.last().messages()
+            assertTrue(
+                wire.any { message ->
+                    message.isUser() &&
+                        message.asUser().content().asText().contains("""State ledger JSON: {"turn":1}""")
+                },
+                "frozen turn:1 sidecar must replay after cross-turn rehydrate prefix drift",
+            )
+        }
+
+    private data class ToolLoopWithBudgetFixture(
+        val userMessage: AgentLoopMessage,
+        val assistantWithTool: AgentLoopMessage,
+        val toolResult: AgentLoopMessage,
+        val agentBudgetMessage: AgentLoopMessage,
+        val assistantSummary: AgentLoopMessage,
+    )
+
+    private fun toolLoopWithBudgetFixture(): ToolLoopWithBudgetFixture =
+        ToolLoopWithBudgetFixture(
+            userMessage = AgentLoopMessage(id = "u1", role = Role.USER, content = "Search for cats"),
+            assistantWithTool =
+                AgentLoopMessage(
+                    id = "a1",
+                    role = Role.ASSISTANT,
+                    content = "",
+                    metadataJson =
+                        """
+                        {"raw_tool_calls":[{"id":"call_1","name":"web_search","arguments_json":"{\"query\":\"cats\"}"}]}
+                        """.trimIndent(),
+                ),
+            toolResult =
+                AgentLoopMessage(
+                    id = "t1",
+                    role = Role.USER,
+                    content = """{"results":[{"title":"Cat"}]}""",
+                    metadataJson = """{"call_id":"call_1"}""",
+                ),
+            agentBudgetMessage =
+                AgentLoopMessage(
+                    id = "budget",
+                    role = Role.ASSISTANT,
+                    content =
+                        "<system_context>\nTool budget: 1/35 used (34 remaining). Tools enabled.\n</system_context>",
+                    metadataJson = """{"agent_tool_budget":true}""",
+                ),
+            assistantSummary =
+                AgentLoopMessage(id = "a2", role = Role.ASSISTANT, content = "Here are cat results."),
+        )
+
     private fun xaiService(capturedParams: MutableList<ChatCompletionCreateParams>): BaseOpenAiSdkInferenceService =
-        object : BaseOpenAiSdkInferenceService(
+        object : XaiInferenceServiceImpl(
             client = mockk<OpenAIClient>(),
             modelId = "grok-4.3",
-            provider = "XAI",
             modelType = ModelType.FAST,
             loggingPort = loggingPort,
             toolStreamGatePort = FakeToolStreamGatePort(),

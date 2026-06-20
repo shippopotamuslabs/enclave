@@ -307,6 +307,27 @@ internal class SettingsViewModel
         // --- API Providers (BYOK) ---
         fun onShowByokSheet(show: Boolean) = apiProvidersDelegate.onShowByokSheet(_apiState, show)
 
+        fun onShowOpenRouterProvidersSheet(
+            show: Boolean,
+            modelId: String = "",
+            currentApiKey: String = "",
+            credentialAlias: String? = null,
+            baseUrl: String? = null,
+        ) {
+            viewModelScope.launch {
+                apiProvidersDelegate.onShowOpenRouterProvidersSheet(
+                    scope = this,
+                    apiState = _apiState,
+                    show = show,
+                    modelId = modelId,
+                    currentApiKey = currentApiKey,
+                    credentialAlias = credentialAlias,
+                    baseUrl = baseUrl,
+                    onShowSnackbar = { msg -> _snackbarMessages.tryEmit(msg) },
+                )
+            }
+        }
+
         fun onSelectApiModelAsset(asset: ApiModelAssetUi?) =
             apiProvidersDelegate.onSelectApiProviderAsset(viewModelScope, _apiState, _currentApiKey, asset)
 

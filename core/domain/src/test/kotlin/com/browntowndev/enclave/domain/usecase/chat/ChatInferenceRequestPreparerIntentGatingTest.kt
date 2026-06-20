@@ -30,7 +30,7 @@ import org.junit.jupiter.api.Test
 
 class ChatInferenceRequestPreparerIntentGatingTest {
     @Test
-    fun `IGTA-02 search classifier activates search_x_recent when X search enabled`() =
+    fun `IGTA-02 search_x_recent preloaded when X search configured`() =
         runTest {
             val classifier = mockk<SearchIntentClassifierPort>()
             every { classifier.getSearchIntentProbability(any()) } returns 0.9f
@@ -46,9 +46,12 @@ class ChatInferenceRequestPreparerIntentGatingTest {
                         modelType = ModelType.FAST,
                     )
 
+            // search_x_recent is preloaded on par with web_search whenever X search is configured,
+            // so it is always active (and PRELOADED in the catalog) rather than intent-activated.
+            // This keeps the wire tools[] block stable from turn 1 for prompt-cache reuse.
             assertTrue(request.options.activeTools.any { it.name == "search_x_recent" })
             assertEquals(
-                ToolDisclosureMode.INTENT_ACTIVATED,
+                ToolDisclosureMode.PRELOADED,
                 request.options.toolCatalog
                     .single { it.name == "search_x_recent" }
                     .disclosureMode,
@@ -101,7 +104,10 @@ class ChatInferenceRequestPreparerIntentGatingTest {
             assertTrue(activeNames.contains("start_artifact"))
             assertTrue(activeNames.contains("append_blocks"))
             assertTrue(activeNames.contains("search_current_artifact"))
-            assertFalse(activeNames.contains("search_x_recent"))
+            // search_x_recent is preloaded (X configured), so it is present independent of the
+            // artifact-only intent path. The point of this test — artifact trio active, no proactive
+            // web search results — is carried by the prompt/volatile-context assertions below.
+            assertTrue(activeNames.contains("search_x_recent"))
             assertTrue(
                 request.options.systemPrompt == null ||
                     !request.options.systemPrompt!!.contains("# RELEVANT WEB SEARCH RESULTS:"),
@@ -163,7 +169,7 @@ class ChatInferenceRequestPreparerIntentGatingTest {
         }
 
     @Test
-    fun `IGTA-07 low classifier probability does not activate X in preparer`() =
+    fun `IGTA-07 search_x_recent preloaded even when classifier probability is low`() =
         runTest {
             val classifier = mockk<SearchIntentClassifierPort>()
             every { classifier.getSearchIntentProbability(any()) } returns 0.1f
@@ -179,11 +185,14 @@ class ChatInferenceRequestPreparerIntentGatingTest {
                         modelType = ModelType.FAST,
                     )
 
-            assertFalse(request.options.activeTools.any { it.name == "search_x_recent" })
+            // X exposure is no longer gated on the search-intent classifier: search_x_recent is
+            // preloaded whenever X search is configured, so it stays in the active set even when the
+            // classifier says no search is needed. (Proactive X pre-retrieval is still intent-gated.)
+            assertTrue(request.options.activeTools.any { it.name == "search_x_recent" })
         }
 
     @Test
-    fun `IGTA-13 searchEnabled false prevents X activation`() =
+    fun `IGTA-13 search_x_recent preloaded on its own toggle independent of web searchEnabled`() =
         runTest {
             val classifier = mockk<SearchIntentClassifierPort>()
             every { classifier.requiresSearch(any(), any()) } returns true
@@ -206,7 +215,10 @@ class ChatInferenceRequestPreparerIntentGatingTest {
                     modelType = ModelType.FAST,
                 )
 
-            assertFalse(request.options.activeTools.any { it.name == "search_x_recent" })
+            // X search is configured by its own toggle + key (isXSearchSkillConfigured), independent
+            // of the web searchEnabled master toggle. search_x_recent is therefore preloaded, while
+            // web tools stay absent because web search is not configured.
+            assertTrue(request.options.activeTools.any { it.name == "search_x_recent" })
             assertFalse(request.options.toolCatalog.any { it.name == "web_search" })
         }
 
@@ -309,7 +321,7 @@ class ChatInferenceRequestPreparerIntentGatingTest {
         }
 
     @Test
-    fun `MUT-01 search_x_recent absent when classifier requiresSearch is false`() =
+    fun `MUT-01 search_x_recent preloaded into active set when X configured regardless of search intent`() =
         runTest {
             val classifier = mockk<SearchIntentClassifierPort>()
             every { classifier.requiresSearch(any(), any()) } returns false
@@ -324,8 +336,10 @@ class ChatInferenceRequestPreparerIntentGatingTest {
                         modelType = ModelType.FAST,
                     )
 
+            // search_x_recent is preloaded last (eligibleTools orders X tools after web/artifact),
+            // present even though the classifier reports no search intent.
             assertEquals(
-                listOf("tool_discovery_tool", "web_search", "web_extract"),
+                listOf("tool_discovery_tool", "read_context_reference", "web_search", "web_extract", "search_x_recent"),
                 request.options.activeTools.map { it.name },
             )
         }
@@ -350,7 +364,9 @@ class ChatInferenceRequestPreparerIntentGatingTest {
             assertTrue(activeNames.contains("start_artifact"))
             assertTrue(activeNames.contains("append_blocks"))
             assertTrue(activeNames.contains("search_current_artifact"))
-            assertFalse(activeNames.contains("search_x_recent"))
+            // search_x_recent is preloaded (X configured); the "search path blocked" guarantee this
+            // test cares about is the absence of proactive web search results, asserted below.
+            assertTrue(activeNames.contains("search_x_recent"))
             assertTrue(
                 request.options.systemPrompt == null ||
                     !request.options.systemPrompt!!.contains("# RELEVANT WEB SEARCH RESULTS:"),

@@ -195,7 +195,11 @@ object DataModule {
                 context,
                 EnclaveDatabase::class.java,
                 "enclave.db",
-            ).addMigrations(EnclaveDatabaseMigrations.MIGRATION_2_3)
+            ).addMigrations(
+                EnclaveDatabaseMigrations.MIGRATION_2_3,
+                EnclaveDatabaseMigrations.MIGRATION_3_4,
+                EnclaveDatabaseMigrations.MIGRATION_4_5,
+            )
             .fallbackToDestructiveMigration(dropAllTables = true)
             .openHelperFactory(SQLiteVecInstaller.createOpenHelperFactory(context))
             .addCallback(

@@ -8,6 +8,7 @@ import androidx.compose.ui.unit.sp
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.core.ui.theme.LlmBodyTextStyle
 import com.browntowndev.enclave.core.ui.theme.darkMarkdownTheme
+import com.browntowndev.enclave.core.ui.theme.lightMarkdownTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotSame
 import org.junit.Rule
@@ -45,6 +46,25 @@ class StreamableMarkdownTextRecompositionTest {
         val second = darkMarkdownTheme()
         assertNotSame(
             "darkMarkdownTheme() allocates a new object each call — remember is required to avoid per-recomposition waste",
+            first,
+            second,
+        )
+    }
+
+    @Test
+    fun `lightMarkdownTheme applies custom body style when provided`() {
+        val custom = LlmBodyTextStyle.copy(fontSize = 18.sp, lineHeight = 29.sp)
+        val theme = lightMarkdownTheme(bodyStyle = custom)
+        assertEquals(18.sp, theme.bodyStyle.fontSize)
+        assertEquals(29.sp, theme.bodyStyle.lineHeight)
+    }
+
+    @Test
+    fun `lightMarkdownTheme creates a new MarkdownTheme instance on each invocation`() {
+        val first = lightMarkdownTheme()
+        val second = lightMarkdownTheme()
+        assertNotSame(
+            "lightMarkdownTheme() allocates a new object each call — remember is required to avoid per-recomposition waste",
             first,
             second,
         )

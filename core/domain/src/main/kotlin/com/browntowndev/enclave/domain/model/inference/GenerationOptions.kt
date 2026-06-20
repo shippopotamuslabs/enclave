@@ -28,6 +28,8 @@ data class GenerationOptions(
     val volatileTurnContext: String? = null,
     val imageUris: List<String> = emptyList(),
     val reasoningEffort: ApiReasoningEffort? = null,
+    /** When enabled, replays stored provider reasoning content on follow-up chat requests. */
+    val includeReasoningContentOnRequest: Boolean = false,
     val temperature: Float? = null,
     val topK: Int? = null,
     val topP: Float? = null,

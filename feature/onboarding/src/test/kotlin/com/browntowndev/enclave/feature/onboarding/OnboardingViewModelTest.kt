@@ -7,7 +7,9 @@ import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.config.TtsProviderId
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
+import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.onboarding.OnboardingFlowMode
+import com.browntowndev.enclave.domain.usecase.onboarding.BulkAssignApiProviderUseCase
 import com.browntowndev.enclave.domain.usecase.FakeSettingsRepository
 import com.browntowndev.enclave.domain.usecase.media.SaveMediaProviderUseCase
 import com.browntowndev.enclave.domain.usecase.onboarding.ResolveOnboardingFlowModeUseCase
@@ -319,8 +321,10 @@ class OnboardingViewModelTest {
                 assertTrue(fakeSettingsRepository.ageConfirmed)
                 assertTrue(fakeSettingsRepository.onboardingCompleted)
 
-                val event = awaitItem()
-                assertTrue(event is OnboardingEvent.NavigateToChat)
+                val event = awaitItem() as OnboardingEvent.NavigateToChat
+                assertEquals(ModelChoice.API, event.modelChoice)
+                val expectedSlots = BulkAssignApiProviderUseCase.TEXT_SLOTS.toSet() + ModelType.VISION
+                assertEquals(expectedSlots, event.apiSlots)
 
                 val state = viewModel.uiState.value
                 assertFalse(state.isSaving)
@@ -354,8 +358,9 @@ class OnboardingViewModelTest {
                 assertEquals(0, fakeBulkAssign.callCount)
                 assertTrue(fakeSettingsRepository.onboardingCompleted)
 
-                val event = awaitItem()
-                assertTrue(event is OnboardingEvent.NavigateToChat)
+                val event = awaitItem() as OnboardingEvent.NavigateToChat
+                assertEquals(ModelChoice.LOCAL, event.modelChoice)
+                assertEquals(emptySet<ModelType>(), event.apiSlots)
 
                 cancelAndIgnoreRemainingEvents()
             }
@@ -459,6 +464,8 @@ class OnboardingViewModelTest {
 
                 val event = awaitItem() as OnboardingEvent.NavigateToChat
                 assertEquals(ModelChoice.API, event.modelChoice)
+                val expectedSlots = BulkAssignApiProviderUseCase.TEXT_SLOTS.toSet() + ModelType.VISION
+                assertEquals(expectedSlots, event.apiSlots)
 
                 cancelAndIgnoreRemainingEvents()
             }
@@ -482,6 +489,7 @@ class OnboardingViewModelTest {
 
                 val event = awaitItem() as OnboardingEvent.NavigateToChat
                 assertEquals(ModelChoice.LOCAL, event.modelChoice)
+                assertEquals(emptySet<ModelType>(), event.apiSlots)
 
                 cancelAndIgnoreRemainingEvents()
             }
@@ -551,7 +559,11 @@ class OnboardingViewModelTest {
                 coVerify(exactly = 1) { mockSaveMedia(match { it.id == mediaDraft.id }, "media-key") }
 
                 assertTrue(fakeSettingsRepository.onboardingCompleted)
-                assertTrue(awaitItem() is OnboardingEvent.NavigateToChat)
+                val event = awaitItem() as OnboardingEvent.NavigateToChat
+                assertEquals(ModelChoice.API, event.modelChoice)
+                val expectedSlots = BulkAssignApiProviderUseCase.TEXT_SLOTS.toSet() +
+                    ModelType.VISION + ModelType.IMAGE_GENERATION + ModelType.IMAGE_EDIT
+                assertEquals(expectedSlots, event.apiSlots)
                 cancelAndIgnoreRemainingEvents()
             }
         }
@@ -589,6 +601,7 @@ class OnboardingViewModelTest {
                 assertTrue(fakeSettingsRepository.ageConfirmed)
                 val event = awaitItem() as OnboardingEvent.NavigateToChat
                 assertEquals(ModelChoice.RESTORED, event.modelChoice)
+                assertEquals(emptySet<ModelType>(), event.apiSlots)
                 assertEquals(0, fakeBulkAssign.callCount)
                 cancelAndIgnoreRemainingEvents()
             }
@@ -652,6 +665,77 @@ class OnboardingViewModelTest {
 
                 val state = viewModel.uiState.value
                 assertEquals("Terms of Service agreement is required", state.saveError)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    @DisplayName("OB-BASEURL-01 — Base URL updates and resets correctly")
+    fun `OB-BASEURL-01 base url updates in state and resets on provider selected`() =
+        runTest {
+            viewModel.onBaseUrlChanged("https://custom-api.com")
+            assertEquals("https://custom-api.com", viewModel.uiState.value.baseUrl)
+
+            viewModel.onProviderSelected(ApiProvider.OPENAI)
+            assertEquals("", viewModel.uiState.value.baseUrl)
+        }
+
+    @Test
+    @DisplayName("OB-BASEURL-02 — Model discovery uses custom base URL if configured")
+    fun `OB-BASEURL-02 model discovery passes custom base URL to discovery use case`() =
+        runTest {
+            // Navigate to step 1
+            viewModel.onAgeConfirmedChange(true)
+            viewModel.onTosAcceptedChange(true)
+            viewModel.onNextStep()
+            advanceUntilIdle()
+
+            viewModel.onModelChoiceSelected(ModelChoice.API)
+            viewModel.onProviderSelected(ApiProvider.OPENAI)
+            viewModel.onApiKeyChanged("sk-test-key")
+            viewModel.onBaseUrlChanged("https://my-custom-endpoint.com")
+            viewModel.onDiscoverModels()
+            advanceUntilIdle()
+
+            coVerify {
+                mockDiscoverModels(
+                    match {
+                        it.provider == ApiProvider.OPENAI &&
+                            it.currentApiKey == "sk-test-key" &&
+                            it.baseUrl == "https://my-custom-endpoint.com"
+                    },
+                )
+            }
+        }
+
+    @Test
+    @DisplayName("OB-BASEURL-03 — Onboarding completion passes custom base URL to credentials")
+    fun `OB-BASEURL-03 onboarding completion passes custom base URL to credentials`() =
+        runTest {
+            fakeBulkAssign.resultToReturn = Result.success(ApiCredentialsId("creds-123"))
+
+            // Navigate to step 3 via API path
+            viewModel.onAgeConfirmedChange(true)
+            viewModel.onTosAcceptedChange(true)
+            viewModel.onNextStep()
+            advanceUntilIdle()
+            viewModel.onModelChoiceSelected(ModelChoice.API)
+            viewModel.onProviderSelected(ApiProvider.OPENAI)
+            viewModel.onApiKeyChanged("sk-valid-key")
+            viewModel.onBaseUrlChanged("https://my-custom-endpoint.com")
+            viewModel.onModelSelected("gpt-4o")
+            viewModel.onNextStep()
+            advanceUntilIdle()
+            viewModel.onSkipMedia()
+            advanceUntilIdle()
+
+            viewModel.events.test {
+                viewModel.onCompleteOnboarding()
+                advanceUntilIdle()
+
+                assertEquals(1, fakeBulkAssign.callCount)
+                val credentialsPassed = fakeBulkAssign.lastCredentials
+                assertEquals("https://my-custom-endpoint.com", credentialsPassed?.baseUrl)
                 cancelAndIgnoreRemainingEvents()
             }
         }

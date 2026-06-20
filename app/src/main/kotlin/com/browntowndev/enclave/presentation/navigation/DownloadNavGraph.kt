@@ -7,7 +7,7 @@ import com.browntowndev.enclave.feature.download.DownloadPlanRefresher
 import com.browntowndev.enclave.feature.download.ModelDownloadScreen
 
 fun NavGraphBuilder.downloadGraph(
-    modelsResult: DownloadModelsResult?,
+    modelsResultProvider: () -> DownloadModelsResult?,
     errorMessage: String?,
     onReady: () -> Unit,
     refreshDownloadPlan: DownloadPlanRefresher? = null,
@@ -18,7 +18,7 @@ fun NavGraphBuilder.downloadGraph(
         exitTransition = { slideOutToStartTransition() },
     ) {
         ModelDownloadScreen(
-            modelsResult = modelsResult,
+            modelsResult = modelsResultProvider(),
             errorMessage = errorMessage,
             onReady = onReady,
             refreshDownloadPlan = refreshDownloadPlan,

@@ -270,6 +270,8 @@ class ApiModelRepositoryImpl
                         openRouterRequireParameters = config.openRouterRouting.requireParameters,
                         openRouterDataCollectionPolicy = config.openRouterRouting.dataCollectionPolicy.wireValue,
                         openRouterZeroDataRetention = config.openRouterRouting.zeroDataRetention,
+                        openRouterPreferredProvider = config.openRouterRouting.preferredProvider,
+                        includeReasoningContentOnRequest = config.includeReasoningContentOnRequest,
                         promptPriceUsdPerMillion = config.pricing.promptUsdPerMillion,
                         completionPriceUsdPerMillion = config.pricing.completionUsdPerMillion,
                         cachedPromptPriceUsdPerMillion = config.pricing.cachedPromptUsdPerMillion,
@@ -337,7 +339,9 @@ class ApiModelRepositoryImpl
                         requireParameters = e.openRouterRequireParameters ?: false,
                         dataCollectionPolicy = OpenRouterDataCollectionPolicy.fromWireValue(e.openRouterDataCollectionPolicy),
                         zeroDataRetention = e.openRouterZeroDataRetention ?: false,
+                        preferredProvider = e.openRouterPreferredProvider,
                     ),
+                includeReasoningContentOnRequest = e.includeReasoningContentOnRequest,
                 pricing =
                     ApiModelSavedPricing(
                         promptUsdPerMillion = e.promptPriceUsdPerMillion,

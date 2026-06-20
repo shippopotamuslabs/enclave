@@ -463,6 +463,7 @@ private fun buildMinimalViewModel(): SettingsViewModel {
                     discoverApiModels = mockk(relaxed = true),
                     applyApiModelMetadataDefaults = mockk(relaxed = true),
                     testApiProviderConnection = mockk(relaxed = true),
+                    fetchOpenRouterModelEndpoints = mockk(relaxed = true),
                 ),
             assignments =
                 SettingsAssignmentUseCasesImpl(

@@ -10,6 +10,7 @@ import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelId
+import com.browntowndev.enclave.domain.model.config.OpenRouterRoutingConfiguration
 import com.browntowndev.enclave.domain.model.error.InferenceIOException
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ModelType
@@ -262,6 +263,35 @@ class InferenceFactoryImplTest {
             val first = factory.withInferenceService(ModelType.THINKING) { it }
 
             apiKey = "secret-b"
+            val second = factory.withInferenceService(ModelType.THINKING) { it }
+
+            assertNotSame(first, second)
+        }
+
+    @Test
+    fun `withInferenceService recreates OpenRouter service when preferred provider changes`() =
+        runTest {
+            val assignment = DefaultModelAssignment(modelType = ModelType.THINKING, apiConfigId = ApiModelConfigurationId("9"))
+            var config =
+                apiModelConfiguration(
+                    id = ApiModelConfigurationId("9"),
+                    modelId = "openai/gpt-5.2:nitro",
+                    displayName = "Router preset",
+                    openRouterRouting = OpenRouterRoutingConfiguration(preferredProvider = "together"),
+                )
+            val credentials = apiCredentials(provider = ApiProvider.OPENROUTER)
+
+            coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns assignment
+            coEvery { apiModelRepository.getConfigurationById(ApiModelConfigurationId("9")) } answers { config }
+            coEvery { apiModelRepository.getCredentialsById(ApiCredentialsId("11")) } returns credentials
+            coEvery { apiKeyProvider.getApiKey("alias") } returns "secret"
+
+            val first = factory.withInferenceService(ModelType.THINKING) { it }
+
+            config =
+                config.copy(
+                    openRouterRouting = OpenRouterRoutingConfiguration(preferredProvider = "deepinfra"),
+                )
             val second = factory.withInferenceService(ModelType.THINKING) { it }
 
             assertNotSame(first, second)
@@ -616,6 +646,62 @@ class InferenceFactoryImplTest {
         }
 
     @Test
+    fun `SCN-FACTORY-001 factory builds DeepSeekInferenceServiceImpl for DEEPSEEK credentials`() =
+        runTest {
+            val configId = ApiModelConfigurationId("deepseek-config")
+            val credsId = ApiCredentialsId("deepseek-creds")
+            coEvery { apiModelRepository.getConfigurationById(configId) } returns
+                apiModelConfiguration(
+                    id = configId,
+                    apiCredentialsId = credsId,
+                    modelId = "deepseek-chat",
+                    displayName = "DeepSeek preset",
+                )
+            coEvery { apiModelRepository.getCredentialsById(credsId) } returns
+                apiCredentials(
+                    id = credsId,
+                    provider = ApiProvider.DEEPSEEK,
+                    baseUrl = null,
+                )
+            coEvery { apiKeyProvider.getApiKey("alias") } returns "ds-secret"
+
+            val service = factory.withRawApiServiceForConfig(configId) { it }
+
+            assertTrue(service.javaClass.name.contains("DeepSeekInferenceServiceImpl"))
+        }
+
+    @Test
+    fun `SCN-FACTORY-002 blank base URL resolves to official DeepSeek endpoint`() =
+        runTest {
+            val configId = ApiModelConfigurationId("deepseek-config-2")
+            val credsId = ApiCredentialsId("deepseek-creds-2")
+            coEvery { apiModelRepository.getConfigurationById(configId) } returns
+                apiModelConfiguration(
+                    id = configId,
+                    apiCredentialsId = credsId,
+                    modelId = "deepseek-chat",
+                    displayName = "DeepSeek preset",
+                )
+            coEvery { apiModelRepository.getCredentialsById(credsId) } returns
+                apiCredentials(
+                    id = credsId,
+                    provider = ApiProvider.DEEPSEEK,
+                    baseUrl = "   ",
+                )
+            coEvery { apiKeyProvider.getApiKey("alias") } returns "ds-secret"
+
+            factory.withRawApiServiceForConfig(configId) { it }
+
+            verify {
+                openAiClientProvider.getClient(
+                    apiKey = "ds-secret",
+                    baseUrl = "https://api.deepseek.com",
+                    headers = any(),
+                )
+            }
+        }
+
+    @Test
     fun `withInferenceService routes zai credentials to openai client with default base url`() =
         runTest {
             val assignment = DefaultModelAssignment(modelType = ModelType.THINKING, apiConfigId = ApiModelConfigurationId("zai-config"))
@@ -768,12 +854,14 @@ class InferenceFactoryImplTest {
         modelId: String,
         apiCredentialsId: ApiCredentialsId = ApiCredentialsId("11"),
         displayName: String = "Preset",
+        openRouterRouting: OpenRouterRoutingConfiguration = OpenRouterRoutingConfiguration(),
     ): ApiModelConfiguration =
         ApiModelConfiguration(
             id = id,
             apiCredentialsId = apiCredentialsId,
             modelId = modelId,
             displayName = displayName,
+            openRouterRouting = openRouterRouting,
         )
 
     private suspend fun resolveApiService(

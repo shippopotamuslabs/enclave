@@ -195,3 +195,118 @@ fun darkMarkdownTheme(bodyStyle: TextStyle = LlmBodyTextStyle.copy(color = DarkO
         kbdBackground = DarkSurfaceVariant,
         codeBlockTitleBackground = Color(0xFF21262D),
     )
+
+private fun lightHeadingStyles() =
+    listOf(
+        LlmBodyTextStyle.copy(
+            color = LightOnBackground,
+            fontWeight = FontWeight.ExtraBold,
+            fontSize = Typography.headlineLarge.fontSize,
+            lineHeight = Typography.headlineLarge.lineHeight,
+            textDecoration = TextDecoration.None,
+        ),
+        LlmBodyTextStyle.copy(
+            color = LightOnBackground,
+            fontWeight = FontWeight.ExtraBold,
+            fontSize = Typography.headlineMedium.fontSize,
+            lineHeight = Typography.headlineMedium.lineHeight,
+            textDecoration = TextDecoration.None,
+        ),
+        LlmBodyTextStyle.copy(
+            color = LightOnBackground,
+            fontWeight = FontWeight.Bold,
+            fontSize = Typography.titleLarge.fontSize,
+            lineHeight = Typography.titleLarge.lineHeight,
+            textDecoration = TextDecoration.None,
+        ),
+        LlmBodyTextStyle.copy(
+            color = LightOnBackground,
+            fontWeight = FontWeight.Bold,
+            fontSize = Typography.titleMedium.fontSize,
+            lineHeight = Typography.titleMedium.lineHeight,
+            textDecoration = TextDecoration.None,
+        ),
+        LlmBodyTextStyle.copy(
+            color = Color(0xFF475569), // Slate 600
+            fontWeight = FontWeight.Bold,
+            fontSize = Typography.titleMedium.fontSize,
+            lineHeight = Typography.titleMedium.lineHeight,
+            textDecoration = TextDecoration.None,
+        ),
+        LlmBodyTextStyle.copy(
+            color = Color(0xFF475569), // Slate 600
+            fontWeight = FontWeight.Bold,
+            fontSize = Typography.titleMedium.fontSize,
+            lineHeight = Typography.titleMedium.lineHeight,
+            textDecoration = TextDecoration.None,
+        ),
+    )
+
+private fun lightAdmonitionStyles(): Map<String, AdmonitionStyle> =
+    mapOf(
+        "tip" to
+            AdmonitionStyle(
+                borderColor = PurpleLightPrimary,
+                backgroundColor = LightSurface,
+                iconText = "\u2728",
+                titleColor = LightOnBackground,
+            ),
+        "warning" to
+            AdmonitionStyle(
+                borderColor = GoldVariant,
+                backgroundColor = LightSurface,
+                iconText = "\u26A0\uFE0F",
+                titleColor = LightOnBackground,
+            ),
+        "danger" to
+            AdmonitionStyle(
+                borderColor = ErrorRed,
+                backgroundColor = LightSurface,
+                iconText = "\u274C",
+                titleColor = LightOnBackground,
+            ),
+        "info" to
+            AdmonitionStyle(
+                borderColor = Color(0xFF3182CE),
+                backgroundColor = LightSurface,
+                iconText = "\u2139\uFE0F",
+                titleColor = LightOnBackground,
+            ),
+        "note" to
+            AdmonitionStyle(
+                borderColor = Color(0xFF805AD5),
+                backgroundColor = LightSurface,
+                iconText = "\uD83D\uDCDD",
+                titleColor = LightOnBackground,
+            ),
+    )
+
+fun lightMarkdownTheme(bodyStyle: TextStyle = LlmBodyTextStyle.copy(color = LightOnBackground)): MarkdownTheme =
+    MarkdownTheme(
+        headingStyles = lightHeadingStyles(),
+        bodyStyle = bodyStyle,
+        inlineCodeStyle = SpanStyle(color = LightOnBackground),
+        inlineCodeBackground = LightSurface,
+        codeBlockStyle =
+            Typography.bodySmall.copy(
+                fontFamily = FontFamily.Monospace,
+                color = LightOnBackground,
+            ),
+        codeBlockBackground = LightSurface,
+        blockSpacing = 18.dp,
+        blockQuoteBorderColor = LightOutline,
+        blockQuoteTextColor = Color(0xFF475569),
+        dividerColor = LightOutline,
+        linkColor = PurpleLightPrimary,
+        listBulletColor = LightOnBackground,
+        tableBorderColor = LightOutline,
+        tableHeaderBackground = LightSurface,
+        highlightColor = Color(0xFFFEF08A), // Light yellow highlight
+        taskCheckedColor = Color(0xFF16A34A),
+        taskUncheckedColor = LightOutline,
+        mathBlockBackground = LightSurface,
+        mathColor = LightOnBackground,
+        admonitionStyles = lightAdmonitionStyles(),
+        kbdBackground = LightSurface,
+        codeBlockTitleBackground = Color(0xFFE2E8F0),
+    )

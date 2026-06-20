@@ -131,7 +131,12 @@ class ConversationManagerImplToolsTest {
                 signatureCache.activeToolNames,
             )
             assertEquals(
-                listOf("tool_discovery_tool", "tavily_web_search", "tavily_extract", "append_blocks"),
+                listOf(
+                    ToolDefinition.APPEND_BLOCKS.name,
+                    "tool_discovery_tool",
+                    "tavily_extract",
+                    "tavily_web_search",
+                ),
                 callableNames
                     .filter {
                         it in
@@ -144,6 +149,30 @@ class ConversationManagerImplToolsTest {
                     },
             )
         }
+
+    @Test
+    fun `buildToolList order is deterministic across activation orderings for cache stability`() {
+        val toolContext = createToolContext()
+        val orderA = listOf("web_search", "tool_discovery_tool", "append_blocks", "web_extract")
+        val orderB = listOf("append_blocks", "web_extract", "tool_discovery_tool", "web_search")
+
+        val toolsetsA = LiteRtNativeToolsets.buildToolList(orderA, toolContext)
+        val toolsetsB = LiteRtNativeToolsets.buildToolList(orderB, toolContext)
+
+        val classNamesA = toolsetsA.map { it.javaClass.simpleName }
+        val classNamesB = toolsetsB.map { it.javaClass.simpleName }
+
+        assertEquals(classNamesA, classNamesB)
+        assertEquals(
+            listOf(
+                "LocalAppendBlocksToolset",
+                "LocalSearchToolsToolset",
+                "LocalExtractToolset",
+                "LocalSearchToolset",
+            ),
+            classNamesA,
+        )
+    }
 
     @Test
     fun `LocalSearchChatHistoryToolset splits multiple queries correctly`() =

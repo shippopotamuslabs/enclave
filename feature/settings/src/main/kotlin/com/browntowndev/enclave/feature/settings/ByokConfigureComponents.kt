@@ -2,6 +2,7 @@ package com.browntowndev.enclave.feature.settings
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -36,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -60,12 +62,16 @@ import com.browntowndev.enclave.domain.model.inference.ApiReasoningPolicy
 fun OpenRouterRoutingCard(
     routing: OpenRouterRoutingConfiguration,
     onRoutingChange: (OpenRouterRoutingConfiguration) -> Unit,
+    canSelectTargetProvider: Boolean = false,
+    onShowProvidersSheet: () -> Unit = {},
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         ConfigurationHeader("OpenRouter Routing")
         OpenRouterRoutingSection(
             routing = routing,
             onRoutingChange = onRoutingChange,
+            canSelectTargetProvider = canSelectTargetProvider,
+            onShowProvidersSheet = onShowProvidersSheet,
         )
     }
 }
@@ -75,101 +81,129 @@ fun OpenRouterRoutingCard(
 fun OpenRouterRoutingSection(
     routing: OpenRouterRoutingConfiguration,
     onRoutingChange: (OpenRouterRoutingConfiguration) -> Unit,
+    canSelectTargetProvider: Boolean = false,
+    onShowProvidersSheet: () -> Unit = {},
 ) {
     var sortExpanded by remember(routing.providerSort) { mutableStateOf(false) }
-    var dataCollectionExpanded by remember(routing.dataCollectionPolicy) { mutableStateOf(false) }
+    val showFallbackOptions = routing.preferredProvider == null || routing.allowFallbacks
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        ExposedDropdownMenuBox(
-            expanded = sortExpanded,
-            onExpandedChange = { sortExpanded = it },
-            modifier = Modifier.fillMaxWidth(),
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .testTag("OpenRouterPreferredProviderBox")
+                    .then(
+                        if (canSelectTargetProvider) {
+                            Modifier.clickable(onClick = onShowProvidersSheet)
+                        } else {
+                            Modifier
+                        },
+                    ),
         ) {
             NeoOutlinedTextField(
-                value = routing.providerSort.displayName,
+                value = routing.preferredProvider ?: "Automatic",
                 onValueChange = {},
                 readOnly = true,
-                label = { Text("Provider Sort") },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = sortExpanded) },
-                modifier =
-                    Modifier
-                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
-                        .fillMaxWidth(),
-            )
-            ExposedDropdownMenu(
-                expanded = sortExpanded,
-                onDismissRequest = { sortExpanded = false },
-                modifier = Modifier.neoBorder(color = neoBorderColor(), shape = EnclaveNeoTokens.shape),
-                shape = EnclaveNeoTokens.shape,
-                containerColor = MaterialTheme.colorScheme.surface,
-            ) {
-                OpenRouterProviderSort.entries.forEach { sort ->
-                    DropdownMenuItem(
-                        text = { Text(sort.displayName) },
-                        onClick = {
-                            onRoutingChange(routing.copy(providerSort = sort))
-                            sortExpanded = false
-                        },
+                enabled = false,
+                label = { Text("Target Provider") },
+                supportingText =
+                    if (canSelectTargetProvider) {
+                        null
+                    } else {
+                        { Text("Select a model before choosing a target provider.") }
+                    },
+                trailingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = "Select target provider",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                }
-            }
-        }
-
-        ExposedDropdownMenuBox(
-            expanded = dataCollectionExpanded,
-            onExpandedChange = { dataCollectionExpanded = it },
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            NeoOutlinedTextField(
-                value = routing.dataCollectionPolicy.displayName,
-                onValueChange = {},
-                readOnly = true,
-                label = { Text("Data Collection Policy") },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = dataCollectionExpanded) },
-                modifier =
-                    Modifier
-                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
-                        .fillMaxWidth(),
+                },
+                modifier = Modifier.fillMaxWidth(),
             )
-            ExposedDropdownMenu(
-                expanded = dataCollectionExpanded,
-                onDismissRequest = { dataCollectionExpanded = false },
-                modifier = Modifier.neoBorder(color = neoBorderColor(), shape = EnclaveNeoTokens.shape),
-                shape = EnclaveNeoTokens.shape,
-                containerColor = MaterialTheme.colorScheme.surface,
-            ) {
-                OpenRouterDataCollectionPolicy.entries.forEach { policy ->
-                    DropdownMenuItem(
-                        text = { Text(policy.displayName) },
-                        onClick = {
-                            onRoutingChange(routing.copy(dataCollectionPolicy = policy))
-                            dataCollectionExpanded = false
-                        },
-                    )
-                }
-            }
         }
 
         RoutingSwitchRow(
             label = "Allow Fallbacks",
-            description = "OpenRouter may fall back to alternate providers when the primary one is unavailable.",
+            description =
+                if (routing.preferredProvider != null) {
+                    "Pinned to a provider — fallbacks disabled to keep the prompt cache warm."
+                } else {
+                    "OpenRouter may fall back to alternate providers when the primary one is unavailable."
+                },
             checked = routing.allowFallbacks,
             onCheckedChange = { onRoutingChange(routing.copy(allowFallbacks = it)) },
+            enabled = routing.preferredProvider == null,
         )
 
-        RoutingSwitchRow(
-            label = "Require Parameters",
-            description = "Only route to providers that support every parameter in the request.",
-            checked = routing.requireParameters,
-            onCheckedChange = { onRoutingChange(routing.copy(requireParameters = it)) },
-        )
+        if (showFallbackOptions) {
+            ExposedDropdownMenuBox(
+                expanded = sortExpanded,
+                onExpandedChange = { sortExpanded = it },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                NeoOutlinedTextField(
+                    value = routing.providerSort.displayName,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Provider Sort") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = sortExpanded) },
+                    modifier =
+                        Modifier
+                            .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                            .fillMaxWidth(),
+                )
+                ExposedDropdownMenu(
+                    expanded = sortExpanded,
+                    onDismissRequest = { sortExpanded = false },
+                    modifier = Modifier.neoBorder(color = neoBorderColor(), shape = EnclaveNeoTokens.shape),
+                    shape = EnclaveNeoTokens.shape,
+                    containerColor = MaterialTheme.colorScheme.surface,
+                ) {
+                    OpenRouterProviderSort.entries.forEach { sort ->
+                        DropdownMenuItem(
+                            text = { Text(sort.displayName) },
+                            onClick = {
+                                onRoutingChange(routing.copy(providerSort = sort))
+                                sortExpanded = false
+                            },
+                        )
+                    }
+                }
+            }
 
-        RoutingSwitchRow(
-            label = "Zero Data Retention",
-            description = "Prefer providers that support zero data retention for this request.",
-            checked = routing.zeroDataRetention,
-            onCheckedChange = { onRoutingChange(routing.copy(zeroDataRetention = it)) },
-        )
+            RoutingSwitchRow(
+                label = "Require Parameters",
+                description = "Only route to providers that support every parameter in the request.",
+                checked = routing.requireParameters,
+                onCheckedChange = { onRoutingChange(routing.copy(requireParameters = it)) },
+            )
+
+            RoutingSwitchRow(
+                label = "Allow Data Collection",
+                description = "Allow providers to collect and store prompts and completions.",
+                checked = routing.dataCollectionPolicy == OpenRouterDataCollectionPolicy.ALLOW,
+                onCheckedChange = { allowed ->
+                    onRoutingChange(
+                        routing.copy(
+                            dataCollectionPolicy = if (allowed) {
+                                OpenRouterDataCollectionPolicy.ALLOW
+                            } else {
+                                OpenRouterDataCollectionPolicy.DENY
+                            }
+                        )
+                    )
+                },
+            )
+
+            RoutingSwitchRow(
+                label = "Zero Data Retention",
+                description = "Prefer providers that support zero data retention for this request.",
+                checked = routing.zeroDataRetention,
+                onCheckedChange = { onRoutingChange(routing.copy(zeroDataRetention = it)) },
+            )
+        }
     }
 }
 
@@ -179,6 +213,7 @@ fun RoutingSwitchRow(
     description: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
+    enabled: Boolean = true,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -193,7 +228,11 @@ fun RoutingSwitchRow(
             Spacer(modifier = Modifier.width(4.dp))
             PersistentTooltip(description = description)
         }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            enabled = enabled,
+        )
     }
 }
 

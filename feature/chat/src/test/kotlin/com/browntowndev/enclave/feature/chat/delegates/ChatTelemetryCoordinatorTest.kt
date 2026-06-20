@@ -150,6 +150,7 @@ class ChatTelemetryCoordinatorTest {
             val sheet = coordinator.chatStatsSheet.value
             assertTrue(sheet.isVisible)
             assertEquals("3500", sheet.summaryRows.first { it.label == "Input tokens" }.value)
+            assertEquals("3500", sheet.summaryRows.first { it.label == "Total prompt tokens (all API calls)" }.value)
         }
 
     @Test

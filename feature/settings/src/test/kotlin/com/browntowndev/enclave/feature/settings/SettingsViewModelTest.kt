@@ -220,6 +220,7 @@ class SettingsViewModelTest {
                         discoverApiModels = discoverApiModelsUseCase,
                         applyApiModelMetadataDefaults = applyApiModelMetadataDefaultsUseCase,
                         testApiProviderConnection = mockk(relaxed = true),
+                        fetchOpenRouterModelEndpoints = mockk(relaxed = true),
                     ),
                 assignments =
                     SettingsAssignmentUseCasesImpl(
