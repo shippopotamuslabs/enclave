@@ -74,20 +74,22 @@ pub fn view<'a>(
             theme: app_theme,
         })));
 
+    let text_color = if is_dark {
+        theme::DARK_TEXT
+    } else {
+        theme::LIGHT_TEXT
+    };
+
     let settings_btn = button(
-        text(icons::ICON_SETTINGS)
-            .font(icons::ICON_FONT)
-            .size(16)
-            .shaping(iced::widget::text::Shaping::Advanced)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .horizontal_alignment(alignment::Horizontal::Center)
-            .vertical_alignment(alignment::Vertical::Center)
-            .style(if is_dark {
-                theme::DARK_TEXT
-            } else {
-                theme::LIGHT_TEXT
-            }),
+        container(
+            icons::render_svg(&icons::HANDLE_SETTINGS, text_color)
+                .width(Length::Fixed(16.0))
+                .height(Length::Fixed(16.0)),
+        )
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .center_x()
+        .center_y(),
     )
     .padding(6)
     .width(Length::Fixed(32.0))
@@ -108,14 +110,12 @@ pub fn view<'a>(
     .padding(10);
 
     // --- 2. Navigation Quick Links ---
-    let nav_btn = |title: &str, icon_str: &str, msg: Message| {
+    let nav_btn = |title: &str, icon_handle: &iced::widget::svg::Handle, msg: Message| {
         button(
             row![
-                text(icon_str)
-                    .font(icons::ICON_FONT)
-                    .size(16)
-                    .shaping(iced::widget::text::Shaping::Advanced)
-                    .style(theme::COLOR_ACCENT),
+                icons::render_svg(icon_handle, theme::COLOR_ACCENT)
+                    .width(Length::Fixed(16.0))
+                    .height(Length::Fixed(16.0)),
                 text(title)
                     .font(icons::FONT_BOLD)
                     .size(13)
@@ -141,19 +141,19 @@ pub fn view<'a>(
     let quick_links = column![
         nav_btn(
             "New Chat",
-            icons::ICON_ADD,
+            &icons::HANDLE_ADD,
             Message::NavigateTo(crate::Screen::Chat {
                 chat_id: "new_chat".into()
             })
         ),
         nav_btn(
             "Studio Screen",
-            icons::ICON_IMAGE,
+            &icons::HANDLE_IMAGE,
             Message::NavigateTo(crate::Screen::Studio)
         ),
         nav_btn(
             "Media Gallery",
-            icons::ICON_GALLERY,
+            &icons::HANDLE_GALLERY,
             Message::NavigateTo(crate::Screen::Gallery {
                 selected_album_id: None
             })
@@ -186,17 +186,18 @@ pub fn view<'a>(
 
     let render_chat_row = |chat: &HistoryChat| {
         let pin_btn = button(
-            text(icons::ICON_PIN)
-                .font(icons::ICON_FONT)
-                .size(16)
-                .shaping(iced::widget::text::Shaping::Advanced)
-                .style(if chat.is_pinned {
+            icons::render_svg(
+                &icons::HANDLE_PIN,
+                if chat.is_pinned {
                     theme::COLOR_ACCENT
                 } else if is_dark {
                     theme::DARK_TEXT_MUTED
                 } else {
                     theme::LIGHT_TEXT_MUTED
-                }),
+                },
+            )
+            .width(Length::Fixed(16.0))
+            .height(Length::Fixed(16.0)),
         )
         .style(iced::theme::Button::Text)
         .on_press(if chat.is_pinned {
@@ -206,15 +207,16 @@ pub fn view<'a>(
         });
 
         let delete_btn = button(
-            text(icons::ICON_DELETE)
-                .font(icons::ICON_FONT)
-                .size(16)
-                .shaping(iced::widget::text::Shaping::Advanced)
-                .style(if is_dark {
+            icons::render_svg(
+                &icons::HANDLE_DELETE,
+                if is_dark {
                     theme::DARK_TEXT_MUTED
                 } else {
                     theme::LIGHT_TEXT_MUTED
-                }),
+                },
+            )
+            .width(Length::Fixed(16.0))
+            .height(Length::Fixed(16.0)),
         )
         .style(iced::theme::Button::Text)
         .on_press(Message::HistoryDeleteChat(chat.id.clone()));
