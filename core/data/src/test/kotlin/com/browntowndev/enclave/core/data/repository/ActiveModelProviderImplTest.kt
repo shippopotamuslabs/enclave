@@ -8,8 +8,15 @@ import com.browntowndev.enclave.core.data.local.LocalModelConfigurationEntity
 import com.browntowndev.enclave.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.enclave.core.data.local.LocalModelEntity
 import com.browntowndev.enclave.core.data.local.LocalModelsDao
+import com.browntowndev.enclave.core.data.local.MediaProviderDao
+import com.browntowndev.enclave.core.data.local.MediaProviderEntity
+import com.browntowndev.enclave.core.data.local.TtsProviderDao
+import com.browntowndev.enclave.core.data.local.TtsProviderEntity
 import com.browntowndev.enclave.domain.model.chat.ChatModelOverride
 import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
+import com.browntowndev.enclave.domain.model.config.MediaCapability
+import com.browntowndev.enclave.domain.model.config.MediaProviderId
+import com.browntowndev.enclave.domain.model.config.TtsProviderId
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
@@ -38,6 +45,8 @@ class ActiveModelProviderImplTest {
     private val localConfigsDao = mockk<LocalModelConfigurationsDao>(relaxed = true)
     private val apiCredentialsDao = mockk<ApiCredentialsDao>(relaxed = true)
     private val apiConfigsDao = mockk<ApiModelConfigurationsDao>(relaxed = true)
+    private val mediaProviderDao = mockk<MediaProviderDao>(relaxed = true)
+    private val ttsProviderDao = mockk<TtsProviderDao>(relaxed = true)
     private val localEncryption = FakeLocalDataEncryptionService()
 
     private lateinit var repository: ActiveModelProviderImpl
@@ -51,6 +60,8 @@ class ActiveModelProviderImplTest {
                 localConfigsDao = localConfigsDao,
                 apiCredentialsDao = apiCredentialsDao,
                 apiConfigsDao = apiConfigsDao,
+                mediaProviderDao = mediaProviderDao,
+                ttsProviderDao = ttsProviderDao,
                 localEncryption = localEncryption,
             )
     }
@@ -250,5 +261,60 @@ class ActiveModelProviderImplTest {
             // TDD Red: should resolve from explicit config id, not FAST slot
             assertEquals("Grok Beta", result?.name)
             coVerify(exactly = 0) { defaultModelRepository.getDefault(any()) }
+        }
+
+    @Test
+    @DisplayName("getActiveConfiguration returns non-local ActiveModelConfiguration for media default assignment")
+    fun getActiveConfigurationMediaProvider() =
+        runTest {
+            val mediaProviderId = MediaProviderId("media-1")
+            coEvery { defaultModelRepository.getDefault(ModelType.IMAGE_GENERATION) } returns
+                DefaultModelAssignment(
+                    modelType = ModelType.IMAGE_GENERATION,
+                    mediaProviderId = mediaProviderId,
+                )
+            coEvery { mediaProviderDao.getMediaProvider("media-1") } returns
+                MediaProviderEntity(
+                    id = "media-1",
+                    displayName = localEncryption.encryptString("DALL-E 3"),
+                    provider = ApiProvider.OPENAI,
+                    capability = MediaCapability.IMAGE,
+                    modelName = localEncryption.encryptString("dall-e-3"),
+                    credentialAlias = "openai-creds",
+                )
+
+            val result = repository.getActiveConfiguration(ModelType.IMAGE_GENERATION)
+
+            assertEquals("DALL-E 3", result?.name)
+            assertEquals("dall-e-3", result?.modelId)
+            assertEquals(false, result?.isLocal)
+            assertEquals(ApiProvider.OPENAI, result?.apiProvider)
+        }
+
+    @Test
+    @DisplayName("getActiveConfiguration returns non-local ActiveModelConfiguration for TTS default assignment")
+    fun getActiveConfigurationTtsProvider() =
+        runTest {
+            val ttsProviderId = TtsProviderId("tts-1")
+            coEvery { defaultModelRepository.getDefault(ModelType.TTS) } returns
+                DefaultModelAssignment(
+                    modelType = ModelType.TTS,
+                    ttsProviderId = ttsProviderId,
+                )
+            coEvery { ttsProviderDao.getTtsProvider("tts-1") } returns
+                TtsProviderEntity(
+                    id = "tts-1",
+                    displayName = localEncryption.encryptString("TTS Voice"),
+                    provider = ApiProvider.OPENAI,
+                    voiceName = localEncryption.encryptString("alloy"),
+                    credentialAlias = "openai-creds",
+                )
+
+            val result = repository.getActiveConfiguration(ModelType.TTS)
+
+            assertEquals("TTS Voice", result?.name)
+            assertEquals("alloy", result?.modelId)
+            assertEquals(false, result?.isLocal)
+            assertEquals(ApiProvider.OPENAI, result?.apiProvider)
         }
 }
