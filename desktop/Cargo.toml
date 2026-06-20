@@ -1,0 +1,20 @@
+[package]
+name = "enclave-desktop"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+iced = { version = "0.12.1", features = ["tokio", "image", "svg"] }
+tokio = { version = "1", features = ["full"] }
+once_cell = "1.19"
+bytes = "1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Local workspace dependencies
+agent_core = { path = "../third_party/agent_core" }
+docgen_core = { path = "../third_party/docgen_core" }
+enclave-desktop-domain = { path = "domain" }
+enclave-desktop-data = { path = "data" }
+enclave-desktop-inference = { path = "inference" }
+
