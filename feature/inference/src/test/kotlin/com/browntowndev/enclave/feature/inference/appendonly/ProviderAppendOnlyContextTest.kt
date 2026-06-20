@@ -424,4 +424,73 @@ class ProviderAppendOnlyContextTest {
         assertEquals("11111111-2222-3333-4444-555555555555", snapshots[0].markerId)
         assertEquals(3, snapshots[0].mappedInsertIndex)
     }
+
+    @Test
+    @DisplayName("AOC-DCR-01 compaction boundary clear with revision does not double-clear on subsequent sync")
+    fun AOC_DCR_01_compactionBoundaryWithRevisionDoesNotDoubleClear() {
+        val context = ProviderAppendOnlyContext()
+        // Seed append-only state: a frozen sidecar + committed messages at revision 10.
+        context.endTurnFreezeSidecar(
+            sidecarText = """State ledger JSON: {"v":1}""",
+            markerId = "11111111-2222-3333-4444-555555555555",
+            mappedInsertIndex = 0,
+        )
+        context.syncMessages(
+            listOf(
+                ProviderNormalizedMessage(role = "user", content = "prompt"),
+                ProviderNormalizedMessage(role = "assistant", content = "reply"),
+            ),
+            transcriptRevision = 10L,
+        )
+        assertEquals(1, context.frozenSidecarsForWireReplay().size)
+        assertEquals(0, context.clearCount)
+
+        // Rust emits CompactionBoundaryApplied with revisionAfter=11; the event handler
+        // calls clearOnRustCompactionBoundary(11) which must set lastSeenRevision=11.
+        context.clearOnRustCompactionBoundary(revisionAfter = 11L)
+        assertEquals(1, context.clearCount)
+        assertEquals("rust_compaction_boundary", context.lastClearReason)
+        assertTrue(context.frozenSidecarsForWireReplay().isEmpty())
+
+        // completeSingleTurn then delivers the compacted messages at the same revision.
+        // syncMessages' proactive compaction clear must NOT fire again — lastSeenRevision
+        // is already 11, so transcriptRevision(11) > lastSeenRevision(11) is false.
+        context.syncMessages(
+            listOf(
+                ProviderNormalizedMessage(role = "user", content = "compacted prompt"),
+            ),
+            transcriptRevision = 11L,
+        )
+
+        assertEquals(1, context.clearCount, "syncMessages must not double-clear after compaction boundary")
+    }
+
+    @Test
+    @DisplayName("AOC-DCR-02 compaction boundary clear without revision still allows proactive sync clear")
+    fun AOC_DCR_02_compactionBoundaryWithoutRevisionStillProactivelyClears() {
+        val context = ProviderAppendOnlyContext()
+        context.endTurnFreezeSidecar(
+            sidecarText = """State ledger JSON: {"v":1}""",
+            markerId = "11111111-2222-3333-4444-555555555555",
+            mappedInsertIndex = 0,
+        )
+        context.syncMessages(
+            listOf(ProviderNormalizedMessage(role = "user", content = "prompt")),
+            transcriptRevision = 10L,
+        )
+        assertEquals(0, context.clearCount)
+
+        // KvCacheInvalidated path: no revision available.
+        context.clearOnRustCompactionBoundary(revisionAfter = null)
+        assertEquals(1, context.clearCount)
+
+        // syncMessages with a revision bump must still proactively clear since
+        // lastSeenRevision was not advanced by the boundary clear.
+        context.syncMessages(
+            listOf(ProviderNormalizedMessage(role = "user", content = "compacted")),
+            transcriptRevision = 11L,
+        )
+
+        assertEquals(2, context.clearCount, "proactive clear still fires when boundary clear had no revision")
+    }
 }
