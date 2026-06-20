@@ -90,8 +90,16 @@ pub fn view<'a>(
         text(icons::ICON_MENU)
             .font(icons::ICON_FONT)
             .size(20)
+            .shaping(iced::widget::text::Shaping::Advanced)
+            .width(Length::Fill)
+            .height(Length::Fill)
             .horizontal_alignment(alignment::Horizontal::Center)
-            .vertical_alignment(alignment::Vertical::Center),
+            .vertical_alignment(alignment::Vertical::Center)
+            .style(if is_dark {
+                theme::DARK_TEXT
+            } else {
+                theme::LIGHT_TEXT
+            }),
     )
     .padding(8)
     .width(Length::Fixed(40.0))
@@ -116,8 +124,15 @@ pub fn view<'a>(
         text("+")
             .font(icons::FONT_BOLD)
             .size(20)
+            .width(Length::Fill)
+            .height(Length::Fill)
             .horizontal_alignment(alignment::Horizontal::Center)
-            .vertical_alignment(alignment::Vertical::Center),
+            .vertical_alignment(alignment::Vertical::Center)
+            .style(if is_dark {
+                theme::DARK_TEXT
+            } else {
+                theme::LIGHT_TEXT
+            }),
     )
     .padding(8)
     .width(Length::Fixed(40.0))
@@ -200,8 +215,16 @@ pub fn view<'a>(
         text(icons::ICON_MIC)
             .font(icons::ICON_FONT)
             .size(20)
+            .shaping(iced::widget::text::Shaping::Advanced)
+            .width(Length::Fill)
+            .height(Length::Fill)
             .horizontal_alignment(alignment::Horizontal::Center)
-            .vertical_alignment(alignment::Vertical::Center),
+            .vertical_alignment(alignment::Vertical::Center)
+            .style(if is_dark {
+                theme::DARK_TEXT
+            } else {
+                theme::LIGHT_TEXT
+            }),
     )
     .padding(8)
     .width(Length::Fixed(40.0))
@@ -210,14 +233,23 @@ pub fn view<'a>(
         is_accent: false,
         has_shadow: true,
         theme: app_theme,
-    })));
+    })))
+    .on_press(Message::ChatMicPressed);
 
     let file_btn = button(
-        text("📎")
-            .font(icons::FONT_REGULAR)
-            .size(18)
+        text(icons::ICON_ATTACH)
+            .font(icons::ICON_FONT)
+            .size(20)
+            .shaping(iced::widget::text::Shaping::Advanced)
+            .width(Length::Fill)
+            .height(Length::Fill)
             .horizontal_alignment(alignment::Horizontal::Center)
-            .vertical_alignment(alignment::Vertical::Center),
+            .vertical_alignment(alignment::Vertical::Center)
+            .style(if is_dark {
+                theme::DARK_TEXT
+            } else {
+                theme::LIGHT_TEXT
+            }),
     )
     .padding(8)
     .width(Length::Fixed(40.0))
@@ -226,7 +258,8 @@ pub fn view<'a>(
         is_accent: false,
         has_shadow: true,
         theme: app_theme,
-    })));
+    })))
+    .on_press(Message::ChatFilePressed);
 
     let prompt_input = text_input("Type a message...", &state.input_text)
         .on_input(Message::ChatInputChange)
@@ -240,6 +273,9 @@ pub fn view<'a>(
         text(icons::ICON_SEND)
             .font(icons::ICON_FONT)
             .size(16)
+            .shaping(iced::widget::text::Shaping::Advanced)
+            .horizontal_alignment(alignment::Horizontal::Center)
+            .vertical_alignment(alignment::Vertical::Center)
             .style(iced::Color::BLACK),
     )
     .padding(10)

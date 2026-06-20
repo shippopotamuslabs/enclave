@@ -76,13 +76,19 @@ pub fn view<'a>(
     state: &'a StudioState,
     app_theme: AppTheme,
 ) -> Element<'a, Message, Theme, iced::Renderer> {
+    let is_dark = app_theme == AppTheme::Dark;
+
     // --- 1. Studio Top Bar ---
     let menu_btn = button(
         text(icons::ICON_MENU)
             .font(icons::ICON_FONT)
             .size(20)
-            .horizontal_alignment(alignment::Horizontal::Center)
-            .vertical_alignment(alignment::Vertical::Center),
+            .shaping(iced::widget::text::Shaping::Advanced)
+            .style(if is_dark {
+                theme::DARK_TEXT
+            } else {
+                theme::LIGHT_TEXT
+            }),
     )
     .padding(8)
     .width(Length::Fixed(40.0))
@@ -109,6 +115,7 @@ pub fn view<'a>(
             text(icons::ICON_CHEVRON_DOWN)
                 .font(icons::ICON_FONT)
                 .size(16)
+                .shaping(iced::widget::text::Shaping::Advanced)
                 .style(if app_theme == AppTheme::Dark {
                     theme::DARK_TEXT_MUTED
                 } else {
@@ -130,8 +137,12 @@ pub fn view<'a>(
         text(icons::ICON_GALLERY)
             .font(icons::ICON_FONT)
             .size(20)
-            .horizontal_alignment(alignment::Horizontal::Center)
-            .vertical_alignment(alignment::Vertical::Center),
+            .shaping(iced::widget::text::Shaping::Advanced)
+            .style(if is_dark {
+                theme::DARK_TEXT
+            } else {
+                theme::LIGHT_TEXT
+            }),
     )
     .padding(8)
     .width(Length::Fixed(40.0))
@@ -269,6 +280,7 @@ pub fn view<'a>(
                 text(icons::ICON_CLOSE)
                     .font(icons::ICON_FONT)
                     .size(14)
+                    .shaping(iced::widget::text::Shaping::Advanced)
                     .style(theme::COLOR_ACCENT)
             )
             .style(iced::theme::Button::Text)
@@ -296,8 +308,12 @@ pub fn view<'a>(
         text(icons::ICON_MIC)
             .font(icons::ICON_FONT)
             .size(20)
-            .horizontal_alignment(alignment::Horizontal::Center)
-            .vertical_alignment(alignment::Vertical::Center),
+            .shaping(iced::widget::text::Shaping::Advanced)
+            .style(if is_dark {
+                theme::DARK_TEXT
+            } else {
+                theme::LIGHT_TEXT
+            }),
     )
     .padding(8)
     .width(Length::Fixed(40.0))
@@ -313,8 +329,12 @@ pub fn view<'a>(
         text(icons::ICON_IMAGE)
             .font(icons::ICON_FONT)
             .size(20)
-            .horizontal_alignment(alignment::Horizontal::Center)
-            .vertical_alignment(alignment::Vertical::Center),
+            .shaping(iced::widget::text::Shaping::Advanced)
+            .style(if is_dark {
+                theme::DARK_TEXT
+            } else {
+                theme::LIGHT_TEXT
+            }),
     )
     .padding(8)
     .width(Length::Fixed(40.0))

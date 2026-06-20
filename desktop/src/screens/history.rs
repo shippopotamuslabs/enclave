@@ -78,8 +78,16 @@ pub fn view<'a>(
         text(icons::ICON_SETTINGS)
             .font(icons::ICON_FONT)
             .size(16)
+            .shaping(iced::widget::text::Shaping::Advanced)
+            .width(Length::Fill)
+            .height(Length::Fill)
             .horizontal_alignment(alignment::Horizontal::Center)
-            .vertical_alignment(alignment::Vertical::Center),
+            .vertical_alignment(alignment::Vertical::Center)
+            .style(if is_dark {
+                theme::DARK_TEXT
+            } else {
+                theme::LIGHT_TEXT
+            }),
     )
     .padding(6)
     .width(Length::Fixed(32.0))
@@ -106,6 +114,7 @@ pub fn view<'a>(
                 text(icon_str)
                     .font(icons::ICON_FONT)
                     .size(16)
+                    .shaping(iced::widget::text::Shaping::Advanced)
                     .style(theme::COLOR_ACCENT),
                 text(title)
                     .font(icons::FONT_BOLD)
@@ -132,7 +141,7 @@ pub fn view<'a>(
     let quick_links = column![
         nav_btn(
             "New Chat",
-            "+",
+            icons::ICON_ADD,
             Message::NavigateTo(crate::Screen::Chat {
                 chat_id: "new_chat".into()
             })
@@ -176,19 +185,39 @@ pub fn view<'a>(
     let recent_chats: Vec<&&HistoryChat> = filtered_chats.iter().filter(|c| !c.is_pinned).collect();
 
     let render_chat_row = |chat: &HistoryChat| {
-        let pin_icon = if chat.is_pinned { "📍" } else { "📌" };
+        let pin_btn = button(
+            text(icons::ICON_PIN)
+                .font(icons::ICON_FONT)
+                .size(16)
+                .shaping(iced::widget::text::Shaping::Advanced)
+                .style(if chat.is_pinned {
+                    theme::COLOR_ACCENT
+                } else if is_dark {
+                    theme::DARK_TEXT_MUTED
+                } else {
+                    theme::LIGHT_TEXT_MUTED
+                }),
+        )
+        .style(iced::theme::Button::Text)
+        .on_press(if chat.is_pinned {
+            Message::HistoryUnpinChat(chat.id.clone())
+        } else {
+            Message::HistoryPinChat(chat.id.clone())
+        });
 
-        let pin_btn = button(text(pin_icon).size(12))
-            .style(iced::theme::Button::Text)
-            .on_press(if chat.is_pinned {
-                Message::HistoryUnpinChat(chat.id.clone())
-            } else {
-                Message::HistoryPinChat(chat.id.clone())
-            });
-
-        let delete_btn = button(text("🗑️").size(12))
-            .style(iced::theme::Button::Text)
-            .on_press(Message::HistoryDeleteChat(chat.id.clone()));
+        let delete_btn = button(
+            text(icons::ICON_DELETE)
+                .font(icons::ICON_FONT)
+                .size(16)
+                .shaping(iced::widget::text::Shaping::Advanced)
+                .style(if is_dark {
+                    theme::DARK_TEXT_MUTED
+                } else {
+                    theme::LIGHT_TEXT_MUTED
+                }),
+        )
+        .style(iced::theme::Button::Text)
+        .on_press(Message::HistoryDeleteChat(chat.id.clone()));
 
         container(
             row![
