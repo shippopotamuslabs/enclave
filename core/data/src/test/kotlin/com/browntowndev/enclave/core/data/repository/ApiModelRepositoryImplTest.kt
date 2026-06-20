@@ -652,6 +652,46 @@ class ApiModelRepositoryImplTest {
             }
         }
 
+    @Test
+    @org.junit.jupiter.api.DisplayName("SCN-PERSIST-001")
+    fun scnPersist001_apiModelRepositoryMapsPreferredProviderToAndFromDatabase() =
+        runTest {
+            val storedConfigs = mutableListOf<ApiModelConfigurationEntity>()
+            coEvery { configurationsDao.upsert(any()) } answers {
+                val entity = firstArg<ApiModelConfigurationEntity>()
+                storedConfigs.removeAll { it.id == entity.id }
+                storedConfigs.add(entity)
+            }
+            coEvery { configurationsDao.getById(any()) } answers {
+                val requestedId =
+                    when (val idArg = invocation.args[0]) {
+                        is ApiModelConfigurationId -> idArg
+                        is String -> ApiModelConfigurationId(idArg)
+                        else -> error("Unexpected getById arg: $idArg")
+                    }
+                storedConfigs.find { it.id == requestedId }
+            }
+
+            val config =
+                ApiModelConfiguration(
+                    apiCredentialsId = ApiCredentialsId("9"),
+                    modelId = "openai/gpt-5.2",
+                    displayName = "Router preset",
+                    openRouterRouting =
+                        OpenRouterRoutingConfiguration(
+                            preferredProvider = "together",
+                        ),
+                )
+
+            val configId = repo.saveConfiguration(config)
+
+            assertEquals(1, storedConfigs.size)
+            assertEquals("together", storedConfigs.first().openRouterPreferredProvider)
+
+            val retrieved = repo.getConfigurationById(configId)
+            assertEquals("together", retrieved?.openRouterRouting?.preferredProvider)
+        }
+
     private class LockedLocalDataEncryptionService : LocalDataEncryptionService {
         override fun encryptString(plaintext: String): String = throw IllegalStateException("Encryption session locked")
 

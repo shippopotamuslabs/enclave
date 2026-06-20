@@ -157,6 +157,18 @@ internal fun ByokConfigureRoute(
         onToggleModelProviderFilter = viewModel::onToggleModelProviderFilter,
         onClearModelProviderFilters = viewModel::onClearModelProviderFilters,
         onUpdateModelSortOption = viewModel::onUpdateModelSortOption,
+        onShowOpenRouterProvidersSheet = { modelId, credentialAlias, baseUrl ->
+            viewModel.onShowOpenRouterProvidersSheet(
+                show = true,
+                modelId = modelId,
+                currentApiKey = apiKey,
+                credentialAlias = credentialAlias,
+                baseUrl = baseUrl,
+            )
+        },
+        onDismissOpenRouterProvidersSheet = {
+            viewModel.onShowOpenRouterProvidersSheet(show = false)
+        },
         onSaveApiCredentials = {
             viewModel.onSaveApiCredentials(onSuccess = { _, createdPreset ->
                 if (createdPreset == null) {
@@ -203,6 +215,8 @@ fun ByokConfigureScreen(
     onToggleModelProviderFilter: (String) -> Unit,
     onClearModelProviderFilters: () -> Unit,
     onUpdateModelSortOption: (ModelSortOption) -> Unit,
+    onShowOpenRouterProvidersSheet: (modelId: String, credentialAlias: String?, baseUrl: String?) -> Unit = { _, _, _ -> },
+    onDismissOpenRouterProvidersSheet: () -> Unit = {},
     onSaveApiCredentials: () -> Unit,
     onSaveApiModelConfig: () -> Unit,
     onSaveSearchSettings: () -> Unit,
@@ -329,6 +343,19 @@ fun ByokConfigureScreen(
                             onClearProviderFilters = onClearModelProviderFilters,
                             onUpdateSortOption = onUpdateModelSortOption,
                         ),
+                    onShowOpenRouterProvidersSheet = {
+                        if (selectedConfig.modelId.isBlank()) {
+                            return@PresetConfigurationForm
+                        }
+                        val credentialAlias =
+                            uiState.apiProviderEditor.selectedReusableCredential?.credentialAlias
+                                ?: draftAsset.credentialAlias.takeIf { it.isNotBlank() }
+                        onShowOpenRouterProvidersSheet(
+                            selectedConfig.modelId,
+                            credentialAlias,
+                            draftAsset.baseUrl,
+                        )
+                    },
                 )
             } else {
                 CredentialsConfigurationForm(
@@ -353,5 +380,30 @@ fun ByokConfigureScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
         }
+    }
+
+    if (uiState.apiProviderEditor.isOpenRouterProvidersSheetOpen && selectedConfig != null) {
+        OpenRouterProvidersBottomSheet(
+            openRouterEndpointsState = uiState.apiProviderEditor.openRouterEndpointsState,
+            selectedPreferredProvider = selectedConfig.openRouterRouting.preferredProvider,
+            onSelectPreferredProvider = { providerSlug ->
+                val openRouterRouting =
+                    if (providerSlug.isNullOrBlank()) {
+                        selectedConfig.openRouterRouting.copy(
+                            preferredProvider = null,
+                            allowFallbacks = true,
+                        )
+                    } else {
+                        selectedConfig.openRouterRouting.copy(
+                            preferredProvider = providerSlug,
+                            allowFallbacks = false,
+                        )
+                    }
+                onApiModelConfigFieldChange(
+                    selectedConfig.copy(openRouterRouting = openRouterRouting),
+                )
+            },
+            onDismissRequest = onDismissOpenRouterProvidersSheet,
+        )
     }
 }

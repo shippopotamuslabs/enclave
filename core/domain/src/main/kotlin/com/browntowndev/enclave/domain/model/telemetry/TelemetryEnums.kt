@@ -9,6 +9,7 @@ enum class TelemetryProviderKey {
     GOOGLE,
     XAI,
     ZAI,
+    DEEPSEEK,
     OTHER,
     ;
 
@@ -37,6 +38,7 @@ enum class TelemetryProviderKey {
                 "OpenRouter" -> OPENROUTER
                 "Google" -> GOOGLE
                 "xAI" -> XAI
+                "DeepSeek", "DEEPSEEK" -> DEEPSEEK
                 else -> OTHER
             }
     }

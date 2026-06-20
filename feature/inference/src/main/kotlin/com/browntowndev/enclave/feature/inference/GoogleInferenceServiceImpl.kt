@@ -1,7 +1,7 @@
 package com.browntowndev.enclave.feature.inference
 
+import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.ChatMessage
-import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.AgentFinishReason
 import com.browntowndev.enclave.domain.model.inference.AgentLoopMessage
 import com.browntowndev.enclave.domain.model.inference.AgentLoopToolCatalogJson
@@ -20,18 +20,11 @@ import com.browntowndev.enclave.feature.inference.appendonly.ProviderAppendOnlyC
 import com.browntowndev.enclave.feature.inference.appendonly.ProviderAppendOnlyContextFactory
 import com.browntowndev.enclave.feature.inference.appendonly.SessionIndexVolatilePlacement
 import com.browntowndev.enclave.feature.inference.appendonly.ensureAppendOnlyContext
-import com.browntowndev.enclave.feature.inference.appendonly.toProviderNormalizedMessages
+import com.browntowndev.enclave.feature.inference.appendonly.toAppendOnlySyncMessages
 import com.browntowndev.enclave.feature.inference.appendonly.toToolsFingerprint
 import com.browntowndev.enclave.feature.inference.telemetry.InferenceTelemetrySupport
 import com.browntowndev.enclave.feature.inference.telemetry.emitInferenceExecutionOutcome
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.google.genai.types.Content
-import com.google.genai.types.FunctionCallingConfig
-import com.google.genai.types.FunctionCallingConfigMode
-import com.google.genai.types.GenerateContentConfig
-import com.google.genai.types.Part
-import com.google.genai.types.ThinkingConfig
-import com.google.genai.types.ToolConfig
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -86,11 +79,12 @@ class GoogleInferenceServiceImpl(
         resetAppendOnlyForNewPrompt()
     }
 
-    internal fun clearAppendOnlyOnRustCompactionBoundary() {
-        appendOnlyContext?.clearOnRustCompactionBoundary()
+    internal fun clearAppendOnlyOnRustCompactionBoundary(revisionAfter: Long? = null) {
+        appendOnlyContext?.clearOnRustCompactionBoundary(revisionAfter)
     }
 
-    internal fun resetAppendOnlyForNewPrompt() {
+    @Suppress("UnusedParameter")
+    internal fun resetAppendOnlyForNewPrompt(chatId: ChatId? = null) {
         appendOnlyContext?.invalidate()
         appendOnlyContext = null
     }
@@ -123,14 +117,7 @@ class GoogleInferenceServiceImpl(
                         .InferenceTurnTiming()
                 }
             val captureContext = telemetrySupport?.captureContext(options)
-            val lastUserIndex = GoogleAgentLoopContentMapper.lastNonToolResultUserIndex(sessionMessages)
-            val imageUris = options.imageUris.take(3600)
-
             val stableHistory = sessionMessages.dropLast(1)
-            val latestMessage =
-                sessionMessages.lastOrNull()
-                    ?: throw IllegalArgumentException("sessionMessages cannot be empty")
-            val latestIndex = sessionMessages.lastIndex
 
             appendOnlyContext =
                 ProviderAppendOnlyContextFactory.ensureAppendOnlyContext(
@@ -144,35 +131,12 @@ class GoogleInferenceServiceImpl(
                 systemPrompt = systemPrompt,
                 toolsFingerprint = availableTools.toToolsFingerprint(),
             )
-            appendOnly.syncMessages(sessionMessages.toProviderNormalizedMessages())
-            val tailInsertIndex = SessionIndexVolatilePlacement.resolveTailInsertIndex(sessionMessages)
-            val latestUserPrepends = contextSidecars?.trim()?.takeIf { it.isNotEmpty() }
-
-            fun mapAtIndex(
-                message: AgentLoopMessage,
-                index: Int,
-                attachImages: Boolean,
-            ): Content? =
-                GoogleAgentLoopContentMapper.mapMessage(
-                    message = message,
-                    index = index,
-                    lastUserIndex = if (attachImages) lastUserIndex else -1,
-                    imageUris = if (attachImages) imageUris else emptyList(),
-                    prependedText = if (index == latestIndex && !latestUserPrepends.isNullOrBlank()) latestUserPrepends else null,
-                )
-
-            fun appendMappedMessage(
-                target: MutableList<Content>,
-                message: AgentLoopMessage,
-                index: Int,
-                attachImages: Boolean,
-            ) {
-                mapAtIndex(
-                    message = message,
-                    index = index,
-                    attachImages = attachImages,
-                )?.let(target::add)
-            }
+            appendOnly.syncMessages(
+                sessionMessages.toAppendOnlySyncMessages(),
+                transcriptRevision = options.transcriptRevision,
+            )
+            val wireSidecar = appendOnly.resolveContextSidecarsForWire(contextSidecars)
+            val lastUserIndex = GoogleAgentLoopContentMapper.lastNonToolResultUserIndex(sessionMessages)
 
             val activeCacheName =
                 promptCacheSession.ensureCacheForStablePrefix(
@@ -181,68 +145,41 @@ class GoogleInferenceServiceImpl(
                     availableTools = availableTools,
                     mapToContent = { msg ->
                         val index = sessionMessages.indexOfFirst { it.id == msg.id }
-                        mapAtIndex(msg, index, attachImages = false)
+                        GoogleAgentLoopContentMapper.mapMessage(
+                            message = msg,
+                            index = index,
+                            lastUserIndex = -1,
+                            imageUris = emptyList(),
+                            sidecarMarkers = SessionIndexVolatilePlacement.sidecarMarkersForSessionIndex(
+                                sessionIndex = index,
+                                frozenSidecars = appendOnly.frozenSidecarsForWireReplay(),
+                                preRetrievalSidecar = null,
+                                preRetrievalInsertIndex = null,
+                                liveSidecar = wireSidecar,
+                                tailInsertIndex = lastUserIndex.coerceAtLeast(0),
+                            ),
+                        )
                     },
                 )
 
-            val configBuilder = GenerateContentConfig.builder()
-            options.temperature?.let { configBuilder.temperature(it) }
-            options.topP?.let { configBuilder.topP(it) }
-            options.topK?.let { configBuilder.topK(it.toFloat()) }
-            options.maxTokens?.let { configBuilder.maxOutputTokens(it) }
-            resolveThinkingConfig(options)?.let { configBuilder.thinkingConfig(it) }
-
-            if (availableTools.isNotEmpty()) {
-                configBuilder.tools(availableTools.map { it.toGoogleTool() })
-                val mode =
-                    if (allowToolCall) {
-                        FunctionCallingConfigMode.Known.AUTO
-                    } else {
-                        FunctionCallingConfigMode.Known.NONE
-                    }
-                configBuilder.toolConfig(
-                    ToolConfig
-                        .builder()
-                        .functionCallingConfig(
-                            FunctionCallingConfig
-                                .builder()
-                                .mode(mode)
-                                .build(),
-                        ).build(),
-                )
-            }
-
-            if (activeCacheName != null) {
-                configBuilder.cachedContent(activeCacheName)
-            } else if (systemPrompt.isNotBlank()) {
-                configBuilder.systemInstruction(Content.fromParts(Part.fromText(systemPrompt)))
-            }
-
             val deltaHistory = promptCacheSession.deltaHistory(stableHistory)
-            val contentsToSend =
-                buildList {
-                    deltaHistory.forEach { msg ->
-                        val index = sessionMessages.indexOfFirst { it.id == msg.id }
-                        appendMappedMessage(
-                            target = this,
-                            message = msg,
-                            index = index,
-                            attachImages = false,
-                        )
-                    }
-                    appendMappedMessage(
-                        target = this,
-                        message = latestMessage,
-                        index = latestIndex,
-                        attachImages = true,
-                    )
-                }
+            val request = GoogleRequestMapper.mapSessionToGenerateContent(
+                sessionMessages = sessionMessages,
+                systemPrompt = systemPrompt,
+                availableTools = availableTools,
+                allowToolCall = allowToolCall,
+                options = options,
+                appendOnly = appendOnly,
+                wireSidecar = wireSidecar,
+                activeCacheName = activeCacheName,
+                deltaHistory = deltaHistory,
+            )
 
             val response =
                 sdkClient.generateContentStream(
                     modelId = modelId,
-                    contents = contentsToSend,
-                    config = configBuilder.build(),
+                    contents = request.contents,
+                    config = request.config,
                     allowToolCall = allowToolCall,
                     emitEvent = { event ->
                         when (event) {
@@ -303,10 +240,11 @@ class GoogleInferenceServiceImpl(
                     null
                 }
 
-            if (!contextSidecars.isNullOrBlank()) {
+            if (wireSidecar != null) {
                 appendOnly.endTurnFreezeSidecar(
-                    sidecarText = contextSidecars,
-                    mappedInsertIndex = tailInsertIndex,
+                    sidecarText = wireSidecar.text,
+                    markerId = wireSidecar.markerId,
+                    mappedInsertIndex = lastUserIndex.coerceAtLeast(0),
                 )
             }
 
@@ -369,17 +307,6 @@ class GoogleInferenceServiceImpl(
             )
             throw e
         }
-    }
-
-    private fun resolveThinkingConfig(options: GenerationOptions): ThinkingConfig? {
-        if (options.reasoningBudget <= 0) {
-            return null
-        }
-        return ThinkingConfig
-            .builder()
-            .thinkingBudget(options.reasoningBudget)
-            .includeThoughts(true)
-            .build()
     }
 
     private fun googleFinishReason(

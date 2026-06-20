@@ -128,6 +128,7 @@ class InferenceFactoryImpl
             val requireParameters: Boolean,
             val dataCollectionPolicy: String,
             val zeroDataRetention: Boolean,
+            val preferredProvider: String?,
         )
 
         private val activeIdentities = mutableMapOf<ModelType, ServiceIdentity>()
@@ -721,6 +722,7 @@ class InferenceFactoryImpl
                         requireParameters = apiConfig.openRouterRouting.requireParameters,
                         dataCollectionPolicy = apiConfig.openRouterRouting.dataCollectionPolicy.wireValue,
                         zeroDataRetention = apiConfig.openRouterRouting.zeroDataRetention,
+                        preferredProvider = apiConfig.openRouterRouting.preferredProvider,
                     ),
                 googleApiVersion =
                     if (apiCredentials.provider == ApiProvider.GOOGLE) {

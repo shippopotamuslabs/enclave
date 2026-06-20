@@ -56,6 +56,10 @@ internal data class ApiProvidersTransientState(
     val modelSortOption: ModelSortOption = ModelSortOption.A_TO_Z,
     val connectionTestStatus: ApiConnectionTestStatus = ApiConnectionTestStatus.IDLE,
     val connectionTestFingerprint: String? = null,
+    val isOpenRouterProvidersSheetOpen: Boolean = false,
+    val isLoadingEndpoints: Boolean = false,
+    val endpointFetchError: Boolean = false,
+    val openRouterEndpoints: List<com.browntowndev.enclave.domain.model.config.OpenRouterModelEndpoint> = emptyList(),
 )
 
 internal data class MemoriesTransientState(

@@ -7,9 +7,11 @@ import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
+import com.browntowndev.enclave.domain.model.inference.ModelType
+
 @Composable
 fun OnboardingRoute(
-    onOnboardingComplete: (ModelChoice) -> Unit,
+    onOnboardingComplete: (ModelChoice, Set<ModelType>) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: OnboardingViewModel = hiltViewModel(),
 ) {
@@ -18,7 +20,7 @@ fun OnboardingRoute(
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
             when (event) {
-                is OnboardingEvent.NavigateToChat -> onOnboardingComplete(event.modelChoice)
+                is OnboardingEvent.NavigateToChat -> onOnboardingComplete(event.modelChoice, event.apiSlots)
             }
         }
     }
@@ -34,6 +36,7 @@ fun OnboardingRoute(
         onModelChoiceSelected = viewModel::onModelChoiceSelected,
         onProviderSelected = viewModel::onProviderSelected,
         onApiKeyChanged = viewModel::onApiKeyChanged,
+        onBaseUrlChanged = viewModel::onBaseUrlChanged,
         onDiscoverModels = viewModel::onDiscoverModels,
         onModelSelected = viewModel::onModelSelected,
         onSkipMedia = viewModel::onSkipMedia,

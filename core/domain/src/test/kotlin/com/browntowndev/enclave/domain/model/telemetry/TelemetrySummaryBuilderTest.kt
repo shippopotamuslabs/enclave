@@ -2,6 +2,7 @@ package com.browntowndev.enclave.domain.model.telemetry
 
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageId
+import com.browntowndev.enclave.domain.model.telemetry.TurnTelemetryId
 import com.browntowndev.enclave.domain.telemetry.TelemetryTestFixtures
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -160,6 +161,17 @@ class TelemetrySummaryBuilderTest {
     }
 
     @Test
+    fun `SCN-TELEMETRY-002 TelemetryProviderKey fromLabel resolves DeepSeek`() {
+        assertEquals(TelemetryProviderKey.DEEPSEEK, TelemetryProviderKey.fromLabel("DeepSeek"))
+        assertEquals(TelemetryProviderKey.DEEPSEEK, TelemetryProviderKey.fromLabel("DEEPSEEK"))
+    }
+
+    @Test
+    fun `SCN-TELEMETRY-003 DEEPSEEK reports cache inclusive input`() {
+        assertFalse(TelemetryProviderKey.DEEPSEEK.reportsCacheExclusiveInput)
+    }
+
+    @Test
     fun `normalizedInputTokens leaves OpenAI input unchanged`() {
         // OpenAI reports cache read as a subset of the total prompt; input is already the full count.
         val row = TelemetryTestFixtures.telOpenAi1
@@ -175,7 +187,7 @@ class TelemetrySummaryBuilderTest {
     }
 
     @Test
-    fun `buildMessageSummary totalInputTokensNormalized sums normalized per-row input`() {
+    fun `buildMessageSummary totalInputTokensNormalized uses peak normalized input per message`() {
         val anthropicRow =
             TelemetryTestFixtures.telAnthropic1.copy(
                 messageId = MessageId("m-anthropic-norm"),
@@ -196,7 +208,128 @@ class TelemetrySummaryBuilderTest {
     }
 
     @Test
-    fun `buildChatSummary totalInputTokensNormalized mixes Anthropic and OpenAI semantics`() {
+    fun `buildMessageSummary totalInputTokensNormalized peaks across tool-loop hops`() {
+        val messageId = MessageId("m-tool-loop")
+        val hop1 =
+            TelemetryTestFixtures.telOpenAi1.copy(
+                id = TurnTelemetryId("tel-hop-1"),
+                messageId = messageId,
+                inputTokens = 20_000,
+            )
+        val hop2 =
+            TelemetryTestFixtures.telOpenAi1.copy(
+                id = TurnTelemetryId("tel-hop-2"),
+                messageId = messageId,
+                inputTokens = 26_240,
+            )
+
+        val summary =
+            TelemetrySummaryBuilder.buildMessageSummary(
+                messageId = messageId,
+                rows = listOf(hop1, hop2),
+            )
+
+        assertEquals(26_240, summary.totalInputTokensNormalized)
+        assertEquals(20_000 + 26_240, summary.billingInputTokensNormalized)
+        assertEquals(20_000 + 26_240, TelemetryInputTokenMetrics.sumNormalizedInputTokens(listOf(hop1, hop2)))
+    }
+
+    @Test
+    fun `buildMessageSummary peakCacheRead aligns with peak input hop not row sum`() {
+        val messageId = MessageId("m-cache-peak")
+        val hop1 =
+            TelemetryTestFixtures.telOpenAi1.copy(
+                id = TurnTelemetryId("tel-cache-peak-1"),
+                messageId = messageId,
+                inputTokens = 10_129,
+                cacheReadInputTokens = 7_552,
+            )
+        val hop2 =
+            TelemetryTestFixtures.telOpenAi1.copy(
+                id = TurnTelemetryId("tel-cache-peak-2"),
+                messageId = messageId,
+                inputTokens = 29_422,
+                cacheReadInputTokens = 10_880,
+            )
+        val hop3 =
+            TelemetryTestFixtures.telOpenAi1.copy(
+                id = TurnTelemetryId("tel-cache-peak-3"),
+                messageId = messageId,
+                inputTokens = 36_417,
+                cacheReadInputTokens = 0,
+            )
+
+        val summary =
+            TelemetrySummaryBuilder.buildMessageSummary(
+                messageId = messageId,
+                rows = listOf(hop1, hop2, hop3),
+            )
+
+        assertEquals(36_417, summary.totalInputTokensNormalized)
+        assertEquals(0, summary.peakCacheReadInputTokens)
+        assertEquals(7_552 + 10_880, summary.totalCacheReadInputTokens)
+    }
+
+    @Test
+    fun `buildChatSummary peakCacheRead sums per-message peak-aligned cache not row totals`() {
+        val messageId = MessageId("m-cache-chat-peak")
+        val hop1 =
+            TelemetryTestFixtures.telOpenAi1.copy(
+                id = TurnTelemetryId("tel-chat-cache-1"),
+                messageId = messageId,
+                chatId = ChatId("chat-cache-peak"),
+                inputTokens = 10_000,
+                cacheReadInputTokens = 7_000,
+            )
+        val hop2 =
+            TelemetryTestFixtures.telOpenAi1.copy(
+                id = TurnTelemetryId("tel-chat-cache-2"),
+                messageId = messageId,
+                chatId = ChatId("chat-cache-peak"),
+                inputTokens = 36_417,
+                cacheReadInputTokens = 0,
+            )
+
+        val summary =
+            TelemetrySummaryBuilder.buildChatSummary(
+                chatId = ChatId("chat-cache-peak"),
+                rows = listOf(hop1, hop2),
+            )
+
+        assertEquals(0, summary.peakCacheReadInputTokens)
+        assertEquals(7_000, summary.totalCacheReadInputTokens)
+    }
+
+    @Test
+    fun `buildChatSummary peakInputTokensNormalized sums per-message peaks not row totals`() {
+        val messageId = MessageId("m-tool-loop")
+        val hop1 =
+            TelemetryTestFixtures.telOpenAi1.copy(
+                id = TurnTelemetryId("tel-hop-1"),
+                messageId = messageId,
+                chatId = ChatId("chat-tool-loop"),
+                inputTokens = 20_000,
+            )
+        val hop2 =
+            TelemetryTestFixtures.telOpenAi1.copy(
+                id = TurnTelemetryId("tel-hop-2"),
+                messageId = messageId,
+                chatId = ChatId("chat-tool-loop"),
+                inputTokens = 26_240,
+            )
+
+        val summary =
+            TelemetrySummaryBuilder.buildChatSummary(
+                chatId = ChatId("chat-tool-loop"),
+                rows = listOf(hop1, hop2),
+            )
+
+        assertEquals(26_240, summary.peakInputTokensNormalized)
+        assertEquals(46_240, summary.totalInputTokensNormalized)
+    }
+
+    @Test
+    fun `buildChatSummary peakInputTokensNormalized mixes Anthropic and OpenAI semantics`() {
         val anthropicRow =
             TelemetryTestFixtures.telAnthropic1.copy(
                 messageId = MessageId("m-anthropic-mix"),
@@ -219,9 +352,37 @@ class TelemetrySummaryBuilderTest {
                 rows = listOf(anthropicRow, openAiRow),
             )
 
-        // Anthropic 800+16000+3000 = 19800; OpenAI 1000 (cache read already inside). Total 20800.
+        // Anthropic 800+16000+3000 = 19800; OpenAI 1000 (cache read already inside).
         assertEquals(800 + 1_000, summary.totalInputTokens)
+        assertEquals(19_800 + 1_000, summary.peakInputTokensNormalized)
         assertEquals(19_800 + 1_000, summary.totalInputTokensNormalized)
+    }
+
+    @Test
+    fun `cache hit rate stays row-sum based for tool-loop hops`() {
+        val messageId = MessageId("m-cache-tool-loop")
+        val hop1 =
+            TelemetryTestFixtures.telOpenAi1.copy(
+                id = TurnTelemetryId("tel-cache-hop-1"),
+                messageId = messageId,
+                inputTokens = 1_000,
+                cacheReadInputTokens = 400,
+            )
+        val hop2 =
+            TelemetryTestFixtures.telOpenAi1.copy(
+                id = TurnTelemetryId("tel-cache-hop-2"),
+                messageId = messageId,
+                inputTokens = 1_000,
+                cacheReadInputTokens = 400,
+            )
+
+        val summary =
+            TelemetrySummaryBuilder.buildMessageSummary(
+                messageId = messageId,
+                rows = listOf(hop1, hop2),
+            )
+
+        assertEquals(40.0, summary.cacheHitRatePercent)
     }
 
     @Test

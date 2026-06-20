@@ -483,6 +483,85 @@ class LlamaInferenceServiceImplTest {
             assertEquals(listOf(0, 2, 0), prevMessageCounts)
         }
 
+    @Test
+    fun `completeSingleTurn maps all AgentLoopRowKind variants correctly to DomainChatMessage`() =
+        runTest {
+            every { sessionManager.streamAssistantResponseWithOptions(any()) } returns
+                flowOf(GenerationEvent.Completed("Assistant text"))
+            val capturedHistories = mutableListOf<List<ChatMessage>>()
+            val service = createService(ModelType.FAST)
+
+            val sessionMessages = listOf(
+                // 1. SystemPrompt
+                AgentLoopMessage(id = "s1", role = Role.SYSTEM, content = "System Prompt Content", metadataJson = "null"),
+                // 2. UserText
+                AgentLoopMessage(id = "u1", role = Role.USER, content = "User Content", metadataJson = "null"),
+                // 3. CompactSummary
+                AgentLoopMessage(id = "compact-summary-001", role = Role.ASSISTANT, content = "Summary Content", metadataJson = "null"),
+                // 4. EngineInternal
+                AgentLoopMessage(
+                    id = "budget",
+                    role = Role.ASSISTANT,
+                    content = "<system_context>Tool budget: 1/35 used.</system_context>",
+                    metadataJson = """{"agent_tool_budget":true}""",
+                ),
+                // 5. ToolResult (mapped via ToolEnvelopeParserPort)
+                AgentLoopMessage(
+                    id = "t1",
+                    role = Role.USER,
+                    content = """{"result":"ok"}""",
+                    metadataJson = """{"call_id":"call_1"}""",
+                ),
+                // 6. AssistantText
+                AgentLoopMessage(id = "a1", role = Role.ASSISTANT, content = "Assistant Content", metadataJson = "null"),
+                // 7. Null/blank assistant -> fallback to fallback message
+                AgentLoopMessage(id = "a2", role = Role.ASSISTANT, content = "  ", metadataJson = "null")
+            )
+
+            service.completeSingleTurn(
+                sessionMessages = sessionMessages,
+                systemPrompt = "System",
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options = GenerationOptions(reasoningBudget = 0, modelType = ModelType.FAST),
+            )
+
+            coVerify(atLeast = 1) { sessionManager.setHistory(capture(capturedHistories)) }
+            val history = capturedHistories.last()
+
+            assertEquals(7, history.size)
+
+            // 1. SystemPrompt -> SYSTEM
+            assertEquals(Role.SYSTEM, history[0].role)
+            assertEquals("System Prompt Content", history[0].content)
+
+            // 2. UserText -> USER
+            assertEquals(Role.USER, history[1].role)
+            assertEquals("User Content", history[1].content)
+
+            // 3. CompactSummary -> ASSISTANT
+            assertEquals(Role.ASSISTANT, history[2].role)
+            assertEquals("Summary Content", history[2].content)
+
+            // 4. EngineInternal -> SYSTEM
+            assertEquals(Role.SYSTEM, history[3].role)
+            assertEquals("<system_context>Tool budget: 1/35 used.</system_context>", history[3].content)
+
+            // 5. ToolResult -> USER (formatted with fake parser)
+            assertEquals(Role.USER, history[4].role)
+            assertEquals("<tool_result>{\"result\":\"ok\"}</tool_result>", history[4].content)
+
+            // 6. AssistantText -> ASSISTANT
+            assertEquals(Role.ASSISTANT, history[5].role)
+            assertEquals("Assistant Content", history[5].content)
+
+            // 7. Null/blank assistant -> fallback to original Role/Content
+            assertEquals(Role.ASSISTANT, history[6].role)
+            assertEquals("  ", history[6].content)
+        }
+
     private suspend fun LlamaInferenceServiceImpl.completeTurnForTest(
         messages: List<AgentLoopMessage>,
         systemPrompt: String,

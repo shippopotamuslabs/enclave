@@ -27,10 +27,26 @@ data class ChatTelemetrySummary(
     val averageTtftMs: Long?,
     val averageOutputTokensPerSecond: Double?,
     val totalInputTokens: Int,
+    /**
+     * Sum of per-message peak normalized prompt size. Tool-loop assistant turns emit one telemetry
+     * row per API hop, each reporting the full prompt for that request; summing those rows
+     * double-counts overlapping context. For each distinct [TurnTelemetry.messageId] we take
+     * max([TelemetrySummaryBuilder.normalizedInputTokens]) and sum those peaks so chat-level
+     * "Input tokens" reflects total context exposure across turns without overlap inflation.
+     */
+    val peakInputTokensNormalized: Int,
+    /** Sum of [TelemetrySummaryBuilder.normalizedInputTokens] across every API row (billing rollup). */
     val totalInputTokensNormalized: Int,
     val totalOutputTokens: Int,
     val totalReasoningTokens: Int,
+    /**
+     * Sum of per-message peak-aligned cache read (cache read on the largest prompt hop per message).
+     * Not comparable to summing cache read across all tool-loop API calls.
+     */
+    val peakCacheReadInputTokens: Int,
+    /** Sum of [TurnTelemetry.cacheReadInputTokens] across every API row (billing rollup). */
     val totalCacheReadInputTokens: Int,
+    val peakCacheWriteInputTokens: Int,
     val totalCacheWriteInputTokens: Int,
     val cacheHitRatePercent: Double?,
     val providerBreakdown: List<ProviderTelemetryBreakdown>,

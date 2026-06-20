@@ -1,9 +1,13 @@
 package com.browntowndev.enclave.core.data.local
 
 import androidx.room.Room
+import androidx.room.testing.MigrationTestHelper
+import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.test.core.app.ApplicationProvider
+import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
@@ -364,7 +368,7 @@ class EnclaveDatabaseMigrationTest {
 
     @Test
     @org.junit.jupiter.api.DisplayName("LV-DB-VERSION-001")
-    fun lvDbVersion001_databaseVersionIsThree() {
+    fun lvDbVersion001_databaseVersionIsFour() {
         val db =
             Room
                 .inMemoryDatabaseBuilder(
@@ -374,9 +378,91 @@ class EnclaveDatabaseMigrationTest {
                 .build()
 
         try {
-            assertEquals(3, db.openHelper.writableDatabase.version)
+            assertEquals(5, db.openHelper.writableDatabase.version)
         } finally {
             db.close()
         }
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("SCN-MIGRATION-3-4-001")
+    fun scnMigration3To4001_databaseMigration3To4SuccessfullyAddsColumn() {
+        val helper =
+            MigrationTestHelper(
+                InstrumentationRegistry.getInstrumentation(),
+                EnclaveDatabase::class.java,
+                emptyList(),
+                FrameworkSQLiteOpenHelperFactory(),
+            )
+        val db = helper.createDatabase("migration-test-db", 3)
+        db.close()
+
+        val migratedDb =
+            helper.runMigrationsAndValidate(
+                "migration-test-db",
+                4,
+                true,
+                EnclaveDatabaseMigrations.MIGRATION_3_4,
+            )
+
+        assertEquals(4, migratedDb.version)
+        val cursor = migratedDb.query("PRAGMA table_info('api_model_configurations')")
+        var columnExists = false
+        var columnType = ""
+        var defaultValue: String? = null
+        cursor.use {
+            while (it.moveToNext()) {
+                val name = it.getString(it.getColumnIndexOrThrow("name"))
+                if (name == "openrouter_preferred_provider") {
+                    columnExists = true
+                    columnType = it.getString(it.getColumnIndexOrThrow("type"))
+                    defaultValue = it.getString(it.getColumnIndexOrThrow("dflt_value"))
+                }
+            }
+        }
+        assertTrue(columnExists)
+        assertEquals("TEXT", columnType.uppercase())
+        assertNull(defaultValue)
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("SCN-MIGRATION-4-5-001")
+    fun scnMigration4To5001_databaseMigration4To5SuccessfullyAddsColumn() {
+        val helper =
+            MigrationTestHelper(
+                InstrumentationRegistry.getInstrumentation(),
+                EnclaveDatabase::class.java,
+                emptyList(),
+                FrameworkSQLiteOpenHelperFactory(),
+            )
+        val db = helper.createDatabase("migration-test-db-4-5", 4)
+        db.close()
+
+        val migratedDb =
+            helper.runMigrationsAndValidate(
+                "migration-test-db-4-5",
+                5,
+                true,
+                EnclaveDatabaseMigrations.MIGRATION_4_5,
+            )
+
+        assertEquals(5, migratedDb.version)
+        val cursor = migratedDb.query("PRAGMA table_info('api_model_configurations')")
+        var columnExists = false
+        var columnType = ""
+        var defaultValue: String? = null
+        cursor.use {
+            while (it.moveToNext()) {
+                val name = it.getString(it.getColumnIndexOrThrow("name"))
+                if (name == "include_reasoning_content_on_request") {
+                    columnExists = true
+                    columnType = it.getString(it.getColumnIndexOrThrow("type"))
+                    defaultValue = it.getString(it.getColumnIndexOrThrow("dflt_value"))
+                }
+            }
+        }
+        assertTrue(columnExists)
+        assertEquals("INTEGER", columnType.uppercase())
+        assertEquals("0", defaultValue)
     }
 }

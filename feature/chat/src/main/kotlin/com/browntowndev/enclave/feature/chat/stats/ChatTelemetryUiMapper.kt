@@ -45,11 +45,23 @@ class ChatTelemetryUiMapper
                         summaryMetric("Total cost", formatCost(summary.totalCostUsd, hasAnyCost = summary.totalCostUsd > BigDecimal.ZERO)),
                         summaryMetric("Average TTFT", formatTtft(summary.averageTtftMs)),
                         summaryMetric("Average output speed", formatSpeed(summary.averageOutputTokensPerSecond)),
-                        summaryMetric("Input tokens", formatInt(summary.totalInputTokensNormalized)),
+                        summaryMetric("Input tokens", formatInt(summary.peakInputTokensNormalized)),
+                        summaryMetric(
+                            "Total prompt tokens (all API calls)",
+                            formatInt(summary.totalInputTokensNormalized),
+                        ),
                         summaryMetric("Output tokens", summary.totalOutputTokens.toString()),
                         summaryMetric("Reasoning tokens", summary.totalReasoningTokens.toString()),
-                        summaryMetric("Cache read tokens", formatInt(summary.totalCacheReadInputTokens)),
-                        summaryMetric("Cache write tokens", formatInt(summary.totalCacheWriteInputTokens)),
+                        summaryMetric("Cache read tokens", formatInt(summary.peakCacheReadInputTokens)),
+                        summaryMetric(
+                            "Total cache read (all API calls)",
+                            formatInt(summary.totalCacheReadInputTokens),
+                        ),
+                        summaryMetric("Cache write tokens", formatInt(summary.peakCacheWriteInputTokens)),
+                        summaryMetric(
+                            "Total cache write (all API calls)",
+                            formatInt(summary.totalCacheWriteInputTokens),
+                        ),
                         summaryMetric("Cache hit rate", formatPercent(summary.cacheHitRatePercent)),
                     ),
                 providerBreakdownRows =
@@ -100,17 +112,54 @@ class ChatTelemetryUiMapper
                     ),
                     responseMetric(
                         "Cache read input tokens",
-                        formatInt(summary.totalCacheReadInputTokens ?: single?.cacheReadInputTokens),
+                        formatInt(
+                            summary.peakCacheReadInputTokens ?: single?.cacheReadInputTokens,
+                        ),
                     ),
                     responseMetric(
                         "Cache write input tokens",
-                        formatInt(summary.totalCacheWriteInputTokens ?: single?.cacheCreationInputTokens),
+                        formatInt(
+                            summary.peakCacheWriteInputTokens
+                                ?: single?.cacheWriteInputTokens
+                                ?: single?.cacheCreationInputTokens,
+                        ),
                     ),
                     responseMetric("Cache hit rate", formatPercent(summary.cacheHitRatePercent)),
                     responseMetric("Cost", formatCost(summary.totalCostUsd, summary.costStatus)),
                     responseMetric("Cost status", formatCostStatus(summary.costStatus)),
                 )
             val costSource = rows.singleOrNull()?.costSource
+            if (summary.requestCount > 1) {
+                val billingPromptTotal = summary.billingInputTokensNormalized
+                if (billingPromptTotal != null &&
+                    billingPromptTotal != summary.totalInputTokensNormalized
+                ) {
+                    metrics.add(
+                        responseMetric(
+                            "Total prompt tokens (all API calls)",
+                            formatInt(billingPromptTotal),
+                        ),
+                    )
+                }
+                val billingCacheRead = summary.totalCacheReadInputTokens
+                if (billingCacheRead != null && billingCacheRead != summary.peakCacheReadInputTokens) {
+                    metrics.add(
+                        responseMetric(
+                            "Total cache read (all API calls)",
+                            formatInt(billingCacheRead),
+                        ),
+                    )
+                }
+                val billingCacheWrite = summary.totalCacheWriteInputTokens
+                if (billingCacheWrite != null && billingCacheWrite != summary.peakCacheWriteInputTokens) {
+                    metrics.add(
+                        responseMetric(
+                            "Total cache write (all API calls)",
+                            formatInt(billingCacheWrite),
+                        ),
+                    )
+                }
+            }
             if (costSource == TelemetryCostSource.SAVED_MODEL_PRICING) {
                 metrics.add(responseMetric("Cost source", "Saved model pricing"))
             }

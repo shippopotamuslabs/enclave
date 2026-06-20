@@ -11,6 +11,7 @@ import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.util.FakeToolStreamGatePort
 import com.browntowndev.enclave.feature.inference.openai.PreRetrievalContextSidecar
 import com.browntowndev.enclave.feature.inference.openai.StreamedOpenAiResponse
+import com.browntowndev.enclave.feature.inference.appendonly.SidecarUserContentEmbedder
 import com.openai.client.OpenAIClient
 import com.openai.models.chat.completions.ChatCompletionCreateParams
 import com.openai.models.chat.completions.ChatCompletionMessageParam
@@ -19,6 +20,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 
 /**
@@ -161,8 +163,8 @@ class XaiPromptCacheLiveContextTest {
             val turnTwoWire = turnTwoFirst.messages()
             assertTrue(
                 turnTwoWire.any { message ->
-                    message.isSystem() &&
-                        message.asSystem().content().asText() == ledgerSidecar(1)
+                    message.isUser() &&
+                        message.asUser().content().asText().contains(ledgerSidecar(1))
                 },
                 "prior sidecars are part of the xAI messages[] prefix and must be replayed",
             )
@@ -171,9 +173,9 @@ class XaiPromptCacheLiveContextTest {
             )
             assertTrue(
                 turnTwoWire.any { message ->
-                    message.isSystem() &&
+                    message.isUser() &&
                         message
-                            .asSystem()
+                            .asUser()
                             .content()
                             .asText()
                             .contains("advertised_tools")
@@ -204,20 +206,10 @@ class XaiPromptCacheLiveContextTest {
             )
             val turnOneWire = captured.last().messages()
             val turnOneEligible = turnOneWire.cacheEligibleWire()
-            assertEquals(
-                "Question needing search?",
-                turnOneWire
-                    .first { it.isUser() }
-                    .asUser()
-                    .content()
-                    .asText(),
-            )
-            assertTrue(
-                turnOneWire.any { message ->
-                    message.isSystem() &&
-                        PreRetrievalContextSidecar.isSidecarText(message.asSystem().content().asText())
-                },
-            )
+            val userText = turnOneWire.first { it.isUser() }.asUser().content().asText()
+            assertTrue(userText.startsWith("Question needing search?"))
+            assertTrue(userText.contains("[Sidecar-"))
+            assertTrue(userText.contains("RELEVANT WEB SEARCH RESULTS"))
 
             service.resetAppendOnlyForNewPrompt()
 
@@ -357,11 +349,20 @@ class XaiPromptCacheLiveContextTest {
                 "tools[] must be byte-stable when toolChoice flips to none",
             )
             for (index in preTool.indices) {
-                assertEquals(
-                    preTool[index].asWireText(),
-                    postTool[index].asWireText(),
-                    "xAI cache requires request[$index] bytes unchanged after tools; was invalidated",
-                )
+                val preText = preTool[index].asWireText()
+                val postText = postTool[index].asWireText()
+                if (index == preTool.indices.last) {
+                    assertTrue(
+                        postText.startsWith(preText),
+                        "xAI cache requires request[$index] prefix unchanged after tools; was: $postText, expected prefix: $preText"
+                    )
+                } else {
+                    assertEquals(
+                        preText,
+                        postText,
+                        "xAI cache requires request[$index] bytes unchanged after tools; was invalidated",
+                    )
+                }
             }
         }
 
@@ -495,16 +496,14 @@ class XaiPromptCacheLiveContextTest {
         toolIndex: String? = null,
     ): String =
         buildString {
-            appendLine("Context management sidecars:")
             appendLine("State ledger JSON: {\"turn\":$ledgerTurn}")
             toolIndex?.let { appendLine("Tool context index JSON: $it") }
         }.trimEnd()
 
     private fun capturingXaiService(captured: MutableList<ChatCompletionCreateParams>): BaseOpenAiSdkInferenceService =
-        object : BaseOpenAiSdkInferenceService(
+        object : XaiInferenceServiceImpl(
             client = mockk<OpenAIClient>(),
             modelId = "grok-4.3",
-            provider = "XAI",
             modelType = ModelType.FAST,
             loggingPort = loggingPort,
             toolStreamGatePort = FakeToolStreamGatePort(),
@@ -531,17 +530,98 @@ class XaiPromptCacheLiveContextTest {
         }
 
     private fun List<ChatCompletionMessageParam>.cacheEligibleWire(): List<String> =
-        filterNot { it.isVolatileSidecar() }.map { it.toCacheEligibleWireLine() }
+        map { it.toCacheEligibleWireLineClean() }
+
+    private fun ChatCompletionMessageParam.toCacheEligibleWireLineClean(): String =
+        when {
+            isSystem() -> "SYSTEM:${asSystem().content().asText()}"
+            isUser() -> {
+                val cleanText = SidecarUserContentEmbedder.stripSidecarBlocks(asUser().content().asText())
+                "USER:$cleanText"
+            }
+            isAssistant() -> {
+                val assistant = asAssistant()
+                val tools =
+                    if (assistant.toolCalls().isPresent) {
+                        assistant.toolCalls().get().joinToString { tc ->
+                            tc.asFunction().function().name()
+                        }
+                    } else {
+                        ""
+                    }
+                val text =
+                    if (assistant.content().isPresent && assistant.content().get().isText()) {
+                        assistant.content().get().asText()
+                    } else {
+                        ""
+                    }
+                "ASSISTANT:text=$text;tools=$tools"
+            }
+            isTool() -> "TOOL:${asTool().toolCallId()}:${asTool().content().asText()}"
+            else -> toString()
+        }
 
     private fun ChatCompletionMessageParam.isVolatileSidecar(): Boolean {
         if (!isSystem()) return false
         val text = asSystem().content().asText()
         return PreRetrievalContextSidecar.isSidecarText(text) ||
             text.startsWith("State ledger JSON:") ||
-            text.startsWith("Context management sidecars:") ||
             text.startsWith("Tool context index JSON:") ||
-            text.startsWith("File context index JSON:") ||
-            text.startsWith("Cache hints:")
+            text.startsWith("File context index JSON:")
+    }
+
+    private fun ChatCompletionMessageParam.isStableSessionSystemMessage(): Boolean =
+        isSystem() && !isVolatileSidecar()
+
+    @Test
+    @DisplayName("SC-VOL-01 prefix set after format cleanup")
+    fun SC_VOL_01_volatileSidecarDetectionAlignment() {
+        fun systemMessage(text: String): ChatCompletionMessageParam =
+            ChatCompletionMessageParam.ofSystem(
+                com.openai.models.chat.completions.ChatCompletionSystemMessageParam
+                    .builder()
+                    .content(text)
+                    .build(),
+            )
+
+        assertTrue(systemMessage("""State ledger JSON: {"k":1}""").isVolatileSidecar())
+        assertFalse(systemMessage("Context management sidecars:").isVolatileSidecar())
+        assertFalse(systemMessage("Cache hints: breakpoint:system").isVolatileSidecar())
+    }
+
+    @Test
+    @DisplayName("SC-VOL-02 pre-retrieval sidecar")
+    fun SC_VOL_02_preRetrievalVolatileDetectionUnchanged() {
+        val text = "${PreRetrievalContextSidecar.MARKER}\nmemory hits"
+        val message =
+            ChatCompletionMessageParam.ofSystem(
+                com.openai.models.chat.completions.ChatCompletionSystemMessageParam
+                    .builder()
+                    .content(text)
+                    .build(),
+            )
+
+        assertTrue(message.isVolatileSidecar())
+        assertFalse(message.isStableSessionSystemMessage())
+    }
+
+    @Test
+    @DisplayName("SC-FMT-MUT sidecar string forbidden patterns")
+    fun SC_FMT_MUT_xaiDuplicateBuilderForbiddenPatterns() {
+        val side =
+            buildContextSidecars(
+                ledgerTurn = 1,
+                toolIndex = """{"advertised_tools":["web_search"]}""",
+            )
+        assertSidecarWireFormatCompliant(side)
+    }
+
+    private fun assertSidecarWireFormatCompliant(side: String?) {
+        if (side == null) return
+        assertFalse(side.contains("Context management sidecars:"))
+        assertFalse(side.contains("Cache hints:"))
+        assertFalse(Regex("""\|(fresh|stale)\|""").containsMatchIn(side))
+        assertFalse(Regex("""\[(TOOL_OUTPUT|FILE_OUTLINE)\|turn:""").containsMatchIn(side))
     }
 
     private fun ChatCompletionMessageParam.toCacheEligibleWireLine(): String =

@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.feature.inference
 
+import com.browntowndev.enclave.domain.model.inference.AgentLoopMessage
 import com.browntowndev.enclave.domain.model.inference.AgentLoopWireKeys
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -20,6 +21,23 @@ internal object EngineInternalMessageMapper {
     fun isEngineInternalMessage(metadataJson: String): Boolean {
         val metadata = metadataJson.toMetadataJsonObject() ?: return false
         return ENGINE_INTERNAL_METADATA_KEYS.any { metadata.containsKey(it) }
+    }
+
+    /**
+     * Messages excluded from committed provider transcripts and append-only sync accounting.
+     * They may still be sent on the provider wire within a live agent turn.
+     */
+    fun isExcludedFromCommittedProviderTranscript(message: AgentLoopMessage): Boolean {
+        if (isEngineInternalMessage(message.metadataJson)) {
+            return true
+        }
+        val contentObj =
+            runCatching {
+                Json.parseToJsonElement(message.content).jsonObject
+            }.getOrNull()
+        return contentObj != null &&
+            contentObj.size == 1 &&
+            contentObj.containsKey(AgentLoopWireKeys.ENGINE_PAYLOAD_JSON_KEY)
     }
 
     /**

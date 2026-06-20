@@ -167,32 +167,138 @@ class XaiPromptCacheRoutingTest {
         modelId: String,
         provider: String,
     ): BaseOpenAiSdkInferenceService =
-        object : BaseOpenAiSdkInferenceService(
-            client = mockk<OpenAIClient>(),
-            modelId = modelId,
-            provider = provider,
-            modelType = ModelType.FAST,
-            loggingPort = loggingPort,
-            toolStreamGatePort = FakeToolStreamGatePort(),
-        ) {
-            override val tag: String = "TestXai"
-
-            override suspend fun streamChatCompletions(
-                params: ChatCompletionCreateParams,
-                chatId: ChatId?,
-                userMessageId: MessageId?,
-                assistantMessageId: MessageId?,
-                emitEvent: suspend (InferenceEvent) -> Unit,
-            ): StreamedOpenAiResponse {
-                capturedParams.add(params)
-                return StreamedOpenAiResponse(
-                    emittedAny = true,
-                    functionCalls = emptyList(),
-                    responseId = "resp_1",
-                    providerToolCallIds = emptyList(),
-                    providerToolItemIds = emptyList(),
-                    assistantMessageText = "mock-response",
-                )
+        when (provider) {
+            "XAI" -> object : XaiInferenceServiceImpl(
+                client = mockk<OpenAIClient>(),
+                modelId = modelId,
+                modelType = ModelType.FAST,
+                loggingPort = loggingPort,
+                toolStreamGatePort = FakeToolStreamGatePort(),
+            ) {
+                override suspend fun streamChatCompletions(
+                    params: ChatCompletionCreateParams,
+                    chatId: ChatId?,
+                    userMessageId: MessageId?,
+                    assistantMessageId: MessageId?,
+                    emitEvent: suspend (InferenceEvent) -> Unit,
+                ): StreamedOpenAiResponse {
+                    capturedParams.add(params)
+                    return StreamedOpenAiResponse(
+                        emittedAny = true,
+                        functionCalls = emptyList(),
+                        responseId = "resp_1",
+                        providerToolCallIds = emptyList(),
+                        providerToolItemIds = emptyList(),
+                        assistantMessageText = "mock-response",
+                    )
+                }
             }
+            "OPENROUTER" -> object : OpenRouterInferenceServiceImpl(
+                client = mockk<OpenAIClient>(),
+                modelId = modelId,
+                modelType = ModelType.FAST,
+                openRouterRouting = com.browntowndev.enclave.domain.model.config.OpenRouterRoutingConfiguration(),
+                loggingPort = loggingPort,
+                toolStreamGatePort = FakeToolStreamGatePort(),
+            ) {
+                override suspend fun streamChatCompletions(
+                    params: ChatCompletionCreateParams,
+                    chatId: ChatId?,
+                    userMessageId: MessageId?,
+                    assistantMessageId: MessageId?,
+                    emitEvent: suspend (InferenceEvent) -> Unit,
+                ): StreamedOpenAiResponse {
+                    capturedParams.add(params)
+                    return StreamedOpenAiResponse(
+                        emittedAny = true,
+                        functionCalls = emptyList(),
+                        responseId = "resp_1",
+                        providerToolCallIds = emptyList(),
+                        providerToolItemIds = emptyList(),
+                        assistantMessageText = "mock-response",
+                    )
+                }
+            }
+            else -> object : BaseOpenAiSdkInferenceService(
+                client = mockk<OpenAIClient>(),
+                modelId = modelId,
+                provider = provider,
+                modelType = ModelType.FAST,
+                loggingPort = loggingPort,
+                toolStreamGatePort = FakeToolStreamGatePort(),
+            ) {
+                override val tag: String = "TestXai"
+
+                override suspend fun streamChatCompletions(
+                    params: ChatCompletionCreateParams,
+                    chatId: ChatId?,
+                    userMessageId: MessageId?,
+                    assistantMessageId: MessageId?,
+                    emitEvent: suspend (InferenceEvent) -> Unit,
+                ): StreamedOpenAiResponse {
+                    capturedParams.add(params)
+                    return StreamedOpenAiResponse(
+                        emittedAny = true,
+                        functionCalls = emptyList(),
+                        responseId = "resp_1",
+                        providerToolCallIds = emptyList(),
+                        providerToolItemIds = emptyList(),
+                        assistantMessageText = "mock-response",
+                    )
+                }
+            }
+        }
+
+    @Test
+    fun completeSingleTurn_openRouterDeepSeekModel_attachesReasoningContentAndSuppliesPlaceholder(): Unit =
+        runTest {
+            val capturedParams = mutableListOf<ChatCompletionCreateParams>()
+            val service = openRouterSingleTurnService(capturedParams, modelId = "deepseek/deepseek-v4-flash")
+
+            service.completeSingleTurn(
+                sessionMessages =
+                    listOf(
+                        AgentLoopMessage(id = "u1", role = Role.USER, content = "Search"),
+                        AgentLoopMessage(
+                            id = "a1",
+                            role = Role.ASSISTANT,
+                            content = "",
+                            metadataJson =
+                                """
+                                {
+                                  "provider_reasoning": {"reasoning_content": "let's search"},
+                                  "raw_tool_calls": [{"id": "call_1", "name": "web_search", "arguments_json": "{}"}]
+                                }
+                                """.trimIndent(),
+                        ),
+                        AgentLoopMessage(
+                            id = "t1",
+                            role = Role.USER,
+                            content = """{"results":[]}""",
+                            metadataJson = """{"call_id":"call_1"}""",
+                        ),
+                    ),
+                systemPrompt = "System prompt",
+                contextSidecars = null,
+                availableTools = emptyList(),
+                allowToolCall = false,
+                onTextToken = {},
+                onThinkingToken = {},
+                options =
+                    GenerationOptions(
+                        reasoningBudget = 1024,
+                        includeReasoningContentOnRequest = true,
+                        chatId = ChatId("chat-123"),
+                    ),
+            )
+
+            val params = capturedParams.single()
+            val messages = params.messages()
+            val assistantMessage = messages.first { it.isAssistant() }.asAssistant()
+
+            val reasoningContent = assistantMessage._additionalProperties()["reasoning_content"]?.convert(String::class.java)
+            assertEquals("let's search", reasoningContent)
+            assertTrue(assistantMessage.content().isPresent)
+            assertEquals(".", assistantMessage.content().get().asText())
         }
 }

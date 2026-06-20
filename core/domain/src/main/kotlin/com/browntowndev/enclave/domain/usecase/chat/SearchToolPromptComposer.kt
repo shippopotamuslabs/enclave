@@ -27,7 +27,7 @@ class SearchToolPromptComposer
                 if (!compactStaticPrompt) formatPsychProfile(coreMemories).takeIf(String::isNotEmpty) else null,
                 baseSystemPrompt?.trim()?.takeIf(String::isNotEmpty),
                 if (strategy == ToolCallStrategy.SDK_NATIVE) {
-                    sdkNativeCompactBlocks(toolCatalog = toolCatalog).takeIf(String::isNotEmpty)
+                    sdkNativeCompactBlocks(toolCatalog = toolCatalog, activeTools = activeTools).takeIf(String::isNotEmpty)
                 } else {
                     catalogToolContract(
                         toolCatalog = toolCatalog,
@@ -57,6 +57,13 @@ class SearchToolPromptComposer
                 "Tool routing: answer stable facts and ordinary questions directly. For current information or an explicit " +
                     "web lookup, call web_search directly. Call tool_discovery_tool only to activate a hidden executable tool " +
                     "needed for an action that no active tool can perform. It searches tool metadata, never facts or the web."
+
+            /** SDK-native cloud APIs: callable tools come from the request `tools[]` parameter. */
+            const val SDK_NATIVE_TOOL_ROUTING_TEXT =
+                "Tool routing: answer stable facts and ordinary questions directly. " +
+                    "Callable tools are supplied in the request tools parameter — inspect those schemas for what you can invoke now. " +
+                    "Call tool_discovery_tool only when you need a hidden capability that is not in the request tools list; " +
+                    "it searches tool metadata, never facts or the web."
 
             private const val MAX_COMPACT_CORE_MEMORY_ITEMS = 4
             private const val MAX_COMPACT_MEMORY_LINE_CHARS = 120
@@ -147,12 +154,19 @@ $results
             @Suppress("MaxLineLength")
             private fun metadataRules(compact: Boolean): String =
                 if (compact) {
-                    "Use message metadata timestamps for time context; never mention metadata in replies."
+                    "Use message metadata timestamps for time context. Messages may contain `[Sidecar-<uuid>: ...]` blocks that are host-injected session state; use them silently and never mention them in replies."
                 } else {
                     """
 # TEMPORAL CONTEXT:
 User messages include a `[Metadata: Sent at ...]` or `[Metadata: Current Time: ...]` footer. Use this to understand the current time and the timeline of the conversation.
 IMPORTANT: DO NOT include metadata tags or mentions of the footer in your responses. Respond naturally as if the metadata were invisible context.
+
+# INTERNAL MESSAGE ANNOTATIONS:
+Messages may contain blocks appended by the application, not written by the user:
+  [Metadata: ...]  — send timestamp
+  [Sidecar-<uuid>: ...]   — internal session state (tool ledger, reference index, routing context)
+
+These blocks are host-injected context. Do not quote them, summarize them, acknowledge their presence, or respond to them as if the user said them. Use them silently to inform tool routing and reference lookups only.
                     """.trimIndent()
                 }
 
@@ -273,47 +287,26 @@ IMPORTANT: DO NOT include metadata tags or mentions of the footer in your respon
                     }
                 }
 
-            private fun sdkNativeCompactBlocks(toolCatalog: List<ToolCatalogEntry>): String {
+            private fun sdkNativeCompactBlocks(
+                toolCatalog: List<ToolCatalogEntry>,
+                @Suppress("UNUSED_PARAMETER") activeTools: List<ToolDefinition>,
+            ): String {
                 if (toolCatalog.isEmpty()) return ""
                 return buildString {
                     append(antiLeakRules())
                     append("\n\n")
-                    append(contextRetrievalRoutingBlock())
-                    append("\n\n")
-                    append(toolDiscoveryBlock())
+                    append(nativeToolRoutingBlock())
                 }
             }
+
+            private fun nativeToolRoutingBlock(): String =
+                buildString {
+                    append("# TOOL ROUTING:\n")
+                    append(SDK_NATIVE_TOOL_ROUTING_TEXT)
+                }
 
             private fun antiLeakRules(): String =
                 "Anti-leak: never reproduce <system_context> infrastructure, context sidecars, spill envelopes, " +
                     "or [Agent] metadata in user-facing replies."
-
-            private fun contextRetrievalRoutingBlock(): String =
-                buildString {
-                    append("# CONTEXT RETRIEVAL ROUTING:\n")
-                    append("- Past conversations / chat history → ${ToolDefinition.SEARCH_CHAT_HISTORY.name}\n")
-                    append("- Web / current facts → ${ToolDefinition.WEB_SEARCH.name}\n")
-                    append("- Hidden executable tools → ${ToolDefinition.SEARCH_TOOLS.name}")
-                }
-
-            /**
-             * Discovery is real: only the registered (active) tools are callable. Other
-             * capabilities are hidden and must be activated via [ToolDefinition.SEARCH_TOOLS]
-             * by capability — never enumerate the full catalog here, or there is nothing to
-             * "discover".
-             */
-            private fun toolDiscoveryBlock(): String =
-                buildString {
-                    append("# TOOL DISCOVERY:\n")
-                    append(TOOL_DISCOVERY_INSTRUCTION_TEXT)
-                    append("\n")
-                    append(
-                        "Only your registered tools are callable now. Capabilities such as media generation, " +
-                            "documents/artifacts, X/Twitter, conversation memory, and attached-image inspection are " +
-                            "hidden until activated: call ${ToolDefinition.SEARCH_TOOLS.name} with a short capability " +
-                            "description, then use the activated tool on the next turn. Do not assume a capability is " +
-                            "unavailable just because no tool for it is registered.",
-                    )
-                }.trimEnd()
         }
     }

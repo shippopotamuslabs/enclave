@@ -28,6 +28,7 @@ class OpenAiStreamUsageAccumulatorTest {
         every { usage.promptTokensDetails() } returns Optional.of(promptDetails)
         every { usage._additionalProperties() } returns emptyMap()
         every { promptDetails.cachedTokens() } returns Optional.of(9_500L)
+        every { promptDetails._additionalProperties() } returns emptyMap()
         every { event.choices() } returns emptyList()
 
         accumulateOpenAiStreamUsage(event, state)
@@ -49,6 +50,7 @@ class OpenAiStreamUsageAccumulatorTest {
         every { usage.inputTokensDetails() } returns inputDetails
         every { usage.outputTokensDetails() } returns outputDetails
         every { inputDetails.cachedTokens() } returns 9_500L
+        every { inputDetails._additionalProperties() } returns emptyMap()
         every { outputDetails.reasoningTokens() } returns 12L
         every { usage._additionalProperties() } returns emptyMap()
 
@@ -74,6 +76,7 @@ class OpenAiStreamUsageAccumulatorTest {
         every { usage.inputTokensDetails() } returns inputDetails
         every { usage.outputTokensDetails() } returns outputDetails
         every { inputDetails.cachedTokens() } returns 400L
+        every { inputDetails._additionalProperties() } returns emptyMap()
         every { outputDetails.reasoningTokens() } returns 0L
         every { usage._additionalProperties() } returns emptyMap()
 
@@ -123,6 +126,7 @@ class OpenAiStreamUsageAccumulatorTest {
         every { usage.promptTokensDetails() } returns Optional.of(promptDetails)
         every { usage._additionalProperties() } returns emptyMap()
         every { promptDetails.cachedTokens() } returns Optional.of(9_500L)
+        every { promptDetails._additionalProperties() } returns emptyMap()
         every { event.choices() } returns emptyList()
 
         accumulateOpenAiStreamUsage(event, state)
@@ -166,4 +170,187 @@ class OpenAiStreamUsageAccumulatorTest {
         every { event.choices() } returns emptyList()
         return event
     }
+
+    @Test
+    fun testRealJsonDeserialization() {
+        val json = """
+            {
+              "prompt_tokens": 12000,
+              "completion_tokens": 50,
+              "total_tokens": 12050,
+              "prompt_tokens_details": {
+                "cached_tokens": 9500
+              }
+            }
+        """.trimIndent()
+        val mapper = com.fasterxml.jackson.databind.ObjectMapper()
+        val usage = mapper.readValue(json, CompletionUsage::class.java)
+        assertEquals(12000L, usage.promptTokens())
+        assertEquals(50L, usage.completionTokens())
+        val detailsOpt = usage.promptTokensDetails()
+        org.junit.jupiter.api.Assertions.assertTrue(detailsOpt.isPresent)
+        val details = detailsOpt.get()
+        val cachedOpt = details.cachedTokens()
+        org.junit.jupiter.api.Assertions.assertTrue(cachedOpt.isPresent)
+        assertEquals(9500L, cachedOpt.get())
+    }
+
+    @Test
+    fun testRealChunkDeserialization() {
+        val json = """
+            {
+              "id": "gen-123",
+              "choices": [],
+              "usage": {
+                "prompt_tokens": 12000,
+                "completion_tokens": 50,
+                "total_tokens": 12050,
+                "prompt_tokens_details": {
+                  "cached_tokens": 9500
+                }
+              }
+            }
+        """.trimIndent()
+        val mapper = com.fasterxml.jackson.databind.ObjectMapper()
+        val chunk = mapper.readValue(json, ChatCompletionChunk::class.java)
+        val state = OpenAiStreamUsageAccumulator()
+        accumulateOpenAiStreamUsage(chunk, state)
+        assertEquals(12000, state.inputTokens)
+        assertEquals(50, state.outputTokens)
+        assertEquals(9500, state.cacheReadInputTokens)
+    }
+
+    @Test
+    fun testRealChunkDeserializationWithCacheWriteTokens() {
+        val json = """
+            {
+              "id": "gen-123",
+              "choices": [],
+              "usage": {
+                "prompt_tokens": 12000,
+                "completion_tokens": 50,
+                "total_tokens": 12050,
+                "prompt_tokens_details": {
+                  "cached_tokens": 9500,
+                  "cache_write_tokens": 1000
+                }
+              }
+            }
+        """.trimIndent()
+        val mapper = com.fasterxml.jackson.databind.ObjectMapper()
+        val chunk = mapper.readValue(json, ChatCompletionChunk::class.java)
+        val state = OpenAiStreamUsageAccumulator()
+        accumulateOpenAiStreamUsage(chunk, state)
+        assertEquals(12000, state.inputTokens)
+        assertEquals(50, state.outputTokens)
+        assertEquals(9500, state.cacheReadInputTokens)
+        assertEquals(1000, state.cacheWriteInputTokens)
+    }
+
+    @Test
+    fun accumulateResponseStreamUsage_mapsCacheWriteTokens() {
+        val state = OpenAiStreamUsageAccumulator()
+        val usage = mockk<ResponseUsage>()
+        val inputDetails = mockk<ResponseUsage.InputTokensDetails>()
+        val outputDetails = mockk<ResponseUsage.OutputTokensDetails>()
+
+        every { usage.inputTokens() } returns 12_000L
+        every { usage.outputTokens() } returns 50L
+        every { usage.inputTokensDetails() } returns inputDetails
+        every { usage.outputTokensDetails() } returns outputDetails
+        every { inputDetails.cachedTokens() } returns 9_500L
+        every { outputDetails.reasoningTokens() } returns 0L
+        every { usage._additionalProperties() } returns emptyMap()
+        
+        val cacheWriteVal = JsonValue.from(1000)
+        every { inputDetails._additionalProperties() } returns mapOf("cache_write_tokens" to cacheWriteVal)
+
+        accumulateResponseStreamUsage(usage, state)
+
+        assertEquals(12_000, state.inputTokens)
+        assertEquals(50, state.outputTokens)
+        assertEquals(9_500, state.cacheReadInputTokens)
+        assertEquals(1000, state.cacheWriteInputTokens)
+    }
+
+    @Test
+    fun accumulateOpenAiStreamUsage_accumulatesCacheWriteTokensFromDetailsAdditionalProperties() {
+        val state = OpenAiStreamUsageAccumulator()
+        val event = mockk<ChatCompletionChunk>()
+        val usage = mockk<CompletionUsage>()
+        val promptDetails = mockk<PromptTokensDetails>()
+
+        every { event.usage() } returns Optional.of(usage)
+        every { usage.promptTokens() } returns 12_000L
+        every { usage.completionTokens() } returns 50L
+        every { usage.completionTokensDetails() } returns Optional.empty()
+        every { usage.promptTokensDetails() } returns Optional.of(promptDetails)
+        every { usage._additionalProperties() } returns emptyMap()
+        every { promptDetails.cachedTokens() } returns Optional.of(9_500L)
+        
+        val cacheWriteVal = JsonValue.from(1000)
+        every { promptDetails._additionalProperties() } returns mapOf("cache_write_tokens" to cacheWriteVal)
+        every { event.choices() } returns emptyList()
+
+        accumulateOpenAiStreamUsage(event, state)
+
+        assertEquals(12_000, state.inputTokens)
+        assertEquals(50, state.outputTokens)
+        assertEquals(9_500, state.cacheReadInputTokens)
+        assertEquals(1000, state.cacheWriteInputTokens)
+    }
+
+    @Test
+    fun testRealChunkDeserializationWithOpenRouterFlatCachingKeys() {
+        val json = """
+            {
+              "id": "gen-123",
+              "choices": [],
+              "usage": {
+                "prompt_tokens": 12000,
+                "completion_tokens": 50,
+                "total_tokens": 12050,
+                "cache_read_tokens": 9500,
+                "cache_write_tokens": 1000
+              }
+            }
+        """.trimIndent()
+        val mapper = com.fasterxml.jackson.databind.ObjectMapper()
+        val chunk = mapper.readValue(json, ChatCompletionChunk::class.java)
+        val state = OpenAiStreamUsageAccumulator()
+        accumulateOpenAiStreamUsage(chunk, state)
+        assertEquals(12000, state.inputTokens)
+        assertEquals(50, state.outputTokens)
+        assertEquals(9500, state.cacheReadInputTokens)
+        assertEquals(1000, state.cacheWriteInputTokens)
+    }
+
+    @Test
+    fun accumulateResponseStreamUsage_mapsOpenRouterFlatCachingKeys() {
+        val state = OpenAiStreamUsageAccumulator()
+        val usage = mockk<ResponseUsage>()
+        val inputDetails = mockk<ResponseUsage.InputTokensDetails>()
+        val outputDetails = mockk<ResponseUsage.OutputTokensDetails>()
+
+        every { usage.inputTokens() } returns 12_000L
+        every { usage.outputTokens() } returns 50L
+        every { usage.inputTokensDetails() } returns inputDetails
+        every { usage.outputTokensDetails() } returns outputDetails
+        every { inputDetails.cachedTokens() } returns 0L
+        every { inputDetails._additionalProperties() } returns emptyMap()
+        every { outputDetails.reasoningTokens() } returns 0L
+        
+        every { usage._additionalProperties() } returns mapOf(
+            "cache_read_tokens" to JsonValue.from(9500),
+            "cache_write_tokens" to JsonValue.from(1000)
+        )
+
+        accumulateResponseStreamUsage(usage, state)
+
+        assertEquals(12_000, state.inputTokens)
+        assertEquals(50, state.outputTokens)
+        assertEquals(9500, state.cacheReadInputTokens)
+        assertEquals(1000, state.cacheWriteInputTokens)
+    }
 }
+

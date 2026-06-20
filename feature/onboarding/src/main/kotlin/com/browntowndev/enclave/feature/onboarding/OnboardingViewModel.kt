@@ -7,6 +7,7 @@ import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.onboarding.OnboardingFlowMode
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.repository.SettingsRepository
+import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.usecase.media.SaveMediaProviderUseCase
 import com.browntowndev.enclave.domain.usecase.onboarding.BulkAssignApiProviderUseCase
 import com.browntowndev.enclave.domain.usecase.onboarding.ResolveOnboardingFlowModeUseCase
@@ -138,11 +139,28 @@ class OnboardingViewModel
         }
 
         fun onProviderSelected(provider: ApiProvider) {
-            _uiState.update { it.copy(selectedProvider = provider) }
+            _uiState.update { state ->
+                if (state.selectedProvider != provider) {
+                    state.copy(
+                        selectedProvider = provider,
+                        apiKey = "",
+                        baseUrl = "",
+                        discoveredModels = emptyList(),
+                        selectedModelId = "",
+                        discoveryError = null,
+                    )
+                } else {
+                    state
+                }
+            }
         }
 
         fun onApiKeyChanged(key: String) {
             _uiState.update { it.copy(apiKey = key) }
+        }
+
+        fun onBaseUrlChanged(url: String) {
+            _uiState.update { it.copy(baseUrl = url) }
         }
 
         fun onDiscoverModels() {
@@ -156,7 +174,7 @@ class OnboardingViewModel
                             provider = provider,
                             currentApiKey = state.apiKey,
                             credentialAlias = null,
-                            baseUrl = null,
+                            baseUrl = state.baseUrl.takeIf { it.isNotBlank() },
                             selectedModelId = null,
                         )
                     val result = discoverApiModelsUseCase(request)
@@ -229,6 +247,7 @@ class OnboardingViewModel
                                     .ApiCredentialsId(""),
                             displayName = provider.name,
                             provider = provider,
+                            baseUrl = latestState.baseUrl.takeIf { it.isNotBlank() },
                             credentialAlias = provider.name.lowercase(),
                         )
                     val result =
@@ -290,9 +309,19 @@ class OnboardingViewModel
                     }
                 }
 
+                val apiSlots = mutableSetOf<ModelType>()
+                if (latestState.selectedModelChoice == ModelChoice.API) {
+                    apiSlots.addAll(BulkAssignApiProviderUseCase.TEXT_SLOTS)
+                    apiSlots.add(ModelType.VISION)
+                }
+                if (latestState.mediaProviderDraft != null) {
+                    apiSlots.add(ModelType.IMAGE_GENERATION)
+                    apiSlots.add(ModelType.IMAGE_EDIT)
+                }
+
                 settingsRepository.updateOnboardingCompleted(true)
                 _uiState.update { it.copy(isSaving = false, saveError = null) }
-                _events.send(OnboardingEvent.NavigateToChat(latestState.selectedModelChoice))
+                _events.send(OnboardingEvent.NavigateToChat(latestState.selectedModelChoice, apiSlots))
             }
         }
     }

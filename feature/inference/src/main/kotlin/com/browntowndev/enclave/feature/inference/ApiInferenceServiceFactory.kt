@@ -48,6 +48,22 @@ internal object ApiInferenceServiceFactory {
                     telemetryEventPort = telemetryEventPort,
                     providerLabel = telemetrySupport.providerLabel(ApiProvider.ANTHROPIC.name),
                 )
+            ApiProvider.DEEPSEEK ->
+                DeepSeekInferenceServiceImpl(
+                    client =
+                        openAiClientProvider.getClient(
+                            apiKey = apiKey,
+                            baseUrl = resolvedBaseUrl,
+                            headers = requestHeaders,
+                        ),
+                    modelId = apiConfig.modelId,
+                    modelType = modelType,
+                    baseUrl = resolvedBaseUrl,
+                    loggingPort = loggingPort,
+                    toolStreamGatePort = toolStreamGatePort,
+                    telemetrySupport = telemetrySupport,
+                    telemetryEventPort = telemetryEventPort,
+                )
             ApiProvider.ZAI ->
                 ZaiInferenceServiceImpl(
                     client =

@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.domain.port.repository
 
+import com.browntowndev.enclave.domain.model.config.OpenRouterModelEndpoint
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
 
@@ -21,4 +22,10 @@ interface ApiModelCatalogPort {
         modelId: String,
         baseUrl: String? = null,
     ): DiscoveredApiModel?
+
+    suspend fun fetchModelEndpoints(
+        modelId: String,
+        apiKey: String,
+        baseUrl: String? = null,
+    ): List<OpenRouterModelEndpoint>
 }

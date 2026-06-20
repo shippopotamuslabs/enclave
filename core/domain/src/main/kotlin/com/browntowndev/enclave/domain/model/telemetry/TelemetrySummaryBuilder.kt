@@ -30,10 +30,13 @@ object TelemetrySummaryBuilder {
                 averageOutputTokensPerSecond = null,
                 totalInputTokens = null,
                 totalInputTokensNormalized = null,
+                billingInputTokensNormalized = null,
                 totalOutputTokens = null,
                 totalReasoningTokens = null,
                 totalCacheReadInputTokens = null,
+                peakCacheReadInputTokens = null,
                 totalCacheWriteInputTokens = null,
+                peakCacheWriteInputTokens = null,
                 cacheHitRatePercent = null,
                 requestRows = emptyList(),
             )
@@ -54,11 +57,14 @@ object TelemetrySummaryBuilder {
             averageTtftMs = averageTtft(rows),
             averageOutputTokensPerSecond = weightedOutputSpeed(rows),
             totalInputTokens = sumOrNull(rows) { it.inputTokens },
-            totalInputTokensNormalized = sumNormalizedInputTokens(rows),
+            totalInputTokensNormalized = TelemetryInputTokenMetrics.peakNormalizedInputTokens(rows),
+            billingInputTokensNormalized = TelemetryInputTokenMetrics.sumNormalizedInputTokens(rows),
             totalOutputTokens = sumOrNull(rows) { it.outputTokens },
             totalReasoningTokens = sumOrNull(rows) { it.reasoningTokens },
-            totalCacheReadInputTokens = sumOrNull(rows) { it.cacheReadInputTokens },
-            totalCacheWriteInputTokens = sumOrNull(rows) { it.cacheWriteInputTokens ?: it.cacheCreationInputTokens },
+            totalCacheReadInputTokens = TelemetryInputTokenMetrics.sumCacheReadInputTokens(rows),
+            peakCacheReadInputTokens = TelemetryInputTokenMetrics.peakAlignedCacheReadInputTokens(rows),
+            totalCacheWriteInputTokens = TelemetryInputTokenMetrics.sumCacheWriteInputTokens(rows),
+            peakCacheWriteInputTokens = TelemetryInputTokenMetrics.peakAlignedCacheWriteInputTokens(rows),
             cacheHitRatePercent = cacheHitRate(rows),
             requestRows = rows,
         )
@@ -83,11 +89,15 @@ object TelemetrySummaryBuilder {
             averageTtftMs = averageTtft(rows),
             averageOutputTokensPerSecond = weightedOutputSpeed(rows),
             totalInputTokens = rows.mapNotNull { it.inputTokens }.sum(),
-            totalInputTokensNormalized = rows.mapNotNull { normalizedInputTokens(it) }.sum(),
+            peakInputTokensNormalized = TelemetryInputTokenMetrics.sumOfPerMessagePeakNormalizedInput(rows),
+            totalInputTokensNormalized = TelemetryInputTokenMetrics.sumNormalizedInputTokens(rows) ?: 0,
             totalOutputTokens = rows.mapNotNull { it.outputTokens }.sum(),
             totalReasoningTokens = rows.mapNotNull { it.reasoningTokens }.sum(),
+            peakCacheReadInputTokens = TelemetryInputTokenMetrics.sumOfPerMessagePeakAlignedCacheRead(rows),
             totalCacheReadInputTokens = rows.mapNotNull { it.cacheReadInputTokens }.sum(),
-            totalCacheWriteInputTokens = rows.mapNotNull { it.cacheWriteInputTokens ?: it.cacheCreationInputTokens }.sum(),
+            peakCacheWriteInputTokens = TelemetryInputTokenMetrics.sumOfPerMessagePeakAlignedCacheWrite(rows),
+            totalCacheWriteInputTokens =
+                rows.mapNotNull { it.cacheWriteInputTokens ?: it.cacheCreationInputTokens }.sum(),
             cacheHitRatePercent = cacheHitRate(rows),
             providerBreakdown = providerBreakdown(rows),
             modelBreakdown = modelBreakdown(rows),
@@ -298,15 +308,6 @@ object TelemetrySummaryBuilder {
         } else {
             input
         }
-    }
-
-    /**
-     * Provider-normalized total prompt tokens across a set of rows. Sums [normalizedInputTokens] per row,
-     * returning `null` only when every row lacks input tokens.
-     */
-    internal fun sumNormalizedInputTokens(rows: List<TurnTelemetry>): Int? {
-        if (rows.none { it.inputTokens != null }) return null
-        return rows.mapNotNull { normalizedInputTokens(it) }.sum()
     }
 
     private fun cacheHitRate(rows: List<TurnTelemetry>): Double? {

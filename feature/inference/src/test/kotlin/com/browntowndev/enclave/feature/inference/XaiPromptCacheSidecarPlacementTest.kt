@@ -61,23 +61,22 @@ class XaiPromptCacheSidecarPlacementTest {
             )
 
             val messages = capturedParams.single().messages()
-            assertEquals(5, messages.size)
+            assertEquals(4, messages.size)
             assertTrue(messages[0].isSystem())
             assertEquals("You are a helpful assistant.", messages[0].asSystem().content().asText())
             assertTrue(messages[1].isUser())
-            assertEquals("Search for cats", messages[1].asUser().content().asText())
+            val userText = messages[1].asUser().content().asText()
+            assertTrue(userText.startsWith("Search for cats"))
+            assertTrue(userText.contains("[Sidecar-"))
+            assertTrue(userText.contains(sidecars))
             assertTrue(messages[2].isAssistant())
-            assertTrue(messages[3].isSystem())
-            assertEquals(sidecars, messages[3].asSystem().content().asText())
-            assertTrue(messages[4].isTool())
-            assertFalse(messages[1].isSystem())
+            assertTrue(messages[3].isTool())
         }
 
     private fun xaiSingleTurnService(capturedParams: MutableList<ChatCompletionCreateParams>): BaseOpenAiSdkInferenceService =
-        object : BaseOpenAiSdkInferenceService(
+        object : XaiInferenceServiceImpl(
             client = mockk<OpenAIClient>(),
             modelId = "grok-4.3",
-            provider = "XAI",
             modelType = ModelType.FAST,
             loggingPort = loggingPort,
             toolStreamGatePort = FakeToolStreamGatePort(),
