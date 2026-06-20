@@ -3,10 +3,10 @@ package com.browntowndev.enclave.feature.inference
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.AgentLoopMessage
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.feature.inference.wire.toMetadataJsonObject
 import com.openai.models.responses.ResponseFunctionToolCall
 import com.openai.models.responses.ResponseInputImage
 import com.openai.models.responses.ResponseInputItem
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -261,13 +261,6 @@ internal object AgentLoopOpenAiResponseMapper {
     private fun AgentLoopMessage.isSyntheticAssistantError(): Boolean =
         role == Role.ASSISTANT &&
             content.startsWith(ProviderInferenceConstants.SYNTHETIC_API_ERROR_PREFIX)
-
-    private fun String.toMetadataJsonObject(): JsonObject? =
-        if (this != "null" && isNotBlank()) {
-            runCatching { Json.parseToJsonElement(this).jsonObject }.getOrNull()
-        } else {
-            null
-        }
 
 }
 
