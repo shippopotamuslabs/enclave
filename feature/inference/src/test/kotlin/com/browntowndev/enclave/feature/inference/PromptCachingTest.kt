@@ -905,7 +905,7 @@ class PromptCachingTest {
         }
 
     @Test
-    @DisplayName("SC-AG-01 first hop prepends at tail index")
+    @DisplayName("SC-AG-01 first hop suffix-embeds at tail index")
     fun SC_AG_01_anthropicFirstHopSidecarAtFreezeIndex() =
         runTest {
             val client = mockk<AnthropicClient>()
@@ -963,16 +963,20 @@ class PromptCachingTest {
                 params.messages()[index].content().asBlockParams()[0].asText().text()
 
             val hop1 = capturedParams.first()
-            assertTrue(anthropicUserText(hop1, 0).startsWith(sidecar))
-            assertTrue(anthropicUserText(hop1, 0).endsWith("Hello"))
+            val hop1UserText = anthropicUserText(hop1, 0)
+            assertTrue(hop1UserText.startsWith("Hello"))
+            assertTrue(hop1UserText.contains("[Sidecar-"))
+            assertTrue(hop1UserText.endsWith("$sidecar]"))
             val frozen = requireNotNull(service.appendOnlyContextForTests()).frozenSidecarsForWireReplay()
             assertEquals(1, frozen.size)
             assertEquals(0, frozen[0].mappedInsertIndex)
 
             val hop2 = capturedParams[1]
-            assertTrue(anthropicUserText(hop2, 0).startsWith(sidecar))
+            val hop2FrozenText = anthropicUserText(hop2, 0)
+            assertTrue(hop2FrozenText.contains("[Sidecar-"))
+            assertTrue(hop2FrozenText.contains("Hello"))
             assertEquals("Follow up", anthropicUserText(hop2, 2))
-            assertFalse(anthropicUserText(hop2, 2).startsWith(sidecar))
+            assertFalse(anthropicUserText(hop2, 2).contains("[Sidecar-"))
         }
 
     @Test
@@ -1054,13 +1058,16 @@ class PromptCachingTest {
                 params.messages()[index].content().asBlockParams()[0].asText().text()
 
             val hop2 = capturedParams[1]
-            assertTrue(anthropicUserText(hop2, 0).startsWith(sidecar))
+            val hop2FrozenText = anthropicUserText(hop2, 0)
+            assertTrue(hop2FrozenText.contains("[Sidecar-"))
+            assertTrue(hop2FrozenText.contains("Hello"))
             assertEquals("Explain the plan.", anthropicUserText(hop2, 2))
-            assertFalse(anthropicUserText(hop2, 2).startsWith(sidecar))
+            assertFalse(anthropicUserText(hop2, 2).contains("[Sidecar-"))
 
             val hop3 = capturedParams[2]
-            assertTrue(anthropicUserText(hop3, 0).startsWith(sidecar))
-            assertFalse(anthropicUserText(hop3, 2).startsWith(sidecar))
+            val hop3FrozenText = anthropicUserText(hop3, 0)
+            assertTrue(hop3FrozenText.contains("[Sidecar-"))
+            assertFalse(anthropicUserText(hop3, 2).contains("[Sidecar-"))
         }
 
     @Test
@@ -1227,7 +1234,7 @@ class PromptCachingTest {
         }
 
     @Test
-    @DisplayName("SC-AG-05 frozen at index 0 not prepended to index 2")
+    @DisplayName("SC-AG-05 frozen at index 0 not suffix-embedded at index 2")
     fun SC_AG_05_indexInterleavedReplayNotLatestUserOnly() =
         runTest {
             val client = mockk<AnthropicClient>()
@@ -1285,9 +1292,12 @@ class PromptCachingTest {
                 params.messages()[index].content().asBlockParams()[0].asText().text()
 
             val hop2 = capturedParams[1]
-            assertTrue(anthropicUserText(hop2, 0).startsWith(frozenSidecar))
+            val hop2FrozenText = anthropicUserText(hop2, 0)
+            assertTrue(hop2FrozenText.startsWith("First"))
+            assertTrue(hop2FrozenText.contains("[Sidecar-"))
+            assertTrue(hop2FrozenText.contains(frozenSidecar))
             assertEquals("Second", anthropicUserText(hop2, 2))
-            assertFalse(anthropicUserText(hop2, 2).startsWith(frozenSidecar))
+            assertFalse(anthropicUserText(hop2, 2).contains("[Sidecar-"))
             assertEquals(
                 1,
                 requireNotNull(service.appendOnlyContextForTests()).frozenSidecarsForWireReplay().size,

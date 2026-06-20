@@ -20,7 +20,7 @@ import com.browntowndev.enclave.domain.port.telemetry.TelemetryEventPort
 import com.browntowndev.enclave.feature.inference.appendonly.ProviderAppendOnlyContext
 import com.browntowndev.enclave.feature.inference.appendonly.ProviderAppendOnlyContextFactory
 import com.browntowndev.enclave.feature.inference.appendonly.SessionIndexVolatilePlacement
-import com.browntowndev.enclave.feature.inference.appendonly.SidecarMarkerFactory
+import com.browntowndev.enclave.feature.inference.appendonly.SidecarMarker
 import com.browntowndev.enclave.feature.inference.appendonly.ensureAppendOnlyContext
 import com.browntowndev.enclave.feature.inference.appendonly.toAppendOnlySyncMessages
 import com.browntowndev.enclave.feature.inference.appendonly.toToolsFingerprint
@@ -152,19 +152,17 @@ class GoogleInferenceServiceImpl(
                 transcriptRevision = options.transcriptRevision,
             )
             val liveSidecarInsertIndex = lastUserIndex.coerceAtLeast(0)
-            val wireSidecar = appendOnly.resolveContextSidecarsForWire(contextSidecars)?.text
+            val wireSidecar = appendOnly.resolveContextSidecarsForWire(contextSidecars)
 
-            fun sidecarPrependTextForIndex(index: Int): String? =
-                SessionIndexVolatilePlacement
-                    .sidecarTextsBeforeSessionIndex(
-                        sessionIndex = index,
-                        frozenSidecars = appendOnly.frozenSidecarsForWireReplay(),
-                        preRetrievalSidecarText = null,
-                        preRetrievalInsertIndex = null,
-                        currentSidecarText = wireSidecar,
-                        tailInsertIndex = liveSidecarInsertIndex,
-                    ).joinToString(separator = "\n\n")
-                    .takeIf { it.isNotBlank() }
+            fun sidecarMarkersForIndex(index: Int): List<SidecarMarker> =
+                SessionIndexVolatilePlacement.sidecarMarkersForSessionIndex(
+                    sessionIndex = index,
+                    frozenSidecars = appendOnly.frozenSidecarsForWireReplay(),
+                    preRetrievalSidecar = null,
+                    preRetrievalInsertIndex = null,
+                    liveSidecar = wireSidecar,
+                    tailInsertIndex = liveSidecarInsertIndex,
+                )
 
             fun mapAtIndex(
                 message: AgentLoopMessage,
@@ -176,7 +174,7 @@ class GoogleInferenceServiceImpl(
                     index = index,
                     lastUserIndex = if (attachImages) lastUserIndex else -1,
                     imageUris = if (attachImages) imageUris else emptyList(),
-                    prependedText = sidecarPrependTextForIndex(index),
+                    sidecarMarkers = sidecarMarkersForIndex(index),
                 )
 
             fun appendMappedMessage(
@@ -323,8 +321,8 @@ class GoogleInferenceServiceImpl(
 
             if (wireSidecar != null) {
                 appendOnly.endTurnFreezeSidecar(
-                    sidecarText = wireSidecar,
-                    markerId = SidecarMarkerFactory.newMarker(wireSidecar).markerId,
+                    sidecarText = wireSidecar.text,
+                    markerId = wireSidecar.markerId,
                     mappedInsertIndex = liveSidecarInsertIndex,
                 )
             }

@@ -2,6 +2,8 @@ package com.browntowndev.enclave.feature.inference
 
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.AgentLoopMessage
+import com.browntowndev.enclave.feature.inference.appendonly.SidecarMarker
+import com.browntowndev.enclave.feature.inference.appendonly.SidecarUserContentEmbedder
 import com.google.genai.types.Content
 import com.google.genai.types.Part
 import kotlinx.serialization.json.Json
@@ -35,7 +37,7 @@ internal object GoogleAgentLoopContentMapper {
         index: Int,
         lastUserIndex: Int,
         imageUris: List<String>,
-        prependedText: String? = null,
+        sidecarMarkers: List<SidecarMarker> = emptyList(),
     ): Content? {
         val metadata =
             if (message.metadataJson != "null" && message.metadataJson.isNotBlank()) {
@@ -56,12 +58,7 @@ internal object GoogleAgentLoopContentMapper {
                 .build()
         }
 
-        val contentText =
-            if (!prependedText.isNullOrBlank()) {
-                "$prependedText\n\n${message.content}"
-            } else {
-                message.content
-            }
+        val contentText = SidecarUserContentEmbedder.embed(message.content, sidecarMarkers)
 
         return when (message.role) {
             Role.SYSTEM -> null

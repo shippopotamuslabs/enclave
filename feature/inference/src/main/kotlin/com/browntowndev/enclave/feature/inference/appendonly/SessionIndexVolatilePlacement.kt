@@ -30,27 +30,34 @@ internal object SessionIndexVolatilePlacement {
         } ?: 0
     }
 
-    fun sidecarTextsBeforeSessionIndex(
+    fun sidecarMarkersForSessionIndex(
         sessionIndex: Int,
         frozenSidecars: List<FrozenSidecarSnapshot>,
-        preRetrievalSidecarText: String?,
+        preRetrievalSidecar: ResolvedSidecar?,
         preRetrievalInsertIndex: Int?,
-        currentSidecarText: String?,
+        liveSidecar: ResolvedSidecar?,
         tailInsertIndex: Int,
-    ): List<String> =
+    ): List<SidecarMarker> =
         buildList {
             frozenSidecars
                 .filter { it.mappedInsertIndex == sessionIndex }
-                .forEach { add(it.text) }
+                .forEach { snapshot ->
+                    add(SidecarMarker(markerId = snapshot.markerId, body = snapshot.text))
+                }
             if (
-                !preRetrievalSidecarText.isNullOrBlank() &&
+                preRetrievalSidecar != null &&
                 preRetrievalInsertIndex != null &&
                 sessionIndex == preRetrievalInsertIndex
             ) {
-                add(preRetrievalSidecarText)
+                add(
+                    SidecarMarker(
+                        markerId = preRetrievalSidecar.markerId,
+                        body = preRetrievalSidecar.text,
+                    ),
+                )
             }
-            if (!currentSidecarText.isNullOrBlank() && sessionIndex == tailInsertIndex) {
-                add(currentSidecarText)
+            if (liveSidecar != null && sessionIndex == tailInsertIndex) {
+                add(SidecarMarker(markerId = liveSidecar.markerId, body = liveSidecar.text))
             }
         }
 
