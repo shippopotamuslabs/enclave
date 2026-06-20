@@ -112,6 +112,11 @@ class ModelDownloadOrchestratorImpl
             modelsResult: DownloadModelsResult,
             wifiOnly: Boolean,
         ): Boolean {
+            // Refresh the cached startup result so subsequent resume/retry/mobile-data
+            // calls use the latest filtered set rather than the unfiltered startup snapshot.
+            // Without this, API onboarding would re-enqueue suppressed local LLMs on resume.
+            startupModelsResult = modelsResult
+
             val sessionId = sessionManager.createNewSession()
             logger.debug(TAG, "Starting download session with pre-computed result: $sessionId")
 

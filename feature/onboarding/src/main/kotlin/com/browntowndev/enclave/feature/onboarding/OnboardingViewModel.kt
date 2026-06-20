@@ -7,6 +7,7 @@ import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.onboarding.OnboardingFlowMode
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.repository.SettingsRepository
+import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.usecase.media.SaveMediaProviderUseCase
 import com.browntowndev.enclave.domain.usecase.onboarding.BulkAssignApiProviderUseCase
 import com.browntowndev.enclave.domain.usecase.onboarding.ResolveOnboardingFlowModeUseCase
@@ -308,9 +309,19 @@ class OnboardingViewModel
                     }
                 }
 
+                val apiSlots = mutableSetOf<ModelType>()
+                if (latestState.selectedModelChoice == ModelChoice.API) {
+                    apiSlots.addAll(BulkAssignApiProviderUseCase.TEXT_SLOTS)
+                    apiSlots.add(ModelType.VISION)
+                }
+                if (latestState.mediaProviderDraft != null) {
+                    apiSlots.add(ModelType.IMAGE_GENERATION)
+                    apiSlots.add(ModelType.IMAGE_EDIT)
+                }
+
                 settingsRepository.updateOnboardingCompleted(true)
                 _uiState.update { it.copy(isSaving = false, saveError = null) }
-                _events.send(OnboardingEvent.NavigateToChat(latestState.selectedModelChoice))
+                _events.send(OnboardingEvent.NavigateToChat(latestState.selectedModelChoice, apiSlots))
             }
         }
     }

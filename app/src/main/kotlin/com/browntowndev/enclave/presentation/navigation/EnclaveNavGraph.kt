@@ -103,11 +103,11 @@ fun EnclaveNavGraph(
         startDestination = startDestination,
     ) {
         onboardingNavGraph(
-            onOnboardingComplete = { modelChoice ->
+            onOnboardingComplete = { modelChoice, apiSlots ->
                 val filtered =
                     when (modelChoice) {
                         ModelChoice.API ->
-                            modelsResult?.let(::filterDownloadModelsResultForApiOnboarding)
+                            modelsResult?.let { filterDownloadModelsResultForApiOnboarding(it, apiSlots) }
                         ModelChoice.LOCAL,
                         ModelChoice.RESTORED,
                         ModelChoice.UNDECIDED,
@@ -128,7 +128,7 @@ fun EnclaveNavGraph(
             },
         )
         downloadGraph(
-            modelsResult = effectiveModelsResult,
+            modelsResultProvider = { effectiveModelsResult },
             errorMessage = errorMessage,
             onReady = {
                 navController.navigate(Routes.CHAT) {

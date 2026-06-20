@@ -2,12 +2,15 @@ package com.browntowndev.enclave.feature.download
 
 import com.browntowndev.enclave.core.data.download.WorkProgressParser
 import com.browntowndev.enclave.core.data.repository.DownloadWorkRepository
+import com.browntowndev.enclave.core.testing.MainDispatcherRule
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.config.LocalModelAsset
 import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.config.LocalModelMetadata
 import com.browntowndev.enclave.domain.model.config.UtilityType
 import com.browntowndev.enclave.domain.model.download.DownloadModelsResult
+import com.browntowndev.enclave.domain.model.download.DownloadState
+import com.browntowndev.enclave.domain.model.download.DownloadStatus
 import com.browntowndev.enclave.domain.model.download.FileProgress
 import com.browntowndev.enclave.domain.model.download.FileStatus
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
@@ -15,10 +18,28 @@ import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.download.ModelDownloadOrchestratorPort
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
 
+@ExtendWith(MainDispatcherRule::class)
 class DownloadViewModelUiModelTest {
+    private val orchestrator = mockk<ModelDownloadOrchestratorPort>(relaxed = true)
+    private val workRepo = mockk<DownloadWorkRepository>(relaxed = true)
+    private val parser = mockk<WorkProgressParser>(relaxed = true)
+    private val errorHandler = mockk<ViewModelErrorHandler>(relaxed = true)
+    private val downloadStateFlow = MutableStateFlow(DownloadState(status = DownloadStatus.IDLE))
+
+    @BeforeEach
+    fun setup() {
+        every { orchestrator.downloadState } returns downloadStateFlow
+        every { orchestrator.snackbarMessages } returns flowOf()
+        every { workRepo.observeDownloadProgress() } returns flowOf()
+    }
+
     @Test
     fun `ModelType displayName returns correct names`() {
         assertEquals("Vision", ModelType.VISION.displayName())
@@ -43,11 +64,6 @@ class DownloadViewModelUiModelTest {
                 modelTypes = listOf(ModelType.DRAFT_ONE),
             )
 
-        // Mock dependencies for ViewModel (though we only need the extension)
-        val orchestrator = mockk<ModelDownloadOrchestratorPort>(relaxed = true)
-        val workRepo = mockk<DownloadWorkRepository>(relaxed = true)
-        val parser = mockk<WorkProgressParser>(relaxed = true)
-        val errorHandler = mockk<ViewModelErrorHandler>(relaxed = true)
         val result = mockk<DownloadModelsResult>(relaxed = true)
 
         val viewModel =
@@ -81,11 +97,6 @@ class DownloadViewModelUiModelTest {
                 modelTypes = listOf(ModelType.VISION, ModelType.DRAFT_ONE),
             )
 
-        // Mock dependencies
-        val orchestrator = mockk<ModelDownloadOrchestratorPort>(relaxed = true)
-        val workRepo = mockk<DownloadWorkRepository>(relaxed = true)
-        val parser = mockk<WorkProgressParser>(relaxed = true)
-        val errorHandler = mockk<ViewModelErrorHandler>(relaxed = true)
         val result = mockk<DownloadModelsResult>(relaxed = true)
 
         val viewModel =
@@ -140,10 +151,10 @@ class DownloadViewModelUiModelTest {
 
         val viewModel =
             DownloadViewModel(
-                modelDownloadOrchestrator = mockk(relaxed = true),
-                downloadWorkRepository = mockk(relaxed = true),
-                progressParser = mockk(relaxed = true),
-                errorHandler = mockk(relaxed = true),
+                modelDownloadOrchestrator = orchestrator,
+                downloadWorkRepository = workRepo,
+                progressParser = parser,
+                errorHandler = errorHandler,
                 modelsResult = modelsResult,
                 initialErrorMessage = null,
                 autoStartDownloads = false,
@@ -189,10 +200,10 @@ class DownloadViewModelUiModelTest {
 
         val viewModel =
             DownloadViewModel(
-                modelDownloadOrchestrator = mockk(relaxed = true),
-                downloadWorkRepository = mockk(relaxed = true),
-                progressParser = mockk(relaxed = true),
-                errorHandler = mockk(relaxed = true),
+                modelDownloadOrchestrator = orchestrator,
+                downloadWorkRepository = workRepo,
+                progressParser = parser,
+                errorHandler = errorHandler,
                 modelsResult = modelsResult,
                 initialErrorMessage = null,
                 autoStartDownloads = false,
@@ -217,10 +228,6 @@ class DownloadViewModelUiModelTest {
                 modelTypes = listOf(ModelType.MAIN),
             )
 
-        val orchestrator = mockk<ModelDownloadOrchestratorPort>(relaxed = true)
-        val workRepo = mockk<DownloadWorkRepository>(relaxed = true)
-        val parser = mockk<WorkProgressParser>(relaxed = true)
-        val errorHandler = mockk<ViewModelErrorHandler>(relaxed = true)
         val result = mockk<DownloadModelsResult>(relaxed = true)
 
         val viewModel =

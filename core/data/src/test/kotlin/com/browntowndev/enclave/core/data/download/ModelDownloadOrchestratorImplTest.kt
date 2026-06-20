@@ -261,4 +261,67 @@ class ModelDownloadOrchestratorImplTest {
             )
             verify(exactly = 0) { workScheduler.enqueue(any()) }
         }
+
+    @Test
+    @DisplayName("startDownloads(modelsResult) refreshes cached startup result so resume uses the filtered set")
+    fun startDownloads_refreshesCachedStartupResultForResume() =
+        runTest {
+            // Orchestrator is initialized at cold start with the unfiltered result (LLM + diffusion).
+            val llmAsset =
+                LocalModelAsset(
+                    metadata =
+                        LocalModelMetadata(
+                            id = LocalModelId("llm-1"),
+                            huggingFaceModelName = "org/llm",
+                            remoteFileName = "llm.bin",
+                            localFileName = "llm.bin",
+                            sha256 = "llm-sha",
+                            sizeInBytes = 2_000L,
+                            modelFileFormat = ModelFileFormat.GGUF,
+                        ),
+                    configurations = emptyList(),
+                )
+            val unfilteredResult =
+                DownloadModelsResult(
+                    allModels = mapOf(ModelType.FAST to testAsset, ModelType.MAIN to llmAsset),
+                    modelsToDownload = listOf(testAsset, llmAsset),
+                    scanResult =
+                        ModelScanResult(
+                            missingModels = listOf(testAsset, llmAsset),
+                            partialDownloads = emptyMap(),
+                            allValid = true,
+                        ),
+                )
+            orchestrator.initializeWithStartupResult(unfilteredResult)
+
+            // API onboarding filters the LLM out before the first startDownloads call.
+            val filteredResult =
+                unfilteredResult.copy(
+                    allModels = mapOf(ModelType.FAST to testAsset),
+                    modelsToDownload = listOf(testAsset),
+                    scanResult =
+                        ModelScanResult(
+                            missingModels = listOf(testAsset),
+                            partialDownloads = emptyMap(),
+                            allValid = true,
+                        ),
+                )
+            val enqueued = mutableListOf<DownloadWorkRequest>()
+            every { workScheduler.enqueue(capture(enqueued)) } returns Unit
+
+            orchestrator.startDownloads(modelsResult = filteredResult, wifiOnly = true)
+            // Pause, then resume — resume falls back to the cached startupModelsResult.
+            orchestrator.pauseDownloads()
+            orchestrator.resumeDownloads()
+
+            // Two enqueue calls (initial + resume); neither should reference the suppressed LLM.
+            assertEquals(2, enqueued.size)
+            enqueued.forEach { request ->
+                val shas = request.files.map { it.sha256 }.toSet()
+                assertFalse("resume must not re-enqueue suppressed LLM" in shas.toString()) {
+                    "Suppressed LLM sha256 leaked into enqueued files: $shas"
+                }
+                assertTrue("llm-sha" !in shas)
+            }
+        }
 }

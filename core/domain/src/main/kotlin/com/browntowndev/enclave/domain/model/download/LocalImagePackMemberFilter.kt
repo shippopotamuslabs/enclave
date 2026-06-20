@@ -9,13 +9,6 @@ import com.browntowndev.enclave.domain.model.media.LocalStableDiffusionModelPoli
  * Identifies catalog local-image pack members for download gating when [ParsedModelCatalog] is unavailable.
  */
 object LocalImagePackMemberFilter {
-    private val LOCAL_IMAGE_QNN_UTILITY_TYPES =
-        setOf(
-            UtilityType.SD15_QNN_PACK,
-            UtilityType.SDXL_QNN_PACK,
-            UtilityType.JUGGERNAUT_XL_QNN_PACK,
-        )
-
     fun sha256sFromCatalog(
         catalog: ParsedModelCatalog,
         slot: ModelType = ModelType.IMAGE_GENERATION,
@@ -65,30 +58,53 @@ object LocalImagePackMemberFilter {
     }
 
     /**
-     * Strips all catalog local-image pack members (both slots) when the user completes API onboarding.
+     * Strips models from the download result that are configured to use an API model.
+     *
+     * The nested [DownloadModelsResult.scanResult] is filtered too, otherwise
+     * [InitializeFileProgressUseCase] would keep reading the unfiltered
+     * `missingModels`/`partialDownloads`/`invalidModels` and the download screen would
+     * show suppressed LLMs as QUEUED, prompting the user to resume/retry and re-enqueue them.
      */
-    fun excludeForApiOnboarding(result: DownloadModelsResult): DownloadModelsResult {
-        val blockedShas =
-            (result.imageGenerationPackMemberSha256s + result.imageEditPackMemberSha256s).ifEmpty {
-                sha256sFromAssets(result.modelsToDownload + result.utilityAssets)
+    fun excludeForApiOnboarding(
+        result: DownloadModelsResult,
+        apiSlots: Set<ModelType>,
+    ): DownloadModelsResult {
+        fun isSuppressed(asset: LocalModelAsset): Boolean {
+            val assignedSlots = asset.configurations.flatMap { it.defaultAssignments }
+            if (assignedSlots.isNotEmpty()) {
+                return assignedSlots.all { it in apiSlots }
             }
+            val utilityType = asset.metadata.utilityType
+            return when (utilityType) {
+                UtilityType.SD15_QNN_PACK, UtilityType.SDXL_QNN_PACK ->
+                    ModelType.IMAGE_GENERATION in apiSlots
+                UtilityType.JUGGERNAUT_XL_QNN_PACK ->
+                    ModelType.IMAGE_EDIT in apiSlots
+                else -> false
+            }
+        }
+
+        val suppressedLocalFileNames =
+            (result.modelsToDownload + result.utilityAssets + result.availableToRedownload)
+                .filter(::isSuppressed)
+                .mapTo(mutableSetOf()) { it.metadata.localFileName }
+
+        val filteredScan =
+            result.scanResult.copy(
+                missingModels = result.scanResult.missingModels.filter { !isSuppressed(it) },
+                partialDownloads =
+                    result.scanResult.partialDownloads.filterKeys { filename ->
+                        filename !in suppressedLocalFileNames
+                    },
+                invalidModels = result.scanResult.invalidModels.filter { !isSuppressed(it) },
+            )
+
         return result.copy(
-            allModels = emptyMap(),
-            modelsToDownload =
-                result.modelsToDownload.filter { asset ->
-                    asset.metadata.sha256 !in blockedShas &&
-                        asset.metadata.utilityType !in LOCAL_IMAGE_QNN_UTILITY_TYPES
-                },
-            utilityAssets =
-                result.utilityAssets.filter { asset ->
-                    asset.metadata.sha256 !in blockedShas &&
-                        asset.metadata.utilityType !in LOCAL_IMAGE_QNN_UTILITY_TYPES
-                },
-            availableToRedownload =
-                result.availableToRedownload.filter { asset ->
-                    asset.metadata.sha256 !in blockedShas &&
-                        asset.metadata.utilityType !in LOCAL_IMAGE_QNN_UTILITY_TYPES
-                },
+            allModels = result.allModels.filterKeys { it !in apiSlots },
+            modelsToDownload = result.modelsToDownload.filter { !isSuppressed(it) },
+            utilityAssets = result.utilityAssets.filter { !isSuppressed(it) },
+            availableToRedownload = result.availableToRedownload.filter { !isSuppressed(it) },
+            scanResult = filteredScan,
         )
     }
 }
