@@ -11,6 +11,8 @@ Never modify this file or any file in `/contracts/` without an explicit
 
 Every task maps to one or more binding contracts in `/contracts/`. Read the relevant contract(s) before generating code or proposing architecture.
 
+### Android Application Contracts
+
 | Task type | Contract to read |
 |-----------|-----------------|
 | Module structure, dependency direction, layer responsibilities, navigation, Scaffold, IME handling, `WorkManager`, background tasks | `ARCHITECTURE_RULES.md` |
@@ -19,6 +21,12 @@ Every task maps to one or more binding contracts in `/contracts/`. Read the rele
 | LiteRT inference, model loading, KV cache, thermal/memory watchdog, thinking pipeline, safety layer | `INFERENCE_RULES.md` |
 | Colors, typography, Compose component structure, `InputBar`, `MessageList`, `ChatTopBar`, `HistoryScreen` | `UI_DESIGN_SPEC.md` |
 | JUnit 5, Fakes vs Mocks, Robolectric, Turbine, State-based assertions, Test coverage | `UNIT_TESTING.md` |
+
+### Desktop Application Contracts
+
+| Task type | Contract to read |
+|-----------|-----------------|
+| Elm Architecture (MVU), styling rules (Neobrutalism), state patterns, commands, clippy, and rustfmt validations | `DESKTOP_RULES.md` |
 
 When a task spans multiple domains, read all relevant contracts.
 
@@ -40,6 +48,7 @@ Enclave is a mixed Android monorepo, not a single-module app.
 - `core/agent/`: Android UniFFI/JNI bridge for Rust `third_party/agent_core`; read `core/agent/README.md` for bridge work.
 - `core/docgen/`: Android UniFFI/JNI bridge for Rust `third_party/docgen_core`.
 - `feature/*/`: feature modules for chat, settings, history, downloads, inference, studio, and background services.
+- `desktop/`: Rust & Iced companion desktop application.
 - `llama-android/` and `whisper-android/`: native Android library wrappers over C/C++ code in `third_party`.
 - `functions/`: Firebase Cloud Functions TypeScript project.
 - `third_party/agent_core/` and `third_party/docgen_core/`: repo-owned Rust native cores used to generate Kotlin bindings.
@@ -49,13 +58,13 @@ Enclave is a mixed Android monorepo, not a single-module app.
 - `docs/superpowers/` and `plans/`: planning/spec artifacts, not runtime source.
 
 Main toolchains: Gradle Kotlin DSL, Kotlin/Compose/Hilt/Room/WorkManager,
-Rust/Cargo/UniFFI, CMake/Android NDK, and npm/TypeScript for Firebase functions.
+Rust/Cargo/UniFFI/Iced, CMake/Android NDK, and npm/TypeScript for Firebase functions.
 
 ---
 
 ## 3. Hard Rules (Non-Negotiable)
 
-### 3.1 Clean Architecture — Zero Tolerance
+### 3.1 Android Clean Architecture — Zero Tolerance (Android Only)
 
 - `:core:domain` contains domain models, ports, use cases, and test fixtures. Keep framework dependencies out of domain APIs.
 - Dependency direction is inward toward `:core:domain`. Data, inference, UI, app, and feature modules may depend on domain; domain must not depend on app, feature, data, UI, or native bridge modules.
@@ -64,7 +73,7 @@ Rust/Cargo/UniFFI, CMake/Android NDK, and npm/TypeScript for Firebase functions.
 
 **Violation response:** Reply with exactly: `"Contract violation detected in [file]. Request explicit 'Contract Waiver' from user."` Then stop. Do not generate code.
 
-### 3.2 Android Code — AndroJack Level 3 Protocol
+### 3.2 Android Code — AndroJack Level 3 Protocol (Android Only)
 
 For every Kotlin, XML, or Gradle code block generated:
 
@@ -81,9 +90,9 @@ For every Kotlin, XML, or Gradle code block generated:
 
 ### 3.3 Test Coverage — Mandatory
 
-Whenever production code is added or modified (new classes, public functions, logic in `:core:domain`, `:core:data`, `:feature:inference`, ViewModels, repositories, mappers, use cases):
-- Write or extend unit tests in the matching `src/test/kotlin` source set.
-- Use JUnit 5 + Turbine (for Flow) + MockK.
+Whenever production code is added or modified (new classes, public functions, logic in `:core:domain`, `:core:data`, `:feature:inference`, ViewModels, repositories, mappers, use cases, or desktop screens and native crates):
+- **Android**: Write or extend unit tests in the matching `src/test/kotlin` source set using JUnit 5 + Turbine (for Flow) + MockK.
+- **Desktop/Rust**: Write or extend cargo tests. Run using `cargo test --workspace`.
 - Tests must pass before `TASK_STATUS: COMPLETE`.
 - Trivial styling-only or preview-only changes are exempt.
 
@@ -93,7 +102,7 @@ Whenever production code is added or modified (new classes, public functions, lo
 
 ### 3.5 Inference — On-Device First (BYOK Optional)
 
-Prioritize on-device inference via LiteRT 2.x. Optional "BYOK" cloud providers (OpenAI, Anthropic, Google GenAI) are permitted in `:feature:inference` as advanced user escape hatches, provided they remain isolated from core on-device logic.
+Prioritize on-device inference via LiteRT 2.x/agent_core. Optional "BYOK" cloud providers (OpenAI, Anthropic, Google GenAI) are permitted as advanced user escape hatches, provided they remain isolated from core on-device logic.
 
 ---
 
@@ -101,6 +110,7 @@ Prioritize on-device inference via LiteRT 2.x. Optional "BYOK" cloud providers (
 
 Prefer the narrowest command that covers the changed area.
 
+### Android Commands
 - Android app compile: `./gradlew :app:assembleDebug`
 - Single Android module compile: `./gradlew :core:data:assembleDebug` or `./gradlew :feature:chat:assembleDebug`
 - Single Android module tests: `./gradlew :feature:inference:testDebugUnitTest`
@@ -108,16 +118,26 @@ Prefer the narrowest command that covers the changed area.
 - Full style check: `./gradlew ktlintCheck`
 - Full static analysis: `./gradlew detekt`
 - Room/KSP smoke: `./gradlew :app:kspDebugKotlin`
-- Rust agent core tests: `(cd third_party/agent_core && cargo test)`
 - Agent binding regeneration: `./scripts/build-agent-bindings.sh`
 - Docgen binding regeneration: `./scripts/build-docgen-bindings.sh`
+
+### Desktop / Rust Commands
+- Workspace check: `cargo check --workspace`
+- Desktop app check: `cargo check -p enclave-desktop`
+- Run desktop app: `cargo run -p enclave-desktop`
+- Workspace tests: `cargo test --workspace`
+- Desktop tests: `cargo test -p enclave-desktop`
+- Rust lints: `cargo clippy --workspace --all-targets`
+- Rust formatter check: `cargo fmt --all -- --check`
+
+### Firebase Commands
 - Firebase functions build: `npm --prefix functions run build`
 - Firebase functions tests: `npm --prefix functions test`
 - Firebase functions emulator: `npm --prefix functions run serve`
 
-Before merge or a large cross-module change, use the CI-aligned checks:
-`./gradlew ktlintCheck`, `./gradlew detekt`, `./gradlew assembleDebug`, and
-`./gradlew testDebugUnitTest`. Run narrower checks during small iterations.
+Before merge or a large cross-module change, use the CI-aligned checks for the active platform:
+- **Android**: `./gradlew ktlintCheck`, `./gradlew detekt`, `./gradlew assembleDebug`, and `./gradlew testDebugUnitTest`.
+- **Desktop**: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets`, and `cargo test --workspace`.
 
 ---
 
@@ -126,6 +146,7 @@ Before merge or a large cross-module change, use the CI-aligned checks:
 Do not inspect or edit these during normal tasks unless the task explicitly targets them:
 
 - Gradle/build outputs: `build/`, `**/build/`, `.gradle/`, `.kotlin/`, `.cxx/`, `.externalNativeBuild/`.
+- Rust/Cargo build outputs: `target/`, `**/target/`, `Cargo.lock` (unless dependency updates are explicitly required).
 - Dependency caches and generated JS: `functions/node_modules/`, `functions/lib/`.
 - Vendored native sources: `third_party/llama.cpp/`, `third_party/whisper.cpp/`, `third_party/kleidiai-*`, `third_party/OpenCL-*`, `third_party/Vulkan-*`.
 - Binary/model/assets noise: `*.so`, `*.tflite`, `*.onnx`, `*.png`, `*.jpg`, `*.webp`, APK/AAB outputs, keystores.
@@ -141,8 +162,9 @@ or edit generated binding outputs only as part of that regeneration workflow.
 
 - Android/Kotlin: import the root Gradle project in **Android Studio Quail** (or IntelliJ). Keep Studio open on **Enclave** during agent sessions so `android studio` bridge commands work. Use JDK 17 and the checked-in Gradle wrapper.
 - **Android CLI:** `android` 1.0+ on PATH (`android info`). Run `android init` once per machine; project skills live under `.agents/skills/`.
+- Rust/Desktop: use **VS Code** with the **rust-analyzer** extension or JetBrains **RustRover**. Open the root of the workspace.
+- Rust bridge crates & desktop: use `rust-analyzer` rooted at the root `Cargo.toml`.
 - TypeScript functions: run `npm --prefix functions install` if dependencies are missing; TypeScript server should use `functions/tsconfig.json`.
-- Rust bridge crates: use `rust-analyzer` rooted at `third_party/agent_core/Cargo.toml` or `third_party/docgen_core/Cargo.toml`.
 - Native C/C++: Android Studio/CMake can generate compile commands under native build output folders; those outputs are intentionally ignored.
 
 ---
@@ -156,13 +178,13 @@ commands are available.
 
 | MCP Server | When to use |
 |------------|-------------|
-| `androjack` | All Android/Kotlin validation, API research, dependency checks — **mandatory for all code generation** |
-| `mobile-mcp` | Install APKs, interact with a running emulator/device, take screenshots |
+| `androjack` | All Android/Kotlin validation, API research, dependency checks — **mandatory for all code generation** (Android only) |
+| `mobile-mcp` | Install APKs, interact with a running emulator/device, take screenshots (Android only) |
 | `google-developer-knowledge` / `firebase-mcp-server` | Official Android/Firebase/Google API documentation lookup |
 | `github-mcp-server` | PR creation, branch management, code search across the repo |
 | `synthitect` | CFAW workflow phases when explicitly invoked by the user |
 
-Use MCP tools before ad-hoc web search. Prefer MCP over guessing APIs.
+For Desktop tasks, use Cargo, Clippy, and Rustfmt CLI commands directly.
 
 ### Android CLI and Studio bridge (shell)
 
@@ -220,9 +242,9 @@ and PR access, Firebase project operations, and deeper emulator automation beyon
 
 ## 9. Executable Validation Before Completion
 
-Before declaring `TASK_STATUS: COMPLETE`, run the narrowest relevant validations.
-For large or cross-module changes, run the CI-aligned checks.
+Before declaring `TASK_STATUS: COMPLETE`, run the narrowest relevant validations based on the target project.
 
+### Android Validations (Android Tasks Only)
 - **Architecture / Domain:** `./gradlew :core:domain:assembleDebug`
 - **App Compilation:** `./gradlew :app:assembleDebug`
 - **Data Layer:** `./gradlew :core:data:assembleDebug` + `./gradlew :app:kspDebugKotlin`
@@ -232,6 +254,12 @@ For large or cross-module changes, run the CI-aligned checks.
 - **Static analysis:** `./gradlew detekt` (required — `maxIssues: 0`; must pass before completion)
 
 **Note on Detekt:** Detekt runs per module. `./gradlew assembleDebug` (root) and `./gradlew detekt` analyze all modules. `:app:assembleDebug` alone only ran `:app:detekt` historically; the app module's `assemble*` tasks now also depend on every subproject `detekt` task. Still run `./gradlew detekt` explicitly after Kotlin changes — do not rely on compile-only checks.
+
+### Desktop Validations (Desktop Tasks Only)
+- **Compile Check:** `cargo check -p enclave-desktop`
+- **Linter (Clippy):** `cargo clippy -p enclave-desktop --all-targets` (must pass with zero warnings or errors)
+- **Code Formatter:** `cargo fmt --all -- --check`
+- **Unit Tests:** `cargo test -p enclave-desktop`
 
 Only run the checks relevant to what was changed during iteration, but run the
 full affected unit test set for logic changes.
