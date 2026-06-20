@@ -27,6 +27,8 @@ import com.browntowndev.enclave.feature.inference.llama.LlamaChatSessionManager
 import com.browntowndev.enclave.feature.inference.telemetry.InferenceTelemetrySupport
 import com.browntowndev.enclave.feature.inference.telemetry.InferenceTurnTiming
 import com.browntowndev.enclave.feature.inference.telemetry.estimateTokenCount
+import com.browntowndev.enclave.feature.inference.wire.AgentLoopRowKind
+import com.browntowndev.enclave.feature.inference.wire.classify
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -36,10 +38,6 @@ import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
 import javax.inject.Inject
 import com.browntowndev.enclave.domain.model.chat.ChatMessage as DomainChatMessage
@@ -630,29 +628,30 @@ class LlamaInferenceServiceImpl
             )
         }
 
-        private fun toLlamaDomainMessage(message: AgentLoopMessage): DomainChatMessage {
-            if (EngineInternalMessageMapper.isEngineInternalMessage(message.metadataJson)) {
-                return DomainChatMessage(
+    private fun toLlamaDomainMessage(message: AgentLoopMessage): DomainChatMessage {
+        val kind = message.classify(attachImages = false, pendingToolCallIds = mutableSetOf())
+        return when (kind) {
+            is AgentLoopRowKind.EngineInternal ->
+                DomainChatMessage(
                     role = Role.SYSTEM,
-                    content = EngineInternalMessageMapper.formatForProviderWire(message.content),
+                    content = kind.wireText,
                 )
-            }
-            val metadata =
-                if (message.metadataJson != "null" && message.metadataJson.isNotBlank()) {
-                    runCatching { Json.parseToJsonElement(message.metadataJson).jsonObject }.getOrNull()
-                } else {
-                    null
-                }
-            val callId = metadata?.get("call_id")?.jsonPrimitive?.contentOrNull
-            return if (callId != null) {
+            is AgentLoopRowKind.ToolResult ->
                 DomainChatMessage(
                     role = Role.USER,
                     content = toolEnvelopeParserPort.buildToolResultMessage(message.content),
                 )
-            } else {
-                DomainChatMessage(role = message.role, content = message.content)
-            }
+            is AgentLoopRowKind.SystemPrompt ->
+                DomainChatMessage(role = Role.SYSTEM, content = message.content)
+            is AgentLoopRowKind.UserText ->
+                DomainChatMessage(role = Role.USER, content = message.content)
+            is AgentLoopRowKind.CompactSummary ->
+                DomainChatMessage(role = Role.ASSISTANT, content = message.content)
+            is AgentLoopRowKind.AssistantText ->
+                DomainChatMessage(role = Role.ASSISTANT, content = message.content)
+            null -> DomainChatMessage(role = message.role, content = message.content)
         }
+    }
 
         private fun injectSidecarIntoLastUserMessage(
             messages: List<DomainChatMessage>,
