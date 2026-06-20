@@ -14,8 +14,10 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.graphics.luminance
 import com.browntowndev.enclave.core.ui.theme.LlmBodyTextStyle
 import com.browntowndev.enclave.core.ui.theme.darkMarkdownTheme
+import com.browntowndev.enclave.core.ui.theme.lightMarkdownTheme
 import com.hrm.markdown.parser.MarkdownParser
 import com.hrm.markdown.parser.ast.Document
 import com.hrm.markdown.renderer.Markdown
@@ -59,7 +61,7 @@ fun StreamableMarkdownText(
     isPreview: Boolean = false, // Default to false for production; pass true for previews
     bodyStyle: TextStyle? = null,
     // Allows tests to inject a tracked factory and assert it is called only once per lifetime.
-    themeFactory: MarkdownThemeFactory = MarkdownThemeFactory { darkMarkdownTheme() },
+    themeFactory: MarkdownThemeFactory? = null,
 ) {
     if (markdown.isEmpty()) return // Prevents spinner from showing when text is empty
 
@@ -75,13 +77,18 @@ fun StreamableMarkdownText(
         return
     }
 
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val contentColor = MaterialTheme.colorScheme.onBackground
     val theme =
-        remember(bodyStyle, contentColor, themeFactory) {
-            if (bodyStyle != null) {
-                darkMarkdownTheme(bodyStyle = resolvedBodyStyle.copy(color = contentColor))
-            } else {
+        remember(bodyStyle, contentColor, isDark, themeFactory) {
+            if (themeFactory != null) {
                 themeFactory.create()
+            } else {
+                if (isDark) {
+                    darkMarkdownTheme(bodyStyle = resolvedBodyStyle.copy(color = contentColor))
+                } else {
+                    lightMarkdownTheme(bodyStyle = resolvedBodyStyle.copy(color = contentColor))
+                }
             }
         }
 
