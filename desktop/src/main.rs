@@ -1,5 +1,5 @@
-use iced::widget::text;
-use iced::{executor, Application, Command, Element, Settings, Theme};
+use iced::widget::{button, column, container, horizontal_space, mouse_area, row, text};
+use iced::{executor, Alignment, Application, Command, Element, Length, Padding, Settings, Theme};
 
 mod icons;
 mod screens;
@@ -9,9 +9,15 @@ pub fn main() -> iced::Result {
     let mut settings = Settings::default();
     settings.window.size = iced::Size::new(900.0, 750.0);
     settings.window.resizable = true;
+    settings.window.decorations = false;
 
     // Default font setup
     settings.default_font = icons::FONT_REGULAR;
+    settings.fonts = vec![
+        std::borrow::Cow::Borrowed(icons::ICON_FONT_BYTES),
+        std::borrow::Cow::Borrowed(icons::FONT_REGULAR_BYTES),
+        std::borrow::Cow::Borrowed(icons::FONT_BOLD_BYTES),
+    ];
 
     EnclaveApp::run(settings)
 }
@@ -39,14 +45,18 @@ struct EnclaveApp {
 
 #[derive(Debug, Clone)]
 pub enum Message {
-    FontLoaded(Result<(), iced::font::Error>),
-
     // Navigation
     NavigateTo(Screen),
     NavigateBack,
 
     // Theme
     ThemeChanged(theme::AppTheme),
+
+    // Window controls
+    WindowClose,
+    WindowMinimize,
+    WindowMaximize,
+    WindowDrag,
 
     // Screen actions - Studio
     StudioPromptChanged(String),
@@ -58,12 +68,136 @@ pub enum Message {
     HistoryUnpinChat(String),
     HistoryDeleteChat(String),
 
-    // Screen actions - Chat
     ChatInputChange(String),
     ChatSendMessage,
+    ChatMicPressed,
+    ChatFilePressed,
 
     // Screen actions - Gallery
     GallerySelectAlbum(Option<String>),
+}
+
+impl EnclaveApp {
+    fn render_titlebar(&self) -> Element<'_, Message, Theme, iced::Renderer> {
+        let is_dark = self.app_theme == theme::AppTheme::Dark;
+        let text_color = if is_dark {
+            theme::DARK_TEXT
+        } else {
+            theme::LIGHT_TEXT
+        };
+
+        // Draggable region containing the app name/logo
+        let title_content = row![
+            horizontal_space().width(Length::Fixed(12.0)),
+            text("Enclave")
+                .font(icons::FONT_BOLD)
+                .size(14)
+                .style(text_color),
+            horizontal_space().width(Length::Fill)
+        ]
+        .align_items(Alignment::Center)
+        .width(Length::Fill)
+        .height(Length::Fill);
+
+        // Wrap the draggable title in a mouse area to handle window dragging
+        let drag_area = mouse_area(title_content).on_press(Message::WindowDrag);
+
+        // Custom styled window controls
+        let window_controls = row![
+            // Minimize
+            button(
+                text(icons::ICON_MINIMIZE)
+                    .font(icons::ICON_FONT)
+                    .size(14)
+                    .shaping(iced::widget::text::Shaping::Advanced)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .horizontal_alignment(iced::alignment::Horizontal::Center)
+                    .vertical_alignment(iced::alignment::Vertical::Center)
+                    .style(if is_dark {
+                        theme::DARK_TEXT
+                    } else {
+                        theme::LIGHT_TEXT
+                    }),
+            )
+            .width(Length::Fixed(32.0))
+            .height(Length::Fixed(32.0))
+            .padding(0)
+            .style(iced::theme::Button::Custom(Box::new(theme::NeoButton {
+                is_accent: false,
+                has_shadow: false,
+                theme: self.app_theme,
+            })))
+            .on_press(Message::WindowMinimize),
+            // Maximize
+            button(
+                text(icons::ICON_MAXIMIZE)
+                    .font(icons::ICON_FONT)
+                    .size(14)
+                    .shaping(iced::widget::text::Shaping::Advanced)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .horizontal_alignment(iced::alignment::Horizontal::Center)
+                    .vertical_alignment(iced::alignment::Vertical::Center)
+                    .style(if is_dark {
+                        theme::DARK_TEXT
+                    } else {
+                        theme::LIGHT_TEXT
+                    }),
+            )
+            .width(Length::Fixed(32.0))
+            .height(Length::Fixed(32.0))
+            .padding(0)
+            .style(iced::theme::Button::Custom(Box::new(theme::NeoButton {
+                is_accent: false,
+                has_shadow: false,
+                theme: self.app_theme,
+            })))
+            .on_press(Message::WindowMaximize),
+            // Close
+            button(
+                text(icons::ICON_CLOSE)
+                    .font(icons::ICON_FONT)
+                    .size(14)
+                    .shaping(iced::widget::text::Shaping::Advanced)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .horizontal_alignment(iced::alignment::Horizontal::Center)
+                    .vertical_alignment(iced::alignment::Vertical::Center)
+                    .style(iced::Color::BLACK),
+            )
+            .width(Length::Fixed(32.0))
+            .height(Length::Fixed(32.0))
+            .padding(0)
+            .style(iced::theme::Button::Custom(Box::new(theme::NeoButton {
+                is_accent: true, // Peach accent for close
+                has_shadow: false,
+                theme: self.app_theme,
+            })))
+            .on_press(Message::WindowClose),
+        ]
+        .spacing(8)
+        .align_items(Alignment::Center);
+
+        // Entire header container
+        container(
+            row![drag_area, window_controls]
+                .align_items(Alignment::Center)
+                .padding(Padding::from([0, 12]))
+                .width(Length::Fill)
+                .height(Length::Fill),
+        )
+        .width(Length::Fill)
+        .height(Length::Fixed(44.0))
+        .style(iced::theme::Container::Custom(Box::new(
+            theme::NeoContainer {
+                is_surface: true,
+                has_shadow: false,
+                theme: self.app_theme,
+            },
+        )))
+        .into()
+    }
 }
 
 impl Application for EnclaveApp {
@@ -86,14 +220,7 @@ impl Application for EnclaveApp {
                 settings_state: screens::settings::SettingsState::new(),
                 gallery_state: screens::gallery::GalleryState::new(),
             },
-            Command::batch(vec![
-                iced::font::load(std::borrow::Cow::Borrowed(icons::ICON_FONT_BYTES))
-                    .map(Message::FontLoaded),
-                iced::font::load(std::borrow::Cow::Borrowed(icons::FONT_REGULAR_BYTES))
-                    .map(Message::FontLoaded),
-                iced::font::load(std::borrow::Cow::Borrowed(icons::FONT_BOLD_BYTES))
-                    .map(Message::FontLoaded),
-            ]),
+            Command::none(),
         )
     }
 
@@ -108,7 +235,10 @@ impl Application for EnclaveApp {
 
     fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
         match message {
-            Message::FontLoaded(_) => Command::none(),
+            Message::WindowClose => iced::window::close(iced::window::Id::MAIN),
+            Message::WindowMinimize => iced::window::minimize(iced::window::Id::MAIN, true),
+            Message::WindowMaximize => iced::window::toggle_maximize(iced::window::Id::MAIN),
+            Message::WindowDrag => iced::window::drag(iced::window::Id::MAIN),
 
             Message::NavigateTo(mut screen) => {
                 // Save current screen to back stack
@@ -225,6 +355,9 @@ impl Application for EnclaveApp {
                 Command::none()
             }
 
+            Message::ChatMicPressed => Command::none(),
+            Message::ChatFilePressed => Command::none(),
+
             // Gallery Actions
             Message::GallerySelectAlbum(album_id) => {
                 self.gallery_state.selected_album_id = album_id.clone();
@@ -241,7 +374,8 @@ impl Application for EnclaveApp {
     }
 
     fn view(&self) -> Element<'_, Self::Message, Self::Theme, iced::Renderer> {
-        match &self.current_screen {
+        let titlebar = self.render_titlebar();
+        let content = match &self.current_screen {
             Screen::Studio => screens::studio::view(&self.studio_state, self.app_theme),
             Screen::Chat { .. } => {
                 if let Some(ref chat) = self.chat_state {
@@ -252,6 +386,11 @@ impl Application for EnclaveApp {
             }
             Screen::Settings => screens::settings::view(&self.settings_state, self.app_theme),
             Screen::Gallery { .. } => screens::gallery::view(&self.gallery_state, self.app_theme),
-        }
+        };
+
+        column![titlebar, content]
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into()
     }
 }

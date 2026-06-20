@@ -104,8 +104,16 @@ pub fn view<'a>(
         text(icons::ICON_CLOSE) // close icon
             .font(icons::ICON_FONT)
             .size(20)
+            .shaping(iced::widget::text::Shaping::Advanced)
+            .width(Length::Fill)
+            .height(Length::Fill)
             .horizontal_alignment(alignment::Horizontal::Center)
-            .vertical_alignment(alignment::Vertical::Center),
+            .vertical_alignment(alignment::Vertical::Center)
+            .style(if is_dark {
+                theme::DARK_TEXT
+            } else {
+                theme::LIGHT_TEXT
+            }),
     )
     .padding(8)
     .width(Length::Fixed(40.0))
@@ -140,8 +148,15 @@ pub fn view<'a>(
         text("+")
             .font(icons::FONT_BOLD)
             .size(20)
+            .width(Length::Fill)
+            .height(Length::Fill)
             .horizontal_alignment(alignment::Horizontal::Center)
-            .vertical_alignment(alignment::Vertical::Center),
+            .vertical_alignment(alignment::Vertical::Center)
+            .style(if is_dark {
+                theme::DARK_TEXT
+            } else {
+                theme::LIGHT_TEXT
+            }),
     )
     .padding(8)
     .width(Length::Fixed(40.0))
@@ -248,9 +263,15 @@ pub fn view<'a>(
                 // Folder Cover mockup block
                 let folder_cover = container(
                     column![
-                        text("📁")
+                        text(icons::ICON_FOLDER)
+                            .font(icons::ICON_FONT)
                             .size(36)
-                            .horizontal_alignment(alignment::Horizontal::Center),
+                            .shaping(iced::widget::text::Shaping::Advanced)
+                            .style(if is_dark {
+                                theme::DARK_TEXT
+                            } else {
+                                theme::LIGHT_TEXT
+                            }),
                         text(format!("{} items", album.items.len()))
                             .font(icons::FONT_REGULAR)
                             .size(12)

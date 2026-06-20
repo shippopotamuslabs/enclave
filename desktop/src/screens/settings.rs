@@ -1,9 +1,7 @@
 use crate::icons;
 use crate::theme::{self, AppTheme};
 use crate::Message;
-use iced::widget::{
-    button, column, container, horizontal_space, row, scrollable, text, Column,
-};
+use iced::widget::{button, column, container, horizontal_space, row, scrollable, text, Column};
 use iced::{alignment, Color, Element, Length, Theme};
 
 pub struct SettingsState {
@@ -38,8 +36,16 @@ pub fn view<'a>(
         text(icons::ICON_CLOSE)
             .font(icons::ICON_FONT)
             .size(20)
+            .shaping(iced::widget::text::Shaping::Advanced)
+            .width(Length::Fill)
+            .height(Length::Fill)
             .horizontal_alignment(alignment::Horizontal::Center)
-            .vertical_alignment(alignment::Vertical::Center),
+            .vertical_alignment(alignment::Vertical::Center)
+            .style(if is_dark {
+                theme::DARK_TEXT
+            } else {
+                theme::LIGHT_TEXT
+            }),
     )
     .padding(8)
     .width(Length::Fixed(40.0))
@@ -195,6 +201,7 @@ pub fn view<'a>(
                 text(icon_str)
                     .font(icons::ICON_FONT)
                     .size(20)
+                    .shaping(iced::widget::text::Shaping::Advanced)
                     .style(theme::COLOR_ACCENT),
                 horizontal_space().width(Length::Fixed(12.0)),
                 column![
