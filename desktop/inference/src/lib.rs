@@ -12,6 +12,12 @@ pub enum InferenceError {
 
 pub struct LocalAndCloudInferenceService;
 
+impl Default for LocalAndCloudInferenceService {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LocalAndCloudInferenceService {
     pub fn new() -> Self {
         Self

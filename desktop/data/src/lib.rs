@@ -18,6 +18,12 @@ pub struct InMemoryChatRepository {
     messages: Mutex<std::collections::HashMap<String, Vec<ChatMessage>>>,
 }
 
+impl Default for InMemoryChatRepository {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl InMemoryChatRepository {
     pub fn new() -> Self {
         Self {
@@ -135,6 +141,12 @@ impl ChatRepository for InMemoryChatRepository {
 
 pub struct InMemorySettingsRepository {
     settings: Mutex<DesktopSettings>,
+}
+
+impl Default for InMemorySettingsRepository {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl InMemorySettingsRepository {
