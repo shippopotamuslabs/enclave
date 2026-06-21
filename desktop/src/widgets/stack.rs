@@ -18,7 +18,7 @@
 use iced::advanced::widget::tree::{State, Tag, Tree};
 use iced::advanced::widget::Operation;
 use iced::advanced::{layout, mouse, overlay, renderer, widget, Clipboard, Layout, Shell};
-use iced::event::{self, Event};
+use iced::event::Event;
 use iced::{Element, Length, Point, Rectangle, Size};
 
 /// Alignment of a layer's content within the stack bounds.
@@ -123,7 +123,7 @@ where
     }
 
     fn layout(
-        &self,
+        &mut self,
         tree: &mut Tree,
         renderer: &Renderer,
         limits: &layout::Limits,
@@ -136,10 +136,10 @@ where
         // siblings overlap instead of flowing.
         let children = self
             .layers
-            .iter()
+            .iter_mut()
             .zip(&mut tree.children)
             .map(|(layer, state)| {
-                let mut node = layer.content.as_widget().layout(
+                let mut node = layer.content.as_widget_mut().layout(
                     state,
                     renderer,
                     &layout::Limits::new(Size::ZERO, stack_size),
@@ -233,51 +233,49 @@ where
     }
 
     fn operate(
-        &self,
+        &mut self,
         tree: &mut Tree,
         layout: Layout<'_>,
         renderer: &Renderer,
-        operation: &mut dyn Operation<Message>,
+        operation: &mut dyn Operation,
     ) {
         // Forward operations (focus, text-editor actions, scrollable, etc.) to
         // every layer so nested widgets — notably the chat input bar's
         // `text_editor` — keep receiving their actions while the chat pane sits
         // inside a `Stack`. Mirrors `Column::operate`.
-        operation.container(None, layout.bounds(), &mut |operation| {
+        operation.container(None, layout.bounds());
+        operation.traverse(&mut |operation| {
             self.layers
-                .iter()
+                .iter_mut()
                 .zip(&mut tree.children)
                 .zip(layout.children())
                 .for_each(|((layer, state), child_layout)| {
                     layer
                         .content
-                        .as_widget()
+                        .as_widget_mut()
                         .operate(state, child_layout, renderer, operation);
                 });
         });
     }
 
-    fn on_event(
+    fn update(
         &mut self,
         tree: &mut Tree,
-        event: Event,
+        event: &Event,
         layout: Layout<'_>,
         cursor: mouse::Cursor,
         renderer: &Renderer,
         clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
-    ) -> event::Status {
-        // Dispatch top-down: the front-most (last) layer gets the first chance
-        // to capture the event, matching draw order. `layout.children()` is not
-        // double-ended, so collect then walk the indices in reverse.
+    ) {
         let layouts: Vec<Layout<'_>> = layout.children().collect();
         let count = self.layers.len();
 
         for idx in (0..count).rev() {
-            let status = self.layers[idx].content.as_widget_mut().on_event(
+            self.layers[idx].content.as_widget_mut().update(
                 &mut tree.children[idx],
-                event.clone(),
+                event,
                 layouts[idx],
                 cursor,
                 renderer,
@@ -285,11 +283,7 @@ where
                 shell,
                 viewport,
             );
-            if status == event::Status::Captured {
-                return event::Status::Captured;
-            }
         }
-        event::Status::Ignored
     }
 
     fn mouse_interaction(
@@ -321,16 +315,11 @@ where
     fn overlay<'b>(
         &'b mut self,
         tree: &'b mut Tree,
-        layout: Layout<'_>,
+        layout: Layout<'b>,
         renderer: &Renderer,
+        viewport: &Rectangle,
         translation: iced::Vector,
     ) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
-        // Forward to children so nested overlays (e.g. the chat input bar's
-        // `Popover` dropdowns) still float when they live inside a stack. The
-        // `.zip(&mut tree.children)` chain (the same one `overlay::from_children`
-        // uses) is what satisfies the borrow checker: it treats the child-tree
-        // borrow as one disjoint simultaneous slice rather than repeated indexed
-        // borrows that would have to last `'b`.
         let collected: Vec<overlay::Element<'b, Message, Theme, Renderer>> = self
             .layers
             .iter_mut()
@@ -340,7 +329,7 @@ where
             .filter_map(|((child, state), child_layout)| {
                 child
                     .as_widget_mut()
-                    .overlay(state, child_layout, renderer, translation)
+                    .overlay(state, child_layout, renderer, viewport, translation)
             })
             .collect();
 

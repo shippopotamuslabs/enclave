@@ -1,5 +1,7 @@
 use iced::widget::text_editor;
 
+use crate::widgets::StreamingMarkdownState;
+
 pub struct ChatState {
     pub active_chat_id: String,
     #[allow(dead_code)]
@@ -18,7 +20,49 @@ pub struct ChatState {
 #[derive(Debug, Clone)]
 pub struct ChatMessage {
     pub sender: MessageSender,
+    /// Raw markdown/plain source mirror for persistence and debugging.
     pub text: String,
+    pub markdown: Option<StreamingMarkdownState>,
+}
+
+impl ChatMessage {
+    pub fn user(text: String) -> Self {
+        Self {
+            sender: MessageSender::User,
+            text,
+            markdown: None,
+        }
+    }
+
+    pub fn assistant(text: impl Into<String>) -> Self {
+        let text = text.into();
+        Self {
+            sender: MessageSender::Assistant,
+            markdown: Some(StreamingMarkdownState::from_static(&text)),
+            text,
+        }
+    }
+
+    pub fn streaming_assistant() -> Self {
+        Self {
+            sender: MessageSender::Assistant,
+            text: String::new(),
+            markdown: Some(StreamingMarkdownState::new()),
+        }
+    }
+
+    pub fn append_stream_chunk(&mut self, chunk: &str) {
+        self.text.push_str(chunk);
+        if let Some(ref mut markdown) = self.markdown {
+            markdown.append(chunk);
+        }
+    }
+
+    pub fn finalize_stream(&mut self) {
+        if let Some(ref mut markdown) = self.markdown {
+            markdown.finalize();
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -98,33 +142,31 @@ pub fn advance_anim(anim: InputBarAnim, delta: f32) -> InputBarAnim {
     }
 }
 
+/// Seed assistant reply for `chat_1` — rendered via [`message_list`](super::message_list.rs)
+/// as a comprehensive markdown capability demo.
+const CHAT_1_ASSISTANT_DEMO: &str = include_str!("../../../seed/chat_1_assistant_demo.md");
+
 impl ChatState {
     pub fn new(chat_id: String) -> Self {
         let (name, messages) = match chat_id.as_str() {
             "chat_1" => (
                 "Analyzing Rust Iced performance".into(),
                 vec![
-                    ChatMessage {
-                        sender: MessageSender::User,
-                        text: "How does Iced compare to other UI toolkits on Linux?".into(),
-                    },
-                    ChatMessage {
-                        sender: MessageSender::Assistant,
-                        text: "Iced is a cross-platform GUI library written in Rust. On Linux, it uses wgpu (WebGPU) or OpenGL by default, giving it hardware-accelerated rendering. Because of its Elm-inspired architecture, it maintains low memory overhead and high responsiveness. It is highly competitive with toolkits like GTK, Qt, or Slint, especially when you need a pure-Rust codebase.".into(),
-                    },
+                    ChatMessage::user(
+                        "How does Iced compare to other UI toolkits on Linux?".into(),
+                    ),
+                    ChatMessage::assistant(CHAT_1_ASSISTANT_DEMO),
                 ],
             ),
             "chat_2" => (
                 "Android Compose compiler options".into(),
                 vec![
-                    ChatMessage {
-                        sender: MessageSender::User,
-                        text: "How do I optimize Jetpack Compose compile times?".into(),
-                    },
-                    ChatMessage {
-                        sender: MessageSender::Assistant,
-                        text: "To optimize Compose compile times, ensure you are utilizing Hilt or Dagger efficiently to prevent KSP bottlenecking. You can also enable Compose compiler metrics in your gradle configuration to inspect unstable parameters causing excessive recompositions.".into(),
-                    },
+                    ChatMessage::user(
+                        "How do I optimize Jetpack Compose compile times?".into(),
+                    ),
+                    ChatMessage::assistant(
+                        "To optimize Compose compile times, ensure you are utilizing Hilt or Dagger efficiently to prevent KSP bottlenecking. You can also enable Compose compiler metrics in your gradle configuration to inspect unstable parameters causing excessive recompositions.",
+                    ),
                 ],
             ),
             _ => ("New Chat".into(), Vec::new()),

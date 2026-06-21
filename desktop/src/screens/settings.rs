@@ -2,7 +2,7 @@ use crate::icons;
 use crate::screens::layout::{icon_button, screen_shell, scrollable_padded_body};
 use crate::theme::{self, AppTheme};
 use crate::Message;
-use iced::widget::{button, column, container, horizontal_space, row, text, Column};
+use iced::widget::{button, column, container, row, space, text, Column};
 use iced::{alignment, Color, Element, Length, Theme};
 
 pub struct SettingsState {
@@ -27,7 +27,7 @@ pub fn view(
     let header_title = text("Settings")
         .font(icons::FONT_BOLD)
         .size(20)
-        .style(if is_dark {
+        .color(if is_dark {
             theme::DARK_TEXT
         } else {
             theme::LIGHT_TEXT
@@ -49,30 +49,28 @@ pub fn view(
     let top_bar = container(
         row![
             header_title,
-            horizontal_space().width(Length::Fill),
+            space::horizontal().width(Length::Fill),
             close_btn
         ]
         .padding(10)
-        .align_items(alignment::Alignment::Center),
+        .align_y(alignment::Alignment::Center),
     )
     .width(Length::Fill)
-    .style(iced::theme::Container::Custom(Box::new(
-        theme::NeoContainer {
-            is_surface: true,
-            has_shadow: false,
-            theme: app_theme,
-        },
-    )));
+    .style(theme::neo_container(theme::NeoContainer {
+        is_surface: true,
+        has_shadow: false,
+        theme: app_theme,
+    }));
 
     // --- 2. Scrollable Settings Content ---
     let mut settings_list = Column::new().spacing(24);
 
     // Section Title helper
-    let make_section_header = |title: &str| {
+    let make_section_header = |title: String| {
         text(title)
             .font(icons::FONT_BOLD)
             .size(13)
-            .style(theme::COLOR_ACCENT)
+            .color(theme::COLOR_ACCENT)
     };
 
     // --- Account Section ---
@@ -83,26 +81,24 @@ pub fn view(
                 text("SD")
                     .font(icons::FONT_BOLD)
                     .size(16)
-                    .style(Color::BLACK)
+                    .color(Color::BLACK)
             )
             .width(44)
             .height(44)
             .align_x(alignment::Horizontal::Center)
             .align_y(alignment::Vertical::Center)
-            .style(iced::theme::Container::Custom(Box::new(
-                theme::NeoContainer {
-                    is_surface: true,
-                    has_shadow: false,
-                    theme: AppTheme::Light,
-                }
-            ))),
-            horizontal_space().width(Length::Fixed(12.0)),
+            .style(theme::neo_container(theme::NeoContainer {
+                is_surface: true,
+                has_shadow: false,
+                theme: AppTheme::Light,
+            })),
+            space::horizontal().width(Length::Fixed(12.0)),
             // Name and email
             column![
                 text("Sean Dev")
                     .font(icons::FONT_BOLD)
                     .size(15)
-                    .style(if is_dark {
+                    .color(if is_dark {
                         theme::DARK_TEXT
                     } else {
                         theme::LIGHT_TEXT
@@ -110,52 +106,50 @@ pub fn view(
                 text("sean@browntowndev.com")
                     .font(icons::FONT_REGULAR)
                     .size(12)
-                    .style(if is_dark {
+                    .color(if is_dark {
                         theme::DARK_TEXT_MUTED
                     } else {
                         theme::LIGHT_TEXT_MUTED
                     })
             ]
             .spacing(2),
-            horizontal_space().width(Length::Fill),
+            space::horizontal().width(Length::Fill),
             // Logout
             button(
                 text("Logout")
                     .font(icons::FONT_BOLD)
                     .size(12)
-                    .style(Color::BLACK)
+                    .color(Color::BLACK)
             )
             .padding(8)
-            .style(iced::theme::Button::Custom(Box::new(theme::NeoButton {
+            .style(theme::neo_button(theme::NeoButton {
                 is_accent: true,
                 has_shadow: false,
                 theme: app_theme,
-            })))
+            }))
         ]
-        .align_items(alignment::Alignment::Center),
+        .align_y(alignment::Alignment::Center),
     )
     .padding(14)
     .width(Length::Fill)
-    .style(iced::theme::Container::Custom(Box::new(
-        theme::NeoContainer {
-            is_surface: true,
-            has_shadow: false,
-            theme: app_theme,
-        },
-    )));
+    .style(theme::neo_container(theme::NeoContainer {
+        is_surface: true,
+        has_shadow: false,
+        theme: app_theme,
+    }));
 
-    settings_list =
-        settings_list.push(column![make_section_header("ACCOUNT"), profile_row].spacing(8));
+    settings_list = settings_list
+        .push(column![make_section_header("ACCOUNT".to_string()), profile_row].spacing(8));
 
     // --- Appearance Theme Selector ---
-    let theme_btn = |label: &str, target_theme: AppTheme| {
+    let theme_btn = |label: String, target_theme: AppTheme| {
         let is_selected = state.active_theme == target_theme;
         button(
             text(label)
                 .font(icons::FONT_BOLD)
                 .size(14)
-                .horizontal_alignment(alignment::Horizontal::Center)
-                .style(if is_selected {
+                .align_x(alignment::Horizontal::Center)
+                .color(if is_selected {
                     Color::BLACK
                 } else if is_dark {
                     theme::DARK_TEXT
@@ -165,110 +159,109 @@ pub fn view(
         )
         .width(Length::FillPortion(1))
         .padding(10)
-        .style(iced::theme::Button::Custom(Box::new(theme::NeoButton {
+        .style(theme::neo_button(theme::NeoButton {
             is_accent: is_selected,
             has_shadow: false,
             theme: app_theme,
-        })))
+        }))
         .on_press(Message::ThemeChanged(target_theme))
     };
 
     let theme_row = row![
-        theme_btn("Dark Theme", AppTheme::Dark),
-        theme_btn("Light Theme", AppTheme::Light)
+        theme_btn("Dark Theme".to_string(), AppTheme::Dark),
+        theme_btn("Light Theme".to_string(), AppTheme::Light)
     ]
     .spacing(12)
     .width(Length::Fill);
 
-    settings_list =
-        settings_list.push(column![make_section_header("APPEARANCE"), theme_row].spacing(8));
+    settings_list = settings_list
+        .push(column![make_section_header("APPEARANCE".to_string()), theme_row].spacing(8));
 
     // --- Models / Assignments Rows ---
-    let make_nav_row = |title: &str, subtitle: &str, icon_handle: &iced::widget::svg::Handle| {
-        container(
-            row![
-                icons::render_svg(icon_handle, theme::COLOR_ACCENT)
-                    .width(Length::Fixed(20.0))
-                    .height(Length::Fixed(20.0)),
-                horizontal_space().width(Length::Fixed(12.0)),
-                column![
-                    text(title)
-                        .font(icons::FONT_BOLD)
-                        .size(14)
-                        .style(if is_dark {
-                            theme::DARK_TEXT
-                        } else {
-                            theme::LIGHT_TEXT
-                        }),
-                    text(subtitle)
-                        .font(icons::FONT_REGULAR)
-                        .size(12)
-                        .style(if is_dark {
-                            theme::DARK_TEXT_MUTED
-                        } else {
-                            theme::LIGHT_TEXT_MUTED
-                        })
+    let make_nav_row =
+        |title: String, subtitle: String, icon_handle: &'static iced::widget::svg::Handle| {
+            container(
+                row![
+                    icons::render_svg(icon_handle, theme::COLOR_ACCENT)
+                        .width(Length::Fixed(20.0))
+                        .height(Length::Fixed(20.0)),
+                    space::horizontal().width(Length::Fixed(12.0)),
+                    column![
+                        text(title)
+                            .font(icons::FONT_BOLD)
+                            .size(14)
+                            .color(if is_dark {
+                                theme::DARK_TEXT
+                            } else {
+                                theme::LIGHT_TEXT
+                            }),
+                        text(subtitle)
+                            .font(icons::FONT_REGULAR)
+                            .size(12)
+                            .color(if is_dark {
+                                theme::DARK_TEXT_MUTED
+                            } else {
+                                theme::LIGHT_TEXT_MUTED
+                            })
+                    ]
+                    .spacing(2),
+                    space::horizontal().width(Length::Fill),
+                    text(">").font(icons::FONT_BOLD).size(16).color(if is_dark {
+                        theme::DARK_TEXT_MUTED
+                    } else {
+                        theme::LIGHT_TEXT_MUTED
+                    })
                 ]
-                .spacing(2),
-                horizontal_space().width(Length::Fill),
-                text(">").font(icons::FONT_BOLD).size(16).style(if is_dark {
-                    theme::DARK_TEXT_MUTED
-                } else {
-                    theme::LIGHT_TEXT_MUTED
-                })
-            ]
-            .align_items(alignment::Alignment::Center),
-        )
-        .padding(12)
-        .width(Length::Fill)
-        .style(iced::theme::Container::Custom(Box::new(
-            theme::NeoContainer {
+                .align_y(alignment::Alignment::Center),
+            )
+            .padding(12)
+            .width(Length::Fill)
+            .style(theme::neo_container(theme::NeoContainer {
                 is_surface: true,
                 has_shadow: false,
                 theme: app_theme,
-            },
-        )))
-    };
+            }))
+        };
 
     let models_column = column![
         make_nav_row(
-            "Model Role Assignments",
-            "Set models for chat, media, and TTS",
+            "Model Role Assignments".to_string(),
+            "Set models for chat, media, and TTS".to_string(),
             &icons::HANDLE_MENU
         ),
         make_nav_row(
-            "Local Models",
-            "Manage on-device inference packs",
+            "Local Models".to_string(),
+            "Manage on-device inference packs".to_string(),
             &icons::HANDLE_MENU
         ),
         make_nav_row(
-            "API Presets",
-            "Configure Bring-Your-Own-Keys",
+            "API Presets".to_string(),
+            "Configure Bring-Your-Own-Keys".to_string(),
             &icons::HANDLE_GALLERY
         )
     ]
     .spacing(8);
 
-    settings_list =
-        settings_list.push(column![make_section_header("MODELS"), models_column].spacing(8));
+    settings_list = settings_list
+        .push(column![make_section_header("MODELS".to_string()), models_column].spacing(8));
 
     // --- About Section ---
     let about_column = column![
         make_nav_row(
-            "Terms of Service",
-            "Read Enclave user guidelines",
+            "Terms of Service".to_string(),
+            "Read Enclave user guidelines".to_string(),
             &icons::HANDLE_SETTINGS
         ),
         make_nav_row(
-            "Licenses & Attributions",
-            "Credits for open source packages",
+            "Licenses & Attributions".to_string(),
+            "Credits for open source packages".to_string(),
             &icons::HANDLE_SETTINGS
         )
     ]
     .spacing(8);
 
-    settings_list =
-        settings_list.push(column![make_section_header("ABOUT"), about_column].spacing(8));
+    settings_list = settings_list
+        .push(column![make_section_header("ABOUT".to_string()), about_column].spacing(8));
 
     let scroll_settings = scrollable_padded_body(settings_list, app_theme);
 

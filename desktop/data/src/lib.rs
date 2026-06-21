@@ -55,7 +55,7 @@ impl InMemoryChatRepository {
                         },
                         ChatMessage {
                             sender: enclave_desktop_domain::models::MessageSender::Assistant,
-                            text: "Iced is a cross-platform GUI library written in Rust. On Linux, it uses wgpu (WebGPU) or OpenGL by default, giving it hardware-accelerated rendering. Because of its Elm-inspired architecture, it maintains low memory overhead and high responsiveness. It is highly competitive with toolkits like GTK, Qt, or Slint, especially when you need a pure-Rust codebase.".into(),
+                            text: include_str!("../../seed/chat_1_assistant_demo.md").into(),
                             timestamp: 1718880005,
                         },
                     ],

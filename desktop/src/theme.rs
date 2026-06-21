@@ -31,6 +31,7 @@ pub const LIGHT_NEO_SHADOW: Color = Color::from_rgb(0.06, 0.09, 0.16); // Slate 
 // ACCENT
 pub const COLOR_ACCENT: Color = Color::from_rgb(0.96, 0.64, 0.38); // Peach Accent
 
+#[derive(Clone, Copy)]
 pub struct NeoContainer {
     pub is_surface: bool,
     pub has_shadow: bool,
@@ -42,6 +43,7 @@ pub struct NeoContainer {
 /// history sidebar's own border to the side — so the two borders don't double
 /// up at the seam. Drawn with no border and no shadow; just the solid base or
 /// surface background so the pane reads as one continuous panel.
+#[derive(Clone, Copy)]
 pub struct NeoPaneBackground {
     pub is_surface: bool,
     pub theme: AppTheme,
@@ -52,99 +54,77 @@ pub struct NeoPaneBackground {
 /// the neobrutalist outline color (`*_NEO_BORDER`). Used as a bottom rule under
 /// the chat pane — the chat pane alone, not the history sidebar, so the rule
 /// spans only the chat region and never doubles up under the sidebar's border.
+#[derive(Clone, Copy)]
 pub struct NeoRule {
     pub theme: AppTheme,
 }
 
-impl container::StyleSheet for NeoRule {
-    type Style = iced::Theme;
-
-    fn appearance(&self, _style: &Self::Style) -> container::Appearance {
-        let border_color = if self.theme == AppTheme::Dark {
-            DARK_NEO_BORDER
-        } else {
-            LIGHT_NEO_BORDER
-        };
-
-        container::Appearance {
-            text_color: None,
-            background: Some(Background::Color(border_color)),
-            border: Border {
-                color: Color::TRANSPARENT,
-                width: 0.0,
-                radius: 0.0.into(),
-            },
-            shadow: Shadow::default(),
-        }
+fn neo_border(theme: AppTheme) -> Color {
+    if theme == AppTheme::Dark {
+        DARK_NEO_BORDER
+    } else {
+        LIGHT_NEO_BORDER
     }
 }
 
-impl container::StyleSheet for NeoPaneBackground {
-    type Style = iced::Theme;
-
-    fn appearance(&self, _style: &Self::Style) -> container::Appearance {
-        let is_dark = self.theme == AppTheme::Dark;
-        let bg_color = if is_dark {
-            if self.is_surface {
-                DARK_SURFACE
-            } else {
-                DARK_BG
-            }
-        } else if self.is_surface {
-            LIGHT_SURFACE
-        } else {
-            LIGHT_BG
-        };
-        let text_color = if is_dark { DARK_TEXT } else { LIGHT_TEXT };
-
-        container::Appearance {
-            text_color: Some(text_color),
-            background: Some(Background::Color(bg_color)),
-            border: Border {
-                color: Color::TRANSPARENT,
-                width: 0.0,
-                radius: 0.0.into(),
-            },
-            shadow: Shadow::default(),
-        }
+fn neo_shadow_color(theme: AppTheme) -> Color {
+    if theme == AppTheme::Dark {
+        DARK_NEO_SHADOW
+    } else {
+        LIGHT_NEO_SHADOW
     }
 }
 
-impl container::StyleSheet for NeoContainer {
-    type Style = iced::Theme;
+fn neo_bg(theme: AppTheme, is_surface: bool) -> Color {
+    match (theme, is_surface) {
+        (AppTheme::Dark, true) => DARK_SURFACE,
+        (AppTheme::Dark, false) => DARK_BG,
+        (AppTheme::Light, true) => LIGHT_SURFACE,
+        (AppTheme::Light, false) => LIGHT_BG,
+    }
+}
 
-    fn appearance(&self, _style: &Self::Style) -> container::Appearance {
-        let is_dark = self.theme == AppTheme::Dark;
+fn neo_text(theme: AppTheme) -> Color {
+    if theme == AppTheme::Dark {
+        DARK_TEXT
+    } else {
+        LIGHT_TEXT
+    }
+}
 
-        let bg_color = if is_dark {
-            if self.is_surface {
-                DARK_SURFACE
-            } else {
-                DARK_BG
-            }
-        } else {
-            if self.is_surface {
-                LIGHT_SURFACE
-            } else {
-                LIGHT_BG
-            }
-        };
+pub fn neo_rule(neo: NeoRule) -> impl Fn(&iced::Theme) -> container::Style {
+    move |_theme| container::Style {
+        text_color: None,
+        background: Some(Background::Color(neo_border(neo.theme))),
+        border: Border {
+            color: Color::TRANSPARENT,
+            width: 0.0,
+            radius: 0.0.into(),
+        },
+        shadow: Shadow::default(),
+        snap: false,
+    }
+}
 
-        let text_color = if is_dark { DARK_TEXT } else { LIGHT_TEXT };
-        let border_color = if is_dark {
-            DARK_NEO_BORDER
-        } else {
-            LIGHT_NEO_BORDER
-        };
-        let shadow_color = if is_dark {
-            DARK_NEO_SHADOW
-        } else {
-            LIGHT_NEO_SHADOW
-        };
+pub fn neo_pane_background(neo: NeoPaneBackground) -> impl Fn(&iced::Theme) -> container::Style {
+    move |_theme| container::Style {
+        text_color: Some(neo_text(neo.theme)),
+        background: Some(Background::Color(neo_bg(neo.theme, neo.is_surface))),
+        border: Border {
+            color: Color::TRANSPARENT,
+            width: 0.0,
+            radius: 0.0.into(),
+        },
+        shadow: Shadow::default(),
+        snap: false,
+    }
+}
 
-        let shadow = if self.has_shadow {
+pub fn neo_container(neo: NeoContainer) -> impl Fn(&iced::Theme) -> container::Style {
+    move |_theme| {
+        let shadow = if neo.has_shadow {
             Shadow {
-                color: shadow_color,
+                color: neo_shadow_color(neo.theme),
                 offset: Vector::new(4.0, 4.0),
                 blur_radius: 0.0,
             }
@@ -152,367 +132,252 @@ impl container::StyleSheet for NeoContainer {
             Shadow::default()
         };
 
-        container::Appearance {
-            text_color: Some(text_color),
-            background: Some(Background::Color(bg_color)),
+        container::Style {
+            text_color: Some(neo_text(neo.theme)),
+            background: Some(Background::Color(neo_bg(neo.theme, neo.is_surface))),
             border: Border {
-                color: border_color,
+                color: neo_border(neo.theme),
                 width: 2.0,
                 radius: 4.0.into(),
             },
             shadow,
+            snap: false,
         }
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct NeoButton {
     pub is_accent: bool,
     pub has_shadow: bool,
     pub theme: AppTheme,
 }
 
-impl button::StyleSheet for NeoButton {
-    type Style = iced::Theme;
+fn neo_button_active(neo: NeoButton) -> button::Style {
+    let bg_color = if neo.is_accent {
+        COLOR_ACCENT
+    } else {
+        neo_bg(neo.theme, true)
+    };
 
-    fn active(&self, _style: &Self::Style) -> button::Appearance {
-        let is_dark = self.theme == AppTheme::Dark;
+    let text_color = if neo.is_accent {
+        Color::BLACK
+    } else {
+        neo_text(neo.theme)
+    };
 
-        let bg_color = if self.is_accent {
-            COLOR_ACCENT
-        } else if is_dark {
-            DARK_SURFACE
-        } else {
-            LIGHT_SURFACE
-        };
-
-        let text_color = if self.is_accent {
-            Color::BLACK
-        } else if is_dark {
-            DARK_TEXT
-        } else {
-            LIGHT_TEXT
-        };
-
-        let border_color = if is_dark {
-            DARK_NEO_BORDER
-        } else {
-            LIGHT_NEO_BORDER
-        };
-        let shadow_color = if is_dark {
-            DARK_NEO_SHADOW
-        } else {
-            LIGHT_NEO_SHADOW
-        };
-
-        let shadow_offset = if self.has_shadow {
-            Vector::new(3.0, 3.0)
-        } else {
-            Vector::default()
-        };
-
-        let shadow = if self.has_shadow {
-            Shadow {
-                color: shadow_color,
-                offset: Vector::new(3.0, 3.0),
-                blur_radius: 0.0,
-            }
-        } else {
-            Shadow::default()
-        };
-
-        button::Appearance {
-            background: Some(Background::Color(bg_color)),
-            border: Border {
-                color: border_color,
-                width: 2.0,
-                radius: 4.0.into(),
-            },
-            shadow_offset,
-            shadow,
-            text_color,
+    let shadow = if neo.has_shadow {
+        Shadow {
+            color: neo_shadow_color(neo.theme),
+            offset: Vector::new(3.0, 3.0),
+            blur_radius: 0.0,
         }
-    }
+    } else {
+        Shadow::default()
+    };
 
-    fn hovered(&self, style: &Self::Style) -> button::Appearance {
-        let is_dark = self.theme == AppTheme::Dark;
-        let active = self.active(style);
-
-        let shadow_offset = if self.has_shadow {
-            Vector::new(5.0, 5.0)
-        } else {
-            Vector::default()
-        };
-
-        let border_color = if is_dark {
-            DARK_NEO_BORDER
-        } else {
-            LIGHT_NEO_BORDER
-        };
-        let shadow_color = if is_dark {
-            DARK_NEO_SHADOW
-        } else {
-            LIGHT_NEO_SHADOW
-        };
-
-        let shadow = if self.has_shadow {
-            Shadow {
-                color: shadow_color,
-                offset: Vector::new(5.0, 5.0),
-                blur_radius: 0.0,
-            }
-        } else {
-            Shadow::default()
-        };
-
-        let bg_color = if self.is_accent {
-            Color::from_rgb(0.98, 0.73, 0.52) // Lighten peach slightly
-        } else if is_dark {
-            Color::from_rgb(0.18, 0.18, 0.20) // Lighten surface slightly
-        } else {
-            Color::from_rgb(0.90, 0.92, 0.92) // Lighten light surface slightly
-        };
-
-        button::Appearance {
-            background: Some(Background::Color(bg_color)),
-            shadow_offset,
-            shadow,
-            border: Border {
-                color: border_color,
-                width: 2.0,
-                radius: 4.0.into(),
-            },
-            ..active
-        }
-    }
-
-    fn pressed(&self, style: &Self::Style) -> button::Appearance {
-        let active = self.active(style);
-        button::Appearance {
-            shadow_offset: Vector::default(),
-            shadow: Shadow::default(),
-            ..active
-        }
-    }
-
-    fn disabled(&self, _style: &Self::Style) -> button::Appearance {
-        let is_dark = self.theme == AppTheme::Dark;
-        let bg_color = if is_dark { DARK_BG } else { LIGHT_BG };
-        let border_color = if is_dark {
-            DARK_NEO_BORDER
-        } else {
-            LIGHT_NEO_BORDER
-        };
-        let text_color = if is_dark {
-            DARK_TEXT_MUTED
-        } else {
-            LIGHT_TEXT_MUTED
-        };
-
-        button::Appearance {
-            background: Some(Background::Color(bg_color)),
-            border: Border {
-                color: border_color,
-                width: 2.0,
-                radius: 4.0.into(),
-            },
-            shadow_offset: Vector::default(),
-            shadow: Shadow::default(),
-            text_color,
-        }
+    button::Style {
+        background: Some(Background::Color(bg_color)),
+        border: Border {
+            color: neo_border(neo.theme),
+            width: 2.0,
+            radius: 4.0.into(),
+        },
+        shadow,
+        text_color,
+        snap: false,
     }
 }
 
+pub fn neo_button(neo: NeoButton) -> impl Fn(&iced::Theme, button::Status) -> button::Style {
+    move |_theme, status| match status {
+        button::Status::Active => neo_button_active(neo),
+        button::Status::Hovered => {
+            let mut active = neo_button_active(neo);
+            let bg_color = if neo.is_accent {
+                Color::from_rgb(0.98, 0.73, 0.52)
+            } else if neo.theme == AppTheme::Dark {
+                Color::from_rgb(0.18, 0.18, 0.20)
+            } else {
+                Color::from_rgb(0.90, 0.92, 0.92)
+            };
+            active.background = Some(Background::Color(bg_color));
+            if neo.has_shadow {
+                active.shadow = Shadow {
+                    color: neo_shadow_color(neo.theme),
+                    offset: Vector::new(5.0, 5.0),
+                    blur_radius: 0.0,
+                };
+            }
+            active
+        }
+        button::Status::Pressed => {
+            let mut active = neo_button_active(neo);
+            active.shadow = Shadow::default();
+            active
+        }
+        button::Status::Disabled => button::Style {
+            background: Some(Background::Color(neo_bg(neo.theme, false))),
+            border: Border {
+                color: neo_border(neo.theme),
+                width: 2.0,
+                radius: 4.0.into(),
+            },
+            shadow: Shadow::default(),
+            text_color: if neo.theme == AppTheme::Dark {
+                DARK_TEXT_MUTED
+            } else {
+                LIGHT_TEXT_MUTED
+            },
+            snap: false,
+        },
+    }
+}
+
+#[derive(Clone, Copy)]
 pub struct NeoInput {
     pub theme: AppTheme,
 }
 
-impl text_input::StyleSheet for NeoInput {
-    type Style = iced::Theme;
+fn neo_input_style(neo: NeoInput, border_color: Color) -> text_input::Style {
+    let bg_color = if neo.theme == AppTheme::Dark {
+        DARK_SURFACE_VAR
+    } else {
+        LIGHT_SURFACE_VAR
+    };
+    let text_muted = if neo.theme == AppTheme::Dark {
+        DARK_TEXT_MUTED
+    } else {
+        LIGHT_TEXT_MUTED
+    };
+    let text_color = neo_text(neo.theme);
 
-    fn active(&self, _style: &Self::Style) -> text_input::Appearance {
-        let is_dark = self.theme == AppTheme::Dark;
-
-        let bg_color = if is_dark {
-            DARK_SURFACE_VAR
-        } else {
-            LIGHT_SURFACE_VAR
-        };
-        let border_color = if is_dark {
-            DARK_NEO_BORDER
-        } else {
-            LIGHT_NEO_BORDER
-        };
-        let text_muted = if is_dark {
-            DARK_TEXT_MUTED
-        } else {
-            LIGHT_TEXT_MUTED
-        };
-
-        text_input::Appearance {
-            background: Background::Color(bg_color),
-            border: Border {
-                color: border_color,
-                width: 2.0,
-                radius: 4.0.into(),
-            },
-            icon_color: text_muted,
-        }
-    }
-
-    fn focused(&self, _style: &Self::Style) -> text_input::Appearance {
-        let is_dark = self.theme == AppTheme::Dark;
-        let bg_color = if is_dark {
-            DARK_SURFACE_VAR
-        } else {
-            LIGHT_SURFACE_VAR
-        };
-        let text_color = if is_dark { DARK_TEXT } else { LIGHT_TEXT };
-
-        text_input::Appearance {
-            background: Background::Color(bg_color),
-            border: Border {
-                color: COLOR_ACCENT,
-                width: 2.0,
-                radius: 4.0.into(),
-            },
-            icon_color: text_color,
-        }
-    }
-
-    fn placeholder_color(&self, _style: &Self::Style) -> Color {
-        if self.theme == AppTheme::Dark {
-            DARK_TEXT_MUTED
-        } else {
-            LIGHT_TEXT_MUTED
-        }
-    }
-
-    fn value_color(&self, _style: &Self::Style) -> Color {
-        if self.theme == AppTheme::Dark {
-            DARK_TEXT
-        } else {
-            LIGHT_TEXT
-        }
-    }
-
-    fn disabled_color(&self, _style: &Self::Style) -> Color {
-        if self.theme == AppTheme::Dark {
-            DARK_TEXT_MUTED
-        } else {
-            LIGHT_TEXT_MUTED
-        }
-    }
-
-    fn selection_color(&self, _style: &Self::Style) -> Color {
-        Color::from_rgba(0.96, 0.64, 0.38, 0.4)
-    }
-
-    fn disabled(&self, _style: &Self::Style) -> text_input::Appearance {
-        let is_dark = self.theme == AppTheme::Dark;
-        let bg_color = if is_dark { DARK_BG } else { LIGHT_BG };
-        let border_color = if is_dark {
-            DARK_NEO_BORDER
-        } else {
-            LIGHT_NEO_BORDER
-        };
-        let outline = if is_dark { DARK_OUTLINE } else { LIGHT_OUTLINE };
-
-        text_input::Appearance {
-            background: Background::Color(bg_color),
-            border: Border {
-                color: border_color,
-                width: 2.0,
-                radius: 4.0.into(),
-            },
-            icon_color: outline,
-        }
+    text_input::Style {
+        background: Background::Color(bg_color),
+        border: Border {
+            color: border_color,
+            width: 2.0,
+            radius: 4.0.into(),
+        },
+        icon: text_muted,
+        placeholder: text_muted,
+        value: text_color,
+        selection: Color::from_rgba(0.96, 0.64, 0.38, 0.4),
     }
 }
 
+pub fn neo_input(neo: NeoInput) -> impl Fn(&iced::Theme, text_input::Status) -> text_input::Style {
+    move |_theme, status| match status {
+        text_input::Status::Focused { .. } => neo_input_style(neo, COLOR_ACCENT),
+        text_input::Status::Disabled => {
+            let bg_color = if neo.theme == AppTheme::Dark {
+                DARK_BG
+            } else {
+                LIGHT_BG
+            };
+            let outline = if neo.theme == AppTheme::Dark {
+                DARK_OUTLINE
+            } else {
+                LIGHT_OUTLINE
+            };
+            text_input::Style {
+                background: Background::Color(bg_color),
+                border: Border {
+                    color: neo_border(neo.theme),
+                    width: 2.0,
+                    radius: 4.0.into(),
+                },
+                icon: outline,
+                placeholder: outline,
+                value: outline,
+                selection: Color::from_rgba(0.96, 0.64, 0.38, 0.4),
+            }
+        }
+        _ => neo_input_style(neo, neo_border(neo.theme)),
+    }
+}
+
+#[derive(Clone, Copy)]
 pub struct NeoScrollable {
     pub theme: AppTheme,
 }
 
-impl scrollable::StyleSheet for NeoScrollable {
-    type Style = iced::Theme;
-
-    fn active(&self, _style: &Self::Style) -> scrollable::Appearance {
-        let is_dark = self.theme == AppTheme::Dark;
-        let scroller_color = if is_dark {
+pub fn neo_scrollable(
+    neo: NeoScrollable,
+) -> impl Fn(&iced::Theme, scrollable::Status) -> scrollable::Style {
+    move |_theme, status| {
+        let scroller_color = if neo.theme == AppTheme::Dark {
             Color::from_rgba(0.32, 0.32, 0.36, 0.6)
         } else {
             Color::from_rgba(0.80, 0.84, 0.88, 0.6)
         };
 
-        scrollable::Appearance {
-            container: container::Appearance::default(),
-            scrollbar: scrollable::Scrollbar {
-                background: Some(Background::Color(Color::TRANSPARENT)),
-                border: Border::default(),
-                scroller: scrollable::Scroller {
-                    color: scroller_color,
-                    border: Border {
-                        color: Color::TRANSPARENT,
-                        width: 0.0,
-                        radius: 2.0.into(),
-                    },
+        let rail = scrollable::Rail {
+            background: Some(Background::Color(Color::TRANSPARENT)),
+            border: Border::default(),
+            scroller: scrollable::Scroller {
+                background: Background::Color(scroller_color),
+                border: Border {
+                    color: Color::TRANSPARENT,
+                    width: 0.0,
+                    radius: 2.0.into(),
                 },
             },
-            gap: None,
-        }
-    }
+        };
 
-    fn hovered(
-        &self,
-        style: &Self::Style,
-        is_mouse_over_scrollbar: bool,
-    ) -> scrollable::Appearance {
-        let active = self.active(style);
-        if is_mouse_over_scrollbar {
-            scrollable::Appearance {
-                scrollbar: scrollable::Scrollbar {
+        let mut style = scrollable::Style {
+            container: container::Style::default(),
+            vertical_rail: rail,
+            horizontal_rail: rail,
+            gap: None,
+            auto_scroll: scrollable::AutoScroll {
+                background: Background::Color(Color::TRANSPARENT),
+                border: Border::default(),
+                shadow: Shadow::default(),
+                icon: neo_text(neo.theme),
+            },
+        };
+
+        if let scrollable::Status::Hovered {
+            is_horizontal_scrollbar_hovered,
+            is_vertical_scrollbar_hovered,
+            ..
+        } = status
+        {
+            if is_horizontal_scrollbar_hovered || is_vertical_scrollbar_hovered {
+                let hovered = scrollable::Rail {
                     scroller: scrollable::Scroller {
-                        color: COLOR_ACCENT,
-                        ..active.scrollbar.scroller
+                        background: Background::Color(COLOR_ACCENT),
+                        border: rail.scroller.border,
                     },
-                    ..active.scrollbar
-                },
-                ..active
+                    ..rail
+                };
+                if is_vertical_scrollbar_hovered {
+                    style.vertical_rail = hovered;
+                }
+                if is_horizontal_scrollbar_hovered {
+                    style.horizontal_rail = hovered;
+                }
             }
-        } else {
-            active
         }
+
+        style
     }
 }
 
 /// Solid container for the chat input bar. The text area and the action row
 /// share one background + border so the bar reads as a single solid block.
+#[derive(Clone, Copy)]
 pub struct NeoInputBar {
     pub has_shadow: bool,
     pub theme: AppTheme,
 }
 
-impl container::StyleSheet for NeoInputBar {
-    type Style = iced::Theme;
-
-    fn appearance(&self, _style: &Self::Style) -> container::Appearance {
-        let is_dark = self.theme == AppTheme::Dark;
-        let bg_color = if is_dark { DARK_SURFACE } else { LIGHT_SURFACE };
-        let text_color = if is_dark { DARK_TEXT } else { LIGHT_TEXT };
-        let border_color = if is_dark {
-            DARK_NEO_BORDER
-        } else {
-            LIGHT_NEO_BORDER
-        };
-        let shadow_color = if is_dark {
-            DARK_NEO_SHADOW
-        } else {
-            LIGHT_NEO_SHADOW
-        };
-
-        let shadow = if self.has_shadow {
+pub fn neo_input_bar(neo: NeoInputBar) -> impl Fn(&iced::Theme) -> container::Style {
+    move |_theme| {
+        let shadow = if neo.has_shadow {
             Shadow {
-                color: shadow_color,
+                color: neo_shadow_color(neo.theme),
                 offset: Vector::new(4.0, 4.0),
                 blur_radius: 0.0,
             }
@@ -520,15 +385,16 @@ impl container::StyleSheet for NeoInputBar {
             Shadow::default()
         };
 
-        container::Appearance {
-            text_color: Some(text_color),
-            background: Some(Background::Color(bg_color)),
+        container::Style {
+            text_color: Some(neo_text(neo.theme)),
+            background: Some(Background::Color(neo_bg(neo.theme, true))),
             border: Border {
-                color: border_color,
+                color: neo_border(neo.theme),
                 width: 2.0,
                 radius: 4.0.into(),
             },
             shadow,
+            snap: false,
         }
     }
 }
@@ -536,45 +402,33 @@ impl container::StyleSheet for NeoInputBar {
 /// Popover container for the `+` attachment menu, permission-mode dropdown, and
 /// model picker. Surface background with a heavier offset shadow so it lifts
 /// above the input bar.
+#[derive(Clone, Copy)]
 pub struct NeoDropdown {
     pub theme: AppTheme,
 }
 
-impl container::StyleSheet for NeoDropdown {
-    type Style = iced::Theme;
-
-    fn appearance(&self, _style: &Self::Style) -> container::Appearance {
-        let is_dark = self.theme == AppTheme::Dark;
-        let bg_color = if is_dark {
+pub fn neo_dropdown(neo: NeoDropdown) -> impl Fn(&iced::Theme) -> container::Style {
+    move |_theme| {
+        let bg_color = if neo.theme == AppTheme::Dark {
             DARK_SURFACE_VAR
         } else {
             LIGHT_SURFACE_VAR
         };
-        let text_color = if is_dark { DARK_TEXT } else { LIGHT_TEXT };
-        let border_color = if is_dark {
-            DARK_NEO_BORDER
-        } else {
-            LIGHT_NEO_BORDER
-        };
-        let shadow_color = if is_dark {
-            DARK_NEO_SHADOW
-        } else {
-            LIGHT_NEO_SHADOW
-        };
 
-        container::Appearance {
-            text_color: Some(text_color),
+        container::Style {
+            text_color: Some(neo_text(neo.theme)),
             background: Some(Background::Color(bg_color)),
             border: Border {
-                color: border_color,
+                color: neo_border(neo.theme),
                 width: 2.0,
                 radius: 4.0.into(),
             },
             shadow: Shadow {
-                color: shadow_color,
+                color: neo_shadow_color(neo.theme),
                 offset: Vector::new(4.0, 4.0),
                 blur_radius: 0.0,
             },
+            snap: false,
         }
     }
 }
@@ -582,71 +436,29 @@ impl container::StyleSheet for NeoDropdown {
 /// Neobrutalist style for the multi-line `text_editor`. Transparent background
 /// (the enclosing `NeoInputBar` provides the solid fill) so the typing area and
 /// the bar read as one solid block. Border only on focus.
+#[derive(Clone, Copy)]
 pub struct NeoTextEditor {
     pub theme: AppTheme,
 }
 
-impl text_editor::StyleSheet for NeoTextEditor {
-    type Style = iced::Theme;
-
-    fn active(&self, _style: &Self::Style) -> text_editor::Appearance {
-        text_editor::Appearance {
-            background: Background::Color(Color::TRANSPARENT),
-            border: Border {
-                color: Color::TRANSPARENT,
-                width: 0.0,
-                radius: 4.0.into(),
-            },
-        }
-    }
-
-    fn focused(&self, _style: &Self::Style) -> text_editor::Appearance {
-        // Borderless on focus: the enclosing `NeoInputBar` already supplies the
-        // solid border, so the editor must not draw its own peach outline when
-        // the user clicks into it.
-        text_editor::Appearance {
-            background: Background::Color(Color::TRANSPARENT),
-            border: Border {
-                color: Color::TRANSPARENT,
-                width: 0.0,
-                radius: 4.0.into(),
-            },
-        }
-    }
-
-    fn placeholder_color(&self, _style: &Self::Style) -> Color {
-        if self.theme == AppTheme::Dark {
+pub fn neo_text_editor(
+    neo: NeoTextEditor,
+) -> impl Fn(&iced::Theme, text_editor::Status) -> text_editor::Style {
+    let transparent = text_editor::Style {
+        background: Background::Color(Color::TRANSPARENT),
+        border: Border {
+            color: Color::TRANSPARENT,
+            width: 0.0,
+            radius: 4.0.into(),
+        },
+        placeholder: if neo.theme == AppTheme::Dark {
             DARK_TEXT_MUTED
         } else {
             LIGHT_TEXT_MUTED
-        }
-    }
+        },
+        value: neo_text(neo.theme),
+        selection: Color::from_rgba(0.96, 0.64, 0.38, 0.4),
+    };
 
-    fn value_color(&self, _style: &Self::Style) -> Color {
-        if self.theme == AppTheme::Dark {
-            DARK_TEXT
-        } else {
-            LIGHT_TEXT
-        }
-    }
-
-    fn disabled_color(&self, _style: &Self::Style) -> Color {
-        if self.theme == AppTheme::Dark {
-            DARK_TEXT_MUTED
-        } else {
-            LIGHT_TEXT_MUTED
-        }
-    }
-
-    fn selection_color(&self, _style: &Self::Style) -> Color {
-        Color::from_rgba(0.96, 0.64, 0.38, 0.4)
-    }
-
-    fn hovered(&self, style: &Self::Style) -> text_editor::Appearance {
-        self.focused(style)
-    }
-
-    fn disabled(&self, style: &Self::Style) -> text_editor::Appearance {
-        self.active(style)
-    }
+    move |_theme, _status| transparent
 }

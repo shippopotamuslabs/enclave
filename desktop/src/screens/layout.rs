@@ -1,19 +1,19 @@
 //! Shared layout helpers for full-screen views and repeated neobrutalist chrome.
 
 use iced::widget::{button, container, scrollable};
-use iced::{Element, Length, Theme};
+use iced::{alignment, Element, Length, Theme};
 
 use crate::icons;
 use crate::theme::{self, AppTheme};
 use crate::Message;
 
 /// Square 40×40 neobrutalist icon button with hard shadow.
-pub fn icon_button(
-    handle: &iced::widget::svg::Handle,
+pub fn icon_button<'a>(
+    handle: &'a iced::widget::svg::Handle,
     color: iced::Color,
     app_theme: AppTheme,
     on_press: Message,
-) -> button::Button<'static, Message, Theme, iced::Renderer> {
+) -> button::Button<'a, Message, Theme, iced::Renderer> {
     button(
         container(
             icons::render_svg(handle, color)
@@ -22,17 +22,17 @@ pub fn icon_button(
         )
         .width(Length::Fill)
         .height(Length::Fill)
-        .center_x()
-        .center_y(),
+        .align_x(alignment::Horizontal::Center)
+        .align_y(alignment::Vertical::Center),
     )
     .padding(8)
     .width(Length::Fixed(40.0))
     .height(Length::Fixed(40.0))
-    .style(iced::theme::Button::Custom(Box::new(theme::NeoButton {
+    .style(theme::neo_button(theme::NeoButton {
         is_accent: false,
         has_shadow: true,
         theme: app_theme,
-    })))
+    }))
     .on_press(on_press)
 }
 
@@ -45,11 +45,11 @@ pub fn dropdown_menu_row<'a>(
     button(container(label).padding(8))
         .padding(0)
         .width(Length::Fill)
-        .style(iced::theme::Button::Custom(Box::new(theme::NeoButton {
+        .style(theme::neo_button(theme::NeoButton {
             is_accent: false,
             has_shadow: false,
             theme: app_theme,
-        })))
+        }))
         .on_press(on_press)
 }
 
@@ -60,9 +60,9 @@ pub fn neo_scrollable<'a>(
 ) -> scrollable::Scrollable<'a, Message, Theme, iced::Renderer> {
     scrollable(content)
         .height(Length::Fill)
-        .style(iced::theme::Scrollable::Custom(Box::new(
-            theme::NeoScrollable { theme: app_theme },
-        )))
+        .style(theme::neo_scrollable(theme::NeoScrollable {
+            theme: app_theme,
+        }))
 }
 
 /// Scrollable body with standard 20px padding around `content`.
@@ -84,12 +84,10 @@ pub fn screen_shell<'a>(
     container(main_layout)
         .width(Length::Fill)
         .height(Length::Fill)
-        .style(iced::theme::Container::Custom(Box::new(
-            theme::NeoContainer {
-                is_surface: false,
-                has_shadow: false,
-                theme: app_theme,
-            },
-        )))
+        .style(theme::neo_container(theme::NeoContainer {
+            is_surface: false,
+            has_shadow: false,
+            theme: app_theme,
+        }))
         .into()
 }

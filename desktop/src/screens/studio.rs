@@ -2,9 +2,7 @@ use crate::icons;
 use crate::screens::layout::{icon_button, screen_shell, scrollable_padded_body};
 use crate::theme::{self, AppTheme};
 use crate::Message;
-use iced::widget::{
-    button, column, container, horizontal_space, row, text, text_input, Column, Row,
-};
+use iced::widget::{button, column, container, row, space, text, text_input, Column, Row};
 use iced::{alignment, Element, Length, Theme};
 
 pub struct StudioState {
@@ -100,7 +98,7 @@ pub fn view(
             text(&state.active_model)
                 .font(icons::FONT_BOLD)
                 .size(16)
-                .style(if app_theme == AppTheme::Dark {
+                .color(if app_theme == AppTheme::Dark {
                     theme::DARK_TEXT
                 } else {
                     theme::LIGHT_TEXT
@@ -117,14 +115,14 @@ pub fn view(
             .height(Length::Fixed(16.0))
         ]
         .spacing(8)
-        .align_items(alignment::Alignment::Center),
+        .align_y(alignment::Alignment::Center),
     )
     .padding(8)
-    .style(iced::theme::Button::Custom(Box::new(theme::NeoButton {
+    .style(theme::neo_button(theme::NeoButton {
         is_accent: false,
         has_shadow: false,
         theme: app_theme,
-    })))
+    }))
     .on_press(Message::NavigateTo(crate::Screen::Settings));
 
     let gallery_btn = icon_button(
@@ -139,22 +137,20 @@ pub fn view(
     let top_bar = container(
         row![
             menu_btn,
-            horizontal_space().width(Length::FillPortion(1)),
+            space::horizontal().width(Length::FillPortion(1)),
             model_picker,
-            horizontal_space().width(Length::FillPortion(1)),
+            space::horizontal().width(Length::FillPortion(1)),
             gallery_btn
         ]
         .padding(10)
-        .align_items(alignment::Alignment::Center),
+        .align_y(alignment::Alignment::Center),
     )
     .width(Length::Fill)
-    .style(iced::theme::Container::Custom(Box::new(
-        theme::NeoContainer {
-            is_surface: true,
-            has_shadow: false,
-            theme: app_theme,
-        },
-    )));
+    .style(theme::neo_container(theme::NeoContainer {
+        is_surface: true,
+        has_shadow: false,
+        theme: app_theme,
+    }));
 
     // --- 2. Main Content Grid (StudioGalleryPane) ---
     let mut gallery_grid = Column::new().spacing(20);
@@ -173,7 +169,7 @@ pub fn view(
                     })
                     .font(icons::FONT_BOLD)
                     .size(14)
-                    .style(if app_theme == AppTheme::Dark {
+                    .color(if app_theme == AppTheme::Dark {
                         theme::DARK_TEXT_MUTED
                     } else {
                         theme::LIGHT_TEXT_MUTED
@@ -181,26 +177,24 @@ pub fn view(
                     text(&item.timestamp)
                         .font(icons::FONT_REGULAR)
                         .size(12)
-                        .style(if app_theme == AppTheme::Dark {
+                        .color(if app_theme == AppTheme::Dark {
                             theme::DARK_TEXT_MUTED
                         } else {
                             theme::LIGHT_TEXT_MUTED
                         })
                 ]
                 .spacing(4)
-                .align_items(alignment::Alignment::Center),
+                .align_x(alignment::Horizontal::Center),
             )
             .width(Length::Fill)
             .height(Length::Fixed(150.0))
             .align_x(alignment::Horizontal::Center)
             .align_y(alignment::Vertical::Center)
-            .style(iced::theme::Container::Custom(Box::new(
-                theme::NeoContainer {
-                    is_surface: false,
-                    has_shadow: false,
-                    theme: app_theme,
-                },
-            )));
+            .style(theme::neo_container(theme::NeoContainer {
+                is_surface: false,
+                has_shadow: false,
+                theme: app_theme,
+            }));
 
             let media_card = container(
                 column![
@@ -208,7 +202,7 @@ pub fn view(
                     text(&item.title)
                         .font(icons::FONT_REGULAR)
                         .size(14)
-                        .style(if app_theme == AppTheme::Dark {
+                        .color(if app_theme == AppTheme::Dark {
                             theme::DARK_TEXT
                         } else {
                             theme::LIGHT_TEXT
@@ -219,20 +213,18 @@ pub fn view(
             )
             .padding(12)
             .width(Length::FillPortion(1))
-            .style(iced::theme::Container::Custom(Box::new(
-                theme::NeoContainer {
-                    is_surface: true,
-                    has_shadow: true,
-                    theme: app_theme,
-                },
-            )));
+            .style(theme::neo_container(theme::NeoContainer {
+                is_surface: true,
+                has_shadow: true,
+                theme: app_theme,
+            }));
 
             row_layout = row_layout.push(media_card);
         }
 
         // Pad remaining space if row is not full
         for _ in row_chunk.len()..columns_count {
-            row_layout = row_layout.push(horizontal_space().width(Length::FillPortion(1)));
+            row_layout = row_layout.push(space::horizontal().width(Length::FillPortion(1)));
         }
 
         gallery_grid = gallery_grid.push(row_layout);
@@ -246,35 +238,33 @@ pub fn view(
             text(msg)
                 .font(icons::FONT_REGULAR)
                 .size(14)
-                .style(if app_theme == AppTheme::Dark {
+                .color(if app_theme == AppTheme::Dark {
                     theme::DARK_TEXT
                 } else {
                     theme::LIGHT_TEXT
                 }),
-            horizontal_space().width(Length::Fill),
+            space::horizontal().width(Length::Fill),
             button(
                 icons::render_svg(&icons::HANDLE_CLOSE, theme::COLOR_ACCENT)
                     .width(Length::Fixed(14.0))
                     .height(Length::Fixed(14.0))
             )
-            .style(iced::theme::Button::Text)
+            .style(button::text)
             .on_press(Message::StudioPromptChanged(String::new())) // Reset/dismiss
         ]
-        .align_items(alignment::Alignment::Center)
+        .align_y(alignment::Alignment::Center)
         .spacing(10);
 
         container(status_content)
             .padding(12)
             .width(Length::Fill)
-            .style(iced::theme::Container::Custom(Box::new(
-                theme::NeoContainer {
-                    is_surface: true,
-                    has_shadow: false,
-                    theme: app_theme,
-                },
-            )))
+            .style(theme::neo_container(theme::NeoContainer {
+                is_surface: true,
+                has_shadow: false,
+                theme: app_theme,
+            }))
     } else {
-        container(horizontal_space().width(Length::Shrink))
+        container(space::horizontal().width(Length::Shrink))
     };
 
     // --- 3. Bottom Input Dock (StudioInputDock) ---
@@ -298,9 +288,7 @@ pub fn view(
         .on_input(Message::StudioPromptChanged)
         .on_submit(Message::StudioGenerate)
         .padding(10)
-        .style(iced::theme::TextInput::Custom(Box::new(theme::NeoInput {
-            theme: app_theme,
-        })));
+        .style(theme::neo_input(theme::NeoInput { theme: app_theme }));
 
     let generate_btn = button(
         row![
@@ -310,33 +298,31 @@ pub fn view(
             text("Generate")
                 .font(icons::FONT_BOLD)
                 .size(14)
-                .style(iced::Color::BLACK)
+                .color(iced::Color::BLACK)
         ]
         .spacing(6)
-        .align_items(alignment::Alignment::Center),
+        .align_y(alignment::Alignment::Center),
     )
     .padding(10)
-    .style(iced::theme::Button::Custom(Box::new(theme::NeoButton {
+    .style(theme::neo_button(theme::NeoButton {
         is_accent: true,
         has_shadow: true,
         theme: app_theme,
-    })))
+    }))
     .on_press(Message::StudioGenerate);
 
     let bottom_dock = container(
         row![mic_btn, image_btn, prompt_input, generate_btn]
             .spacing(12)
             .padding(16)
-            .align_items(alignment::Alignment::Center),
+            .align_y(alignment::Alignment::Center),
     )
     .width(Length::Fill)
-    .style(iced::theme::Container::Custom(Box::new(
-        theme::NeoContainer {
-            is_surface: true,
-            has_shadow: false,
-            theme: app_theme,
-        },
-    )));
+    .style(theme::neo_container(theme::NeoContainer {
+        is_surface: true,
+        has_shadow: false,
+        theme: app_theme,
+    }));
 
     // Outer layout column
     let main_layout = column![top_bar, status_bar, scroll_gallery, bottom_dock]

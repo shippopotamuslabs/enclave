@@ -2,12 +2,10 @@ mod input_bar;
 mod message_list;
 pub mod state;
 
-pub use state::{
-    advance_anim, ChatMessage, ChatState, InputBarAnim, MessageSender, PermissionMode,
-};
+pub use state::{advance_anim, ChatMessage, ChatState, InputBarAnim, PermissionMode};
 
-use iced::widget::{column, container, horizontal_space, row, text};
-use iced::{alignment, Element, Length, Theme};
+use iced::widget::{column, container, row, space, text};
+use iced::{alignment, Element, Length, Padding, Theme};
 
 use crate::icons;
 use crate::theme::{self, AppTheme};
@@ -69,14 +67,14 @@ pub fn view<'a>(
             container(icons::render_svg_untinted(&icons::HANDLE_ENCLAVE_E_MARK))
                 .width(Length::Fixed(mark_size))
                 .height(Length::Fixed(mark_size))
-                .center_x(),
+                .align_x(iced::alignment::Horizontal::Center),
             text("Welcome to your Enclave.")
                 .font(icons::FONT_BOLD)
                 .size(22)
-                .style(text_color),
+                .color(text_color),
         ]
         .spacing(12)
-        .align_items(alignment::Alignment::Center);
+        .align_x(alignment::Horizontal::Center);
 
         // The hero+bar group's vertical position is driven by FillPortion
         // weights around it: at eased=0 the weights are equal (centered); as
@@ -85,10 +83,10 @@ pub fn view<'a>(
         let top_portion = (11.0 + eased * 10.0) as u16;
         let bottom_portion = (11.0 - eased * 10.0).max(1.0) as u16;
 
-        let top_region = container(horizontal_space())
+        let top_region = container(space::horizontal())
             .width(Length::Fill)
             .height(Length::FillPortion(top_portion));
-        let bottom_region = container(horizontal_space())
+        let bottom_region = container(space::horizontal())
             .width(Length::Fill)
             .height(Length::FillPortion(bottom_portion));
 
@@ -96,8 +94,13 @@ pub fn view<'a>(
             .width(Length::Fill)
             .height(Length::Fill)
             .spacing(28)
-            .padding([0, 0, 12, 0])
-            .align_items(alignment::Alignment::Center)
+            .padding(Padding {
+                top: 0.0,
+                right: 0.0,
+                bottom: 12.0,
+                left: 0.0,
+            })
+            .align_x(alignment::Horizontal::Center)
             .into()
     } else {
         // Active chat: message list fills the pane, bar pinned to the bottom.
@@ -106,7 +109,12 @@ pub fn view<'a>(
         column![scroll_messages, input_bar]
             .width(Length::Fill)
             .height(Length::Fill)
-            .padding([0, 0, 12, 0])
+            .padding(Padding {
+                top: 0.0,
+                right: 0.0,
+                bottom: 12.0,
+                left: 0.0,
+            })
             .into()
     };
 
@@ -119,22 +127,18 @@ pub fn view<'a>(
     let chat_pane: Element<Message, Theme, iced::Renderer> = container(chat_body)
         .width(Length::Fill)
         .height(Length::Fill)
-        .style(iced::theme::Container::Custom(Box::new(
-            theme::NeoPaneBackground {
-                is_surface: false,
-                theme: app_theme,
-            },
-        )))
+        .style(theme::neo_pane_background(theme::NeoPaneBackground {
+            is_surface: false,
+            theme: app_theme,
+        }))
         .into();
 
     // One full-width bottom rule under the entire split row (history + splitter +
     // chat) so the horizontal edge meets the sidebar seam cleanly.
-    let bottom_rule = container(horizontal_space())
+    let bottom_rule = container(space::horizontal())
         .width(Length::Fill)
         .height(Length::Fixed(2.0))
-        .style(iced::theme::Container::Custom(Box::new(theme::NeoRule {
-            theme: app_theme,
-        })));
+        .style(theme::neo_rule(theme::NeoRule { theme: app_theme }));
 
     let splitter_line = if is_dark {
         theme::DARK_NEO_BORDER
@@ -157,12 +161,10 @@ pub fn view<'a>(
     )
     .width(Length::Fill)
     .height(Length::Fill)
-    .style(iced::theme::Container::Custom(Box::new(
-        theme::NeoPaneBackground {
-            is_surface: false,
-            theme: app_theme,
-        },
-    )))
+    .style(theme::neo_pane_background(theme::NeoPaneBackground {
+        is_surface: false,
+        theme: app_theme,
+    }))
     .into()
 }
 
