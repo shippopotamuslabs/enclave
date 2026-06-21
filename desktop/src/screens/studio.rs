@@ -1,8 +1,9 @@
 use crate::icons;
+use crate::screens::layout::{icon_button, screen_shell, scrollable_padded_body};
 use crate::theme::{self, AppTheme};
 use crate::Message;
 use iced::widget::{
-    button, column, container, horizontal_space, row, scrollable, text, text_input, Column, Row,
+    button, column, container, horizontal_space, row, text, text_input, Column, Row,
 };
 use iced::{alignment, Element, Length, Theme};
 
@@ -72,10 +73,10 @@ impl StudioState {
     }
 }
 
-pub fn view<'a>(
-    state: &'a StudioState,
+pub fn view(
+    state: &StudioState,
     app_theme: AppTheme,
-) -> Element<'a, Message, Theme, iced::Renderer> {
+) -> Element<'_, Message, Theme, iced::Renderer> {
     let is_dark = app_theme == AppTheme::Dark;
 
     let text_color = if is_dark {
@@ -85,28 +86,14 @@ pub fn view<'a>(
     };
 
     // --- 1. Studio Top Bar ---
-    let menu_btn = button(
-        container(
-            icons::render_svg(&icons::HANDLE_MENU, text_color)
-                .width(Length::Fixed(18.0))
-                .height(Length::Fixed(18.0)),
-        )
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .center_x()
-        .center_y(),
-    )
-    .padding(8)
-    .width(Length::Fixed(40.0))
-    .height(Length::Fixed(40.0))
-    .style(iced::theme::Button::Custom(Box::new(theme::NeoButton {
-        is_accent: false,
-        has_shadow: true,
-        theme: app_theme,
-    })))
-    .on_press(Message::NavigateTo(crate::Screen::Chat {
-        chat_id: "active".into(),
-    }));
+    let menu_btn = icon_button(
+        &icons::HANDLE_MENU,
+        text_color,
+        app_theme,
+        Message::NavigateTo(crate::Screen::Chat {
+            chat_id: "active".into(),
+        }),
+    );
 
     let model_picker = button(
         row![
@@ -140,28 +127,14 @@ pub fn view<'a>(
     })))
     .on_press(Message::NavigateTo(crate::Screen::Settings));
 
-    let gallery_btn = button(
-        container(
-            icons::render_svg(&icons::HANDLE_GALLERY, text_color)
-                .width(Length::Fixed(18.0))
-                .height(Length::Fixed(18.0)),
-        )
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .center_x()
-        .center_y(),
-    )
-    .padding(8)
-    .width(Length::Fixed(40.0))
-    .height(Length::Fixed(40.0))
-    .style(iced::theme::Button::Custom(Box::new(theme::NeoButton {
-        is_accent: false,
-        has_shadow: true,
-        theme: app_theme,
-    })))
-    .on_press(Message::NavigateTo(crate::Screen::Gallery {
-        selected_album_id: None,
-    }));
+    let gallery_btn = icon_button(
+        &icons::HANDLE_GALLERY,
+        text_color,
+        app_theme,
+        Message::NavigateTo(crate::Screen::Gallery {
+            selected_album_id: None,
+        }),
+    );
 
     let top_bar = container(
         row![
@@ -265,11 +238,7 @@ pub fn view<'a>(
         gallery_grid = gallery_grid.push(row_layout);
     }
 
-    let scroll_gallery = scrollable(container(gallery_grid).padding(20).width(Length::Fill))
-        .height(Length::Fill)
-        .style(iced::theme::Scrollable::Custom(Box::new(
-            theme::NeoScrollable { theme: app_theme },
-        )));
+    let scroll_gallery = scrollable_padded_body(gallery_grid, app_theme);
 
     // --- Optional Status Notification Bar ---
     let status_bar = if let Some(ref msg) = state.status_message {
@@ -309,49 +278,21 @@ pub fn view<'a>(
     };
 
     // --- 3. Bottom Input Dock (StudioInputDock) ---
-    let mic_btn = button(
-        container(
-            icons::render_svg(&icons::HANDLE_MIC, text_color)
-                .width(Length::Fixed(18.0))
-                .height(Length::Fixed(18.0)),
-        )
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .center_x()
-        .center_y(),
-    )
-    .padding(8)
-    .width(Length::Fixed(40.0))
-    .height(Length::Fixed(40.0))
-    .style(iced::theme::Button::Custom(Box::new(theme::NeoButton {
-        is_accent: false,
-        has_shadow: true,
-        theme: app_theme,
-    })))
-    .on_press(Message::NavigateTo(crate::Screen::Settings));
+    let mic_btn = icon_button(
+        &icons::HANDLE_MIC,
+        text_color,
+        app_theme,
+        Message::NavigateTo(crate::Screen::Settings),
+    );
 
-    let image_btn = button(
-        container(
-            icons::render_svg(&icons::HANDLE_IMAGE, text_color)
-                .width(Length::Fixed(18.0))
-                .height(Length::Fixed(18.0)),
-        )
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .center_x()
-        .center_y(),
-    )
-    .padding(8)
-    .width(Length::Fixed(40.0))
-    .height(Length::Fixed(40.0))
-    .style(iced::theme::Button::Custom(Box::new(theme::NeoButton {
-        is_accent: false,
-        has_shadow: true,
-        theme: app_theme,
-    })))
-    .on_press(Message::NavigateTo(crate::Screen::Gallery {
-        selected_album_id: None,
-    }));
+    let image_btn = icon_button(
+        &icons::HANDLE_IMAGE,
+        text_color,
+        app_theme,
+        Message::NavigateTo(crate::Screen::Gallery {
+            selected_album_id: None,
+        }),
+    );
 
     let prompt_input = text_input("Describe what you want to generate...", &state.prompt)
         .on_input(Message::StudioPromptChanged)
@@ -402,15 +343,5 @@ pub fn view<'a>(
         .width(Length::Fill)
         .height(Length::Fill);
 
-    container(main_layout)
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .style(iced::theme::Container::Custom(Box::new(
-            theme::NeoContainer {
-                is_surface: false,
-                has_shadow: false,
-                theme: app_theme,
-            },
-        )))
-        .into()
+    screen_shell(main_layout, app_theme)
 }

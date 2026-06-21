@@ -1,9 +1,8 @@
 use crate::icons;
+use crate::screens::layout::{icon_button, screen_shell, scrollable_padded_body};
 use crate::theme::{self, AppTheme};
 use crate::Message;
-use iced::widget::{
-    button, column, container, horizontal_space, row, scrollable, text, Column, Row,
-};
+use iced::widget::{button, column, container, horizontal_space, row, text, Column, Row};
 use iced::{alignment, Element, Length, Theme};
 
 pub struct GalleryState {
@@ -87,10 +86,10 @@ impl GalleryState {
     }
 }
 
-pub fn view<'a>(
-    state: &'a GalleryState,
+pub fn view(
+    state: &GalleryState,
     app_theme: AppTheme,
-) -> Element<'a, Message, Theme, iced::Renderer> {
+) -> Element<'_, Message, Theme, iced::Renderer> {
     let is_dark = app_theme == AppTheme::Dark;
 
     // Determine active selected album
@@ -106,30 +105,16 @@ pub fn view<'a>(
     };
 
     // --- 1. Gallery Top Bar ---
-    let back_btn = button(
-        container(
-            icons::render_svg(&icons::HANDLE_CLOSE, text_color)
-                .width(Length::Fixed(18.0))
-                .height(Length::Fixed(18.0)),
-        )
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .center_x()
-        .center_y(),
-    )
-    .padding(8)
-    .width(Length::Fixed(40.0))
-    .height(Length::Fixed(40.0))
-    .style(iced::theme::Button::Custom(Box::new(theme::NeoButton {
-        is_accent: false,
-        has_shadow: true,
-        theme: app_theme,
-    })))
-    .on_press(if active_album.is_some() {
-        Message::GallerySelectAlbum(None) // Navigate back to root albums grid
-    } else {
-        Message::NavigateBack // Navigate back to History/Studio
-    });
+    let back_btn = icon_button(
+        &icons::HANDLE_CLOSE,
+        text_color,
+        app_theme,
+        if active_album.is_some() {
+            Message::GallerySelectAlbum(None)
+        } else {
+            Message::NavigateBack
+        },
+    );
 
     let top_bar_title = if let Some(album) = active_album {
         format!("Gallery > {}", album.name)
@@ -335,26 +320,11 @@ pub fn view<'a>(
         }
     }
 
-    let scroll_grid = scrollable(container(grid_layout).padding(20).width(Length::Fill))
-        .height(Length::Fill)
-        .style(iced::theme::Scrollable::Custom(Box::new(
-            theme::NeoScrollable { theme: app_theme },
-        )));
+    let scroll_grid = scrollable_padded_body(grid_layout, app_theme);
 
-    // Outer layout column
     let main_layout = column![top_bar, scroll_grid]
         .width(Length::Fill)
         .height(Length::Fill);
 
-    container(main_layout)
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .style(iced::theme::Container::Custom(Box::new(
-            theme::NeoContainer {
-                is_surface: false,
-                has_shadow: false,
-                theme: app_theme,
-            },
-        )))
-        .into()
+    screen_shell(main_layout, app_theme)
 }
