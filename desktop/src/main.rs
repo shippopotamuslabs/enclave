@@ -86,6 +86,11 @@ pub enum Message {
     ChatContextPressed,
     ChatAnimTick,
     MarkdownLinkClicked(String),
+    /// Copy the raw source of a fenced code block to the system clipboard.
+    /// Carries the block contents (without markdown fences) cloned at
+    /// button-construction time so shifting block indices during streaming
+    /// can't misroute the copy.
+    CopyCodeBlock(String),
     WindowReady(window::Id),
     GallerySelectAlbum(Option<String>),
 }
@@ -504,6 +509,8 @@ fn update(state: &mut EnclaveApp, message: Message) -> Task<Message> {
             eprintln!("Markdown link clicked: {url}");
             Task::none()
         }
+
+        Message::CopyCodeBlock(code) => iced::clipboard::write(code),
 
         Message::GallerySelectAlbum(album_id) => {
             state.gallery_state.selected_album_id = album_id.clone();

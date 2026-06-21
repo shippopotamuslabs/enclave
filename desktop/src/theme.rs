@@ -462,3 +462,127 @@ pub fn neo_text_editor(
 
     move |_theme, _status| transparent
 }
+
+/// Neobrutalist container for a fenced markdown code block. Replaces Iced's
+/// default `container::dark` (hard-coded `#111111` with a 2px round border and
+/// no width) so the block reads as part of the locked surface palette: a solid
+/// one-step-darker-than-surface fill with the standard 2px neo border and a 4px
+/// radius, no offset shadow (the block sits flat inside the assistant
+/// transcript, like the Android code-block surface).
+#[derive(Clone, Copy)]
+pub struct NeoCodeBlock {
+    pub theme: AppTheme,
+}
+
+pub fn neo_code_block(neo: NeoCodeBlock) -> impl Fn(&iced::Theme) -> container::Style {
+    move |_theme| {
+        // One step darker than the surrounding surface so the block is visible
+        // against both the chat pane background and the surface tokens.
+        let bg_color = match neo.theme {
+            AppTheme::Dark => Color::from_rgb(0.11, 0.11, 0.13),
+            AppTheme::Light => Color::from_rgb(0.17, 0.18, 0.20),
+        };
+
+        container::Style {
+            text_color: Some(Color::WHITE),
+            background: Some(Background::Color(bg_color)),
+            border: Border {
+                color: neo_border(neo.theme),
+                width: 2.0,
+                radius: 4.0.into(),
+            },
+            shadow: Shadow::default(),
+            snap: false,
+        }
+    }
+}
+
+/// Neobrutalist metadata header strip for a fenced code block — the language
+/// label + copy control row that sits at the top of the block, inside the
+/// [`NeoCodeBlock`] container. A flat surface fill one step lighter than the
+/// block body with a 1px bottom rule in the neo border color so the header
+/// reads as a distinct band without doubling the container's 2px border.
+#[derive(Clone, Copy)]
+pub struct NeoCodeBlockHeader {
+    pub theme: AppTheme,
+}
+
+pub fn neo_code_block_header(neo: NeoCodeBlockHeader) -> impl Fn(&iced::Theme) -> container::Style {
+    move |_theme| {
+        let bg_color = match neo.theme {
+            AppTheme::Dark => Color::from_rgb(0.17, 0.17, 0.19),
+            AppTheme::Light => Color::from_rgb(0.23, 0.24, 0.27),
+        };
+
+        container::Style {
+            text_color: Some(if neo.theme == AppTheme::Dark {
+                DARK_TEXT_MUTED
+            } else {
+                Color::from_rgb(0.80, 0.84, 0.88)
+            }),
+            background: Some(Background::Color(bg_color)),
+            border: Border {
+                color: neo_border(neo.theme),
+                width: 0.0,
+                // Uniform radius to echo the enclosing `NeoCodeBlock` (4px);
+                // Iced's `Radius` is a single scalar, so the header's bottom
+                // corners round along with the top. The fill still reads as a
+                // distinct band thanks to the contrast step + spacing above the
+                // body, and stays inside the container's 2px border.
+                radius: 4.0.into(),
+            },
+            shadow: Shadow::default(),
+            snap: false,
+        }
+    }
+}
+
+/// Ghost button styling for the code-block copy control. No background, no
+/// shadow, no border — just the icon — so it sits flush inside the header strip
+/// and only the hover/press state lifts it (matching the icon-button treatment
+/// in the titlebar's `NeoButton { has_shadow: false }` but stripped further for
+/// an in-block affordance).
+#[derive(Clone, Copy)]
+pub struct NeoIconButton {
+    pub theme: AppTheme,
+}
+
+pub fn neo_icon_button(
+    neo: NeoIconButton,
+) -> impl Fn(&iced::Theme, button::Status) -> button::Style {
+    let icon_color = if neo.theme == AppTheme::Dark {
+        DARK_TEXT_MUTED
+    } else {
+        Color::from_rgb(0.80, 0.84, 0.88)
+    };
+
+    move |_theme, status| {
+        let (bg, color) = match status {
+            button::Status::Hovered => (
+                Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.08))),
+                if neo.theme == AppTheme::Dark {
+                    DARK_TEXT
+                } else {
+                    LIGHT_TEXT
+                },
+            ),
+            button::Status::Pressed => (
+                Some(Background::Color(Color::from_rgba(1.0, 1.0, 1.0, 0.16))),
+                icon_color,
+            ),
+            _ => (None, icon_color),
+        };
+
+        button::Style {
+            background: bg,
+            border: Border {
+                color: Color::TRANSPARENT,
+                width: 0.0,
+                radius: 4.0.into(),
+            },
+            shadow: Shadow::default(),
+            text_color: color,
+            snap: false,
+        }
+    }
+}
