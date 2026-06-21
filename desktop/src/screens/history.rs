@@ -2,21 +2,27 @@ use crate::icons;
 use crate::theme::{self, AppTheme};
 use crate::Message;
 use iced::widget::{
-    button, column, container, horizontal_space, row, scrollable, text, text_input, Column,
+    button, column, container, horizontal_space, mouse_area, row, scrollable, text, text_input,
+    Column,
 };
 use iced::{alignment, Element, Length, Theme};
+
+pub const MIN_SIDEBAR_WIDTH: f32 = 220.0;
+pub const MAX_SIDEBAR_WIDTH: f32 = 480.0;
 
 pub struct HistoryState {
     pub search_query: String,
     pub chats: Vec<HistoryChat>,
+    pub hovered_chat_id: Option<String>,
+    pub sidebar_width: f32,
 }
 
 #[derive(Debug, Clone)]
 pub struct HistoryChat {
     pub id: String,
     pub name: String,
-    pub last_message: String,
     #[allow(dead_code)]
+    pub last_message: String,
     pub timestamp: String,
     pub is_pinned: bool,
 }
@@ -25,6 +31,8 @@ impl HistoryState {
     pub fn new() -> Self {
         Self {
             search_query: String::new(),
+            hovered_chat_id: None,
+            sidebar_width: MAX_SIDEBAR_WIDTH,
             chats: vec![
                 HistoryChat {
                     id: "chat_1".into(),
@@ -57,13 +65,26 @@ impl HistoryState {
             ],
         }
     }
+
+    pub fn clamp_sidebar_width(width: f32) -> f32 {
+        width.clamp(MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH)
+    }
+
+    pub fn apply_sidebar_resize_delta(&mut self, delta_x: f32) {
+        self.sidebar_width = Self::clamp_sidebar_width(self.sidebar_width + delta_x);
+    }
 }
 
-// Returns a Sidebar element of fixed width 280.0
-pub fn view<'a>(
-    state: &'a HistoryState,
+/// Max title length when hover actions are visible, scaled to sidebar width.
+fn hover_title_max_chars(sidebar_width: f32) -> usize {
+    // Reserve ~96px for padding + hover action buttons; ~12px per character at 13px bold.
+    ((sidebar_width - 96.0) / 12.0).max(10.0) as usize
+}
+
+pub fn view(
+    state: &HistoryState,
     app_theme: AppTheme,
-) -> Element<'a, Message, Theme, iced::Renderer> {
+) -> Element<'_, Message, Theme, iced::Renderer> {
     let is_dark = app_theme == AppTheme::Dark;
 
     // --- 1. Sidebar Header (Search & Actions) ---
@@ -110,6 +131,9 @@ pub fn view<'a>(
     .padding(10);
 
     // --- 2. Navigation Quick Links ---
+    // Each quick link is a standalone full-width shadowed `NeoButton` (matching
+    // the chat input bar's action buttons) rather than buttons grouped inside a
+    // bordered box — so they read as individual elevated controls, not a panel.
     let nav_btn = |title: &str, icon_handle: &iced::widget::svg::Handle, msg: Message| {
         button(
             row![
@@ -132,7 +156,7 @@ pub fn view<'a>(
         .padding(10)
         .style(iced::theme::Button::Custom(Box::new(theme::NeoButton {
             is_accent: false,
-            has_shadow: false,
+            has_shadow: true,
             theme: app_theme,
         })))
         .on_press(msg)
@@ -159,15 +183,7 @@ pub fn view<'a>(
             })
         )
     ]
-    .spacing(4);
-
-    let quick_links_section = container(quick_links).padding(8).width(Length::Fill).style(
-        iced::theme::Container::Custom(Box::new(theme::NeoContainer {
-            is_surface: true,
-            has_shadow: false,
-            theme: app_theme,
-        })),
-    );
+    .spacing(8);
 
     // --- 3. Chat Lists ---
     let filtered_chats: Vec<&HistoryChat> = state
@@ -185,89 +201,101 @@ pub fn view<'a>(
     let recent_chats: Vec<&&HistoryChat> = filtered_chats.iter().filter(|c| !c.is_pinned).collect();
 
     let render_chat_row = |chat: &HistoryChat| {
-        let pin_btn = button(
-            icons::render_svg(
-                &icons::HANDLE_PIN,
-                if chat.is_pinned {
-                    theme::COLOR_ACCENT
-                } else if is_dark {
-                    theme::DARK_TEXT_MUTED
-                } else {
-                    theme::LIGHT_TEXT_MUTED
-                },
-            )
-            .width(Length::Fixed(16.0))
-            .height(Length::Fixed(16.0)),
-        )
-        .style(iced::theme::Button::Text)
-        .on_press(if chat.is_pinned {
-            Message::HistoryUnpinChat(chat.id.clone())
+        let is_hovered = state.hovered_chat_id.as_deref() == Some(chat.id.as_str());
+        let muted_color = if is_dark {
+            theme::DARK_TEXT_MUTED
         } else {
-            Message::HistoryPinChat(chat.id.clone())
-        });
+            theme::LIGHT_TEXT_MUTED
+        };
+        let title_color = if is_dark {
+            theme::DARK_TEXT
+        } else {
+            theme::LIGHT_TEXT
+        };
 
-        let delete_btn = button(
-            icons::render_svg(
-                &icons::HANDLE_DELETE,
-                if is_dark {
-                    theme::DARK_TEXT_MUTED
-                } else {
-                    theme::LIGHT_TEXT_MUTED
-                },
+        let title_label = if is_hovered {
+            truncate_with_ellipsis(&chat.name, hover_title_max_chars(state.sidebar_width))
+        } else {
+            chat.name.clone()
+        };
+
+        let title = text(title_label)
+            .font(icons::FONT_BOLD)
+            .size(13)
+            .style(title_color)
+            .width(Length::Fill);
+
+        let timestamp = text(&chat.timestamp)
+            .font(icons::FONT_REGULAR)
+            .size(11)
+            .style(muted_color);
+
+        let chat_body = button(column![title, timestamp].spacing(2))
+            .width(Length::Fill)
+            .style(iced::theme::Button::Text)
+            .on_press(Message::NavigateTo(crate::Screen::Chat {
+                chat_id: chat.id.clone(),
+            }));
+
+        let mut card_row = row![chat_body].align_items(alignment::Alignment::Center);
+
+        if is_hovered {
+            let pin_color = if chat.is_pinned {
+                theme::COLOR_ACCENT
+            } else {
+                muted_color
+            };
+
+            let pin_btn = button(
+                icons::render_svg(&icons::HANDLE_PIN, pin_color)
+                    .width(Length::Fixed(16.0))
+                    .height(Length::Fixed(16.0)),
             )
-            .width(Length::Fixed(16.0))
-            .height(Length::Fixed(16.0)),
-        )
-        .style(iced::theme::Button::Text)
-        .on_press(Message::HistoryDeleteChat(chat.id.clone()));
+            .style(iced::theme::Button::Text)
+            .on_press(if chat.is_pinned {
+                Message::HistoryUnpinChat(chat.id.clone())
+            } else {
+                Message::HistoryPinChat(chat.id.clone())
+            });
 
-        container(
-            row![
-                button(
-                    column![
-                        text(&chat.name)
-                            .font(icons::FONT_BOLD)
-                            .size(13)
-                            .style(if is_dark {
-                                theme::DARK_TEXT
-                            } else {
-                                theme::LIGHT_TEXT
-                            }),
-                        text(&chat.last_message)
-                            .font(icons::FONT_REGULAR)
-                            .size(11)
-                            .style(if is_dark {
-                                theme::DARK_TEXT_MUTED
-                            } else {
-                                theme::LIGHT_TEXT_MUTED
-                            })
-                    ]
-                    .spacing(2)
-                )
-                .width(Length::Fill)
-                .style(iced::theme::Button::Text)
-                .on_press(Message::NavigateTo(crate::Screen::Chat {
-                    chat_id: chat.id.clone()
-                })),
-                column![pin_btn, delete_btn].spacing(4)
-            ]
-            .align_items(alignment::Alignment::Center),
-        )
-        .padding(8)
-        .width(Length::Fill)
-        .style(iced::theme::Container::Custom(Box::new(
-            theme::NeoContainer {
+            let rename_btn = button(
+                icons::render_svg(&icons::HANDLE_PENCIL, muted_color)
+                    .width(Length::Fixed(16.0))
+                    .height(Length::Fixed(16.0)),
+            )
+            .style(iced::theme::Button::Text)
+            .on_press(Message::HistoryRenameChat(chat.id.clone()));
+
+            let delete_btn = button(
+                icons::render_svg(&icons::HANDLE_DELETE, muted_color)
+                    .width(Length::Fixed(16.0))
+                    .height(Length::Fixed(16.0)),
+            )
+            .style(iced::theme::Button::Text)
+            .on_press(Message::HistoryDeleteChat(chat.id.clone()));
+
+            card_row = card_row.push(
+                row![pin_btn, rename_btn, delete_btn]
+                    .spacing(4)
+                    .align_items(alignment::Alignment::Center),
+            );
+        }
+
+        mouse_area(container(card_row).padding(8).width(Length::Fill).style(
+            iced::theme::Container::Custom(Box::new(theme::NeoContainer {
                 is_surface: true,
                 has_shadow: false,
                 theme: app_theme,
-            },
-        )))
+            })),
+        ))
+        .on_enter(Message::HistoryHoverChat(Some(chat.id.clone())))
+        .on_exit(Message::HistoryHoverChat(None))
     };
 
     let mut sidebar_list = Column::new().spacing(14);
 
     // Quick navigation section
-    sidebar_list = sidebar_list.push(quick_links_section);
+    sidebar_list = sidebar_list.push(quick_links);
 
     // Pinned Section
     if !pinned_chats.is_empty() {
@@ -311,18 +339,64 @@ pub fn view<'a>(
         )));
 
     let sidebar_layout = column![header_row, scroll_sidebar]
-        .width(Length::Fixed(280.0))
+        .width(Length::Fixed(state.sidebar_width))
         .height(Length::Fill);
 
+    // Borderless surface fill — the draggable pane splitter draws the single
+    // vertical rule between sidebar and chat so we don't double up with a
+    // `NeoContainer` right edge. A full-width bottom rule in the chat screen
+    // closes off the pane row under both columns.
     container(sidebar_layout)
-        .width(Length::Fixed(280.0))
+        .width(Length::Fixed(state.sidebar_width))
         .height(Length::Fill)
         .style(iced::theme::Container::Custom(Box::new(
-            theme::NeoContainer {
+            theme::NeoPaneBackground {
                 is_surface: true,
-                has_shadow: false,
                 theme: app_theme,
             },
         )))
         .into()
+}
+
+fn truncate_with_ellipsis(text: &str, max_chars: usize) -> String {
+    let char_count = text.chars().count();
+    if char_count <= max_chars {
+        return text.to_owned();
+    }
+
+    let keep = max_chars.saturating_sub(1);
+    format!("{}…", text.chars().take(keep).collect::<String>())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn truncate_with_ellipsis_leaves_short_text_unchanged() {
+        assert_eq!(truncate_with_ellipsis("Short chat", 22), "Short chat");
+    }
+
+    #[test]
+    fn truncate_with_ellipsis_adds_ellipsis_for_long_text() {
+        let long = "Multimodal Gemini API prompt engineering";
+        assert_eq!(truncate_with_ellipsis(long, 22), "Multimodal Gemini API…");
+    }
+
+    #[test]
+    fn clamp_sidebar_width_respects_bounds() {
+        assert_eq!(HistoryState::clamp_sidebar_width(100.0), MIN_SIDEBAR_WIDTH);
+        assert_eq!(HistoryState::clamp_sidebar_width(900.0), MAX_SIDEBAR_WIDTH);
+        assert_eq!(HistoryState::clamp_sidebar_width(300.0), 300.0);
+    }
+
+    #[test]
+    fn apply_sidebar_resize_delta_clamps_result() {
+        let mut state = HistoryState::new();
+        assert_eq!(state.sidebar_width, MAX_SIDEBAR_WIDTH);
+        state.apply_sidebar_resize_delta(-50.0);
+        assert_eq!(state.sidebar_width, MAX_SIDEBAR_WIDTH - 50.0);
+        state.apply_sidebar_resize_delta(500.0);
+        assert_eq!(state.sidebar_width, MAX_SIDEBAR_WIDTH);
+    }
 }

@@ -39,8 +39,13 @@ pub const SVG_MINIMIZE: &[u8] = include_bytes!("../assets/icons/minus.svg");
 pub const SVG_MAXIMIZE: &[u8] = include_bytes!("../assets/icons/square.svg");
 pub const SVG_ATTACH: &[u8] = include_bytes!("../assets/icons/paperclip.svg");
 pub const SVG_PIN: &[u8] = include_bytes!("../assets/icons/pin.svg");
+pub const SVG_PENCIL: &[u8] = include_bytes!("../assets/icons/pencil.svg");
 pub const SVG_DELETE: &[u8] = include_bytes!("../assets/icons/trash-2.svg");
 pub const SVG_FOLDER: &[u8] = include_bytes!("../assets/icons/folder.svg");
+pub const SVG_ENCLAVE_LOGO: &[u8] = include_bytes!("../assets/icons/enclave_logo.svg");
+// The Enclave "E" source mark — cream `#F2F1EC` glyph with a peach `#FF8A00`
+// accent dot. Used untinted (its colors are baked in via `fill` attributes).
+pub const SVG_ENCLAVE_E_MARK: &[u8] = include_bytes!("../assets/icons/enclave_e_mark.svg");
 
 // Static SVG Handles
 pub static HANDLE_CLOSE: Lazy<svg::Handle> = Lazy::new(|| svg::Handle::from_memory(SVG_CLOSE));
@@ -65,8 +70,13 @@ pub static HANDLE_MAXIMIZE: Lazy<svg::Handle> =
     Lazy::new(|| svg::Handle::from_memory(SVG_MAXIMIZE));
 pub static HANDLE_ATTACH: Lazy<svg::Handle> = Lazy::new(|| svg::Handle::from_memory(SVG_ATTACH));
 pub static HANDLE_PIN: Lazy<svg::Handle> = Lazy::new(|| svg::Handle::from_memory(SVG_PIN));
+pub static HANDLE_PENCIL: Lazy<svg::Handle> = Lazy::new(|| svg::Handle::from_memory(SVG_PENCIL));
 pub static HANDLE_DELETE: Lazy<svg::Handle> = Lazy::new(|| svg::Handle::from_memory(SVG_DELETE));
 pub static HANDLE_FOLDER: Lazy<svg::Handle> = Lazy::new(|| svg::Handle::from_memory(SVG_FOLDER));
+pub static HANDLE_ENCLAVE_LOGO: Lazy<svg::Handle> =
+    Lazy::new(|| svg::Handle::from_memory(SVG_ENCLAVE_LOGO));
+pub static HANDLE_ENCLAVE_E_MARK: Lazy<svg::Handle> =
+    Lazy::new(|| svg::Handle::from_memory(SVG_ENCLAVE_E_MARK));
 
 // Custom style struct implementing svg::StyleSheet
 pub struct SvgStyle {
@@ -86,4 +96,10 @@ impl svg::StyleSheet for SvgStyle {
 // Helper rendering function
 pub fn render_svg(handle: &svg::Handle, color: iced::Color) -> svg::Svg {
     svg(handle.clone()).style(iced::theme::Svg::Custom(Box::new(SvgStyle { color })))
+}
+
+// Render an SVG with its baked-in colors (no tint). Used for the brand logo,
+// which uses `fill` attributes rather than `stroke="currentColor"`.
+pub fn render_svg_untinted(handle: &svg::Handle) -> svg::Svg {
+    svg(handle.clone())
 }

@@ -1,7 +1,8 @@
 use crate::icons;
+use crate::screens::layout::{icon_button, screen_shell, scrollable_padded_body};
 use crate::theme::{self, AppTheme};
 use crate::Message;
-use iced::widget::{button, column, container, horizontal_space, row, scrollable, text, Column};
+use iced::widget::{button, column, container, horizontal_space, row, text, Column};
 use iced::{alignment, Color, Element, Length, Theme};
 
 pub struct SettingsState {
@@ -16,10 +17,10 @@ impl SettingsState {
     }
 }
 
-pub fn view<'a>(
-    state: &'a SettingsState,
+pub fn view(
+    state: &SettingsState,
     app_theme: AppTheme,
-) -> Element<'a, Message, Theme, iced::Renderer> {
+) -> Element<'_, Message, Theme, iced::Renderer> {
     let is_dark = app_theme == AppTheme::Dark;
 
     // --- 1. Settings Top Bar ---
@@ -38,26 +39,12 @@ pub fn view<'a>(
         theme::LIGHT_TEXT
     };
 
-    let close_btn = button(
-        container(
-            icons::render_svg(&icons::HANDLE_CLOSE, text_color)
-                .width(Length::Fixed(18.0))
-                .height(Length::Fixed(18.0)),
-        )
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .center_x()
-        .center_y(),
-    )
-    .padding(8)
-    .width(Length::Fixed(40.0))
-    .height(Length::Fixed(40.0))
-    .style(iced::theme::Button::Custom(Box::new(theme::NeoButton {
-        is_accent: false,
-        has_shadow: true,
-        theme: app_theme,
-    })))
-    .on_press(Message::NavigateBack);
+    let close_btn = icon_button(
+        &icons::HANDLE_CLOSE,
+        text_color,
+        app_theme,
+        Message::NavigateBack,
+    );
 
     let top_bar = container(
         row![
@@ -283,26 +270,11 @@ pub fn view<'a>(
     settings_list =
         settings_list.push(column![make_section_header("ABOUT"), about_column].spacing(8));
 
-    let scroll_settings = scrollable(container(settings_list).padding(20).width(Length::Fill))
-        .height(Length::Fill)
-        .style(iced::theme::Scrollable::Custom(Box::new(
-            theme::NeoScrollable { theme: app_theme },
-        )));
+    let scroll_settings = scrollable_padded_body(settings_list, app_theme);
 
-    // Outer layout column
     let main_layout = column![top_bar, scroll_settings]
         .width(Length::Fill)
         .height(Length::Fill);
 
-    container(main_layout)
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .style(iced::theme::Container::Custom(Box::new(
-            theme::NeoContainer {
-                is_surface: false,
-                has_shadow: false,
-                theme: app_theme,
-            },
-        )))
-        .into()
+    screen_shell(main_layout, app_theme)
 }

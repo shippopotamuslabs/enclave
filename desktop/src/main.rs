@@ -1,9 +1,15 @@
-use iced::widget::{button, column, container, horizontal_space, mouse_area, row, text};
-use iced::{executor, Alignment, Application, Command, Element, Length, Padding, Settings, Theme};
+use iced::widget::{
+    button, column, container, horizontal_space, mouse_area, row, text, text_editor,
+};
+use iced::{
+    executor, Alignment, Application, Command, Element, Length, Padding, Settings, Subscription,
+    Theme,
+};
 
 mod icons;
 mod screens;
 mod theme;
+mod widgets;
 
 pub fn main() -> iced::Result {
     let mut settings = Settings::default();
@@ -66,11 +72,21 @@ pub enum Message {
     HistoryPinChat(String),
     HistoryUnpinChat(String),
     HistoryDeleteChat(String),
+    HistoryRenameChat(String),
+    HistoryHoverChat(Option<String>),
+    HistorySidebarResize(f32),
 
-    ChatInputChange(String),
+    ChatEditorAction(text_editor::Action),
     ChatSendMessage,
     ChatMicPressed,
     ChatFilePressed,
+    ChatToggleMenu,
+    ChatTogglePermPicker,
+    ChatToggleModelPicker,
+    ChatSelectPermission(screens::chat::PermissionMode),
+    ChatSelectModel(String),
+    ChatContextPressed,
+    ChatAnimTick,
 
     // Screen actions - Gallery
     GallerySelectAlbum(Option<String>),
@@ -217,7 +233,10 @@ impl Application for EnclaveApp {
                 settings_state: screens::settings::SettingsState::new(),
                 gallery_state: screens::gallery::GalleryState::new(),
             },
-            Command::none(),
+            // Maximize on launch so the window is deterministic for validation
+            // (screenshots, xdotool automation) and fills the workspace for the
+            // custom-decorated chat UI.
+            iced::window::maximize(iced::window::Id::MAIN, true),
         )
     }
 
@@ -320,27 +339,55 @@ impl Application for EnclaveApp {
 
             Message::HistoryDeleteChat(chat_id) => {
                 self.history_state.chats.retain(|c| c.id != chat_id);
+                if self.history_state.hovered_chat_id.as_deref() == Some(chat_id.as_str()) {
+                    self.history_state.hovered_chat_id = None;
+                }
+                Command::none()
+            }
+
+            Message::HistoryRenameChat(_chat_id) => {
+                // Rename flow is not wired yet; pencil affordance is reserved.
+                Command::none()
+            }
+
+            Message::HistoryHoverChat(chat_id) => {
+                self.history_state.hovered_chat_id = chat_id;
+                Command::none()
+            }
+
+            Message::HistorySidebarResize(delta) => {
+                self.history_state.apply_sidebar_resize_delta(delta);
                 Command::none()
             }
 
             // Chat Actions
-            Message::ChatInputChange(val) => {
+            Message::ChatEditorAction(action) => {
                 if let Some(ref mut chat) = self.chat_state {
-                    chat.input_text = val;
+                    chat.input_content.perform(action);
                 }
                 Command::none()
             }
 
             Message::ChatSendMessage => {
                 if let Some(ref mut chat) = self.chat_state {
-                    let user_text = chat.input_text.trim().to_string();
+                    let user_text = chat.input_content.text().trim().to_string();
                     if !user_text.is_empty() {
+                        // Kick off the fall animation on the first send from the
+                        // centered empty-state layout.
+                        if chat.anim == screens::chat::InputBarAnim::Centered {
+                            chat.anim = screens::chat::InputBarAnim::Falling { progress: 0.0 };
+                        }
+                        // Close any open popovers.
+                        chat.menu_open = false;
+                        chat.perm_picker_open = false;
+                        chat.model_picker_open = false;
+
                         // Push user message
                         chat.messages.push(screens::chat::ChatMessage {
                             sender: screens::chat::MessageSender::User,
                             text: user_text,
                         });
-                        chat.input_text.clear();
+                        chat.input_content = text_editor::Content::default();
 
                         // Push mock assistant response
                         chat.messages.push(screens::chat::ChatMessage {
@@ -353,7 +400,65 @@ impl Application for EnclaveApp {
             }
 
             Message::ChatMicPressed => Command::none(),
-            Message::ChatFilePressed => Command::none(),
+            Message::ChatFilePressed => {
+                // "Attach File" from the + menu — close the menu after the pick.
+                if let Some(ref mut chat) = self.chat_state {
+                    chat.menu_open = false;
+                }
+                Command::none()
+            }
+
+            Message::ChatToggleMenu => {
+                if let Some(ref mut chat) = self.chat_state {
+                    chat.menu_open = !chat.menu_open;
+                    chat.perm_picker_open = false;
+                    chat.model_picker_open = false;
+                }
+                Command::none()
+            }
+
+            Message::ChatTogglePermPicker => {
+                if let Some(ref mut chat) = self.chat_state {
+                    chat.perm_picker_open = !chat.perm_picker_open;
+                    chat.menu_open = false;
+                    chat.model_picker_open = false;
+                }
+                Command::none()
+            }
+
+            Message::ChatToggleModelPicker => {
+                if let Some(ref mut chat) = self.chat_state {
+                    chat.model_picker_open = !chat.model_picker_open;
+                    chat.menu_open = false;
+                    chat.perm_picker_open = false;
+                }
+                Command::none()
+            }
+
+            Message::ChatSelectPermission(mode) => {
+                if let Some(ref mut chat) = self.chat_state {
+                    chat.permission_mode = mode;
+                    chat.perm_picker_open = false;
+                }
+                Command::none()
+            }
+
+            Message::ChatSelectModel(model) => {
+                if let Some(ref mut chat) = self.chat_state {
+                    chat.selected_model = model;
+                    chat.model_picker_open = false;
+                }
+                Command::none()
+            }
+
+            Message::ChatContextPressed => Command::none(),
+
+            Message::ChatAnimTick => {
+                if let Some(ref mut chat) = self.chat_state {
+                    chat.anim = screens::chat::advance_anim(chat.anim, 0.08);
+                }
+                Command::none()
+            }
 
             // Gallery Actions
             Message::GallerySelectAlbum(album_id) => {
@@ -389,5 +494,17 @@ impl Application for EnclaveApp {
             .width(Length::Fill)
             .height(Length::Fill)
             .into()
+    }
+
+    fn subscription(&self) -> Subscription<Self::Message> {
+        // Only tick while the input bar is actively falling. Once it locks the
+        // subscription goes quiet so we don't wake the runtime on every frame.
+        if let Some(ref chat) = self.chat_state {
+            if matches!(chat.anim, screens::chat::InputBarAnim::Falling { .. }) {
+                return iced::time::every(std::time::Duration::from_millis(16))
+                    .map(|_| Message::ChatAnimTick);
+            }
+        }
+        Subscription::none()
     }
 }
