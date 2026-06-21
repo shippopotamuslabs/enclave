@@ -8,7 +8,7 @@ use iced::advanced::widget::tree::{State, Tag, Tree};
 use iced::advanced::{
     layout, mouse, overlay, renderer, widget, Clipboard, Layout, Renderer, Shell,
 };
-use iced::event::{self, Event};
+use iced::event::Event;
 use iced::mouse::Button;
 use iced::{Color, Element, Length, Rectangle, Size, Theme};
 
@@ -63,7 +63,7 @@ where
     }
 
     fn layout(
-        &self,
+        &mut self,
         _tree: &mut Tree,
         _renderer: &iced::Renderer,
         limits: &layout::Limits,
@@ -113,17 +113,17 @@ where
         State::new(DragState::default())
     }
 
-    fn on_event(
+    fn update(
         &mut self,
         tree: &mut Tree,
-        event: Event,
+        event: &Event,
         layout: Layout<'_>,
         cursor: mouse::Cursor,
         _renderer: &iced::Renderer,
         _clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         _viewport: &Rectangle,
-    ) -> event::Status {
+    ) {
         let drag: &mut DragState = tree.state.downcast_mut();
 
         match event {
@@ -133,7 +133,6 @@ where
                 if let Some(position) = cursor.position() {
                     drag.dragging = true;
                     drag.last_x = position.x;
-                    return event::Status::Captured;
                 }
             }
             Event::Mouse(mouse::Event::CursorMoved { .. }) if drag.dragging => {
@@ -143,7 +142,6 @@ where
                     if delta.abs() > f32::EPSILON {
                         shell.publish((self.on_resize)(delta));
                     }
-                    return event::Status::Captured;
                 }
             }
             Event::Mouse(mouse::Event::ButtonReleased(Button::Left)) if drag.dragging => {
@@ -151,12 +149,9 @@ where
                 if let Some(message) = self.on_resize_end.clone() {
                     shell.publish(message);
                 }
-                return event::Status::Captured;
             }
             _ => {}
         }
-
-        event::Status::Ignored
     }
 
     fn mouse_interaction(
@@ -179,6 +174,7 @@ where
         _tree: &'b mut Tree,
         _layout: Layout<'_>,
         _renderer: &iced::Renderer,
+        _viewport: &Rectangle,
         _translation: iced::Vector,
     ) -> Option<overlay::Element<'b, Message, Theme, iced::Renderer>> {
         None

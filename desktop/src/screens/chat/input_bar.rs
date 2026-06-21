@@ -1,7 +1,5 @@
-use iced::widget::{
-    button, column, container, horizontal_space, row, scrollable, text, text_editor, Column,
-};
-use iced::{alignment, Element, Length, Theme};
+use iced::widget::{button, column, container, row, scrollable, space, text, text_editor, Column};
+use iced::{alignment, Element, Length, Padding, Theme};
 
 use super::state::{ChatState, PermissionMode};
 use crate::icons;
@@ -23,32 +21,20 @@ pub fn view(
         theme::LIGHT_TEXT_MUTED
     };
 
-    // --- Row 1: auto-expanding text area ---
-    // The editor shrinks-to-content so it starts at a single line and grows as
-    // the user types. The scrollable has no fixed height (it follows the
-    // child), and the outer container clamps the visible region to ~8 lines
-    // (176px). Once the content exceeds the clamp the scrollbar engages.
     let editor = text_editor(&state.input_content)
         .on_action(Message::ChatEditorAction)
         .font(icons::FONT_REGULAR)
         .padding(8)
         .height(Length::Shrink)
-        .style(iced::theme::TextEditor::Custom(Box::new(
-            theme::NeoTextEditor { theme: app_theme },
-        )));
+        .style(theme::neo_text_editor(theme::NeoTextEditor {
+            theme: app_theme,
+        }));
 
-    // 8 lines * ~22px line height ≈ 176px before the scrollbar engages.
-    let scroller = scrollable(editor).style(iced::theme::Scrollable::Custom(Box::new(
-        theme::NeoScrollable { theme: app_theme },
-    )));
+    let scroller = scrollable(editor).style(theme::neo_scrollable(theme::NeoScrollable {
+        theme: app_theme,
+    }));
     let editor_host = container(scroller).max_height(176.0);
 
-    // --- Row 2: action row ---
-    // Each menu trigger is wrapped in a floating `Popover` so the menu overlays
-    // the UI instead of pushing the bar's layout. The closure returns the menu
-    // when the flag is set, `None` otherwise (popover is hidden).
-
-    // [+] button → attachment menu.
     let plus_trigger = icon_button(
         &icons::HANDLE_ADD,
         text_color,
@@ -68,24 +54,22 @@ pub fn view(
                     text("Attach File").font(icons::FONT_REGULAR).size(13),
                 ]
                 .spacing(8)
-                .align_items(alignment::Alignment::Center),
+                .align_y(alignment::Alignment::Center),
             )
             .padding(8)
             .width(Length::Fill)
-            .style(iced::theme::Button::Custom(Box::new(theme::NeoButton {
+            .style(theme::neo_button(theme::NeoButton {
                 is_accent: false,
                 has_shadow: false,
                 theme: app_theme,
-            })))
+            }))
             .on_press(Message::ChatFilePressed);
 
             Some(
                 container(column![attach_item].spacing(2).width(Length::Fill))
                     .padding(6)
                     .width(Length::Fixed(160.0))
-                    .style(iced::theme::Container::Custom(Box::new(
-                        theme::NeoDropdown { theme: app_theme },
-                    )))
+                    .style(theme::neo_dropdown(theme::NeoDropdown { theme: app_theme }))
                     .into(),
             )
         })
@@ -93,7 +77,6 @@ pub fn view(
         .on_close(Message::ChatToggleMenu)
         .into();
 
-    // Permission-mode dropdown.
     let perm_label = state.permission_mode.label();
     let perm_trigger = dropdown_trigger(
         perm_label,
@@ -112,7 +95,7 @@ pub fn view(
                 Column::new().spacing(2).width(Length::Fill),
                 |col, mode| {
                     let is_selected = *mode == state.permission_mode;
-                    let label = text(mode.label()).font(icons::FONT_REGULAR).size(13).style(
+                    let label = text(mode.label()).font(icons::FONT_REGULAR).size(13).color(
                         if is_selected {
                             theme::COLOR_ACCENT
                         } else {
@@ -128,9 +111,7 @@ pub fn view(
                 container(items)
                     .padding(6)
                     .width(Length::Fixed(180.0))
-                    .style(iced::theme::Container::Custom(Box::new(
-                        theme::NeoDropdown { theme: app_theme },
-                    )))
+                    .style(theme::neo_dropdown(theme::NeoDropdown { theme: app_theme }))
                     .into(),
             )
         })
@@ -138,8 +119,6 @@ pub fn view(
         .on_close(Message::ChatTogglePermPicker)
         .into();
 
-    // Context ring scaffold: a ring icon + percent overlay. Click wired, popup
-    // deferred to a later pass.
     let context_btn = button(
         container(
             row![
@@ -149,22 +128,21 @@ pub fn view(
                 text(format!("{}%", state.context_pct))
                     .font(icons::FONT_REGULAR)
                     .size(12)
-                    .style(muted_color),
+                    .color(muted_color),
             ]
             .spacing(4)
-            .align_items(alignment::Alignment::Center),
+            .align_y(alignment::Alignment::Center),
         )
         .padding(6),
     )
     .padding(0)
-    .style(iced::theme::Button::Custom(Box::new(theme::NeoButton {
+    .style(theme::neo_button(theme::NeoButton {
         is_accent: false,
         has_shadow: false,
         theme: app_theme,
-    })))
+    }))
     .on_press(Message::ChatContextPressed);
 
-    // Model picker dropdown.
     let model_trigger = dropdown_trigger(
         &state.selected_model,
         &icons::HANDLE_CHEVRON_DOWN,
@@ -189,7 +167,7 @@ pub fn view(
                         text(*model)
                             .font(icons::FONT_REGULAR)
                             .size(13)
-                            .style(if is_selected {
+                            .color(if is_selected {
                                 theme::COLOR_ACCENT
                             } else {
                                 text_color
@@ -206,9 +184,7 @@ pub fn view(
                 container(items)
                     .padding(6)
                     .width(Length::Fixed(200.0))
-                    .style(iced::theme::Container::Custom(Box::new(
-                        theme::NeoDropdown { theme: app_theme },
-                    )))
+                    .style(theme::neo_dropdown(theme::NeoDropdown { theme: app_theme }))
                     .into(),
             )
         })
@@ -224,24 +200,23 @@ pub fn view(
         )
         .width(Length::Fill)
         .height(Length::Fill)
-        .center_x()
-        .center_y(),
+        .align_x(alignment::Horizontal::Center)
+        .align_y(alignment::Vertical::Center),
     )
     .padding(10)
     .width(Length::Fixed(44.0))
     .height(Length::Fixed(44.0))
-    .style(iced::theme::Button::Custom(Box::new(theme::NeoButton {
+    .style(theme::neo_button(theme::NeoButton {
         is_accent: true,
         has_shadow: true,
         theme: app_theme,
-    })))
+    }))
     .on_press(Message::ChatSendMessage);
 
-    // [+] [perm] <fill> [context] [model] [send]
     let action_row = row![plus_btn, perm_btn]
         .spacing(8)
-        .align_items(alignment::Alignment::Center)
-        .push(horizontal_space().width(Length::Fill))
+        .align_y(alignment::Alignment::Center)
+        .push(space::horizontal().width(Length::Fill))
         .push(context_btn)
         .push(model_btn)
         .push(send_btn);
@@ -253,42 +228,37 @@ pub fn view(
     .spacing(8)
     .width(Length::Fill);
 
-    // The styled solid block is 75% of the pane width (6 of 8 FillPortion),
-    // centered between two bare fill spacers. Bare `horizontal_space` (matching
-    // the working top-bar pattern) is required — wrapping it in a container
-    // breaks the FillPortion distribution in iced 0.12. Bottom padding is
-    // smaller than top so the bar lifts clear of the window's bottom edge.
     let styled_bar = container(bar)
         .width(Length::FillPortion(6))
-        .padding([10, 24, 14, 24])
-        .style(iced::theme::Container::Custom(Box::new(
-            theme::NeoInputBar {
-                has_shadow: false,
-                theme: app_theme,
-            },
-        )));
+        .padding(Padding {
+            top: 10.0,
+            right: 24.0,
+            bottom: 14.0,
+            left: 24.0,
+        })
+        .style(theme::neo_input_bar(theme::NeoInputBar {
+            has_shadow: false,
+            theme: app_theme,
+        }));
 
     row![
-        horizontal_space().width(Length::FillPortion(1)),
+        space::horizontal().width(Length::FillPortion(1)),
         styled_bar,
-        horizontal_space().width(Length::FillPortion(1)),
+        space::horizontal().width(Length::FillPortion(1)),
     ]
     .width(Length::Fill)
-    .align_items(alignment::Alignment::Center)
+    .align_y(alignment::Alignment::Center)
     .into()
 }
-/// border to the accent color so the open state is visible.
-fn dropdown_trigger(
+
+fn dropdown_trigger<'a>(
     label: &str,
-    chevron: &iced::widget::svg::Handle,
+    chevron: &'a iced::widget::svg::Handle,
     color: iced::Color,
     app_theme: AppTheme,
     active: bool,
     on_press: Message,
-) -> button::Button<'static, Message, Theme, iced::Renderer> {
-    // When the trigger is active (open), it switches to the peach accent
-    // background, so its label + chevron must be BLACK to stay legible against
-    // the brightened-on-hover peach fill.
+) -> button::Button<'a, Message, Theme, iced::Renderer> {
     let trigger_color = if active { iced::Color::BLACK } else { color };
     button(
         container(
@@ -296,21 +266,21 @@ fn dropdown_trigger(
                 text(label.to_string())
                     .font(icons::FONT_REGULAR)
                     .size(13)
-                    .style(trigger_color),
+                    .color(trigger_color),
                 icons::render_svg(chevron, trigger_color)
                     .width(Length::Fixed(14.0))
                     .height(Length::Fixed(14.0)),
             ]
             .spacing(6)
-            .align_items(alignment::Alignment::Center),
+            .align_y(alignment::Alignment::Center),
         )
         .padding([6, 10]),
     )
     .padding(0)
-    .style(iced::theme::Button::Custom(Box::new(theme::NeoButton {
+    .style(theme::neo_button(theme::NeoButton {
         is_accent: active,
         has_shadow: false,
         theme: app_theme,
-    })))
+    }))
     .on_press(on_press)
 }

@@ -12,7 +12,7 @@
 
 use iced::advanced::widget::tree::Tree;
 use iced::advanced::{layout, mouse, overlay, renderer, widget, Clipboard, Layout, Shell};
-use iced::event::{self, Event};
+use iced::event::Event;
 use iced::{Element, Length, Padding, Point, Rectangle, Size, Vector};
 
 /// Anchor placement of the popup relative to the content's bounds.
@@ -94,13 +94,13 @@ where
     }
 
     fn layout(
-        &self,
+        &mut self,
         tree: &mut Tree,
         renderer: &Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
         self.content
-            .as_widget()
+            .as_widget_mut()
             .layout(&mut tree.children[0], renderer, limits)
     }
 
@@ -150,18 +150,18 @@ where
         }
     }
 
-    fn on_event(
+    fn update(
         &mut self,
         tree: &mut Tree,
-        event: Event,
+        event: &Event,
         layout: Layout<'_>,
         cursor: mouse::Cursor,
         renderer: &Renderer,
         clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
-    ) -> event::Status {
-        self.content.as_widget_mut().on_event(
+    ) {
+        self.content.as_widget_mut().update(
             &mut tree.children[0],
             event,
             layout,
@@ -170,7 +170,7 @@ where
             clipboard,
             shell,
             viewport,
-        )
+        );
     }
 
     fn mouse_interaction(
@@ -195,6 +195,7 @@ where
         tree: &'b mut Tree,
         layout: Layout<'_>,
         _renderer: &Renderer,
+        _viewport: &Rectangle,
         translation: Vector,
     ) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
         let popup = (self.popup)()?;
@@ -251,7 +252,7 @@ where
     fn layout(&mut self, renderer: &Renderer, bounds: Size) -> layout::Node {
         let viewport = Rectangle::with_size(bounds);
 
-        let popup_layout = self.popup.as_widget().layout(
+        let popup_layout = self.popup.as_widget_mut().layout(
             self.state,
             renderer,
             &layout::Limits::new(Size::ZERO, viewport.size()),
@@ -303,35 +304,33 @@ where
             inherited_style,
             layout.children().next().unwrap(),
             cursor,
-            &Rectangle::with_size(Size::INFINITY),
+            &Rectangle::with_size(Size::INFINITE),
         );
     }
 
-    fn on_event(
+    fn update(
         &mut self,
-        event: Event,
+        event: &Event,
         layout: Layout<'_>,
         cursor: mouse::Cursor,
         renderer: &Renderer,
         clipboard: &mut dyn Clipboard,
         shell: &mut Shell<'_, Message>,
-    ) -> event::Status {
+    ) {
         let popup_layout = layout.children().next().unwrap();
         let popup_bounds = popup_layout.bounds();
         let inside = cursor.is_over(popup_bounds);
 
-        // Outside-click closes the popover. We capture the event so the
-        // underlying widget doesn't also react to the dismiss click.
-        if let Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) = &event {
+        if let Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) = event {
             if !inside {
                 if let Some(on_close) = self.on_close.clone() {
                     shell.publish(on_close);
                 }
-                return event::Status::Captured;
+                return;
             }
         }
 
-        self.popup.as_widget_mut().on_event(
+        self.popup.as_widget_mut().update(
             self.state,
             event,
             popup_layout,
@@ -340,33 +339,21 @@ where
             clipboard,
             shell,
             &popup_bounds,
-        )
+        );
     }
 
     fn mouse_interaction(
         &self,
         layout: Layout<'_>,
         cursor: mouse::Cursor,
-        viewport: &Rectangle,
         renderer: &Renderer,
     ) -> mouse::Interaction {
         self.popup.as_widget().mouse_interaction(
             self.state,
             layout.children().next().unwrap(),
             cursor,
-            viewport,
+            &layout.bounds(),
             renderer,
         )
-    }
-
-    // Claim the cursor only when over the popup so the rest of the UI keeps
-    // receiving hover events. The overlay still gets `on_event` for every event
-    // (that's how outside-clicks reach us).
-    fn is_over(&self, layout: Layout<'_>, _renderer: &Renderer, cursor_position: Point) -> bool {
-        layout
-            .children()
-            .next()
-            .map(|c| c.bounds())
-            .is_some_and(|bounds| bounds.contains(cursor_position))
     }
 }

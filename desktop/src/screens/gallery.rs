@@ -2,7 +2,7 @@ use crate::icons;
 use crate::screens::layout::{icon_button, screen_shell, scrollable_padded_body};
 use crate::theme::{self, AppTheme};
 use crate::Message;
-use iced::widget::{button, column, container, horizontal_space, row, text, Column, Row};
+use iced::widget::{button, column, container, row, space, text, Column, Row};
 use iced::{alignment, Element, Length, Theme};
 
 pub struct GalleryState {
@@ -122,10 +122,10 @@ pub fn view(
         "Gallery".to_string()
     };
 
-    let title_text = text(&top_bar_title)
+    let title_text = text(top_bar_title)
         .font(icons::FONT_BOLD)
         .size(18)
-        .style(if is_dark {
+        .color(if is_dark {
             theme::DARK_TEXT
         } else {
             theme::LIGHT_TEXT
@@ -137,9 +137,9 @@ pub fn view(
             .size(20)
             .width(Length::Fill)
             .height(Length::Fill)
-            .horizontal_alignment(alignment::Horizontal::Center)
-            .vertical_alignment(alignment::Vertical::Center)
-            .style(if is_dark {
+            .align_x(alignment::Horizontal::Center)
+            .align_y(alignment::Vertical::Center)
+            .color(if is_dark {
                 theme::DARK_TEXT
             } else {
                 theme::LIGHT_TEXT
@@ -148,31 +148,29 @@ pub fn view(
     .padding(8)
     .width(Length::Fixed(40.0))
     .height(Length::Fixed(40.0))
-    .style(iced::theme::Button::Custom(Box::new(theme::NeoButton {
+    .style(theme::neo_button(theme::NeoButton {
         is_accent: false,
         has_shadow: true,
         theme: app_theme,
-    })));
+    }));
 
     let top_bar = container(
         row![
             back_btn,
-            horizontal_space().width(Length::Fixed(12.0)),
+            space::horizontal().width(Length::Fixed(12.0)),
             title_text,
-            horizontal_space().width(Length::Fill),
+            space::horizontal().width(Length::Fill),
             add_album_btn
         ]
         .padding(10)
-        .align_items(alignment::Alignment::Center),
+        .align_y(alignment::Alignment::Center),
     )
     .width(Length::Fill)
-    .style(iced::theme::Container::Custom(Box::new(
-        theme::NeoContainer {
-            is_surface: true,
-            has_shadow: false,
-            theme: app_theme,
-        },
-    )));
+    .style(theme::neo_container(theme::NeoContainer {
+        is_surface: true,
+        has_shadow: false,
+        theme: app_theme,
+    }));
 
     // --- 2. Main Grid Layout ---
     let mut grid_layout = Column::new().spacing(20);
@@ -191,7 +189,7 @@ pub fn view(
                     })
                     .font(icons::FONT_BOLD)
                     .size(14)
-                    .style(if is_dark {
+                    .color(if is_dark {
                         theme::DARK_TEXT_MUTED
                     } else {
                         theme::LIGHT_TEXT_MUTED
@@ -201,13 +199,11 @@ pub fn view(
                 .height(130)
                 .align_x(alignment::Horizontal::Center)
                 .align_y(alignment::Vertical::Center)
-                .style(iced::theme::Container::Custom(Box::new(
-                    theme::NeoContainer {
-                        is_surface: false,
-                        has_shadow: false,
-                        theme: app_theme,
-                    },
-                )));
+                .style(theme::neo_container(theme::NeoContainer {
+                    is_surface: false,
+                    has_shadow: false,
+                    theme: app_theme,
+                }));
 
                 let item_card = container(
                     column![
@@ -215,7 +211,7 @@ pub fn view(
                         text(&item.title)
                             .font(icons::FONT_REGULAR)
                             .size(13)
-                            .style(if is_dark {
+                            .color(if is_dark {
                                 theme::DARK_TEXT
                             } else {
                                 theme::LIGHT_TEXT
@@ -225,19 +221,17 @@ pub fn view(
                 )
                 .padding(12)
                 .width(Length::FillPortion(1))
-                .style(iced::theme::Container::Custom(Box::new(
-                    theme::NeoContainer {
-                        is_surface: true,
-                        has_shadow: true,
-                        theme: app_theme,
-                    },
-                )));
+                .style(theme::neo_container(theme::NeoContainer {
+                    is_surface: true,
+                    has_shadow: true,
+                    theme: app_theme,
+                }));
 
                 row_layout = row_layout.push(item_card);
             }
 
             for _ in row_chunk.len()..columns {
-                row_layout = row_layout.push(horizontal_space().width(Length::FillPortion(1)));
+                row_layout = row_layout.push(space::horizontal().width(Length::FillPortion(1)));
             }
 
             grid_layout = grid_layout.push(row_layout);
@@ -262,26 +256,24 @@ pub fn view(
                         text(format!("{} items", album.items.len()))
                             .font(icons::FONT_REGULAR)
                             .size(12)
-                            .style(if is_dark {
+                            .color(if is_dark {
                                 theme::DARK_TEXT_MUTED
                             } else {
                                 theme::LIGHT_TEXT_MUTED
                             })
                     ]
                     .spacing(4)
-                    .align_items(alignment::Alignment::Center),
+                    .align_x(alignment::Horizontal::Center),
                 )
                 .width(Length::Fill)
                 .height(140)
                 .align_x(alignment::Horizontal::Center)
                 .align_y(alignment::Vertical::Center)
-                .style(iced::theme::Container::Custom(Box::new(
-                    theme::NeoContainer {
-                        is_surface: false,
-                        has_shadow: false,
-                        theme: app_theme,
-                    },
-                )));
+                .style(theme::neo_container(theme::NeoContainer {
+                    is_surface: false,
+                    has_shadow: false,
+                    theme: app_theme,
+                }));
 
                 let album_card = button(
                     container(
@@ -290,7 +282,7 @@ pub fn view(
                             text(&album.name)
                                 .font(icons::FONT_BOLD)
                                 .size(15)
-                                .style(if is_dark {
+                                .color(if is_dark {
                                     theme::DARK_TEXT
                                 } else {
                                     theme::LIGHT_TEXT
@@ -302,18 +294,18 @@ pub fn view(
                     .width(Length::Fill),
                 )
                 .width(Length::FillPortion(1))
-                .style(iced::theme::Button::Custom(Box::new(theme::NeoButton {
+                .style(theme::neo_button(theme::NeoButton {
                     is_accent: false,
                     has_shadow: true,
                     theme: app_theme,
-                })))
+                }))
                 .on_press(Message::GallerySelectAlbum(Some(album.id.clone())));
 
                 row_layout = row_layout.push(album_card);
             }
 
             for _ in row_chunk.len()..columns {
-                row_layout = row_layout.push(horizontal_space().width(Length::FillPortion(1)));
+                row_layout = row_layout.push(space::horizontal().width(Length::FillPortion(1)));
             }
 
             grid_layout = grid_layout.push(row_layout);

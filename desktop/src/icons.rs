@@ -3,23 +3,68 @@
 use iced::widget::svg;
 use once_cell::sync::Lazy;
 
-// IBM Plex Sans Fonts
+// Font assets mirror Android `core/ui/.../theme/Type.kt`:
+// - `EnclaveUiFontFamily`: IBM Plex Sans (UI chrome, user bubbles, input)
+// - `EnclaveReadingFontFamily`: Source Serif 4 (assistant markdown body)
+// - Code spans/blocks: platform monospace (Compose `FontFamily.Monospace`)
+
+// IBM Plex Sans — UI chrome
 pub const FONT_REGULAR_BYTES: &[u8] = include_bytes!("../assets/ibm_plex_sans_regular.ttf");
+pub const FONT_MEDIUM_BYTES: &[u8] = include_bytes!("../assets/ibm_plex_sans_medium.ttf");
+pub const FONT_SEMIBOLD_BYTES: &[u8] = include_bytes!("../assets/ibm_plex_sans_semibold.ttf");
 pub const FONT_BOLD_BYTES: &[u8] = include_bytes!("../assets/ibm_plex_sans_bold.ttf");
 
+// Source Serif 4 — assistant markdown / long-form reading
+pub const FONT_SERIF_REGULAR_BYTES: &[u8] = include_bytes!("../assets/source_serif4_regular.ttf");
+pub const FONT_SERIF_BOLD_BYTES: &[u8] = include_bytes!("../assets/source_serif4_bold.ttf");
+
+const IBM_PLEX_SANS: &str = "IBM Plex Sans";
+const SOURCE_SERIF_4: &str = "Source Serif 4";
+
 pub const FONT_REGULAR: iced::Font = iced::Font {
-    family: iced::font::Family::Name("IBM Plex Sans"),
+    family: iced::font::Family::Name(IBM_PLEX_SANS),
     weight: iced::font::Weight::Normal,
     stretch: iced::font::Stretch::Normal,
     style: iced::font::Style::Normal,
 };
 
+pub const FONT_MEDIUM: iced::Font = iced::Font {
+    family: iced::font::Family::Name(IBM_PLEX_SANS),
+    weight: iced::font::Weight::Medium,
+    stretch: iced::font::Stretch::Normal,
+    style: iced::font::Style::Normal,
+};
+
+pub const FONT_SEMIBOLD: iced::Font = iced::Font {
+    family: iced::font::Family::Name(IBM_PLEX_SANS),
+    weight: iced::font::Weight::Semibold,
+    stretch: iced::font::Stretch::Normal,
+    style: iced::font::Style::Normal,
+};
+
 pub const FONT_BOLD: iced::Font = iced::Font {
-    family: iced::font::Family::Name("IBM Plex Sans"),
+    family: iced::font::Family::Name(IBM_PLEX_SANS),
     weight: iced::font::Weight::Bold,
     stretch: iced::font::Stretch::Normal,
     style: iced::font::Style::Normal,
 };
+
+pub const FONT_SERIF_REGULAR: iced::Font = iced::Font {
+    family: iced::font::Family::Name(SOURCE_SERIF_4),
+    weight: iced::font::Weight::Normal,
+    stretch: iced::font::Stretch::Normal,
+    style: iced::font::Style::Normal,
+};
+
+pub const FONT_SERIF_BOLD: iced::Font = iced::Font {
+    family: iced::font::Family::Name(SOURCE_SERIF_4),
+    weight: iced::font::Weight::Bold,
+    stretch: iced::font::Stretch::Normal,
+    style: iced::font::Style::Normal,
+};
+
+/// Platform monospace for markdown code — matches Android `FontFamily.Monospace`.
+pub const FONT_MONO: iced::Font = iced::Font::MONOSPACE;
 
 // SVG Byte slices
 pub const SVG_CLOSE: &[u8] = include_bytes!("../assets/icons/x.svg");
@@ -78,28 +123,13 @@ pub static HANDLE_ENCLAVE_LOGO: Lazy<svg::Handle> =
 pub static HANDLE_ENCLAVE_E_MARK: Lazy<svg::Handle> =
     Lazy::new(|| svg::Handle::from_memory(SVG_ENCLAVE_E_MARK));
 
-// Custom style struct implementing svg::StyleSheet
-pub struct SvgStyle {
-    pub color: iced::Color,
-}
-
-impl svg::StyleSheet for SvgStyle {
-    type Style = iced::Theme;
-
-    fn appearance(&self, _style: &Self::Style) -> svg::Appearance {
-        svg::Appearance {
-            color: Some(self.color),
-        }
-    }
-}
-
 // Helper rendering function
-pub fn render_svg(handle: &svg::Handle, color: iced::Color) -> svg::Svg {
-    svg(handle.clone()).style(iced::theme::Svg::Custom(Box::new(SvgStyle { color })))
+pub fn render_svg(handle: &svg::Handle, color: iced::Color) -> svg::Svg<'_> {
+    svg(handle.clone()).style(move |_theme, _status| svg::Style { color: Some(color) })
 }
 
 // Render an SVG with its baked-in colors (no tint). Used for the brand logo,
 // which uses `fill` attributes rather than `stroke="currentColor"`.
-pub fn render_svg_untinted(handle: &svg::Handle) -> svg::Svg {
+pub fn render_svg_untinted(handle: &svg::Handle) -> svg::Svg<'_> {
     svg(handle.clone())
 }

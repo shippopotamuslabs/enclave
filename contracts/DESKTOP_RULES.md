@@ -123,6 +123,7 @@ The presentation crate `enclave-desktop` implements the standard Model-View-Upda
 - **Linter & Formatter**:
   - Keep code strictly warning-free. Always format files with `cargo fmt`.
   - Suppress warnings selectively (e.g. `#![allow(async_fn_in_trait)]`) only if they are due to intentional architectural design choices.
+  - Run `./scripts/rustrover-inspect.sh` before completing desktop tasks to catch IDE-only inspections (duplicate code, elidable lifetimes, unused Cargo deps) that `cargo clippy` does not report. Close RustRover first — the headless inspector cannot run while the GUI is open.
 
 ---
 
@@ -218,6 +219,7 @@ Run every item for UI-generating desktop tasks. If any box fails, fix before com
 - [ ] **States:** empty, loading, and error paths rendered — not blank panes.
 - [ ] **Copy:** no placeholder lorem or broken AI filler in labels.
 - [ ] **Tests:** layout/state invariants covered by `cargo test` where logic changed (§8 Executable Validation).
+- [ ] **IDE lint:** `./scripts/rustrover-inspect.sh --scope rust-workspace --fail-on WARNING` passed (RustRover GUI closed).
 - [ ] **Out of scope rejected:** landing-page layouts and industrial/CRT brutalism were not imported.
 
 ---
@@ -229,6 +231,22 @@ Whenever a desktop task is performed, the agent must run the following checks:
 2. **Linting Check**: `cargo clippy --workspace --all-targets` (must contain zero warnings/errors)
 3. **Format Check**: `cargo fmt --all -- --check`
 4. **Unit Tests**: `cargo test --workspace`
+5. **IDE Inspection Check**: `./scripts/rustrover-inspect.sh --scope rust-workspace --fail-on WARNING`
+
+   RustRover headless inspect surfaces IDE-only linting (duplicate code, elidable lifetimes, unused Cargo deps, unnecessary qualifications) that Clippy does not emit. **Close the RustRover GUI before running** — the CLI inspector fails if an IDE window is already open on this project.
+
+   ```bash
+   # Default: desktop + agent_core + classifier_core + docgen_core
+   ./scripts/rustrover-inspect.sh --scope rust-workspace --fail-on WARNING
+
+   # Faster, desktop-only pass during UI work
+   ./scripts/rustrover-inspect.sh --scope desktop --fail-on WARNING
+
+   # Uncommitted changes only
+   ./scripts/rustrover-inspect.sh --scope desktop --changes --fail-on WARNING
+   ```
+
+   Reports land in `build/rustrover-inspections/`. Fix findings or document why a warning is intentionally accepted before `TASK_STATUS: COMPLETE`.
 
 ---
 

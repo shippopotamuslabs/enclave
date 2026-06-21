@@ -2,8 +2,7 @@ use crate::icons;
 use crate::theme::{self, AppTheme};
 use crate::Message;
 use iced::widget::{
-    button, column, container, horizontal_space, mouse_area, row, scrollable, text, text_input,
-    Column,
+    button, column, container, mouse_area, row, scrollable, space, text, text_input, Column,
 };
 use iced::{alignment, Element, Length, Theme};
 
@@ -91,9 +90,7 @@ pub fn view(
     let search_input = text_input("Search chats...", &state.search_query)
         .on_input(Message::HistorySearchChanged)
         .padding(8)
-        .style(iced::theme::TextInput::Custom(Box::new(theme::NeoInput {
-            theme: app_theme,
-        })));
+        .style(theme::neo_input(theme::NeoInput { theme: app_theme }));
 
     let text_color = if is_dark {
         theme::DARK_TEXT
@@ -109,58 +106,59 @@ pub fn view(
         )
         .width(Length::Fill)
         .height(Length::Fill)
-        .center_x()
-        .center_y(),
+        .align_x(iced::alignment::Horizontal::Center)
+        .align_y(iced::alignment::Vertical::Center),
     )
     .padding(6)
     .width(Length::Fixed(32.0))
     .height(Length::Fixed(32.0))
-    .style(iced::theme::Button::Custom(Box::new(theme::NeoButton {
+    .style(theme::neo_button(theme::NeoButton {
         is_accent: false,
         has_shadow: true,
         theme: app_theme,
-    })))
+    }))
     .on_press(Message::NavigateTo(crate::Screen::Settings));
 
     let header_row = row![
         search_input,
-        horizontal_space().width(Length::Fixed(8.0)),
+        space::horizontal().width(Length::Fixed(8.0)),
         settings_btn
     ]
-    .align_items(alignment::Alignment::Center)
+    .align_y(alignment::Alignment::Center)
     .padding(10);
 
     // --- 2. Navigation Quick Links ---
     // Each quick link is a standalone full-width shadowed `NeoButton` (matching
     // the chat input bar's action buttons) rather than buttons grouped inside a
     // bordered box — so they read as individual elevated controls, not a panel.
-    let nav_btn = |title: &str, icon_handle: &iced::widget::svg::Handle, msg: Message| {
-        button(
-            row![
-                icons::render_svg(icon_handle, theme::COLOR_ACCENT)
-                    .width(Length::Fixed(16.0))
-                    .height(Length::Fixed(16.0)),
-                text(title)
-                    .font(icons::FONT_BOLD)
-                    .size(13)
-                    .style(if is_dark {
-                        theme::DARK_TEXT
-                    } else {
-                        theme::LIGHT_TEXT
-                    })
-            ]
-            .spacing(10)
-            .align_items(alignment::Alignment::Center),
-        )
-        .width(Length::Fill)
-        .padding(10)
-        .style(iced::theme::Button::Custom(Box::new(theme::NeoButton {
-            is_accent: false,
-            has_shadow: true,
-            theme: app_theme,
-        })))
-        .on_press(msg)
-    };
+    let nav_btn =
+        |title: &'static str, icon_handle: &'static iced::widget::svg::Handle, msg: Message| {
+            button(
+                row![
+                    icons::render_svg(icon_handle, theme::COLOR_ACCENT)
+                        .width(Length::Fixed(16.0))
+                        .height(Length::Fixed(16.0)),
+                    text(title)
+                        .font(icons::FONT_BOLD)
+                        .size(13)
+                        .color(if is_dark {
+                            theme::DARK_TEXT
+                        } else {
+                            theme::LIGHT_TEXT
+                        })
+                ]
+                .spacing(10)
+                .align_y(alignment::Alignment::Center),
+            )
+            .width(Length::Fill)
+            .padding(10)
+            .style(theme::neo_button(theme::NeoButton {
+                is_accent: false,
+                has_shadow: true,
+                theme: app_theme,
+            }))
+            .on_press(msg)
+        };
 
     let quick_links = column![
         nav_btn(
@@ -200,97 +198,100 @@ pub fn view(
     let pinned_chats: Vec<&&HistoryChat> = filtered_chats.iter().filter(|c| c.is_pinned).collect();
     let recent_chats: Vec<&&HistoryChat> = filtered_chats.iter().filter(|c| !c.is_pinned).collect();
 
-    let render_chat_row = |chat: &HistoryChat| {
-        let is_hovered = state.hovered_chat_id.as_deref() == Some(chat.id.as_str());
-        let muted_color = if is_dark {
-            theme::DARK_TEXT_MUTED
-        } else {
-            theme::LIGHT_TEXT_MUTED
-        };
-        let title_color = if is_dark {
-            theme::DARK_TEXT
-        } else {
-            theme::LIGHT_TEXT
-        };
-
-        let title_label = if is_hovered {
-            truncate_with_ellipsis(&chat.name, hover_title_max_chars(state.sidebar_width))
-        } else {
-            chat.name.clone()
-        };
-
-        let title = text(title_label)
-            .font(icons::FONT_BOLD)
-            .size(13)
-            .style(title_color)
-            .width(Length::Fill);
-
-        let timestamp = text(&chat.timestamp)
-            .font(icons::FONT_REGULAR)
-            .size(11)
-            .style(muted_color);
-
-        let chat_body = button(column![title, timestamp].spacing(2))
-            .width(Length::Fill)
-            .style(iced::theme::Button::Text)
-            .on_press(Message::NavigateTo(crate::Screen::Chat {
-                chat_id: chat.id.clone(),
-            }));
-
-        let mut card_row = row![chat_body].align_items(alignment::Alignment::Center);
-
-        if is_hovered {
-            let pin_color = if chat.is_pinned {
-                theme::COLOR_ACCENT
+    let render_chat_row =
+        |chat: &HistoryChat| {
+            let chat_id = chat.id.clone();
+            let is_pinned = chat.is_pinned;
+            let is_hovered = state.hovered_chat_id.as_deref() == Some(chat_id.as_str());
+            let muted_color = if is_dark {
+                theme::DARK_TEXT_MUTED
             } else {
-                muted_color
+                theme::LIGHT_TEXT_MUTED
+            };
+            let title_color = if is_dark {
+                theme::DARK_TEXT
+            } else {
+                theme::LIGHT_TEXT
             };
 
-            let pin_btn = button(
-                icons::render_svg(&icons::HANDLE_PIN, pin_color)
-                    .width(Length::Fixed(16.0))
-                    .height(Length::Fixed(16.0)),
-            )
-            .style(iced::theme::Button::Text)
-            .on_press(if chat.is_pinned {
-                Message::HistoryUnpinChat(chat.id.clone())
+            let title_label = if is_hovered {
+                truncate_with_ellipsis(&chat.name, hover_title_max_chars(state.sidebar_width))
             } else {
-                Message::HistoryPinChat(chat.id.clone())
-            });
+                chat.name.clone()
+            };
 
-            let rename_btn = button(
-                icons::render_svg(&icons::HANDLE_PENCIL, muted_color)
-                    .width(Length::Fixed(16.0))
-                    .height(Length::Fixed(16.0)),
-            )
-            .style(iced::theme::Button::Text)
-            .on_press(Message::HistoryRenameChat(chat.id.clone()));
+            let title = text(title_label)
+                .font(icons::FONT_BOLD)
+                .size(13)
+                .color(title_color)
+                .width(Length::Fill);
 
-            let delete_btn = button(
-                icons::render_svg(&icons::HANDLE_DELETE, muted_color)
-                    .width(Length::Fixed(16.0))
-                    .height(Length::Fixed(16.0)),
-            )
-            .style(iced::theme::Button::Text)
-            .on_press(Message::HistoryDeleteChat(chat.id.clone()));
+            let timestamp = text(chat.timestamp.clone())
+                .font(icons::FONT_REGULAR)
+                .size(11)
+                .color(muted_color);
 
-            card_row = card_row.push(
-                row![pin_btn, rename_btn, delete_btn]
-                    .spacing(4)
-                    .align_items(alignment::Alignment::Center),
-            );
-        }
+            let chat_body = button(column![title, timestamp].spacing(2))
+                .width(Length::Fill)
+                .style(button::text)
+                .on_press(Message::NavigateTo(crate::Screen::Chat {
+                    chat_id: chat_id.clone(),
+                }));
 
-        mouse_area(container(card_row).padding(8).width(Length::Fill).style(
-            iced::theme::Container::Custom(Box::new(theme::NeoContainer {
-                is_surface: true,
-                has_shadow: false,
-                theme: app_theme,
-            })),
-        ))
-        .on_enter(Message::HistoryHoverChat(Some(chat.id.clone())))
-        .on_exit(Message::HistoryHoverChat(None))
-    };
+            let mut card_row = row![chat_body].align_y(alignment::Alignment::Center);
+
+            if is_hovered {
+                let pin_color = if is_pinned {
+                    theme::COLOR_ACCENT
+                } else {
+                    muted_color
+                };
+
+                let pin_btn = button(
+                    icons::render_svg(&icons::HANDLE_PIN, pin_color)
+                        .width(Length::Fixed(16.0))
+                        .height(Length::Fixed(16.0)),
+                )
+                .style(button::text)
+                .on_press(if is_pinned {
+                    Message::HistoryUnpinChat(chat_id.clone())
+                } else {
+                    Message::HistoryPinChat(chat_id.clone())
+                });
+
+                let rename_btn = button(
+                    icons::render_svg(&icons::HANDLE_PENCIL, muted_color)
+                        .width(Length::Fixed(16.0))
+                        .height(Length::Fixed(16.0)),
+                )
+                .style(button::text)
+                .on_press(Message::HistoryRenameChat(chat_id.clone()));
+
+                let delete_btn = button(
+                    icons::render_svg(&icons::HANDLE_DELETE, muted_color)
+                        .width(Length::Fixed(16.0))
+                        .height(Length::Fixed(16.0)),
+                )
+                .style(button::text)
+                .on_press(Message::HistoryDeleteChat(chat_id.clone()));
+
+                card_row = card_row.push(
+                    row![pin_btn, rename_btn, delete_btn]
+                        .spacing(4)
+                        .align_y(alignment::Alignment::Center),
+                );
+            }
+
+            mouse_area(container(card_row).padding(8).width(Length::Fill).style(
+                theme::neo_container(theme::NeoContainer {
+                    is_surface: true,
+                    has_shadow: false,
+                    theme: app_theme,
+                }),
+            ))
+            .on_enter(Message::HistoryHoverChat(Some(chat_id)))
+            .on_exit(Message::HistoryHoverChat(None))
+        };
 
     let mut sidebar_list = Column::new().spacing(14);
 
@@ -304,7 +305,7 @@ pub fn view(
             text("PINNED")
                 .font(icons::FONT_BOLD)
                 .size(10)
-                .style(if is_dark {
+                .color(if is_dark {
                     theme::DARK_TEXT_MUTED
                 } else {
                     theme::LIGHT_TEXT_MUTED
@@ -319,7 +320,7 @@ pub fn view(
     // Recent Section
     if !recent_chats.is_empty() {
         let mut section = Column::new().spacing(6);
-        section = section.push(text("RECENT CHATS").font(icons::FONT_BOLD).size(10).style(
+        section = section.push(text("RECENT CHATS").font(icons::FONT_BOLD).size(10).color(
             if is_dark {
                 theme::DARK_TEXT_MUTED
             } else {
@@ -334,9 +335,9 @@ pub fn view(
 
     let scroll_sidebar = scrollable(container(sidebar_list).padding(10).width(Length::Fill))
         .height(Length::Fill)
-        .style(iced::theme::Scrollable::Custom(Box::new(
-            theme::NeoScrollable { theme: app_theme },
-        )));
+        .style(theme::neo_scrollable(theme::NeoScrollable {
+            theme: app_theme,
+        }));
 
     let sidebar_layout = column![header_row, scroll_sidebar]
         .width(Length::Fixed(state.sidebar_width))
@@ -349,12 +350,10 @@ pub fn view(
     container(sidebar_layout)
         .width(Length::Fixed(state.sidebar_width))
         .height(Length::Fill)
-        .style(iced::theme::Container::Custom(Box::new(
-            theme::NeoPaneBackground {
-                is_surface: true,
-                theme: app_theme,
-            },
-        )))
+        .style(theme::neo_pane_background(theme::NeoPaneBackground {
+            is_surface: true,
+            theme: app_theme,
+        }))
         .into()
 }
 
