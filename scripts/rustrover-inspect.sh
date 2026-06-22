@@ -18,6 +18,7 @@
 #   --verbosity LEVEL      -v0, -v1, or -v2 (default: -v2)
 #   --print-raw            Dump every report file to stdout after the run
 #   --fail-on LEVEL        Exit 1 if issues at or above LEVEL are found (ERROR, WARNING, WEAK WARNING)
+#   --skip-typo            Omit TYPO from summary counts and --fail-on checks
 #   --help                 Show this help text
 #
 # Scopes:
@@ -44,6 +45,7 @@ RUSTROVER_BIN=""
 VERBOSITY="-v2"
 PRINT_RAW=0
 FAIL_ON=""
+SKIP_TYPO=0
 
 usage() {
   sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'
@@ -98,6 +100,7 @@ while [[ $# -gt 0 ]]; do
       FAIL_ON="$2"
       shift
       ;;
+    --skip-typo) SKIP_TYPO=1 ;;
     -h|--help)
       usage
       exit 0
@@ -159,12 +162,35 @@ resolve_rustrover_bin() {
   die "Could not find rustrover.sh. Set RUSTROVER_HOME or pass --rustrover /path/to/rustrover.sh"
 }
 
+sync_rustrover_config() {
+  local tracked_root="$PROJECT_ROOT/config/rustrover"
+  [[ -d "$tracked_root" ]] || return 0
+
+  mkdir -p "$PROJECT_ROOT/.idea/dictionaries" "$PROJECT_ROOT/.idea/inspectionProfiles" "$PROJECT_ROOT/.idea/scopes"
+
+  if [[ -d "$tracked_root/.idea" ]]; then
+    cp -a "$tracked_root/.idea/." "$PROJECT_ROOT/.idea/"
+  fi
+
+  if [[ -d "$tracked_root/dictionaries" ]]; then
+    cp -a "$tracked_root/dictionaries/." "$PROJECT_ROOT/.idea/dictionaries/"
+  fi
+  if [[ -d "$tracked_root/inspectionProfiles" ]]; then
+    cp -a "$tracked_root/inspectionProfiles/." "$PROJECT_ROOT/.idea/inspectionProfiles/"
+  fi
+  if [[ -d "$tracked_root/scopes" ]]; then
+    cp -a "$tracked_root/scopes/." "$PROJECT_ROOT/.idea/scopes/"
+  fi
+}
+
 resolve_profile_path() {
   if [[ -n "$PROFILE_PATH" ]]; then
     [[ -f "$PROFILE_PATH" ]] || die "Inspection profile not found: $PROFILE_PATH"
     echo "$PROFILE_PATH"
     return 0
   fi
+
+  sync_rustrover_config
 
   local idea_profile="$PROJECT_ROOT/.idea/inspectionProfiles/Project_Default.xml"
   if [[ -f "$idea_profile" ]]; then
@@ -280,6 +306,7 @@ echo "  output   : $OUTPUT_DIR"
 echo "  format   : $FORMAT"
 echo "  scope    : $(describe_scope)"
 echo "  changes  : $([[ "$SCOPE_CHANGES" -eq 1 ]] && echo yes || echo no)"
+echo "  skip typo: $([[ "$SKIP_TYPO" -eq 1 ]] && echo yes || echo no)"
 
 assert_rustrover_not_running
 
@@ -375,7 +402,7 @@ fi
 if command -v python3 >/dev/null 2>&1; then
   SUMMARY_FILE="$(mktemp)"
   set +e
-  FAIL_ON="$FAIL_ON" python3 - "$OUTPUT_DIR" "$FORMAT" "$SUMMARY_FILE" <<'PY'
+  SKIP_TYPO="$SKIP_TYPO" FAIL_ON="$FAIL_ON" python3 - "$OUTPUT_DIR" "$FORMAT" "$SUMMARY_FILE" <<'PY'
 import json
 import os
 import sys
@@ -386,36 +413,54 @@ output_dir = Path(sys.argv[1])
 report_format = sys.argv[2]
 summary_file = Path(sys.argv[3])
 fail_on = os.environ.get("FAIL_ON", "")
+skip_typo = os.environ.get("SKIP_TYPO", "0") == "1"
 lines = []
 
 SEVERITY_RANK = {
-    "ERROR": 4,
-    "WARNING": 3,
-    "WEAK WARNING": 2,
+    "ERROR": 5,
+    "WARNING": 4,
+    "GRAMMAR_ERROR": 4,
+    "WEAK WARNING": 3,
+    "STYLE_SUGGESTION": 2,
+    "INFORMATION": 1,
     "INFO": 1,
     "TYPO": 1,
 }
 
+# RustRover Annotator emits thousands of #loc INFORMATION markers — not actionable.
+SKIP_INSPECTION_IDS = frozenset({"Annotator"})
+SKIP_DESCRIPTIONS = frozenset({"#loc"})
+
 def should_count(level: str) -> bool:
+    if skip_typo and level == "TYPO":
+        return False
     if not fail_on:
         return True
     return SEVERITY_RANK.get(level, 0) >= SEVERITY_RANK.get(fail_on, 0)
 
+def norm_project_path(file_path: str) -> str:
+    return file_path.replace("file://$PROJECT_DIR$/", "")
+
 issues = []
 
-def add_issue(level, file_path, line, description, source):
+def add_issue(level, file_path, line, description, source, inspection_id):
+    if inspection_id in SKIP_INSPECTION_IDS or description in SKIP_DESCRIPTIONS:
+        return
     issues.append(
         {
             "level": level,
-            "file": file_path,
+            "file": norm_project_path(file_path),
             "line": line,
             "description": description,
             "source": source,
+            "inspection": inspection_id,
         }
     )
 
-for path in sorted(output_dir.rglob("*")):
+for path in sorted(output_dir.rglob("*.json")):
     if not path.is_file():
+        continue
+    if path.name.startswith(".") or path.name.endswith("_aggregate.json"):
         continue
 
     suffix = path.suffix.lower()
@@ -425,21 +470,39 @@ for path in sorted(output_dir.rglob("*")):
         except json.JSONDecodeError:
             continue
 
-        def walk(node, source=path.name):
-            if isinstance(node, dict):
-                level = node.get("severity") or node.get("level") or node.get("type")
-                description = node.get("description") or node.get("msg") or node.get("problem")
-                file_path = node.get("file") or node.get("filePath") or node.get("path")
-                line = node.get("line") or node.get("offset") or node.get("lineNumber")
-                if description and (file_path or level):
-                    add_issue(str(level or "UNKNOWN"), str(file_path or ""), str(line or ""), str(description), source)
-                for value in node.values():
-                    walk(value, source)
-            elif isinstance(node, list):
-                for item in node:
-                    walk(item, source)
+        inspection_id = path.stem
+        problems = payload.get("problems")
+        if not isinstance(problems, list):
+            continue
 
-        walk(payload)
+        for problem in problems:
+            if not isinstance(problem, dict):
+                continue
+            problem_class = problem.get("problem_class") or {}
+            level = (
+                problem_class.get("severity")
+                or problem.get("severity")
+                or problem.get("level")
+                or "UNKNOWN"
+            )
+            description = (
+                problem.get("description")
+                or problem.get("msg")
+                or problem.get("problem")
+                or ""
+            )
+            file_path = problem.get("file") or problem.get("filePath") or problem.get("path") or ""
+            line = problem.get("line") or problem.get("lineNumber") or problem.get("offset") or ""
+            insp_id = problem_class.get("id") or problem_class.get("name") or inspection_id
+            if description:
+                add_issue(
+                    str(level),
+                    str(file_path),
+                    str(line),
+                    str(description),
+                    path.name,
+                    str(insp_id),
+                )
         continue
 
     if suffix == ".xml":

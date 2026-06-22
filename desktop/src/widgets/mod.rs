@@ -1,5 +1,6 @@
 //! Reusable desktop widgets.
 pub mod bottom_sheet;
+pub(crate) mod overlay_anchor;
 pub mod pane_splitter;
 pub mod popover;
 pub mod stack;

@@ -1,3 +1,4 @@
+//noinspection SpellCheckingInspection
 use iced::widget::text_editor;
 
 use crate::screens::chat::stats::ChatStats;
@@ -78,8 +79,8 @@ pub enum MessageSender {
     Assistant,
 }
 
-/// Permission mode for the active chat. Desktop-only concept (no Android
-/// counterpart). The label is what the input-bar dropdown displays.
+/// Permission mode for the active chat. Desktop-only concept with no Android
+/// counterpart. The label appears in the input-bar dropdown.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PermissionMode {
     AskEveryTime,
@@ -122,7 +123,7 @@ impl InputBarAnim {
         !matches!(self, InputBarAnim::Locked)
     }
 
-    /// Normalized 0.0..=1.0 progress toward the bottom.
+    /// Normalized progress from 0.0 to 1.0 toward the bottom.
     pub fn progress(self) -> f32 {
         match self {
             InputBarAnim::Centered => 0.0,
@@ -149,7 +150,7 @@ pub fn advance_anim(anim: InputBarAnim, delta: f32) -> InputBarAnim {
     }
 }
 
-/// Seed assistant reply for `chat_1` — rendered via [`message_list`](super::message_list.rs)
+/// Seed assistant reply for `chat_1`, rendered via [`message_list`](super::message_list.rs)
 /// as a comprehensive markdown capability demo.
 const CHAT_1_ASSISTANT_DEMO: &str = include_str!("../../../seed/chat_1_assistant_demo.md");
 

@@ -1,0 +1,3 @@
+<component name="DependencyValidationManager">
+  <scope name="rust-spell-excluded" pattern="file:third_party/agent_core/resources/tool_catalog.json||file:**/*.snap||file:third_party/agent_core/tests/fixtures/**" />
+</component>

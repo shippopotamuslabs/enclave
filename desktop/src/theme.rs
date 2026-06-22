@@ -1,3 +1,4 @@
+//noinspection SpellCheckingInspection
 use iced::widget::{button, container, scrollable, text_editor, text_input};
 use iced::{Background, Border, Color, Shadow, Vector};
 
@@ -39,8 +40,8 @@ pub struct NeoContainer {
 }
 
 /// Borderless background fill. Used for panes (e.g. the chat body) that sit
-/// flush against an adjacent bordered surface — the titlebar above and the
-/// history sidebar's own border to the side — so the two borders don't double
+/// flush against an adjacent bordered surface — the title bar above and the
+/// history sidebar's own border to the side — so the two borders do not double
 /// up at the seam. Drawn with no border and no shadow; just the solid base or
 /// surface background so the pane reads as one continuous panel.
 #[derive(Clone, Copy)]
@@ -120,17 +121,21 @@ pub fn neo_pane_background(neo: NeoPaneBackground) -> impl Fn(&iced::Theme) -> c
     }
 }
 
+fn neo_brutalist_shadow(theme: AppTheme, has_shadow: bool) -> Shadow {
+    if has_shadow {
+        Shadow {
+            color: neo_shadow_color(theme),
+            offset: Vector::new(4.0, 4.0),
+            blur_radius: 0.0,
+        }
+    } else {
+        Shadow::default()
+    }
+}
+
 pub fn neo_container(neo: NeoContainer) -> impl Fn(&iced::Theme) -> container::Style {
     move |_theme| {
-        let shadow = if neo.has_shadow {
-            Shadow {
-                color: neo_shadow_color(neo.theme),
-                offset: Vector::new(4.0, 4.0),
-                blur_radius: 0.0,
-            }
-        } else {
-            Shadow::default()
-        };
+        let shadow = neo_brutalist_shadow(neo.theme, neo.has_shadow);
 
         container::Style {
             text_color: Some(neo_text(neo.theme)),
@@ -375,15 +380,7 @@ pub struct NeoInputBar {
 
 pub fn neo_input_bar(neo: NeoInputBar) -> impl Fn(&iced::Theme) -> container::Style {
     move |_theme| {
-        let shadow = if neo.has_shadow {
-            Shadow {
-                color: neo_shadow_color(neo.theme),
-                offset: Vector::new(4.0, 4.0),
-                blur_radius: 0.0,
-            }
-        } else {
-            Shadow::default()
-        };
+        let shadow = neo_brutalist_shadow(neo.theme, neo.has_shadow);
 
         container::Style {
             text_color: Some(neo_text(neo.theme)),
@@ -407,6 +404,24 @@ pub struct NeoDropdown {
     pub theme: AppTheme,
 }
 
+fn neo_elevated_surface(theme: AppTheme, background: Color) -> container::Style {
+    container::Style {
+        text_color: Some(neo_text(theme)),
+        background: Some(Background::Color(background)),
+        border: Border {
+            color: neo_border(theme),
+            width: 2.0,
+            radius: 4.0.into(),
+        },
+        shadow: Shadow {
+            color: neo_shadow_color(theme),
+            offset: Vector::new(4.0, 4.0),
+            blur_radius: 0.0,
+        },
+        snap: false,
+    }
+}
+
 pub fn neo_dropdown(neo: NeoDropdown) -> impl Fn(&iced::Theme) -> container::Style {
     move |_theme| {
         let bg_color = if neo.theme == AppTheme::Dark {
@@ -415,21 +430,7 @@ pub fn neo_dropdown(neo: NeoDropdown) -> impl Fn(&iced::Theme) -> container::Sty
             LIGHT_SURFACE_VAR
         };
 
-        container::Style {
-            text_color: Some(neo_text(neo.theme)),
-            background: Some(Background::Color(bg_color)),
-            border: Border {
-                color: neo_border(neo.theme),
-                width: 2.0,
-                radius: 4.0.into(),
-            },
-            shadow: Shadow {
-                color: neo_shadow_color(neo.theme),
-                offset: Vector::new(4.0, 4.0),
-                blur_radius: 0.0,
-            },
-            snap: false,
-        }
+        neo_elevated_surface(neo.theme, bg_color)
     }
 }
 
@@ -444,21 +445,7 @@ pub struct NeoBottomSheet {
 }
 
 pub fn neo_bottom_sheet(neo: NeoBottomSheet) -> impl Fn(&iced::Theme) -> container::Style {
-    move |_theme| container::Style {
-        text_color: Some(neo_text(neo.theme)),
-        background: Some(Background::Color(neo_bg(neo.theme, true))),
-        border: Border {
-            color: neo_border(neo.theme),
-            width: 2.0,
-            radius: 4.0.into(),
-        },
-        shadow: Shadow {
-            color: neo_shadow_color(neo.theme),
-            offset: Vector::new(4.0, 4.0),
-            blur_radius: 0.0,
-        },
-        snap: false,
-    }
+    move |_theme| neo_elevated_surface(neo.theme, neo_bg(neo.theme, true))
 }
 
 /// Full-viewport dim layer behind a modal bottom sheet. Semi-transparent black
@@ -498,8 +485,8 @@ pub fn neo_text_editor(
     move |_theme, _status| transparent
 }
 
-/// Neobrutalist container for a fenced markdown code block. Replaces Iced's
-/// default `container::dark` (hard-coded `#111111` with a 2px round border and
+/// Neobrutalist container for a fenced code block. Replaces Iced default
+/// `container::dark` styling (hard-coded `#111111` with a 2px round border and
 /// no width) so the block reads as part of the locked surface palette: a solid
 /// one-step-darker-than-surface fill with the standard 2px neo border and a 4px
 /// radius, no offset shadow (the block sits flat inside the assistant
@@ -575,7 +562,7 @@ pub fn neo_code_block_header(neo: NeoCodeBlockHeader) -> impl Fn(&iced::Theme) -
 /// Ghost button styling for the code-block copy control. No background, no
 /// shadow, no border — just the icon — so it sits flush inside the header strip
 /// and only the hover/press state lifts it (matching the icon-button treatment
-/// in the titlebar's `NeoButton { has_shadow: false }` but stripped further for
+/// in the title bar's `NeoButton { has_shadow: false }` but stripped further for
 /// an in-block affordance).
 #[derive(Clone, Copy)]
 pub struct NeoIconButton {

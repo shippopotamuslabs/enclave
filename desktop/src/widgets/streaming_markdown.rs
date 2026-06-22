@@ -1,3 +1,4 @@
+//noinspection SpellCheckingInspection
 //! Live / streaming Markdown rendering for assistant chat messages.
 //!
 //! # Repository findings (Step 0)
@@ -12,8 +13,8 @@
 //!   `LlmBodyTextStyle`); platform monospace for code (`FontFamily.Monospace`).
 //! - **Theming**: Neobrutalist tokens from [`theme`](../theme.rs).
 //!
-//! Uses [`iced::widget::markdown::Content::push_str`] for incremental parsing and a
-//! custom [`markdown::Viewer`] ([`CopyableMarkdownViewer`]) for rendering with
+//! Uses [`markdown::Content::push_str`] for incremental parsing and a
+//! custom [`Viewer`] ([`CopyableMarkdownViewer`]) for rendering with
 //! syntax-highlighted code blocks plus a per-block header (language label + copy
 //! control). Non-code items are delegated to [`iced_selection::markdown`] so plain
 //! text, headings, lists, and tables stay text-selectable, matching the prior
@@ -415,11 +416,11 @@ mod tests {
     }
 
     /// The viewer must produce an element tree for a complete fenced block
-    /// without panicking. We can't introspect the button payload through the
-    /// opaque `Element`, but the build itself is the regression guard — the
-    /// prior selectable viewer had no per-block hook, so this asserts the
-    /// custom `Viewer` wires into `view_with` for every item kind in the seed
-    /// document.
+    /// without panicking. We cannot introspect the button payload through the
+    /// opaque `Element`, but the build itself is the regression guard.
+    /// The prior selectable viewer had no per-block hook; this asserts the
+    /// custom `Viewer` wires into `view_with` for every item kind in the demo
+    /// seed file.
     #[test]
     fn viewer_builds_for_complete_fenced_document() {
         let state = StreamingMarkdownState::from_static(

@@ -5,7 +5,7 @@ use once_cell::sync::Lazy;
 
 // Font assets mirror Android `core/ui/.../theme/Type.kt`:
 // - `EnclaveUiFontFamily`: IBM Plex Sans (UI chrome, user bubbles, input)
-// - `EnclaveReadingFontFamily`: Source Serif 4 (assistant markdown body)
+// - `EnclaveReadingFontFamily`: Source Serif 4 (assistant reading body)
 // - Code spans/blocks: platform monospace (Compose `FontFamily.Monospace`)
 
 // IBM Plex Sans — UI chrome
@@ -14,7 +14,7 @@ pub const FONT_MEDIUM_BYTES: &[u8] = include_bytes!("../assets/ibm_plex_sans_med
 pub const FONT_SEMIBOLD_BYTES: &[u8] = include_bytes!("../assets/ibm_plex_sans_semibold.ttf");
 pub const FONT_BOLD_BYTES: &[u8] = include_bytes!("../assets/ibm_plex_sans_bold.ttf");
 
-// Source Serif 4 — assistant markdown / long-form reading
+// Source Serif 4 — assistant reading / long-form prose
 pub const FONT_SERIF_REGULAR_BYTES: &[u8] = include_bytes!("../assets/source_serif4_regular.ttf");
 pub const FONT_SERIF_BOLD_BYTES: &[u8] = include_bytes!("../assets/source_serif4_bold.ttf");
 
@@ -63,10 +63,10 @@ pub const FONT_SERIF_BOLD: iced::Font = iced::Font {
     style: iced::font::Style::Normal,
 };
 
-/// Platform monospace for markdown code — matches Android `FontFamily.Monospace`.
+/// Platform monospace for code spans and fenced blocks — matches Android `FontFamily.Monospace`.
 pub const FONT_MONO: iced::Font = iced::Font::MONOSPACE;
 
-// SVG Byte slices
+// SVG byte slices
 pub const SVG_CLOSE: &[u8] = include_bytes!("../assets/icons/x.svg");
 pub const SVG_MENU: &[u8] = include_bytes!("../assets/icons/menu.svg");
 pub const SVG_CHEVRON_DOWN: &[u8] = include_bytes!("../assets/icons/chevron-down.svg");
@@ -96,7 +96,7 @@ pub const SVG_ENCLAVE_LOGO: &[u8] = include_bytes!("../assets/icons/enclave_logo
 // accent dot. Used untinted (its colors are baked in via `fill` attributes).
 pub const SVG_ENCLAVE_E_MARK: &[u8] = include_bytes!("../assets/icons/enclave_e_mark.svg");
 
-// Static SVG Handles
+// Static SVG handles
 pub static HANDLE_CLOSE: Lazy<svg::Handle> = Lazy::new(|| svg::Handle::from_memory(SVG_CLOSE));
 pub static HANDLE_MENU: Lazy<svg::Handle> = Lazy::new(|| svg::Handle::from_memory(SVG_MENU));
 pub static HANDLE_CHEVRON_DOWN: Lazy<svg::Handle> =
@@ -131,7 +131,7 @@ pub static HANDLE_ENCLAVE_LOGO: Lazy<svg::Handle> =
 pub static HANDLE_ENCLAVE_E_MARK: Lazy<svg::Handle> =
     Lazy::new(|| svg::Handle::from_memory(SVG_ENCLAVE_E_MARK));
 
-// Helper rendering function
+/// Render an SVG icon tinted with `color`.
 pub fn render_svg(handle: &svg::Handle, color: iced::Color) -> svg::Svg<'_> {
     svg(handle.clone()).style(move |_theme, _status| svg::Style { color: Some(color) })
 }
@@ -143,10 +143,10 @@ pub fn render_svg_untinted(handle: &svg::Handle) -> svg::Svg<'_> {
 }
 
 /// Build a determinate circular-progress ring as an SVG handle. `pct` is clamped
-/// to `0.0..=100.0`; the track is a 360° ring and the progress arc sweeps
+/// to the range 0 through 100 percent; the track is a 360° ring and the progress arc sweeps
 /// clockwise from 12 o'clock, matching the Android `NeoCircularProgressIndicator`
-/// (determinate mode) for cross-platform parity. Built fresh per render so the
-/// input bar's `context_pct` always reflects the current chat state.
+/// (determinate mode) for cross-platform parity. Built fresh on each render so
+/// the input bar `context_pct` always reflects the current chat state.
 ///
 /// Geometry: 24×24 viewBox, center `(12, 12)`, radius `10`, stroke width `2`.
 /// Progress uses `stroke-dasharray` on a `<circle>` so the arc shares the exact

@@ -1,3 +1,4 @@
+//noinspection SpellCheckingInspection
 use crate::icons;
 use crate::theme::{self, AppTheme};
 use crate::widgets::{Popover, Position};
@@ -390,7 +391,7 @@ pub fn view(
         .height(Length::Fill);
 
     // Borderless surface fill — the draggable pane splitter draws the single
-    // vertical rule between sidebar and chat so we don't double up with a
+    // vertical rule between sidebar and chat so we do not double up with a
     // `NeoContainer` right edge. A full-width bottom rule in the chat screen
     // closes off the pane row under both columns.
     container(sidebar_layout)
@@ -552,8 +553,8 @@ fn profile_popover_menu(
     };
 
     let (auth_label, auth_icon, auth_msg) = match auth {
-        AuthState::Unauthenticated => ("Login", &icons::HANDLE_LOG_IN, Message::HistorySignIn),
-        AuthState::Authenticated(_) => ("Logout", &icons::HANDLE_LOG_OUT, Message::HistorySignOut),
+        AuthState::Unauthenticated => ("Log in", &icons::HANDLE_LOG_IN, Message::HistorySignIn),
+        AuthState::Authenticated(_) => ("Log out", &icons::HANDLE_LOG_OUT, Message::HistorySignOut),
     };
 
     let menu = column![
@@ -575,8 +576,8 @@ fn profile_popover_menu(
         .style(theme::neo_dropdown(theme::NeoDropdown { theme: app_theme }))
 }
 
-/// One icon-led row inside the profile popover menu. Accent-coloured leading
-/// icon + bold label, full-width non-accent `NeoButton` so the rows read as a
+/// One icon-led row inside the profile popover menu. Leading icon in accent color
+/// plus bold label, full-width non-accent `NeoButton` so the rows read as a
 /// single stacked menu inside the `NeoDropdown` container.
 fn menu_row<'a>(
     label: &'a str,

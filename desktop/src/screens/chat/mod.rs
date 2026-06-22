@@ -1,3 +1,4 @@
+//noinspection SpellCheckingInspection
 mod input_bar;
 mod message_list;
 pub mod state;
@@ -10,6 +11,7 @@ use iced::widget::{column, container, row, space, text};
 use iced::{alignment, Element, Length, Padding, Theme};
 
 use crate::icons;
+use crate::screens::history::HistoryState;
 use crate::theme::{self, AppTheme};
 use crate::widgets::PaneSplitter;
 use crate::Message;
@@ -23,7 +25,7 @@ const E_MARK_BASE_SIZE: f32 = 132.0;
 
 pub fn view<'a>(
     state: &'a ChatState,
-    history_state: &'a crate::screens::history::HistoryState,
+    history_state: &'a HistoryState,
     app_theme: AppTheme,
 ) -> Element<'a, Message, Theme, iced::Renderer> {
     let is_dark = app_theme == AppTheme::Dark;
@@ -37,11 +39,11 @@ pub fn view<'a>(
         theme::LIGHT_TEXT
     };
 
-    // The chat pane no longer renders its own app bar — the global titlebar
+    // The chat pane no longer renders its own app bar — the global title bar
     // (window controls) sits above it, and navigation/new-chat/studio entry
     // points already live in the history sidebar. Removing the per-pane bar
     // also removes the border it drew along its bottom edge, which was doubling
-    // up with the titlebar and history borders at every seam.
+    // up with the title bar and history borders at every seam.
 
     // Message Thread
     let scroll_messages = message_list::view(state, app_theme);
@@ -69,7 +71,7 @@ pub fn view<'a>(
             container(icons::render_svg_untinted(&icons::HANDLE_ENCLAVE_E_MARK))
                 .width(Length::Fixed(mark_size))
                 .height(Length::Fixed(mark_size))
-                .align_x(iced::alignment::Horizontal::Center),
+                .align_x(alignment::Horizontal::Center),
             text("Welcome to your Enclave.")
                 .font(icons::FONT_BOLD)
                 .size(22)

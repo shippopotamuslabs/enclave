@@ -2,7 +2,7 @@
 //!
 //! Renders an anchor (`content`) inline and floats a `popup` element above it
 //! as a true overlay when open — it is not clipped by the anchor's parent and
-//! does not push surrounding layout. Built on Iced 0.12's overlay system,
+//! does not push surrounding layout. Built on Iced 0.14's overlay system,
 //! mirroring how the built-in `tooltip` widget works.
 //!
 //! Outside-click dismissal: when the overlay is open, any pointer press
@@ -13,9 +13,11 @@
 //! menu (the caller emits `on_close` from the relevant item handlers).
 
 use iced::advanced::widget::tree::Tree;
-use iced::advanced::{layout, mouse, overlay, renderer, widget, Clipboard, Layout, Shell};
+use iced::advanced::{layout, mouse, overlay, renderer, Clipboard, Layout, Shell};
+
+use super::overlay_anchor;
 use iced::event::Event;
-use iced::{Element, Length, Padding, Point, Rectangle, Size, Vector};
+use iced::{Element, Padding, Point, Rectangle, Size, Vector};
 
 /// Anchor placement of the popup relative to the content's bounds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -80,122 +82,19 @@ where
     }
 }
 
-impl<'a, Message, Theme, Renderer> widget::Widget<Message, Theme, Renderer>
+overlay_anchor::impl_overlay_anchor_widget!(Popover<'a, Message, Theme, Renderer>);
+
+impl<'a, Message, Theme, Renderer> overlay_anchor::OverlayAnchorOverlay<Message, Theme, Renderer>
     for Popover<'a, Message, Theme, Renderer>
 where
     Message: Clone + 'a,
     Renderer: iced::advanced::Renderer + 'a,
     Theme: 'a,
 {
-    fn size(&self) -> Size<Length> {
-        self.content.as_widget().size()
-    }
-
-    fn size_hint(&self) -> Size<Length> {
-        self.content.as_widget().size_hint()
-    }
-
-    fn layout(
-        &mut self,
-        tree: &mut Tree,
-        renderer: &Renderer,
-        limits: &layout::Limits,
-    ) -> layout::Node {
-        self.content
-            .as_widget_mut()
-            .layout(&mut tree.children[0], renderer, limits)
-    }
-
-    fn draw(
-        &self,
-        tree: &Tree,
-        renderer: &mut Renderer,
-        theme: &Theme,
-        inherited_style: &renderer::Style,
-        layout: Layout<'_>,
-        cursor: mouse::Cursor,
-        viewport: &Rectangle,
-    ) {
-        self.content.as_widget().draw(
-            &tree.children[0],
-            renderer,
-            theme,
-            inherited_style,
-            layout,
-            cursor,
-            viewport,
-        );
-    }
-
-    fn children(&self) -> Vec<Tree> {
-        // Two declared children keep `diff`/`children` lengths in sync:
-        //   [0] = the anchor (content),
-        //   [1] = the popup (rebuilt lazily; empty when closed).
-        // Persisting the popup as a declared child is what lets its widget
-        // state (e.g. text `Paragraph`s) survive across `operate()` and
-        // `draw()`. The iced runtime calls `Widget::overlay` once during event
-        // processing (running `layout`, which fills text paragraphs) and again
-        // during `draw` (reusing the cached layout). If the popup owned a
-        // throwaway `Tree::new` each time, the paragraphs built during `layout`
-        // would be discarded and `draw` would render empty text.
-        vec![Tree::new(&self.content), Tree::empty()]
-    }
-
-    fn diff(&self, tree: &mut Tree) {
-        // Diff only the anchor (slot [0]) and leave the popup slot [1]
-        // untouched. `diff_children` would truncate `tree.children` down to the
-        // slice length, which would drop the persistent popup tree and make the
-        // later `tree.children[1]` access in `overlay` panic. The popup slot is
-        // reconciled lazily against the freshly-built element inside `overlay`.
-        if let Some(content_tree) = tree.children.get_mut(0) {
-            content_tree.diff(self.content.as_widget());
-        }
-    }
-
-    fn update(
-        &mut self,
-        tree: &mut Tree,
-        event: &Event,
-        layout: Layout<'_>,
-        cursor: mouse::Cursor,
-        renderer: &Renderer,
-        clipboard: &mut dyn Clipboard,
-        shell: &mut Shell<'_, Message>,
-        viewport: &Rectangle,
-    ) {
-        self.content.as_widget_mut().update(
-            &mut tree.children[0],
-            event,
-            layout,
-            cursor,
-            renderer,
-            clipboard,
-            shell,
-            viewport,
-        );
-    }
-
-    fn mouse_interaction(
-        &self,
-        tree: &Tree,
-        layout: Layout<'_>,
-        cursor: mouse::Cursor,
-        viewport: &Rectangle,
-        renderer: &Renderer,
-    ) -> mouse::Interaction {
-        self.content.as_widget().mouse_interaction(
-            &tree.children[0],
-            layout,
-            cursor,
-            viewport,
-            renderer,
-        )
-    }
-
-    fn overlay<'b>(
+    fn overlay_anchor<'b>(
         &'b mut self,
         tree: &'b mut Tree,
-        layout: Layout<'_>,
+        layout: Layout<'b>,
         _renderer: &Renderer,
         _viewport: &Rectangle,
         translation: Vector,
@@ -220,17 +119,7 @@ where
     }
 }
 
-impl<'a, Message, Theme, Renderer> From<Popover<'a, Message, Theme, Renderer>>
-    for Element<'a, Message, Theme, Renderer>
-where
-    Message: Clone + 'a,
-    Renderer: iced::advanced::Renderer + 'a,
-    Theme: 'a,
-{
-    fn from(popover: Popover<'a, Message, Theme, Renderer>) -> Self {
-        Element::new(popover)
-    }
-}
+overlay_anchor::impl_overlay_anchor_from!(Popover<'a, Message, Theme, Renderer>);
 
 struct Overlay<'a, Message, Theme, Renderer>
 where

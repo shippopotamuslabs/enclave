@@ -57,5 +57,28 @@
       <option name="composableFile" value="true" />
       <option name="previewFile" value="true" />
     </inspection_tool>
+    <inspection_tool class="SpellCheckingInspection" enabled="true" level="TYPO" enabled_by_default="true">
+      <option name="processCode" value="true" />
+      <option name="processLiterals" value="true" />
+      <option name="processComments" value="true" />
+      <scope name="rust-spell-excluded" level="TYPO" enabled="false">
+        <option name="processCode" value="true" />
+        <option name="processLiterals" value="true" />
+        <option name="processComments" value="true" />
+      </scope>
+    </inspection_tool>
+    <inspection_tool class="MissingFeatures" enabled="true" level="WARNING" enabled_by_default="true">
+      <scope name="lalr-harness-tests" level="WARNING" enabled="false" />
+    </inspection_tool>
+    <inspection_tool class="RsUnresolvedPath" enabled="true" level="ERROR" enabled_by_default="true">
+      <scope name="agent-core-uniffi-bridge" level="ERROR" enabled="false" />
+    </inspection_tool>
+    <inspection_tool class="RsTypeCheck" enabled="true" level="ERROR" enabled_by_default="true">
+      <scope name="agent-core-uniffi-bridge" level="ERROR" enabled="false" />
+    </inspection_tool>
+    <inspection_tool class="MarkdownIncorrectTableFormatting" enabled="false" level="WEAK WARNING" enabled_by_default="true" />
+    <inspection_tool class="DuplicatedCode" enabled="true" level="WEAK WARNING" enabled_by_default="true">
+      <scope name="agent-core-tool-parse-mirror" level="WEAK WARNING" enabled="false" />
+    </inspection_tool>
   </profile>
 </component>

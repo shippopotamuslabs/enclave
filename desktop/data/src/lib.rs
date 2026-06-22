@@ -1,3 +1,4 @@
+//noinspection SpellCheckingInspection
 use enclave_desktop_domain::models::{ChatMessage, ChatSession, DesktopSettings};
 use enclave_desktop_domain::repositories::{ChatRepository, SettingsRepository};
 use std::sync::Mutex;

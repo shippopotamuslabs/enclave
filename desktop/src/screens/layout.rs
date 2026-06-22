@@ -1,3 +1,4 @@
+//noinspection SpellCheckingInspection
 //! Shared layout helpers for full-screen views and repeated neobrutalist chrome.
 
 use iced::widget::{button, container, scrollable};
@@ -8,12 +9,12 @@ use crate::theme::{self, AppTheme};
 use crate::Message;
 
 /// Square 40×40 neobrutalist icon button with hard shadow.
-pub fn icon_button<'a>(
-    handle: &'a iced::widget::svg::Handle,
+pub fn icon_button(
+    handle: &iced::widget::svg::Handle,
     color: iced::Color,
     app_theme: AppTheme,
     on_press: Message,
-) -> button::Button<'a, Message, Theme, iced::Renderer> {
+) -> button::Button<'_, Message, Theme, iced::Renderer> {
     button(
         container(
             icons::render_svg(handle, color)

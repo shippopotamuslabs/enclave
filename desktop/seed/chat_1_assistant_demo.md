@@ -11,7 +11,7 @@ This reply exercises **bold**, *italic*, ***bold italic***, ~~strikethrough~~, a
 ## Rendering backends
 
 | Backend | Default on Linux | Notes |
-|:--------|:----------------:|------:|
+| --- | --- | --- |
 | **wgpu** | yes | WebGPU-style, hardware-accelerated |
 | OpenGL | fallback | Broad driver support |
 | Software | rarely | Last-resort raster path |
@@ -44,7 +44,7 @@ pub fn view(count: &u64) -> iced::Element<'_, Message> {
 
 ## Math notation
 
-Iced markdown does not yet render LaTeX, but you can still express ideas clearly:
+The Iced Markdown renderer does not yet render LaTeX math, but you can still express ideas clearly:
 
 - Inline complexity: `O(n log n)` vs `O(1)` lookup
 - Unicode: α + β = γ, ∑ᵢ xᵢ, ∫₀¹ f(t) dt, E ≈ mc², ∞ → 0

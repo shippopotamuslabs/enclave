@@ -1,3 +1,4 @@
+//noinspection SpellCheckingInspection
 use iced::widget::{button, column, container, mouse_area, row, space, text, text_editor};
 use iced::{window, Alignment, Element, Length, Padding, Subscription, Task, Theme};
 
@@ -97,9 +98,8 @@ pub enum Message {
     ChatAnimTick,
     MarkdownLinkClicked(String),
     /// Copy the raw source of a fenced code block to the system clipboard.
-    /// Carries the block contents (without markdown fences) cloned at
-    /// button-construction time so shifting block indices during streaming
-    /// can't misroute the copy.
+    /// Clones the fenced block source (without fence lines) when the copy button
+    /// is built so shifting block indices during streaming cannot misroute the copy.
     CopyCodeBlock(String),
     WindowReady(window::Id),
     GallerySelectAlbum(Option<String>),
@@ -159,6 +159,35 @@ fn app_theme(state: &EnclaveApp) -> Theme {
     }
 }
 
+fn titlebar_control_button(
+    handle: &iced::widget::svg::Handle,
+    icon_color: iced::Color,
+    app_theme: theme::AppTheme,
+    is_accent: bool,
+    on_press: Message,
+) -> button::Button<'_, Message, Theme, iced::Renderer> {
+    button(
+        container(
+            icons::render_svg(handle, icon_color)
+                .width(Length::Fixed(12.0))
+                .height(Length::Fixed(12.0)),
+        )
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .align_x(Alignment::Center)
+        .align_y(Alignment::Center),
+    )
+    .width(Length::Fixed(32.0))
+    .height(Length::Fixed(32.0))
+    .padding(0)
+    .style(theme::neo_button(theme::NeoButton {
+        is_accent,
+        has_shadow: false,
+        theme: app_theme,
+    }))
+    .on_press(on_press)
+}
+
 fn render_titlebar(state: &EnclaveApp) -> Element<'_, Message, Theme, iced::Renderer> {
     let is_dark = state.app_theme == theme::AppTheme::Dark;
     let text_color = if is_dark {
@@ -188,66 +217,27 @@ fn render_titlebar(state: &EnclaveApp) -> Element<'_, Message, Theme, iced::Rend
     };
 
     let window_controls = row![
-        button(
-            container(
-                icons::render_svg(&icons::HANDLE_MINIMIZE, control_color)
-                    .width(Length::Fixed(12.0))
-                    .height(Length::Fixed(12.0))
-            )
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .align_x(Alignment::Center)
-            .align_y(Alignment::Center)
-        )
-        .width(Length::Fixed(32.0))
-        .height(Length::Fixed(32.0))
-        .padding(0)
-        .style(theme::neo_button(theme::NeoButton {
-            is_accent: false,
-            has_shadow: false,
-            theme: state.app_theme,
-        }))
-        .on_press(Message::WindowMinimize),
-        button(
-            container(
-                icons::render_svg(&icons::HANDLE_MAXIMIZE, control_color)
-                    .width(Length::Fixed(12.0))
-                    .height(Length::Fixed(12.0))
-            )
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .align_x(Alignment::Center)
-            .align_y(Alignment::Center)
-        )
-        .width(Length::Fixed(32.0))
-        .height(Length::Fixed(32.0))
-        .padding(0)
-        .style(theme::neo_button(theme::NeoButton {
-            is_accent: false,
-            has_shadow: false,
-            theme: state.app_theme,
-        }))
-        .on_press(Message::WindowMaximize),
-        button(
-            container(
-                icons::render_svg(&icons::HANDLE_CLOSE, iced::Color::BLACK)
-                    .width(Length::Fixed(12.0))
-                    .height(Length::Fixed(12.0))
-            )
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .align_x(Alignment::Center)
-            .align_y(Alignment::Center)
-        )
-        .width(Length::Fixed(32.0))
-        .height(Length::Fixed(32.0))
-        .padding(0)
-        .style(theme::neo_button(theme::NeoButton {
-            is_accent: true,
-            has_shadow: false,
-            theme: state.app_theme,
-        }))
-        .on_press(Message::WindowClose),
+        titlebar_control_button(
+            &icons::HANDLE_MINIMIZE,
+            control_color,
+            state.app_theme,
+            false,
+            Message::WindowMinimize,
+        ),
+        titlebar_control_button(
+            &icons::HANDLE_MAXIMIZE,
+            control_color,
+            state.app_theme,
+            false,
+            Message::WindowMaximize,
+        ),
+        titlebar_control_button(
+            &icons::HANDLE_CLOSE,
+            iced::Color::BLACK,
+            state.app_theme,
+            true,
+            Message::WindowClose,
+        ),
     ]
     .spacing(8)
     .align_y(Alignment::Center);
@@ -275,6 +265,14 @@ fn split_mock_stream(text: &str) -> Vec<String> {
         .chunks(12)
         .map(|chunk| chunk.iter().collect())
         .collect()
+}
+
+fn append_stream_chunk_to_message(state: &mut EnclaveApp, chunk: &str) {
+    if let (Some(index), Some(chat)) = (state.streaming_message_index, state.chat_state.as_mut()) {
+        if let Some(msg) = chat.messages.get_mut(index) {
+            msg.append_stream_chunk(chunk);
+        }
+    }
 }
 
 fn update(state: &mut EnclaveApp, message: Message) -> Task<Message> {
@@ -439,26 +437,14 @@ fn update(state: &mut EnclaveApp, message: Message) -> Task<Message> {
         }
 
         Message::ChatStreamChunk(chunk) => {
-            if let (Some(index), Some(chat)) =
-                (state.streaming_message_index, state.chat_state.as_mut())
-            {
-                if let Some(msg) = chat.messages.get_mut(index) {
-                    msg.append_stream_chunk(&chunk);
-                }
-            }
+            append_stream_chunk_to_message(state, &chunk);
             Task::none()
         }
 
         Message::ChatStreamTick => {
             if let Some(chunk) = state.pending_stream_chunks.first().cloned() {
                 state.pending_stream_chunks.remove(0);
-                if let (Some(index), Some(chat)) =
-                    (state.streaming_message_index, state.chat_state.as_mut())
-                {
-                    if let Some(msg) = chat.messages.get_mut(index) {
-                        msg.append_stream_chunk(&chunk);
-                    }
-                }
+                append_stream_chunk_to_message(state, &chunk);
                 if state.pending_stream_chunks.is_empty() {
                     if let (Some(index), Some(chat)) = (
                         state.streaming_message_index.take(),
