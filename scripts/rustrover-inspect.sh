@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 # Run RustRover headless code inspections and print a human/agent-readable summary.
 #
-# Requires RustRover on PATH or RUSTROVER_HOME. Close the RustRover GUI first —
-# the CLI inspector cannot run while an IDE window is open on this project.
+# Requires RustRover on PATH or RUSTROVER_HOME. By default the inspector runs in
+# an isolated JetBrains config sandbox (build/rustrover-inspect-env/) so it can
+# run while the RustRover GUI is open — the sandbox uses separate idea.config.path,
+# idea.system.path, and idea.caches.path and does not touch your IDE theme or
+# options. Pass --shared-config to use the live GUI config instead (GUI must be
+# closed; appearance may reset without the snapshot/restore workaround).
 #
 # Usage:
 #   ./scripts/rustrover-inspect.sh [options]
@@ -19,6 +23,8 @@
 #   --print-raw            Dump every report file to stdout after the run
 #   --fail-on LEVEL        Exit 1 if issues at or above LEVEL are found (ERROR, WARNING, WEAK WARNING)
 #   --skip-typo            Omit TYPO from summary counts and --fail-on checks
+#   --shared-config        Use live JetBrains config (close GUI first; may reset theme)
+#   --reset-env            Delete and recreate the isolated inspect sandbox
 #   --help                 Show this help text
 #
 # Scopes:
@@ -46,9 +52,13 @@ VERBOSITY="-v2"
 PRINT_RAW=0
 FAIL_ON=""
 SKIP_TYPO=0
+SHARED_CONFIG=0
+RESET_ENV=0
+INSPECT_ENV_DIR=""
+INSPECT_VMOPTIONS=""
 
 usage() {
-  sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,31p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 die() {
@@ -101,6 +111,8 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --skip-typo) SKIP_TYPO=1 ;;
+    --shared-config) SHARED_CONFIG=1 ;;
+    --reset-env) RESET_ENV=1 ;;
     -h|--help)
       usage
       exit 0
@@ -204,18 +216,50 @@ resolve_profile_path() {
 }
 
 assert_rustrover_not_running() {
-  # Match the IDE launcher process, not this script (whose argv contains
-  # "rustrover-inspect.sh"). The `[R]` trick avoids matching `pgrep` itself but
-  # still matches our own script name, so filter out shell processes running
-  # this script before deciding the IDE is open.
+  # Only needed when sharing the live JetBrains config — two instances contend for
+  # the same config/system directories and the CLI inspector refuses to start.
   local pids
   pids="$(pgrep -f '[R]ustRover' 2>/dev/null || true)"
   [[ -z "$pids" ]] && return 0
   if echo "$pids" | xargs -r -I{} ps -o args= -p {} 2>/dev/null \
       | grep -vE 'rustrover-inspect\.sh' \
       | grep -q .; then
-    die "RustRover is already running. Close the IDE window, then rerun this script."
+    die "RustRover is already running. Close the IDE window, or omit --shared-config to use the isolated inspect sandbox."
   fi
+}
+
+setup_inspect_env() {
+  INSPECT_ENV_DIR="$PROJECT_ROOT/build/rustrover-inspect-env"
+  local config_dir="$INSPECT_ENV_DIR/config"
+  local system_dir="$INSPECT_ENV_DIR/system"
+  local log_dir="$INSPECT_ENV_DIR/log"
+  local cache_dir="$INSPECT_ENV_DIR/cache"
+  INSPECT_VMOPTIONS="$INSPECT_ENV_DIR/inspect.vmoptions"
+
+  if [[ "$RESET_ENV" -eq 1 && -d "$INSPECT_ENV_DIR" ]]; then
+    rm -rf "$INSPECT_ENV_DIR"
+  fi
+
+  mkdir -p "$config_dir/options" "$system_dir" "$log_dir" "$cache_dir"
+
+  cat > "$config_dir/options/trusted-paths.xml" <<EOF
+<application>
+  <component name="Trusted.Paths">
+    <option name="TRUSTED_PROJECT_PATHS">
+      <map>
+        <entry key="$PROJECT_ROOT" value="true" />
+      </map>
+    </option>
+  </component>
+</application>
+EOF
+
+  cat > "$INSPECT_VMOPTIONS" <<EOF
+-Didea.config.path=$config_dir
+-Didea.system.path=$system_dir
+-Didea.log.path=$log_dir
+-Didea.caches.path=$cache_dir
+EOF
 }
 
 resolve_scope_paths() {
@@ -287,7 +331,11 @@ run_inspect() {
 
   echo ""
   echo "==> Inspecting ${scope_path#$PROJECT_ROOT/}..."
-  "$RUSTROVER_BIN" inspect "${inspect_args[@]}"
+  if [[ -n "$INSPECT_VMOPTIONS" ]]; then
+    RUSTROVER_VM_OPTIONS="$INSPECT_VMOPTIONS" "$RUSTROVER_BIN" inspect "${inspect_args[@]}"
+  else
+    "$RUSTROVER_BIN" inspect "${inspect_args[@]}"
+  fi
 }
 
 RUSTROVER_BIN="$(resolve_rustrover_bin)"
@@ -308,13 +356,17 @@ echo "  scope    : $(describe_scope)"
 echo "  changes  : $([[ "$SCOPE_CHANGES" -eq 1 ]] && echo yes || echo no)"
 echo "  skip typo: $([[ "$SKIP_TYPO" -eq 1 ]] && echo yes || echo no)"
 
-assert_rustrover_not_running
+if [[ "$SHARED_CONFIG" -eq 1 ]]; then
+  echo "  config   : shared (live JetBrains directories)"
+  assert_rustrover_not_running
+else
+  setup_inspect_env
+  echo "  config   : isolated sandbox at $INSPECT_ENV_DIR"
+fi
 
-# Headless `rustrover.sh inspect` rewrites the IDE's `options/` directory on
-# exit, resetting the colour scheme / LAF to defaults (e.g. Darcula Contrast →
-# Default, which reads as the light theme). Snapshot the user's `options/`
-# before the run and restore them on exit (incl. early failure) so the GUI
-# appearance the user returns to is preserved.
+# When --shared-config is used, headless `rustrover.sh inspect` rewrites the
+# IDE's `options/` directory on exit, resetting the colour scheme / LAF to
+# defaults. Snapshot the user's `options/` before the run and restore on exit.
 #
 # Note: the inspector can also rewrite source files in the inspected scope to
 # its cached in-IDE buffer state. This script does NOT snapshot/restore source
@@ -325,7 +377,6 @@ IDE_OPTIONS_DIR=""
 OPTIONS_SNAPSHOT=""
 
 resolve_ide_options_dir() {
-  # Prefer the newest per-version options dir under the JetBrains config root.
   local base="${XDG_CONFIG_HOME:-$HOME/.config}/JetBrains"
   [[ -d "$base" ]] || return 1
   local candidate
@@ -337,6 +388,7 @@ resolve_ide_options_dir() {
 }
 
 snapshot_ide_options() {
+  [[ "$SHARED_CONFIG" -eq 1 ]] || return 0
   IDE_OPTIONS_DIR="$(resolve_ide_options_dir || true)"
   [[ -n "$IDE_OPTIONS_DIR" ]] || return 0
   OPTIONS_SNAPSHOT="$(mktemp -d -t rustrover-options.XXXXXX)"
@@ -352,9 +404,6 @@ snapshot_ide_options() {
 
 restore_ide_options() {
   [[ -n "$OPTIONS_SNAPSHOT" && -n "$IDE_OPTIONS_DIR" ]] || return 0
-  # Restore the files the inspect run mutates (colors.scheme.xml, other.xml,
-  # editor-font.xml, recentProjects.xml, usage.statistics.xml, …) by copying
-  # the whole snapshot back.
   rsync -a --delete "$OPTIONS_SNAPSHOT/" "$IDE_OPTIONS_DIR/" 2>/dev/null \
     || cp -a "$OPTIONS_SNAPSHOT/." "$IDE_OPTIONS_DIR/"
   rm -rf "$OPTIONS_SNAPSHOT"

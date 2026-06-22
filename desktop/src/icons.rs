@@ -91,6 +91,13 @@ pub const SVG_COPY: &[u8] = include_bytes!("../assets/icons/copy.svg");
 pub const SVG_LOG_IN: &[u8] = include_bytes!("../assets/icons/log-in.svg");
 pub const SVG_LOG_OUT: &[u8] = include_bytes!("../assets/icons/log-out.svg");
 pub const SVG_USER: &[u8] = include_bytes!("../assets/icons/user.svg");
+pub const SVG_LOCK: &[u8] = include_bytes!("../assets/icons/lock.svg");
+pub const SVG_EYE: &[u8] = include_bytes!("../assets/icons/eye.svg");
+pub const SVG_EYE_OFF: &[u8] = include_bytes!("../assets/icons/eye-off.svg");
+/// Official multicolor Google "G" logo (4 fixed fills, no `currentColor`).
+/// Rendered untinted per Google's branding guidelines — the logo color may
+/// not be altered. Mirrors the Android `core/ui/.../drawable/ic_google.xml`.
+pub const SVG_GOOGLE_G: &[u8] = include_bytes!("../assets/icons/google_g.svg");
 pub const SVG_ENCLAVE_LOGO: &[u8] = include_bytes!("../assets/icons/enclave_logo.svg");
 // The Enclave "E" source mark — cream `#F2F1EC` glyph with a peach `#FF8A00`
 // accent dot. Used untinted (its colors are baked in via `fill` attributes).
@@ -126,6 +133,11 @@ pub static HANDLE_COPY: Lazy<svg::Handle> = Lazy::new(|| svg::Handle::from_memor
 pub static HANDLE_LOG_IN: Lazy<svg::Handle> = Lazy::new(|| svg::Handle::from_memory(SVG_LOG_IN));
 pub static HANDLE_LOG_OUT: Lazy<svg::Handle> = Lazy::new(|| svg::Handle::from_memory(SVG_LOG_OUT));
 pub static HANDLE_USER: Lazy<svg::Handle> = Lazy::new(|| svg::Handle::from_memory(SVG_USER));
+pub static HANDLE_LOCK: Lazy<svg::Handle> = Lazy::new(|| svg::Handle::from_memory(SVG_LOCK));
+pub static HANDLE_EYE: Lazy<svg::Handle> = Lazy::new(|| svg::Handle::from_memory(SVG_EYE));
+pub static HANDLE_EYE_OFF: Lazy<svg::Handle> = Lazy::new(|| svg::Handle::from_memory(SVG_EYE_OFF));
+pub static HANDLE_GOOGLE_G: Lazy<svg::Handle> =
+    Lazy::new(|| svg::Handle::from_memory(SVG_GOOGLE_G));
 pub static HANDLE_ENCLAVE_LOGO: Lazy<svg::Handle> =
     Lazy::new(|| svg::Handle::from_memory(SVG_ENCLAVE_LOGO));
 pub static HANDLE_ENCLAVE_E_MARK: Lazy<svg::Handle> =

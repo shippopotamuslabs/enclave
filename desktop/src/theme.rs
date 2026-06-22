@@ -239,6 +239,86 @@ pub fn neo_button(neo: NeoButton) -> impl Fn(&iced::Theme, button::Status) -> bu
     }
 }
 
+/// Google "Sign in with Google" branding-compliant button style. Per Google's
+/// branding guidelines (https://developers.google.com/identity/branding-guidelines):
+/// the button must use the standard multicolor "G" logo (rendered untinted by
+/// the caller) on a fixed fill with a fixed 1px stroke and a fixed font color.
+/// The fill/stroke/text tokens differ per theme:
+///
+/// | Theme | Fill     | Stroke   | Text     |
+/// |-------|----------|----------|----------|
+/// | Light | `#FFFFFF`| `#747775`| `#1F1F1F`|
+/// | Dark  | `#131314`| `#8E918F`| `#E3E3E3`|
+///
+/// Mirrors the Android `GoogleSignInButton` spec colors exactly. The
+/// neo-brutalist border width (2.0) and hard offset shadow are applied on top —
+/// Google's guidelines do not prohibit decorative borders or shadows, only
+/// altering the logo's color/size or placing it on a non-light/dark/neutral
+/// fill. Because the fill is part of the spec, this style ignores the usual
+/// `neo_bg` surface tokens.
+#[derive(Clone, Copy)]
+pub struct NeoGoogleButton {
+    pub theme: AppTheme,
+}
+
+fn google_button_colors(theme: AppTheme) -> (Color, Color, Color) {
+    match theme {
+        // (fill, stroke, text)
+        AppTheme::Light => (
+            Color::from_rgb(1.0, 1.0, 1.0),       // #FFFFFF
+            Color::from_rgb(0.455, 0.467, 0.459), // #747775
+            Color::from_rgb(0.122, 0.122, 0.122), // #1F1F1F
+        ),
+        AppTheme::Dark => (
+            Color::from_rgb(0.075, 0.075, 0.078), // #131314
+            Color::from_rgb(0.557, 0.569, 0.561), // #8E918F
+            Color::from_rgb(0.890, 0.890, 0.890), // #E3E3E3
+        ),
+    }
+}
+
+pub fn neo_google_button(
+    neo: NeoGoogleButton,
+) -> impl Fn(&iced::Theme, button::Status) -> button::Style {
+    move |_theme, status| {
+        let (fill, stroke, text) = google_button_colors(neo.theme);
+
+        // Hover lightens/darkens the fill one step toward the opposite theme —
+        // the spec colors are baseline only; hover is an app-level affordance
+        // that does not alter the logo.
+        let fill = if matches!(status, button::Status::Hovered) {
+            match neo.theme {
+                AppTheme::Light => Color::from_rgb(0.96, 0.96, 0.96),
+                AppTheme::Dark => Color::from_rgb(0.11, 0.11, 0.12),
+            }
+        } else {
+            fill
+        };
+
+        let shadow = if matches!(status, button::Status::Pressed) {
+            Shadow::default()
+        } else {
+            Shadow {
+                color: neo_shadow_color(neo.theme),
+                offset: Vector::new(3.0, 3.0),
+                blur_radius: 0.0,
+            }
+        };
+
+        button::Style {
+            background: Some(Background::Color(fill)),
+            border: Border {
+                color: stroke,
+                width: 2.0,
+                radius: 4.0.into(),
+            },
+            shadow,
+            text_color: text,
+            snap: false,
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 pub struct NeoInput {
     pub theme: AppTheme,
