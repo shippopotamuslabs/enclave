@@ -71,6 +71,16 @@ pub enum Message {
     HistoryRenameChat(String),
     HistoryHoverChat(Option<String>),
     HistorySidebarResize(f32),
+    /// Toggle the profile popover over the history sidebar footer card.
+    /// Fired by the card's tap target and the popover's outside-click close.
+    HistoryToggleProfileMenu,
+    /// Mock Google sign-in — flips `HistoryState::auth` to the seed
+    /// `Authenticated` profile. A real desktop auth port would route through
+    /// the domain `AuthManager` here instead.
+    HistorySignIn,
+    /// Mock sign-out — flips `HistoryState::auth` to `Unauthenticated` and
+    /// dismisses the popover.
+    HistorySignOut,
     ChatEditorAction(text_editor::Action),
     ChatSendMessage,
     ChatStreamChunk(String),
@@ -280,6 +290,9 @@ fn update(state: &mut EnclaveApp, message: Message) -> Task<Message> {
 
         Message::NavigateTo(mut screen) => {
             state.back_stack.push(state.current_screen.clone());
+            // Closing the profile popover on navigation avoids a stale open
+            // flag lingering over a rebuilt sidebar.
+            state.history_state.profile_menu_open = false;
 
             if let Screen::Chat { ref mut chat_id } = screen {
                 if chat_id == "active" {
@@ -372,6 +385,23 @@ fn update(state: &mut EnclaveApp, message: Message) -> Task<Message> {
 
         Message::HistorySidebarResize(delta) => {
             state.history_state.apply_sidebar_resize_delta(delta);
+            Task::none()
+        }
+
+        Message::HistoryToggleProfileMenu => {
+            state.history_state.profile_menu_open = !state.history_state.profile_menu_open;
+            Task::none()
+        }
+
+        Message::HistorySignIn => {
+            state.history_state.auth = screens::history::AuthState::default();
+            state.history_state.profile_menu_open = false;
+            Task::none()
+        }
+
+        Message::HistorySignOut => {
+            state.history_state.auth = screens::history::AuthState::Unauthenticated;
+            state.history_state.profile_menu_open = false;
             Task::none()
         }
 
