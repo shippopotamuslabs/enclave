@@ -88,6 +88,9 @@ pub const SVG_PENCIL: &[u8] = include_bytes!("../assets/icons/pencil.svg");
 pub const SVG_DELETE: &[u8] = include_bytes!("../assets/icons/trash-2.svg");
 pub const SVG_FOLDER: &[u8] = include_bytes!("../assets/icons/folder.svg");
 pub const SVG_COPY: &[u8] = include_bytes!("../assets/icons/copy.svg");
+pub const SVG_LOG_IN: &[u8] = include_bytes!("../assets/icons/log-in.svg");
+pub const SVG_LOG_OUT: &[u8] = include_bytes!("../assets/icons/log-out.svg");
+pub const SVG_USER: &[u8] = include_bytes!("../assets/icons/user.svg");
 pub const SVG_ENCLAVE_LOGO: &[u8] = include_bytes!("../assets/icons/enclave_logo.svg");
 // The Enclave "E" source mark — cream `#F2F1EC` glyph with a peach `#FF8A00`
 // accent dot. Used untinted (its colors are baked in via `fill` attributes).
@@ -120,6 +123,9 @@ pub static HANDLE_PENCIL: Lazy<svg::Handle> = Lazy::new(|| svg::Handle::from_mem
 pub static HANDLE_DELETE: Lazy<svg::Handle> = Lazy::new(|| svg::Handle::from_memory(SVG_DELETE));
 pub static HANDLE_FOLDER: Lazy<svg::Handle> = Lazy::new(|| svg::Handle::from_memory(SVG_FOLDER));
 pub static HANDLE_COPY: Lazy<svg::Handle> = Lazy::new(|| svg::Handle::from_memory(SVG_COPY));
+pub static HANDLE_LOG_IN: Lazy<svg::Handle> = Lazy::new(|| svg::Handle::from_memory(SVG_LOG_IN));
+pub static HANDLE_LOG_OUT: Lazy<svg::Handle> = Lazy::new(|| svg::Handle::from_memory(SVG_LOG_OUT));
+pub static HANDLE_USER: Lazy<svg::Handle> = Lazy::new(|| svg::Handle::from_memory(SVG_USER));
 pub static HANDLE_ENCLAVE_LOGO: Lazy<svg::Handle> =
     Lazy::new(|| svg::Handle::from_memory(SVG_ENCLAVE_LOGO));
 pub static HANDLE_ENCLAVE_E_MARK: Lazy<svg::Handle> =

@@ -74,72 +74,9 @@ pub fn view(
     };
 
     // --- Account Section ---
-    let profile_row = container(
-        row![
-            // User initials avatar well
-            container(
-                text("SD")
-                    .font(icons::FONT_BOLD)
-                    .size(16)
-                    .color(Color::BLACK)
-            )
-            .width(44)
-            .height(44)
-            .align_x(alignment::Horizontal::Center)
-            .align_y(alignment::Vertical::Center)
-            .style(theme::neo_container(theme::NeoContainer {
-                is_surface: true,
-                has_shadow: false,
-                theme: AppTheme::Light,
-            })),
-            space::horizontal().width(Length::Fixed(12.0)),
-            // Name and email
-            column![
-                text("Sean Dev")
-                    .font(icons::FONT_BOLD)
-                    .size(15)
-                    .color(if is_dark {
-                        theme::DARK_TEXT
-                    } else {
-                        theme::LIGHT_TEXT
-                    }),
-                text("sean@browntowndev.com")
-                    .font(icons::FONT_REGULAR)
-                    .size(12)
-                    .color(if is_dark {
-                        theme::DARK_TEXT_MUTED
-                    } else {
-                        theme::LIGHT_TEXT_MUTED
-                    })
-            ]
-            .spacing(2),
-            space::horizontal().width(Length::Fill),
-            // Logout
-            button(
-                text("Logout")
-                    .font(icons::FONT_BOLD)
-                    .size(12)
-                    .color(Color::BLACK)
-            )
-            .padding(8)
-            .style(theme::neo_button(theme::NeoButton {
-                is_accent: true,
-                has_shadow: false,
-                theme: app_theme,
-            }))
-        ]
-        .align_y(alignment::Alignment::Center),
-    )
-    .padding(14)
-    .width(Length::Fill)
-    .style(theme::neo_container(theme::NeoContainer {
-        is_surface: true,
-        has_shadow: false,
-        theme: app_theme,
-    }));
-
-    settings_list = settings_list
-        .push(column![make_section_header("ACCOUNT".to_string()), profile_row].spacing(8));
+    // The Google sign-in / profile card moved to the history sidebar footer
+    // (tap the card there for the Login/Logout popover). Settings no longer
+    // carries account chrome.
 
     // --- Appearance Theme Selector ---
     let theme_btn = |label: String, target_theme: AppTheme| {

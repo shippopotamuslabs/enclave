@@ -6,9 +6,11 @@
 //! mirroring how the built-in `tooltip` widget works.
 //!
 //! Outside-click dismissal: when the overlay is open, any pointer press
-//! outside the popup bounds dispatches the `on_close` message. Menu-item
-//! clicks should also close the menu (the caller emits `on_close` from the
-//! relevant item handlers).
+//! outside the popup bounds dispatches the `on_close` message — except a
+//! press that lands on the anchor itself, which is left to the anchor's own
+//! `on_press` (so a toggle trigger can flip closed without `on_close`
+//! double-toggling it back open). Menu-item clicks should also close the
+//! menu (the caller emits `on_close` from the relevant item handlers).
 
 use iced::advanced::widget::tree::Tree;
 use iced::advanced::{layout, mouse, overlay, renderer, widget, Clipboard, Layout, Shell};
@@ -319,14 +321,17 @@ where
     ) {
         let popup_layout = layout.children().next().unwrap();
         let popup_bounds = popup_layout.bounds();
-        let inside = cursor.is_over(popup_bounds);
 
-        if let Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) = event {
-            if !inside {
-                if let Some(on_close) = self.on_close.clone() {
-                    shell.publish(on_close);
+        if let Some(action) = click_action(event, cursor, popup_bounds, self.content_bounds) {
+            match action {
+                ClickAction::ForwardToPopup => {}
+                ClickAction::ForwardToAnchor => return,
+                ClickAction::Close => {
+                    if let Some(on_close) = self.on_close.clone() {
+                        shell.publish(on_close);
+                    }
+                    return;
                 }
-                return;
             }
         }
 
@@ -355,5 +360,132 @@ where
             &layout.bounds(),
             renderer,
         )
+    }
+}
+
+/// How the overlay should route a pointer event. Only meaningful for
+/// left-button presses; all other events forward to the popup (`None`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ClickAction {
+    /// Click landed inside the popup — let the popup handle it.
+    ForwardToPopup,
+    /// Click landed on the anchor (content) itself — defer to the anchor's
+    /// own `on_press` so a toggle trigger can flip closed without `on_close`
+    /// double-toggling it back open.
+    ForwardToAnchor,
+    /// Click landed outside both popup and anchor — dismiss the popover.
+    Close,
+}
+
+/// Pure decision function for an overlay pointer event. Returns `None` for
+/// non-left-press events (the popup handles them normally). Extracted from
+/// `Overlay::update` so the anchor-vs-outside routing logic is testable
+/// without spinning up a full widget tree.
+///
+/// `popup_bounds` is the floating menu's screen-space rectangle;
+/// `anchor_bounds` is the inline trigger button's rectangle. The cursor is
+/// the pointer position, if any (`None` means "not over the window").
+fn click_action(
+    event: &Event,
+    cursor: mouse::Cursor,
+    popup_bounds: Rectangle,
+    anchor_bounds: Rectangle,
+) -> Option<ClickAction> {
+    let Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) = event else {
+        return None;
+    };
+
+    let over_popup = cursor.is_over(popup_bounds);
+    if over_popup {
+        return Some(ClickAction::ForwardToPopup);
+    }
+
+    // Not over the popup. If the press is on the anchor itself, let the
+    // anchor's `on_press` handle it (e.g. toggle closed) — emitting `on_close`
+    // here would double-toggle and immediately reopen the popover.
+    if cursor.is_over(anchor_bounds) {
+        return Some(ClickAction::ForwardToAnchor);
+    }
+
+    Some(ClickAction::Close)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use iced::Point;
+
+    /// Build a cursor positioned at an absolute point (mirrors the
+    /// `mouse::Cursor` API used by the overlay).
+    fn cursor_at(point: Point) -> mouse::Cursor {
+        mouse::Cursor::Available(point)
+    }
+
+    /// A left-button press event.
+    fn left_press() -> Event {
+        Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
+    }
+
+    const POPUP: Rectangle = Rectangle {
+        x: 100.0,
+        y: 0.0,
+        width: 80.0,
+        height: 60.0,
+    };
+    const ANCHOR: Rectangle = Rectangle {
+        x: 100.0,
+        y: 70.0,
+        width: 40.0,
+        height: 40.0,
+    };
+
+    #[test]
+    fn click_inside_popup_forwards_to_popup() {
+        // Center of the popup.
+        let cursor = cursor_at(Point::new(140.0, 30.0));
+        assert_eq!(
+            click_action(&left_press(), cursor, POPUP, ANCHOR),
+            Some(ClickAction::ForwardToPopup)
+        );
+    }
+
+    #[test]
+    fn click_on_anchor_forwards_to_anchor_not_close() {
+        // Center of the anchor button. This is the regression case: without
+        // the anchor check, re-clicking an open popover's trigger would
+        // double-toggle (close via anchor, reopen via `on_close`).
+        let cursor = cursor_at(Point::new(120.0, 90.0));
+        assert_eq!(
+            click_action(&left_press(), cursor, POPUP, ANCHOR),
+            Some(ClickAction::ForwardToAnchor)
+        );
+    }
+
+    #[test]
+    fn click_outside_popup_and_anchor_closes() {
+        // Far away from both rectangles.
+        let cursor = cursor_at(Point::new(500.0, 500.0));
+        assert_eq!(
+            click_action(&left_press(), cursor, POPUP, ANCHOR),
+            Some(ClickAction::Close)
+        );
+    }
+
+    #[test]
+    fn non_press_events_are_not_intercepted() {
+        let cursor = cursor_at(Point::new(500.0, 500.0));
+        let event = Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left));
+        assert_eq!(click_action(&event, cursor, POPUP, ANCHOR), None);
+    }
+
+    #[test]
+    fn unavailable_cursor_on_press_closes() {
+        // `Cursor::Unavailable` is not over any rectangle, so a press with no
+        // pointer position falls through to the close path. (This mirrors the
+        // prior behavior: `is_over` returns false for an unavailable cursor.)
+        assert_eq!(
+            click_action(&left_press(), mouse::Cursor::Unavailable, POPUP, ANCHOR),
+            Some(ClickAction::Close)
+        );
     }
 }

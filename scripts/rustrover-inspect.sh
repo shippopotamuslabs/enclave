@@ -178,7 +178,16 @@ resolve_profile_path() {
 }
 
 assert_rustrover_not_running() {
-  if pgrep -af '[R]ustRover' >/dev/null 2>&1; then
+  # Match the IDE launcher process, not this script (whose argv contains
+  # "rustrover-inspect.sh"). The `[R]` trick avoids matching `pgrep` itself but
+  # still matches our own script name, so filter out shell processes running
+  # this script before deciding the IDE is open.
+  local pids
+  pids="$(pgrep -f '[R]ustRover' 2>/dev/null || true)"
+  [[ -z "$pids" ]] && return 0
+  if echo "$pids" | xargs -r -I{} ps -o args= -p {} 2>/dev/null \
+      | grep -vE 'rustrover-inspect\.sh' \
+      | grep -q .; then
     die "RustRover is already running. Close the IDE window, then rerun this script."
   fi
 }
@@ -273,6 +282,62 @@ echo "  scope    : $(describe_scope)"
 echo "  changes  : $([[ "$SCOPE_CHANGES" -eq 1 ]] && echo yes || echo no)"
 
 assert_rustrover_not_running
+
+# Headless `rustrover.sh inspect` rewrites the IDE's `options/` directory on
+# exit, resetting the colour scheme / LAF to defaults (e.g. Darcula Contrast →
+# Default, which reads as the light theme). Snapshot the user's `options/`
+# before the run and restore them on exit (incl. early failure) so the GUI
+# appearance the user returns to is preserved.
+#
+# Note: the inspector can also rewrite source files in the inspected scope to
+# its cached in-IDE buffer state. This script does NOT snapshot/restore source
+# — a prior attempt to do so with `rsync --delete` destroyed uncommitted edits
+# when the snapshot was incomplete. Run the inspector only when your source
+# tree is committed or safely stashed.
+IDE_OPTIONS_DIR=""
+OPTIONS_SNAPSHOT=""
+
+resolve_ide_options_dir() {
+  # Prefer the newest per-version options dir under the JetBrains config root.
+  local base="${XDG_CONFIG_HOME:-$HOME/.config}/JetBrains"
+  [[ -d "$base" ]] || return 1
+  local candidate
+  candidate="$(find "$base" -maxdepth 2 -type d -name options -path '*RustRover*' 2>/dev/null \
+    | xargs -r -n1 dirname 2>/dev/null \
+    | sort -r | head -1)"
+  [[ -n "$candidate" ]] || return 1
+  echo "$candidate/options"
+}
+
+snapshot_ide_options() {
+  IDE_OPTIONS_DIR="$(resolve_ide_options_dir || true)"
+  [[ -n "$IDE_OPTIONS_DIR" ]] || return 0
+  OPTIONS_SNAPSHOT="$(mktemp -d -t rustrover-options.XXXXXX)"
+  if cp -a "$IDE_OPTIONS_DIR/." "$OPTIONS_SNAPSHOT/" 2>/dev/null; then
+    echo "  options  : $IDE_OPTIONS_DIR (snapshot for restore-on-exit)"
+  else
+    echo "  options  : $IDE_OPTIONS_DIR (snapshot FAILED — appearance will not be restored)"
+    rm -rf "$OPTIONS_SNAPSHOT"
+    OPTIONS_SNAPSHOT=""
+    IDE_OPTIONS_DIR=""
+  fi
+}
+
+restore_ide_options() {
+  [[ -n "$OPTIONS_SNAPSHOT" && -n "$IDE_OPTIONS_DIR" ]] || return 0
+  # Restore the files the inspect run mutates (colors.scheme.xml, other.xml,
+  # editor-font.xml, recentProjects.xml, usage.statistics.xml, …) by copying
+  # the whole snapshot back.
+  rsync -a --delete "$OPTIONS_SNAPSHOT/" "$IDE_OPTIONS_DIR/" 2>/dev/null \
+    || cp -a "$OPTIONS_SNAPSHOT/." "$IDE_OPTIONS_DIR/"
+  rm -rf "$OPTIONS_SNAPSHOT"
+  OPTIONS_SNAPSHOT=""
+  IDE_OPTIONS_DIR=""
+}
+
+trap restore_ide_options EXIT
+
+snapshot_ide_options
 
 echo ""
 echo "==> Running RustRover inspect (first run may take several minutes)..."
