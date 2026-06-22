@@ -9,7 +9,7 @@
 //! the seeded `chat_1` assistant demo in `state.rs`).
 
 use iced::widget::{button, column, container, row, scrollable, space, text, Column};
-use iced::{alignment, Element, Length, Padding, Theme};
+use iced::{alignment, Color, Element, Length, Padding, Theme};
 
 use crate::icons;
 use crate::theme::{self, AppTheme};
@@ -149,10 +149,10 @@ pub fn wrap_stats_sheet<'a>(
 /// Render the stats sheet content. A header row (title + close affordance)
 /// followed by the Summary / By provider / By model sections inside a scrollable
 /// body, all on a [`theme::NeoBottomSheet`] surface.
-fn view<'a>(
-    stats: &'a ChatStats,
+fn view(
+    stats: &ChatStats,
     app_theme: AppTheme,
-) -> Element<'a, Message, Theme, iced::Renderer> {
+) -> Element<'static, Message, Theme, iced::Renderer> {
     let is_dark = app_theme == AppTheme::Dark;
     let muted = if is_dark {
         theme::DARK_TEXT_MUTED
@@ -246,17 +246,17 @@ fn view<'a>(
         .into()
 }
 
-fn section_title<'a>(label: &'static str) -> Element<'a, Message, Theme, iced::Renderer> {
+fn section_title(label: &'static str) -> Element<'static, Message, Theme, iced::Renderer> {
     text(label).font(icons::FONT_SEMIBOLD).size(13).into()
 }
 
 /// A bordered panel grouping metric rows — the desktop analogue of the Android
 /// `NeoTelemetryMetricPanel` (`NeoPanel` with a neo border). Built from an
 /// iterator so the call sites read like the Compose `forEach` over the row sets.
-fn metric_panel<'a>(
+fn metric_panel(
     app_theme: AppTheme,
-    rows: impl Iterator<Item = Element<'a, Message, Theme, iced::Renderer>>,
-) -> Element<'a, Message, Theme, iced::Renderer> {
+    rows: impl Iterator<Item = Element<'static, Message, Theme, iced::Renderer>>,
+) -> Element<'static, Message, Theme, iced::Renderer> {
     let mut col = Column::<Message, Theme, iced::Renderer>::new().width(Length::Fill);
     for row in rows {
         col = col.push(row);
@@ -272,11 +272,11 @@ fn metric_panel<'a>(
         .into()
 }
 
-fn metric_row<'a>(
-    label: &'a str,
-    value: &'a str,
-    muted: iced::Color,
-) -> Element<'a, Message, Theme, iced::Renderer> {
+fn metric_row(
+    label: &str,
+    value: &str,
+    muted: Color,
+) -> Element<'static, Message, Theme, iced::Renderer> {
     row![
         text(label.to_string())
             .font(icons::FONT_REGULAR)
@@ -291,10 +291,10 @@ fn metric_row<'a>(
     .into()
 }
 
-fn breakdown_row_provider<'a>(
-    row: &'a ProviderBreakdownRow,
-    muted: iced::Color,
-) -> Element<'a, Message, Theme, iced::Renderer> {
+fn breakdown_row_provider(
+    row: &ProviderBreakdownRow,
+    muted: Color,
+) -> Element<'static, Message, Theme, iced::Renderer> {
     let request_suffix = row
         .request_count
         .map(|c| format!(" · {c} requests"))
@@ -307,10 +307,10 @@ fn breakdown_row_provider<'a>(
     breakdown_row(row.label.clone(), row.cost_label.clone(), secondary, muted)
 }
 
-fn breakdown_row_model<'a>(
-    row: &'a ModelBreakdownRow,
-    muted: iced::Color,
-) -> Element<'a, Message, Theme, iced::Renderer> {
+fn breakdown_row_model(
+    row: &ModelBreakdownRow,
+    muted: Color,
+) -> Element<'static, Message, Theme, iced::Renderer> {
     let secondary = format!("{} output tokens", row.output_tokens);
     breakdown_row(row.label.clone(), row.cost_label.clone(), secondary, muted)
 }
@@ -319,7 +319,7 @@ fn breakdown_row(
     primary: String,
     cost: String,
     secondary: String,
-    muted: iced::Color,
+    muted: Color,
 ) -> Element<'static, Message, Theme, iced::Renderer> {
     column![
         row![
@@ -344,15 +344,10 @@ fn breakdown_row(
 
 /// Like `column!` but from a `Vec`, so `view` can conditionally accumulate
 /// sections without borrow-checker churn on the macro's tuple expansion.
-fn column_with<'a, M, T, R>(
-    elements: Vec<Element<'a, M, T, R>>,
-) -> iced::widget::Column<'a, M, T, R>
-where
-    M: 'a + Clone,
-    T: 'a,
-    R: iced::advanced::Renderer + 'a,
-{
-    let mut col = iced::widget::Column::<M, T, R>::new();
+fn column_with(
+    elements: Vec<Element<'static, Message, Theme, iced::Renderer>>,
+) -> Column<'static, Message, Theme, iced::Renderer> {
+    let mut col = Column::<Message, Theme, iced::Renderer>::new();
     for el in elements {
         col = col.push(el);
     }

@@ -190,8 +190,8 @@ where
     /// A `Stack`-specific state tag. This is the fix for the chat-screen panic
     /// (`popover.rs: index out of bounds: the len is 0`).
     ///
-    /// By default every stateless widget shares the same `Tag::stateless()`
-    /// (`TypeId::of::<()`). The chat pane swaps between an empty-state `Stack`
+    /// Every stateless widget shares, by default, the same stateless tag
+    /// (`TypeId::of::<()>`). The chat pane swaps between an empty-state `Stack`
     /// and an active `Column` across frames; both report that default tag, so
     /// the runtime believed the slot was the "same" widget and called
     /// `Column::diff` against a tree shaped for a `Stack` (or vice versa). That

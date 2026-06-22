@@ -1,3 +1,4 @@
+//noinspection SpellCheckingInspection
 use iced::widget::{container, row, space, Column};
 use iced::{Element, Length, Padding, Theme};
 use iced_selection::text::Style as SelectableTextStyle;

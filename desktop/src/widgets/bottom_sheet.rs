@@ -12,9 +12,11 @@
 //! the sheet bounds (i.e. on the scrim) dispatches the `on_close` message.
 
 use iced::advanced::widget::tree::Tree;
-use iced::advanced::{layout, mouse, overlay, renderer, widget, Clipboard, Layout, Shell};
+use iced::advanced::{layout, mouse, overlay, renderer, Clipboard, Layout, Shell};
+
+use super::overlay_anchor;
 use iced::event::Event;
-use iced::{Element, Length, Rectangle, Size, Vector};
+use iced::{Element, Rectangle, Size, Vector};
 
 /// Max sheet width in logical pixels. Matches the input-bar centered gutter
 /// (`FillPortion` 1/6/1) so the sheet lines up with the chat surface.
@@ -63,115 +65,16 @@ where
     }
 }
 
-impl<'a, Message, Theme, Renderer> widget::Widget<Message, Theme, Renderer>
+overlay_anchor::impl_overlay_anchor_widget!(BottomSheet<'a, Message, Theme, Renderer>);
+
+impl<'a, Message, Theme, Renderer> overlay_anchor::OverlayAnchorOverlay<Message, Theme, Renderer>
     for BottomSheet<'a, Message, Theme, Renderer>
 where
     Message: Clone + 'a,
     Renderer: iced::advanced::Renderer + 'a,
     Theme: 'a,
 {
-    fn size(&self) -> Size<Length> {
-        self.content.as_widget().size()
-    }
-
-    fn size_hint(&self) -> Size<Length> {
-        self.content.as_widget().size_hint()
-    }
-
-    fn layout(
-        &mut self,
-        tree: &mut Tree,
-        renderer: &Renderer,
-        limits: &layout::Limits,
-    ) -> layout::Node {
-        self.content
-            .as_widget_mut()
-            .layout(&mut tree.children[0], renderer, limits)
-    }
-
-    fn draw(
-        &self,
-        tree: &Tree,
-        renderer: &mut Renderer,
-        theme: &Theme,
-        inherited_style: &renderer::Style,
-        layout: Layout<'_>,
-        cursor: mouse::Cursor,
-        viewport: &Rectangle,
-    ) {
-        self.content.as_widget().draw(
-            &tree.children[0],
-            renderer,
-            theme,
-            inherited_style,
-            layout,
-            cursor,
-            viewport,
-        );
-    }
-
-    fn children(&self) -> Vec<Tree> {
-        // Two declared children keep `diff`/`children` lengths in sync:
-        //   [0] = the inline anchor (content),
-        //   [1] = the sheet (rebuilt lazily; empty when closed).
-        // Persisting the sheet as a declared child is what lets its widget
-        // state (e.g. text `Paragraph`s) survive across `operate()` and
-        // `draw()`. See `super::popover::Popover::children` for the same
-        // rationale.
-        vec![Tree::new(&self.content), Tree::empty()]
-    }
-
-    fn diff(&self, tree: &mut Tree) {
-        // Diff only the anchor (slot [0]); the sheet slot [1] is reconciled
-        // lazily against the freshly-built element inside `overlay`. Same
-        // invariant `Popover` relies on so a bare `diff_children` doesn't
-        // truncate the persistent sheet tree.
-        if let Some(content_tree) = tree.children.get_mut(0) {
-            content_tree.diff(self.content.as_widget());
-        }
-    }
-
-    fn update(
-        &mut self,
-        tree: &mut Tree,
-        event: &Event,
-        layout: Layout<'_>,
-        cursor: mouse::Cursor,
-        renderer: &Renderer,
-        clipboard: &mut dyn Clipboard,
-        shell: &mut Shell<'_, Message>,
-        viewport: &Rectangle,
-    ) {
-        self.content.as_widget_mut().update(
-            &mut tree.children[0],
-            event,
-            layout,
-            cursor,
-            renderer,
-            clipboard,
-            shell,
-            viewport,
-        );
-    }
-
-    fn mouse_interaction(
-        &self,
-        tree: &Tree,
-        layout: Layout<'_>,
-        cursor: mouse::Cursor,
-        viewport: &Rectangle,
-        renderer: &Renderer,
-    ) -> mouse::Interaction {
-        self.content.as_widget().mouse_interaction(
-            &tree.children[0],
-            layout,
-            cursor,
-            viewport,
-            renderer,
-        )
-    }
-
-    fn overlay<'b>(
+    fn overlay_anchor<'b>(
         &'b mut self,
         tree: &'b mut Tree,
         layout: Layout<'b>,
@@ -179,7 +82,7 @@ where
         viewport: &Rectangle,
         translation: Vector,
     ) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
-        let mut collected: Vec<overlay::Element<'b, Message, Theme, Renderer>> = Vec::new();
+        let mut collected: Vec<overlay::Element<'_, Message, Theme, Renderer>> = Vec::new();
 
         let (content_tree, sheet_tree) = tree.children.split_at_mut(1);
 
@@ -216,17 +119,7 @@ where
     }
 }
 
-impl<'a, Message, Theme, Renderer> From<BottomSheet<'a, Message, Theme, Renderer>>
-    for Element<'a, Message, Theme, Renderer>
-where
-    Message: Clone + 'a,
-    Renderer: iced::advanced::Renderer + 'a,
-    Theme: 'a,
-{
-    fn from(sheet: BottomSheet<'a, Message, Theme, Renderer>) -> Self {
-        Element::new(sheet)
-    }
-}
+overlay_anchor::impl_overlay_anchor_from!(BottomSheet<'a, Message, Theme, Renderer>);
 
 struct SheetOverlay<'a, Message, Theme, Renderer>
 where
