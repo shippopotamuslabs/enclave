@@ -14,13 +14,6 @@ pub fn view(
     app_theme: AppTheme,
     text_color: iced::Color,
 ) -> Element<'_, Message, Theme, iced::Renderer> {
-    let is_dark = app_theme == AppTheme::Dark;
-    let muted_color = if is_dark {
-        theme::DARK_TEXT_MUTED
-    } else {
-        theme::LIGHT_TEXT_MUTED
-    };
-
     let editor = text_editor(&state.input_content)
         .on_action(Message::ChatEditorAction)
         .font(icons::FONT_REGULAR)
@@ -119,26 +112,22 @@ pub fn view(
         .on_close(Message::ChatTogglePermPicker)
         .into();
 
+    // Circular progress ring bound to `context_pct`.
     let context_btn = button(
         container(
-            row![
-                icons::render_svg(&icons::HANDLE_IMAGE, theme::COLOR_ACCENT)
-                    .width(Length::Fixed(16.0))
-                    .height(Length::Fixed(16.0)),
-                text(format!("{}%", state.context_pct))
-                    .font(icons::FONT_REGULAR)
-                    .size(12)
-                    .color(muted_color),
-            ]
-            .spacing(4)
-            .align_y(alignment::Alignment::Center),
+            icons::render_circular_progress(state.context_pct as f32, theme::COLOR_ACCENT)
+                .width(Length::Fixed(22.0))
+                .height(Length::Fixed(22.0)),
         )
-        .padding(6),
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .align_x(alignment::Horizontal::Center)
+        .align_y(alignment::Vertical::Center),
     )
-    .padding(0)
-    .style(theme::neo_button(theme::NeoButton {
-        is_accent: false,
-        has_shadow: false,
+    .padding(7)
+    .width(Length::Fixed(36.0))
+    .height(Length::Fixed(36.0))
+    .style(theme::neo_icon_button(theme::NeoIconButton {
         theme: app_theme,
     }))
     .on_press(Message::ChatContextPressed);

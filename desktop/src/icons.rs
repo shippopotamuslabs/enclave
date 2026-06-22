@@ -135,3 +135,97 @@ pub fn render_svg(handle: &svg::Handle, color: iced::Color) -> svg::Svg<'_> {
 pub fn render_svg_untinted(handle: &svg::Handle) -> svg::Svg<'_> {
     svg(handle.clone())
 }
+
+/// Build a determinate circular-progress ring as an SVG handle. `pct` is clamped
+/// to `0.0..=100.0`; the track is a 360° ring and the progress arc sweeps
+/// clockwise from 12 o'clock, matching the Android `NeoCircularProgressIndicator`
+/// (determinate mode) for cross-platform parity. Built fresh per render so the
+/// input bar's `context_pct` always reflects the current chat state.
+///
+/// Geometry: 24×24 viewBox, center `(12, 12)`, radius `10`, stroke width `2`.
+/// Progress uses `stroke-dasharray` on a `<circle>` so the arc shares the exact
+/// center and radius as the track (the prior elliptical-arc path used incorrect
+/// endpoint math and `stroke-linecap="round"`, which drew a distorted inner arc).
+fn circular_progress_svg(pct: f32, color: iced::Color) -> String {
+    let clamped = pct.clamp(0.0, 100.0) / 100.0;
+    let cx = 12.0_f32;
+    let cy = 12.0_f32;
+    let r = 10.0_f32;
+    let stroke_width = 2.0_f32;
+    let circumference = 2.0 * std::f32::consts::PI * r;
+    let track = svg_color(color);
+    let stroke = svg_color(color);
+
+    let progress_ring = if clamped > 0.0 {
+        let dash = circumference * clamped;
+        let gap = circumference - dash;
+        format!(
+            r#"<circle cx="{cx}" cy="{cy}" r="{r}" fill="none" stroke="{stroke}" stroke-width="{stroke_width}" stroke-dasharray="{dash} {gap}" stroke-linecap="butt" transform="rotate(-90 {cx} {cy})"/>"#,
+        )
+    } else {
+        String::new()
+    };
+
+    format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
+  <circle cx="{cx}" cy="{cy}" r="{r}" fill="none" stroke="{track}" stroke-width="{stroke_width}" opacity="0.35"/>
+  {progress_ring}
+</svg>"#,
+    )
+}
+
+pub fn render_circular_progress<'a>(pct: f32, color: iced::Color) -> svg::Svg<'a> {
+    let svg = circular_progress_svg(pct, color);
+    svg::Svg::new(svg::Handle::from_memory(svg.into_bytes()))
+}
+
+/// Format an `iced::Color` as an SVG `rgb()` / `rgba()` string. Used by
+/// [`render_circular_progress`] to bake the ring color into the SVG source.
+fn svg_color(color: iced::Color) -> String {
+    let r = (color.r * 255.0).round() as u8;
+    let g = (color.g * 255.0).round() as u8;
+    let b = (color.b * 255.0).round() as u8;
+    if color.a >= 1.0 {
+        format!("rgb({r} {g} {b})")
+    } else {
+        format!("rgba({r} {g} {b} {:.3})", color.a)
+    }
+}
+
+#[cfg(test)]
+mod circular_progress_tests {
+    use super::circular_progress_svg;
+    use crate::theme;
+
+    #[test]
+    fn zero_percent_shows_track_only() {
+        let svg = circular_progress_svg(0.0, theme::COLOR_ACCENT);
+        assert!(!svg.contains("stroke-dasharray"));
+        assert!(svg.contains("opacity=\"0.35\""));
+    }
+
+    #[test]
+    fn partial_progress_uses_dasharray_on_track_radius() {
+        let svg = circular_progress_svg(50.0, theme::COLOR_ACCENT);
+        let circumference = 2.0 * std::f32::consts::PI * 10.0;
+        let expected_dash = circumference * 0.5;
+        assert!(svg.contains(&format!("stroke-dasharray=\"{expected_dash}")));
+        assert!(svg.contains("transform=\"rotate(-90 12 12)\""));
+        assert!(svg.contains("stroke-linecap=\"butt\""));
+        assert!(!svg.contains("stroke-linecap=\"round\""));
+    }
+
+    #[test]
+    fn full_progress_closes_the_ring() {
+        let svg = circular_progress_svg(100.0, theme::COLOR_ACCENT);
+        let circumference = 2.0 * std::f32::consts::PI * 10.0;
+        assert!(svg.contains(&format!("stroke-dasharray=\"{circumference} 0\"")));
+    }
+
+    #[test]
+    fn progress_clamps_out_of_range_input() {
+        let svg = circular_progress_svg(150.0, theme::COLOR_ACCENT);
+        let circumference = 2.0 * std::f32::consts::PI * 10.0;
+        assert!(svg.contains(&format!("stroke-dasharray=\"{circumference} 0\"")));
+    }
+}
