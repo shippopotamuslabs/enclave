@@ -433,6 +433,41 @@ pub fn neo_dropdown(neo: NeoDropdown) -> impl Fn(&iced::Theme) -> container::Sty
     }
 }
 
+/// Neobrutalist modal bottom-sheet surface. A surface fill with the standard
+/// 2px neo border, rounded top corners, and the heavy offset shadow so the
+/// sheet lifts above the dimmed scrim — the desktop analogue of the Android
+/// `NeoModalBottomSheet`. Width is constrained by the caller; the style only
+/// owns fill/border/shadow.
+#[derive(Clone, Copy)]
+pub struct NeoBottomSheet {
+    pub theme: AppTheme,
+}
+
+pub fn neo_bottom_sheet(neo: NeoBottomSheet) -> impl Fn(&iced::Theme) -> container::Style {
+    move |_theme| container::Style {
+        text_color: Some(neo_text(neo.theme)),
+        background: Some(Background::Color(neo_bg(neo.theme, true))),
+        border: Border {
+            color: neo_border(neo.theme),
+            width: 2.0,
+            radius: 4.0.into(),
+        },
+        shadow: Shadow {
+            color: neo_shadow_color(neo.theme),
+            offset: Vector::new(4.0, 4.0),
+            blur_radius: 0.0,
+        },
+        snap: false,
+    }
+}
+
+/// Full-viewport dim layer behind a modal bottom sheet. Semi-transparent black
+/// regardless of theme so the underlying chat reads through at a consistent
+/// weight on dark and light (mirrors the Android modal scrim).
+pub fn scrim_color() -> Color {
+    Color::from_rgba(0.0, 0.0, 0.0, 0.5)
+}
+
 /// Neobrutalist style for the multi-line `text_editor`. Transparent background
 /// (the enclosing `NeoInputBar` provides the solid fill) so the typing area and
 /// the bar read as one solid block. Border only on focus.
