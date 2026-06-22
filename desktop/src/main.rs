@@ -31,9 +31,17 @@ pub fn main() -> iced::Result {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Screen {
     Studio,
-    Chat { chat_id: String },
+    Chat {
+        chat_id: String,
+    },
     Settings,
-    Gallery { selected_album_id: Option<String> },
+    Gallery {
+        selected_album_id: Option<String>,
+    },
+    /// Cold-start vault unlock route. The user lands here on boot and must
+    /// enter their Enclave password (or mock Google sign-in) to reach the chat
+    /// screen. Mirrors the Android `UnlockVaultScreen`.
+    UnlockVault,
 }
 
 struct EnclaveApp {
@@ -47,6 +55,7 @@ struct EnclaveApp {
     chat_state: Option<screens::chat::ChatState>,
     settings_state: screens::settings::SettingsState,
     gallery_state: screens::gallery::GalleryState,
+    unlock_vault_state: screens::unlock_vault::UnlockVaultState,
 
     /// Mock streaming state: index of the assistant message being streamed.
     streaming_message_index: Option<usize>,
@@ -103,6 +112,16 @@ pub enum Message {
     CopyCodeBlock(String),
     WindowReady(window::Id),
     GallerySelectAlbum(Option<String>),
+    /// Vault-unlock: password input changed.
+    UnlockVaultPasswordChanged(String),
+    /// Vault-unlock: toggle the password visibility (eye / eye-off).
+    UnlockVaultTogglePasswordVisible,
+    /// Vault-unlock: primary "Unlock" action — routes the user into the chat
+    /// screen. A real port would derive the local key and decrypt here first.
+    UnlockVaultSubmit,
+    /// Vault-unlock: mock Google sign-in — routes the user into the chat screen
+    /// (mirrors the `HistorySignIn` mock in the history sidebar).
+    UnlockVaultLogin,
 }
 
 const MOCK_STREAM_RESPONSE: &str = r#"## Streaming Markdown Demo
@@ -124,9 +143,10 @@ See [Enclave](https://example.com) for more.
 fn boot() -> (EnclaveApp, Task<Message>) {
     (
         EnclaveApp {
-            current_screen: Screen::Chat {
-                chat_id: "chat_1".into(),
-            },
+            // Boot on the vault-unlock route so the user lands on the cold-start
+            // password screen (mirrors the Android `UnlockVaultScreen` entry).
+            // The "Unlock" / "Sign in" actions navigate to the chat screen.
+            current_screen: Screen::UnlockVault,
             back_stack: Vec::new(),
             app_theme: theme::AppTheme::Dark,
             window: window::Id::unique(),
@@ -135,6 +155,7 @@ fn boot() -> (EnclaveApp, Task<Message>) {
             chat_state: Some(screens::chat::ChatState::new("chat_1".into())),
             settings_state: screens::settings::SettingsState::new(),
             gallery_state: screens::gallery::GalleryState::new(),
+            unlock_vault_state: screens::unlock_vault::UnlockVaultState::new(),
             streaming_message_index: None,
             pending_stream_chunks: Vec::new(),
         },
@@ -149,6 +170,7 @@ fn title(state: &EnclaveApp) -> String {
         Screen::Chat { .. } => "Enclave - Chat".to_string(),
         Screen::Settings => "Enclave - Settings".to_string(),
         Screen::Gallery { .. } => "Enclave - Gallery".to_string(),
+        Screen::UnlockVault => "Enclave - Unlock Vault".to_string(),
     }
 }
 
@@ -550,6 +572,40 @@ fn update(state: &mut EnclaveApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+
+        Message::UnlockVaultPasswordChanged(val) => {
+            state.unlock_vault_state.password = val;
+            // Clear any prior error as soon as the user edits the field.
+            state.unlock_vault_state.error_message = None;
+            Task::none()
+        }
+
+        Message::UnlockVaultTogglePasswordVisible => {
+            state.unlock_vault_state.password_visible = !state.unlock_vault_state.password_visible;
+            Task::none()
+        }
+
+        Message::UnlockVaultSubmit => {
+            // Mock unlock: route the user into the chat screen. A real port
+            // would derive the local key, decrypt the vault, and surface an
+            // error here on failure. Re-dispatching `NavigateTo` via
+            // `Task::done` keeps the navigation path identical to every other
+            // screen transition (single `Message::NavigateTo` handler).
+            state.unlock_vault_state.is_unlocking = false;
+            state.unlock_vault_state.error_message = None;
+            Task::done(Message::NavigateTo(Screen::Chat {
+                chat_id: "chat_1".into(),
+            }))
+        }
+
+        Message::UnlockVaultLogin => {
+            // Mock Google sign-in — same routing as the primary unlock action.
+            // Mirrors the `HistorySignIn` mock in the history sidebar.
+            state.unlock_vault_state.error_message = None;
+            Task::done(Message::NavigateTo(Screen::Chat {
+                chat_id: "chat_1".into(),
+            }))
+        }
     }
 }
 
@@ -566,6 +622,9 @@ fn view(state: &EnclaveApp) -> Element<'_, Message, Theme, iced::Renderer> {
         }
         Screen::Settings => screens::settings::view(&state.settings_state, state.app_theme),
         Screen::Gallery { .. } => screens::gallery::view(&state.gallery_state, state.app_theme),
+        Screen::UnlockVault => {
+            screens::unlock_vault::view(&state.unlock_vault_state, state.app_theme)
+        }
     };
 
     column![titlebar, content]

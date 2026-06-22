@@ -4,3 +4,4 @@ pub mod history;
 pub(crate) mod layout;
 pub mod settings;
 pub mod studio;
+pub mod unlock_vault;

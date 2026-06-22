@@ -123,7 +123,7 @@ The presentation crate `enclave-desktop` implements the standard Model-View-Upda
 - **Linter & Formatter**:
   - Keep code strictly warning-free. Always format files with `cargo fmt`.
   - Suppress warnings selectively (e.g. `#![allow(async_fn_in_trait)]`) only if they are due to intentional architectural design choices.
-  - Run `./scripts/rustrover-inspect.sh` before completing desktop tasks to catch IDE-only inspections (duplicate code, elidable lifetimes, unused Cargo deps) that `cargo clippy` does not report. Close RustRover first — the headless inspector cannot run while the GUI is open.
+  - Run `./scripts/rustrover-inspect.sh` before completing desktop tasks to catch IDE-only inspections (duplicate code, elidable lifetimes, unused Cargo deps) that `cargo clippy` does not report. The script uses an isolated JetBrains config sandbox (`build/rustrover-inspect-env/`) by default, so it can run while the RustRover GUI is open.
 
 ---
 
@@ -219,7 +219,7 @@ Run every item for UI-generating desktop tasks. If any box fails, fix before com
 - [ ] **States:** empty, loading, and error paths rendered — not blank panes.
 - [ ] **Copy:** no placeholder lorem or broken AI filler in labels.
 - [ ] **Tests:** layout/state invariants covered by `cargo test` where logic changed (§8 Executable Validation).
-- [ ] **IDE lint:** `./scripts/rustrover-inspect.sh --scope rust-workspace --fail-on WARNING` passed (RustRover GUI closed).
+- [ ] **IDE lint:** `./scripts/rustrover-inspect.sh --scope rust-workspace --fail-on WARNING` passed.
 - [ ] **Out of scope rejected:** landing-page layouts and industrial/CRT brutalism were not imported.
 
 ---
@@ -233,7 +233,7 @@ Whenever a desktop task is performed, the agent must run the following checks:
 4. **Unit Tests**: `cargo test --workspace`
 5. **IDE Inspection Check**: `./scripts/rustrover-inspect.sh --scope rust-workspace --fail-on WARNING`
 
-   RustRover headless inspect surfaces IDE-only linting (duplicate code, elidable lifetimes, unused Cargo deps, unnecessary qualifications) that Clippy does not emit. **Close the RustRover GUI before running** — the CLI inspector fails if an IDE window is already open on this project.
+   RustRover headless inspect surfaces IDE-only linting (duplicate code, elidable lifetimes, unused Cargo deps, unnecessary qualifications) that Clippy does not emit. By default the script runs in an isolated JetBrains config sandbox (`build/rustrover-inspect-env/`) with separate `idea.config.path` / `idea.system.path` / `idea.caches.path`, so the RustRover GUI may stay open and your live IDE theme/options are not touched. Pass `--shared-config` only if you need the live JetBrains directories (close the GUI first; theme may reset). Pass `--reset-env` to wipe and recreate the sandbox.
 
    ```bash
    # Default: desktop + agent_core + classifier_core + docgen_core
