@@ -83,7 +83,7 @@ pub enum Message {
     ChatToggleModelPicker,
     ChatSelectPermission(screens::chat::PermissionMode),
     ChatSelectModel(String),
-    ChatContextPressed,
+    ChatToggleStatsSheet,
     ChatAnimTick,
     MarkdownLinkClicked(String),
     /// Copy the raw source of a fenced code block to the system clipboard.
@@ -392,6 +392,7 @@ fn update(state: &mut EnclaveApp, message: Message) -> Task<Message> {
                     chat.menu_open = false;
                     chat.perm_picker_open = false;
                     chat.model_picker_open = false;
+                    chat.stats_sheet_open = false;
 
                     chat.messages
                         .push(screens::chat::ChatMessage::user(user_text));
@@ -458,6 +459,7 @@ fn update(state: &mut EnclaveApp, message: Message) -> Task<Message> {
                 chat.menu_open = !chat.menu_open;
                 chat.perm_picker_open = false;
                 chat.model_picker_open = false;
+                chat.stats_sheet_open = false;
             }
             Task::none()
         }
@@ -467,6 +469,7 @@ fn update(state: &mut EnclaveApp, message: Message) -> Task<Message> {
                 chat.perm_picker_open = !chat.perm_picker_open;
                 chat.menu_open = false;
                 chat.model_picker_open = false;
+                chat.stats_sheet_open = false;
             }
             Task::none()
         }
@@ -476,6 +479,7 @@ fn update(state: &mut EnclaveApp, message: Message) -> Task<Message> {
                 chat.model_picker_open = !chat.model_picker_open;
                 chat.menu_open = false;
                 chat.perm_picker_open = false;
+                chat.stats_sheet_open = false;
             }
             Task::none()
         }
@@ -496,7 +500,15 @@ fn update(state: &mut EnclaveApp, message: Message) -> Task<Message> {
             Task::none()
         }
 
-        Message::ChatContextPressed => Task::none(),
+        Message::ChatToggleStatsSheet => {
+            if let Some(ref mut chat) = state.chat_state {
+                chat.stats_sheet_open = !chat.stats_sheet_open;
+                chat.menu_open = false;
+                chat.perm_picker_open = false;
+                chat.model_picker_open = false;
+            }
+            Task::none()
+        }
 
         Message::ChatAnimTick => {
             if let Some(ref mut chat) = state.chat_state {

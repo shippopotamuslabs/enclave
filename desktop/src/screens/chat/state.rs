@@ -1,5 +1,6 @@
 use iced::widget::text_editor;
 
+use crate::screens::chat::stats::ChatStats;
 use crate::widgets::StreamingMarkdownState;
 
 pub struct ChatState {
@@ -14,6 +15,12 @@ pub struct ChatState {
     pub menu_open: bool,
     pub perm_picker_open: bool,
     pub model_picker_open: bool,
+    /// Whether the chat-stats bottom sheet is open. Toggled by the input-bar
+    /// circular-progress control (the desktop analogue of the Android top-bar
+    /// "Chat stats" button).
+    pub stats_sheet_open: bool,
+    /// Seeded chat telemetry rendered by the stats bottom sheet.
+    pub stats: ChatStats,
     pub anim: InputBarAnim,
 }
 
@@ -185,6 +192,8 @@ impl ChatState {
             menu_open: false,
             perm_picker_open: false,
             model_picker_open: false,
+            stats_sheet_open: false,
+            stats: ChatStats::sample(),
             anim: if is_empty {
                 InputBarAnim::Centered
             } else {

@@ -1,8 +1,10 @@
 mod input_bar;
 mod message_list;
 pub mod state;
+pub mod stats;
 
 pub use state::{advance_anim, ChatMessage, ChatState, InputBarAnim, PermissionMode};
+pub use stats::wrap_stats_sheet;
 
 use iced::widget::{column, container, row, space, text};
 use iced::{alignment, Element, Length, Padding, Theme};
@@ -154,7 +156,7 @@ pub fn view<'a>(
         .width(Length::Fill)
         .height(Length::Fill);
 
-    container(
+    let chat_shell = container(
         column![split_layout, bottom_rule]
             .width(Length::Fill)
             .height(Length::Fill),
@@ -164,8 +166,14 @@ pub fn view<'a>(
     .style(theme::neo_pane_background(theme::NeoPaneBackground {
         is_surface: false,
         theme: app_theme,
-    }))
-    .into()
+    }));
+
+    wrap_stats_sheet(
+        chat_shell.into(),
+        &state.stats,
+        state.stats_sheet_open,
+        app_theme,
+    )
 }
 
 #[cfg(test)]

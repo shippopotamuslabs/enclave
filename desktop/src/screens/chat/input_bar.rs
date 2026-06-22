@@ -112,25 +112,27 @@ pub fn view(
         .on_close(Message::ChatTogglePermPicker)
         .into();
 
-    // Circular progress ring bound to `context_pct`.
+    // Circular progress ring bound to `context_pct`. Clicking it opens the
+    // chat-stats bottom sheet (the desktop analogue of the Android top-bar
+    // "Chat stats" button — same Summary / By provider / By model content).
     let context_btn = button(
         container(
             icons::render_circular_progress(state.context_pct as f32, theme::COLOR_ACCENT)
-                .width(Length::Fixed(22.0))
-                .height(Length::Fixed(22.0)),
+                .width(Length::Fixed(24.0))
+                .height(Length::Fixed(24.0)),
         )
         .width(Length::Fill)
         .height(Length::Fill)
         .align_x(alignment::Horizontal::Center)
         .align_y(alignment::Vertical::Center),
     )
-    .padding(7)
-    .width(Length::Fixed(36.0))
-    .height(Length::Fixed(36.0))
+    .padding(8)
+    .width(Length::Fixed(40.0))
+    .height(Length::Fixed(40.0))
     .style(theme::neo_icon_button(theme::NeoIconButton {
         theme: app_theme,
     }))
-    .on_press(Message::ChatContextPressed);
+    .on_press(Message::ChatToggleStatsSheet);
 
     let model_trigger = dropdown_trigger(
         &state.selected_model,
@@ -250,22 +252,20 @@ fn dropdown_trigger<'a>(
 ) -> button::Button<'a, Message, Theme, iced::Renderer> {
     let trigger_color = if active { iced::Color::BLACK } else { color };
     button(
-        container(
-            row![
-                text(label.to_string())
-                    .font(icons::FONT_REGULAR)
-                    .size(13)
-                    .color(trigger_color),
-                icons::render_svg(chevron, trigger_color)
-                    .width(Length::Fixed(14.0))
-                    .height(Length::Fixed(14.0)),
-            ]
-            .spacing(6)
-            .align_y(alignment::Alignment::Center),
-        )
-        .padding([6, 10]),
+        row![
+            text(label.to_string())
+                .font(icons::FONT_REGULAR)
+                .size(14)
+                .color(trigger_color),
+            icons::render_svg(chevron, trigger_color)
+                .width(Length::Fixed(16.0))
+                .height(Length::Fixed(16.0)),
+        ]
+        .spacing(8)
+        .align_y(alignment::Alignment::Center),
     )
-    .padding(0)
+    .padding([10, 12])
+    .height(Length::Fixed(40.0))
     .style(theme::neo_button(theme::NeoButton {
         is_accent: active,
         has_shadow: false,
