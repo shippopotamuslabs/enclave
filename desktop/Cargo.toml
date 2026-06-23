@@ -3,8 +3,24 @@ name = "enclave-desktop"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+default = ["gpu"]
+# NVIDIA GPU offload via llama.cpp CUDA backend (requires CUDA toolkit / nvcc).
+# On Debian/Ubuntu, install `nvidia-cuda-toolkit` (or set `CUDA_LIBRARY_PATH`).
+gpu = ["enclave-desktop-inference/cuda"]
+# Cross-vendor GPU offload via Vulkan (requires `spirv-headers` + `glslang-tools` apt packages).
+gpu-vulkan = ["enclave-desktop-inference/vulkan"]
+
 [dependencies]
 iced = { version = "0.14.0", features = ["tokio", "image", "svg", "advanced", "markdown", "highlighter"] }
 iced_selection = { version = "0.5.0", features = ["markdown"] }
 once_cell = "1.19"
+enclave-desktop-domain = { path = "domain" }
+enclave-desktop-data = { path = "data" }
+enclave-desktop-inference = { path = "inference", features = ["llama"] }
+tokio = { version = "1", features = ["sync", "rt-multi-thread"] }
+tokio-stream = "0.1"
+async-stream = "0.3"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 

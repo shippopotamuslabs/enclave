@@ -1,11 +1,11 @@
-use iced::widget::{button, column, container, row, scrollable, space, text, text_editor, Column};
-use iced::{alignment, Element, Length, Padding, Theme};
+use iced::widget::{Column, button, column, container, row, scrollable, space, text, text_editor};
+use iced::{Element, Length, Padding, Theme, alignment};
 
 use super::state::{ChatState, PermissionMode};
+use crate::Message;
 use crate::icons;
 use crate::screens::layout::{dropdown_menu_row, icon_button};
 use crate::theme::{self, AppTheme};
-use crate::Message;
 
 /// Build the shared input bar: a single solid `NeoInputBar` container holding
 /// the auto-expanding text area on top and the action row below.
@@ -147,32 +147,43 @@ pub fn view(
             if !state.model_picker_open {
                 return None;
             }
-            let models = ["On-Device (LiteRT)", "Claude (BYOK)", "GPT-4o (BYOK)"];
-            let items = models.iter().fold(
-                Column::<Message, Theme, iced::Renderer>::new()
-                    .spacing(2)
-                    .width(Length::Fill),
-                |col, model| {
-                    let is_selected = *model == state.selected_model;
-                    let label =
-                        text(*model)
-                            .font(icons::FONT_REGULAR)
-                            .size(13)
-                            .color(if is_selected {
-                                theme::COLOR_ACCENT
-                            } else {
-                                text_color
-                            });
+            let mut col = Column::<Message, Theme, iced::Renderer>::new()
+                .spacing(2)
+                .width(Length::Fill);
+            if state.available_models.is_empty() {
+                // Empty state: show a single disabled hint row instead of a
+                // blank pane (DESKTOP_RULES.md §7.3 "States: empty paths
+                // rendered").
+                col = col.push(
+                    text("No models installed")
+                        .font(icons::FONT_REGULAR)
+                        .size(13)
+                        .color(text_color),
+                );
+            } else {
+                for entry in &state.available_models {
+                    let is_selected = state.selected_model_id.as_deref() == Some(&entry.id);
+                    let label = text(entry.display_name.as_str())
+                        .font(icons::FONT_REGULAR)
+                        .size(13)
+                        .color(if is_selected {
+                            theme::COLOR_ACCENT
+                        } else {
+                            text_color
+                        });
                     let row_btn = dropdown_menu_row(
                         label,
                         app_theme,
-                        Message::ChatSelectModel((*model).to_string()),
+                        Message::ChatSelectModel {
+                            id: entry.id.clone(),
+                            display_name: entry.display_name.clone(),
+                        },
                     );
-                    col.push(row_btn)
-                },
-            );
+                    col = col.push(row_btn);
+                }
+            }
             Some(
-                container(items)
+                container(col)
                     .padding(6)
                     .width(Length::Fixed(200.0))
                     .style(theme::neo_dropdown(theme::NeoDropdown { theme: app_theme }))

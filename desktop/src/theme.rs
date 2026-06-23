@@ -1,5 +1,5 @@
 //noinspection SpellCheckingInspection
-use iced::widget::{button, container, scrollable, text_editor, text_input};
+use iced::widget::{button, container, progress_bar, scrollable, text_editor, text_input};
 use iced::{Background, Border, Color, Shadow, Vector};
 
 // App theme variant definition
@@ -685,6 +685,24 @@ pub fn neo_icon_button(
             shadow: Shadow::default(),
             text_color: color,
             snap: false,
+        }
+    }
+}
+
+/// Neobrutalist progress bar style — a bordered track with the peach accent fill.
+/// The track is the surface color with a 2px border; the bar is `COLOR_ACCENT`.
+pub fn neo_progress_bar(app_theme: AppTheme) -> impl Fn(&iced::Theme) -> progress_bar::Style {
+    move |_theme| {
+        let track_bg = neo_bg(app_theme, true);
+        let border_color = neo_border(app_theme);
+        progress_bar::Style {
+            background: Background::Color(track_bg),
+            bar: Background::Color(COLOR_ACCENT),
+            border: Border {
+                color: border_color,
+                width: 2.0,
+                radius: 4.0.into(),
+            },
         }
     }
 }

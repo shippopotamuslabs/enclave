@@ -1,2 +1,9 @@
+# Debian/Ubuntu/Mint `nvidia-cuda-toolkit` installs CUDA static libs under
+# `/usr/lib/x86_64-linux-gnu`, not `/usr/local/cuda/lib64` where `find_cuda_helper`
+# (used by `llama-cpp-sys-2`) looks. The extra `-L` is required when linking
+# `llama-cpp-sys-2` with the `cuda` feature on distro-packaged CUDA.
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-D", "warnings", "-L", "/usr/lib/x86_64-linux-gnu"]
+
 [build]
 rustflags = ["-D", "warnings"]

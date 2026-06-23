@@ -1,4 +1,5 @@
 pub mod chat;
+pub mod download;
 pub mod gallery;
 pub mod history;
 pub(crate) mod layout;

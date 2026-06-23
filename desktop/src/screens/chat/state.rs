@@ -12,6 +12,13 @@ pub struct ChatState {
     pub messages: Vec<ChatMessage>,
     pub permission_mode: PermissionMode,
     pub selected_model: String,
+    /// The registry id of the model the picker has selected. `None` until the
+    /// available-models list is loaded (see `ChatModelsLoaded`); drives the
+    /// inference `model_id` parameter at send time.
+    pub selected_model_id: Option<String>,
+    /// Installed models available to pick from, populated from
+    /// `LocalModelRepository::list_all`. Empty until loaded.
+    pub available_models: Vec<enclave_desktop_domain::repositories::InstalledModelEntry>,
     pub context_pct: u8,
     pub menu_open: bool,
     pub perm_picker_open: bool,
@@ -22,7 +29,94 @@ pub struct ChatState {
     pub stats_sheet_open: bool,
     /// Seeded chat telemetry rendered by the stats bottom sheet.
     pub stats: ChatStats,
+    /// Live turn indicator + thinking trace for the in-flight assistant reply.
+    pub turn_thinking: TurnThinkingState,
     pub anim: InputBarAnim,
+}
+
+/// Indicator phases for the active assistant turn — mirrors Android
+/// `IndicatorState` (Thinking / Processing / Complete-with-thought-header).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TurnIndicator {
+    None,
+    Thinking,
+    Processing,
+    Complete { thinking_duration_secs: u32 },
+}
+
+/// Thinking trace + panel state for the streaming assistant turn.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TurnThinkingState {
+    pub indicator: TurnIndicator,
+    pub thinking_raw: String,
+    pub thinking_panel_open: bool,
+    pub thinking_elapsed_secs: u32,
+    pub is_thinking_streaming: bool,
+    pub turn_active: bool,
+}
+
+impl Default for TurnThinkingState {
+    fn default() -> Self {
+        Self {
+            indicator: TurnIndicator::None,
+            thinking_raw: String::new(),
+            thinking_panel_open: false,
+            thinking_elapsed_secs: 0,
+            is_thinking_streaming: false,
+            turn_active: false,
+        }
+    }
+}
+
+impl TurnThinkingState {
+    pub fn reset_for_new_turn(&mut self) {
+        *self = Self {
+            turn_active: true,
+            indicator: TurnIndicator::Processing,
+            ..Self::default()
+        };
+    }
+
+    pub fn on_thinking_chunk(&mut self, chunk: &str) {
+        self.turn_active = true;
+        self.indicator = TurnIndicator::Thinking;
+        self.is_thinking_streaming = true;
+        self.thinking_raw.push_str(chunk);
+    }
+
+    pub fn on_visible_chunk(&mut self, assistant_visible_len: usize) {
+        self.turn_active = true;
+        self.is_thinking_streaming = false;
+        if assistant_visible_len > 0 {
+            self.indicator = TurnIndicator::None;
+        } else {
+            self.indicator = TurnIndicator::Processing;
+        }
+    }
+
+    pub fn finalize_turn(&mut self) {
+        if self.thinking_raw.is_empty() {
+            self.indicator = TurnIndicator::None;
+        } else {
+            self.indicator = TurnIndicator::Complete {
+                thinking_duration_secs: self.thinking_elapsed_secs,
+            };
+        }
+        self.is_thinking_streaming = false;
+        self.turn_active = false;
+    }
+
+    pub fn has_thinking_trace(&self) -> bool {
+        !self.thinking_raw.is_empty()
+    }
+
+    pub fn format_duration(secs: u32) -> String {
+        if secs < 60 {
+            format!("{secs}s")
+        } else {
+            format!("{}m {}s", secs / 60, secs % 60)
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -155,6 +249,61 @@ pub fn advance_anim(anim: InputBarAnim, delta: f32) -> InputBarAnim {
 const CHAT_1_ASSISTANT_DEMO: &str = include_str!("../../../seed/chat_1_assistant_demo.md");
 
 impl ChatState {
+    pub fn empty(chat_id: String) -> Self {
+        Self {
+            active_chat_id: chat_id,
+            active_chat_name: "New Chat".into(),
+            input_content: text_editor::Content::default(),
+            messages: Vec::new(),
+            permission_mode: PermissionMode::AskEveryTime,
+            selected_model: "On-Device (Gemma 4 E4B)".to_string(),
+            selected_model_id: None,
+            available_models: Vec::new(),
+            context_pct: 12,
+            menu_open: false,
+            perm_picker_open: false,
+            model_picker_open: false,
+            stats_sheet_open: false,
+            stats: ChatStats::sample(),
+            turn_thinking: TurnThinkingState::default(),
+            anim: InputBarAnim::Centered,
+        }
+    }
+
+    pub fn from_repository(
+        chat_id: String,
+        title: String,
+        messages: Vec<enclave_desktop_domain::models::ChatMessage>,
+    ) -> Self {
+        let presentation_messages: Vec<ChatMessage> = messages
+            .iter()
+            .map(domain_message_to_presentation)
+            .collect();
+        let is_empty = presentation_messages.is_empty();
+        Self {
+            active_chat_id: chat_id,
+            active_chat_name: title,
+            input_content: text_editor::Content::default(),
+            messages: presentation_messages,
+            permission_mode: PermissionMode::AskEveryTime,
+            selected_model: "On-Device (Gemma 4 E4B)".to_string(),
+            selected_model_id: None,
+            available_models: Vec::new(),
+            context_pct: 12,
+            menu_open: false,
+            perm_picker_open: false,
+            model_picker_open: false,
+            stats_sheet_open: false,
+            stats: ChatStats::sample(),
+            turn_thinking: TurnThinkingState::default(),
+            anim: if is_empty {
+                InputBarAnim::Centered
+            } else {
+                InputBarAnim::Locked
+            },
+        }
+    }
+
     pub fn new(chat_id: String) -> Self {
         let (name, messages) = match chat_id.as_str() {
             "chat_1" => (
@@ -169,9 +318,7 @@ impl ChatState {
             "chat_2" => (
                 "Android Compose compiler options".into(),
                 vec![
-                    ChatMessage::user(
-                        "How do I optimize Jetpack Compose compile times?".into(),
-                    ),
+                    ChatMessage::user("How do I optimize Jetpack Compose compile times?".into()),
                     ChatMessage::assistant(
                         "To optimize Compose compile times, ensure you are utilizing Hilt or Dagger efficiently to prevent KSP bottlenecking. You can also enable Compose compiler metrics in your gradle configuration to inspect unstable parameters causing excessive recompositions.",
                     ),
@@ -188,19 +335,47 @@ impl ChatState {
             input_content: text_editor::Content::default(),
             messages,
             permission_mode: PermissionMode::AskEveryTime,
-            selected_model: "On-Device (LiteRT)".to_string(),
+            selected_model: "On-Device (Gemma 4 E4B)".to_string(),
+            selected_model_id: None,
+            available_models: Vec::new(),
             context_pct: 12,
             menu_open: false,
             perm_picker_open: false,
             model_picker_open: false,
             stats_sheet_open: false,
             stats: ChatStats::sample(),
+            turn_thinking: TurnThinkingState::default(),
             anim: if is_empty {
                 InputBarAnim::Centered
             } else {
                 InputBarAnim::Locked
             },
         }
+    }
+}
+
+pub fn domain_message_to_presentation(
+    msg: &enclave_desktop_domain::models::ChatMessage,
+) -> ChatMessage {
+    match msg.sender {
+        enclave_desktop_domain::models::MessageSender::User => ChatMessage::user(msg.text.clone()),
+        enclave_desktop_domain::models::MessageSender::Assistant => {
+            ChatMessage::assistant(msg.text.clone())
+        }
+    }
+}
+
+pub fn presentation_message_to_domain(
+    msg: &ChatMessage,
+    timestamp: u64,
+) -> enclave_desktop_domain::models::ChatMessage {
+    enclave_desktop_domain::models::ChatMessage {
+        sender: match msg.sender {
+            MessageSender::User => enclave_desktop_domain::models::MessageSender::User,
+            MessageSender::Assistant => enclave_desktop_domain::models::MessageSender::Assistant,
+        },
+        text: msg.text.clone(),
+        timestamp,
     }
 }
 
@@ -261,5 +436,81 @@ mod tests {
             advance_anim(InputBarAnim::Locked, 0.08),
             InputBarAnim::Locked
         );
+    }
+
+    #[test]
+    fn empty_chat_state_starts_with_no_selected_model() {
+        let state = ChatState::empty("chat_1".into());
+        assert!(state.selected_model_id.is_none());
+        assert!(state.available_models.is_empty());
+    }
+
+    #[test]
+    fn chat_state_holds_selected_model_id_and_available_models() {
+        use enclave_desktop_domain::download::{ModelFormat, ModelSlot};
+        use enclave_desktop_domain::repositories::InstalledModelEntry;
+
+        let mut state = ChatState::empty("chat_1".into());
+        state.available_models = vec![
+            InstalledModelEntry {
+                id: "gemma-e4b".into(),
+                slot: Some(ModelSlot::Main),
+                sha256: "abc".into(),
+                local_path: "/models/gemma.gguf".into(),
+                display_name: "Gemma 4 E4B".into(),
+                format: ModelFormat::GGUF,
+            },
+            InstalledModelEntry {
+                id: "gemma-12b".into(),
+                slot: None,
+                sha256: "def".into(),
+                local_path: "/models/gemma-12b.gguf".into(),
+                display_name: "Gemma 4 12B".into(),
+                format: ModelFormat::GGUF,
+            },
+        ];
+        // Simulate a `ChatSelectModel { id, display_name }` update.
+        state.selected_model_id = Some("gemma-12b".into());
+        state.selected_model = "Gemma 4 12B".into();
+
+        assert_eq!(state.selected_model_id.as_deref(), Some("gemma-12b"));
+        assert_eq!(state.selected_model, "Gemma 4 12B");
+        assert_eq!(state.available_models.len(), 2);
+    }
+
+    #[test]
+    fn domain_presentation_message_roundtrip_preserves_text() {
+        let original = ChatMessage::user("Hello vault".into());
+        let domain = presentation_message_to_domain(&original, 42);
+        let back = domain_message_to_presentation(&domain);
+        assert_eq!(back.text, "Hello vault");
+        assert_eq!(back.sender, MessageSender::User);
+    }
+
+    #[test]
+    fn turn_thinking_tracks_streaming_phases() {
+        let mut turn = TurnThinkingState::default();
+        turn.reset_for_new_turn();
+        assert!(matches!(turn.indicator, TurnIndicator::Processing));
+
+        turn.on_thinking_chunk("plan");
+        assert!(matches!(turn.indicator, TurnIndicator::Thinking));
+        assert!(turn.is_thinking_streaming);
+
+        turn.on_visible_chunk(0);
+        assert!(matches!(turn.indicator, TurnIndicator::Processing));
+        assert!(!turn.is_thinking_streaming);
+
+        turn.on_visible_chunk(12);
+        assert!(matches!(turn.indicator, TurnIndicator::None));
+
+        turn.finalize_turn();
+        assert!(matches!(turn.indicator, TurnIndicator::Complete { .. }));
+    }
+
+    #[test]
+    fn turn_thinking_duration_formatting() {
+        assert_eq!(TurnThinkingState::format_duration(45), "45s");
+        assert_eq!(TurnThinkingState::format_duration(125), "2m 5s");
     }
 }

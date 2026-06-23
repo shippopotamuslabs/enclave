@@ -21,13 +21,13 @@
 //! selectable viewer.
 
 use iced::widget::markdown::Viewer;
-use iced::widget::{button, column, container, markdown, row, space, text, Column};
+use iced::widget::{Column, button, column, container, markdown, row, space, text};
 use iced::{Alignment, Background, Element, Length, Theme};
 use iced_selection::markdown as selectable_markdown;
 
+use crate::Message;
 use crate::icons;
 use crate::theme::{self, AppTheme};
-use crate::Message;
 
 /// Parsed markdown plus streaming lifecycle for one assistant message.
 #[derive(Debug)]
@@ -247,9 +247,11 @@ fn code_block_with_header<'a>(
     let body = selectable_markdown::code_block(settings, lines, on_link_click);
 
     // Header: language label (left) + copy control (right), muted surface strip.
-    let mut header_row = row![text(display_language(language))
-        .font(icons::FONT_MONO)
-        .size(settings.code_size)]
+    let mut header_row = row![
+        text(display_language(language))
+            .font(icons::FONT_MONO)
+            .size(settings.code_size)
+    ]
     .align_y(Alignment::Center)
     .spacing(settings.spacing.0)
     .width(Length::Fill);

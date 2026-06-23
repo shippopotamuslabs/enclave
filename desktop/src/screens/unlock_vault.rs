@@ -1,22 +1,27 @@
 //! Vault-unlock screen — desktop port of the Android `UnlockVaultScreen` /
 //! `VaultUnlockContent` body. Renders the cold-start password unlock surface:
 //! account avatar, heading, Google sign-in affordance (mock), password input
-//! with show/hide toggle, and the primary "Unlock" action that routes the user
-//! into the chat screen. The biometric opt-in from the Android body is omitted
-//! — desktop platforms do not surface biometric unlock.
+//! with show/hide toggle, and the primary "Unlock" action. After a successful
+//! unlock, the app opens chat directly when models are already on disk; otherwise
+//! it routes to the download screen. The biometric opt-in from the Android body
+//! is omitted — desktop platforms do not surface biometric unlock.
 //!
-//! No auth backend is wired into the desktop shell yet, so the Google sign-in
-//! control is a mock affordance — it flips local state and navigates,
-//! mirroring the `HistorySignIn` mock in the history sidebar. The screen
-//! follows MVU: state lives in [`UnlockVaultState`], side effects are
-//! dispatched from `main.rs::update` via `Message`, and [`view`] is a pure
+//! The screen supports two modes selected by `VaultKind`:
+//! - `VaultKind::Create` (first run): shows a confirm-password field and a
+//!   "Create Vault" button; calls `VaultRepository::create`.
+//! - `VaultKind::Open` (returning user): single password field, "Unlock"
+//!   button; calls `VaultRepository::unlock`.
+//!
+//! The screen follows MVU: state lives in [`UnlockVaultState`], side effects
+//! are dispatched from `main.rs::update` via `Message`, and [`view`] is a pure
 //! layout mapping.
 
+use crate::Message;
 use crate::icons;
 use crate::theme::{self, AppTheme};
-use crate::Message;
+use enclave_desktop_domain::vault::VaultKind;
 use iced::widget::{button, column, container, row, space, text, text_input};
-use iced::{alignment, Color, Element, Length, Theme};
+use iced::{Color, Element, Length, Theme, alignment};
 
 /// State for the vault-unlock screen. Owned by `EnclaveApp` when
 /// `Screen::UnlockVault` is active.
@@ -24,29 +29,44 @@ use iced::{alignment, Color, Element, Length, Theme};
 pub struct UnlockVaultState {
     /// Current password input value.
     pub password: String,
+    /// Confirm-password input value (first-run Create mode only).
+    pub confirm_password: String,
     /// Whether the password is shown in cleartext (eye toggle).
     pub password_visible: bool,
-    /// Mock unlocking spinner latch — set true on submit; the real port would
-    /// drive this from the domain `AuthManager` result.
+    /// Unlocking/creating spinner latch — set true on submit while the async
+    /// vault operation runs; cleared on completion or error.
     pub is_unlocking: bool,
     /// Inline error string rendered under the password input.
     pub error_message: Option<String>,
+    /// Whether this is a first-run Create flow vs. a returning-user Open flow.
+    /// Set by `boot` after probing `VaultRepository::status`.
+    pub kind: VaultKind,
 }
 
 impl UnlockVaultState {
     pub fn new() -> Self {
         Self {
             password: String::new(),
+            confirm_password: String::new(),
             password_visible: false,
             is_unlocking: false,
             error_message: None,
+            kind: VaultKind::Open,
         }
     }
 
     /// True when the password field has non-whitespace content — gates the
-    /// primary "Unlock" button (matching the Android `enabled = password.isNotBlank()`).
+    /// primary button (matching the Android `enabled = password.isNotBlank()`).
+    /// In Create mode also requires the confirm field to match.
     pub fn can_submit(&self) -> bool {
-        !self.password.trim().is_empty()
+        if self.password.trim().is_empty() {
+            return false;
+        }
+        if self.kind == VaultKind::Create {
+            !self.confirm_password.trim().is_empty() && self.password == self.confirm_password
+        } else {
+            true
+        }
     }
 }
 
@@ -91,19 +111,31 @@ pub fn view(
     }));
 
     // --- Heading + subtitle ---
-    let heading = text("Unlock Enclave")
+    let (heading_text, subtitle_text, primary_label) = match state.kind {
+        VaultKind::Create => (
+            "Create Enclave Vault",
+            "Choose a password to encrypt your local data. \
+             Store it safely — it cannot be recovered if lost.",
+            "Create Vault",
+        ),
+        VaultKind::Open => (
+            "Unlock Enclave",
+            "Enter your Enclave password to decrypt local data. \
+             Google sign-in is optional and only enables encrypted sync.",
+            "Unlock",
+        ),
+    };
+
+    let heading = text(heading_text)
         .font(icons::FONT_BOLD)
         .size(28)
         .color(text_color);
 
-    let subtitle = text(
-        "Enter your Enclave password to decrypt local data. \
-         Google sign-in is optional and only enables encrypted sync.",
-    )
-    .font(icons::FONT_REGULAR)
-    .size(14)
-    .color(muted_color)
-    .align_x(alignment::Horizontal::Center);
+    let subtitle = text(subtitle_text)
+        .font(icons::FONT_REGULAR)
+        .size(14)
+        .color(muted_color)
+        .align_x(alignment::Horizontal::Center);
 
     // --- Google "Sign in with Google" button ---
     // Branding-compliant per https://developers.google.com/identity/branding-guidelines:
@@ -172,7 +204,11 @@ pub fn view(
     }));
 
     // --- Password input + show/hide toggle ---
-    let password_input = text_input("Enclave Password", &state.password)
+    let password_placeholder = match state.kind {
+        VaultKind::Create => "New Enclave Password",
+        VaultKind::Open => "Enclave Password",
+    };
+    let password_input = text_input(password_placeholder, &state.password)
         .on_input(Message::UnlockVaultPasswordChanged)
         .on_submit_maybe(if state.can_submit() {
             Some(Message::UnlockVaultSubmit)
@@ -213,6 +249,48 @@ pub fn view(
         .align_y(alignment::Alignment::Center)
         .width(Length::Fill);
 
+    // --- Confirm-password input (Create mode only) ---
+    let confirm_row: Option<iced::widget::Row<'_, Message, Theme, iced::Renderer>> =
+        if state.kind == VaultKind::Create {
+            let confirm_input = text_input("Confirm Password", &state.confirm_password)
+                .on_input(Message::UnlockVaultConfirmPasswordChanged)
+                .on_submit_maybe(if state.can_submit() {
+                    Some(Message::UnlockVaultSubmit)
+                } else {
+                    None
+                })
+                .secure(!state.password_visible)
+                .padding(12)
+                .size(14)
+                .style(theme::neo_input(theme::NeoInput { theme: app_theme }));
+            Some(
+                row![confirm_input]
+                    .spacing(8)
+                    .align_y(alignment::Alignment::Center)
+                    .width(Length::Fill),
+            )
+        } else {
+            None
+        };
+
+    // Mismatch hint for Create mode.
+    let mismatch_error: Option<Element<'_, Message, Theme, iced::Renderer>> = if state.kind
+        == VaultKind::Create
+        && !state.confirm_password.is_empty()
+        && state.password != state.confirm_password
+    {
+        Some(
+            text("Passwords do not match")
+                .font(icons::FONT_REGULAR)
+                .size(12)
+                .color(Color::from_rgb(0.85, 0.27, 0.27))
+                .align_x(alignment::Horizontal::Center)
+                .into(),
+        )
+    } else {
+        None
+    };
+
     // Inline error text under the input (mirrors the Android `supportingText`).
     let error_text: Option<Element<'_, Message, Theme, iced::Renderer>> =
         state.error_message.as_ref().map(|msg| {
@@ -232,7 +310,7 @@ pub fn view(
             icons::render_svg(&icons::HANDLE_LOCK, Color::BLACK)
                 .width(Length::Fixed(16.0))
                 .height(Length::Fixed(16.0)),
-            text("Unlock")
+            text(primary_label)
                 .font(icons::FONT_BOLD)
                 .size(14)
                 .color(Color::BLACK)
@@ -270,9 +348,22 @@ pub fn view(
     .align_x(alignment::Horizontal::Center)
     .width(Length::Fixed(420.0));
 
-    if let Some(err) = error_text {
-        body = body.push(space::vertical().height(Length::Fixed(8.0)));
-        body = body.push(err);
+    // Confirm-password row (Create mode only).
+    if let Some(confirm) = confirm_row {
+        body = body
+            .push(space::vertical().height(Length::Fixed(12.0)))
+            .push(confirm);
+    }
+
+    // Mismatch hint (Create mode only, takes priority over the generic error).
+    if let Some(mismatch) = mismatch_error {
+        body = body
+            .push(space::vertical().height(Length::Fixed(8.0)))
+            .push(mismatch);
+    } else if let Some(err) = error_text {
+        body = body
+            .push(space::vertical().height(Length::Fixed(8.0)))
+            .push(err);
     }
 
     body = body
@@ -316,6 +407,7 @@ mod tests {
     fn new_state_starts_empty_and_hidden() {
         let state = UnlockVaultState::new();
         assert!(state.password.is_empty());
+        assert!(state.confirm_password.is_empty());
         assert!(!state.password_visible);
         assert!(!state.is_unlocking);
         assert!(state.error_message.is_none());
@@ -330,9 +422,24 @@ mod tests {
     }
 
     #[test]
-    fn can_submit_is_true_for_non_empty_password() {
+    fn can_submit_is_true_for_non_empty_password_in_open_mode() {
         let mut state = UnlockVaultState::new();
+        state.kind = VaultKind::Open;
         state.password = "hunter2".into();
+        assert!(state.can_submit());
+    }
+
+    #[test]
+    fn can_submit_requires_matching_confirm_in_create_mode() {
+        let mut state = UnlockVaultState::new();
+        state.kind = VaultKind::Create;
+        state.password = "hunter2".into();
+        state.confirm_password = "hunter3".into();
+        assert!(
+            !state.can_submit(),
+            "mismatched confirm should block submit"
+        );
+        state.confirm_password = "hunter2".into();
         assert!(state.can_submit());
     }
 
@@ -346,12 +453,19 @@ mod tests {
     }
 
     #[test]
-    fn view_builds_for_dark_and_light_themes() {
-        // Structural smoke: the view must build under both themes without
-        // panicking. Mirrors the chat screen's tree-shape smoke test.
+    fn view_builds_for_dark_and_light_themes_open_mode() {
         let state = UnlockVaultState::new();
         let _dark = view(&state, AppTheme::Dark);
         let _light = view(&state, AppTheme::Light);
+    }
+
+    #[test]
+    fn view_builds_in_create_mode() {
+        let mut state = UnlockVaultState::new();
+        state.kind = VaultKind::Create;
+        state.password = "pw".into();
+        state.confirm_password = "pw".into();
+        let _ = view(&state, AppTheme::Dark);
     }
 
     #[test]

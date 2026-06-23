@@ -28,4 +28,12 @@ pub struct DesktopSettings {
     pub local_model_path: Option<String>,
     pub api_key: Option<String>,
     pub api_endpoint: Option<String>,
+    /// The registry id of the model selected in the chat picker, persisted
+    /// across restarts. `None` falls back to the Main-slot default.
+    ///
+    /// Stored in the `settings` KV row (no schema migration); a future
+    /// full-Android-parity migration can move this to a dedicated
+    /// `default_models` table without changing this field's meaning.
+    #[serde(default)]
+    pub selected_model_id: Option<String>,
 }

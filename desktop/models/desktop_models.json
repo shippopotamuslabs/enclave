@@ -1,0 +1,120 @@
+{
+  "chatModels": [
+    {
+      "id": "gemma-4-e4b-it-q4",
+      "displayName": "Gemma 4 E4B Instruct",
+      "source": "HF",
+      "repo": "unsloth/gemma-4-E4B-it-GGUF",
+      "file": "gemma-4-E4B-it-Q4_K_M.gguf",
+      "mmprojFile": "mmproj-F16.gguf",
+      "mmprojSha256": "ddf46c21d7078e95338cfc22306b19b276a29a5ad089023449dd54d4b6170a51",
+      "mmprojSizeInBytes": 990372672,
+      "format": "GGUF",
+      "sha256": null,
+      "sizeInBytes": 4980000000,
+      "contextWindow": 32768,
+      "isMultimodal": true,
+      "defaultSlots": ["main", "fast", "thinking", "final_synthesis"],
+      "configurations": [
+        {
+          "configId": "balanced",
+          "displayName": "Balanced",
+          "systemPrompt": "You are Enclave, a helpful, privacy-first AI assistant.",
+          "temperature": 0.7,
+          "topP": 0.95,
+          "topK": 40,
+          "minP": 0.05,
+          "repetitionPenalty": 1.1,
+          "contextWindow": 32768,
+          "maxTokens": 4096,
+          "thinkingEnabled": true
+        }
+      ]
+    },
+    {
+      "id": "qwen3-4b-q4",
+      "displayName": "Qwen 3 4B",
+      "source": "HF",
+      "repo": "Qwen/Qwen3-4B-GGUF",
+      "file": "Qwen3-4B-Q4_K_M.gguf",
+      "mmprojFile": null,
+      "format": "GGUF",
+      "sha256": null,
+      "sizeInBytes": 2500000000,
+      "contextWindow": 32768,
+      "isMultimodal": false,
+      "defaultSlots": ["draft_one"],
+      "configurations": [
+        {
+          "configId": "balanced",
+          "displayName": "Balanced",
+          "systemPrompt": "You are a fast draft model in an AI council. Provide concise, direct responses.",
+          "temperature": 0.6,
+          "topP": 0.9,
+          "topK": 40,
+          "minP": 0.05,
+          "repetitionPenalty": 1.1,
+          "contextWindow": 32768,
+          "maxTokens": 2048,
+          "thinkingEnabled": false
+        }
+      ]
+    },
+    {
+      "id": "gemma-4-12b-it-q4",
+      "displayName": "Gemma 4 12B Instruct (optional — needs ≥12GB VRAM)",
+      "source": "HF",
+      "repo": "unsloth/gemma-4-12b-it-GGUF",
+      "file": "gemma-4-12b-it-Q4_K_M.gguf",
+      "mmprojFile": "mmproj-F16.gguf",
+      "mmprojSha256": "91f086971e56d7a7d8d39e271873fccdb49541bd259d6e02c401a4f1cb7a219e",
+      "mmprojSizeInBytes": 175115840,
+      "format": "GGUF",
+      "sha256": null,
+      "sizeInBytes": 7120000000,
+      "contextWindow": 32768,
+      "isMultimodal": true,
+      "defaultSlots": [],
+      "configurations": [
+        {
+          "configId": "balanced",
+          "displayName": "Balanced",
+          "systemPrompt": "You are Enclave, a helpful, privacy-first AI assistant.",
+          "temperature": 0.7,
+          "topP": 0.95,
+          "topK": 40,
+          "minP": 0.05,
+          "repetitionPenalty": 1.1,
+          "contextWindow": 8192,
+          "maxTokens": 4096,
+          "thinkingEnabled": true
+        }
+      ]
+    }
+  ],
+  "utilityModels": [
+    {
+      "id": "whisper-base-en",
+      "displayName": "Whisper Base (English)",
+      "source": "HF",
+      "repo": "ggerganov/whisper.cpp",
+      "file": "ggml-base.en.bin",
+      "format": "GGML",
+      "sha256": null,
+      "sizeInBytes": 147964211,
+      "utilityType": "whisper"
+    },
+    {
+      "id": "minilm-embeddings",
+      "displayName": "MiniLM Embeddings",
+      "source": "HF",
+      "repo": "sentence-transformers/all-MiniLM-L6-v2",
+      "huggingFacePath": "onnx",
+      "file": "model.onnx",
+      "format": "ONNX",
+      "sha256": null,
+      "sizeInBytes": 90405214,
+      "utilityType": "embeddings"
+    }
+  ]
+}

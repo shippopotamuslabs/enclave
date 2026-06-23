@@ -6,7 +6,7 @@
 
 use iced::advanced::widget::tree::{State, Tag, Tree};
 use iced::advanced::{
-    layout, mouse, overlay, renderer, widget, Clipboard, Layout, Renderer, Shell,
+    Clipboard, Layout, Renderer, Shell, layout, mouse, overlay, renderer, widget,
 };
 use iced::event::Event;
 use iced::mouse::Button;

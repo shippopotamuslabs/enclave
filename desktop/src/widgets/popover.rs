@@ -13,7 +13,7 @@
 //! menu (the caller emits `on_close` from the relevant item handlers).
 
 use iced::advanced::widget::tree::Tree;
-use iced::advanced::{layout, mouse, overlay, renderer, Clipboard, Layout, Shell};
+use iced::advanced::{Clipboard, Layout, Shell, layout, mouse, overlay, renderer};
 
 use super::overlay_anchor;
 use iced::event::Event;
