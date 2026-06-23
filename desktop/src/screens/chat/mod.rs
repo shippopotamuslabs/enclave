@@ -1,20 +1,23 @@
+ 
 //noinspection SpellCheckingInspection
 mod input_bar;
 mod message_list;
 pub mod state;
 pub mod stats;
+mod thinking_indicator;
+mod thinking_panel;
 
-pub use state::{advance_anim, ChatMessage, ChatState, InputBarAnim, PermissionMode};
+pub use state::{ChatMessage, ChatState, InputBarAnim, PermissionMode, advance_anim};
 pub use stats::wrap_stats_sheet;
 
 use iced::widget::{column, container, row, space, text};
-use iced::{alignment, Element, Length, Padding, Theme};
+use iced::{Element, Length, Padding, Theme, alignment};
 
+use crate::Message;
 use crate::icons;
 use crate::screens::history::HistoryState;
 use crate::theme::{self, AppTheme};
 use crate::widgets::PaneSplitter;
-use crate::Message;
 
 // Empty-state hero sizing for the Enclave "E" source mark. The mark sits
 // directly above the centered input bar (with a welcome line between them) as a
@@ -45,8 +48,22 @@ pub fn view<'a>(
     // also removes the border it drew along its bottom edge, which was doubling
     // up with the title bar and history borders at every seam.
 
-    // Message Thread
+    // Message Thread (+ optional thinking trace panel on the right)
     let scroll_messages = message_list::view(state, app_theme);
+    let message_region: Element<Message, Theme, iced::Renderer> =
+        if state.turn_thinking.thinking_panel_open {
+            row![
+                container(scroll_messages)
+                    .width(Length::Fill)
+                    .height(Length::Fill),
+                thinking_panel::view(&state.turn_thinking, app_theme),
+            ]
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into()
+        } else {
+            scroll_messages
+        };
 
     // --- Input bar ---
     let input_bar = input_bar::view(state, app_theme, text_color);
@@ -110,7 +127,7 @@ pub fn view<'a>(
         // Active chat: message list fills the pane, bar pinned to the bottom.
         // Bottom padding lifts the whole input bar clear of the window edge so
         // its bottom border is fully visible.
-        column![scroll_messages, input_bar]
+        column![message_region, input_bar]
             .width(Length::Fill)
             .height(Length::Fill)
             .padding(Padding {

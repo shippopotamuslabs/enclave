@@ -1,12 +1,12 @@
 //noinspection SpellCheckingInspection
+use crate::Message;
 use crate::icons;
 use crate::theme::{self, AppTheme};
 use crate::widgets::{Popover, Position};
-use crate::Message;
 use iced::widget::{
-    button, column, container, mouse_area, row, scrollable, space, text, text_input, Column,
+    Column, button, column, container, mouse_area, row, scrollable, space, text, text_input,
 };
-use iced::{alignment, Color, Element, Length, Theme};
+use iced::{Color, Element, Length, Theme, alignment};
 
 pub const MIN_SIDEBAR_WIDTH: f32 = 220.0;
 pub const MAX_SIDEBAR_WIDTH: f32 = 480.0;
@@ -83,6 +83,19 @@ pub struct HistoryChat {
     pub last_message: String,
     pub timestamp: String,
     pub is_pinned: bool,
+}
+
+/// Map a persisted chat session into the sidebar row model.
+pub fn history_chat_from_session(
+    session: &enclave_desktop_domain::models::ChatSession,
+) -> HistoryChat {
+    HistoryChat {
+        id: session.id.clone(),
+        name: session.title.clone(),
+        last_message: String::new(),
+        timestamp: "Just now".into(),
+        is_pinned: session.is_pinned,
+    }
 }
 
 impl HistoryState {
@@ -200,13 +213,7 @@ pub fn view(
         };
 
     let quick_links = column![
-        nav_btn(
-            "New Chat",
-            &icons::HANDLE_ADD,
-            Message::NavigateTo(crate::Screen::Chat {
-                chat_id: "new_chat".into()
-            })
-        ),
+        nav_btn("New Chat", &icons::HANDLE_ADD, Message::NewChat),
         nav_btn(
             "Studio Screen",
             &icons::HANDLE_IMAGE,

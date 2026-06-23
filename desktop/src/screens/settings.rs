@@ -1,9 +1,9 @@
+use crate::Message;
 use crate::icons;
 use crate::screens::layout::{icon_button, screen_shell, scrollable_padded_body};
 use crate::theme::{self, AppTheme};
-use crate::Message;
-use iced::widget::{button, column, container, row, space, text, Column};
-use iced::{alignment, Color, Element, Length, Theme};
+use iced::widget::{Column, button, column, container, row, space, text};
+use iced::{Color, Element, Length, Theme, alignment};
 
 pub struct SettingsState {
     pub active_theme: AppTheme,

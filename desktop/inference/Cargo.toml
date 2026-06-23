@@ -3,6 +3,40 @@ name = "enclave-desktop-inference"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+default = ["llama"]
+# Enable native llama.cpp engine (builds llama.cpp from source; requires a
+# C++ compiler — enable a GPU backend sub-feature for hardware acceleration:
+#   `cuda`   — NVIDIA (requires CUDA toolkit / nvcc)
+#   `vulkan` — cross-vendor (requires SPIRV-Headers + glslangValidator at build time)
+llama = ["dep:llama-cpp-2", "dep:llama-cpp-sys-2", "dep:tracing", "dep:encoding_rs"]
+cuda = ["llama-cpp-2/cuda"]
+vulkan = ["llama-cpp-2/vulkan"]
+# Enable ONNX Runtime for utility models (embeddings, classifiers).
+onnx = ["dep:ort"]
+# Enable whisper.cpp for speech-to-text transcription.
+whisper = ["dep:whisper-rs"]
+
+[build-dependencies]
+cc = "1.2"
+glob = "0.3"
+
 [dependencies]
 enclave-desktop-domain = { path = "../domain" }
 thiserror = "2.0"
+async-trait = "0.1"
+agent_core = { path = "../../third_party/agent_core" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+tokio = { version = "1", features = ["sync", "rt-multi-thread", "macros"] }
+tracing = { version = "0.1", optional = true }
+encoding_rs = { version = "0.8", optional = true }
+# Native engines — feature-gated so the workspace compiles without them.
+llama-cpp-2 = { version = "0.1", optional = true, features = ["common"] }
+llama-cpp-sys-2 = { version = "0.1.150", optional = true }
+ort = { version = "2.0.0-rc.12", optional = true, features = ["download-binaries"] }
+whisper-rs = { version = "0.13", optional = true }
+
+[dev-dependencies]
+tempfile = "3"

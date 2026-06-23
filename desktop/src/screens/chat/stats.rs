@@ -8,13 +8,13 @@
 //! demo telemetry (the desktop app is a UI prototype with mock data, matching
 //! the seeded `chat_1` assistant demo in `state.rs`).
 
-use iced::widget::{button, column, container, row, scrollable, space, text, Column};
-use iced::{alignment, Color, Element, Length, Padding, Theme};
+use iced::widget::{Column, button, column, container, row, scrollable, space, text};
+use iced::{Color, Element, Length, Padding, Theme, alignment};
 
+use crate::Message;
 use crate::icons;
 use crate::theme::{self, AppTheme};
 use crate::widgets::BottomSheet;
-use crate::Message;
 
 /// A label/value telemetry metric row (Summary section). Mirrors the Android
 /// `SummaryMetricRowUi`.
