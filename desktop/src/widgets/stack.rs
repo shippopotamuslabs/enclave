@@ -15,9 +15,9 @@
 //! which is wired into a screen at any given time.
 #![allow(dead_code)]
 
-use iced::advanced::widget::Operation;
 use iced::advanced::widget::tree::{State, Tag, Tree};
-use iced::advanced::{Clipboard, Layout, Shell, layout, mouse, overlay, renderer, widget};
+use iced::advanced::widget::Operation;
+use iced::advanced::{layout, mouse, overlay, renderer, widget, Clipboard, Layout, Shell};
 use iced::event::Event;
 use iced::{Element, Length, Point, Rectangle, Size};
 
@@ -356,9 +356,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use iced::Theme;
     use iced::advanced::Widget;
     use iced::widget::text;
+    use iced::Theme;
 
     type TestStack<'a> = Stack<'a, (), Theme, iced::Renderer>;
 

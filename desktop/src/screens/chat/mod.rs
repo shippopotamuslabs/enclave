@@ -1,4 +1,3 @@
- 
 //noinspection SpellCheckingInspection
 mod input_bar;
 mod message_list;
@@ -7,17 +6,17 @@ pub mod stats;
 mod thinking_indicator;
 mod thinking_panel;
 
-pub use state::{ChatMessage, ChatState, InputBarAnim, PermissionMode, advance_anim};
+pub use state::{advance_anim, ChatMessage, ChatState, InputBarAnim, PermissionMode};
 pub use stats::wrap_stats_sheet;
 
 use iced::widget::{column, container, row, space, text};
-use iced::{Element, Length, Padding, Theme, alignment};
+use iced::{alignment, Element, Length, Padding, Theme};
 
-use crate::Message;
 use crate::icons;
 use crate::screens::history::HistoryState;
 use crate::theme::{self, AppTheme};
 use crate::widgets::PaneSplitter;
+use crate::Message;
 
 // Empty-state hero sizing for the Enclave "E" source mark. The mark sits
 // directly above the centered input bar (with a welcome line between them) as a

@@ -81,6 +81,8 @@ pub enum Message {
     HistoryRenameChat(String),
     HistoryHoverChat(Option<String>),
     HistorySidebarResize(f32),
+    /// Start a fresh chat — navigates to a new `Chat` screen (mock `chat_id`).
+    NewChat,
     /// Toggle the profile popover over the history sidebar footer card.
     /// Fired by the card's tap target and the popover's outside-click close.
     HistoryToggleProfileMenu,
@@ -102,7 +104,14 @@ pub enum Message {
     ChatTogglePermPicker,
     ChatToggleModelPicker,
     ChatSelectPermission(screens::chat::PermissionMode),
-    ChatSelectModel(String),
+    /// Select an installed model from the picker. Carries both the registry id
+    /// (drives inference `model_id`) and display name (rendered in the input bar).
+    ChatSelectModel {
+        id: String,
+        display_name: String,
+    },
+    /// Toggle the right-side thinking trace panel for the active assistant turn.
+    ChatToggleThinkingPanel,
     ChatToggleStatsSheet,
     ChatAnimTick,
     MarkdownLinkClicked(String),
@@ -114,6 +123,8 @@ pub enum Message {
     GallerySelectAlbum(Option<String>),
     /// Vault-unlock: password input changed.
     UnlockVaultPasswordChanged(String),
+    /// Vault-unlock: confirm-password input changed (Create mode only).
+    UnlockVaultConfirmPasswordChanged(String),
     /// Vault-unlock: toggle the password visibility (eye / eye-off).
     UnlockVaultTogglePasswordVisible,
     /// Vault-unlock: primary "Unlock" action — routes the user into the chat
@@ -122,6 +133,11 @@ pub enum Message {
     /// Vault-unlock: mock Google sign-in — routes the user into the chat screen
     /// (mirrors the `HistorySignIn` mock in the history sidebar).
     UnlockVaultLogin,
+    /// Downloads screen: proceed past the model-download batch (either the
+    /// "Continue" action once `Ready`, or "Skip for now"). The download flow is
+    /// not yet wired into the app shell, so this is a placeholder until routing
+    /// and `DownloadState` ownership land in `EnclaveApp`.
+    DownloadContinue,
 }
 
 const MOCK_STREAM_RESPONSE: &str = r#"## Streaming Markdown Demo
@@ -425,6 +441,20 @@ fn update(state: &mut EnclaveApp, message: Message) -> Task<Message> {
             Task::none()
         }
 
+        Message::NewChat => {
+            // Start a fresh chat session. Derive a unique `chat_id` from the
+            // existing history list so repeated "New Chat" presses do not
+            // collide, then re-dispatch `NavigateTo` via `Task::done` so the
+            // navigation path stays identical to every other screen transition
+            // (single `Message::NavigateTo` handler), which also seeds a new
+            // `ChatState`.
+            let next_id = state.history_state.chats.len() + 2;
+            let new_chat_id = format!("chat_{next_id}");
+            Task::done(Message::NavigateTo(Screen::Chat {
+                chat_id: new_chat_id,
+            }))
+        }
+
         Message::ChatEditorAction(action) => {
             if let Some(ref mut chat) = state.chat_state {
                 chat.input_content.perform(action);
@@ -530,10 +560,18 @@ fn update(state: &mut EnclaveApp, message: Message) -> Task<Message> {
             Task::none()
         }
 
-        Message::ChatSelectModel(model) => {
+        Message::ChatSelectModel { id, display_name } => {
             if let Some(ref mut chat) = state.chat_state {
-                chat.selected_model = model;
+                chat.selected_model_id = Some(id);
+                chat.selected_model = display_name;
                 chat.model_picker_open = false;
+            }
+            Task::none()
+        }
+
+        Message::ChatToggleThinkingPanel => {
+            if let Some(ref mut chat) = state.chat_state {
+                chat.turn_thinking.thinking_panel_open = !chat.turn_thinking.thinking_panel_open;
             }
             Task::none()
         }
@@ -580,6 +618,12 @@ fn update(state: &mut EnclaveApp, message: Message) -> Task<Message> {
             Task::none()
         }
 
+        Message::UnlockVaultConfirmPasswordChanged(val) => {
+            state.unlock_vault_state.confirm_password = val;
+            state.unlock_vault_state.error_message = None;
+            Task::none()
+        }
+
         Message::UnlockVaultTogglePasswordVisible => {
             state.unlock_vault_state.password_visible = !state.unlock_vault_state.password_visible;
             Task::none()
@@ -605,6 +649,15 @@ fn update(state: &mut EnclaveApp, message: Message) -> Task<Message> {
             Task::done(Message::NavigateTo(Screen::Chat {
                 chat_id: "chat_1".into(),
             }))
+        }
+
+        Message::DownloadContinue => {
+            // The downloads flow is not yet wired into the app shell (no
+            // `Screen::Download` route or `DownloadState` ownership yet), so
+            // this is a no-op placeholder until that routing lands. The variant
+            // exists so the download screen's "Continue" / "Skip for now"
+            // controls compile against the shared `Message` enum.
+            Task::none()
         }
     }
 }

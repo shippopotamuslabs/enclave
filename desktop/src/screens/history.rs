@@ -1,12 +1,12 @@
 //noinspection SpellCheckingInspection
-use crate::Message;
 use crate::icons;
 use crate::theme::{self, AppTheme};
 use crate::widgets::{Popover, Position};
+use crate::Message;
 use iced::widget::{
-    Column, button, column, container, mouse_area, row, scrollable, space, text, text_input,
+    button, column, container, mouse_area, row, scrollable, space, text, text_input, Column,
 };
-use iced::{Color, Element, Length, Theme, alignment};
+use iced::{alignment, Color, Element, Length, Theme};
 
 pub const MIN_SIDEBAR_WIDTH: f32 = 220.0;
 pub const MAX_SIDEBAR_WIDTH: f32 = 480.0;
@@ -86,6 +86,7 @@ pub struct HistoryChat {
 }
 
 /// Map a persisted chat session into the sidebar row model.
+#[allow(dead_code)]
 pub fn history_chat_from_session(
     session: &enclave_desktop_domain::models::ChatSession,
 ) -> HistoryChat {

@@ -11,7 +11,7 @@
 //! `layout` and `draw` would render empty text.
 
 use iced::advanced::widget::tree::Tree;
-use iced::advanced::{Clipboard, Layout, Shell, layout, mouse, overlay, renderer};
+use iced::advanced::{layout, mouse, overlay, renderer, Clipboard, Layout, Shell};
 use iced::event::Event;
 use iced::{Element, Length, Rectangle, Size, Vector};
 

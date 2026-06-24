@@ -16,12 +16,12 @@
 //! are dispatched from `main.rs::update` via `Message`, and [`view`] is a pure
 //! layout mapping.
 
-use crate::Message;
 use crate::icons;
 use crate::theme::{self, AppTheme};
+use crate::Message;
 use enclave_desktop_domain::vault::VaultKind;
 use iced::widget::{button, column, container, row, space, text, text_input};
-use iced::{Color, Element, Length, Theme, alignment};
+use iced::{alignment, Color, Element, Length, Theme};
 
 /// State for the vault-unlock screen. Owned by `EnclaveApp` when
 /// `Screen::UnlockVault` is active.

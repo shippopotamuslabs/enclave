@@ -691,6 +691,7 @@ pub fn neo_icon_button(
 
 /// Neobrutalist progress bar style — a bordered track with the peach accent fill.
 /// The track is the surface color with a 2px border; the bar is `COLOR_ACCENT`.
+#[allow(dead_code)]
 pub fn neo_progress_bar(app_theme: AppTheme) -> impl Fn(&iced::Theme) -> progress_bar::Style {
     move |_theme| {
         let track_bg = neo_bg(app_theme, true);

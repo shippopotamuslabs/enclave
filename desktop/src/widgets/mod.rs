@@ -9,4 +9,4 @@ pub mod streaming_markdown;
 pub use bottom_sheet::BottomSheet;
 pub use pane_splitter::PaneSplitter;
 pub use popover::{Popover, Position};
-pub use streaming_markdown::{StreamingMarkdownState, streaming_markdown};
+pub use streaming_markdown::{streaming_markdown, StreamingMarkdownState};

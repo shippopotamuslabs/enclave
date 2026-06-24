@@ -1,9 +1,9 @@
-use crate::Message;
 use crate::icons;
 use crate::screens::layout::{icon_button, screen_shell, scrollable_padded_body};
 use crate::theme::{self, AppTheme};
-use iced::widget::{Column, Row, button, column, container, row, space, text};
-use iced::{Element, Length, Theme, alignment};
+use crate::Message;
+use iced::widget::{button, column, container, row, space, text, Column, Row};
+use iced::{alignment, Element, Length, Theme};
 
 pub struct GalleryState {
     pub selected_album_id: Option<String>,

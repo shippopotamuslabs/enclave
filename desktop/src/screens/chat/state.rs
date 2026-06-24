@@ -37,6 +37,7 @@ pub struct ChatState {
 /// Indicator phases for the active assistant turn — mirrors Android
 /// `IndicatorState` (Thinking / Processing / Complete-with-thought-header).
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum TurnIndicator {
     None,
     Thinking,
@@ -69,6 +70,7 @@ impl Default for TurnThinkingState {
 }
 
 impl TurnThinkingState {
+    #[allow(dead_code)]
     pub fn reset_for_new_turn(&mut self) {
         *self = Self {
             turn_active: true,
@@ -77,6 +79,7 @@ impl TurnThinkingState {
         };
     }
 
+    #[allow(dead_code)]
     pub fn on_thinking_chunk(&mut self, chunk: &str) {
         self.turn_active = true;
         self.indicator = TurnIndicator::Thinking;
@@ -84,6 +87,7 @@ impl TurnThinkingState {
         self.thinking_raw.push_str(chunk);
     }
 
+    #[allow(dead_code)]
     pub fn on_visible_chunk(&mut self, assistant_visible_len: usize) {
         self.turn_active = true;
         self.is_thinking_streaming = false;
@@ -94,6 +98,7 @@ impl TurnThinkingState {
         }
     }
 
+    #[allow(dead_code)]
     pub fn finalize_turn(&mut self) {
         if self.thinking_raw.is_empty() {
             self.indicator = TurnIndicator::None;
@@ -249,6 +254,7 @@ pub fn advance_anim(anim: InputBarAnim, delta: f32) -> InputBarAnim {
 const CHAT_1_ASSISTANT_DEMO: &str = include_str!("../../../seed/chat_1_assistant_demo.md");
 
 impl ChatState {
+    #[allow(dead_code)]
     pub fn empty(chat_id: String) -> Self {
         Self {
             active_chat_id: chat_id,
@@ -270,6 +276,7 @@ impl ChatState {
         }
     }
 
+    #[allow(dead_code)]
     pub fn from_repository(
         chat_id: String,
         title: String,
@@ -354,6 +361,7 @@ impl ChatState {
     }
 }
 
+#[allow(dead_code)]
 pub fn domain_message_to_presentation(
     msg: &enclave_desktop_domain::models::ChatMessage,
 ) -> ChatMessage {
@@ -365,6 +373,7 @@ pub fn domain_message_to_presentation(
     }
 }
 
+#[allow(dead_code)]
 pub fn presentation_message_to_domain(
     msg: &ChatMessage,
     timestamp: u64,

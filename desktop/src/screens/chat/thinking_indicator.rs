@@ -4,12 +4,12 @@
 //! `ThoughtForHeader` in the message list.
 
 use iced::widget::{button, container, row, space, text};
-use iced::{Element, Length, Padding, Theme, alignment};
+use iced::{alignment, Element, Length, Padding, Theme};
 
 use super::state::{TurnIndicator, TurnThinkingState};
-use crate::Message;
 use crate::icons;
 use crate::theme::{self, AppTheme};
+use crate::Message;
 
 pub fn view(
     turn: &TurnThinkingState,
