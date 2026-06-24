@@ -1,15 +1,15 @@
 //noinspection SpellCheckingInspection
-use iced::widget::{Column, container, row, space};
+use iced::widget::{container, row, space, Column};
 use iced::{Element, Length, Padding, Theme};
 use iced_selection::text::Style as SelectableTextStyle;
 
 use super::state::{ChatState, MessageSender};
 use super::thinking_indicator;
-use crate::Message;
 use crate::icons;
 use crate::screens::layout::neo_scrollable;
 use crate::theme::{self, AppTheme};
 use crate::widgets::streaming_markdown;
+use crate::Message;
 
 fn selectable_body_style(text_color: iced::Color) -> impl Fn(&Theme) -> SelectableTextStyle + Copy {
     move |theme: &Theme| SelectableTextStyle {

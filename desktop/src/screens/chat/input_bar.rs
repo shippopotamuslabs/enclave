@@ -1,11 +1,11 @@
-use iced::widget::{Column, button, column, container, row, scrollable, space, text, text_editor};
-use iced::{Element, Length, Padding, Theme, alignment};
+use iced::widget::{button, column, container, row, scrollable, space, text, text_editor, Column};
+use iced::{alignment, Element, Length, Padding, Theme};
 
 use super::state::{ChatState, PermissionMode};
-use crate::Message;
 use crate::icons;
 use crate::screens::layout::{dropdown_menu_row, icon_button};
 use crate::theme::{self, AppTheme};
+use crate::Message;
 
 /// Build the shared input bar: a single solid `NeoInputBar` container holding
 /// the auto-expanding text area on top and the action row below.

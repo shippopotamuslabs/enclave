@@ -6,14 +6,14 @@
 //! the turn completes.
 
 use iced::widget::{button, column, container, row, space, text};
-use iced::{Element, Length, Padding, Theme, alignment};
+use iced::{alignment, Element, Length, Padding, Theme};
 use iced_selection::text::Style as SelectableTextStyle;
 
 use super::state::{TurnIndicator, TurnThinkingState};
-use crate::Message;
 use crate::icons;
 use crate::screens::layout::neo_scrollable;
 use crate::theme::{self, AppTheme};
+use crate::Message;
 
 const PANEL_WIDTH: f32 = 360.0;
 

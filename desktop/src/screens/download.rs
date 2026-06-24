@@ -4,12 +4,19 @@
 //! Follows MVU: state lives in [`DownloadState`], side effects
 //! are dispatched from `main.rs::update` via `Message`, and [`view`] is a pure
 //! layout mapping.
+//
+// This screen is checked in as part of the BYOK checkpoint but is not yet wired
+// into the app shell (`Screen::Download`, `DownloadState` ownership, and the
+// download pipeline are pending). All items are `allow(dead_code)` until that
+// routing lands so the `-D warnings` workspace lint does not fail the build on
+// intentionally-unwired checkpoint code.
+#![allow(dead_code)]
 
-use crate::Message;
 use crate::icons;
 use crate::theme::{self, AppTheme};
-use iced::widget::{Column, button, column, container, progress_bar, row, scrollable, space, text};
-use iced::{Color, Element, Length, Theme, alignment};
+use crate::Message;
+use iced::widget::{button, column, container, progress_bar, row, scrollable, space, text, Column};
+use iced::{alignment, Color, Element, Length, Theme};
 
 /// Top-level download status (mirrors Android `DownloadStatus`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
