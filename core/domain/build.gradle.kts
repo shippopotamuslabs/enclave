@@ -65,6 +65,7 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.kotlin.reflect)
     testImplementation(libs.turbine)
+    testImplementation(project(":core:testing"))
 
     // TestFixtures dependencies
     testFixturesApi(libs.junit.jupiter)
