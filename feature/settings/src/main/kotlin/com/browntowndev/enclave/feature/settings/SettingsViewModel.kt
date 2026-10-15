@@ -17,6 +17,9 @@ import com.browntowndev.enclave.domain.model.telemetry.UsagePeriod
 import com.browntowndev.enclave.core.data.repository.DownloadWorkRepository
 import com.browntowndev.enclave.core.data.download.DownloadWorkChainObserver
 import com.browntowndev.enclave.domain.port.repository.EmbeddingProgressPort
+import com.browntowndev.enclave.domain.theme.ObserveThemePreferencesUseCase
+import com.browntowndev.enclave.domain.theme.SetThemeFamilyUseCase
+import com.browntowndev.enclave.domain.theme.ThemeFamily
 import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.enclave.domain.usecase.telemetry.ObserveUsageSpendSummaryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -55,6 +58,8 @@ internal class SettingsViewModel
         private val errorHandler: ViewModelErrorHandler,
         private val embeddingProgressPort: EmbeddingProgressPort,
         private val downloadWorkRepository: DownloadWorkRepository,
+        private val observeThemePreferencesUseCase: ObserveThemePreferencesUseCase,
+        private val setThemeFamilyUseCase: SetThemeFamilyUseCase,
     ) : ViewModel() {
         companion object {
             private const val TAG = "SettingsViewModel"
@@ -121,9 +126,11 @@ internal class SettingsViewModel
                 observeUsageSpendSummaryUseCase(period.toDomain())
             }
 
+        private val _themeFamily = MutableStateFlow(ThemeFamilyUi.NeoBrutalist)
+
         val uiState: StateFlow<SettingsUiState> =
-            settingsUiStateFactory
-                .observeUiState(
+            combine(
+                settingsUiStateFactory.observeUiState(
                     SettingsUiStateSources(
                         persistedSettings = settingsUseCases.preferences.getSettings(),
                         localAssets = localModelAssetsFlow,
@@ -156,7 +163,11 @@ internal class SettingsViewModel
                         usageSpendSummary = usageSpendSummaryFlow,
                         modelPackRows = modelPackRowsFlow,
                     ),
-                ).stateIn(
+                ),
+                _themeFamily,
+            ) { state, family ->
+                state.copy(home = state.home.copy(themeFamily = family))
+            }.stateIn(
                     scope = viewModelScope,
                     started = SharingStarted.Eagerly,
                     initialValue = SettingsUiState(),
@@ -164,6 +175,26 @@ internal class SettingsViewModel
 
         init {
             localModelsDelegate.observeActiveLocalModels(viewModelScope, localModelAssetsFlow, _localModelsState)
+            viewModelScope.launch {
+                observeThemePreferencesUseCase().collect { prefs ->
+                    _themeFamily.value =
+                        when (prefs.family) {
+                            ThemeFamily.Tonal -> ThemeFamilyUi.Tonal
+                            ThemeFamily.NeoBrutalist -> ThemeFamilyUi.NeoBrutalist
+                        }
+                }
+            }
+        }
+
+        fun onThemeFamilyChange(family: ThemeFamilyUi) {
+            viewModelScope.launch {
+                setThemeFamilyUseCase(
+                    when (family) {
+                        ThemeFamilyUi.Tonal -> ThemeFamily.Tonal
+                        ThemeFamilyUi.NeoBrutalist -> ThemeFamily.NeoBrutalist
+                    },
+                )
+            }
         }
 
         // --- General / Auth ---
