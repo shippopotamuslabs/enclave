@@ -514,8 +514,10 @@ private fun buildMinimalViewModel(): SettingsViewModel {
     every { embeddingProgressPort.isReindexing } returns MutableStateFlow(false)
     every { embeddingProgressPort.progress } returns MutableStateFlow(0f)
 
-    val downloadWorkRepository = mockk<com.browntowndev.enclave.core.data.repository.DownloadWorkRepository>()
-    every { downloadWorkRepository.observeDownloadProgress() } returns kotlinx.coroutines.flow.flowOf(null)
+    val observeDownloadWorkUseCase =
+        com.browntowndev.enclave.domain.usecase.download.ObserveDownloadWorkUseCase(
+            com.browntowndev.enclave.core.testing.download.FakeDownloadWorkObserverPort(),
+        )
 
     val detectVaultReconciliationStateUseCase = mockk<DetectVaultReconciliationStateUseCase>(relaxed = true)
     val adoptCloudVaultUseCase = mockk<AdoptCloudVaultUseCase>(relaxed = true)
@@ -593,7 +595,7 @@ private fun buildMinimalViewModel(): SettingsViewModel {
         deletionHelper = deletionHelper,
         errorHandler = errorHandler,
         embeddingProgressPort = embeddingProgressPort,
-        downloadWorkRepository = downloadWorkRepository,
+        observeDownloadWorkUseCase = com.browntowndev.enclave.domain.usecase.download.ObserveDownloadWorkUseCase(com.browntowndev.enclave.core.testing.download.FakeDownloadWorkObserverPort()),
                 observeThemePreferencesUseCase = ObserveThemePreferencesUseCase(FakeThemePreferencesRepository()),
                 setThemeFamilyUseCase = SetThemeFamilyUseCase(FakeThemePreferencesRepository()),
     )

@@ -264,8 +264,6 @@ class SettingsViewModelTest {
         every { embeddingProgressPort.isReindexing } returns MutableStateFlow(false)
         every { embeddingProgressPort.progress } returns MutableStateFlow(0f)
 
-        val downloadWorkRepository = mockk<com.browntowndev.enclave.core.data.repository.DownloadWorkRepository>()
-        every { downloadWorkRepository.observeDownloadProgress() } returns kotlinx.coroutines.flow.flowOf(null)
 
         val detectVaultReconciliationStateUseCase =
             mockk<com.browntowndev.enclave.domain.usecase.security.DetectVaultReconciliationStateUseCase>(relaxed = true)
@@ -340,7 +338,7 @@ class SettingsViewModelTest {
                 deletionHelper = deletionHelper,
                 errorHandler = errorHandler,
                 embeddingProgressPort = embeddingProgressPort,
-                downloadWorkRepository = downloadWorkRepository,
+                observeDownloadWorkUseCase = com.browntowndev.enclave.domain.usecase.download.ObserveDownloadWorkUseCase(com.browntowndev.enclave.core.testing.download.FakeDownloadWorkObserverPort()),
                 observeThemePreferencesUseCase = ObserveThemePreferencesUseCase(FakeThemePreferencesRepository()),
                 setThemeFamilyUseCase = SetThemeFamilyUseCase(FakeThemePreferencesRepository()),
             )
