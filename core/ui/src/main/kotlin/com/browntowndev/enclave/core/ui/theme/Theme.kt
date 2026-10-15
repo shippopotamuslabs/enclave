@@ -7,6 +7,8 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.SpanStyle
@@ -18,51 +20,85 @@ import androidx.compose.ui.unit.dp
 import com.hrm.markdown.renderer.AdmonitionStyle
 import com.hrm.markdown.renderer.MarkdownTheme
 
-private val DarkColorScheme =
-    darkColorScheme(
-        primary = PeachAccent,
-        onPrimary = Color.Black,
-        primaryContainer = DarkSurfaceVariant,
-        onPrimaryContainer = PeachAccent,
-        secondary = DarkOnSurfaceVariant,
-        onSecondary = DarkOnBackground,
-        tertiary = PeachVariant,
-        onTertiary = DarkOnBackground,
-        background = DarkBackground,
-        onBackground = DarkOnBackground,
-        surface = DarkSurface,
-        onSurface = DarkOnBackground,
-        surfaceVariant = DarkSurfaceVariant,
-        onSurfaceVariant = DarkOnSurfaceVariant,
-        outline = DarkOutline,
-        outlineVariant = DarkNeoBorder,
-        error = ErrorRed,
-        onError = OnErrorWhite,
-    )
+val LocalEnclaveTheme =
+    staticCompositionLocalOf {
+        NeoBrutalistSpec.resolve(dark = true)
+    }
 
-private val LightColorScheme =
-    lightColorScheme(
-        primary = PurpleLightPrimary,
-        secondary = Color(0xFF64748B),
-        tertiary = GoldVariant,
-        background = LightBackground,
-        surface = LightSurface,
-        onPrimary = Color.White,
-        onBackground = LightOnBackground,
-        onSurface = LightOnBackground,
-        outline = LightOutline,
-        outlineVariant = LightNeoBorder,
-        error = ErrorRed,
-        onError = OnErrorWhite,
-    )
+object EnclaveThemeAccessor {
+    val colors: EnclaveColors
+        @Composable get() = LocalEnclaveTheme.current.colors
 
+    val shapes: EnclaveShapes
+        @Composable get() = LocalEnclaveTheme.current.shapes
+
+    val elevations: EnclaveElevations
+        @Composable get() = LocalEnclaveTheme.current.elevations
+
+    val spec: EnclaveThemeSpec
+        @Composable get() = LocalEnclaveTheme.current
+}
+
+/**
+ * Root Enclave theme. [themeFamily] selects the spec (ENC-1, UI_DESIGN_SPEC §1.4);
+ * the default preserves the historical neo-brutalist rendering until ENC-7/ENC-9
+ * wire persisted preferences. Dynamic color overrides the spec palette for
+ * Material slots but the spec still drives shapes/elevations.
+ */
 @Composable
 fun EnclaveTheme(
     darkTheme: Boolean? = null,
     dynamicColor: Boolean = false,
+    themeFamily: EnclaveThemeId = EnclaveThemeId.NeoBrutalist,
     content: @Composable () -> Unit,
 ) {
     val isDarkTheme = darkTheme ?: isSystemInDarkTheme()
+    val spec = EnclaveThemeSpecFactory.resolve(themeFamily, isDarkTheme)
+
+    val specScheme =
+        if (spec.dark) {
+            darkColorScheme(
+                primary = spec.colors.accent,
+                onPrimary = spec.colors.onAccent,
+                primaryContainer = spec.colors.surfaceSunken,
+                onPrimaryContainer = spec.colors.accent,
+                secondary = spec.colors.textMuted,
+                onSecondary = spec.colors.textPrimary,
+                tertiary = spec.colors.accentMuted,
+                onTertiary = spec.colors.textPrimary,
+                background = spec.colors.surfaceBase,
+                onBackground = spec.colors.textPrimary,
+                surface = spec.colors.surfaceRaised,
+                onSurface = spec.colors.textPrimary,
+                surfaceVariant = spec.colors.surfaceSunken,
+                onSurfaceVariant = spec.colors.textMuted,
+                outline = spec.colors.borderSubtle,
+                outlineVariant = spec.colors.borderStrong,
+                error = spec.colors.error,
+                onError = spec.colors.onError,
+            )
+        } else {
+            lightColorScheme(
+                primary = spec.colors.accent,
+                onPrimary = spec.colors.onAccent,
+                primaryContainer = spec.colors.surfaceSunken,
+                onPrimaryContainer = spec.colors.accent,
+                secondary = spec.colors.textMuted,
+                onSecondary = spec.colors.textPrimary,
+                tertiary = spec.colors.accentMuted,
+                onTertiary = spec.colors.textPrimary,
+                background = spec.colors.surfaceBase,
+                onBackground = spec.colors.textPrimary,
+                surface = spec.colors.surfaceRaised,
+                onSurface = spec.colors.textPrimary,
+                surfaceVariant = spec.colors.surfaceSunken,
+                onSurfaceVariant = spec.colors.textMuted,
+                outline = spec.colors.borderSubtle,
+                outlineVariant = spec.colors.borderStrong,
+                error = spec.colors.error,
+                onError = spec.colors.onError,
+            )
+        }
 
     val colorScheme =
         when {
@@ -70,15 +106,16 @@ fun EnclaveTheme(
                 val context = LocalContext.current
                 if (isDarkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
             }
-            isDarkTheme -> DarkColorScheme
-            else -> LightColorScheme
+            else -> specScheme
         }
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
-        content = content,
-    )
+    CompositionLocalProvider(LocalEnclaveTheme provides spec) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = Typography,
+            content = content,
+        )
+    }
 }
 
 private fun darkHeadingStyles() =
