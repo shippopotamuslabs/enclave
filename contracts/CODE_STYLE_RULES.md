@@ -110,16 +110,18 @@ Kotlin and Compose idioms, naming, formatting, and stability rules.
 
 ## 8. Testing Conventions
 
-- Unit tests: JUnit 5 + Turbine for Flow testing + MockK for mocks.
+- Unit tests: JUnit 5 + Turbine for Flow testing + **fakes from `:core:testing`** for Enclave-owned ports (see `UNIT_TESTING.md`). MockK only for third-party SDK boundaries with `@Suppress` + justification; no `verify` in ViewModel tests.
 - Compose UI tests: `createComposeRule()` with semantic matchers.
 - Test names: `fun methodName_condition_expectedResult()` or backtick descriptive names.
-- Fakes for previews live alongside models. Fakes for tests live in `test/` source set.
+- Fakes for previews live alongside models. Fakes for tests live in `:core:testing` (shared) or the module `test/` source set (single-use only).
+- Architecture/style is machine-enforced by the `enclave` Detekt rule set (`:detekt-rules`, ENC-2): ViewModels use-case-only, no domain types in composables/UiState, no raw Material/hex in features. `./gradlew detekt` must pass at `maxIssues: 0`.
+- All work is ticketed in Linear (team `ENC`) per `AGENTS.md` §3.7 — one MR per sub-issue, `Fixes ENC-xx` in the MR description.
 
 ### 8.1 Test Coverage Discipline (Agent Mandate)
 
 - Whenever the task **adds** new production code (new classes, public functions, significant logic in `:core:domain`, `:core:data`, `:feature:inference`, ViewModels, repositories, mappers, use cases, etc.) **or modifies** existing code, the agent **MUST**:
   - Write new unit tests (or extend existing ones) in the matching `src/test/kotlin` source set that cover the new/modified behavior, main paths, edge cases, and error conditions.
-  - Use JUnit 5 + Turbine (for `StateFlow`/`Flow`) + MockK exactly as defined in the conventions above.
+  - Use JUnit 5 + Turbine (for `StateFlow`/`Flow`) + fakes from `:core:testing` as defined above and in `UNIT_TESTING.md`.
 - For pure UI/Compose changes that affect behavior or interactions: also add or update Compose UI tests using `createComposeRule()` and semantic matchers.
 - Trivial styling-only or preview-only changes are exempt from new tests, but the full test suite must still pass.
 - Before declaring `TASK_STATUS: COMPLETE`, the agent must have written/updated the tests **and** executed them successfully.
