@@ -1,9 +1,11 @@
 # UI_DESIGN_SPEC.md
-**Enclave – UI Design Contract v2.5**
+**Enclave – UI Design Contract v2.6**
 
-Immutable UI contract. This defines exact visual behavior, component structure, and interaction patterns.
+UI contract. This defines exact visual behavior, component structure, and interaction patterns.
 
 Always enforce together with `ARCHITECTURE_RULES.md` (which defines the structural Scaffold/navigation/IME patterns) and `DESKTOP_RULES.md` §6–§7 for the shared neo-brutalist token model and agent UI workflow on desktop.
+
+> **v2.6 change (ENC-1/ENC-5, user-authorized contract update):** Enclave moves from neo-only chrome to **dual theme families** — Material Tonal (normal Material 3) and Neo-Brutalist — sharing one semantic spec and one neutral component API, adapted from Stratum `contracts/UI_DESIGN.md`. Existing `Neo*` components and `EnclaveNeoTokens` are the Neo spec's implementation debt to migrate (ENC-8), not the long-term public API. Sections §1.3/§5 are updated accordingly; locked chat/input shapes in §2–§3 remain preserve-mode until an ENC sub-issue explicitly migrates them.
 
 ---
 
@@ -11,14 +13,15 @@ Always enforce together with `ARCHITECTURE_RULES.md` (which defines the structur
 
 | Always | Never |
 |--------|-------|
-| Use Material 3 Expressive theming & dynamic layout reflows (`PaneScaffold`). | Hard-code hex colors outside the theme definitions (except specific semantic colors). |
-| Include unified `@Preview` (`androidx.compose.ui.tooling.preview`) for states. | Inject real ViewModels or Hilt dependencies into `@Preview` functions. |
+| Use the root Enclave theme + semantic tokens from the active theme spec (see §1.4). | Hard-code hex colors outside the theme definitions (except specific semantic colors). |
+| Use neutral spec-driven components from `:core:ui` for product chrome. | Import raw `MaterialTheme`/Material 3 chrome (`Button`, `Card`, `OutlinedTextField`, …) or hex literals in `:feature:*`/`:app` UI — Detekt `enclave` enforced (ENC-2). |
+| Include unified `@Preview` (`androidx.compose.ui.tooling.preview`) for states, covering **Tonal + Neo × Light + Dark** for shared components. | Inject real ViewModels or Hilt dependencies into `@Preview` functions. |
 | Use lambda-based deferred state reads (e.g., `Modifier.offset { ... }`). | Tie UI recompositions directly to rapidly emitting state values directly in modifiers. |
 | Use 20.dp asymmetric corners for message bubbles. | Rely on `paddingValues` threading down the UI tree from a root Scaffold. |
 | Support Dynamic Color on Android 12+ (API 31+). | Introduce layout thrash when the keyboard opens/closes. |
 | Clear the input text immediately after send. | Recompose the entire message list when the user is typing. |
 | Run the Brief Read (§5.1) and Anti-Slop Pre-Flight (§5.3) before generating or materially restyling UI. | Ship marketing-landing patterns, industrial/CRT brutalism, glassmorphism, soft shadows, or ad-hoc hex colors outside theme tokens. |
-| Extend existing `Neo*` components and `EnclaveNeoTokens` before inventing one-off styling. | Rebuild surfaces with raw Material defaults when a neo component already exists. |
+| Extend existing neutral `:core:ui` components (today: `Neo*` + `EnclaveNeoTokens` until ENC-8 lands) before inventing one-off styling. | Rebuild surfaces with raw Material defaults when a shared component already exists, or name new public components `Neo*`/`Material*`. |
 
 ## 1. Design Language & Theme
 
@@ -46,15 +49,36 @@ Always enforce together with `ARCHITECTURE_RULES.md` (which defines the structur
 - **Headlines:** SemiBold, 24-28sp (top bar title, mode switcher).
 - **Body:** Normal, 16sp (message content, standard text).
 
-### 1.3 Neo-Brutalist Product Chrome (Mandatory)
+### 1.3 Neo-Brutalist Product Chrome (One Family, Not the Only Chrome)
 
-Enclave is **product neo-brutalism**, not marketing brutalism or industrial/CRT terminal aesthetics.
+Enclave Neo is **product neo-brutalism**, not marketing brutalism or industrial/CRT terminal aesthetics. It is one of two theme families (§1.4); feature code must render correctly in both.
 
-- **Geometry:** `EnclaveNeoTokens` (`cornerRadius` 4.dp, `borderWidth` 2.dp, hard shadow offsets). Chat bubbles and the input bar retain their locked shapes in §2–§3 until explicitly migrated.
-- **Surfaces:** Use `Modifier.neoSurface`, `NeoPanel`, `NeoPrimaryButton`, `NeoOutlinedTextField`, and siblings under `core/ui/.../component/neo/`. Do not restyle settings rows, sheets, or actions with plain Material cards.
-- **Colors:** Read from `MaterialTheme.colorScheme` and `Color.kt` (`PeachAccent`, `DarkNeoBorder`, `LightNeoBorder`, etc.). Neo borders use `outlineVariant`; hard shadows use `DarkNeoShadow` / `LightNeoShadow`.
-- **Accent lock:** Dark theme uses peach as primary accent. Do not introduce a second competing accent (purple gradients, neon greens, hazard red) on the same screen unless it is an existing semantic color (error, success, shield).
+- **Geometry (Neo spec):** 4.dp corners, 2.dp borders, hard offset shadows (no blur). Chat bubbles and the input bar retain their locked shapes in §2–§3 until explicitly migrated.
+- **Surfaces:** Use the neutral `:core:ui` component API (today implemented by `Neo*` components + `Modifier.neoSurface`; ENC-8 migrates them to spec-driven primitives). Do not restyle settings rows, sheets, or actions with plain Material cards in feature code.
+- **Colors:** Read semantic roles from the active spec (today bridged via `MaterialTheme.colorScheme` + `Color.kt`). Never branch on theme family in feature code — components consult spec shapes/elevations internally.
+- **Accent lock:** Neo dark uses peach as primary accent. Do not introduce a second competing accent (purple gradients, neon greens, hazard red) on the same screen unless it is an existing semantic color (error, success, shield). The Tonal spec uses its own single Material accent; do not mix accents within a family.
 - **Motion:** Functional only — press/hover feedback, list scroll affordances, IME-safe transitions. No scroll-jacking, marquees, or cinematic page motion.
+
+### 1.4 Theme Architecture — Dual Families (Mandatory, ENC-1)
+
+Feature modules depend on **semantic theme**, not Material or neo implementation details.
+
+Core types in `:core:ui/theme/` (Stratum `StratumThemeSpec` pattern):
+
+```text
+EnclaveThemeId / ThemeFamily   enum: Tonal, NeoBrutalist
+ColorMode                      enum: System, Light, Dark
+EnclaveThemeSpec               immutable token bundle (colors, shapes, elevations, typography)
+TonalSpec                      Material 3 baseline (rounded corners, thin borders, no hard shadow)
+NeoBrutalistSpec               Enclave neo values (4dp, 2dp, hard shadow, peach-on-dark)
+LocalEnclaveTheme              CompositionLocal carrying the active spec + accessor
+ThemePreferences (domain)      family + colorMode, persisted via DataStore; app shell maps domain → UI
+```
+
+- The root theme composable is the **only** place that resolves a spec (factory `(family, dark) → spec`) and may wrap `MaterialTheme` internally. Features must not import `MaterialTheme`.
+- Adding a family = new spec file only — no feature rewrites if this section was followed.
+- Settings exposes **Theme family** (Tonal / Neo Brutalist) and **Appearance** (System / Light / Dark); changing family recomposes without activity restart.
+- Enforced by Detekt `enclave` rules `ForbiddenMaterialComposeInFeatures` and `ForbiddenRawColorLiteralInFeatures` (`:core:ui` implementation exempt; tests/previews per `UNIT_TESTING.md`).
 
 ---
 
@@ -165,8 +189,10 @@ Run every item for UI-generating tasks. If any box fails, fix before completing.
 - [ ] **Design Read** (§5.1) stated in the agent response.
 - [ ] **Change mode** correct: locked §2–§4 specs untouched when mode is *preserve*.
 - [ ] **Token lock:** no hard-coded hex outside theme definitions (except §1 semantic exceptions).
-- [ ] **Neo chrome:** surfaces use `Neo*` components or `Modifier.neoSurface`; not raw Material cards/buttons for product chrome.
-- [ ] **Geometry lock:** borders 2.dp, hard shadows, radii from `EnclaveNeoTokens` (except locked chat/input shapes).
+- [ ] **Spec chrome:** surfaces use neutral `:core:ui` components driven by the active spec; not raw Material cards/buttons in feature code, and no feature branching on theme family.
+- [ ] **Geometry lock:** corners, borders, and shadows come from the active spec (Neo: 2.dp/hard shadow/4.dp; Tonal: Material radii/no hard shadow), except locked chat/input shapes in §2–§3.
+- [ ] **Detekt:** `./gradlew detekt` passes (`ForbiddenMaterialComposeInFeatures`, `ForbiddenRawColorLiteralInFeatures`, `maxIssues: 0`).
+- [ ] **Previews:** shared components cover Tonal + Neo × Light + Dark; screenshot goldens updated when ENC-19 wiring exists.
 - [ ] **Accent lock:** one primary accent per theme; semantic colors only for error/success/shield states.
 - [ ] **Contrast:** primary actions and labels meet WCAG AA against their backgrounds.
 - [ ] **Hierarchy:** one obvious primary action per region; no duplicate CTAs with the same intent.
