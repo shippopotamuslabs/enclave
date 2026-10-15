@@ -1,17 +1,16 @@
 package com.browntowndev.enclave.feature.settings
 
-import androidx.work.Data
-import androidx.work.WorkInfo
-import com.browntowndev.enclave.core.data.download.DownloadFinalizeWorker
-import com.browntowndev.enclave.core.data.download.ModelDownloadWorker
-import com.browntowndev.enclave.core.data.repository.DownloadWorkRepository
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
 import com.browntowndev.enclave.domain.model.config.LocalModelId
-import com.browntowndev.enclave.domain.model.download.DownloadKey
 import com.browntowndev.enclave.domain.model.download.DownloadRequestKind
+import com.browntowndev.enclave.domain.model.download.DownloadWorkLifecycle
+import com.browntowndev.enclave.domain.model.download.DownloadWorkSnapshot
 import com.browntowndev.enclave.domain.model.download.ScheduledDownload
+import com.browntowndev.enclave.domain.port.download.DownloadWorkObserverPort
+import com.browntowndev.enclave.domain.usecase.download.ObserveDownloadWorkUseCase
 import com.browntowndev.enclave.domain.usecase.modelconfig.ReDownloadModelPackUseCase
 import com.browntowndev.enclave.domain.usecase.modelconfig.ReDownloadModelUseCase
+import kotlinx.coroutines.flow.Flow
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -30,13 +29,41 @@ import org.junit.jupiter.api.extension.ExtendWith
 class ModelReDownloadViewModelTest {
     private val reDownloadModelUseCase = mockk<ReDownloadModelUseCase>()
     private val reDownloadModelPackUseCase = mockk<ReDownloadModelPackUseCase>(relaxed = true)
-    private val downloadWorkRepository = mockk<DownloadWorkRepository>()
+    private var workFlow: Flow<DownloadWorkSnapshot?> = flowOf(null)
+    private val observerPort =
+        object : DownloadWorkObserverPort {
+            override fun observeDownloadWork(): Flow<DownloadWorkSnapshot?> = workFlow
+        }
     private lateinit var viewModel: ModelReDownloadViewModel
 
     @BeforeEach
     fun setup() {
-        viewModel = ModelReDownloadViewModel(reDownloadModelUseCase, reDownloadModelPackUseCase, downloadWorkRepository)
+        viewModel =
+            ModelReDownloadViewModel(
+                reDownloadModelUseCase,
+                reDownloadModelPackUseCase,
+                ObserveDownloadWorkUseCase(observerPort),
+            )
     }
+
+    private fun snapshot(
+        lifecycle: DownloadWorkLifecycle,
+        isTerminalSuccess: Boolean = false,
+        isIntermediateDownloadSuccess: Boolean = false,
+        unassignedFileProgress: String? = null,
+        aggregateProgress: Float? = null,
+    ): DownloadWorkSnapshot =
+        DownloadWorkSnapshot(
+            id = "work-1",
+            lifecycle = lifecycle,
+            isTerminalSuccess = isTerminalSuccess,
+            isTerminalFailure = false,
+            isIntermediateDownloadSuccess = isIntermediateDownloadSuccess,
+            isFinalizing = false,
+            postProcessProgress = null,
+            aggregateProgress = aggregateProgress,
+            unassignedFileProgress = unassignedFileProgress,
+        )
 
     @Test
     fun `reDownloadModel transitions to Preparing then Downloading and Complete`() =
@@ -52,32 +79,9 @@ class ModelReDownloadViewModelTest {
                     ),
                 )
 
-            val progressData =
-                Data
-                    .Builder()
-                    .putStringArray(DownloadKey.FILES_PROGRESS.key, arrayOf("unassigned|50|100"))
-                    .build()
-
-            val workInfoRunning = mockk<WorkInfo>()
-            every { workInfoRunning.state } returns WorkInfo.State.RUNNING
-            every { workInfoRunning.tags } returns setOf(ModelDownloadWorker::class.java.name)
-            every { workInfoRunning.progress } returns progressData
-            every { workInfoRunning.outputData } returns Data.EMPTY
-
-            // Simulate the finalizer SUCCEEDED (terminal state in the chain)
-            val finalizerOutputData =
-                Data
-                    .Builder()
-                    .putString("worker_stage", "FINALIZE")
-                    .build()
-            val workInfoSucceeded = mockk<WorkInfo>()
-            every { workInfoSucceeded.state } returns WorkInfo.State.SUCCEEDED
-            every { workInfoSucceeded.tags } returns setOf(DownloadFinalizeWorker::class.java.name)
-            every { workInfoSucceeded.progress } returns Data.EMPTY
-            every { workInfoSucceeded.outputData } returns finalizerOutputData
-
-            every { downloadWorkRepository.observeDownloadProgress() } returns
-                flowOf(workInfoRunning, workInfoSucceeded)
+            val running = snapshot(DownloadWorkLifecycle.RUNNING, unassignedFileProgress = "unassigned|50|100")
+            val succeeded = snapshot(DownloadWorkLifecycle.SUCCEEDED, isTerminalSuccess = true)
+            workFlow = flowOf(running, succeeded)
 
             viewModel.reDownloadModel(modelId)
             advanceUntilIdle()
@@ -116,32 +120,10 @@ class ModelReDownloadViewModelTest {
                     ),
                 )
 
-            // Downloader SUCCEEDED (intermediate) — should NOT trigger Complete yet
-            val downloaderOutputData =
-                Data
-                    .Builder()
-                    .putString("worker_stage", "DOWNLOAD")
-                    .build()
-            val downloaderSucceeded = mockk<WorkInfo>()
-            every { downloaderSucceeded.state } returns WorkInfo.State.SUCCEEDED
-            every { downloaderSucceeded.tags } returns setOf(ModelDownloadWorker::class.java.name)
-            every { downloaderSucceeded.progress } returns Data.EMPTY
-            every { downloaderSucceeded.outputData } returns downloaderOutputData
-
-            // Finalizer SUCCEEDED (terminal) — triggers Complete
-            val finalizerOutputData =
-                Data
-                    .Builder()
-                    .putString("worker_stage", "FINALIZE")
-                    .build()
-            val finalizerSucceeded = mockk<WorkInfo>()
-            every { finalizerSucceeded.state } returns WorkInfo.State.SUCCEEDED
-            every { finalizerSucceeded.tags } returns setOf(DownloadFinalizeWorker::class.java.name)
-            every { finalizerSucceeded.progress } returns Data.EMPTY
-            every { finalizerSucceeded.outputData } returns finalizerOutputData
-
-            every { downloadWorkRepository.observeDownloadProgress() } returns
-                flowOf(downloaderSucceeded, finalizerSucceeded)
+            val downloaderSucceeded =
+                snapshot(DownloadWorkLifecycle.SUCCEEDED, isIntermediateDownloadSuccess = true)
+            val finalizerSucceeded = snapshot(DownloadWorkLifecycle.SUCCEEDED, isTerminalSuccess = true)
+            workFlow = flowOf(downloaderSucceeded, finalizerSucceeded)
 
             viewModel.reDownloadModel(modelId)
             advanceUntilIdle()
@@ -163,33 +145,14 @@ class ModelReDownloadViewModelTest {
                     ),
                 )
 
-            val downloaderOutputData =
-                Data
-                    .Builder()
-                    .putString("worker_stage", "DOWNLOAD")
-                    .build()
-            val downloaderSucceeded = mockk<WorkInfo>()
-            every { downloaderSucceeded.state } returns WorkInfo.State.SUCCEEDED
-            every { downloaderSucceeded.tags } returns setOf(ModelDownloadWorker::class.java.name)
-            every { downloaderSucceeded.progress } returns
-                Data.Builder()
-                    .putStringArray(DownloadKey.FILES_PROGRESS.key, arrayOf("realvis.zip|100|100"))
-                    .build()
-            every { downloaderSucceeded.outputData } returns downloaderOutputData
-
-            val finalizerOutputData =
-                Data
-                    .Builder()
-                    .putString("worker_stage", "FINALIZE")
-                    .build()
-            val finalizerSucceeded = mockk<WorkInfo>()
-            every { finalizerSucceeded.state } returns WorkInfo.State.SUCCEEDED
-            every { finalizerSucceeded.tags } returns setOf(DownloadFinalizeWorker::class.java.name)
-            every { finalizerSucceeded.progress } returns Data.EMPTY
-            every { finalizerSucceeded.outputData } returns finalizerOutputData
-
-            every { downloadWorkRepository.observeDownloadProgress() } returns
-                flowOf(downloaderSucceeded, finalizerSucceeded)
+            val downloaderSucceeded =
+                snapshot(
+                    DownloadWorkLifecycle.SUCCEEDED,
+                    isIntermediateDownloadSuccess = true,
+                    aggregateProgress = 1f,
+                )
+            val finalizerSucceeded = snapshot(DownloadWorkLifecycle.SUCCEEDED, isTerminalSuccess = true)
+            workFlow = flowOf(downloaderSucceeded, finalizerSucceeded)
 
             viewModel.reDownloadPack("sdxl-t2i")
             advanceUntilIdle()
