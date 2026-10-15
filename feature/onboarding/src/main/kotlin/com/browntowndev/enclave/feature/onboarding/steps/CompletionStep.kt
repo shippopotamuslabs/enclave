@@ -18,10 +18,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.browntowndev.enclave.core.ui.component.neo.NeoCircularProgressIndicator
-import com.browntowndev.enclave.core.ui.component.neo.NeoPanel
-import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoSecondaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveCircularProgressIndicator
+import com.browntowndev.enclave.core.ui.component.enclave.EnclavePanel
+import com.browntowndev.enclave.core.ui.component.enclave.EnclavePrimaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSecondaryButton
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 
@@ -55,7 +55,7 @@ fun CompletionStep(
             )
             Spacer(modifier = Modifier.height(16.dp))
 
-            NeoPanel(
+            EnclavePanel(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(
@@ -95,7 +95,7 @@ fun CompletionStep(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Center,
             ) {
-                NeoCircularProgressIndicator()
+                EnclaveCircularProgressIndicator()
             }
         } else {
             Row(
@@ -105,12 +105,12 @@ fun CompletionStep(
                         .padding(top = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                NeoSecondaryButton(
+                EnclaveSecondaryButton(
                     text = "BACK",
                     onClick = onPrevious,
                     modifier = Modifier.weight(1f),
                 )
-                NeoPrimaryButton(
+                EnclavePrimaryButton(
                     text = "START CHATTING",
                     onClick = onCompleteOnboarding,
                     modifier = Modifier.weight(1.5f),

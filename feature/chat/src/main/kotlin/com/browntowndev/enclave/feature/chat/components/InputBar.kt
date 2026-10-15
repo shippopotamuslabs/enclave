@@ -44,14 +44,14 @@ import com.browntowndev.enclave.core.ui.component.UniversalImageAttachment
 import com.browntowndev.enclave.core.ui.component.UniversalInputBar
 import com.browntowndev.enclave.core.ui.component.UniversalPromptTextField
 import com.browntowndev.enclave.core.ui.component.UniversalVoiceTrailingAction
-import com.browntowndev.enclave.core.ui.component.neo.NeoActionRow
-import com.browntowndev.enclave.core.ui.component.neo.NeoDisabledActionTooltip
-import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
-import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
-import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
-import com.browntowndev.enclave.core.ui.component.neo.neoSurface
-import com.browntowndev.enclave.core.ui.component.neo.rememberNeoDisabledClick
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveActionRow
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveDisabledActionTooltip
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveIconButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSheetHeader
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorderColor
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurface
+import com.browntowndev.enclave.core.ui.component.enclave.rememberNeoDisabledClick
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.domain.port.media.SpeechState
 import com.browntowndev.enclave.domain.port.media.isActiveVoiceInput
@@ -114,11 +114,11 @@ fun InputBar(
         }
 
     if (showAttachmentSheet) {
-        NeoModalBottomSheet(
+        EnclaveModalBottomSheet(
             onDismissRequest = { showAttachmentSheet = false },
             sheetState = sheetState,
         ) {
-            NeoSheetHeader(
+            EnclaveSheetHeader(
                 title = "Attach",
                 onDismiss = { showAttachmentSheet = false },
             )
@@ -180,9 +180,9 @@ fun InputBar(
                     modifier =
                         Modifier
                             .padding(start = 16.dp, top = 8.dp, bottom = 8.dp)
-                            .neoSurface(
+                            .enclaveSurface(
                                 backgroundColor = MaterialTheme.colorScheme.surfaceVariant,
-                                borderColor = neoBorderColor(),
+                                borderColor = enclaveBorderColor(),
                                 withShadow = false,
                                 shape = EnclaveNeoTokens.shape,
                             ).padding(horizontal = 12.dp, vertical = 6.dp),
@@ -231,7 +231,7 @@ fun InputBar(
                 null
             } else {
                 {
-                    NeoIconButton(
+                    EnclaveIconButton(
                         onClick = { showAttachmentSheet = true },
                         icon = Icons.Default.Add,
                         contentDescription = "Show attachment options",
@@ -279,12 +279,12 @@ private fun AttachmentMenuItem(
     enabled: Boolean = true,
     disabledReason: String? = null,
 ) {
-    NeoDisabledActionTooltip(
+    EnclaveDisabledActionTooltip(
         enabled = enabled,
         disabledReason = disabledReason,
     ) {
         val handleClick = rememberNeoDisabledClick(enabled = enabled, onEnabledClick = onClick)
-        NeoActionRow(
+        EnclaveActionRow(
             title = label,
             icon = icon,
             enabled = enabled,

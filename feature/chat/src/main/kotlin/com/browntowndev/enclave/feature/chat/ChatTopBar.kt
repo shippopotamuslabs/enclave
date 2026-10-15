@@ -31,12 +31,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.PopupProperties
-import com.browntowndev.enclave.core.ui.component.neo.NeoAppBarChrome
-import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
-import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
-import com.browntowndev.enclave.core.ui.component.neo.neoButtonShadowOffset
-import com.browntowndev.enclave.core.ui.component.neo.neoShadowColor
-import com.browntowndev.enclave.core.ui.component.neo.neoSurface
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveAppBarChrome
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveIconButton
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorderColor
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveButtonShadowOffset
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveShadowColor
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurface
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import androidx.compose.ui.res.stringResource
@@ -57,8 +57,8 @@ fun ChatTopBar(
     var modeExpanded by remember { mutableStateOf(false) }
     var overflowExpanded by remember { mutableStateOf(false) }
 
-    NeoAppBarChrome(modifier = modifier) {
-        NeoIconButton(
+    EnclaveAppBarChrome(modifier = modifier) {
+        EnclaveIconButton(
             onClick = onMenuClick,
             icon = Icons.Default.Menu,
             contentDescription = "Open history",
@@ -107,12 +107,12 @@ fun ChatTopBar(
                 modifier =
                     Modifier
                         .width(200.dp)
-                        .neoSurface(
+                        .enclaveSurface(
                             backgroundColor = MaterialTheme.colorScheme.surface,
-                            borderColor = neoBorderColor(),
+                            borderColor = enclaveBorderColor(),
                             withShadow = true,
-                            shadowColor = neoShadowColor(),
-                            shadowOffset = neoButtonShadowOffset(),
+                            shadowColor = enclaveShadowColor(),
+                            shadowOffset = enclaveButtonShadowOffset(),
                             shape = EnclaveNeoTokens.shape,
                         ),
             ) {
@@ -179,7 +179,7 @@ fun ChatTopBar(
             }
         }
         Box {
-            NeoIconButton(
+            EnclaveIconButton(
                 onClick = { overflowExpanded = true },
                 icon = Icons.Default.MoreVert,
                 contentDescription = "Chat options",

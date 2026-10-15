@@ -28,11 +28,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.browntowndev.enclave.core.ui.component.neo.NeoPanel
-import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoSecondaryButton
-import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
-import com.browntowndev.enclave.core.ui.component.neo.neoSurface
+import com.browntowndev.enclave.core.ui.component.enclave.EnclavePanel
+import com.browntowndev.enclave.core.ui.component.enclave.EnclavePrimaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSecondaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorderColor
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurface
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
@@ -59,7 +59,7 @@ fun ModelChoiceStep(
     onPrevious: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val borderColor = neoBorderColor()
+    val borderColor = enclaveBorderColor()
     val scrollState = rememberScrollState()
     var showConfigureSheet by remember { mutableStateOf(false) }
 
@@ -102,7 +102,7 @@ fun ModelChoiceStep(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .neoSurface(
+                        .enclaveSurface(
                             backgroundColor = MaterialTheme.colorScheme.surface,
                             borderColor =
                                 if (selectedModelChoice == ModelChoice.LOCAL) {
@@ -139,7 +139,7 @@ fun ModelChoiceStep(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .neoSurface(
+                        .enclaveSurface(
                             backgroundColor = MaterialTheme.colorScheme.surface,
                             borderColor =
                                 if (selectedModelChoice == ModelChoice.API) {
@@ -185,7 +185,7 @@ fun ModelChoiceStep(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 // Provider selection panel
-                NeoPanel(
+                EnclavePanel(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Column(
@@ -208,7 +208,7 @@ fun ModelChoiceStep(
                                 modifier =
                                     Modifier
                                         .fillMaxWidth()
-                                        .neoSurface(
+                                        .enclaveSurface(
                                             backgroundColor = if (isSelected) bgSelected else MaterialTheme.colorScheme.surface,
                                             borderColor = if (isSelected) MaterialTheme.colorScheme.primary else borderColor,
                                         ).clickable {
@@ -253,12 +253,12 @@ fun ModelChoiceStep(
                     .padding(top = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            NeoSecondaryButton(
+            EnclaveSecondaryButton(
                 text = "BACK",
                 onClick = onPrevious,
                 modifier = Modifier.weight(1f),
             )
-            NeoPrimaryButton(
+            EnclavePrimaryButton(
                 text = "CONTINUE",
                 onClick = {
                     if (selectedModelChoice == ModelChoice.API) {

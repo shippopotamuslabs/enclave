@@ -54,14 +54,14 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.browntowndev.enclave.core.ui.component.neo.NeoCircularProgressIndicator
-import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
-import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
-import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
-import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
-import com.browntowndev.enclave.core.ui.component.neo.neoSurface
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveCircularProgressIndicator
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveIconButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.enclave.EnclavePrimaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSectionHeader
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSheetHeader
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorderColor
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurface
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
@@ -152,7 +152,7 @@ fun LocalModelsBottomSheetContent(
         }
     }
 
-    NeoModalBottomSheet(
+    EnclaveModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
     ) {
@@ -293,7 +293,7 @@ private fun LocalModelAssetListView(
     }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        NeoSheetHeader(
+        EnclaveSheetHeader(
             title = "Local AI Models",
             subtitle = "Manage your model packs, local models, and tuning presets.",
             onDismiss = onDismiss,
@@ -312,7 +312,7 @@ private fun LocalModelAssetListView(
 
             if (displayedLocalModels.isNotEmpty()) {
                 item {
-                    NeoSectionHeader(text = "Models")
+                    EnclaveSectionHeader(text = "Models")
                 }
                 items(displayedLocalModels, key = { it.metadataId.value }) { asset ->
                     LocalModelAssetCard(
@@ -334,7 +334,7 @@ private fun LocalModelAssetListView(
             if (displayedAvailableToDownloadModels.isNotEmpty()) {
                 item {
                     Spacer(modifier = Modifier.height(EnclaveNeoTokens.sectionSpacing))
-                    NeoSectionHeader(text = "Removed")
+                    EnclaveSectionHeader(text = "Removed")
                 }
                 items(displayedAvailableToDownloadModels, key = { "dl_${it.metadataId.value}" }) { asset ->
                     LocalModelAssetCard(
@@ -370,7 +370,7 @@ private fun LazyListScope.modelPacksSection(
         return
     }
     item(key = "model_packs_header") {
-        NeoSectionHeader(text = "Model packs")
+        EnclaveSectionHeader(text = "Model packs")
     }
     items(modelPacks, key = { it.packId }) { pack ->
         ModelPackCard(
@@ -396,9 +396,9 @@ private fun LocalModelAssetCard(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .neoSurface(
+                    .enclaveSurface(
                         backgroundColor = MaterialTheme.colorScheme.surface,
-                        borderColor = neoBorderColor(),
+                        borderColor = enclaveBorderColor(),
                         withShadow = false,
                     ).clickable { onSelectAsset(asset) }
                     .padding(16.dp),
@@ -464,22 +464,22 @@ private fun LocalModelAssetCard(
                             }
                         }
                         is ReDownloadProgress.Preparing -> {
-                            NeoCircularProgressIndicator(modifier = Modifier.size(20.dp))
+                            EnclaveCircularProgressIndicator(modifier = Modifier.size(20.dp))
                         }
                         is ReDownloadProgress.Downloading -> {
-                            NeoCircularProgressIndicator(
+                            EnclaveCircularProgressIndicator(
                                 progress = { reDownloadProgress.progress },
                                 modifier = Modifier.size(20.dp),
                             )
                         }
                         is ReDownloadProgress.Finalizing -> {
                             if (reDownloadProgress.progress != null) {
-                                NeoCircularProgressIndicator(
+                                EnclaveCircularProgressIndicator(
                                     progress = { reDownloadProgress.progress },
                                     modifier = Modifier.size(20.dp),
                                 )
                             } else {
-                                NeoCircularProgressIndicator(modifier = Modifier.size(20.dp))
+                                EnclaveCircularProgressIndicator(modifier = Modifier.size(20.dp))
                             }
                         }
                         is ReDownloadProgress.Complete -> {
@@ -570,14 +570,14 @@ private fun LocalModelConfigListView(
     var menuExpanded by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        NeoSheetHeader(
+        EnclaveSheetHeader(
             title = asset.friendlyName,
             subtitle = presetSubtitle,
             onDismiss = onDismiss,
             onBackClick = onBack,
             trailingContent = {
                 Box {
-                    NeoIconButton(
+                    EnclaveIconButton(
                         onClick = { menuExpanded = true },
                         icon = Icons.Default.MoreVert,
                         contentDescription = "Options",
@@ -650,7 +650,7 @@ private fun LocalModelConfigListView(
             item {
                 Spacer(modifier = Modifier.height(16.dp))
 
-                NeoPrimaryButton(
+                EnclavePrimaryButton(
                     text = "Add Preset",
                     icon = Icons.Default.Add,
                     onClick = onAddConfig,
@@ -705,9 +705,9 @@ private fun ModelPackCard(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .neoSurface(
+                    .enclaveSurface(
                         backgroundColor = MaterialTheme.colorScheme.surface,
-                        borderColor = neoBorderColor(),
+                        borderColor = enclaveBorderColor(),
                         withShadow = false,
                     ).padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -754,22 +754,22 @@ private fun ModelPackCard(
                             }
                         }
                         ReDownloadProgress.Preparing -> {
-                            NeoCircularProgressIndicator(modifier = Modifier.size(20.dp))
+                            EnclaveCircularProgressIndicator(modifier = Modifier.size(20.dp))
                         }
                         is ReDownloadProgress.Downloading -> {
-                            NeoCircularProgressIndicator(
+                            EnclaveCircularProgressIndicator(
                                 progress = { reDownloadProgress.progress },
                                 modifier = Modifier.size(20.dp),
                             )
                         }
                         is ReDownloadProgress.Finalizing -> {
                             if (reDownloadProgress.progress != null) {
-                                NeoCircularProgressIndicator(
+                                EnclaveCircularProgressIndicator(
                                     progress = { reDownloadProgress.progress },
                                     modifier = Modifier.size(20.dp),
                                 )
                             } else {
-                                NeoCircularProgressIndicator(modifier = Modifier.size(20.dp))
+                                EnclaveCircularProgressIndicator(modifier = Modifier.size(20.dp))
                             }
                         }
                         ReDownloadProgress.Complete -> {

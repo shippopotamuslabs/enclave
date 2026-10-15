@@ -49,15 +49,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
-import com.browntowndev.enclave.core.ui.component.neo.GoogleSignInButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoAppBarChrome
-import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoNavRow
-import com.browntowndev.enclave.core.ui.component.neo.NeoPanel
-import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
-import com.browntowndev.enclave.core.ui.component.neo.NeoSettingsSection
-import com.browntowndev.enclave.core.ui.component.neo.NeoThemeChip
-import com.browntowndev.enclave.core.ui.component.neo.NeoToggleRow
+import com.browntowndev.enclave.core.ui.component.enclave.GoogleSignInButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveAppBarChrome
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveIconButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveNavRow
+import com.browntowndev.enclave.core.ui.component.enclave.EnclavePanel
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSectionHeader
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSettingsSection
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveThemeChip
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveToggleRow
 import com.browntowndev.enclave.core.ui.component.sheet.TosBottomSheet
 import com.browntowndev.enclave.core.ui.component.vault.VaultAuthUiState
 import com.browntowndev.enclave.core.ui.component.vault.VaultReauthBottomSheet
@@ -177,7 +177,7 @@ fun SettingsScreen(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            NeoAppBarChrome {
+            EnclaveAppBarChrome {
                 Text(
                     text = "Settings",
                     style = MaterialTheme.typography.titleLarge,
@@ -185,7 +185,7 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.onBackground,
                     modifier = Modifier.weight(1f),
                 )
-                NeoIconButton(
+                EnclaveIconButton(
                     onClick = onCloseClick,
                     icon = Icons.Default.Close,
                     contentDescription = "Close settings",
@@ -213,7 +213,7 @@ fun SettingsScreen(
             }
 
             item {
-                NeoSectionHeader(text = "Appearance")
+                EnclaveSectionHeader(text = "Appearance")
                 ThemeSelection(
                     selectedTheme = uiState.home.theme,
                     onThemeChange = onThemeChange,
@@ -221,15 +221,15 @@ fun SettingsScreen(
             }
 
             item {
-                NeoSectionHeader(text = "Experience")
-                NeoSettingsSection {
-                    NeoToggleRow(
+                EnclaveSectionHeader(text = "Experience")
+                EnclaveSettingsSection {
+                    EnclaveToggleRow(
                         title = "Haptic Response",
                         icon = Icons.Default.Vibration,
                         checked = uiState.home.hapticResponse,
                         onCheckedChange = onHapticResponseChange,
                     )
-                    NeoToggleRow(
+                    EnclaveToggleRow(
                         title = "Background Inference",
                         subtitle = "Allow chat generation to continue when the app is in the background",
                         icon = Icons.Default.Cloud,
@@ -240,39 +240,39 @@ fun SettingsScreen(
             }
 
             item {
-                NeoSectionHeader(text = "Models")
-                NeoSettingsSection {
-                    NeoNavRow(
+                EnclaveSectionHeader(text = "Models")
+                EnclaveSettingsSection {
+                    EnclaveNavRow(
                         title = "Model Role Assignments",
                         subtitle = "Set models for chat, media, and tts",
                         icon = Icons.AutoMirrored.Filled.Rule,
                         onClick = { onNavigateToModelConfigure(ModelType.MAIN) },
                     )
-                    NeoNavRow(
+                    EnclaveNavRow(
                         title = "Local Models",
                         subtitle = "Manage on-device models",
                         icon = Icons.Default.Memory,
                         onClick = { onShowLocalModelsSheet(true) },
                     )
-                    NeoNavRow(
+                    EnclaveNavRow(
                         title = "API Models",
                         subtitle = "Manage API keys and presets",
                         icon = Icons.Default.Cloud,
                         onClick = { onShowByokSheet(true) },
                     )
-                    NeoNavRow(
+                    EnclaveNavRow(
                         title = "Text to Speech Models",
                         subtitle = "Manage TTS voices and API keys",
                         icon = Icons.Default.Vibration,
                         onClick = { onShowTtsProvidersSheet(true) },
                     )
-                    NeoNavRow(
+                    EnclaveNavRow(
                         title = "Live Voice",
                         subtitle = "Manage realtime speech-to-speech providers",
                         icon = Icons.Default.GraphicEq,
                         onClick = { onShowLiveVoiceProvidersSheet(true) },
                     )
-                    NeoNavRow(
+                    EnclaveNavRow(
                         title = "Media Generation Models",
                         subtitle = "Manage Image and Video generation APIs",
                         icon = Icons.Default.Palette,
@@ -282,9 +282,9 @@ fun SettingsScreen(
             }
 
             item {
-                NeoSectionHeader(text = "Tools")
-                NeoSettingsSection {
-                    NeoNavRow(
+                EnclaveSectionHeader(text = "Tools")
+                EnclaveSettingsSection {
+                    EnclaveNavRow(
                         title = "Search Skills",
                         subtitle =
                             buildString {
@@ -300,13 +300,13 @@ fun SettingsScreen(
                         icon = Icons.Default.Public,
                         onClick = { onShowSearchSkillSheet(true) },
                     )
-                    NeoNavRow(
+                    EnclaveNavRow(
                         title = "Vision",
                         subtitle = ModelType.VISION.description,
                         icon = Icons.Default.Visibility,
                         onClick = { onShowVisionSettingsSheet(true) },
                     )
-                    NeoNavRow(
+                    EnclaveNavRow(
                         title = "Psychological Profile",
                         subtitle = "Build a profile from your AI conversation exports",
                         icon = Icons.Default.Psychology,
@@ -316,20 +316,20 @@ fun SettingsScreen(
             }
 
             item {
-                NeoSectionHeader(text = "Data & Privacy")
-                NeoSettingsSection {
-                    NeoNavRow(
+                EnclaveSectionHeader(text = "Data & Privacy")
+                EnclaveSettingsSection {
+                    EnclaveNavRow(
                         title = "Usage & Spend",
                         icon = Icons.Default.BarChart,
                         onClick = { onShowUsageSpendSheet(true) },
                         modifier = Modifier.testTag("usage_spend_row"),
                     )
-                    NeoNavRow(
+                    EnclaveNavRow(
                         title = "Memories",
                         icon = Icons.Default.SmartToy,
                         onClick = { onShowMemoriesSheet(true) },
                     )
-                    NeoNavRow(
+                    EnclaveNavRow(
                         title = "Data Controls",
                         icon = Icons.Default.Shield,
                         onClick = { onShowDataControlsSheet(true) },
@@ -338,19 +338,19 @@ fun SettingsScreen(
             }
 
             item {
-                NeoSectionHeader(text = "About")
-                NeoSettingsSection {
-                    NeoNavRow(
+                EnclaveSectionHeader(text = "About")
+                EnclaveSettingsSection {
+                    EnclaveNavRow(
                         title = "Terms of Service",
                         icon = Icons.Default.Info,
                         onClick = { onShowTosSheet(true) },
                     )
-                    NeoNavRow(
+                    EnclaveNavRow(
                         title = "Feedback",
                         icon = Icons.Default.Feedback,
                         onClick = { onShowFeedbackSheet(true) },
                     )
-                    NeoNavRow(
+                    EnclaveNavRow(
                         title = "Licenses & Attributions",
                         icon = Icons.Default.Info,
                         onClick = { onShowOssLicensesSheet(true) },
@@ -550,10 +550,10 @@ private fun AuthStateUi.toVaultAuthUiState(): VaultAuthUiState =
         is AuthStateUi.Error -> VaultAuthUiState.Error(message)
     }
 
-/** @deprecated Prefer [NeoSectionHeader]; kept for other settings flows still on legacy section headers. */
+/** @deprecated Prefer [EnclaveSectionHeader]; kept for other settings flows still on legacy section headers. */
 @Composable
 fun SectionHeader(text: String) {
-    NeoSectionHeader(text = text)
+    EnclaveSectionHeader(text = text)
 }
 
 @Composable
@@ -564,10 +564,10 @@ fun AccountSection(
     onLoginClick: () -> Unit,
     onLogoutClick: () -> Unit,
 ) {
-    NeoSectionHeader(text = "Account")
+    EnclaveSectionHeader(text = "Account")
     when (authState) {
         is AuthStateUi.Authenticated -> {
-            NeoPanel {
+            EnclavePanel {
                 Row(
                     modifier =
                         Modifier
@@ -607,7 +607,7 @@ fun AccountSection(
                             )
                         }
                     }
-                    NeoIconButton(
+                    EnclaveIconButton(
                         onClick = onLogoutClick,
                         icon = Icons.Default.Logout,
                         contentDescription = "Logout",
@@ -636,7 +636,7 @@ fun AccountSection(
             GoogleSignInButton(onClick = onLoginClick)
         }
         AuthStateUi.Loading -> {
-            NeoPanel {
+            EnclavePanel {
                 Row(
                     modifier =
                         Modifier
@@ -648,7 +648,7 @@ fun AccountSection(
             }
         }
         is AuthStateUi.Error -> {
-            NeoPanel {
+            EnclavePanel {
                 Row(
                     modifier =
                         Modifier
@@ -661,7 +661,7 @@ fun AccountSection(
                         text = "Error: ${authState.message}",
                         color = MaterialTheme.colorScheme.onErrorContainer,
                     )
-                    NeoIconButton(
+                    EnclaveIconButton(
                         onClick = onLoginClick,
                         icon = Icons.Default.AccountCircle,
                         contentDescription = "Retry Login",
@@ -722,7 +722,7 @@ fun ThemeOption(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    NeoThemeChip(
+    EnclaveThemeChip(
         text = text,
         selected = selected,
         onClick = onClick,

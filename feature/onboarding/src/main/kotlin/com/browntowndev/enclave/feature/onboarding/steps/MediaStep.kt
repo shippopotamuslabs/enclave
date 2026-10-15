@@ -31,10 +31,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoSecondaryButton
-import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
-import com.browntowndev.enclave.core.ui.component.neo.neoSurface
+import com.browntowndev.enclave.core.ui.component.enclave.EnclavePrimaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSecondaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorderColor
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurface
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.config.MediaCapability
@@ -56,7 +56,7 @@ fun MediaStep(
     modifier: Modifier = Modifier,
 ) {
     val scrollState = rememberScrollState()
-    val borderColor = neoBorderColor()
+    val borderColor = enclaveBorderColor()
     var activeSheet by remember { mutableStateOf<ActiveSheet?>(null) }
 
     Column(
@@ -138,12 +138,12 @@ fun MediaStep(
                     .padding(top = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            NeoSecondaryButton(
+            EnclaveSecondaryButton(
                 text = "BACK",
                 onClick = onPrevious,
                 modifier = Modifier.weight(1f),
             )
-            NeoPrimaryButton(
+            EnclavePrimaryButton(
                 text = "CONTINUE",
                 onClick = onNext,
                 modifier = Modifier.weight(1.5f),
@@ -194,7 +194,7 @@ private fun PluginCard(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .neoSurface(
+                .enclaveSurface(
                     backgroundColor = MaterialTheme.colorScheme.surface,
                     borderColor = borderColor,
                 ).clickable(onClick = onClick)

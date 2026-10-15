@@ -33,9 +33,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
-import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.enclave.EnclavePrimaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSheetHeader
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
@@ -63,11 +63,11 @@ fun MediaProvidersBottomSheet(
         }
     }
 
-    NeoModalBottomSheet(
+    EnclaveModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
     ) {
-        NeoSheetHeader(
+        EnclaveSheetHeader(
             title = "Media Generation Models",
             subtitle = "Manage your Image and Video generation APIs.",
             onDismiss = onDismiss,
@@ -137,7 +137,7 @@ fun MediaProvidersBottomSheet(
             }
 
             Spacer(modifier = Modifier.height(16.dp))
-            NeoPrimaryButton(
+            EnclavePrimaryButton(
                 text = "Add Media Provider",
                 icon = Icons.Default.Add,
                 onClick = {

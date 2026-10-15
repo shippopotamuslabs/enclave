@@ -20,12 +20,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.browntowndev.enclave.core.ui.component.neo.NeoCircularProgressIndicator
-import com.browntowndev.enclave.core.ui.component.neo.NeoGroupDivider
-import com.browntowndev.enclave.core.ui.component.neo.NeoPanel
-import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoSecondaryButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveCircularProgressIndicator
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveGroupDivider
+import com.browntowndev.enclave.core.ui.component.enclave.EnclavePanel
+import com.browntowndev.enclave.core.ui.component.enclave.EnclavePrimaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSecondaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSectionHeader
 import com.browntowndev.enclave.domain.model.profile.ProfileCostEstimate
 
 @Composable
@@ -41,7 +41,7 @@ internal fun CostEstimateStep(
                 .fillMaxSize()
                 .padding(16.dp),
     ) {
-        NeoSectionHeader(text = "Cost estimate")
+        EnclaveSectionHeader(text = "Cost estimate")
 
         when {
             isLoading -> {
@@ -51,7 +51,7 @@ internal fun CostEstimateStep(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    NeoCircularProgressIndicator()
+                    EnclaveCircularProgressIndicator()
                     Text(
                         text = "Preparing corpus…",
                         style = MaterialTheme.typography.bodyMedium,
@@ -63,22 +63,22 @@ internal fun CostEstimateStep(
 
             estimate != null -> {
                 Spacer(Modifier.height(8.dp))
-                NeoPanel {
+                EnclavePanel {
                     StatRow(
                         label = "Conversations",
                         value = "${estimate.selectedConversationCount} / ${estimate.totalConversationCount}",
                     )
-                    NeoGroupDivider()
+                    EnclaveGroupDivider()
                     StatRow(
                         label = "Input tokens",
                         value = "~${"%,d".format(estimate.estimatedInputTokens)}",
                     )
-                    NeoGroupDivider()
+                    EnclaveGroupDivider()
                     StatRow(
                         label = "Output tokens",
                         value = "~${"%,d".format(estimate.estimatedOutputTokens)}",
                     )
-                    NeoGroupDivider()
+                    EnclaveGroupDivider()
                     StatRow(
                         label = "Estimated cost",
                         value =
@@ -98,7 +98,7 @@ internal fun CostEstimateStep(
 
                 Spacer(Modifier.height(12.dp))
 
-                NeoPanel {
+                EnclavePanel {
                     Row(
                         modifier = Modifier.padding(16.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -131,9 +131,9 @@ internal fun CostEstimateStep(
 
         Spacer(Modifier.height(16.dp))
         Row {
-            NeoSecondaryButton(text = "Back", onClick = onBack, modifier = Modifier.weight(1f))
+            EnclaveSecondaryButton(text = "Back", onClick = onBack, modifier = Modifier.weight(1f))
             Spacer(Modifier.padding(4.dp))
-            NeoPrimaryButton(
+            EnclavePrimaryButton(
                 text = "Run Analysis",
                 onClick = onStartAnalysis,
                 enabled = !isLoading && estimate != null,
