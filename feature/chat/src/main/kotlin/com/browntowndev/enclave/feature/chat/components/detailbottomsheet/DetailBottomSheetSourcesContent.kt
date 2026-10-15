@@ -11,7 +11,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.browntowndev.enclave.core.ui.component.neo.NeoSheetTabRow
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSheetTabRow
 import com.browntowndev.enclave.domain.model.chat.WebSearchSource
 import com.browntowndev.enclave.feature.chat.components.WebSearchSourceRow
 import java.net.URI
@@ -40,7 +40,7 @@ internal fun DetailBottomSheetSourcesContent(
     val showTabs = webSources.isNotEmpty() && xSources.isNotEmpty()
 
     if (showTabs) {
-        NeoSheetTabRow(
+        EnclaveSheetTabRow(
             selectedTabIndex = selectedTab,
             tabs = listOf("Web Sources", "X Sources"),
             onTabSelected = { selectedTab = it },

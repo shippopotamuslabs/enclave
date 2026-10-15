@@ -29,11 +29,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.browntowndev.enclave.core.ui.component.neo.NeoCircularProgressIndicator
-import com.browntowndev.enclave.core.ui.component.neo.NeoGroupDivider
-import com.browntowndev.enclave.core.ui.component.neo.NeoPanel
-import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoSecondaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveCircularProgressIndicator
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveGroupDivider
+import com.browntowndev.enclave.core.ui.component.enclave.EnclavePanel
+import com.browntowndev.enclave.core.ui.component.enclave.EnclavePrimaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSecondaryButton
 import com.browntowndev.enclave.core.ui.component.sheet.TosBottomSheet
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
@@ -73,7 +73,7 @@ fun WelcomeAgeGateStep(
         ) {
             Spacer(modifier = Modifier.height(48.dp))
 
-            NeoPanel(
+            EnclavePanel(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(
@@ -102,7 +102,7 @@ fun WelcomeAgeGateStep(
                     )
 
                     Spacer(modifier = Modifier.height(24.dp))
-                    NeoGroupDivider(modifier = Modifier.padding(horizontal = 0.dp))
+                    EnclaveGroupDivider(modifier = Modifier.padding(horizontal = 0.dp))
                     Spacer(modifier = Modifier.height(24.dp))
 
                     AgeGateCheckboxRow(
@@ -130,10 +130,10 @@ fun WelcomeAgeGateStep(
                     )
 
                     Spacer(modifier = Modifier.height(24.dp))
-                    NeoGroupDivider(modifier = Modifier.padding(horizontal = 0.dp))
+                    EnclaveGroupDivider(modifier = Modifier.padding(horizontal = 0.dp))
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    NeoSecondaryButton(
+                    EnclaveSecondaryButton(
                         text = "REVIEW TERMS OF SERVICE",
                         onClick = {
                             showTosBottomSheet = true
@@ -179,10 +179,10 @@ fun WelcomeAgeGateStep(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Center,
             ) {
-                NeoCircularProgressIndicator()
+                EnclaveCircularProgressIndicator()
             }
         } else {
-            NeoPrimaryButton(
+            EnclavePrimaryButton(
                 text = continueButtonText,
                 onClick = onNext,
                 enabled = ageConfirmed && tosAccepted,

@@ -25,12 +25,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoSecondaryButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
-import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
-import com.browntowndev.enclave.core.ui.component.neo.neoSurface
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveIconButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclavePrimaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSecondaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSectionHeader
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSheetHeader
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurface
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.feature.chat.ArtifactExportSheetState
 import com.browntowndev.enclave.feature.chat.ArtifactExportWizardStep
@@ -52,12 +52,12 @@ fun ArtifactExportWizardContent(
     Column(
         modifier = modifier.fillMaxWidth(),
     ) {
-        NeoSheetHeader(
+        EnclaveSheetHeader(
             title = stringResource(R.string.artifact_export_sheet_title),
             subtitle = state.title,
             onDismiss = onDismiss,
             trailingContent = {
-                NeoIconButton(
+                EnclaveIconButton(
                     onClick = onDismiss,
                     icon = Icons.Default.Close,
                     contentDescription = stringResource(R.string.artifact_export_close),
@@ -70,7 +70,7 @@ fun ArtifactExportWizardContent(
 
         when (state.step) {
             ArtifactExportWizardStep.CHOOSE_FORMAT -> {
-                NeoSectionHeader(text = stringResource(R.string.artifact_export_step_format))
+                EnclaveSectionHeader(text = stringResource(R.string.artifact_export_step_format))
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     WizardSelectableCard(
                         selected = state.selectedFormat == WizardExportFormat.PDF,
@@ -99,7 +99,7 @@ fun ArtifactExportWizardContent(
                 }
             }
             ArtifactExportWizardStep.CHOOSE_DESTINATION -> {
-                NeoSectionHeader(text = stringResource(R.string.artifact_export_step_destination))
+                EnclaveSectionHeader(text = stringResource(R.string.artifact_export_step_destination))
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     WizardSelectableCard(
                         selected = state.selectedDestination == WizardExportDestination.SHARE,
@@ -146,7 +146,7 @@ fun ArtifactExportWizardContent(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .neoSurface(
+                        .enclaveSurface(
                             backgroundColor = MaterialTheme.colorScheme.errorContainer,
                             borderColor = MaterialTheme.colorScheme.error,
                             withShadow = false,
@@ -185,13 +185,13 @@ private fun ArtifactExportWizardFooter(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                NeoSecondaryButton(
+                EnclaveSecondaryButton(
                     text = stringResource(R.string.artifact_export_back),
                     onClick = onBack,
                     enabled = !state.isExporting,
                     modifier = Modifier.weight(1f),
                 )
-                NeoPrimaryButton(
+                EnclavePrimaryButton(
                     text = stringResource(R.string.artifact_export_next),
                     onClick = onNext,
                     enabled = !state.isExporting && state.selectedFormat != null,
@@ -205,13 +205,13 @@ private fun ArtifactExportWizardFooter(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                NeoSecondaryButton(
+                EnclaveSecondaryButton(
                     text = stringResource(R.string.artifact_export_back),
                     onClick = onBack,
                     enabled = !state.isExporting,
                     modifier = Modifier.weight(1f),
                 )
-                NeoPrimaryButton(
+                EnclavePrimaryButton(
                     text = stringResource(R.string.artifact_export_action),
                     onClick = onConfirmExport,
                     enabled = !state.isExporting && state.selectedDestination != null,

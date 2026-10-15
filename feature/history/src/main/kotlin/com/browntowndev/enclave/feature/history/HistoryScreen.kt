@@ -57,14 +57,14 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.browntowndev.enclave.core.ui.component.neo.NeoAppBarChrome
-import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
-import com.browntowndev.enclave.core.ui.component.neo.NeoNavRow
-import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
-import com.browntowndev.enclave.core.ui.component.neo.NeoSettingsSection
-import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
-import com.browntowndev.enclave.core.ui.component.neo.neoSurface
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveAppBarChrome
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveIconButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveNavRow
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSectionHeader
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSettingsSection
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorderColor
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurface
 import com.browntowndev.enclave.core.ui.component.shimmerEffect
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.domain.model.chat.ChatId
@@ -122,7 +122,7 @@ fun HistoryScreen(
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            NeoAppBarChrome {
+            EnclaveAppBarChrome {
                 HistoryTopBar(
                     searchQuery = searchQuery,
                     onSearchQueryChange = onSearchQueryChange,
@@ -140,24 +140,24 @@ fun HistoryScreen(
             contentPadding = WindowInsets.navigationBars.asPaddingValues(),
         ) {
             item {
-                NeoSettingsSection(
+                EnclaveSettingsSection(
                     modifier =
                         Modifier
                             .fillMaxWidth()
                             .padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding)
                             .padding(top = 8.dp, bottom = EnclaveNeoTokens.sectionSpacing),
                 ) {
-                    NeoNavRow(
+                    EnclaveNavRow(
                         title = "New Chat",
                         icon = Icons.Default.Edit,
                         onClick = onNewChatClick,
                     )
-                    NeoNavRow(
+                    EnclaveNavRow(
                         title = "Studio",
                         icon = Icons.Default.AutoAwesome,
                         onClick = onStudioClick,
                     )
-                    NeoNavRow(
+                    EnclaveNavRow(
                         title = "Gallery",
                         icon = Icons.Default.PhotoLibrary,
                         onClick = onGalleryClick,
@@ -177,7 +177,7 @@ fun HistoryScreen(
             } else {
                 if (uiState.pinnedChats.isNotEmpty()) {
                     item {
-                        NeoSectionHeader(
+                        EnclaveSectionHeader(
                             text = "Pinned",
                             modifier = Modifier.padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding),
                         )
@@ -208,7 +208,7 @@ fun HistoryScreen(
 
                 if (uiState.otherChats.isNotEmpty()) {
                     item {
-                        NeoSectionHeader(
+                        EnclaveSectionHeader(
                             text = "Recent",
                             modifier = Modifier.padding(horizontal = EnclaveNeoTokens.screenHorizontalPadding),
                         )
@@ -243,7 +243,7 @@ fun HistoryScreen(
     when (val state = optionsState) {
         is HistoryOptionsState.Hidden -> {}
         is HistoryOptionsState.Sheet -> {
-            NeoModalBottomSheet(
+            EnclaveModalBottomSheet(
                 onDismissRequest = {
                     if (optionsState is HistoryOptionsState.Sheet) {
                         optionsState = HistoryOptionsState.Hidden
@@ -346,13 +346,13 @@ private fun HistoryChatItem(
     onShowOptions: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val borderColor = neoBorderColor()
+    val borderColor = enclaveBorderColor()
     val backgroundColor = MaterialTheme.colorScheme.surface
 
     Row(
         modifier =
             modifier
-                .neoSurface(
+                .enclaveSurface(
                     backgroundColor = backgroundColor,
                     borderColor = borderColor,
                     withShadow = false,
@@ -381,7 +381,7 @@ private fun HistoryChatItem(
             )
         }
 
-        NeoIconButton(
+        EnclaveIconButton(
             onClick = onShowOptions,
             icon = Icons.Default.MoreVert,
             contentDescription = "Options",
@@ -396,13 +396,13 @@ private fun HistoryChatSkeletonItem(
     highlightColor: Color,
     modifier: Modifier = Modifier,
 ) {
-    val borderColor = neoBorderColor()
+    val borderColor = enclaveBorderColor()
     val backgroundColor = MaterialTheme.colorScheme.surface
 
     Row(
         modifier =
             modifier
-                .neoSurface(
+                .enclaveSurface(
                     backgroundColor = backgroundColor,
                     borderColor = borderColor,
                     withShadow = false,

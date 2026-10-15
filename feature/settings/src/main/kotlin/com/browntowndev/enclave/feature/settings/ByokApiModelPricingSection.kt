@@ -11,9 +11,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import com.browntowndev.enclave.core.ui.component.neo.NeoOutlinedTextField
-import com.browntowndev.enclave.core.ui.component.neo.NeoTelemetryMetricPanel
-import com.browntowndev.enclave.core.ui.component.neo.NeoTelemetryMetricRow
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveOutlinedTextField
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveTelemetryMetricPanel
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveTelemetryMetricRow
 import com.browntowndev.enclave.domain.model.config.ApiModelPricingFormat
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 
@@ -68,16 +68,16 @@ private fun DiscoveryPricingReadOnlyPanel(
         ApiModelPricingFormat.parseUsdPerMillion(config.cachedPromptPriceUsdPerMillion)
             ?: selectedModelMetadata?.cachedPromptPrice
 
-    NeoTelemetryMetricPanel {
-        NeoTelemetryMetricRow(
+    EnclaveTelemetryMetricPanel {
+        EnclaveTelemetryMetricRow(
             label = "Input (prompt)",
             value = ApiModelPricingFormat.displayUsdPerMillion(prompt),
         )
-        NeoTelemetryMetricRow(
+        EnclaveTelemetryMetricRow(
             label = "Output (completion)",
             value = ApiModelPricingFormat.displayUsdPerMillion(completion),
         )
-        NeoTelemetryMetricRow(
+        EnclaveTelemetryMetricRow(
             label = "Cached input",
             value = ApiModelPricingFormat.displayUsdPerMillion(cached),
         )
@@ -89,7 +89,7 @@ private fun ManualPricingFields(
     config: ApiModelConfigUi,
     onConfigChange: (ApiModelConfigUi) -> Unit,
 ) {
-    NeoOutlinedTextField(
+    EnclaveOutlinedTextField(
         value = config.promptPriceUsdPerMillion,
         onValueChange = { onConfigChange(config.copy(promptPriceUsdPerMillion = it)) },
         label = { Text("Input price (USD / 1M tokens)") },
@@ -100,7 +100,7 @@ private fun ManualPricingFields(
                 imeAction = ImeAction.Next,
             ),
     )
-    NeoOutlinedTextField(
+    EnclaveOutlinedTextField(
         value = config.completionPriceUsdPerMillion,
         onValueChange = { onConfigChange(config.copy(completionPriceUsdPerMillion = it)) },
         label = { Text("Output price (USD / 1M tokens)") },
@@ -111,7 +111,7 @@ private fun ManualPricingFields(
                 imeAction = ImeAction.Next,
             ),
     )
-    NeoOutlinedTextField(
+    EnclaveOutlinedTextField(
         value = config.cachedPromptPriceUsdPerMillion,
         onValueChange = { onConfigChange(config.copy(cachedPromptPriceUsdPerMillion = it)) },
         label = { Text("Cached input price (optional, USD / 1M)") },

@@ -9,7 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.browntowndev.enclave.core.ui.component.neo.NeoSegmentedControl
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSegmentedControl
 import com.browntowndev.enclave.domain.model.inference.ZaiEndpoint
 
 /**
@@ -35,7 +35,7 @@ fun ZaiEndpointSelectionField(
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        NeoSegmentedControl(
+        EnclaveSegmentedControl(
             options = ZaiEndpoint.entries.map { it.displayName },
             selectedIndex = endpoint.ordinal,
             onOptionSelected = { index ->

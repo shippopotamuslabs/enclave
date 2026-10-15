@@ -89,11 +89,11 @@ import coil3.compose.AsyncImagePainter
 import com.browntowndev.enclave.core.ui.component.VideoThumbnail
 import com.browntowndev.enclave.core.ui.component.dialog.AddAlbumDialog
 import com.browntowndev.enclave.core.ui.component.dialog.RenameAlbumDialog
-import com.browntowndev.enclave.core.ui.component.neo.NeoAppBarChrome
-import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoSelectionMark
-import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
-import com.browntowndev.enclave.core.ui.component.neo.neoSurface
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveAppBarChrome
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveIconButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSelectionMark
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorderColor
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurface
 import com.browntowndev.enclave.core.ui.component.sheet.MoveToAlbumBottomSheet
 import com.browntowndev.enclave.core.ui.component.shimmerEffect
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
@@ -411,15 +411,15 @@ private fun GalleryTopBar(
     onDeleteClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    NeoAppBarChrome(modifier = modifier) {
+    EnclaveAppBarChrome(modifier = modifier) {
         if (selectedItemCount > 0) {
-            NeoIconButton(
+            EnclaveIconButton(
                 onClick = onClearSelectionClick,
                 icon = Icons.Default.Close,
                 contentDescription = "Clear selection",
             )
         } else {
-            NeoIconButton(
+            EnclaveIconButton(
                 onClick = onBackClick,
                 icon = Icons.AutoMirrored.Filled.ArrowBack,
                 contentDescription = "Back",
@@ -441,19 +441,19 @@ private fun GalleryTopBar(
         if (selectedItemCount > 0) {
             Row(horizontalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing)) {
                 if (selectedMediaItemCount > 0) {
-                    NeoIconButton(
+                    EnclaveIconButton(
                         onClick = onShareClick,
                         icon = Icons.Default.Share,
                         contentDescription = "Share",
                     )
                 }
-                NeoIconButton(
+                EnclaveIconButton(
                     onClick = onMoveClick,
                     icon = Icons.AutoMirrored.Filled.DriveFileMove,
                     contentDescription = "Move",
                 )
                 if (showDeleteIcon) {
-                    NeoIconButton(
+                    EnclaveIconButton(
                         onClick = onDeleteClick,
                         icon = Icons.Default.Delete,
                         contentDescription = "Delete",
@@ -463,14 +463,14 @@ private fun GalleryTopBar(
         } else {
             Row(horizontalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing)) {
                 if (showRenameAlbumIcon) {
-                    NeoIconButton(
+                    EnclaveIconButton(
                         onClick = onRenameClick,
                         icon = Icons.Default.Edit,
                         contentDescription = "Rename album",
                     )
                 }
                 if (showAddAlbumIcon) {
-                    NeoIconButton(
+                    EnclaveIconButton(
                         onClick = onAddAlbumClick,
                         icon = Icons.Default.Add,
                         contentDescription = "Add album",
@@ -567,7 +567,7 @@ private fun AlbumCard(
                 modifier = Modifier.fillMaxWidth(),
             )
             if (selectionModeActive) {
-                NeoSelectionMark(
+                EnclaveSelectionMark(
                     selected = isSelected,
                     modifier =
                         Modifier
@@ -604,9 +604,9 @@ private fun AlbumCover(
         modifier =
             modifier
                 .aspectRatio(1f)
-                .neoSurface(
+                .enclaveSurface(
                     backgroundColor = MaterialTheme.colorScheme.surface,
-                    borderColor = neoBorderColor(),
+                    borderColor = enclaveBorderColor(),
                     withShadow = false,
                 ),
     ) {
@@ -777,7 +777,7 @@ private fun AlbumMediaItem(
                     if (isSelected) {
                         Modifier.border(
                             width = EnclaveNeoTokens.borderWidth,
-                            color = neoBorderColor(),
+                            color = enclaveBorderColor(),
                             shape = tileShape,
                         )
                     } else {
@@ -850,9 +850,9 @@ private fun AlbumMediaItem(
                     Modifier
                         .padding(8.dp)
                         .align(Alignment.BottomEnd)
-                        .neoSurface(
+                        .enclaveSurface(
                             backgroundColor = MaterialTheme.colorScheme.surface,
-                            borderColor = neoBorderColor(),
+                            borderColor = enclaveBorderColor(),
                             withShadow = false,
                         ),
             ) {
@@ -873,7 +873,7 @@ private fun AlbumMediaItem(
         }
 
         if (selectionModeActive) {
-            NeoSelectionMark(
+            EnclaveSelectionMark(
                 selected = isSelected,
                 modifier =
                     Modifier

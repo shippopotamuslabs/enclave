@@ -36,7 +36,7 @@ import com.browntowndev.enclave.core.ui.component.FullscreenMediaActionsOverlay
 import com.browntowndev.enclave.core.ui.component.FullscreenMediaDetailScaffold
 import com.browntowndev.enclave.core.ui.component.FullscreenMediaPagerContent
 import com.browntowndev.enclave.core.ui.component.FullscreenMediaViewer
-import com.browntowndev.enclave.core.ui.component.neo.NeoCircularProgressIndicator
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveCircularProgressIndicator
 import com.browntowndev.enclave.core.ui.component.sheet.CustomAnimationPromptPane
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 
@@ -213,7 +213,7 @@ private fun DetailMedia(
                         .semantics { contentDescription = "Animating image" },
                 contentAlignment = Alignment.Center,
             ) {
-                NeoCircularProgressIndicator(
+                EnclaveCircularProgressIndicator(
                     color = Color.White,
                     trackColor = Color.White.copy(alpha = 0.3f),
                 )

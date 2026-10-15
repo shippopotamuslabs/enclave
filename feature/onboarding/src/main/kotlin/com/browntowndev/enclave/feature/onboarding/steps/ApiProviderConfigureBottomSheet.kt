@@ -15,14 +15,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.browntowndev.enclave.core.ui.component.neo.NeoApiKeyField
-import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
-import com.browntowndev.enclave.core.ui.component.neo.NeoOutlinedTextField
-import com.browntowndev.enclave.core.ui.component.neo.NeoPanel
-import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
-import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
-import com.browntowndev.enclave.core.ui.component.neo.neoSurface
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveApiKeyField
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveOutlinedTextField
+import com.browntowndev.enclave.core.ui.component.enclave.EnclavePanel
+import com.browntowndev.enclave.core.ui.component.enclave.EnclavePrimaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSheetHeader
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorderColor
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurface
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
@@ -45,13 +45,13 @@ fun ApiProviderConfigureBottomSheet(
     onSave: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val borderColor = neoBorderColor()
+    val borderColor = enclaveBorderColor()
 
-    NeoModalBottomSheet(
+    EnclaveModalBottomSheet(
         onDismissRequest = onDismiss,
         modifier = modifier,
     ) {
-        NeoSheetHeader(
+        EnclaveSheetHeader(
             title = "Configure ${provider.displayName}",
             subtitle = "Set up API credentials and select a model preset.",
             onDismiss = onDismiss,
@@ -63,7 +63,7 @@ fun ApiProviderConfigureBottomSheet(
                     .fillMaxWidth()
                     .padding(bottom = 24.dp),
         ) {
-            NeoApiKeyField(
+            EnclaveApiKeyField(
                 label = "Enter API Key",
                 value = apiKey,
                 onValueChange = onApiKeyChanged,
@@ -71,14 +71,14 @@ fun ApiProviderConfigureBottomSheet(
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            NeoOutlinedTextField(
+            EnclaveOutlinedTextField(
                 value = baseUrl,
                 onValueChange = onBaseUrlChanged,
                 label = { Text("Base URL (Optional)") },
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            NeoPrimaryButton(
+            EnclavePrimaryButton(
                 text = if (isDiscoveringModels) "DISCOVERING..." else "DISCOVER MODELS",
                 onClick = onDiscoverModels,
                 enabled = !isDiscoveringModels && apiKey.isNotBlank(),
@@ -94,7 +94,7 @@ fun ApiProviderConfigureBottomSheet(
                 )
             }
 
-            NeoOutlinedTextField(
+            EnclaveOutlinedTextField(
                 value = selectedModelId,
                 onValueChange = onModelSelected,
                 label = { Text("Model ID") },
@@ -109,7 +109,7 @@ fun ApiProviderConfigureBottomSheet(
                     color = MaterialTheme.colorScheme.onBackground,
                 )
 
-                NeoPanel(modifier = Modifier.fillMaxWidth()) {
+                EnclavePanel(modifier = Modifier.fillMaxWidth()) {
                     Column(
                         modifier =
                             Modifier
@@ -124,7 +124,7 @@ fun ApiProviderConfigureBottomSheet(
                                 modifier =
                                     Modifier
                                         .fillMaxWidth()
-                                        .neoSurface(
+                                        .enclaveSurface(
                                             backgroundColor = if (isSelected) bgSelected else MaterialTheme.colorScheme.surface,
                                             borderColor = if (isSelected) MaterialTheme.colorScheme.primary else borderColor,
                                         ).clickable { onModelSelected(model.id) }
@@ -146,7 +146,7 @@ fun ApiProviderConfigureBottomSheet(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            NeoPrimaryButton(
+            EnclavePrimaryButton(
                 text = "SAVE & CONTINUE",
                 onClick = onSave,
                 enabled = apiKey.isNotBlank() && selectedModelId.isNotBlank(),

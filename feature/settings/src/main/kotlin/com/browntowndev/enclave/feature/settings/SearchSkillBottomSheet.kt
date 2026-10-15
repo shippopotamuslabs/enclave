@@ -26,13 +26,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.browntowndev.enclave.core.ui.component.XIcon
-import com.browntowndev.enclave.core.ui.component.neo.NeoApiKeyField
-import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
-import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
-import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
-import com.browntowndev.enclave.core.ui.component.neo.NeoSheetTabRow
-import com.browntowndev.enclave.core.ui.component.neo.NeoToggleRow
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveApiKeyField
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.enclave.EnclavePrimaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSectionHeader
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSheetHeader
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSheetTabRow
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveToggleRow
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.domain.model.settings.SearchProvider
 
@@ -62,7 +62,7 @@ fun SearchSkillBottomSheet(
     var showSwitchConfirm by remember { mutableStateOf<SearchProvider?>(null) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    NeoModalBottomSheet(
+    EnclaveModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
     ) {
@@ -70,13 +70,13 @@ fun SearchSkillBottomSheet(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.sectionSpacing),
         ) {
-            NeoSheetHeader(
+            EnclaveSheetHeader(
                 title = "Search Skills",
                 subtitle = "Configure web and X search for the assistant.",
                 onDismiss = onDismiss,
             )
 
-            NeoSheetTabRow(
+            EnclaveSheetTabRow(
                 selectedTabIndex = selectedTab,
                 tabs = listOf("Web", "X"),
                 onTabSelected = onTabChange,
@@ -186,7 +186,7 @@ internal fun ApiKeyInput(
     keyPresent: Boolean,
     onClearKey: () -> Unit,
 ) {
-    NeoApiKeyField(
+    EnclaveApiKeyField(
         label = label,
         value = value,
         onValueChange = onValueChange,
@@ -209,7 +209,7 @@ private fun WebSearchTabContent(
     onDismiss: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.sectionSpacing)) {
-        NeoToggleRow(
+        EnclaveToggleRow(
             title = "Enable Web Search",
             icon = Icons.Default.Public,
             checked = searchState.enabled,
@@ -218,7 +218,7 @@ private fun WebSearchTabContent(
         )
 
         if (searchState.enabled) {
-            NeoSectionHeader(text = "Search Provider")
+            EnclaveSectionHeader(text = "Search Provider")
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -272,7 +272,7 @@ private fun WebSearchTabContent(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        NeoPrimaryButton(
+        EnclavePrimaryButton(
             text = "Save Web Settings",
             icon = Icons.Default.Check,
             onClick = {
@@ -293,7 +293,7 @@ private fun XSearchTabContent(
     onDismiss: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.sectionSpacing)) {
-        NeoToggleRow(
+        EnclaveToggleRow(
             title = "Enable X Search",
             icon = XIcon,
             checked = xSearchState.enabled,
@@ -313,7 +313,7 @@ private fun XSearchTabContent(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        NeoPrimaryButton(
+        EnclavePrimaryButton(
             text = "Save X Settings",
             icon = Icons.Default.Check,
             onClick = {

@@ -14,9 +14,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoSecondaryButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
+import com.browntowndev.enclave.core.ui.component.enclave.EnclavePrimaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSecondaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSectionHeader
 
 @Composable
 internal fun ReviewEditStep(
@@ -32,7 +32,7 @@ internal fun ReviewEditStep(
                 .fillMaxSize()
                 .padding(16.dp),
     ) {
-        NeoSectionHeader(text = "Review your profile")
+        EnclaveSectionHeader(text = "Review your profile")
         Text("Edit the profile before saving. It will be injected at the start of every new conversation.")
         Spacer(Modifier.height(12.dp))
 
@@ -50,9 +50,9 @@ internal fun ReviewEditStep(
 
         Spacer(Modifier.height(16.dp))
         Row {
-            NeoSecondaryButton(text = "Back", onClick = onBack, modifier = Modifier.weight(1f))
+            EnclaveSecondaryButton(text = "Back", onClick = onBack, modifier = Modifier.weight(1f))
             Spacer(Modifier.padding(4.dp))
-            NeoPrimaryButton(
+            EnclavePrimaryButton(
                 text = if (isSaving) "Saving…" else "Approve & Save",
                 onClick = onSave,
                 enabled = !isSaving && profileContent.isNotBlank(),
