@@ -45,6 +45,8 @@ Enclave is a mixed Android monorepo, not a single-module app.
 - `core/domain/`: domain models, ports, use cases, and test fixtures.
 - `core/data/`: Room, repositories, Firebase/network persistence, WorkManager, entity/domain mapping, schemas.
 - `core/ui/`: shared Compose UI components, themes, media/rendering helpers.
+- `core/testing/`: shared hand-written fakes, `MainDispatcherRule`, test fixtures (see `contracts/UNIT_TESTING.md`).
+- `detekt-rules/`: custom Detekt rules (`enclave` rule set) enforcing architecture/UI/testing contracts; JVM-only, not an app runtime dependency. Scaffold tracked in Linear ENC-10 — until it lands, the contract rules below are agent-enforced and must not be weakened to match existing violations.
 - `core/agent/`: Android UniFFI/JNI bridge for Rust `third_party/agent_core`; read `core/agent/README.md` for bridge work.
 - `core/docgen/`: Android UniFFI/JNI bridge for Rust `third_party/docgen_core`.
 - `feature/*/`: feature modules for chat, settings, history, downloads, inference, studio, and background services.
@@ -68,8 +70,10 @@ Rust/Cargo/UniFFI/Iced, CMake/Android NDK, and npm/TypeScript for Firebase funct
 
 - `:core:domain` contains domain models, ports, use cases, and test fixtures. Keep framework dependencies out of domain APIs.
 - Dependency direction is inward toward `:core:domain`. Data, inference, UI, app, and feature modules may depend on domain; domain must not depend on app, feature, data, UI, or native bridge modules.
-- Domain models are **never** passed directly to composables. ViewModels map domain → presentation.
+- Domain models are **never** passed directly to composables. ViewModels map domain → presentation. Presentation models (`*UiState`, `*UiEvent`, drafts) must not embed domain types.
 - No `NavController` passed into composables. Navigation via pure callbacks hoisted to the route level.
+- **ViewModels depend on use cases only** — never on `*Repository`/`*Port` interfaces or `:core:data` classes. Multi-source `Flow` composition lives in a domain interactor/use case; feature mappers take no use-case parameters; write paths go through use cases. Enforced by the `enclave` Detekt rule set (ENC-2) and `contracts/ARCHITECTURE_RULES.md` §3.4.
+- Feature UI uses the neutral spec-driven component API and semantic theme tokens from `:core:ui` — no raw `MaterialTheme`/Material 3 chrome or hex literals in `:feature:*`/`:app` UI (ENC-1/ENC-2, `contracts/UI_DESIGN_SPEC.md`).
 
 **Violation response:** Reply with exactly: `"Contract violation detected in [file]. Request explicit 'Contract Waiver' from user."` Then stop. Do not generate code.
 
@@ -91,10 +95,10 @@ For every Kotlin, XML, or Gradle code block generated:
 ### 3.3 Test Coverage — Mandatory
 
 Whenever production code is added or modified (new classes, public functions, logic in `:core:domain`, `:core:data`, `:feature:inference`, ViewModels, repositories, mappers, use cases, or desktop screens and native crates):
-- **Android**: Write or extend unit tests in the matching `src/test/kotlin` source set using JUnit 5 + Turbine (for Flow) + MockK.
+- **Android**: Write or extend unit tests in the matching `src/test/kotlin` source set using JUnit 5 + Turbine (for Flow) + **fakes from `:core:testing`** for Enclave-owned ports. MockK is allowed only for third-party SDK boundaries with an explicit `@Suppress` and one-line justification. Never `verify`/`coVerify` in ViewModel tests — assert on `UiState` (see `contracts/UNIT_TESTING.md`, ENC-4).
 - **Desktop/Rust**: Write or extend cargo tests. Run using `cargo test --workspace`.
 - Tests must pass before `TASK_STATUS: COMPLETE`.
-- Trivial styling-only or preview-only changes are exempt.
+- Trivial styling-only or preview-only changes are exempt (theme/preview matrix changes are not exempt — see `contracts/UI_DESIGN_SPEC.md`).
 
 ### 3.4 Schema Lock
 
@@ -103,6 +107,28 @@ Whenever production code is added or modified (new classes, public functions, lo
 ### 3.5 Inference — On-Device First (BYOK Optional)
 
 Prioritize on-device inference via LiteRT 2.x/agent_core. Optional "BYOK" cloud providers (OpenAI, Anthropic, Google GenAI) are permitted as advanced user escape hatches, provided they remain isolated from core on-device logic.
+
+### 3.6 Distribution Scope — No Google Play (Personal / Portfolio)
+
+Enclave will **never** be released on Google Play (liability and Play AI-policy exposure). It is a personal project and portfolio item only.
+
+- Do **not** add Play Console, Play App Signing for distribution, bundle-for-Play, Play service-account, or Firebase Test Lab robo/store lanes to CI or release docs. Signed release APKs are manual/local for personal sideload or portfolio demo only.
+- CI is scoped accordingly (ENC-3): fast MR gates plus scheduled nightly confidence — not store-grade release automation. See §4 and `contracts/ARCHITECTURE_RULES.md`.
+- Linear `Deployed` / `Partially Deployed` / `Released` states (§3.7) therefore mean manual sideload / personal-device distribution milestones on the **parent issue only**, never a Play rollout.
+
+### 3.7 Linear Issue Tracking — Chunk-Based Trunk Workflow
+
+Single source of truth for work items is the Linear **Enclave** team (key `ENC`, workspace Browntown Development: https://linear.app/browntown-development/team/ENC/all), not GitLab issues. Adapted from Stratum `AGENTS.md` §4.8 (team `STR`).
+
+- **Chunk-based development:** one parent issue per feature; each chunk of work is a **sub-issue**; **one MR per sub-issue** — never batch multiple chunks into one MR.
+- **Ticket first:** ensure you have a Linear ticket to work from via the Linear MCP (`save_issue`, `get_issue`, `list_issues`; see §7). If you do not know the ticket, ask the user. If told it does not exist, create one with a `type::` label (`type::feature`, `type::bug`, `type::chore`, `type::polish`). Once you have the ticket, put it **In Progress** (`save_issue` with `state: "In Progress"`), then start working.
+- **Branch naming:** copy the git branch name from the Linear sub-issue (it contains the issue ID, e.g. `browntowndevelopment/enc-20-contracts-edit-agentsmd-linear-workflow-contracts`) — this auto-links the branch.
+- **Every MR description MUST contain a closing magic word + the sub-issue ID**, e.g. `Fixes ENC-20`. Linear's MR automations move the issue to **In Review** when the MR opens (review = the user plus any AI reviewer job) and to **Merged** when the MR merges. A merge is NOT a deploy. `In Progress` is manual: the agent sets it when work starts.
+- To link an MR without triggering the automatic status moves, use `Refs ENC-20` or `Contributes to ENC-20` instead of a closing magic word.
+- Commit messages and MR comments do **not** link issues — only branch name, MR title, and MR description.
+- **Merge vs deploy vs release:** `Merged` = merged to main (trunk). `Deployed` / `Partially Deployed` / `Released` live on the **parent issue only** and are manual (developer sideloads/distributes, then updates Linear or asks the agent to) — there is no Play pipeline or feature-flag webhook into Linear (§3.6). Sub-issues stop at `Merged`.
+- Never close the parent manually while sub-issues are open.
+- Current programme parents: ENC-1 (theme families), ENC-2 (Detekt + layering), ENC-3 (CI MR/nightly, no Play), ENC-4 (fakes/screenshot testing), ENC-5 (contracts/Linear adoption; docs chunk ENC-20).
 
 ---
 
@@ -138,6 +164,8 @@ Prefer the narrowest command that covers the changed area.
 Before merge or a large cross-module change, use the CI-aligned checks for the active platform:
 - **Android**: `./gradlew ktlintCheck`, `./gradlew detekt`, `./gradlew assembleDebug`, and `./gradlew testDebugUnitTest`.
 - **Desktop**: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets`, and `cargo test --workspace`.
+
+CI target shape (ENC-3, personal/portfolio scope per §3.6): MR pipelines run only for MRs targeting the default branch, with independent jobs (`needs: []`) — combined static analysis, unit tests, debug + unsigned release (R8 gate) builds, changes-gated functions/Rust jobs, and changes-gated screenshot tests. Emulator/device and full re-verify jobs run on the scheduled nightly pipeline only (`allow_failure` until green, `interruptible: false`). No Play or Test Lab store lanes.
 
 ---
 
@@ -182,6 +210,7 @@ commands are available.
 | `mobile-mcp` | Install APKs, interact with a running emulator/device, take screenshots (Android only) |
 | `google-developer-knowledge` / `firebase-mcp-server` | Official Android/Firebase/Google API documentation lookup |
 | `github-mcp-server` | PR creation, branch management, code search across the repo |
+| `linear` (Linear MCP, `mcp__linear.*`) | **All work-item tracking for Enclave (team `ENC`)** — `list_issues`/`get_issue` to find tickets, `save_issue` to create/update (including `In Progress`), `save_comment` for MR notes. Accessible in-session; no separate login step for agents. See §3.7. Use before starting work, not GitLab issues |
 | `synthitect` | CFAW workflow phases when explicitly invoked by the user |
 
 For Desktop tasks, use Cargo, Clippy, and Rustfmt CLI commands directly.
@@ -233,10 +262,9 @@ are Gradle tasks, npm scripts, Cargo tests, and scripts under `scripts/`. Do not
 invent hook config unless the repo adds checked-in hook infrastructure.
 
 Existing MCP config is `.cursor/mcp.json`, which configures `androjack`.
+The **Linear MCP is available to agents in-session** (`mcp__linear.*` tools listed in §7) for the Enclave team `ENC` — use it for ticket-first workflow (§3.7); it is not configured in `.cursor/mcp.json`.
 Android CLI is shell-based (not MCP); Studio bridge requires Quail + Gemini signed in.
-Candidate future integrations, if maintainers choose to add them: GitHub issue
-and PR access, Firebase project operations, and deeper emulator automation beyond
-`android emulator` / `mobile-mcp`.
+Candidate future integrations, if maintainers choose to add them: Firebase project operations and deeper emulator automation beyond `android emulator` / `mobile-mcp`.
 
 ---
 
