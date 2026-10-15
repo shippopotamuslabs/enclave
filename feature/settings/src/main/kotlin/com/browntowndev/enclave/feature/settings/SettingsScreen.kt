@@ -86,6 +86,7 @@ fun SettingsScreen(
     onLoginClick: () -> Unit,
     onLogoutClick: () -> Unit,
     onThemeChange: (AppTheme) -> Unit,
+    onThemeFamilyChange: (ThemeFamilyUi) -> Unit = {},
     onHapticResponseChange: (Boolean) -> Unit,
     onBackgroundInferenceChange: (Boolean) -> Unit,
     onShowDataControlsSheet: (Boolean) -> Unit,
@@ -214,6 +215,10 @@ fun SettingsScreen(
 
             item {
                 EnclaveSectionHeader(text = "Appearance")
+                ThemeFamilySelection(
+                    selectedFamily = uiState.home.themeFamily,
+                    onThemeFamilyChange = onThemeFamilyChange,
+                )
                 ThemeSelection(
                     selectedTheme = uiState.home.theme,
                     onThemeChange = onThemeChange,
@@ -673,6 +678,30 @@ fun AccountSection(
 }
 
 @Composable
+fun ThemeFamilySelection(
+    selectedFamily: ThemeFamilyUi,
+    onThemeFamilyChange: (ThemeFamilyUi) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        ThemeOption(
+            text = "Material",
+            selected = selectedFamily == ThemeFamilyUi.Tonal,
+            onClick = { onThemeFamilyChange(ThemeFamilyUi.Tonal) },
+            modifier = Modifier.weight(1f),
+        )
+        ThemeOption(
+            text = "Neo Brutalist",
+            selected = selectedFamily == ThemeFamilyUi.NeoBrutalist,
+            onClick = { onThemeFamilyChange(ThemeFamilyUi.NeoBrutalist) },
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+@Composable
 fun ThemeSelection(
     selectedTheme: AppTheme,
     onThemeChange: (AppTheme) -> Unit,
@@ -731,6 +760,23 @@ fun ThemeOption(
 }
 
 // ==================== PREVIEWS ====================
+
+@Preview(showBackground = true, name = "Theme Picker - Tonal Light")
+@Composable
+fun PreviewThemePickerTonalLight() {
+    EnclaveTheme(darkTheme = false, themeFamily = com.browntowndev.enclave.core.ui.theme.EnclaveThemeId.Tonal) {
+        ThemeFamilySelection(selectedFamily = ThemeFamilyUi.Tonal, onThemeFamilyChange = {})
+    }
+}
+
+@Preview(showBackground = true, name = "Theme Picker - Neo Dark")
+@Composable
+fun PreviewThemePickerNeoDark() {
+    EnclaveTheme(darkTheme = true, themeFamily = com.browntowndev.enclave.core.ui.theme.EnclaveThemeId.NeoBrutalist) {
+        ThemeFamilySelection(selectedFamily = ThemeFamilyUi.NeoBrutalist, onThemeFamilyChange = {})
+    }
+}
+
 
 @Preview(showBackground = true, name = "Main Settings Screen")
 @Composable
