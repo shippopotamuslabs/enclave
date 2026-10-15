@@ -149,7 +149,7 @@ subprojects {
     }
 
     // Centralized Linting and Static Analysis
-    val excludedModules = listOf(":llama-android", ":whisper-android")
+    val excludedModules = listOf(":llama-android", ":whisper-android", ":detekt-rules")
     if (path !in excludedModules) {
         apply(plugin = "org.jlleitschuh.gradle.ktlint")
         apply(plugin = "io.gitlab.arturbosch.detekt")
@@ -168,6 +168,10 @@ subprojects {
             buildUponDefaultConfig = true
             allRules = false
             ignoreFailures = false
+        }
+
+        dependencies {
+            add("detektPlugins", rootProject.project(":detekt-rules"))
         }
 
         tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
@@ -192,7 +196,10 @@ subprojects {
     }
 
     plugins.withId("org.jetbrains.kotlin.jvm") {
-        tasks.register<JacocoReport>("jacocoTestReport") {
+        // The Jacoco plugin already creates jacocoTestReport for plain JVM modules
+        // (e.g. :detekt-rules); only register it where it does not exist yet.
+        if (tasks.findByName("jacocoTestReport") == null) {
+            tasks.register<JacocoReport>("jacocoTestReport") {
             dependsOn("test")
             group = "Reporting"
             description = "Generate Jacoco coverage reports for the test task."
@@ -215,6 +222,7 @@ subprojects {
             ))
 
             executionData.setFrom(file("$buildDir/jacoco/test.exec"))
+            }
         }
     }
 }
