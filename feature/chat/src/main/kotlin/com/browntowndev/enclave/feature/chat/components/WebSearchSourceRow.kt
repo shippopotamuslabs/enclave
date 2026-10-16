@@ -24,13 +24,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.browntowndev.enclave.core.ui.component.XIcon
-import com.browntowndev.enclave.domain.model.chat.WebSearchSource
+import com.browntowndev.enclave.feature.chat.WebSearchSourceUi
 import com.browntowndev.enclave.feature.chat.R
 import java.net.URI
 
 @Composable
 fun WebSearchSourceRow(
-    source: WebSearchSource,
+    source: WebSearchSourceUi,
     onClick: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {

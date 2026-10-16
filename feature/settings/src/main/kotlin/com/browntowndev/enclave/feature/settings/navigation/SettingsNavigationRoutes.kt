@@ -5,7 +5,6 @@ import androidx.compose.runtime.remember
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.navigation.NavBackStackEntry
-import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavType
 import androidx.navigation.compose.composable
@@ -22,7 +21,9 @@ import com.browntowndev.enclave.feature.settings.LiveVoiceConfigureRoute
 import com.browntowndev.enclave.feature.settings.TtsConfigureRoute
 
 internal fun NavGraphBuilder.settingsMainRoute(
-    navController: NavController,
+    onNavigate: (String) -> Unit,
+    onPopBackStack: () -> Unit,
+    graphBackStackEntry: (NavBackStackEntry) -> NavBackStackEntry,
     onNavigateToProfileBuilder: () -> Unit = {},
 ) {
     composable(
@@ -33,37 +34,38 @@ internal fun NavGraphBuilder.settingsMainRoute(
         popExitTransition = { settingsPopExitTransition() },
     ) { backStackEntry ->
         SettingsRoute(
-            onCloseClick = { navController.popBackStack() },
+            onCloseClick = { onPopBackStack() },
             onNavigateToProfileBuilder = onNavigateToProfileBuilder,
             onNavigateToByokConfigure = {
-                navController.navigate(SettingsDestination.BYOK_CONFIGURE)
+                onNavigate(SettingsDestination.BYOK_CONFIGURE)
             },
             onNavigateToTtsConfigure = {
-                navController.navigate(SettingsDestination.TTS_CONFIGURE)
+                onNavigate(SettingsDestination.TTS_CONFIGURE)
             },
             onNavigateToLiveVoiceConfigure = {
-                navController.navigate(SettingsDestination.LIVE_VOICE_CONFIGURE)
+                onNavigate(SettingsDestination.LIVE_VOICE_CONFIGURE)
             },
             onNavigateToLocalModelConfigure = {
-                navController.navigate(SettingsDestination.LOCAL_MODEL_CONFIGURE)
+                onNavigate(SettingsDestination.LOCAL_MODEL_CONFIGURE)
             },
             onNavigateToModelConfigure = { modelType ->
-                navController.navigate(
-                    SettingsDestination.MODEL_CONFIGURE.replace(
-                        "{modelType}",
-                        modelType.name,
-                    ),
+                onNavigate(
+                    SettingsDestination.MODEL_CONFIGURE.replace("{modelType}", modelType.name),
                 )
             },
             onNavigateToMediaConfigure = {
-                navController.navigate(SettingsDestination.MEDIA_CONFIGURE)
+                onNavigate(SettingsDestination.MEDIA_CONFIGURE)
             },
-            viewModel = settingsGraphViewModel(backStackEntry, navController),
+            viewModel = settingsGraphViewModel(backStackEntry, graphBackStackEntry),
         )
     }
 }
 
-internal fun NavGraphBuilder.settingsByokConfigureRoute(navController: NavController) {
+internal fun NavGraphBuilder.settingsByokConfigureRoute(
+    onNavigate: (String) -> Unit,
+    onPopBackStack: () -> Unit,
+    graphBackStackEntry: (NavBackStackEntry) -> NavBackStackEntry,
+) {
     composable(
         route = SettingsDestination.BYOK_CONFIGURE,
         enterTransition = { settingsEnterTransition() },
@@ -72,16 +74,20 @@ internal fun NavGraphBuilder.settingsByokConfigureRoute(navController: NavContro
         popExitTransition = { settingsPopExitTransition() },
     ) { backStackEntry ->
         ByokConfigureRoute(
-            onNavigateBack = { navController.popBackStack() },
+            onNavigateBack = { onPopBackStack() },
             onNavigateToCustomHeaders = {
-                navController.navigate(SettingsDestination.BYOK_CUSTOM_HEADERS)
+                onNavigate(SettingsDestination.BYOK_CUSTOM_HEADERS)
             },
-            viewModel = settingsGraphViewModel(backStackEntry, navController),
+            viewModel = settingsGraphViewModel(backStackEntry, graphBackStackEntry),
         )
     }
 }
 
-internal fun NavGraphBuilder.settingsTtsConfigureRoute(navController: NavController) {
+internal fun NavGraphBuilder.settingsTtsConfigureRoute(
+    onNavigate: (String) -> Unit,
+    onPopBackStack: () -> Unit,
+    graphBackStackEntry: (NavBackStackEntry) -> NavBackStackEntry,
+) {
     composable(
         route = SettingsDestination.TTS_CONFIGURE,
         enterTransition = { settingsEnterTransition() },
@@ -90,13 +96,17 @@ internal fun NavGraphBuilder.settingsTtsConfigureRoute(navController: NavControl
         popExitTransition = { settingsPopExitTransition() },
     ) { backStackEntry ->
         TtsConfigureRoute(
-            onNavigateBack = { navController.popBackStack() },
-            viewModel = settingsGraphViewModel(backStackEntry, navController),
+            onNavigateBack = { onPopBackStack() },
+            viewModel = settingsGraphViewModel(backStackEntry, graphBackStackEntry),
         )
     }
 }
 
-internal fun NavGraphBuilder.settingsLiveVoiceConfigureRoute(navController: NavController) {
+internal fun NavGraphBuilder.settingsLiveVoiceConfigureRoute(
+    onNavigate: (String) -> Unit,
+    onPopBackStack: () -> Unit,
+    graphBackStackEntry: (NavBackStackEntry) -> NavBackStackEntry,
+) {
     composable(
         route = SettingsDestination.LIVE_VOICE_CONFIGURE,
         enterTransition = { settingsEnterTransition() },
@@ -105,13 +115,17 @@ internal fun NavGraphBuilder.settingsLiveVoiceConfigureRoute(navController: NavC
         popExitTransition = { settingsPopExitTransition() },
     ) { backStackEntry ->
         LiveVoiceConfigureRoute(
-            onNavigateBack = { navController.popBackStack() },
-            viewModel = settingsGraphViewModel(backStackEntry, navController),
+            onNavigateBack = { onPopBackStack() },
+            viewModel = settingsGraphViewModel(backStackEntry, graphBackStackEntry),
         )
     }
 }
 
-internal fun NavGraphBuilder.settingsMediaConfigureRoute(navController: NavController) {
+internal fun NavGraphBuilder.settingsMediaConfigureRoute(
+    onNavigate: (String) -> Unit,
+    onPopBackStack: () -> Unit,
+    graphBackStackEntry: (NavBackStackEntry) -> NavBackStackEntry,
+) {
     composable(
         route = SettingsDestination.MEDIA_CONFIGURE,
         enterTransition = { settingsEnterTransition() },
@@ -120,13 +134,17 @@ internal fun NavGraphBuilder.settingsMediaConfigureRoute(navController: NavContr
         popExitTransition = { settingsPopExitTransition() },
     ) { backStackEntry ->
         MediaConfigureRoute(
-            onNavigateBack = { navController.popBackStack() },
-            viewModel = settingsGraphViewModel(backStackEntry, navController),
+            onNavigateBack = { onPopBackStack() },
+            viewModel = settingsGraphViewModel(backStackEntry, graphBackStackEntry),
         )
     }
 }
 
-internal fun NavGraphBuilder.settingsByokCustomHeadersRoute(navController: NavController) {
+internal fun NavGraphBuilder.settingsByokCustomHeadersRoute(
+    onNavigate: (String) -> Unit,
+    onPopBackStack: () -> Unit,
+    graphBackStackEntry: (NavBackStackEntry) -> NavBackStackEntry,
+) {
     composable(
         route = SettingsDestination.BYOK_CUSTOM_HEADERS,
         enterTransition = { settingsEnterTransition() },
@@ -135,13 +153,17 @@ internal fun NavGraphBuilder.settingsByokCustomHeadersRoute(navController: NavCo
         popExitTransition = { settingsPopExitTransition() },
     ) { backStackEntry ->
         ByokCustomHeadersRoute(
-            onNavigateBack = { navController.popBackStack() },
-            viewModel = settingsGraphViewModel(backStackEntry, navController),
+            onNavigateBack = { onPopBackStack() },
+            viewModel = settingsGraphViewModel(backStackEntry, graphBackStackEntry),
         )
     }
 }
 
-internal fun NavGraphBuilder.settingsLocalModelConfigureRoute(navController: NavController) {
+internal fun NavGraphBuilder.settingsLocalModelConfigureRoute(
+    onNavigate: (String) -> Unit,
+    onPopBackStack: () -> Unit,
+    graphBackStackEntry: (NavBackStackEntry) -> NavBackStackEntry,
+) {
     composable(
         route = SettingsDestination.LOCAL_MODEL_CONFIGURE,
         enterTransition = { settingsEnterTransition() },
@@ -150,13 +172,17 @@ internal fun NavGraphBuilder.settingsLocalModelConfigureRoute(navController: Nav
         popExitTransition = { settingsPopExitTransition() },
     ) { backStackEntry ->
         LocalModelConfigureRoute(
-            onNavigateBack = { navController.popBackStack() },
-            viewModel = settingsGraphViewModel(backStackEntry, navController),
+            onNavigateBack = { onPopBackStack() },
+            viewModel = settingsGraphViewModel(backStackEntry, graphBackStackEntry),
         )
     }
 }
 
-internal fun NavGraphBuilder.settingsModelConfigureRoute(navController: NavController) {
+internal fun NavGraphBuilder.settingsModelConfigureRoute(
+    onNavigate: (String) -> Unit,
+    onPopBackStack: () -> Unit,
+    graphBackStackEntry: (NavBackStackEntry) -> NavBackStackEntry,
+) {
     composable(
         route = SettingsDestination.MODEL_CONFIGURE,
         arguments =
@@ -174,8 +200,8 @@ internal fun NavGraphBuilder.settingsModelConfigureRoute(navController: NavContr
         if (ModelType.entries.none { it.name == modelTypeStr }) return@composable
 
         ModelConfigurationRoute(
-            onNavigateBack = { navController.popBackStack() },
-            viewModel = settingsGraphViewModel(backStackEntry, navController),
+            onNavigateBack = { onPopBackStack() },
+            viewModel = settingsGraphViewModel(backStackEntry, graphBackStackEntry),
         )
     }
 }
@@ -195,11 +221,8 @@ internal fun NavGraphBuilder.profileBuilderMainRoute(onBack: () -> Unit) {
 @Composable
 private inline fun <reified VM : ViewModel> settingsGraphViewModel(
     backStackEntry: NavBackStackEntry,
-    navController: NavController,
+    crossinline graphBackStackEntry: (NavBackStackEntry) -> NavBackStackEntry,
 ): VM {
-    val parentEntry =
-        remember(backStackEntry) {
-            navController.getBackStackEntry(SettingsDestination.GRAPH)
-        }
+    val parentEntry = remember(backStackEntry) { graphBackStackEntry(backStackEntry) }
     return hiltViewModel(parentEntry)
 }
