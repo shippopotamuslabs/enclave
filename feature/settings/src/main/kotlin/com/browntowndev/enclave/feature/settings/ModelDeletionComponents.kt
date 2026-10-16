@@ -19,10 +19,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoSecondaryButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoSelectionCard
-import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
+import com.browntowndev.enclave.core.ui.component.enclave.EnclavePrimaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSecondaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSelectionCard
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSheetHeader
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
@@ -40,7 +40,7 @@ fun ReassignmentView(
     var selectedOption by remember { mutableStateOf<ReassignmentOptionUi?>(null) }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        NeoSheetHeader(
+        EnclaveSheetHeader(
             title = "Reassignment Required",
             onDismiss = onDismiss,
         )
@@ -66,7 +66,7 @@ fun ReassignmentView(
                 verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing),
             ) {
                 items(reassignmentOptions) { option ->
-                    NeoSelectionCard(
+                    EnclaveSelectionCard(
                         title = option.displayName,
                         isSelected = selectedOption == option,
                         onClick = { selectedOption = option },
@@ -77,7 +77,7 @@ fun ReassignmentView(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        NeoPrimaryButton(
+        EnclavePrimaryButton(
             text = "Delete & Reassign",
             enabled = selectedOption != null,
             onClick = {
@@ -97,7 +97,7 @@ fun ReassignmentView(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        NeoSecondaryButton(
+        EnclaveSecondaryButton(
             text = "Cancel",
             onClick = onDismiss,
         )

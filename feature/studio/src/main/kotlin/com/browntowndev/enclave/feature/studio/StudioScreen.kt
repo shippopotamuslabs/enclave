@@ -31,8 +31,8 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.browntowndev.enclave.core.ui.component.neo.NeoAppBarChrome
-import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveAppBarChrome
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveIconButton
 import com.browntowndev.enclave.core.ui.component.sheet.MoveToAlbumBottomSheet
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.domain.model.config.MediaCapability
@@ -286,15 +286,15 @@ private fun StudioTopBar(
     onNavigateToGallery: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    NeoAppBarChrome(modifier = modifier) {
+    EnclaveAppBarChrome(modifier = modifier) {
         if (selectedCount > 0) {
-            NeoIconButton(
+            EnclaveIconButton(
                 onClick = onClearSelection,
                 icon = Icons.Default.Close,
                 contentDescription = "Clear selection",
             )
         } else {
-            NeoIconButton(
+            EnclaveIconButton(
                 onClick = onNavigateToHistory,
                 icon = Icons.Default.Menu,
                 contentDescription = "Open history",
@@ -353,19 +353,19 @@ private fun StudioTopBar(
         }
         if (selectedCount > 0) {
             Row(horizontalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing)) {
-                NeoIconButton(
+                EnclaveIconButton(
                     onClick = onShareClick,
                     icon = Icons.Default.Share,
                     contentDescription = "Share selected items",
                 )
-                NeoIconButton(
+                EnclaveIconButton(
                     onClick = onSaveClick,
                     icon = Icons.AutoMirrored.Filled.DriveFileMove,
                     contentDescription = "Save to album",
                 )
             }
         } else {
-            NeoIconButton(
+            EnclaveIconButton(
                 onClick = onNavigateToGallery,
                 icon = Icons.Default.PhotoLibrary,
                 contentDescription = "Open gallery",

@@ -16,8 +16,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
-import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSheetHeader
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 
 private data class TosSection(
@@ -105,13 +105,13 @@ public val TOS_TEXT: String = TOS_SECTIONS.joinToString("\n\n") { "${it.heading}
 public fun TosBottomSheet(onDismiss: () -> Unit) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    NeoModalBottomSheet(
+    EnclaveModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
     ) {
         LazyColumn(modifier = Modifier.fillMaxWidth()) {
             item {
-                NeoSheetHeader(
+                EnclaveSheetHeader(
                     title = "Terms of Service",
                     onDismiss = onDismiss,
                 )

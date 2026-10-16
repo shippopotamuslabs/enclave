@@ -5,7 +5,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
-import com.browntowndev.enclave.core.ui.component.neo.NeoOutlinedTextField
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveOutlinedTextField
 import com.browntowndev.enclave.domain.model.inference.DeepSeekEndpoint
 
 /**
@@ -22,7 +22,7 @@ fun DeepSeekBaseUrlField(
         }
     }
 
-    NeoOutlinedTextField(
+    EnclaveOutlinedTextField(
         value = DeepSeekEndpoint.OFFICIAL.baseUrl,
         onValueChange = {},
         readOnly = true,

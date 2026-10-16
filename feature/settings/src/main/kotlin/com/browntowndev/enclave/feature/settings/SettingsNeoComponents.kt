@@ -21,9 +21,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.browntowndev.enclave.core.ui.component.PersistentTooltip
-import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
-import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
-import com.browntowndev.enclave.core.ui.component.neo.neoSurface
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveIconButton
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorderColor
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurface
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
 import androidx.compose.ui.draw.clip
@@ -43,9 +43,9 @@ internal fun SettingsProviderCard(
         modifier =
             modifier
                 .fillMaxWidth()
-                .neoSurface(
+                .enclaveSurface(
                     backgroundColor = MaterialTheme.colorScheme.surface,
-                    borderColor = neoBorderColor(),
+                    borderColor = enclaveBorderColor(),
                     withShadow = false,
                 ).clickable(onClick = onClick)
                 .padding(16.dp),
@@ -81,9 +81,9 @@ internal fun SettingsAssignmentRow(
         modifier =
             modifier
                 .fillMaxWidth()
-                .neoSurface(
+                .enclaveSurface(
                     backgroundColor = MaterialTheme.colorScheme.surface,
-                    borderColor = neoBorderColor(),
+                    borderColor = enclaveBorderColor(),
                     withShadow = false,
                 ).padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -130,7 +130,7 @@ internal fun SettingsAssignmentRow(
                 )
             }
         }
-        NeoIconButton(
+        EnclaveIconButton(
             onClick = onEditClick,
             icon = Icons.Default.Edit,
             contentDescription = "Change assignment",
@@ -148,9 +148,9 @@ internal fun SettingsAssignmentRowSkeleton(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .neoSurface(
+            .enclaveSurface(
                 backgroundColor = MaterialTheme.colorScheme.surface,
-                borderColor = neoBorderColor(),
+                borderColor = enclaveBorderColor(),
                 withShadow = false,
             )
             .padding(horizontal = 16.dp, vertical = 14.dp),

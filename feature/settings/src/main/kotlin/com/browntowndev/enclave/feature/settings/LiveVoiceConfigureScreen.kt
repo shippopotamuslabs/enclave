@@ -44,11 +44,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.browntowndev.enclave.core.ui.component.neo.NeoBackScreenHeader
-import com.browntowndev.enclave.core.ui.component.neo.NeoCircularProgressIndicator
-import com.browntowndev.enclave.core.ui.component.neo.NeoOutlinedTextField
-import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
-import com.browntowndev.enclave.core.ui.component.neo.neoOutlinedTextFieldColors
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveBackScreenHeader
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveCircularProgressIndicator
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveOutlinedTextField
+import com.browntowndev.enclave.core.ui.component.enclave.EnclavePrimaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveOutlinedTextFieldColors
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
@@ -96,13 +96,13 @@ fun LiveVoiceConfigureScreen(
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            NeoBackScreenHeader(
+            EnclaveBackScreenHeader(
                 title = "Live Voice Provider",
                 onBackClick = onNavigateBack,
             )
         },
         bottomBar = {
-            NeoPrimaryButton(
+            EnclavePrimaryButton(
                 text = "Save Live Voice Provider",
                 onClick = onSaveLiveVoiceProvider,
                 enabled = isSaveEnabled,
@@ -130,7 +130,7 @@ fun LiveVoiceConfigureScreen(
                 onExpandedChange = { providerDropdownExpanded = it },
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                NeoOutlinedTextField(
+                EnclaveOutlinedTextField(
                     value = draft.provider.displayName,
                     onValueChange = {},
                     readOnly = true,
@@ -179,7 +179,7 @@ fun LiveVoiceConfigureScreen(
                 onSelectReusableCredential = onSelectReusableApiCredential,
             )
 
-            NeoOutlinedTextField(
+            EnclaveOutlinedTextField(
                 value = draft.displayName,
                 onValueChange = { onLiveVoiceAssetFieldChange(draft.copy(displayName = it)) },
                 label = { Text("Display Name (e.g. My OpenAI Live Voice)") },
@@ -201,7 +201,7 @@ fun LiveVoiceConfigureScreen(
                             .fillMaxWidth()
                             .then(if (hasModels) Modifier.clickable { showModelSelectionSheet = true } else Modifier),
                 ) {
-                    NeoOutlinedTextField(
+                    EnclaveOutlinedTextField(
                         value = draft.modelName ?: draft.provider.defaultLiveVoiceModelId(),
                         onValueChange = { onLiveVoiceAssetFieldChange(draft.copy(modelName = it)) },
                         readOnly = hasModels,
@@ -220,7 +220,7 @@ fun LiveVoiceConfigureScreen(
                                 null
                             },
                         modifier = Modifier.fillMaxWidth(),
-                        colors = neoOutlinedTextFieldColors(),
+                        colors = enclaveOutlinedTextFieldColors(),
                     )
                 }
                 Text(
@@ -250,7 +250,7 @@ fun LiveVoiceConfigureScreen(
                     modifier = Modifier.align(Alignment.End),
                 ) {
                     if (discovery.isLoading) {
-                        NeoCircularProgressIndicator(modifier = Modifier.size(16.dp))
+                        EnclaveCircularProgressIndicator(modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Loading models\u2026")
                     } else {
@@ -266,7 +266,7 @@ fun LiveVoiceConfigureScreen(
             }
 
             if (draft.provider == ApiProvider.OPENAI || draft.provider == ApiProvider.XAI) {
-                NeoOutlinedTextField(
+                EnclaveOutlinedTextField(
                     value = draft.baseUrl ?: "",
                     onValueChange = { onLiveVoiceAssetFieldChange(draft.copy(baseUrl = it)) },
                     label = { Text("Base URL (Optional)") },
@@ -280,7 +280,7 @@ fun LiveVoiceConfigureScreen(
                 onExpandedChange = { voiceDropdownExpanded = it },
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                NeoOutlinedTextField(
+                EnclaveOutlinedTextField(
                     value = voices.find { it.id == draft.voiceName }?.displayName ?: "Select a voice",
                     onValueChange = {},
                     readOnly = true,

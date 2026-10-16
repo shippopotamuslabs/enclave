@@ -18,7 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
-import com.browntowndev.enclave.core.ui.component.neo.NeoCircularProgressIndicator
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveCircularProgressIndicator
 
 /**
  * Confirmation dialog the user must accept before [com.browntowndev.enclave.domain.usecase
@@ -81,7 +81,7 @@ fun VaultMismatchConfirmDialog(
             ) {
                 if (isReconciling) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        NeoCircularProgressIndicator(
+                        EnclaveCircularProgressIndicator(
                             modifier = Modifier.size(18.dp),
                             color = MaterialTheme.colorScheme.error,
                         )

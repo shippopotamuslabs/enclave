@@ -53,10 +53,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Devices
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
-import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
-import com.browntowndev.enclave.core.ui.component.neo.neoSurface
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveIconButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclavePrimaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorderColor
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurface
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.feature.chat.LiveVoiceUiState
@@ -160,9 +160,9 @@ fun LiveVoiceOverlay(
                         modifier =
                             Modifier
                                 .fillMaxWidth()
-                                .neoSurface(
+                                .enclaveSurface(
                                     backgroundColor = MaterialTheme.colorScheme.surface,
-                                    borderColor = neoBorderColor(),
+                                    borderColor = enclaveBorderColor(),
                                     withShadow = true,
                                     shape = EnclaveNeoTokens.shape,
                                 ).padding(horizontal = 16.dp, vertical = 12.dp),
@@ -228,13 +228,13 @@ private fun LiveVoiceControlsRow(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        NeoIconButton(
+        EnclaveIconButton(
             onClick = onToggleMute,
             icon = if (isMuted) Icons.Default.MicOff else Icons.Default.Mic,
             contentDescription = if (isMuted) "Unmute microphone" else "Mute microphone",
             size = 52.dp,
         )
-        NeoPrimaryButton(
+        EnclavePrimaryButton(
             text = "End",
             onClick = onEnd,
             modifier = Modifier.weight(1f),
@@ -328,9 +328,9 @@ private fun LiveVoiceOrb(
             modifier
                 .size(ORB_OUTER_SIZE_DP.dp)
                 .clip(CircleShape)
-                .neoSurface(
+                .enclaveSurface(
                     backgroundColor = orbColor.copy(alpha = ORB_RING_ALPHA),
-                    borderColor = neoBorderColor(),
+                    borderColor = enclaveBorderColor(),
                     withShadow = true,
                     shape = CircleShape,
                 ),
@@ -429,9 +429,9 @@ private fun LiveVoiceUserCaptionCard(
         modifier =
             modifier
                 .fillMaxWidth()
-                .neoSurface(
+                .enclaveSurface(
                     backgroundColor = MaterialTheme.colorScheme.surface,
-                    borderColor = neoBorderColor(),
+                    borderColor = enclaveBorderColor(),
                     withShadow = true,
                     shape = EnclaveNeoTokens.shape,
                 ).padding(16.dp),
@@ -520,9 +520,9 @@ private fun LiveVoiceCaptionCard(
         modifier =
             modifier
                 .fillMaxWidth()
-                .neoSurface(
+                .enclaveSurface(
                     backgroundColor = MaterialTheme.colorScheme.surface,
-                    borderColor = neoBorderColor(),
+                    borderColor = enclaveBorderColor(),
                     withShadow = true,
                     shape = EnclaveNeoTokens.shape,
                 ).padding(16.dp),

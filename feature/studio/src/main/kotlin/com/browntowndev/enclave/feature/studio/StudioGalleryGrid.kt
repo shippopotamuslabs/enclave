@@ -61,11 +61,11 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.browntowndev.enclave.core.ui.component.VideoPlayer
-import com.browntowndev.enclave.core.ui.component.neo.NeoSelectionMark
-import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
-import com.browntowndev.enclave.core.ui.component.neo.neoButtonShadowOffset
-import com.browntowndev.enclave.core.ui.component.neo.neoShadowColor
-import com.browntowndev.enclave.core.ui.component.neo.neoSurface
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSelectionMark
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorderColor
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveButtonShadowOffset
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveShadowColor
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurface
 import com.browntowndev.enclave.core.ui.component.shimmerEffect
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
@@ -632,7 +632,7 @@ private fun GalleryItem(
                     if (isSelected) {
                         Modifier.border(
                             width = EnclaveNeoTokens.borderWidth,
-                            color = neoBorderColor(),
+                            color = enclaveBorderColor(),
                             shape = tileShape,
                         )
                     } else {
@@ -685,9 +685,9 @@ private fun GalleryItem(
                 modifier =
                     Modifier
                         .align(Alignment.TopEnd)
-                        .neoSurface(
+                        .enclaveSurface(
                             backgroundColor = MaterialTheme.colorScheme.surface,
-                            borderColor = neoBorderColor(),
+                            borderColor = enclaveBorderColor(),
                             withShadow = false,
                         ),
             ) {
@@ -704,7 +704,7 @@ private fun GalleryItem(
         }
 
         if (selectionModeActive && asset.albumId == null) {
-            NeoSelectionMark(
+            EnclaveSelectionMark(
                 selected = isSelected,
                 modifier =
                     Modifier
@@ -782,12 +782,12 @@ private fun EmptyStudioState(
                 modifier =
                     Modifier
                         .size(72.dp)
-                        .neoSurface(
+                        .enclaveSurface(
                             backgroundColor = MaterialTheme.colorScheme.surface,
-                            borderColor = neoBorderColor(),
+                            borderColor = enclaveBorderColor(),
                             withShadow = true,
-                            shadowColor = neoShadowColor(),
-                            shadowOffset = neoButtonShadowOffset(),
+                            shadowColor = enclaveShadowColor(),
+                            shadowOffset = enclaveButtonShadowOffset(),
                         ),
                 contentAlignment = Alignment.Center,
             ) {

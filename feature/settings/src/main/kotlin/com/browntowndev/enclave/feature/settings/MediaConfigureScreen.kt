@@ -38,9 +38,9 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.browntowndev.enclave.core.ui.component.neo.NeoBackScreenHeader
-import com.browntowndev.enclave.core.ui.component.neo.NeoOutlinedTextField
-import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveBackScreenHeader
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveOutlinedTextField
+import com.browntowndev.enclave.core.ui.component.enclave.EnclavePrimaryButton
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.config.MediaCapability
@@ -132,13 +132,13 @@ fun MediaConfigureScreen(
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            NeoBackScreenHeader(
+            EnclaveBackScreenHeader(
                 title = "Media Generation Models",
                 onBackClick = onNavigateBack,
             )
         },
         bottomBar = {
-            NeoPrimaryButton(
+            EnclavePrimaryButton(
                 text = "Save Media Provider",
                 onClick = onSaveMediaProvider,
                 enabled = isSaveEnabled,
@@ -167,7 +167,7 @@ fun MediaConfigureScreen(
                 onExpandedChange = { providerDropdownExpanded = it },
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                NeoOutlinedTextField(
+                EnclaveOutlinedTextField(
                     value = draft.provider.displayName,
                     onValueChange = {},
                     readOnly = true,
@@ -206,7 +206,7 @@ fun MediaConfigureScreen(
                 onExpandedChange = { capabilityDropdownExpanded = it },
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                NeoOutlinedTextField(
+                EnclaveOutlinedTextField(
                     value = draft.capability.displayName,
                     onValueChange = {},
                     readOnly = true,
@@ -254,7 +254,7 @@ fun MediaConfigureScreen(
             )
 
             // Display Name
-            NeoOutlinedTextField(
+            EnclaveOutlinedTextField(
                 value = draft.displayName,
                 onValueChange = { onMediaAssetFieldChange(draft.copy(displayName = it)) },
                 label = { Text("Display Name (e.g. OpenAI Images 2)") },
@@ -290,7 +290,7 @@ fun MediaConfigureScreen(
             )
 
             if (draft.provider.showsMediaBaseUrlOverride()) {
-                NeoOutlinedTextField(
+                EnclaveOutlinedTextField(
                     value = draft.baseUrl ?: "",
                     onValueChange = { onMediaAssetFieldChange(draft.copy(baseUrl = it)) },
                     label = { Text("Base URL (Optional)") },
