@@ -1,6 +1,6 @@
 package com.browntowndev.enclave.feature.chat.components.detailbottomsheet
 
-import com.browntowndev.enclave.domain.model.chat.WebSearchSource
+import com.browntowndev.enclave.feature.chat.WebSearchSourceUi
 
 /**
  * Configuration for [DetailBottomSheet].
@@ -32,7 +32,7 @@ sealed class DetailBottomSheetConfig {
 
     data class Sources(
         override val isVisible: Boolean,
-        val sources: List<WebSearchSource>,
+        val sources: List<WebSearchSourceUi>,
         override val onDismiss: () -> Unit,
         override val content: String = "",
         override val isStreaming: Boolean = false,

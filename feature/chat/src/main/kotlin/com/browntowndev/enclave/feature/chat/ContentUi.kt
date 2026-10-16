@@ -2,7 +2,6 @@ package com.browntowndev.enclave.feature.chat
 
 import androidx.compose.runtime.Immutable
 import com.browntowndev.enclave.domain.model.chat.FileAttachment
-import com.browntowndev.enclave.domain.model.chat.WebSearchSource
 import com.browntowndev.enclave.domain.model.inference.PipelineStep
 
 /**
@@ -17,7 +16,7 @@ data class ContentUi(
     val text: String,
     val pipelineStep: PipelineStep? = null,
     val imageUris: List<String> = emptyList(),
-    val webSearchSources: List<WebSearchSource> = emptyList(),
+    val webSearchSources: List<WebSearchSourceUi> = emptyList(),
     val artifacts: List<ArtifactCardUiModel> = emptyList(),
     val fileAttachments: List<FileAttachment> = emptyList(),
     val generatedMediaUris: List<String> = emptyList(),

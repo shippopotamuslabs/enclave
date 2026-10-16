@@ -14,6 +14,7 @@ import com.browntowndev.enclave.domain.port.inference.ToolExecutionEventPort
 import com.browntowndev.enclave.domain.util.Clock
 import com.browntowndev.enclave.domain.util.WebSearchResultParser
 import com.browntowndev.enclave.feature.chat.ToolCallBannerUi
+import com.browntowndev.enclave.feature.chat.toUiList
 import com.browntowndev.enclave.feature.chat.mapping.ToolCallBannerMapper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -168,7 +169,7 @@ class ToolExecutionBannerCoordinator
                 scope.launch {
                     if (sources.isNotEmpty()) {
                         _activeToolCallBanner.update { banner ->
-                            banner?.copy(webSearchSources = sources)
+                            banner?.copy(webSearchSources = sources.toUiList())
                         }
                     }
                     attachArtifactIfNeeded(

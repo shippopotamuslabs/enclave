@@ -14,6 +14,7 @@ import com.browntowndev.enclave.feature.chat.MessageRole
 import com.browntowndev.enclave.feature.chat.ThinkingDataUi
 import com.browntowndev.enclave.feature.chat.TranscriptSegmentUi
 import com.browntowndev.enclave.feature.chat.toArtifactCardUiModel
+import com.browntowndev.enclave.feature.chat.toUiList
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -69,7 +70,7 @@ class ChatMessageUiMapper
                             text = message.content.text,
                             pipelineStep = message.content.pipelineStep,
                             imageUris = message.content.imageUris,
-                            webSearchSources = message.webSearchSources,
+                            webSearchSources = message.webSearchSources.toUiList(),
                             artifacts =
                                 if (message.messageState == MessageState.COMPLETE) {
                                     message.content.artifacts.map { it.toArtifactCardUiModel() }
@@ -85,7 +86,7 @@ class ChatMessageUiMapper
                     formattedTimestamp = formatTimestamp(message.createdAt),
                     indicatorState = computeIndicatorState(message),
                     modelDisplayName = modelDisplayName,
-                    webSearchSources = message.webSearchSources,
+                    webSearchSources = message.webSearchSources.toUiList(),
                     transcriptSegments = mapTranscriptSegmentsToUi(message),
                 )
             cache[message.id] =
