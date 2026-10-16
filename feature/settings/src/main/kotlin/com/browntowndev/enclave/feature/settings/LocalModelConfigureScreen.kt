@@ -42,11 +42,11 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.browntowndev.enclave.core.ui.component.assignment.AssignmentSelectionContent
 import com.browntowndev.enclave.core.ui.component.PersistentTooltip
-import com.browntowndev.enclave.core.ui.component.neo.NeoBackScreenHeader
-import com.browntowndev.enclave.core.ui.component.neo.NeoOutlinedTextField
-import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoToggleRow
-import com.browntowndev.enclave.core.ui.component.neo.neoOutlinedTextFieldColors
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveBackScreenHeader
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveOutlinedTextField
+import com.browntowndev.enclave.core.ui.component.enclave.EnclavePrimaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveToggleRow
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveOutlinedTextFieldColors
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.config.LocalModelConfiguration
@@ -124,14 +124,14 @@ fun LocalModelConfigureScreen(
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            NeoBackScreenHeader(
+            EnclaveBackScreenHeader(
                 title = "Configure Local Preset",
                 onBackClick = onNavigateBack,
             )
         },
         bottomBar = {
             if (!config.isSystemPreset) {
-                NeoPrimaryButton(
+                EnclavePrimaryButton(
                     text = "Save Preset",
                     onClick = onSave,
                     enabled = isSaveEnabled,
@@ -157,7 +157,7 @@ fun LocalModelConfigureScreen(
         ) {
             Spacer(modifier = Modifier.height(8.dp))
 
-            NeoOutlinedTextField(
+            EnclaveOutlinedTextField(
                 value = config.displayName,
                 onValueChange = { onConfigChange(config.copy(displayName = it)) },
                 label = { Text("Preset Name (e.g. Creative)") },
@@ -179,7 +179,7 @@ fun LocalModelConfigureScreen(
                             },
                         ),
             ) {
-                NeoOutlinedTextField(
+                EnclaveOutlinedTextField(
                     value = config.systemPrompt.ifBlank { "Tap to edit system prompt" },
                     onValueChange = {},
                     label = {
@@ -199,7 +199,7 @@ fun LocalModelConfigureScreen(
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 4,
                     maxLines = 4,
-                    colors = neoOutlinedTextFieldColors(),
+                    colors = enclaveOutlinedTextFieldColors(),
                 )
             }
 
@@ -220,7 +220,7 @@ fun LocalModelConfigureScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
-                    NeoOutlinedTextField(
+                    EnclaveOutlinedTextField(
                         value = config.maxTokens,
                         onValueChange = { onConfigChange(config.copy(maxTokens = it)) },
                         label = {
@@ -240,7 +240,7 @@ fun LocalModelConfigureScreen(
                         enabled = !config.isSystemPreset,
                     )
 
-                    NeoOutlinedTextField(
+                    EnclaveOutlinedTextField(
                         value = config.contextWindow,
                         onValueChange = { newContextWindow ->
                             val oldContextWindow = config.contextWindow.toIntOrNull() ?: 4096
@@ -279,7 +279,7 @@ fun LocalModelConfigureScreen(
                     )
                 }
             } else {
-                NeoOutlinedTextField(
+                EnclaveOutlinedTextField(
                     value = config.contextWindow,
                     onValueChange = { onConfigChange(config.copy(contextWindow = it)) },
                     label = {
@@ -364,7 +364,7 @@ fun LocalModelConfigureScreen(
                 )
             }
 
-            NeoToggleRow(
+            EnclaveToggleRow(
                 title = "Thinking",
                 checked = config.thinkingEnabled,
                 onCheckedChange = { checked ->
@@ -392,7 +392,7 @@ fun LocalModelConfigureScreen(
                 enter = slideInVertically(initialOffsetY = { -it }) + expandVertically(),
                 exit = slideOutVertically(targetOffsetY = { -it }) + shrinkVertically(),
             ) {
-                NeoOutlinedTextField(
+                EnclaveOutlinedTextField(
                     value = config.reasoningBudget,
                     onValueChange = { onConfigChange(config.copy(reasoningBudget = it)) },
                     label = {

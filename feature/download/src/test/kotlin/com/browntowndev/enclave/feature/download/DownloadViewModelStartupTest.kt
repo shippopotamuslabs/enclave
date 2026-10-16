@@ -1,8 +1,5 @@
 package com.browntowndev.enclave.feature.download
 
-import androidx.work.WorkInfo
-import com.browntowndev.enclave.core.data.download.WorkProgressParser
-import com.browntowndev.enclave.core.data.repository.DownloadWorkRepository
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.config.LocalModelAsset
@@ -36,8 +33,6 @@ import java.util.UUID
 @OptIn(ExperimentalCoroutinesApi::class)
 class DownloadViewModelStartupTest {
     private val orchestrator = mockk<ModelDownloadOrchestratorPort>(relaxed = true)
-    private val workRepo = mockk<DownloadWorkRepository>(relaxed = true)
-    private val parser = mockk<WorkProgressParser>(relaxed = true)
     private val errorHandler = mockk<ViewModelErrorHandler>(relaxed = true)
     private val downloadStateFlow = MutableStateFlow(DownloadState(status = DownloadStatus.IDLE))
 
@@ -72,18 +67,24 @@ class DownloadViewModelStartupTest {
     fun setup() {
         every { orchestrator.downloadState } returns downloadStateFlow
         every { orchestrator.snackbarMessages } returns flowOf()
-        every { workRepo.observeDownloadProgress() } returns flowOf()
         coEvery { orchestrator.startDownloads(modelsResult = modelsResult, wifiOnly = true) } answers {
             downloadStateFlow.value = downloadStateFlow.value.copy(status = DownloadStatus.DOWNLOADING)
             true
         }
     }
 
+    private var workObserver =
+        com.browntowndev.enclave.core.testing.download.FakeDownloadWorkObserverPort()
+    private var progressParserPort: com.browntowndev.enclave.domain.port.download.DownloadProgressParserPort =
+        object : com.browntowndev.enclave.domain.port.download.DownloadProgressParserPort {
+            override fun parseProgress(currentDownloads: List<com.browntowndev.enclave.domain.model.download.FileProgress>) = null
+        }
+
     private fun createViewModel(autoStartDownloads: Boolean): DownloadViewModel =
         DownloadViewModel(
             modelDownloadOrchestrator = orchestrator,
-            downloadWorkRepository = workRepo,
-            progressParser = parser,
+            observeDownloadWork = com.browntowndev.enclave.domain.usecase.download.ObserveDownloadWorkUseCase(workObserver),
+            parseDownloadProgress = com.browntowndev.enclave.domain.usecase.download.ParseDownloadProgressUseCase(progressParserPort),
             errorHandler = errorHandler,
             modelsResult = modelsResult,
             initialErrorMessage = null,
@@ -152,8 +153,10 @@ class DownloadViewModelStartupTest {
             val viewModel =
                 DownloadViewModel(
                     modelDownloadOrchestrator = orchestrator,
-                    downloadWorkRepository = workRepo,
-                    progressParser = parser,
+                    observeDownloadWork = com.browntowndev.enclave.domain.usecase.download.ObserveDownloadWorkUseCase(com.browntowndev.enclave.core.testing.download.FakeDownloadWorkObserverPort()),
+                    parseDownloadProgress = com.browntowndev.enclave.domain.usecase.download.ParseDownloadProgressUseCase(object : com.browntowndev.enclave.domain.port.download.DownloadProgressParserPort {
+                        override fun parseProgress(currentDownloads: List<com.browntowndev.enclave.domain.model.download.FileProgress>) = null
+                    }),
                     errorHandler = errorHandler,
                     modelsResult = modelsResult,
                     initialErrorMessage = "boom",
@@ -171,19 +174,29 @@ class DownloadViewModelStartupTest {
     @DisplayName("work progress flow updates downloadState to DOWNLOADING via parser and orchestrator")
     fun observeWorkProgress_parserDownloadingUpdate_reflectsDownloadingState() =
         runTest {
-            val workInfo =
-                mockk<WorkInfo> {
-                    every { id } returns UUID.randomUUID()
-                    every { state } returns WorkInfo.State.RUNNING
-                    every { tags } returns emptySet()
-                    every { outputData } returns androidx.work.Data.EMPTY
-                    every { progress } returns androidx.work.Data.EMPTY
-                }
             val downloadingUpdate =
                 DownloadProgressUpdate(status = DownloadStatus.DOWNLOADING)
 
-            every { workRepo.observeDownloadProgress() } returns flowOf(workInfo)
-            every { parser.parse(workInfo, any()) } returns downloadingUpdate
+            workObserver =
+                com.browntowndev.enclave.core.testing.download.FakeDownloadWorkObserverPort(
+                    com.browntowndev.enclave.domain.model.download.DownloadWorkSnapshot(
+                        id = "work-1",
+                        lifecycle = com.browntowndev.enclave.domain.model.download.DownloadWorkLifecycle.RUNNING,
+                        isTerminalSuccess = false,
+                        isTerminalFailure = false,
+                        isIntermediateDownloadSuccess = false,
+                        isFinalizing = false,
+                        postProcessProgress = null,
+                        aggregateProgress = null,
+                        unassignedFileProgress = null,
+                    ),
+                )
+            progressParserPort =
+                object : com.browntowndev.enclave.domain.port.download.DownloadProgressParserPort {
+                    override fun parseProgress(
+                        currentDownloads: List<com.browntowndev.enclave.domain.model.download.FileProgress>,
+                    ) = downloadingUpdate
+                }
             coEvery { orchestrator.updateFromProgressUpdate(any()) } coAnswers {
                 val update = firstArg<DownloadProgressUpdate>()
                 downloadStateFlow.value = downloadStateFlow.value.copy(status = update.status)
@@ -193,7 +206,6 @@ class DownloadViewModelStartupTest {
             advanceUntilIdle()
 
             assertEquals(DownloadStatus.DOWNLOADING, viewModel.downloadState.value.status)
-            verify { parser.parse(workInfo, any()) }
             coVerify(exactly = 1) { orchestrator.updateFromProgressUpdate(downloadingUpdate) }
         }
 }

@@ -10,8 +10,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoSearchField
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveIconButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSearchField
 
 @Composable
 fun HistoryTopBar(
@@ -26,18 +26,18 @@ fun HistoryTopBar(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        NeoIconButton(
+        EnclaveIconButton(
             onClick = onBackClick,
             icon = Icons.AutoMirrored.Filled.KeyboardArrowRight,
             contentDescription = "Back to chat",
         )
-        NeoSearchField(
+        EnclaveSearchField(
             value = searchQuery,
             onValueChange = onSearchQueryChange,
             placeholder = "Search Enclave History",
             modifier = Modifier.weight(1f),
         )
-        NeoIconButton(
+        EnclaveIconButton(
             onClick = onSettingsClick,
             icon = Icons.Default.Settings,
             contentDescription = "Open settings",

@@ -64,7 +64,38 @@ subprojects {
         toolVersion = jacocoVersion
     }
 
+    // Centralized screenshot-test wiring (ENC-19): covered modules opt in with
+    // `alias(libs.plugins.screenshot)`; the experimental flag and test deps come
+    // from here so new modules copy nothing.
+    plugins.withId("com.android.compose.screenshot") {
+        plugins.withId("com.android.library") {
+            extensions.configure<com.android.build.api.dsl.LibraryExtension> {
+                experimentalProperties["android.experimental.enableScreenshotTest"] = true
+            }
+        }
+        plugins.withId("com.android.application") {
+            extensions.configure<com.android.build.api.dsl.ApplicationExtension> {
+                experimentalProperties["android.experimental.enableScreenshotTest"] = true
+            }
+        }
+        afterEvaluate {
+            dependencies.add("screenshotTestImplementation", libs.screenshot.validation.api)
+            dependencies.add("screenshotTestImplementation", libs.androidx.compose.ui.tooling)
+            dependencies.add("screenshotTestImplementation", libs.junit)
+        }
+    }
+
     tasks.withType<Test> {
+        // Screenshot plugin generates JUnit4 tests; keep its tasks on useJUnit().
+        if (
+            plugins.hasPlugin("com.android.compose.screenshot") &&
+            name in setOf(
+                "updateDebugScreenshotTest", "validateDebugScreenshotTest",
+                "updateReleaseScreenshotTest", "validateReleaseScreenshotTest",
+            )
+        ) {
+            useJUnit()
+        }
         jvmArgs("-noverify")
         configure<JacocoTaskExtension> {
             isIncludeNoLocationClasses = true

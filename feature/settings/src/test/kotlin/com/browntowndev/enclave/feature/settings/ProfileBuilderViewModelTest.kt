@@ -11,6 +11,13 @@ import com.browntowndev.enclave.domain.port.profile.ProfileAnalysisPort
 import com.browntowndev.enclave.domain.port.profile.ProfileExportIngestionPort
 import com.browntowndev.enclave.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.MemoriesRepository
+import com.browntowndev.enclave.domain.usecase.profile.ClearProfileCorpusUseCase
+import com.browntowndev.enclave.domain.usecase.profile.GetLatestProfileSynthesisUseCase
+import com.browntowndev.enclave.domain.usecase.profile.ObserveApiModelConfigurationsUseCase
+import com.browntowndev.enclave.domain.usecase.profile.ObserveProfileAnalysisProgressUseCase
+import com.browntowndev.enclave.domain.usecase.profile.PrepareProfileCorpusUseCase
+import com.browntowndev.enclave.domain.usecase.profile.SavePsychProfileUseCase
+import com.browntowndev.enclave.domain.usecase.profile.StartProfileAnalysisUseCase
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -57,10 +64,13 @@ class ProfileBuilderViewModelTest {
 
         viewModel =
             ProfileBuilderViewModel(
-                apiModelRepository = apiModelRepository,
-                ingestionPort = ingestionPort,
-                analysisPort = analysisPort,
-                memoriesRepository = memoriesRepository,
+                observeApiModelConfigurations = ObserveApiModelConfigurationsUseCase(apiModelRepository),
+                clearProfileCorpus = ClearProfileCorpusUseCase(ingestionPort),
+                prepareProfileCorpus = PrepareProfileCorpusUseCase(analysisPort),
+                startProfileAnalysis = StartProfileAnalysisUseCase(analysisPort),
+                observeProfileAnalysisProgress = ObserveProfileAnalysisProgressUseCase(analysisPort),
+                getLatestProfileSynthesis = GetLatestProfileSynthesisUseCase(analysisPort),
+                savePsychProfile = SavePsychProfileUseCase(memoriesRepository),
             )
     }
 

@@ -22,7 +22,7 @@ import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnSnapshotPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.media.SpeechState
 import com.browntowndev.enclave.domain.port.repository.SettingsData
-import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
+import com.browntowndev.enclave.domain.usecase.studio.ObserveChatStudioMediaUseCase
 import com.browntowndev.enclave.domain.port.repository.UiSelectionRepository
 import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
 import com.browntowndev.enclave.domain.usecase.chat.GetModelDisplayNameUseCase
@@ -96,7 +96,7 @@ class ChatViewModel
         private val activeChatTurnSnapshotPort: ActiveChatTurnSnapshotPort,
         private val errorHandler: ViewModelErrorHandler,
         private val loggingPort: LoggingPort,
-        private val studioRepository: StudioRepositoryPort,
+        private val observeChatStudioMedia: ObserveChatStudioMediaUseCase,
         private val shouldModeratePromptUseCase: ShouldModeratePromptUseCase,
         private val submitModerationReportUseCase: SubmitModerationReportUseCase,
         private val inferenceOrchestrator: InferenceOrchestrator,
@@ -400,12 +400,8 @@ class ChatViewModel
             }
 
         private val studioMediaFlow =
-            combine(
-                studioRepository.observeEphemeralMedia(),
-                studioRepository.observeAllMedia(),
-            ) { ephemeral, persisted ->
-                (ephemeral + persisted).associateBy { it.id }
-            }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIBE_TIMEOUT_MS), emptyMap())
+            observeChatStudioMedia()
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIBE_TIMEOUT_MS), emptyMap())
 
         private val chatUiCombineInputsFlow =
             combine(

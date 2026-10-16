@@ -29,10 +29,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
-import com.browntowndev.enclave.core.ui.component.neo.NeoSecondaryIconButton
-import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
-import com.browntowndev.enclave.core.ui.component.neo.neoSurface
-import com.browntowndev.enclave.core.ui.component.neo.neoSurfaceEdges
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSecondaryIconButton
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorderColor
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurface
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurfaceEdges
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 
 private val PromptHeaderActionSize = EnclaveNeoTokens.iconTileSize
@@ -51,7 +51,7 @@ fun PromptHeaderDivider(
     val expanded = isExpanded ?: localIsExpanded
     val updateExpanded = onExpandedChange ?: { value -> localIsExpanded = value }
     val clipboardManager = LocalClipboardManager.current
-    val borderColor = neoBorderColor()
+    val borderColor = enclaveBorderColor()
     val headerBackground =
         if (omitTopBorder) {
             MaterialTheme.colorScheme.surface
@@ -67,7 +67,7 @@ fun PromptHeaderDivider(
                 .then(
                     when {
                         omitTopBorder -> {
-                            Modifier.neoSurfaceEdges(
+                            Modifier.enclaveSurfaceEdges(
                                 backgroundColor = headerBackground,
                                 borderColor = borderColor,
                                 shape = EnclaveNeoTokens.flushTopShape,
@@ -78,7 +78,7 @@ fun PromptHeaderDivider(
                             )
                         }
                         showSectionDivider -> {
-                            Modifier.neoSurfaceEdges(
+                            Modifier.enclaveSurfaceEdges(
                                 backgroundColor = headerBackground,
                                 borderColor = borderColor,
                                 drawBottom = false,
@@ -87,7 +87,7 @@ fun PromptHeaderDivider(
                             )
                         }
                         else -> {
-                            Modifier.neoSurface(
+                            Modifier.enclaveSurface(
                                 backgroundColor = headerBackground,
                                 borderColor = borderColor,
                                 withShadow = false,
@@ -133,14 +133,14 @@ fun PromptHeaderDivider(
                 )
             }
 
-            NeoSecondaryIconButton(
+            EnclaveSecondaryIconButton(
                 onClick = { clipboardManager.setText(AnnotatedString(prompt)) },
                 icon = Icons.Default.ContentCopy,
                 contentDescription = "Copy prompt",
                 size = PromptHeaderActionSize,
             )
 
-            NeoSecondaryIconButton(
+            EnclaveSecondaryIconButton(
                 onClick = { updateExpanded(!expanded) },
                 icon = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                 contentDescription = if (expanded) "Collapse" else "Expand",

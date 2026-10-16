@@ -176,8 +176,8 @@ class MultimodalViewModelOverrideTest {
 
         viewModel =
             MultimodalViewModel(
-                defaultModelRepository = defaultModelRepository,
-                mediaProviderRepository = mediaProviderRepository,
+                observeDefaultModelAssignments = com.browntowndev.enclave.domain.usecase.studio.ObserveDefaultModelAssignmentsUseCase(defaultModelRepository),
+                getMediaProviders = com.browntowndev.enclave.domain.usecase.studio.GetMediaProvidersUseCase(mediaProviderRepository),
                 moderatePromptUseCase = allowPromptModerationUseCase(),
                 shouldModeratePromptUseCase = allowShouldModeratePromptUseCase(),
                 submitModerationReportUseCase = submitModerationReportUseCase,
@@ -191,7 +191,8 @@ class MultimodalViewModelOverrideTest {
                 remoteCapabilitiesCoordinator = StudioRemoteCapabilitiesCoordinator(resolveMediaProviderCapabilitiesUseCase),
                 promptCoordinator = promptCoordinator,
                 mediaActionsCoordinator = mediaActionsCoordinator,
-                uiSelectionRepository = uiSelectionRepository,
+                getSelectedStudioMediaType = com.browntowndev.enclave.domain.usecase.studio.GetSelectedStudioMediaTypeUseCase(uiSelectionRepository),
+                    setSelectedStudioMediaType = com.browntowndev.enclave.domain.usecase.studio.SetSelectedStudioMediaTypeUseCase(uiSelectionRepository),
                 overrideCoordinator = overrideCoordinator,
                 resolvedModelCoordinator =
                     StudioResolvedModelCoordinator(

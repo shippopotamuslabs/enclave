@@ -14,9 +14,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.browntowndev.enclave.core.ui.component.assignment.AssignmentSelectionContent
-import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
-import com.browntowndev.enclave.core.ui.component.neo.NeoNavRow
-import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveNavRow
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSheetHeader
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.TtsProviderId
@@ -39,7 +39,7 @@ fun VisionSettingsBottomSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var isDrilledDown by remember { mutableStateOf(false) }
 
-    NeoModalBottomSheet(
+    EnclaveModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
     ) {
@@ -65,12 +65,12 @@ fun VisionSettingsBottomSheet(
                 )
             } else {
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    NeoSheetHeader(
+                    EnclaveSheetHeader(
                         title = "Vision Settings",
                         onDismiss = onDismiss,
                     )
                     val currentVisionModel = uiState.assignments.assignments.find { it.modelType == ModelType.VISION }
-                    NeoNavRow(
+                    EnclaveNavRow(
                         title = "API Vision Model",
                         subtitle = formatVisionAssignmentSubtitle(currentVisionModel),
                         icon = Icons.Default.Visibility,

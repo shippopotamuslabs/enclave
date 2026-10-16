@@ -42,14 +42,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.browntowndev.enclave.core.ui.component.neo.NeoDisabledActionTooltip
-import com.browntowndev.enclave.core.ui.component.neo.NeoIconTile
-import com.browntowndev.enclave.core.ui.component.neo.NeoMediaActionButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
-import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
-import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
-import com.browntowndev.enclave.core.ui.component.neo.neoSurface
-import com.browntowndev.enclave.core.ui.component.neo.rememberNeoDisabledClick
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveDisabledActionTooltip
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveIconTile
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveMediaActionButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSheetHeader
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorderColor
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurface
+import com.browntowndev.enclave.core.ui.component.enclave.rememberNeoDisabledClick
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 
 const val FULLSCREEN_MEDIA_ANIMATE_DISABLED_TOOLTIP =
@@ -227,7 +227,7 @@ private fun FullscreenMediaMoreButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    NeoMediaActionButton(
+    EnclaveMediaActionButton(
         icon = Icons.Default.MoreHoriz,
         label = FULLSCREEN_MEDIA_MORE_ACTIONS_LABEL,
         onClick = onClick,
@@ -246,11 +246,11 @@ fun FullscreenMediaActionsSheet(
     val regularActions = actions.filter { !it.isDestructive }
     val destructiveActions = actions.filter { it.isDestructive }
 
-    NeoModalBottomSheet(
+    EnclaveModalBottomSheet(
         onDismissRequest = onDismiss,
         modifier = modifier,
     ) {
-        NeoSheetHeader(
+        EnclaveSheetHeader(
             title = "Actions",
             onDismiss = onDismiss,
         )
@@ -290,7 +290,7 @@ private fun FullscreenMediaSheetActionRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    NeoDisabledActionTooltip(
+    EnclaveDisabledActionTooltip(
         enabled = action.enabled,
         disabledReason = action.disabledTooltip,
         modifier = modifier.fillMaxWidth(),
@@ -302,9 +302,9 @@ private fun FullscreenMediaSheetActionRow(
                 Modifier
                     .fillMaxWidth()
                     .alpha(contentAlpha)
-                    .neoSurface(
+                    .enclaveSurface(
                         backgroundColor = MaterialTheme.colorScheme.surface,
-                        borderColor = neoBorderColor(),
+                        borderColor = enclaveBorderColor(),
                         withShadow = false,
                     ).clickable(enabled = action.enabled, onClick = handleClick)
                     .padding(horizontal = 16.dp, vertical = 14.dp),
@@ -351,9 +351,9 @@ private fun FullscreenMediaSheetLeadingIcon(
             modifier =
                 modifier
                     .size(EnclaveNeoTokens.iconTileSize)
-                    .neoSurface(
+                    .enclaveSurface(
                         backgroundColor = MaterialTheme.colorScheme.errorContainer,
-                        borderColor = neoBorderColor(),
+                        borderColor = enclaveBorderColor(),
                         withShadow = false,
                     ),
             contentAlignment = Alignment.Center,
@@ -365,7 +365,7 @@ private fun FullscreenMediaSheetLeadingIcon(
             )
         }
     } else {
-        NeoIconTile(
+        EnclaveIconTile(
             icon = icon,
             contentDescription = contentDescription,
             modifier = modifier,
@@ -388,13 +388,13 @@ fun FullscreenMediaActionButton(
     modifier: Modifier = Modifier,
     showLabel: Boolean = true,
 ) {
-    NeoDisabledActionTooltip(
+    EnclaveDisabledActionTooltip(
         enabled = action.enabled,
         disabledReason = action.disabledTooltip,
         modifier = modifier,
     ) {
         val handleClick = rememberNeoDisabledClick(enabled = action.enabled, onEnabledClick = action.onClick)
-        NeoMediaActionButton(
+        EnclaveMediaActionButton(
             icon = action.icon,
             label = action.label,
             onClick = handleClick,

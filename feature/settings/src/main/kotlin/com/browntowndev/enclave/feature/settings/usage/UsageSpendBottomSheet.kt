@@ -6,13 +6,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import com.browntowndev.enclave.core.ui.component.neo.NeoGroupDivider
-import com.browntowndev.enclave.core.ui.component.neo.NeoSegmentedControl
-import com.browntowndev.enclave.core.ui.component.neo.NeoTelemetryBreakdownRow
-import com.browntowndev.enclave.core.ui.component.neo.NeoTelemetryMetricPanel
-import com.browntowndev.enclave.core.ui.component.neo.NeoTelemetryMetricRow
-import com.browntowndev.enclave.core.ui.component.neo.NeoTelemetrySectionTitle
-import com.browntowndev.enclave.core.ui.component.neo.NeoTelemetryStatsSheet
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveGroupDivider
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSegmentedControl
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveTelemetryBreakdownRow
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveTelemetryMetricPanel
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveTelemetryMetricRow
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveTelemetrySectionTitle
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveTelemetryStatsSheet
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.feature.settings.UsagePeriodUi
 import com.browntowndev.enclave.feature.settings.UsageSpendSheetUiState
@@ -31,14 +31,14 @@ fun UsageSpendBottomSheet(
             UsagePeriodUi.LIFETIME -> 0
             UsagePeriodUi.CURRENT_MONTH -> 1
         }
-    NeoTelemetryStatsSheet(
+    EnclaveTelemetryStatsSheet(
         title = "Usage & spend",
         subtitle = "API inference costs across providers",
         onDismiss = onDismiss,
         sheetTestTag = "usage_spend_sheet",
         modifier = modifier,
     ) {
-        NeoSegmentedControl(
+        EnclaveSegmentedControl(
             options = periodOptions,
             selectedIndex = selectedPeriodIndex,
             onOptionSelected = { index ->
@@ -64,13 +64,13 @@ fun UsageSpendBottomSheet(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.testTag("usage_spend_period"),
         )
-        NeoTelemetryMetricPanel(
+        EnclaveTelemetryMetricPanel(
             modifier =
                 Modifier
                     .padding(top = EnclaveNeoTokens.rowSpacing)
                     .testTag("usage_spend_total"),
         ) {
-            NeoTelemetryMetricRow(
+            EnclaveTelemetryMetricRow(
                 label = "Total spend",
                 value = state.totalCostLabel,
                 testTagSuffix = "total",
@@ -88,24 +88,24 @@ fun UsageSpendBottomSheet(
             )
         }
         if (state.providerRows.isNotEmpty()) {
-            NeoTelemetrySectionTitle(title = "By provider")
-            NeoTelemetryMetricPanel {
+            EnclaveTelemetrySectionTitle(title = "By provider")
+            EnclaveTelemetryMetricPanel {
                 state.providerRows.forEach { row ->
-                    NeoTelemetryBreakdownRow(
+                    EnclaveTelemetryBreakdownRow(
                         primaryLabel = row.providerLabel,
                         costLabel = row.costLabel,
                         secondaryLabel = "${row.turnCount} turn${if (row.turnCount == 1) "" else "s"}",
                         testTagSuffix = row.providerLabel,
                     )
                     if (row != state.providerRows.last()) {
-                        NeoGroupDivider()
+                        EnclaveGroupDivider()
                     }
                 }
             }
         }
         state.missingCostTurnsLabel?.let { label ->
-            NeoTelemetryMetricPanel(modifier = Modifier.padding(top = EnclaveNeoTokens.rowSpacing)) {
-                NeoTelemetryMetricRow(
+            EnclaveTelemetryMetricPanel(modifier = Modifier.padding(top = EnclaveNeoTokens.rowSpacing)) {
+                EnclaveTelemetryMetricRow(
                     label = "Turns without cost",
                     value = label,
                     testTagSuffix = "missing_cost",

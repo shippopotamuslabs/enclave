@@ -4,9 +4,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import com.browntowndev.enclave.core.ui.component.neo.NeoTelemetryMetricPanel
-import com.browntowndev.enclave.core.ui.component.neo.NeoTelemetryMetricRow
-import com.browntowndev.enclave.core.ui.component.neo.NeoTelemetryStatsSheet
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveTelemetryMetricPanel
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveTelemetryMetricRow
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveTelemetryStatsSheet
 
 @Composable
 fun ResponseStatsBottomSheet(
@@ -15,7 +15,7 @@ fun ResponseStatsBottomSheet(
     modifier: Modifier = Modifier,
 ) {
     if (!state.isVisible) return
-    NeoTelemetryStatsSheet(
+    EnclaveTelemetryStatsSheet(
         title = state.title,
         subtitle =
             listOfNotNull(state.providerLabel, state.modelLabel)
@@ -29,9 +29,9 @@ fun ResponseStatsBottomSheet(
         bannerTestTag = "response_stats_availability",
     ) {
         Column(modifier = Modifier.testTag("response_stats_title")) {
-            NeoTelemetryMetricPanel {
+            EnclaveTelemetryMetricPanel {
                 state.metricRows.forEach { row ->
-                    NeoTelemetryMetricRow(
+                    EnclaveTelemetryMetricRow(
                         label = row.label,
                         value = row.value,
                         testTagSuffix = row.label.lowercase().replace(' ', '_'),

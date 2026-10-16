@@ -120,9 +120,15 @@ sealed interface VaultReauthSheetState {
     ) : VaultReauthSheetState
 }
 
+enum class ThemeFamilyUi {
+    Tonal,
+    NeoBrutalist,
+}
+
 @Immutable
 data class SettingsHomeUiState(
     val theme: AppTheme = AppTheme.SYSTEM,
+    val themeFamily: ThemeFamilyUi = ThemeFamilyUi.NeoBrutalist,
     val hapticResponse: Boolean = true,
     val backgroundInferenceEnabled: Boolean = true,
     val auth: AuthStateUi = AuthStateUi.Loading,

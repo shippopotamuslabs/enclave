@@ -21,13 +21,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.browntowndev.enclave.core.ui.component.neo.NeoChevronCard
-import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
-import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoSecondaryButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoSelectionCard
-import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
-import com.browntowndev.enclave.core.ui.component.neo.NeoSheetTabRow
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveChevronCard
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.enclave.EnclavePrimaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSecondaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSelectionCard
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSheetHeader
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSheetTabRow
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId
@@ -56,7 +56,7 @@ fun AssignmentSelectionBottomSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    NeoModalBottomSheet(
+    EnclaveModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         modifier = modifier,
@@ -138,14 +138,14 @@ fun AssignmentSelectionContent(
     ) {
         when (val state = viewState) {
             is AssignmentSelectionView.AssetList -> {
-                NeoSheetHeader(
+                EnclaveSheetHeader(
                     title = "Assign Model to $slotLabel",
                     onDismiss = onDismiss,
                     onBackClick = onBack,
                 )
             }
             is AssignmentSelectionView.LocalConfigList -> {
-                NeoSheetHeader(
+                EnclaveSheetHeader(
                     title = state.asset.friendlyName,
                     subtitle = "Presets",
                     onDismiss = onDismiss,
@@ -153,7 +153,7 @@ fun AssignmentSelectionContent(
                 )
             }
             is AssignmentSelectionView.ApiConfigList -> {
-                NeoSheetHeader(
+                EnclaveSheetHeader(
                     title = state.asset.displayName,
                     subtitle = "Presets",
                     onDismiss = onDismiss,
@@ -174,7 +174,7 @@ fun AssignmentSelectionContent(
                 is AssignmentSelectionView.AssetList -> {
                     Column {
                         if (tabs.size > 1) {
-                            NeoSheetTabRow(
+                            EnclaveSheetTabRow(
                                 selectedTabIndex = selectedTabIndex,
                                 tabs = tabs,
                                 onTabSelected = { selectedTabIndex = it },
@@ -206,7 +206,7 @@ fun AssignmentSelectionContent(
                                 when (currentTabTitle) {
                                     "Local Models" -> {
                                         items(localAssets, key = { "local_${it.metadataId.value}" }) { asset ->
-                                            NeoChevronCard(
+                                            EnclaveChevronCard(
                                                 title = asset.friendlyName,
                                                 subtitle = "${asset.providerName} • ${asset.format}",
                                                 footer = "${asset.configurations.size} Preset(s) available",
@@ -218,7 +218,7 @@ fun AssignmentSelectionContent(
                                     }
                                     "API Models" -> {
                                         items(apiAssets, key = { "api_${it.credentialsId.value}" }) { asset ->
-                                            NeoChevronCard(
+                                            EnclaveChevronCard(
                                                 title = asset.displayName,
                                                 subtitle = asset.provider.displayName,
                                                 footer = "${asset.configurations.size} Preset(s) available",
@@ -230,7 +230,7 @@ fun AssignmentSelectionContent(
                                     }
                                     "TTS Providers" -> {
                                         items(ttsAssets, key = { "tts_${it.id.value}" }) { asset ->
-                                            NeoChevronCard(
+                                            EnclaveChevronCard(
                                                 title = asset.displayName,
                                                 subtitle = "${asset.provider.displayName} • ${asset.voiceName}",
                                                 footer = "1 Preset(s) available",
@@ -247,7 +247,7 @@ fun AssignmentSelectionContent(
                                     }
                                     "Live Voice Providers" -> {
                                         items(liveVoiceAssets, key = { "live_voice_${it.id.value}" }) { asset ->
-                                            NeoChevronCard(
+                                            EnclaveChevronCard(
                                                 title = asset.displayName,
                                                 subtitle = "${asset.provider.displayName} • ${asset.voiceName}",
                                                 footer = "1 Preset(s) available",
@@ -264,7 +264,7 @@ fun AssignmentSelectionContent(
                                     }
                                     "Media Providers" -> {
                                         items(mediaAssets, key = { "media_${it.id.value}" }) { asset ->
-                                            NeoChevronCard(
+                                            EnclaveChevronCard(
                                                 title = asset.displayName,
                                                 subtitle = "${asset.provider.displayName} • ${asset.modelName}",
                                                 footer = "1 Preset(s) available",
@@ -349,12 +349,12 @@ fun AssignmentSelectionContent(
                     .padding(horizontal = 20.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            NeoSecondaryButton(
+            EnclaveSecondaryButton(
                 text = "Cancel",
                 onClick = onDismiss,
                 modifier = Modifier.weight(1f),
             )
-            NeoPrimaryButton(
+            EnclavePrimaryButton(
                 text = "Confirm",
                 onClick = {
                     onSelect(
@@ -384,7 +384,7 @@ private fun ConfigSelectionCard(
     isSelected: Boolean = false,
     onClick: () -> Unit,
 ) {
-    NeoSelectionCard(
+    EnclaveSelectionCard(
         title = label,
         subtitle = subtitle,
         isSelected = isSelected,

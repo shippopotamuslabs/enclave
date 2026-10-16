@@ -88,6 +88,9 @@ import com.browntowndev.enclave.core.data.repository.ModelConfigProviderImpl
 import com.browntowndev.enclave.core.data.repository.ModerationReportRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.PipelineStateRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.RoomTransactionProvider
+import com.browntowndev.enclave.core.data.download.DownloadProgressParserAdapter
+import com.browntowndev.enclave.core.data.download.DownloadWorkObserverAdapter
+import com.browntowndev.enclave.core.data.repository.DataStoreThemePreferencesRepository
 import com.browntowndev.enclave.core.data.repository.SettingsRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.StudioRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.TelemetryEventRepositoryImpl
@@ -145,6 +148,9 @@ import com.browntowndev.enclave.domain.port.repository.ModelConfigProvider
 import com.browntowndev.enclave.domain.port.repository.ModerationReportRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.PipelineStateRepository
 import com.browntowndev.enclave.domain.port.repository.SettingsRepository
+import com.browntowndev.enclave.domain.port.download.DownloadProgressParserPort
+import com.browntowndev.enclave.domain.port.download.DownloadWorkObserverPort
+import com.browntowndev.enclave.domain.theme.ThemePreferencesRepository
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.SyncOrchestrator
 import com.browntowndev.enclave.domain.port.repository.TransactionProvider
@@ -560,6 +566,24 @@ abstract class DataRepositoryModule {
     @Binds
     @Singleton
     abstract fun bindSettingsRepository(impl: SettingsRepositoryImpl): SettingsRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindThemePreferencesRepository(
+        impl: DataStoreThemePreferencesRepository,
+    ): ThemePreferencesRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindDownloadWorkObserverPort(
+        impl: DownloadWorkObserverAdapter,
+    ): DownloadWorkObserverPort
+
+    @Binds
+    @Singleton
+    abstract fun bindDownloadProgressParserPort(
+        impl: DownloadProgressParserAdapter,
+    ): DownloadProgressParserPort
 
     @Binds
     @Singleton

@@ -16,8 +16,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import com.browntowndev.enclave.core.ui.component.markdown.StreamableMarkdownText
-import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
-import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSheetHeader
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,7 +42,7 @@ fun DetailBottomSheet(
             else -> 0L
         }
 
-    NeoModalBottomSheet(
+    EnclaveModalBottomSheet(
         onDismissRequest = config.onDismiss,
         sheetState = sheetState,
     ) {
@@ -62,7 +62,7 @@ fun DetailBottomSheet(
                 }
             }
 
-        NeoSheetHeader(
+        EnclaveSheetHeader(
             title = title,
             onDismiss = config.onDismiss,
         )

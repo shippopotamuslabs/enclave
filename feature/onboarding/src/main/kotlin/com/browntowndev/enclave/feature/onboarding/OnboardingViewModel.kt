@@ -6,7 +6,9 @@ import com.browntowndev.enclave.domain.model.config.ApiCredentials
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.onboarding.OnboardingFlowMode
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.repository.SettingsRepository
+import com.browntowndev.enclave.domain.usecase.onboarding.CompleteOnboardingUseCase
+import com.browntowndev.enclave.domain.usecase.onboarding.ConfirmAgeUseCase
+import com.browntowndev.enclave.domain.usecase.onboarding.SetAutomaticErrorTrackingUseCase
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.usecase.media.SaveMediaProviderUseCase
 import com.browntowndev.enclave.domain.usecase.onboarding.BulkAssignApiProviderUseCase
@@ -30,7 +32,9 @@ import javax.inject.Inject
 class OnboardingViewModel
     @Inject
     constructor(
-        private val settingsRepository: SettingsRepository,
+        private val confirmAge: ConfirmAgeUseCase,
+        private val setAutomaticErrorTracking: SetAutomaticErrorTrackingUseCase,
+        private val completeOnboarding: CompleteOnboardingUseCase,
         private val bulkAssignApiProviderUseCase: BulkAssignApiProviderUseCase,
         private val discoverApiModelsUseCase: DiscoverApiModelsUseCase,
         private val saveTtsProviderUseCase: SaveTtsProviderUseCase,
@@ -231,8 +235,8 @@ class OnboardingViewModel
                 val latestState = _uiState.value
                 _uiState.update { it.copy(isSaving = true, saveError = null) }
 
-                settingsRepository.updateAgeConfirmed(true)
-                settingsRepository.updateAutomaticErrorTrackingEnabled(latestState.automaticErrorTrackingEnabled)
+                confirmAge()
+                setAutomaticErrorTracking(latestState.automaticErrorTrackingEnabled)
 
                 if (latestState.selectedModelChoice == ModelChoice.API) {
                     val provider =
@@ -319,7 +323,7 @@ class OnboardingViewModel
                     apiSlots.add(ModelType.IMAGE_EDIT)
                 }
 
-                settingsRepository.updateOnboardingCompleted(true)
+                completeOnboarding()
                 _uiState.update { it.copy(isSaving = false, saveError = null) }
                 _events.send(OnboardingEvent.NavigateToChat(latestState.selectedModelChoice, apiSlots))
             }

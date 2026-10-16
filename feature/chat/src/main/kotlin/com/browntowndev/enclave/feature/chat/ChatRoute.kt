@@ -13,7 +13,7 @@ import androidx.compose.ui.platform.LocalContext
 
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveModalBottomSheet
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.feature.chat.artifactexport.ArtifactExportWizardContent
 import com.browntowndev.enclave.feature.chat.stats.ChatStatsBottomSheet
@@ -100,7 +100,7 @@ fun ChatRoute(
 
     if (exportSheet is ArtifactExportSheetState.Visible) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-        NeoModalBottomSheet(
+        EnclaveModalBottomSheet(
             onDismissRequest = viewModel::dismissArtifactExportSheet,
             sheetState = sheetState,
         ) {

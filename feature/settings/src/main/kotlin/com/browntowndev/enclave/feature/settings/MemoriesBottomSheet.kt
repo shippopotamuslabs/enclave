@@ -44,12 +44,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
-import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
-import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
-import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
-import com.browntowndev.enclave.core.ui.component.neo.neoSurface
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.enclave.EnclavePrimaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSectionHeader
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSheetHeader
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorderColor
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurface
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.memory.MemoryCategory
@@ -71,7 +71,7 @@ fun MemoriesBottomSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var memoryIdToDelete by remember { mutableStateOf<String?>(null) }
 
-    NeoModalBottomSheet(
+    EnclaveModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
     ) {
@@ -131,7 +131,7 @@ private fun MemoriesListView(
     onDeleteMemory: (String) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        NeoSheetHeader(
+        EnclaveSheetHeader(
             title = "Memories",
             subtitle = "Personalization and facts about you, your preferences, and projects.",
             onDismiss = onDismiss,
@@ -164,7 +164,7 @@ private fun MemoriesListView(
                     val categoryMemories = groupedMemories[category]
                     if (!categoryMemories.isNullOrEmpty()) {
                         item(key = "header_${category.name}") {
-                            NeoSectionHeader(text = category.displayName)
+                            EnclaveSectionHeader(text = category.displayName)
                         }
                         items(categoryMemories, key = { it.id }) { memory ->
                             MemoryItem(
@@ -180,7 +180,7 @@ private fun MemoriesListView(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        NeoPrimaryButton(
+        EnclavePrimaryButton(
             text = "Add Memory",
             icon = Icons.Default.Add,
             onClick = onAddMemory,
@@ -232,9 +232,9 @@ private fun MemoryItem(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .neoSurface(
+                    .enclaveSurface(
                         backgroundColor = MaterialTheme.colorScheme.surface,
-                        borderColor = neoBorderColor(),
+                        borderColor = enclaveBorderColor(),
                         withShadow = false,
                     ).clickable(onClick = onEdit)
                     .padding(16.dp),
@@ -271,7 +271,7 @@ private fun MemoryEditView(
         modifier = Modifier.fillMaxWidth().fillMaxHeight(),
         verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.sectionSpacing),
     ) {
-        NeoSheetHeader(
+        EnclaveSheetHeader(
             title = if (draft.id.isEmpty()) "Add Memory" else "Edit Memory",
             onDismiss = onCancel,
             onBackClick = onCancel,
@@ -338,7 +338,7 @@ private fun MemoryEditView(
             ) {
                 Text("Cancel")
             }
-            NeoPrimaryButton(
+            EnclavePrimaryButton(
                 text = "Save",
                 onClick = onSave,
                 enabled = draft.text.isNotBlank(),
