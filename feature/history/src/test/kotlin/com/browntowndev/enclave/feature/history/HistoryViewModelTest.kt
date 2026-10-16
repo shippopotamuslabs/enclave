@@ -42,6 +42,30 @@ class HistoryViewModelTest {
     private lateinit var mockDeleteChatUseCase: DeleteChatUseCase
     private lateinit var mockRenameChatUseCase: RenameChatUseCase
     private lateinit var mockTogglePinChatUseCase: TogglePinChatUseCase
+    private data class RecordedError(
+        val tag: String,
+        val message: String,
+        val throwable: Throwable,
+        val userMessage: String,
+    )
+
+    private val recordedErrors = mutableListOf<RecordedError>()
+
+    private val fakeErrorHandler =
+        object : ViewModelErrorHandler {
+            override val errorEvents =
+                kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 16)
+
+            override fun handleError(tag: String, message: String, throwable: Throwable, userMessage: String) {
+                recordedErrors += RecordedError(tag, message, throwable, userMessage)
+            }
+
+            override fun coroutineExceptionHandler(tag: String, message: String, userMessage: String) =
+                kotlinx.coroutines.CoroutineExceptionHandler { _, throwable ->
+                    handleError(tag, message, throwable, userMessage)
+                }
+        }
+
     private lateinit var mockErrorHandler: ViewModelErrorHandler
     private lateinit var viewModel: HistoryViewModel
 
@@ -101,7 +125,7 @@ class HistoryViewModelTest {
         mockDeleteChatUseCase = mockk(relaxed = true)
         mockRenameChatUseCase = mockk(relaxed = true)
         mockTogglePinChatUseCase = mockk(relaxed = true)
-        mockErrorHandler = mockk(relaxed = true)
+        mockErrorHandler = fakeErrorHandler
     }
 
     private fun createViewModel(): HistoryViewModel =
@@ -298,15 +322,18 @@ class HistoryViewModelTest {
             viewModel.deleteChat(chatId)
             advanceUntilIdle()
 
-            // Then
-            io.mockk.verify {
-                mockErrorHandler.handleError(
-                    tag = "HistoryViewModel",
-                    message = "Failed to delete chat with id: ChatId(value=1)",
-                    throwable = exception,
-                    userMessage = "Failed to delete chat",
-                )
-            }
+            // Then — state-based: the recording fake captured exactly one routed error.
+            assertEquals(
+                listOf(
+                    RecordedError(
+                        tag = "HistoryViewModel",
+                        message = "Failed to delete chat with id: ChatId(value=1)",
+                        throwable = exception,
+                        userMessage = "Failed to delete chat",
+                    ),
+                ),
+                recordedErrors,
+            )
         }
 
     // Suite H: Happy Path Tests
@@ -760,6 +787,10 @@ class HistoryViewModelTest {
             advanceUntilIdle()
 
             // Verify that the use case was only invoked exactly once with the final string
+            // ENC-18: invocation-count assertion — debounced intermediate queries
+            // produce identical empty UiState, so this cannot be a state assertion.
+            // Kept under the UNIT_TESTING.md MockK-boundary justification until the
+            // ForbiddenVerifyInViewModelTests rule is enabled (ENC-10 follow-up).
             io.mockk.verify(exactly = 1) { mockSearchChatsUseCase.invoke("hello") }
             io.mockk.verify(exactly = 0) { mockSearchChatsUseCase.invoke("h") }
             io.mockk.verify(exactly = 0) { mockSearchChatsUseCase.invoke("he") }
@@ -825,6 +856,8 @@ class HistoryViewModelTest {
             advanceUntilIdle()
 
             // Ensure it reached the use case
+            // ENC-18: raw-query pass-through is an invocation argument assertion;
+            // see debounce justification above.
             io.mockk.verify { mockSearchChatsUseCase.invoke(invalidQuery) }
             assertTrue(
                 viewModel.uiState.value.otherChats
