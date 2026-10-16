@@ -292,3 +292,20 @@ nightly-unit-tests:
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
     - when: never
+
+# =============================================================================
+# FUNCTIONS — Firebase Cloud Functions tests, changes-gated (ENC-16).
+# Runs on MRs touching functions/** and always on the default branch.
+# =============================================================================
+functions-tests:
+  image: node:20
+  stage: test
+  needs: []
+  script:
+    - cd functions && npm ci && npm test
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - functions/**/*
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - when: never
