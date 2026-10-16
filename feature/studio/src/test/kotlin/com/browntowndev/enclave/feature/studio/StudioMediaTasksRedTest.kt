@@ -310,8 +310,8 @@ class StudioMediaTasksRedTest {
                 every { selectedStudioMediaType } returns flowOf(MediaCapability.IMAGE)
             }
         return MultimodalViewModel(
-            defaultModelRepository = defaultModelRepository,
-            mediaProviderRepository = mediaProviderRepository,
+            observeDefaultModelAssignments = com.browntowndev.enclave.domain.usecase.studio.ObserveDefaultModelAssignmentsUseCase(defaultModelRepository),
+            getMediaProviders = com.browntowndev.enclave.domain.usecase.studio.GetMediaProvidersUseCase(mediaProviderRepository),
             moderatePromptUseCase = allowPromptModerationUseCase(),
             shouldModeratePromptUseCase = allowShouldModeratePromptUseCase(),
             submitModerationReportUseCase = mockk(relaxed = true),
@@ -325,7 +325,8 @@ class StudioMediaTasksRedTest {
             remoteCapabilitiesCoordinator = remoteCapabilitiesCoordinator,
             promptCoordinator = promptCoordinator,
             mediaActionsCoordinator = mediaActionsCoordinator,
-            uiSelectionRepository = uiSelectionRepository,
+            getSelectedStudioMediaType = com.browntowndev.enclave.domain.usecase.studio.GetSelectedStudioMediaTypeUseCase(uiSelectionRepository),
+                    setSelectedStudioMediaType = com.browntowndev.enclave.domain.usecase.studio.SetSelectedStudioMediaTypeUseCase(uiSelectionRepository),
             overrideCoordinator = StudioModelOverrideCoordinator(),
             resolvedModelCoordinator =
                 StudioResolvedModelCoordinator(
