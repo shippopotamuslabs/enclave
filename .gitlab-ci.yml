@@ -309,3 +309,44 @@ functions-tests:
         - functions/**/*
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
     - when: never
+
+# =============================================================================
+# SCREENSHOT — Compose preview screenshot tests (ENC-19/ENC-23).
+# MR: validate-only, gated on UI-path changes. The record job is manual-only
+# and never runs automatically; re-recorded goldens must be reviewed in the
+# MR that updates them (UNIT_TESTING.md §5.2).
+# =============================================================================
+screenshot-tests:
+  extends: .gradle-base
+  stage: test
+  needs: []
+  script:
+    - ./gradlew validateDebugScreenshotTest
+  artifacts:
+    when: always
+    paths:
+      - "**/build/outputs/screenshotTest-results/"
+    expire_in: 7 days
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - core/ui/**/*
+        - feature/**/src/main/**/*
+        - app/src/main/**/*
+    - when: never
+
+screenshot-record:
+  extends: .gradle-base
+  stage: test
+  needs: []
+  script:
+    - ./gradlew updateDebugScreenshotTest
+  artifacts:
+    when: always
+    paths:
+      - "**/src/screenshotTestDebug/reference/**"
+    expire_in: 7 days
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: manual
+    - when: never
