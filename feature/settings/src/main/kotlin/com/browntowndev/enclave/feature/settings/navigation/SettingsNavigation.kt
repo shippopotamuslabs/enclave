@@ -16,13 +16,17 @@ fun NavGraphBuilder.settingsGraph(
         startDestination = SettingsDestination.MAIN,
         route = SettingsDestination.GRAPH,
     ) {
-        settingsMainRoute(navController, onNavigateToProfileBuilder)
-        settingsByokConfigureRoute(navController)
-        settingsTtsConfigureRoute(navController)
-        settingsLiveVoiceConfigureRoute(navController)
-        settingsMediaConfigureRoute(navController)
-        settingsByokCustomHeadersRoute(navController)
-        settingsLocalModelConfigureRoute(navController)
-        settingsModelConfigureRoute(navController)
+        val onNavigate: (String) -> Unit = { route -> navController.navigate(route) }
+        val onPopBackStack: () -> Unit = { navController.popBackStack() }
+        val graphBackStackEntry: (androidx.navigation.NavBackStackEntry) -> androidx.navigation.NavBackStackEntry =
+            { navController.getBackStackEntry(SettingsDestination.GRAPH) }
+        settingsMainRoute(onNavigate, onPopBackStack, graphBackStackEntry, onNavigateToProfileBuilder)
+        settingsByokConfigureRoute(onNavigate, onPopBackStack, graphBackStackEntry)
+        settingsTtsConfigureRoute(onNavigate, onPopBackStack, graphBackStackEntry)
+        settingsLiveVoiceConfigureRoute(onNavigate, onPopBackStack, graphBackStackEntry)
+        settingsMediaConfigureRoute(onNavigate, onPopBackStack, graphBackStackEntry)
+        settingsByokCustomHeadersRoute(onNavigate, onPopBackStack, graphBackStackEntry)
+        settingsLocalModelConfigureRoute(onNavigate, onPopBackStack, graphBackStackEntry)
+        settingsModelConfigureRoute(onNavigate, onPopBackStack, graphBackStackEntry)
     }
 }
