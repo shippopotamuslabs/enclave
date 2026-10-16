@@ -240,3 +240,55 @@ assemble-release:
     - if: '$CI_COMMIT_BRANCH == "main"'
       when: manual
     - when: never
+
+# =============================================================================
+# NIGHTLY — emulator device tests on schedule only. allow_failure until the
+# first green run, then remove it (tracked in ENC-15). Requires a pipeline
+# schedule and a KVM-capable runner (/dev/kvm); the job fails fast with a
+# clear message when KVM is unavailable. Never interrupt a nightly run.
+# =============================================================================
+nightly-emulator-tests:
+  extends: .gradle-base
+  stage: nightly
+  needs: []
+  interruptible: false
+  allow_failure: true
+  script:
+    - |
+      if [ ! -e /dev/kvm ]; then
+        echo "ERROR: /dev/kvm is not available on this runner; the nightly emulator job requires a KVM-capable runner (ENC-15)."
+        exit 1
+      fi
+    - echo "no" | avdmanager create avd -n ci-test -k "system-images;android-35;google_apis;x86_64" --force || sdkmanager "system-images;android-35;google_apis;x86_64"
+    - $ANDROID_HOME/emulator/emulator -avd ci-test -no-window -no-audio -gpu swiftshader_indirect -no-snapshot -wipe-data &
+    - adb wait-for-device
+    - adb shell 'while [[ -z $(getprop sys.boot_completed) ]]; do sleep 5; done'
+    - ./gradlew :app:connectedDebugAndroidTest :core:data:connectedDebugAndroidTest
+  after_script:
+    - $ANDROID_HOME/platform-tools/adb emu kill || true
+  artifacts:
+    when: always
+    paths:
+      - "**/build/reports/androidTests/"
+      - "**/build/outputs/androidTest-results/"
+    expire_in: 7 days
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - when: never
+
+# Full unit-test re-verify on schedule (catches flakes the MR run missed).
+nightly-unit-tests:
+  extends: .gradle-base
+  stage: nightly
+  needs: []
+  interruptible: false
+  script:
+    - ./gradlew testDebugUnitTest
+  artifacts:
+    when: always
+    reports:
+      junit: "**/build/test-results/testDebugUnitTest/TEST-*.xml"
+    expire_in: 7 days
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - when: never
