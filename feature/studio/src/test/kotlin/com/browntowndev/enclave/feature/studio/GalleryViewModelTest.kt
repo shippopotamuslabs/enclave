@@ -10,7 +10,6 @@ import com.browntowndev.enclave.domain.port.repository.StudioMediaAsset
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -41,7 +40,15 @@ class GalleryViewModelTest {
                     moveStudioMediaToAlbum = com.browntowndev.enclave.domain.usecase.studio.MoveStudioMediaToAlbumUseCase(repository),
                 )
     private val repository = FakeStudioRepository()
-    private val shareMediaPort = mockk<ShareMediaPort>(relaxed = true)
+    private val sharedMedia = mutableListOf<Pair<List<String>, String>>()
+    private val shareMediaPort =
+        object : ShareMediaPort {
+            override fun shareMedia(uris: List<String>, mimeType: String) {
+                sharedMedia += uris to mimeType
+            }
+
+            override fun shareDocumentBytes(items: List<com.browntowndev.enclave.domain.model.media.ShareDocumentBytesInput>) = Unit
+        }
     private val defaultModelRepository = mockk<DefaultModelRepositoryPort>(relaxed = true)
 
     @BeforeEach
@@ -203,7 +210,7 @@ class GalleryViewModelTest {
                 awaitItem() // Initial
                 viewModel.shareMedia(setOf("asset-1"))
 
-                verify { shareMediaPort.shareMedia(listOf("content://asset-1"), "*/*") }
+                assertEquals(listOf(listOf("content://asset-1") to "*/*"), sharedMedia)
             }
         }
 
@@ -217,7 +224,7 @@ class GalleryViewModelTest {
                 awaitItem() // Initial
                 viewModel.shareSingleMedia("asset-1")
 
-                verify { shareMediaPort.shareMedia(listOf("content://asset-1"), "image/*") }
+                assertEquals(listOf(listOf("content://asset-1") to "image/*"), sharedMedia)
             }
         }
 
