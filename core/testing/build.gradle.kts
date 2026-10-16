@@ -34,5 +34,6 @@ android {
 dependencies {
     implementation(project(":core:domain"))
     api(libs.junit.jupiter)
+    testRuntimeOnly(libs.junit.platform.launcher)
     api(libs.kotlinx.coroutines.test)
 }
