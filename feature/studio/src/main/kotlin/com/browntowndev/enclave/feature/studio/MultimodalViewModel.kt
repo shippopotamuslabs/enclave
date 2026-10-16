@@ -69,6 +69,7 @@ import javax.inject.Inject
 @OptIn(ExperimentalCoroutinesApi::class)
 @Suppress("TooManyFunctions")
 class MultimodalViewModel
+    @Suppress("LongParameterList")
     @Inject
     constructor(
         private val observeDefaultModelAssignments: ObserveDefaultModelAssignmentsUseCase,

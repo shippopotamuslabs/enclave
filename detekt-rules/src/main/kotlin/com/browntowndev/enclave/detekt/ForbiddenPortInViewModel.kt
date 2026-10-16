@@ -42,6 +42,13 @@ class ForbiddenPortInViewModel(config: Config) : Rule(config) {
             if (!typeText.endsWith(PORT_SUFFIX)) {
                 return@forEach
             }
+            // Exempt infrastructure ports (ENC-22): logging is cross-cutting
+            // telemetry, and the download orchestrator is the assisted,
+            // session-scoped runtime its ViewModel exists to drive (ENC-21).
+            // Neither is a repository/data-source port.
+            if (typeText in EXEMPT_PORTS) {
+                return@forEach
+            }
 
             report(
                 CodeSmell(
@@ -58,5 +65,7 @@ class ForbiddenPortInViewModel(config: Config) : Rule(config) {
     companion object {
         private const val VIEW_MODEL_SUFFIX = "ViewModel"
         private const val PORT_SUFFIX = "Port"
+
+        val EXEMPT_PORTS: Set<String> = setOf("LoggingPort", "ModelDownloadOrchestratorPort")
     }
 }

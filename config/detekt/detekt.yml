@@ -9,28 +9,35 @@ config:
   validation: true
   warningsAsErrors: false
 
-# Custom Enclave rule set (:detekt-rules, ENC-10). Rules ship inactive here;
-# each is flipped to active: true by the remediation chunk that makes its
-# scope pass (ENC-11/12/13 for architecture/UI rules, ENC-18 for test rules).
+# Custom Enclave rule set (:detekt-rules, ENC-10). Enabled per scope by
+# ENC-22 after remediation; still-inactive rules have per-rule follow-ups:
+# ForbiddenMaterialComposeInFeatures (ENC-25), ForbiddenDomainTypeInComposable
+# + ForbiddenDomainTypeInUiState (ENC-26), ForbiddenVerifyInViewModelTests
+# (ENC-27), ForbiddenMockKInTests (ENC-28). MainViewModel is excluded from
+# the ViewModel rules until its vault use-case refactor (ENC-24).
 enclave:
   ForbiddenMaterialComposeInFeatures:
     active: false
   ForbiddenRawColorLiteralInFeatures:
-    active: false
+    active: true
   ForbiddenMockKInTests:
     active: false
   ForbiddenVerifyInViewModelTests:
     active: false
   ForbiddenRepositoryInViewModel:
-    active: false
+    active: true
+    excludes:
+      - '**/app/src/main/kotlin/com/browntowndev/enclave/presentation/MainViewModel.kt'
   ForbiddenDomainTypeInComposable:
     active: false
   ForbiddenPortInViewModel:
-    active: false
+    active: true
+    excludes:
+      - '**/app/src/main/kotlin/com/browntowndev/enclave/presentation/MainViewModel.kt'
   ForbiddenDomainTypeInUiState:
     active: false
   ForbiddenUseCaseInFeatureMapper:
-    active: false
+    active: true
 
 potential-bugs:
   active: true

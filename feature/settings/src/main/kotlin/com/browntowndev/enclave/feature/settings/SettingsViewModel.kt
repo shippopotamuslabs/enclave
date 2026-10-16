@@ -14,7 +14,7 @@ import com.browntowndev.enclave.domain.model.settings.AppTheme
 import com.browntowndev.enclave.domain.model.settings.SearchProvider
 import com.browntowndev.enclave.domain.model.settings.SystemPromptOption
 import com.browntowndev.enclave.domain.model.telemetry.UsagePeriod
-import com.browntowndev.enclave.domain.port.repository.EmbeddingProgressPort
+import com.browntowndev.enclave.domain.usecase.settings.ObserveEmbeddingProgressUseCase
 import com.browntowndev.enclave.domain.theme.ObserveThemePreferencesUseCase
 import com.browntowndev.enclave.domain.usecase.download.ObserveDownloadWorkUseCase
 import com.browntowndev.enclave.domain.theme.SetThemeFamilyUseCase
@@ -55,7 +55,7 @@ internal class SettingsViewModel
         private val settingsUiStateFactory: SettingsUiStateFactory,
         private val observeUsageSpendSummaryUseCase: ObserveUsageSpendSummaryUseCase,
         private val errorHandler: ViewModelErrorHandler,
-        private val embeddingProgressPort: EmbeddingProgressPort,
+        private val observeEmbeddingProgress: ObserveEmbeddingProgressUseCase,
         private val observeDownloadWorkUseCase: ObserveDownloadWorkUseCase,
         private val observeThemePreferencesUseCase: ObserveThemePreferencesUseCase,
         private val setThemeFamilyUseCase: SetThemeFamilyUseCase,
@@ -151,8 +151,8 @@ internal class SettingsViewModel
                         currentExaApiKey = _currentExaApiKey,
                         currentXApiKey = _currentXApiKey,
                         xSearchState = _xSearchState,
-                        isReindexing = embeddingProgressPort.isReindexing,
-                        reindexProgress = embeddingProgressPort.progress,
+                        isReindexing = observeEmbeddingProgress.isReindexing,
+                        reindexProgress = observeEmbeddingProgress.progress,
                         vaultReauthSheet = _vaultReauthSheet,
                         usageSpendSummary = usageSpendSummaryFlow,
                         modelPackRows = modelPackRowsFlow,

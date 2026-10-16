@@ -43,6 +43,10 @@ import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorderColor
 import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurface
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
+import com.browntowndev.enclave.core.ui.theme.ProviderTier1
+import com.browntowndev.enclave.core.ui.theme.ProviderTier2
+import com.browntowndev.enclave.core.ui.theme.ProviderTier3
+import com.browntowndev.enclave.core.ui.theme.ProviderTierFast
 import com.browntowndev.enclave.domain.model.config.ApiModelPricingFormat
 import com.browntowndev.enclave.domain.model.config.OpenRouterModelEndpoint
 
@@ -287,10 +291,10 @@ fun MetricSignalStrengthIndicator(
             // Color-code active bars: 1=Red, 2=Orange, 3=Yellow, 4/5=Green
             val barColor = if (isFilled) {
                 when (activeBars) {
-                    1 -> Color(0xFFEF4444)
-                    2 -> Color(0xFFF97316)
-                    3 -> Color(0xFFEAB308)
-                    else -> Color(0xFF22C55E)
+                    1 -> ProviderTier1
+                    2 -> ProviderTier2
+                    3 -> ProviderTier3
+                    else -> ProviderTierFast
                 }
             } else {
                 inactiveColor

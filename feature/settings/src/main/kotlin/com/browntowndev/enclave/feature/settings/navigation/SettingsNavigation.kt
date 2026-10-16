@@ -22,11 +22,11 @@ fun NavGraphBuilder.settingsGraph(
             { navController.getBackStackEntry(SettingsDestination.GRAPH) }
         settingsMainRoute(onNavigate, onPopBackStack, graphBackStackEntry, onNavigateToProfileBuilder)
         settingsByokConfigureRoute(onNavigate, onPopBackStack, graphBackStackEntry)
-        settingsTtsConfigureRoute(onNavigate, onPopBackStack, graphBackStackEntry)
-        settingsLiveVoiceConfigureRoute(onNavigate, onPopBackStack, graphBackStackEntry)
-        settingsMediaConfigureRoute(onNavigate, onPopBackStack, graphBackStackEntry)
-        settingsByokCustomHeadersRoute(onNavigate, onPopBackStack, graphBackStackEntry)
-        settingsLocalModelConfigureRoute(onNavigate, onPopBackStack, graphBackStackEntry)
-        settingsModelConfigureRoute(onNavigate, onPopBackStack, graphBackStackEntry)
+        settingsTtsConfigureRoute(onPopBackStack, graphBackStackEntry)
+        settingsLiveVoiceConfigureRoute(onPopBackStack, graphBackStackEntry)
+        settingsMediaConfigureRoute(onPopBackStack, graphBackStackEntry)
+        settingsByokCustomHeadersRoute(onPopBackStack, graphBackStackEntry)
+        settingsLocalModelConfigureRoute(onPopBackStack, graphBackStackEntry)
+        settingsModelConfigureRoute(onPopBackStack, graphBackStackEntry)
     }
 }
