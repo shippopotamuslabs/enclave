@@ -1,5 +1,9 @@
 package com.browntowndev.enclave.feature.onboarding
 
+import com.browntowndev.enclave.domain.usecase.onboarding.CompleteOnboardingUseCase
+import com.browntowndev.enclave.domain.usecase.onboarding.ConfirmAgeUseCase
+import com.browntowndev.enclave.domain.usecase.onboarding.SetAutomaticErrorTrackingUseCase
+
 import app.cash.turbine.test
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
@@ -74,7 +78,9 @@ class OnboardingViewModelTest {
 
         viewModel =
             OnboardingViewModel(
-                settingsRepository = fakeSettingsRepository,
+                confirmAge = ConfirmAgeUseCase(fakeSettingsRepository),
+                setAutomaticErrorTracking = SetAutomaticErrorTrackingUseCase(fakeSettingsRepository),
+                completeOnboarding = CompleteOnboardingUseCase(fakeSettingsRepository),
                 bulkAssignApiProviderUseCase = fakeBulkAssign,
                 discoverApiModelsUseCase = mockDiscoverModels,
                 saveTtsProviderUseCase = mockSaveTts,
@@ -87,7 +93,9 @@ class OnboardingViewModelTest {
     private fun createViewModelWithFlowMode(flowMode: OnboardingFlowMode): OnboardingViewModel {
         coEvery { mockResolveFlowMode() } returns flowMode
         return OnboardingViewModel(
-            settingsRepository = fakeSettingsRepository,
+            confirmAge = ConfirmAgeUseCase(fakeSettingsRepository),
+            setAutomaticErrorTracking = SetAutomaticErrorTrackingUseCase(fakeSettingsRepository),
+            completeOnboarding = CompleteOnboardingUseCase(fakeSettingsRepository),
             bulkAssignApiProviderUseCase = fakeBulkAssign,
             discoverApiModelsUseCase = mockDiscoverModels,
             saveTtsProviderUseCase = mockSaveTts,

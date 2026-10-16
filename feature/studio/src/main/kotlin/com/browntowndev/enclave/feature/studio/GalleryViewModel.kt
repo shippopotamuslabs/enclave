@@ -4,10 +4,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.port.media.ShareMediaPort
 import com.browntowndev.enclave.domain.port.repository.DEFAULT_GALLERY_ALBUM_ID
-import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
-import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
+import com.browntowndev.enclave.domain.usecase.studio.CreateStudioAlbumUseCase
+import com.browntowndev.enclave.domain.usecase.studio.DeleteStudioAlbumUseCase
+import com.browntowndev.enclave.domain.usecase.studio.DeleteStudioMediaUseCase
+import com.browntowndev.enclave.domain.usecase.studio.MoveStudioMediaToAlbumUseCase
+import com.browntowndev.enclave.domain.usecase.studio.ObserveDefaultModelAssignmentsUseCase
+import com.browntowndev.enclave.domain.usecase.studio.ObserveStudioAlbumsUseCase
+import com.browntowndev.enclave.domain.usecase.studio.ObserveStudioMediaUseCase
+import com.browntowndev.enclave.domain.usecase.studio.RenameStudioAlbumUseCase
+import com.browntowndev.enclave.domain.usecase.studio.ShareStudioMediaUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -24,21 +30,26 @@ import javax.inject.Inject
 class GalleryViewModel
     @Inject
     constructor(
-        private val studioRepository: StudioRepositoryPort,
-        private val shareMediaPort: ShareMediaPort,
-        private val defaultModelRepository: DefaultModelRepositoryPort,
+        private val observeStudioAlbums: ObserveStudioAlbumsUseCase,
+        private val observeStudioMedia: ObserveStudioMediaUseCase,
+        private val shareStudioMedia: ShareStudioMediaUseCase,
+        private val observeDefaultModelAssignments: ObserveDefaultModelAssignmentsUseCase,
+        private val createStudioAlbum: CreateStudioAlbumUseCase,
+        private val renameStudioAlbum: RenameStudioAlbumUseCase,
+        private val deleteStudioMedia: DeleteStudioMediaUseCase,
+        private val deleteStudioAlbum: DeleteStudioAlbumUseCase,
+        private val moveStudioMediaToAlbum: MoveStudioMediaToAlbumUseCase,
     ) : ViewModel() {
-        private val userAlbums = studioRepository.observeAllAlbums()
+        private val userAlbums = observeStudioAlbums()
         private val itemAspectRatios = MutableStateFlow<Map<String, Float>>(emptyMap())
 
         private val mediaItems =
-            studioRepository.observeAllMedia().map { assets ->
+            observeStudioMedia().map { assets ->
                 assets.map { asset -> asset.toUi() }
             }
 
         private val hasImageToVideoModelFlow =
-            defaultModelRepository
-                .observeDefaults()
+            observeDefaultModelAssignments()
                 .map { assignments ->
                     assignments.any { assignment ->
                         assignment.modelType == ModelType.IMAGE_TO_VIDEO && assignment.mediaProviderId != null
@@ -105,7 +116,7 @@ class GalleryViewModel
             }
 
             viewModelScope.launch {
-                studioRepository.createAlbum(trimmedName)
+                createStudioAlbum(trimmedName)
             }
         }
 
@@ -118,14 +129,14 @@ class GalleryViewModel
                 return
             }
             viewModelScope.launch {
-                studioRepository.renameAlbum(albumId, trimmedName)
+                renameStudioAlbum(albumId, trimmedName)
             }
         }
 
         fun deleteMedia(mediaIds: Set<String>) {
             viewModelScope.launch {
                 mediaIds.forEach { id ->
-                    studioRepository.deleteMedia(id)
+                    deleteStudioMedia(id)
                 }
             }
         }
@@ -133,7 +144,7 @@ class GalleryViewModel
         fun deleteAlbums(albumIds: Set<String>) {
             viewModelScope.launch {
                 albumIds.forEach { id ->
-                    studioRepository.deleteAlbum(id)
+                    deleteStudioAlbum(id)
                 }
             }
         }
@@ -151,7 +162,7 @@ class GalleryViewModel
                 }
 
                 if (uris.isNotEmpty()) {
-                    shareMediaPort.shareMedia(uris, "*/*")
+                    shareStudioMedia(uris, "*/*")
                 }
             }
         }
@@ -169,7 +180,7 @@ class GalleryViewModel
                             MediaCapability.VIDEO -> "video/*"
                             MediaCapability.MUSIC -> "audio/*"
                         }
-                    shareMediaPort.shareMedia(listOf(asset.localUri), mimeType)
+                    shareStudioMedia(listOf(asset.localUri), mimeType)
                 }
             }
         }
@@ -179,7 +190,7 @@ class GalleryViewModel
             targetAlbumId: String,
         ) {
             viewModelScope.launch {
-                studioRepository.moveMediaToAlbum(mediaIds.toList(), targetAlbumId)
+                moveStudioMediaToAlbum(mediaIds.toList(), targetAlbumId)
             }
         }
 
