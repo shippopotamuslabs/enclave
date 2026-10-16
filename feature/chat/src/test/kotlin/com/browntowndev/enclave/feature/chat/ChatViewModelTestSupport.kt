@@ -241,7 +241,7 @@ object ChatViewModelTestSupport {
                     activeChatTurnSnapshotPort = activeChatTurnSnapshotPort,
                     errorHandler = errorHandler,
                     loggingPort = loggingPort,
-                    studioRepository = studioRepository,
+                    observeChatStudioMedia = com.browntowndev.enclave.domain.usecase.studio.ObserveChatStudioMediaUseCase(studioRepository),
                     shouldModeratePromptUseCase = shouldModeratePromptUseCase,
                     submitModerationReportUseCase = submitModerationReportUseCase,
                     inferenceOrchestrator = inferenceOrchestrator,
