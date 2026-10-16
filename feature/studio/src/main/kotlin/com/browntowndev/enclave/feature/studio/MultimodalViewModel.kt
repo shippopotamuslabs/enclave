@@ -11,14 +11,15 @@ import com.browntowndev.enclave.domain.model.media.ProviderCapabilities
 import com.browntowndev.enclave.domain.model.media.StudioModelOverride
 import com.browntowndev.enclave.domain.model.media.StudioTemplate
 
-import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
-import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
-import com.browntowndev.enclave.domain.port.repository.UiSelectionRepository
 import com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase
 import com.browntowndev.enclave.domain.usecase.inference.ShouldModeratePromptUseCase
 import com.browntowndev.enclave.domain.usecase.inference.SubmitModerationReportUseCase
 import com.browntowndev.enclave.domain.usecase.media.GetImageGenerationCapabilitiesUseCase
 import com.browntowndev.enclave.domain.usecase.media.GetStudioCapablePresetsUseCase
+import com.browntowndev.enclave.domain.usecase.studio.GetMediaProvidersUseCase
+import com.browntowndev.enclave.domain.usecase.studio.GetSelectedStudioMediaTypeUseCase
+import com.browntowndev.enclave.domain.usecase.studio.ObserveDefaultModelAssignmentsUseCase
+import com.browntowndev.enclave.domain.usecase.studio.SetSelectedStudioMediaTypeUseCase
 
 import com.browntowndev.enclave.feature.studio.coordinators.CapabilitiesPlaybackInputs
 import com.browntowndev.enclave.feature.studio.coordinators.GenerationInputs
@@ -70,8 +71,8 @@ import javax.inject.Inject
 class MultimodalViewModel
     @Inject
     constructor(
-        private val defaultModelRepository: DefaultModelRepositoryPort,
-        private val mediaProviderRepository: MediaProviderRepositoryPort,
+        private val observeDefaultModelAssignments: ObserveDefaultModelAssignmentsUseCase,
+        private val getMediaProviders: GetMediaProvidersUseCase,
         private val moderatePromptUseCase: ModeratePromptUseCase,
         private val shouldModeratePromptUseCase: ShouldModeratePromptUseCase,
         private val submitModerationReportUseCase: SubmitModerationReportUseCase,
@@ -85,7 +86,8 @@ class MultimodalViewModel
         private val remoteCapabilitiesCoordinator: StudioRemoteCapabilitiesCoordinator,
         private val promptCoordinator: StudioPromptCoordinator,
         private val mediaActionsCoordinator: StudioMediaActionsCoordinator,
-        private val uiSelectionRepository: UiSelectionRepository,
+        private val getSelectedStudioMediaType: GetSelectedStudioMediaTypeUseCase,
+        private val setSelectedStudioMediaType: SetSelectedStudioMediaTypeUseCase,
         private val overrideCoordinator: StudioModelOverrideCoordinator,
         private val resolvedModelCoordinator: StudioResolvedModelCoordinator,
         private val getStudioCapablePresetsUseCase: GetStudioCapablePresetsUseCase,
@@ -101,7 +103,7 @@ class MultimodalViewModel
                 overrideState = overrideCoordinator.state,
                 mediaType = promptCoordinator.mediaType,
                 settings = promptCoordinator.settings,
-                defaults = defaultModelRepository.observeDefaults(),
+                defaults = observeDefaultModelAssignments(),
             )
 
         private val activeModelDisplayNameFlow =
@@ -113,7 +115,7 @@ class MultimodalViewModel
             resolvedStudioModelFlow.flatMapLatest { resolved ->
                 val providerId = resolved.mediaProviderId
                 if (providerId != null) {
-                    mediaProviderRepository.getMediaProviders().map { providers ->
+                    getMediaProviders().map { providers ->
                         providers.find { it.id == providerId }
                     }
                 } else {
@@ -148,8 +150,7 @@ class MultimodalViewModel
         private val _isCapabilitiesLoading = MutableStateFlow(false)
 
         private val hasTtsProviderAssignedFlow =
-            defaultModelRepository
-                .observeDefaults()
+            observeDefaultModelAssignments()
                 .map { assignments ->
                     assignments.any { assignment ->
                         assignment.modelType == ModelType.TTS && assignment.ttsProviderId != null
@@ -157,8 +158,7 @@ class MultimodalViewModel
                 }.distinctUntilChanged()
 
         private val hasImageEditModelFlow =
-            defaultModelRepository
-                .observeDefaults()
+            observeDefaultModelAssignments()
                 .map { assignments ->
                     assignments.any { assignment ->
                         assignment.modelType == ModelType.IMAGE_EDIT &&
@@ -167,8 +167,7 @@ class MultimodalViewModel
                 }.distinctUntilChanged()
 
         private val hasImageToVideoModelFlow =
-            defaultModelRepository
-                .observeDefaults()
+            observeDefaultModelAssignments()
                 .map { assignments ->
                     assignments.any { assignment ->
                         assignment.modelType == ModelType.IMAGE_TO_VIDEO && assignment.mediaProviderId != null
@@ -334,7 +333,7 @@ class MultimodalViewModel
                 onActiveGeneration = promptCoordinator::restoreActiveGeneration,
             )
             viewModelScope.launch {
-                val persistedMediaType = uiSelectionRepository.selectedStudioMediaType.first()
+                val persistedMediaType = getSelectedStudioMediaType().first()
                 promptCoordinator.restoreLastMediaType(persistedMediaType)
             }
             generationCoordinator.moderationEvents
@@ -429,7 +428,7 @@ class MultimodalViewModel
             overrideCoordinator.clearForCapabilityChange()
             promptCoordinator.onMediaTypeChange(type)
             viewModelScope.launch {
-                uiSelectionRepository.setStudioMediaType(type)
+                setSelectedStudioMediaType(type)
             }
         }
 

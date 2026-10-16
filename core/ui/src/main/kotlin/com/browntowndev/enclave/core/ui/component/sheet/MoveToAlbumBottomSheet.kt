@@ -18,11 +18,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.browntowndev.enclave.core.ui.component.dialog.AddAlbumDialog
-import com.browntowndev.enclave.core.ui.component.neo.NeoAlbumSelectionRow
-import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
-import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
-import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveAlbumSelectionRow
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.enclave.EnclavePrimaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSectionHeader
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSheetHeader
 import com.browntowndev.enclave.core.ui.model.AlbumSelectionItem
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 
@@ -38,12 +38,12 @@ fun MoveToAlbumBottomSheet(
 ) {
     var isAddingNewAlbum by remember { mutableStateOf(false) }
 
-    NeoModalBottomSheet(
+    EnclaveModalBottomSheet(
         onDismissRequest = onDismiss,
         modifier = modifier,
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            NeoSheetHeader(
+            EnclaveSheetHeader(
                 title = title,
                 onDismiss = onDismiss,
             )
@@ -54,7 +54,7 @@ fun MoveToAlbumBottomSheet(
                 contentPadding = PaddingValues(bottom = 8.dp),
             ) {
                 item {
-                    NeoPrimaryButton(
+                    EnclavePrimaryButton(
                         text = "Create New Album",
                         icon = Icons.Default.Add,
                         onClick = { isAddingNewAlbum = true },
@@ -64,7 +64,7 @@ fun MoveToAlbumBottomSheet(
 
                 if (albums.isNotEmpty()) {
                     item {
-                        NeoSectionHeader(text = "Existing Albums")
+                        EnclaveSectionHeader(text = "Existing Albums")
                     }
                 }
 
@@ -72,7 +72,7 @@ fun MoveToAlbumBottomSheet(
                     items = albums,
                     key = { album -> album.id },
                 ) { album ->
-                    NeoAlbumSelectionRow(
+                    EnclaveAlbumSelectionRow(
                         name = album.name,
                         itemCount = album.itemCount,
                         coverUri = album.coverUri,

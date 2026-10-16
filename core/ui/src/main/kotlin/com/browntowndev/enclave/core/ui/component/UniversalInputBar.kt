@@ -79,12 +79,12 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.browntowndev.enclave.core.ui.R
 import com.browntowndev.enclave.core.ui.component.ShimmerText
-import com.browntowndev.enclave.core.ui.component.neo.NeoCircularProgressIndicator
-import com.browntowndev.enclave.core.ui.component.neo.NeoDisabledActionTooltip
-import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
-import com.browntowndev.enclave.core.ui.component.neo.rememberNeoDisabledClick
-import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
-import com.browntowndev.enclave.core.ui.component.neo.neoSurface
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveCircularProgressIndicator
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveDisabledActionTooltip
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveIconButton
+import com.browntowndev.enclave.core.ui.component.enclave.rememberNeoDisabledClick
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorderColor
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurface
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.domain.port.media.SpeechState
 import com.browntowndev.enclave.domain.port.media.isActiveVoiceInput
@@ -115,7 +115,7 @@ fun UniversalInputBar(
     hazeAlpha: Float = 0.4f,
 ) {
     val focusManager = LocalFocusManager.current
-    val borderColor = neoBorderColor()
+    val borderColor = enclaveBorderColor()
 
     // Surface matches the bar face so the dock reads full-bleed edge-to-edge.
     Surface(
@@ -135,7 +135,7 @@ fun UniversalInputBar(
                                 noiseFactor = 0.15f
                             }
                         } else {
-                            Modifier.neoSurface(
+                            Modifier.enclaveSurface(
                                 backgroundColor = backgroundColor,
                                 borderColor = borderColor,
                                 withShadow = false,
@@ -309,7 +309,7 @@ fun StandardTrailingAction(
     description: String? = null,
     withShadow: Boolean = true,
 ) {
-    NeoIconButton(
+    EnclaveIconButton(
         onClick = onClick,
         icon = icon,
         contentDescription = description,
@@ -318,7 +318,7 @@ fun StandardTrailingAction(
         size = EnclaveNeoTokens.trailingActionSize,
         backgroundColor = if (enabled) containerColor else disabledContainerColor,
         iconTint = if (enabled) contentColor else disabledContentColor,
-        borderColor = neoBorderColor(),
+        borderColor = enclaveBorderColor(),
         withShadow = withShadow && enabled,
     )
 }
@@ -339,7 +339,7 @@ fun StandardTrailingAction(
     description: String? = null,
     withShadow: Boolean = true,
 ) {
-    NeoIconButton(
+    EnclaveIconButton(
         onClick = onClick,
         icon = painter,
         contentDescription = description,
@@ -348,7 +348,7 @@ fun StandardTrailingAction(
         size = EnclaveNeoTokens.trailingActionSize,
         backgroundColor = if (enabled) containerColor else disabledContainerColor,
         iconTint = if (enabled) contentColor else disabledContentColor,
-        borderColor = neoBorderColor(),
+        borderColor = enclaveBorderColor(),
         withShadow = withShadow && enabled,
     )
 }
@@ -439,7 +439,7 @@ fun UniversalVoiceTrailingAction(
             modifier = modifier.size(EnclaveNeoTokens.trailingActionSize),
             contentAlignment = Alignment.Center,
         ) {
-            NeoCircularProgressIndicator(modifier = Modifier.size(24.dp))
+            EnclaveCircularProgressIndicator(modifier = Modifier.size(24.dp))
         }
     } else {
         val isRecording = speechState is SpeechState.Listening || speechState is SpeechState.ModelLoading
@@ -536,7 +536,7 @@ fun UniversalVoiceTrailingAction(
             }
 
             if (showLiveVoiceButton) {
-                NeoDisabledActionTooltip(
+                EnclaveDisabledActionTooltip(
                     enabled = isLiveVoiceEnabled,
                     disabledReason = if (isLiveVoiceEnabled) null else "Assign a Live Voice provider in Settings",
                 ) {

@@ -44,11 +44,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.browntowndev.enclave.core.ui.component.PersistentTooltip
-import com.browntowndev.enclave.core.ui.component.neo.NeoOutlinedTextField
-import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoSecondaryButton
-import com.browntowndev.enclave.core.ui.component.neo.neoBorder
-import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveOutlinedTextField
+import com.browntowndev.enclave.core.ui.component.enclave.EnclavePrimaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSecondaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorder
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorderColor
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.config.OpenRouterDataCollectionPolicy
@@ -101,7 +101,7 @@ fun OpenRouterRoutingSection(
                         },
                     ),
         ) {
-            NeoOutlinedTextField(
+            EnclaveOutlinedTextField(
                 value = routing.preferredProvider ?: "Automatic",
                 onValueChange = {},
                 readOnly = true,
@@ -143,7 +143,7 @@ fun OpenRouterRoutingSection(
                 onExpandedChange = { sortExpanded = it },
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                NeoOutlinedTextField(
+                EnclaveOutlinedTextField(
                     value = routing.providerSort.displayName,
                     onValueChange = {},
                     readOnly = true,
@@ -157,7 +157,7 @@ fun OpenRouterRoutingSection(
                 ExposedDropdownMenu(
                     expanded = sortExpanded,
                     onDismissRequest = { sortExpanded = false },
-                    modifier = Modifier.neoBorder(color = neoBorderColor(), shape = EnclaveNeoTokens.shape),
+                    modifier = Modifier.enclaveBorder(color = enclaveBorderColor(), shape = EnclaveNeoTokens.shape),
                     shape = EnclaveNeoTokens.shape,
                     containerColor = MaterialTheme.colorScheme.surface,
                 ) {
@@ -404,7 +404,7 @@ fun TuningSlider(
     if (showDialog) {
         AlertDialog(
             onDismissRequest = { showDialog = false },
-            modifier = Modifier.neoBorder(color = neoBorderColor(), shape = EnclaveNeoTokens.shape),
+            modifier = Modifier.enclaveBorder(color = enclaveBorderColor(), shape = EnclaveNeoTokens.shape),
             shape = EnclaveNeoTokens.shape,
             containerColor = MaterialTheme.colorScheme.surface,
             title = { Text("Edit $label") },
@@ -415,7 +415,7 @@ fun TuningSlider(
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(bottom = 8.dp),
                     )
-                    NeoOutlinedTextField(
+                    EnclaveOutlinedTextField(
                         value = textValue,
                         onValueChange = { textValue = it },
                         modifier = Modifier.fillMaxWidth(),
@@ -429,12 +429,12 @@ fun TuningSlider(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    NeoSecondaryButton(
+                    EnclaveSecondaryButton(
                         text = "Cancel",
                         onClick = { showDialog = false },
                         modifier = Modifier.weight(1f),
                     )
-                    NeoPrimaryButton(
+                    EnclavePrimaryButton(
                         text = "Save",
                         onClick = {
                             val newValue = textValue.toFloatOrNull()

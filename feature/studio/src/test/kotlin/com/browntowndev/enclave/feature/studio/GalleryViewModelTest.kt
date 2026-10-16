@@ -10,7 +10,6 @@ import com.browntowndev.enclave.domain.port.repository.StudioMediaAsset
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -27,8 +26,29 @@ import org.junit.jupiter.api.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class GalleryViewModelTest {
+
+            fun galleryViewModel() =
+                GalleryViewModel(
+                    observeStudioAlbums = com.browntowndev.enclave.domain.usecase.studio.ObserveStudioAlbumsUseCase(repository),
+                    observeStudioMedia = com.browntowndev.enclave.domain.usecase.studio.ObserveStudioMediaUseCase(repository),
+                    shareStudioMedia = com.browntowndev.enclave.domain.usecase.studio.ShareStudioMediaUseCase(shareMediaPort),
+                    observeDefaultModelAssignments = com.browntowndev.enclave.domain.usecase.studio.ObserveDefaultModelAssignmentsUseCase(defaultModelRepository),
+                    createStudioAlbum = com.browntowndev.enclave.domain.usecase.studio.CreateStudioAlbumUseCase(repository),
+                    renameStudioAlbum = com.browntowndev.enclave.domain.usecase.studio.RenameStudioAlbumUseCase(repository),
+                    deleteStudioMedia = com.browntowndev.enclave.domain.usecase.studio.DeleteStudioMediaUseCase(repository),
+                    deleteStudioAlbum = com.browntowndev.enclave.domain.usecase.studio.DeleteStudioAlbumUseCase(repository),
+                    moveStudioMediaToAlbum = com.browntowndev.enclave.domain.usecase.studio.MoveStudioMediaToAlbumUseCase(repository),
+                )
     private val repository = FakeStudioRepository()
-    private val shareMediaPort = mockk<ShareMediaPort>(relaxed = true)
+    private val sharedMedia = mutableListOf<Pair<List<String>, String>>()
+    private val shareMediaPort =
+        object : ShareMediaPort {
+            override fun shareMedia(uris: List<String>, mimeType: String) {
+                sharedMedia += uris to mimeType
+            }
+
+            override fun shareDocumentBytes(items: List<com.browntowndev.enclave.domain.model.media.ShareDocumentBytesInput>) = Unit
+        }
     private val defaultModelRepository = mockk<DefaultModelRepositoryPort>(relaxed = true)
 
     @BeforeEach
@@ -51,7 +71,7 @@ class GalleryViewModelTest {
                     studioMediaAsset(id = "asset-2"),
                 ),
             )
-            val viewModel = GalleryViewModel(repository, shareMediaPort, defaultModelRepository)
+            val viewModel = galleryViewModel()
 
             viewModel.uiState.test {
                 val state = awaitItem()
@@ -67,7 +87,7 @@ class GalleryViewModelTest {
     @Test
     fun `add album trims name and appends empty album`() =
         runTest {
-            val viewModel = GalleryViewModel(repository, shareMediaPort, defaultModelRepository)
+            val viewModel = galleryViewModel()
 
             viewModel.uiState.test {
                 assertEquals(listOf("Default Album"), awaitItem().albums.map { it.name })
@@ -83,7 +103,7 @@ class GalleryViewModelTest {
     @Test
     fun `add album ignores blank names`() =
         runTest {
-            val viewModel = GalleryViewModel(repository, shareMediaPort, defaultModelRepository)
+            val viewModel = galleryViewModel()
 
             viewModel.uiState.test {
                 val initialState = awaitItem()
@@ -98,7 +118,7 @@ class GalleryViewModelTest {
     @Test
     fun `rename album updates album name`() =
         runTest {
-            val viewModel = GalleryViewModel(repository, shareMediaPort, defaultModelRepository)
+            val viewModel = galleryViewModel()
             viewModel.addAlbum("Old Name")
 
             viewModel.uiState.test {
@@ -115,7 +135,7 @@ class GalleryViewModelTest {
     @Test
     fun `rename album ignores blank names`() =
         runTest {
-            val viewModel = GalleryViewModel(repository, shareMediaPort, defaultModelRepository)
+            val viewModel = galleryViewModel()
             viewModel.addAlbum("Old Name")
 
             viewModel.uiState.test {
@@ -139,7 +159,7 @@ class GalleryViewModelTest {
                     studioMediaAsset(id = "asset-3"),
                 ),
             )
-            val viewModel = GalleryViewModel(repository, shareMediaPort, defaultModelRepository)
+            val viewModel = galleryViewModel()
 
             viewModel.uiState.test {
                 assertEquals(3, awaitItem().albums.single().itemCount)
@@ -162,7 +182,7 @@ class GalleryViewModelTest {
     @Test
     fun `deleteAlbums removes specified albums`() =
         runTest {
-            val viewModel = GalleryViewModel(repository, shareMediaPort, defaultModelRepository)
+            val viewModel = galleryViewModel()
             viewModel.addAlbum("Album 1")
             viewModel.addAlbum("Album 2")
             viewModel.addAlbum("Album 3")
@@ -184,13 +204,13 @@ class GalleryViewModelTest {
     fun `shareMedia passes correct URIs to ShareMediaPort`() =
         runTest {
             repository.emitMedia(listOf(studioMediaAsset(id = "asset-1")))
-            val viewModel = GalleryViewModel(repository, shareMediaPort, defaultModelRepository)
+            val viewModel = galleryViewModel()
 
             viewModel.uiState.test {
                 awaitItem() // Initial
                 viewModel.shareMedia(setOf("asset-1"))
 
-                verify { shareMediaPort.shareMedia(listOf("content://asset-1"), "*/*") }
+                assertEquals(listOf(listOf("content://asset-1") to "*/*"), sharedMedia)
             }
         }
 
@@ -198,13 +218,13 @@ class GalleryViewModelTest {
     fun `shareSingleMedia passes correct URI and MIME type`() =
         runTest {
             repository.emitMedia(listOf(studioMediaAsset(id = "asset-1")))
-            val viewModel = GalleryViewModel(repository, shareMediaPort, defaultModelRepository)
+            val viewModel = galleryViewModel()
 
             viewModel.uiState.test {
                 awaitItem() // Initial
                 viewModel.shareSingleMedia("asset-1")
 
-                verify { shareMediaPort.shareMedia(listOf("content://asset-1"), "image/*") }
+                assertEquals(listOf(listOf("content://asset-1") to "image/*"), sharedMedia)
             }
         }
 
@@ -217,7 +237,7 @@ class GalleryViewModelTest {
                     studioMediaAsset(id = "asset-2"),
                 ),
             )
-            val viewModel = GalleryViewModel(repository, shareMediaPort, defaultModelRepository)
+            val viewModel = galleryViewModel()
             viewModel.addAlbum("Custom Album")
 
             viewModel.uiState.test {
@@ -246,7 +266,7 @@ class GalleryViewModelTest {
                     studioMediaAsset(id = "asset-1"),
                 ),
             )
-            val viewModel = GalleryViewModel(repository, shareMediaPort, defaultModelRepository)
+            val viewModel = galleryViewModel()
 
             viewModel.uiState.test {
                 val initialState = awaitItem()

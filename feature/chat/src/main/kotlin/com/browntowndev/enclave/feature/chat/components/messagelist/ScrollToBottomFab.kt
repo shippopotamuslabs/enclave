@@ -8,7 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
-import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveIconButton
 
 /**
  * Neo-brutalist scroll-to-bottom control that fades in when the user has scrolled
@@ -27,7 +27,7 @@ internal fun ScrollToBottomFab(
     )
 
     if (alpha > 0f || visible) {
-        NeoIconButton(
+        EnclaveIconButton(
             onClick = onClick,
             icon = Icons.Default.KeyboardArrowDown,
             contentDescription = "Scroll to bottom",

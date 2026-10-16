@@ -47,6 +47,7 @@ fun EnclaveApp(
     EnclaveTheme(
         darkTheme = themeUiState.darkTheme,
         dynamicColor = themeUiState.dynamicColor,
+        themeFamily = themeUiState.themeFamily,
     ) {
         val navController = rememberNavController()
         val scope = rememberCoroutineScope()

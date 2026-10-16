@@ -25,8 +25,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.browntowndev.enclave.core.ui.component.neo.NeoBackScreenHeader
-import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveBackScreenHeader
+import com.browntowndev.enclave.core.ui.component.enclave.EnclavePrimaryButton
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
@@ -269,13 +269,13 @@ fun ByokConfigureScreen(
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            NeoBackScreenHeader(
+            EnclaveBackScreenHeader(
                 title = title,
                 onBackClick = onNavigateBack,
             )
         },
         bottomBar = {
-            NeoPrimaryButton(
+            EnclavePrimaryButton(
                 text =
                     when {
                         isSearchMode -> "Save Search Settings"

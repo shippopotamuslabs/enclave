@@ -52,8 +52,8 @@ import com.browntowndev.enclave.core.ui.component.assignment.AssignmentSelection
 import com.browntowndev.enclave.core.ui.component.assignment.AssignmentSelectionContent
 import com.browntowndev.enclave.core.ui.component.assignment.ApiModelAssetUi
 import com.browntowndev.enclave.core.ui.component.assignment.LocalModelAssetUi
-import com.browntowndev.enclave.core.ui.component.neo.NeoBackScreenHeader
-import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveBackScreenHeader
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSectionHeader
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
@@ -99,7 +99,7 @@ fun ModelConfigurationScreen(
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            NeoBackScreenHeader(
+            EnclaveBackScreenHeader(
                 title = "Model Role Assignments",
                 onBackClick = onNavigateBack,
             )
@@ -340,7 +340,7 @@ fun DefaultAssignmentsCard(
     skeletonCount: Int,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing)) {
-        NeoSectionHeader(text = title)
+        EnclaveSectionHeader(text = title)
         if (isLoading) {
             repeat(skeletonCount) {
                 SettingsAssignmentRowSkeleton(

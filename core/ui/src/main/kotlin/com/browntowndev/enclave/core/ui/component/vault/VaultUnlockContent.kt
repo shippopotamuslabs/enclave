@@ -52,14 +52,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
-import com.browntowndev.enclave.core.ui.component.neo.GoogleSignInButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoToggleRow
-import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
-import com.browntowndev.enclave.core.ui.component.neo.neoButtonShadowOffset
-import com.browntowndev.enclave.core.ui.component.neo.neoOutlinedTextFieldColors
-import com.browntowndev.enclave.core.ui.component.neo.neoShadowColor
-import com.browntowndev.enclave.core.ui.component.neo.neoSurface
+import com.browntowndev.enclave.core.ui.component.enclave.GoogleSignInButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclavePrimaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveToggleRow
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorderColor
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveButtonShadowOffset
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveOutlinedTextFieldColors
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveShadowColor
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurface
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 
 /**
@@ -127,16 +127,16 @@ fun VaultUnlockContent(
                             Modifier
                                 .size(80.dp)
                                 .clip(EnclaveNeoTokens.shape)
-                                .border(EnclaveNeoTokens.borderWidth, neoBorderColor(), EnclaveNeoTokens.shape),
+                                .border(EnclaveNeoTokens.borderWidth, enclaveBorderColor(), EnclaveNeoTokens.shape),
                     )
                 } else {
                     Box(
                         modifier =
                             Modifier
                                 .size(80.dp)
-                                .neoSurface(
+                                .enclaveSurface(
                                     backgroundColor = MaterialTheme.colorScheme.surfaceVariant,
-                                    borderColor = neoBorderColor(),
+                                    borderColor = enclaveBorderColor(),
                                 ),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -168,9 +168,9 @@ fun VaultUnlockContent(
                     modifier =
                         Modifier
                             .size(80.dp)
-                            .neoSurface(
+                            .enclaveSurface(
                                 backgroundColor = MaterialTheme.colorScheme.surfaceVariant,
-                                borderColor = neoBorderColor(),
+                                borderColor = enclaveBorderColor(),
                             ),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -242,12 +242,12 @@ fun VaultUnlockContent(
                         modifier =
                             Modifier
                                 .size(64.dp)
-                                .neoSurface(
+                                .enclaveSurface(
                                     backgroundColor = MaterialTheme.colorScheme.primary,
-                                    borderColor = neoBorderColor(),
+                                    borderColor = enclaveBorderColor(),
                                     withShadow = true,
-                                    shadowColor = neoShadowColor(),
-                                    shadowOffset = neoButtonShadowOffset(),
+                                    shadowColor = enclaveShadowColor(),
+                                    shadowOffset = enclaveButtonShadowOffset(),
                                 ),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -309,12 +309,12 @@ fun VaultUnlockContent(
                         modifier =
                             Modifier
                                 .size(64.dp)
-                                .neoSurface(
+                                .enclaveSurface(
                                     backgroundColor = MaterialTheme.colorScheme.primary,
-                                    borderColor = neoBorderColor(),
+                                    borderColor = enclaveBorderColor(),
                                     withShadow = true,
-                                    shadowColor = neoShadowColor(),
-                                    shadowOffset = neoButtonShadowOffset(),
+                                    shadowColor = enclaveShadowColor(),
+                                    shadowOffset = enclaveButtonShadowOffset(),
                                 ),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -346,7 +346,7 @@ fun VaultUnlockContent(
                         modifier =
                             Modifier
                                 .fillMaxWidth()
-                                .neoSurface(
+                                .enclaveSurface(
                                     backgroundColor = MaterialTheme.colorScheme.errorContainer,
                                     borderColor = MaterialTheme.colorScheme.error,
                                     withShadow = false,
@@ -401,7 +401,7 @@ fun VaultUnlockContent(
                                 null
                             },
                         shape = EnclaveNeoTokens.shape,
-                        colors = neoOutlinedTextFieldColors(),
+                        colors = enclaveOutlinedTextFieldColors(),
                         modifier = Modifier.fillMaxWidth(),
                     )
 
@@ -409,7 +409,7 @@ fun VaultUnlockContent(
                         Spacer(modifier = Modifier.height(16.dp))
 
                         if (initialBiometricEnabled && onBiometricUnlockClick != null) {
-                            NeoPrimaryButton(
+                            EnclavePrimaryButton(
                                 text = "Use Biometrics",
                                 onClick = onBiometricUnlockClick,
                                 icon = Icons.Default.Fingerprint,
@@ -418,7 +418,7 @@ fun VaultUnlockContent(
                                 modifier = Modifier.testTag("use_biometrics_button"),
                             )
                         } else {
-                            NeoToggleRow(
+                            EnclaveToggleRow(
                                 title = "Biometric Unlock",
                                 subtitle = "Use fingerprint next time",
                                 checked = enableBiometric,
@@ -430,7 +430,7 @@ fun VaultUnlockContent(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    NeoPrimaryButton(
+                    EnclavePrimaryButton(
                         text = "Unlock",
                         onClick = { onSubmitVaultPassword(password, enableBiometric) },
                         enabled = password.isNotBlank(),

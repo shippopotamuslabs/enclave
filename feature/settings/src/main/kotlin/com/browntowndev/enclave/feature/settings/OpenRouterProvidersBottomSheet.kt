@@ -35,12 +35,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import com.browntowndev.enclave.core.ui.component.neo.NeoCircularProgressIndicator
-import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
-import com.browntowndev.enclave.core.ui.component.neo.NeoSelectionCard
-import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
-import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
-import com.browntowndev.enclave.core.ui.component.neo.neoSurface
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveCircularProgressIndicator
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSelectionCard
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSheetHeader
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorderColor
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurface
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.config.ApiModelPricingFormat
@@ -56,7 +56,7 @@ fun OpenRouterProvidersBottomSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    NeoModalBottomSheet(
+    EnclaveModalBottomSheet(
         onDismissRequest = onDismissRequest,
         sheetState = sheetState,
     ) {
@@ -121,7 +121,7 @@ internal fun OpenRouterProvidersSheetContent(
                 .fillMaxWidth()
                 .fillMaxHeight(0.9f),
     ) {
-        NeoSheetHeader(
+        EnclaveSheetHeader(
             title = "Target Provider",
             subtitle = "Choose a preferred OpenRouter endpoint or use automatic routing.",
             onDismiss = onDismissRequest,
@@ -161,7 +161,7 @@ internal fun OpenRouterProvidersSheetContent(
                         val cardBorderColor = if (isSelected) {
                             MaterialTheme.colorScheme.primary
                         } else {
-                            neoBorderColor()
+                            enclaveBorderColor()
                         }
                         Box(
                             modifier = Modifier
@@ -198,7 +198,7 @@ internal fun OpenRouterProvidersSheetContent(
                             .weight(1f),
                     contentAlignment = Alignment.Center,
                 ) {
-                    NeoCircularProgressIndicator()
+                    EnclaveCircularProgressIndicator()
                 }
             }
 
@@ -226,7 +226,7 @@ internal fun OpenRouterProvidersSheetContent(
                     verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing),
                 ) {
                     item(key = "automatic-routing") {
-                        NeoSelectionCard(
+                        EnclaveSelectionCard(
                             title = "Automatic routing",
                             subtitle = "Let OpenRouter choose the best provider for each request.",
                             isSelected = selectedPreferredProvider == null,
@@ -301,7 +301,7 @@ fun MetricSignalStrengthIndicator(
                     .width(4.dp)
                     .height(barHeight)
                     .background(color = barColor)
-                    .border(width = 1.dp, color = neoBorderColor())
+                    .border(width = 1.dp, color = enclaveBorderColor())
             )
         }
     }
@@ -382,7 +382,7 @@ fun OpenRouterEndpointCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val borderColor = if (isSelected) MaterialTheme.colorScheme.primary else neoBorderColor()
+    val borderColor = if (isSelected) MaterialTheme.colorScheme.primary else enclaveBorderColor()
     val backgroundColor = if (isSelected) {
         MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
     } else {
@@ -396,7 +396,7 @@ fun OpenRouterEndpointCard(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .neoSurface(
+            .enclaveSurface(
                 backgroundColor = backgroundColor,
                 borderColor = borderColor,
                 withShadow = false,

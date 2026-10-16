@@ -43,13 +43,13 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.browntowndev.enclave.core.ui.component.PersistentTooltip
-import com.browntowndev.enclave.core.ui.component.neo.NeoApiKeyField
-import com.browntowndev.enclave.core.ui.component.neo.NeoCircularProgressIndicator
-import com.browntowndev.enclave.core.ui.component.neo.NeoFilterChip
-import com.browntowndev.enclave.core.ui.component.neo.NeoOutlinedTextField
-import com.browntowndev.enclave.core.ui.component.neo.neoBorder
-import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
-import com.browntowndev.enclave.core.ui.component.neo.neoOutlinedTextFieldColors
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveApiKeyField
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveCircularProgressIndicator
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveFilterChip
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveOutlinedTextField
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorder
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorderColor
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveOutlinedTextFieldColors
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
@@ -96,7 +96,7 @@ fun SearchSkillConfigurationForm(
             )
         }
 
-        NeoApiKeyField(
+        EnclaveApiKeyField(
             label = "Tavily API Key",
             value = apiKey,
             onValueChange = onApiKeyChange,
@@ -121,7 +121,7 @@ fun ProviderSelectionField(
         onExpandedChange = { providerDropdownExpanded = it },
         modifier = Modifier.fillMaxWidth(),
     ) {
-        NeoOutlinedTextField(
+        EnclaveOutlinedTextField(
             value = asset.provider.displayName,
             onValueChange = {},
             readOnly = true,
@@ -136,7 +136,7 @@ fun ProviderSelectionField(
         ExposedDropdownMenu(
             expanded = providerDropdownExpanded,
             onDismissRequest = { providerDropdownExpanded = false },
-            modifier = Modifier.neoBorder(color = neoBorderColor(), shape = EnclaveNeoTokens.shape),
+            modifier = Modifier.enclaveBorder(color = enclaveBorderColor(), shape = EnclaveNeoTokens.shape),
             shape = EnclaveNeoTokens.shape,
             containerColor = MaterialTheme.colorScheme.surface,
         ) {
@@ -207,7 +207,7 @@ fun ModelSelectionField(
                     .fillMaxWidth()
                     .then(if (hasModels) Modifier.clickable { showModelSelectionSheet = true } else Modifier),
         ) {
-            NeoOutlinedTextField(
+            EnclaveOutlinedTextField(
                 value = config.modelId,
                 onValueChange = { onConfigChange(config.copy(modelId = it)) },
                 readOnly = hasModels,
@@ -231,7 +231,7 @@ fun ModelSelectionField(
                     )
                 },
                 modifier = Modifier.fillMaxWidth(),
-                colors = neoOutlinedTextFieldColors(),
+                colors = enclaveOutlinedTextFieldColors(),
                 trailingIcon =
                     if (hasModels) {
                         {
@@ -267,7 +267,7 @@ fun ModelSelectionField(
                 enabled = !discovery.isLoading && canFetchModels,
             ) {
                 if (discovery.isLoading) {
-                    NeoCircularProgressIndicator(
+                    EnclaveCircularProgressIndicator(
                         modifier = Modifier.padding(end = 8.dp).size(16.dp),
                     )
                     Text("Loading models\u2026")
@@ -504,7 +504,7 @@ fun ApiKeyWithReuseSection(
                 onSelectReusableCredential = onSelectReusableCredential,
             )
         }
-        NeoApiKeyField(
+        EnclaveApiKeyField(
             label = apiKeyLabel,
             value = apiKey,
             onValueChange = onApiKeyChange,
@@ -539,7 +539,7 @@ fun ReusableCredentialDropdown(
         DropdownMenu(
             expanded = reusableCredentialDropdownExpanded,
             onDismissRequest = { reusableCredentialDropdownExpanded = false },
-            modifier = Modifier.neoBorder(color = neoBorderColor(), shape = EnclaveNeoTokens.shape),
+            modifier = Modifier.enclaveBorder(color = enclaveBorderColor(), shape = EnclaveNeoTokens.shape),
             shape = EnclaveNeoTokens.shape,
             containerColor = MaterialTheme.colorScheme.surface,
         ) {
@@ -608,7 +608,7 @@ fun CredentialsConfigurationForm(
                     onAssetChange = onAssetChange,
                 )
             else ->
-                NeoOutlinedTextField(
+                EnclaveOutlinedTextField(
                     value = asset.baseUrl ?: "",
                     onValueChange = { onAssetChange(asset.copy(baseUrl = it)) },
                     label = { Text("Base URL (Optional)") },
@@ -641,7 +641,7 @@ fun CredentialsConfigurationForm(
             ) {
                 when (connectionTestStatus) {
                     ApiConnectionTestStatus.TESTING -> {
-                        NeoCircularProgressIndicator(
+                        EnclaveCircularProgressIndicator(
                             modifier = Modifier.padding(end = 8.dp).size(16.dp),
                         )
                         Text("Testing…")
@@ -662,7 +662,7 @@ fun CredentialsConfigurationForm(
             }
         }
 
-        NeoOutlinedTextField(
+        EnclaveOutlinedTextField(
             value = asset.displayName,
             onValueChange = { onAssetChange(asset.copy(displayName = it)) },
             label = { Text("Display Name (e.g. My OpenAI)") },
@@ -683,7 +683,7 @@ fun SystemPromptConfiguration(
     Box(
         modifier = Modifier.fillMaxWidth().clickable { showSystemPromptSheet = true },
     ) {
-        NeoOutlinedTextField(
+        EnclaveOutlinedTextField(
             value = config.systemPrompt.ifBlank { "Tap to edit system prompt" },
             onValueChange = {},
             label = {
@@ -704,7 +704,7 @@ fun SystemPromptConfiguration(
             singleLine = false,
             minLines = 4,
             maxLines = 4,
-            colors = neoOutlinedTextFieldColors(),
+            colors = enclaveOutlinedTextFieldColors(),
         )
     }
 
@@ -729,7 +729,7 @@ fun ContextConfiguration(
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Box(modifier = Modifier.weight(1f)) {
-            NeoOutlinedTextField(
+            EnclaveOutlinedTextField(
                 value = config.contextWindow,
                 onValueChange = { onConfigChange(config.copy(contextWindow = it)) },
                 readOnly = hasReadonlyContextWindow,
@@ -747,7 +747,7 @@ fun ContextConfiguration(
 
         if (supportsMaxTokens) {
             Box(modifier = Modifier.weight(1f)) {
-                NeoOutlinedTextField(
+                EnclaveOutlinedTextField(
                     value = config.maxTokens,
                     onValueChange = { onConfigChange(config.copy(maxTokens = it)) },
                     enabled = !config.maxTokensDisabled,
@@ -846,7 +846,7 @@ private fun ParameterExclusionChip(
     selected: Boolean,
     onSelectedChange: (Boolean) -> Unit,
 ) {
-    NeoFilterChip(
+    EnclaveFilterChip(
         label = label,
         selected = selected,
         onClick = { onSelectedChange(!selected) },
@@ -865,7 +865,7 @@ fun TuningConfiguration(
     var reasoningDropdownExpanded by remember(config.reasoningEffort, reasoningPolicy) { mutableStateOf(false) }
 
     if (parameterSupport.supportsTopK) {
-        NeoOutlinedTextField(
+        EnclaveOutlinedTextField(
             value = config.topK,
             onValueChange = { onConfigChange(config.copy(topK = it)) },
             enabled = !config.topKDisabled,
@@ -887,7 +887,7 @@ fun TuningConfiguration(
             onExpandedChange = { reasoningDropdownExpanded = it },
             modifier = Modifier.fillMaxWidth(),
         ) {
-            NeoOutlinedTextField(
+            EnclaveOutlinedTextField(
                 value = reasoningSelectionLabel(config.reasoningEffort, reasoningPolicy),
                 onValueChange = {},
                 readOnly = true,
@@ -912,7 +912,7 @@ fun TuningConfiguration(
             ExposedDropdownMenu(
                 expanded = reasoningDropdownExpanded,
                 onDismissRequest = { reasoningDropdownExpanded = false },
-                modifier = Modifier.neoBorder(color = neoBorderColor(), shape = EnclaveNeoTokens.shape),
+                modifier = Modifier.enclaveBorder(color = enclaveBorderColor(), shape = EnclaveNeoTokens.shape),
                 shape = EnclaveNeoTokens.shape,
                 containerColor = MaterialTheme.colorScheme.surface,
             ) {
@@ -1023,7 +1023,7 @@ fun PresetConfigurationForm(
     val hasReadonlyContextWindow = selectedModelMetadata?.contextWindowTokens != null
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        NeoOutlinedTextField(
+        EnclaveOutlinedTextField(
             value = config.displayName,
             onValueChange = { onConfigChange(config.copy(displayName = it)) },
             label = { Text("Preset Name (e.g. Creative)") },

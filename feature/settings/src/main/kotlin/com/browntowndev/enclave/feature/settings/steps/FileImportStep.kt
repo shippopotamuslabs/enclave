@@ -15,9 +15,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoSecondaryButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
+import com.browntowndev.enclave.core.ui.component.enclave.EnclavePrimaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSecondaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSectionHeader
 
 @Composable
 internal fun FileImportStep(
@@ -34,14 +34,14 @@ internal fun FileImportStep(
                 .fillMaxSize()
                 .padding(16.dp),
     ) {
-        NeoSectionHeader(text = "Import conversation exports")
+        EnclaveSectionHeader(text = "Import conversation exports")
         Text(
             "Select your exported .zip file(s) from OpenAI, Anthropic, Google, or xAI. " +
                 "Data stays on your device — only API calls leave it.",
         )
         Spacer(Modifier.height(12.dp))
 
-        NeoSecondaryButton(
+        EnclaveSecondaryButton(
             text = if (selectedFileNames.isEmpty()) "Pick zip file(s)" else "Change files",
             onClick = onPickFiles,
             modifier = Modifier.fillMaxWidth(),
@@ -79,9 +79,9 @@ internal fun FileImportStep(
 
         Spacer(Modifier.height(16.dp))
         Row {
-            NeoSecondaryButton(text = "Back", onClick = onBack, modifier = Modifier.weight(1f))
+            EnclaveSecondaryButton(text = "Back", onClick = onBack, modifier = Modifier.weight(1f))
             Spacer(Modifier.padding(4.dp))
-            NeoPrimaryButton(
+            EnclavePrimaryButton(
                 text = "Continue",
                 onClick = onNext,
                 enabled = canProceed,

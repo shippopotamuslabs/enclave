@@ -1,8 +1,10 @@
 # =============================================================================
 # Enclave — GitLab CI/CD Pipeline
 # =============================================================================
-# Android multi-module Kotlin/Compose app
-# Stages: validate → analyze → build → test → package
+# Personal / portfolio project. There is NO Google Play release (AGENTS.md
+# §3.6) and no store automation: MR pipelines give fast confidence, a
+# scheduled nightly pipeline runs device tests, and signed release APKs are
+# manual, main-branch-only, for personal sideloading.
 #
 # Required CI/CD Variables (Settings → CI/CD → Variables):
 #   GOOGLE_SERVICES_JSON  — File variable: contents of app/google-services.json
@@ -11,66 +13,94 @@
 #   RELEASE_STORE_PASSWORD
 #   RELEASE_KEY_ALIAS
 #   RELEASE_KEY_PASSWORD
+#
+# A nightly pipeline schedule (Build → Pipeline schedules, e.g. "0 3 * * *")
+# is required for the `nightly` stage jobs (ENC-15).
 # =============================================================================
+
+workflow:
+  rules:
+    # MR pipelines only for MRs targeting the default branch
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == $CI_DEFAULT_BRANCH
+    # Default-branch pipelines (post-merge confidence + manual release)
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    # Scheduled nightly pipelines
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - when: never
 
 default:
   # fabernovel/android:api-33-v1.7.0 is the highest available tag on Docker Hub.
   # The API level in the tag refers to the bundled emulator image only —
   # JDK 17 + Android build tools in this image support compileSdk 36 just fine.
   image: fabernovel/android:api-33-v1.7.0
-  # Cache Gradle home and wrapper across all jobs to avoid re-downloading
+  interruptible: true
   cache:
-    key: "$CI_COMMIT_REF_SLUG"
+    key:
+      files:
+        - gradle/libs.versions.toml
+      prefix: gradle
     paths:
       - .gradle/
       - gradle/wrapper/dists/
     policy: pull-push
 
 stages:
-  - validate   # Fast style gate (ktlint) — fail early
-  - analyze    # Static analysis (detekt)
-  - build      # Compile debug APK
+  - check      # Static analysis (detekt + lint, ktlint)
+  - build      # Compile debug + release-gate APKs
   - test       # Unit tests (JUnit 5 + Robolectric)
-  - package    # Signed release APK (manual, main branch only)
+  - nightly    # Scheduled device/full re-verify (ENC-15)
+  - package    # Manual signed release APK for personal sideload (main only)
 
-# =============================================================================
-# Hidden base job — common Gradle setup shared by all jobs
-# =============================================================================
 .gradle-base:
   before_script:
-    # Inject Firebase google-services.json from CI file variable
     - echo "Injecting google-services.json..."
     - cp "$GOOGLE_SERVICES_JSON" app/google-services.json
-    # Make gradlew executable (not always preserved in git)
     - chmod +x ./gradlew
 
 # =============================================================================
-# STAGE: validate
-# Runs ktlint to enforce code style. Fails fast before expensive compilation.
+# CHECK — one Gradle invocation so detekt + Android lint share one compile of
+# the analysis classpath. Independent of every other job (needs: []).
 # =============================================================================
+static-analysis:
+  extends: .gradle-base
+  stage: check
+  needs: []
+  script:
+    - ./gradlew detekt lintDebug --continue
+  artifacts:
+    when: always
+    paths:
+      - "**/build/reports/detekt/"
+      - "**/build/reports/lint-results-debug*"
+    expire_in: 7 days
+
 ktlint:
   extends: .gradle-base
-  stage: validate
+  stage: check
+  needs: []
   script:
     - ./gradlew ktlintCheck
-  # Cache is pull-only here — style checks don't produce new cache entries
   cache:
-    key: "$CI_COMMIT_REF_SLUG"
+    key:
+      files:
+        - gradle/libs.versions.toml
+      prefix: gradle
     paths:
       - .gradle/
       - gradle/wrapper/dists/
     policy: pull
   artifacts:
     when: always
-    # Preserve ktlint reports for review even on failure
     paths:
       - "**/build/reports/ktlint/"
     expire_in: 7 days
 
-# Rust agent_core unit tests + catalog parity (AGENT-003 / AGENT-038 / AGENT-050)
+# Rust agent_core unit tests + catalog parity — changes-gated (ENC-16 keeps
+# this gating; runs on MRs touching the Rust core or catalog contracts).
 rust-agent-core:
   image: rust:1.84-bookworm
-  stage: validate
+  stage: check
+  needs: []
   variables:
     GIT_DEPTH: "50"
     GIT_SUBMODULE_STRATEGY: recursive
@@ -81,65 +111,52 @@ rust-agent-core:
     - chmod +x scripts/check-tool-catalog-sync.sh scripts/check-catalog-schema-parity.py
     - ./scripts/check-tool-catalog-sync.sh
     - python3 scripts/check-catalog-schema-parity.py
-  only:
-    changes:
-      - third_party/agent_core/**/*
-      - scripts/check-tool-catalog-sync.sh
-      - scripts/check-catalog-schema-parity.py
-      - core/domain/src/main/kotlin/com/browntowndev/enclave/domain/model/inference/ToolDefinition.kt
-      - core/domain/src/main/kotlin/com/browntowndev/enclave/domain/model/inference/**/*Params*.kt
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - third_party/agent_core/**/*
+        - scripts/check-tool-catalog-sync.sh
+        - scripts/check-catalog-schema-parity.py
+        - core/domain/src/main/kotlin/com/browntowndev/enclave/domain/model/inference/ToolDefinition.kt
+        - core/domain/src/main/kotlin/com/browntowndev/enclave/domain/model/inference/**/*Params*.kt
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        - third_party/agent_core/**/*
+        - scripts/check-tool-catalog-sync.sh
+        - scripts/check-catalog-schema-parity.py
+        - core/domain/src/main/kotlin/com/browntowndev/enclave/domain/model/inference/ToolDefinition.kt
+        - core/domain/src/main/kotlin/com/browntowndev/enclave/domain/model/inference/**/*Params*.kt
 
-# NDK cross-compile + :core:agent assemble smoke (AGENT-048)
+# NDK cross-compile + :core:agent assemble smoke — changes-gated.
 core-agent-assemble:
   extends: .gradle-base
-  stage: validate
+  stage: check
+  needs: []
   script:
     - chmod +x scripts/build-agent-bindings.sh
     - ./scripts/build-agent-bindings.sh
     - ./gradlew :core:agent:assembleDebug
-  only:
-    changes:
-      - third_party/agent_core/**/*
-      - core/agent/**/*
-      - scripts/build-agent-bindings.sh
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - third_party/agent_core/**/*
+        - core/agent/**/*
+        - scripts/build-agent-bindings.sh
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        - third_party/agent_core/**/*
+        - core/agent/**/*
+        - scripts/build-agent-bindings.sh
 
 # =============================================================================
-# STAGE: analyze
-# Runs detekt static analysis. Configured with maxIssues: 0 (zero tolerance).
-# Runs in parallel with ktlint — no dependency between style and analysis.
-# =============================================================================
-detekt:
-  extends: .gradle-base
-  stage: analyze
-  script:
-    - ./gradlew detekt
-  cache:
-    key: "$CI_COMMIT_REF_SLUG"
-    paths:
-      - .gradle/
-      - gradle/wrapper/dists/
-    policy: pull
-  artifacts:
-    when: always
-    # Preserve detekt HTML/XML reports for review
-    paths:
-      - "**/build/reports/detekt/"
-    expire_in: 7 days
-
-# =============================================================================
-# STAGE: build
-# Compiles the full debug APK across all modules.
-# Depends on both ktlint and detekt passing first (via needs DAG).
-# The APK artifact is retained for potential future instrumented test jobs.
-# Recompilation in downstream jobs is avoided via the shared Gradle cache,
-# not artifacts — build/intermediates is too large to transfer efficiently.
+# BUILD — debug APK and an unsigned-secrets release gate in parallel.
+# The release gate signs with an ephemeral in-job keystore: it proves the
+# release variant compiles/links without needing production secrets in MRs.
 # =============================================================================
 assemble-debug:
   extends: .gradle-base
   stage: build
-  needs:
-    - job: ktlint
-    - job: detekt
+  needs: []
   script:
     - ./gradlew assembleDebug
   artifacts:
@@ -147,52 +164,63 @@ assemble-debug:
       - app/build/outputs/apk/debug/
     expire_in: 1 day
 
+assemble-release-gate:
+  extends: .gradle-base
+  stage: build
+  needs: []
+  before_script:
+    - cp "$GOOGLE_SERVICES_JSON" app/google-services.json
+    - chmod +x ./gradlew
+    - mkdir -p .keystore
+    - keytool -genkeypair -keystore .keystore/enclave_keystore.jks -storepass ci-ephemeral -keypass ci-ephemeral -alias ci -keyalg RSA -keysize 2048 -validity 365 -dname "CN=CI Ephemeral"
+    - |
+      cat > local.properties <<EOF
+      RELEASE_STORE_PASSWORD=ci-ephemeral
+      RELEASE_KEY_ALIAS=ci
+      RELEASE_KEY_PASSWORD=ci-ephemeral
+      EOF
+  script:
+    - ./gradlew assembleRelease
+  after_script:
+    - rm -rf .keystore local.properties
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - when: never
+
 # =============================================================================
-# STAGE: test
-# Runs all module unit tests (JUnit 5 + MockK + Turbine + Robolectric).
-# Recompilation is avoided by the shared Gradle cache — unit tests do not
-# consume the APK artifact, so artifacts: true is not needed here.
+# TEST — all module unit tests, independent of the build jobs.
 # =============================================================================
 unit-tests:
   extends: .gradle-base
   stage: test
-  needs:
-    - job: assemble-debug
+  needs: []
   script:
     - ./gradlew testDebugUnitTest
   artifacts:
     when: always
     reports:
-      # Publish JUnit XML results to GitLab's test report UI
       junit: "**/build/test-results/testDebugUnitTest/TEST-*.xml"
     paths:
       - "**/build/reports/tests/"
     expire_in: 7 days
 
+# Screenshot tests are added by ENC-19 (gated on UI-path changes, with a
+# manual screenshot-record job). Device tests live in the nightly stage.
+
 # =============================================================================
-# STAGE: package
-# Builds a signed release APK. Manual trigger only, restricted to main branch.
-# Signing credentials are injected via CI/CD Variables — never hardcoded.
-#
-# KEYSTORE_BASE64 is a base64-encoded copy of the .jks keystore file.
-# Generate it locally with: base64 -w 0 enclave_keystore.jks
-# Then paste the output as a masked CI/CD variable named KEYSTORE_BASE64.
+# PACKAGE — signed release APK, manual on main only, for personal sideload.
+# Never uploaded anywhere; there is no Play pipeline (AGENTS.md §3.6).
 # =============================================================================
 assemble-release:
   extends: .gradle-base
   stage: package
-  needs:
-    - job: unit-tests
+  needs: []
   before_script:
-    # Inject google-services.json (overrides .gradle-base before_script)
     - cp "$GOOGLE_SERVICES_JSON" app/google-services.json
     - chmod +x ./gradlew
-    # Decode the base64-encoded keystore back to a binary .jks file
-    # KEYSTORE_BASE64 is a masked variable — generate with: base64 -w 0 <keystore.jks>
     - mkdir -p .keystore
     - echo "$KEYSTORE_BASE64" | base64 -d > .keystore/enclave_keystore.jks
-    # Write local.properties with signing credentials from CI variables.
-    # This mirrors what app/build.gradle.kts reads at build time.
     - |
       cat > local.properties <<EOF
       RELEASE_STORE_PASSWORD=${RELEASE_STORE_PASSWORD}
@@ -202,9 +230,6 @@ assemble-release:
   script:
     - ./gradlew assembleRelease
   after_script:
-    # Remove both the decoded keystore and local.properties after the build.
-    # The keystore is a sensitive signing artifact and warrants the same
-    # cleanup treatment as the passwords written to local.properties.
     - rm -f .keystore/enclave_keystore.jks
     - rm -f local.properties
   artifacts:
@@ -212,7 +237,116 @@ assemble-release:
       - app/build/outputs/apk/release/
     expire_in: 30 days
   rules:
-    # Only allow manual trigger on the main branch
     - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+    - when: never
+
+# =============================================================================
+# NIGHTLY — emulator device tests on schedule only. allow_failure until the
+# first green run, then remove it (tracked in ENC-15). Requires a pipeline
+# schedule and a KVM-capable runner (/dev/kvm); the job fails fast with a
+# clear message when KVM is unavailable. Never interrupt a nightly run.
+# =============================================================================
+nightly-emulator-tests:
+  extends: .gradle-base
+  stage: nightly
+  needs: []
+  interruptible: false
+  allow_failure: true
+  script:
+    - |
+      if [ ! -e /dev/kvm ]; then
+        echo "ERROR: /dev/kvm is not available on this runner; the nightly emulator job requires a KVM-capable runner (ENC-15)."
+        exit 1
+      fi
+    - echo "no" | avdmanager create avd -n ci-test -k "system-images;android-35;google_apis;x86_64" --force || sdkmanager "system-images;android-35;google_apis;x86_64"
+    - $ANDROID_HOME/emulator/emulator -avd ci-test -no-window -no-audio -gpu swiftshader_indirect -no-snapshot -wipe-data &
+    - adb wait-for-device
+    - adb shell 'while [[ -z $(getprop sys.boot_completed) ]]; do sleep 5; done'
+    - ./gradlew :app:connectedDebugAndroidTest :core:data:connectedDebugAndroidTest
+  after_script:
+    - $ANDROID_HOME/platform-tools/adb emu kill || true
+  artifacts:
+    when: always
+    paths:
+      - "**/build/reports/androidTests/"
+      - "**/build/outputs/androidTest-results/"
+    expire_in: 7 days
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - when: never
+
+# Full unit-test re-verify on schedule (catches flakes the MR run missed).
+nightly-unit-tests:
+  extends: .gradle-base
+  stage: nightly
+  needs: []
+  interruptible: false
+  script:
+    - ./gradlew testDebugUnitTest
+  artifacts:
+    when: always
+    reports:
+      junit: "**/build/test-results/testDebugUnitTest/TEST-*.xml"
+    expire_in: 7 days
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - when: never
+
+# =============================================================================
+# FUNCTIONS — Firebase Cloud Functions tests, changes-gated (ENC-16).
+# Runs on MRs touching functions/** and always on the default branch.
+# =============================================================================
+functions-tests:
+  image: node:20
+  stage: test
+  needs: []
+  script:
+    - cd functions && npm ci && npm test
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - functions/**/*
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - when: never
+
+# =============================================================================
+# SCREENSHOT — Compose preview screenshot tests (ENC-19/ENC-23).
+# MR: validate-only, gated on UI-path changes. The record job is manual-only
+# and never runs automatically; re-recorded goldens must be reviewed in the
+# MR that updates them (UNIT_TESTING.md §5.2).
+# =============================================================================
+screenshot-tests:
+  extends: .gradle-base
+  stage: test
+  needs: []
+  script:
+    - ./gradlew validateDebugScreenshotTest
+  artifacts:
+    when: always
+    paths:
+      - "**/build/outputs/screenshotTest-results/"
+    expire_in: 7 days
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - core/ui/**/*
+        - feature/**/src/main/**/*
+        - app/src/main/**/*
+    - when: never
+
+screenshot-record:
+  extends: .gradle-base
+  stage: test
+  needs: []
+  script:
+    - ./gradlew updateDebugScreenshotTest
+  artifacts:
+    when: always
+    paths:
+      - "**/src/screenshotTestDebug/reference/**"
+    expire_in: 7 days
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       when: manual
     - when: never

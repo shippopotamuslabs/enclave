@@ -15,6 +15,12 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    testOptions {
+        unitTests.all {
+            it.useJUnitPlatform()
+        }
+    }
+
     packaging {
         resources {
             excludes += "META-INF/LICENSE.md"
@@ -28,5 +34,6 @@ android {
 dependencies {
     implementation(project(":core:domain"))
     api(libs.junit.jupiter)
+    testRuntimeOnly(libs.junit.platform.launcher)
     api(libs.kotlinx.coroutines.test)
 }

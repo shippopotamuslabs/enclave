@@ -52,7 +52,7 @@ enum class ResponseHapticPhase {
 data class ToolCallBannerUi(
     val kind: ToolCallBannerKind,
     val label: String,
-    val webSearchSources: List<com.browntowndev.enclave.domain.model.chat.WebSearchSource> = emptyList(),
+    val webSearchSources: List<WebSearchSourceUi> = emptyList(),
 )
 
 @Immutable
@@ -85,7 +85,7 @@ data class ChatMessage(
     val formattedTimestamp: String,
     val indicatorState: IndicatorState? = null,
     val modelDisplayName: String = "",
-    val webSearchSources: List<com.browntowndev.enclave.domain.model.chat.WebSearchSource> = emptyList(),
+    val webSearchSources: List<WebSearchSourceUi> = emptyList(),
     val transcriptSegments: List<TranscriptSegmentUi> = emptyList(),
 )
 

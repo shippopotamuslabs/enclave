@@ -234,8 +234,8 @@ class MultimodalViewModelTest {
         val mediaActionsCoordinator =
             StudioMediaActionsCoordinator(shareMediaPort, studioRepository, generationCoordinator)
         return MultimodalViewModel(
-            defaultModelRepository = defaultModelRepository,
-            mediaProviderRepository = mediaProviderRepository,
+            observeDefaultModelAssignments = com.browntowndev.enclave.domain.usecase.studio.ObserveDefaultModelAssignmentsUseCase(defaultModelRepository),
+            getMediaProviders = com.browntowndev.enclave.domain.usecase.studio.GetMediaProvidersUseCase(mediaProviderRepository),
             moderatePromptUseCase = ModeratePromptUseCase(moderationPort, NoOpLoggingPort),
             shouldModeratePromptUseCase = allowShouldModeratePromptUseCase(),
             submitModerationReportUseCase = submitModerationReportUseCase,
@@ -249,7 +249,8 @@ class MultimodalViewModelTest {
             remoteCapabilitiesCoordinator = remoteCapabilitiesCoordinator,
             promptCoordinator = promptCoordinator,
             mediaActionsCoordinator = mediaActionsCoordinator,
-            uiSelectionRepository = uiSelectionRepository,
+            getSelectedStudioMediaType = com.browntowndev.enclave.domain.usecase.studio.GetSelectedStudioMediaTypeUseCase(uiSelectionRepository),
+                    setSelectedStudioMediaType = com.browntowndev.enclave.domain.usecase.studio.SetSelectedStudioMediaTypeUseCase(uiSelectionRepository),
             overrideCoordinator = StudioModelOverrideCoordinator(),
             resolvedModelCoordinator =
                 StudioResolvedModelCoordinator(
@@ -357,8 +358,8 @@ class MultimodalViewModelTest {
             val shouldModerateMock = allowShouldModeratePromptUseCase(shouldModerate = false)
             viewModel =
                 MultimodalViewModel(
-                    defaultModelRepository = defaultModelRepository,
-                    mediaProviderRepository = mediaProviderRepository,
+                    observeDefaultModelAssignments = com.browntowndev.enclave.domain.usecase.studio.ObserveDefaultModelAssignmentsUseCase(defaultModelRepository),
+                    getMediaProviders = com.browntowndev.enclave.domain.usecase.studio.GetMediaProvidersUseCase(mediaProviderRepository),
                     moderatePromptUseCase = ModeratePromptUseCase(moderationPort, NoOpLoggingPort),
                     shouldModeratePromptUseCase = shouldModerateMock,
                     submitModerationReportUseCase = submitModerationReportUseCase,
@@ -372,7 +373,8 @@ class MultimodalViewModelTest {
                     remoteCapabilitiesCoordinator = StudioRemoteCapabilitiesCoordinator(resolveMediaProviderCapabilitiesUseCase),
                     promptCoordinator = StudioPromptCoordinator(generationCoordinator, studioRepository),
                     mediaActionsCoordinator = StudioMediaActionsCoordinator(shareMediaPort, studioRepository, generationCoordinator),
-                    uiSelectionRepository = uiSelectionRepository,
+                    getSelectedStudioMediaType = com.browntowndev.enclave.domain.usecase.studio.GetSelectedStudioMediaTypeUseCase(uiSelectionRepository),
+                    setSelectedStudioMediaType = com.browntowndev.enclave.domain.usecase.studio.SetSelectedStudioMediaTypeUseCase(uiSelectionRepository),
                     overrideCoordinator = StudioModelOverrideCoordinator(),
                     resolvedModelCoordinator =
                         StudioResolvedModelCoordinator(

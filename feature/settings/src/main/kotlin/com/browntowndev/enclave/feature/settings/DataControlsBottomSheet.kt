@@ -25,12 +25,12 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
-import com.browntowndev.enclave.core.ui.component.neo.NeoCircularProgressIndicator
-import com.browntowndev.enclave.core.ui.component.neo.NeoDestructiveRow
-import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
-import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
-import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
-import com.browntowndev.enclave.core.ui.component.neo.NeoToggleRow
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveCircularProgressIndicator
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveDestructiveRow
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSectionHeader
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSheetHeader
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveToggleRow
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 
@@ -117,7 +117,7 @@ fun DataControlsBottomSheet(
     val rowAlphaModifier =
         Modifier.alpha(if (dc.isDeleting) DELETING_ROW_ALPHA else 1f)
 
-    NeoModalBottomSheet(
+    EnclaveModalBottomSheet(
         onDismissRequest = onDismiss,
         modifier = modifier,
         sheetState = sheetState,
@@ -128,14 +128,14 @@ fun DataControlsBottomSheet(
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
         ) {
-            NeoSheetHeader(
+            EnclaveSheetHeader(
                 title = "Data Controls",
                 subtitle = "Manage or permanently remove your data.",
                 onDismiss = onDismiss,
             )
 
-            NeoSectionHeader(text = "Privacy")
-            NeoToggleRow(
+            EnclaveSectionHeader(text = "Privacy")
+            EnclaveToggleRow(
                 title = "Allow automatic tracking of errors",
                 subtitle = "Send error diagnostics to improve the app.",
                 icon = Icons.Default.BugReport,
@@ -143,10 +143,10 @@ fun DataControlsBottomSheet(
                 onCheckedChange = onAutomaticErrorTrackingChange,
             )
 
-            NeoSectionHeader(text = "Data")
+            EnclaveSectionHeader(text = "Data")
             Column(verticalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing)) {
                 dataRows.forEach { row ->
-                    NeoDestructiveRow(
+                    EnclaveDestructiveRow(
                         title = row.title,
                         subtitle = row.subtitle,
                         onClick = row.onRequest,
@@ -156,8 +156,8 @@ fun DataControlsBottomSheet(
                 }
             }
 
-            NeoSectionHeader(text = "Account")
-            NeoDestructiveRow(
+            EnclaveSectionHeader(text = "Account")
+            EnclaveDestructiveRow(
                 title = accountRow.title,
                 subtitle = accountRow.subtitle,
                 onClick = accountRow.onRequest,
@@ -195,7 +195,7 @@ fun DataControlsBottomSheet(
                     if (dc.isDeleting) {
                         Spacer(modifier = Modifier.height(16.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            NeoCircularProgressIndicator(
+                            EnclaveCircularProgressIndicator(
                                 modifier = Modifier.size(20.dp),
                                 color = MaterialTheme.colorScheme.error,
                             )

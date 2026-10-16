@@ -9,6 +9,7 @@ import androidx.compose.ui.test.isOn
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performScrollTo
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import org.junit.Rule
 import org.junit.Test
@@ -109,7 +110,8 @@ class SettingsScreenTest {
         }
 
         composeTestRule.onAllNodesWithText("Haptic Press").assertCountEquals(0)
-        composeTestRule.onNodeWithText("Haptic Response").assertIsDisplayed()
+        // The theme-family picker (ENC-9) pushes Experience below the fold; scroll to it.
+        composeTestRule.onNodeWithText("Haptic Response").performScrollTo().assertIsDisplayed()
         composeTestRule
             .onNode(hasAnySibling(hasText("Haptic Response")) and isOn(), useUnmergedTree = true)
             .assertIsOn()

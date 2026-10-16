@@ -69,6 +69,7 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
             EnclaveTheme(
                 darkTheme = themeState.darkTheme,
                 dynamicColor = themeState.dynamicColor,
+                themeFamily = themeState.themeFamily,
             ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),

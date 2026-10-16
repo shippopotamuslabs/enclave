@@ -39,9 +39,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
-import com.browntowndev.enclave.core.ui.component.neo.neoShadowColor
-import com.browntowndev.enclave.core.ui.component.neo.neoSurface
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorderColor
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveShadowColor
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurface
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.feature.chat.ArtifactCardUiModel
@@ -68,8 +68,8 @@ internal fun CompletedStepRow(
 
     val previewText = "Tap to View"
 
-    val borderColor = neoBorderColor()
-    val shadowColor = neoShadowColor()
+    val borderColor = enclaveBorderColor()
+    val shadowColor = enclaveShadowColor()
     val shadowOffset = EnclaveNeoTokens.buttonShadowOffsetDark
 
     Column(
@@ -79,7 +79,7 @@ internal fun CompletedStepRow(
                 .padding(
                     top = EnclaveNeoTokens.rowSpacing,
                     bottom = EnclaveNeoTokens.rowSpacing + shadowOffset,
-                ).neoSurface(
+                ).enclaveSurface(
                     backgroundColor = MaterialTheme.colorScheme.surface,
                     borderColor = borderColor,
                     withShadow = true,
@@ -99,7 +99,7 @@ internal fun CompletedStepRow(
                         .offset(y = 4.dp)
                         .rotate(-8f)
                         .size(width = CouncilStepDocPreviewWidth, height = CouncilStepDocPreviewHeight)
-                        .neoSurface(
+                        .enclaveSurface(
                             backgroundColor = MaterialTheme.colorScheme.background,
                             borderColor = borderColor,
                             withShadow = true,

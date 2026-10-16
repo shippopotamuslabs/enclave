@@ -20,9 +20,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.browntowndev.enclave.core.ui.component.neo.NeoIconTile
-import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
-import com.browntowndev.enclave.core.ui.component.neo.neoSurface
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveIconTile
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorderColor
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurface
 
 @Composable
 internal fun WizardSelectableCard(
@@ -38,7 +38,7 @@ internal fun WizardSelectableCard(
         if (selected) {
             MaterialTheme.colorScheme.primary
         } else {
-            neoBorderColor()
+            enclaveBorderColor()
         }
     val containerColor =
         if (selected) {
@@ -50,7 +50,7 @@ internal fun WizardSelectableCard(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .neoSurface(
+                .enclaveSurface(
                     backgroundColor = containerColor,
                     borderColor = borderColor,
                     withShadow = false,
@@ -58,7 +58,7 @@ internal fun WizardSelectableCard(
                 .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        NeoIconTile(
+        EnclaveIconTile(
             icon = icon,
             contentDescription = null,
         )
