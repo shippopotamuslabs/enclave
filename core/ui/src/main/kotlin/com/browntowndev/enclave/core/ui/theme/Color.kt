@@ -35,3 +35,12 @@ val LightNeoShadow = Color(0xFF0F172A)
 // --- ERROR & SEMANTIC ---
 val ErrorRed = Color(0xFFDC2626) // High-vibrancy Tailwind-inspired red
 val OnErrorWhite = Color(0xFFFFFFFF)
+
+/** Semantic success accent for local-model ready states and provider health. */
+val SuccessGreen: Color = Color(0xFF4CAF50)
+
+/** Provider throughput tiers for the OpenRouter provider list (1 slowest, 4+ fastest). */
+val ProviderTier1: Color = Color(0xFFEF4444)
+val ProviderTier2: Color = Color(0xFFF97316)
+val ProviderTier3: Color = Color(0xFFEAB308)
+val ProviderTierFast: Color = Color(0xFF22C55E)

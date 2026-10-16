@@ -376,7 +376,8 @@ class DownloadViewModel
                             if (previousState != workInfo.lifecycle) {
                                 Log.d(
                                     TAG,
-                                    "[TRACE] observeWorkProgress: State changed ${previousState?.name ?: "NULL"} -> ${workInfo.lifecycle.name}",
+                                    "[TRACE] observeWorkProgress: State changed " +
+                                        "${previousState?.name ?: "NULL"} -> ${workInfo.lifecycle.name}",
                                 )
                                 previousState = workInfo.lifecycle
                             }

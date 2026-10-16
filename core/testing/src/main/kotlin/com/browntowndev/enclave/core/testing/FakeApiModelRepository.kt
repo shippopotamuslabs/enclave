@@ -42,7 +42,11 @@ class FakeApiModelRepository : ApiModelRepositoryPort {
     ): ApiCredentialsId {
         val existing = credentialsFlow.value.firstOrNull { it.id == credentials.id }
         credentialsFlow.value =
-            if (existing == null) credentialsFlow.value + credentials else credentialsFlow.value.map { if (it.id == credentials.id) credentials else it }
+            if (existing == null) {
+                credentialsFlow.value + credentials
+            } else {
+                credentialsFlow.value.map { if (it.id == credentials.id) credentials else it }
+            }
         return credentials.id
     }
 
@@ -70,7 +74,11 @@ class FakeApiModelRepository : ApiModelRepositoryPort {
     override suspend fun saveConfiguration(config: ApiModelConfiguration): ApiModelConfigurationId {
         val existing = configurationsFlow.value.firstOrNull { it.id == config.id }
         configurationsFlow.value =
-            if (existing == null) configurationsFlow.value + config else configurationsFlow.value.map { if (it.id == config.id) config else it }
+            if (existing == null) {
+                configurationsFlow.value + config
+            } else {
+                configurationsFlow.value.map { if (it.id == config.id) config else it }
+            }
         return config.id
     }
 
