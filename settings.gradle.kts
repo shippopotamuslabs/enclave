@@ -35,6 +35,7 @@ include(":core:domain")
 include(":core:data")
 include(":core:ui")
 include(":core:testing")
+include(":detekt-rules")
 include(":core:docgen")
 include(":core:agent")
 
