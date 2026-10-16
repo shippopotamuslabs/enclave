@@ -49,8 +49,9 @@ All rules below are non-negotiable implementations of Clean Architecture.
 ## 1. Module Boundaries
 
 
-Primary modules: `:app`, `:core:domain`, `:core:data`, `:core:ui`, `:core:agent`,
-`:core:docgen`, `:feature:*`, `:llama-android`, and `:whisper-android`.
+Primary modules: `:app`, `:core:domain`, `:core:data`, `:core:ui`, `:core:testing`,
+`:core:agent`, `:core:docgen`, `:feature:*`, `:llama-android`, `:whisper-android`, and
+`:detekt-rules` (JVM-only static analysis; tracked in ENC-10, not an app runtime dependency).
 
 ### 1.1 Dependency Direction (Strict)
 
@@ -65,7 +66,14 @@ Primary modules: `:app`, `:core:domain`, `:core:data`, `:core:ui`, `:core:agent`
 :llama-android       → native C/C++ wrapper
 :whisper-android     → :core:domain plus native C/C++ wrapper
 :core:domain         → no app, feature, data, UI, or native bridge modules
+:core:testing        → :core:domain only (fakes, MainDispatcherRule, fixtures)
+:detekt-rules        → isolated (Detekt API only; not a runtime dependency)
 ```
+
+**Feature dependency tightening (ENC-2 target):** `:feature:*` depends on `:core:domain`
+and `:core:ui` only. Direct `:core:data` imports in feature code are forbidden — data
+implementations are wired in `:app` DI behind domain ports/use cases. Existing direct
+imports are remediation debt under ENC-11/ENC-12, not precedent.
 
 No reverse dependencies into `:core:domain` are allowed.
 
@@ -106,7 +114,19 @@ wired by `:app`.
 
 ### 3.3 Model Mapping
 - Domain models MUST NOT be passed directly to composables. ViewModel maps domain → presentation.
+- Presentation models (`*UiState`, `*UiEvent`, drafts) MUST NOT embed domain types; map at the ViewModel/mapper boundary.
 - No repository calls inside composables.
+
+### 3.4 ViewModel Dependencies & Flow Composition (ENC-2)
+- **ViewModels depend on use cases, not repository or port interfaces.** A ViewModel constructor injects `*UseCase` classes from `:core:domain`; it must not inject a `*Repository`/`*Port` interface or any `:core:data` type directly. Repository/service ports are consumed by use cases.
+- **Feature-layer mappers must not accept use-case parameters.** Mappers are pure domain/ephemeral → presentation transforms; ViewModels invoke use cases and pass derived values into mappers.
+- **Use cases own multi-source `Flow` composition.** When a screen needs more than one repository, add a domain interactor that combines the streams into one domain read model; the ViewModel observes that single use case — it must not write its own multi-source `combine` over repositories.
+- **Only transient/presentation state lives in the ViewModel** (unsaved drafts, reveal-errors flags, one-shot events). Durable facts are read through use cases.
+- **Write paths go through use cases too** — never `repository.save(...)` from a ViewModel.
+- Enforced by Detekt `enclave` rules `ForbiddenRepositoryInViewModel`, `ForbiddenPortInViewModel`, `ForbiddenDomainTypeInComposable`, `ForbiddenDomainTypeInUiState`, `ForbiddenUseCaseInFeatureMapper` (ENC-10). `./gradlew detekt` must pass at `maxIssues: 0`; do not add suppressions to hide layering debt — file an ENC sub-issue instead.
+
+### 3.5 Linear Ticketing
+All implementation work follows `AGENTS.md` §3.7 (Linear team `ENC`, chunk-based trunk workflow, one MR per sub-issue, `Fixes ENC-xx` in the MR description). Architecture changes without a ticket are out of contract.
 
 ---
 
