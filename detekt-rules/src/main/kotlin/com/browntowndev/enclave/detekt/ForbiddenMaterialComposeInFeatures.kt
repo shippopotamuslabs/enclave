@@ -51,8 +51,11 @@ class ForbiddenMaterialComposeInFeatures(config: Config) : Rule(config) {
     companion object {
         val FORBIDDEN_IMPORTS: Set<String> =
             setOf(
-                // Material 3 — theme
-                "androidx.compose.material3.MaterialTheme",
+                // Enclave adaptation (ENC-22): MaterialTheme reads and Material 3
+                // Scaffold are allowed — ARCHITECTURE_RULES.md mandates the M3
+                // adaptive Scaffold and EnclaveTheme bridges the active spec
+                // through MaterialTheme (ENC-6). Only raw chrome components
+                // with Enclave* equivalents are forbidden.
                 // Material 3 — surfaces & inputs
                 "androidx.compose.material3.Button",
                 "androidx.compose.material3.Card",
@@ -73,7 +76,6 @@ class ForbiddenMaterialComposeInFeatures(config: Config) : Rule(config) {
                 "androidx.compose.material3.SmallTopAppBar",
                 "androidx.compose.material3.MediumTopAppBar",
                 "androidx.compose.material3.LargeTopAppBar",
-                "androidx.compose.material3.Scaffold",
                 "androidx.compose.material3.FilterChip",
                 "androidx.compose.material3.InputChip",
                 "androidx.compose.material3.SuggestionChip",
