@@ -47,9 +47,9 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
-import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
-import com.browntowndev.enclave.core.ui.component.neo.neoShadowColor
-import com.browntowndev.enclave.core.ui.component.neo.neoSurface
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorderColor
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveShadowColor
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurface
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.domain.model.chat.FileAttachment
 import com.browntowndev.enclave.feature.chat.ChatMessage
@@ -104,11 +104,11 @@ internal fun UserBubble(
                             end = 2.dp,
                             bottom = EnclaveNeoTokens.userBubbleShadowOffset,
                         ).zIndex(1f)
-                        .neoSurface(
+                        .enclaveSurface(
                             backgroundColor = MaterialTheme.colorScheme.surface,
-                            borderColor = neoBorderColor(),
+                            borderColor = enclaveBorderColor(),
                             withShadow = true,
-                            shadowColor = neoShadowColor(),
+                            shadowColor = enclaveShadowColor(),
                             shadowOffset = EnclaveNeoTokens.userBubbleShadowOffset,
                             shape = EnclaveNeoTokens.userBubbleShape,
                         ).clickable(

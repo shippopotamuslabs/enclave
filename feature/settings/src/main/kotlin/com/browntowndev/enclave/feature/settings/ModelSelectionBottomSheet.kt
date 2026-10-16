@@ -30,13 +30,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.browntowndev.enclave.core.ui.component.neo.NeoFilterChip
-import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
-import com.browntowndev.enclave.core.ui.component.neo.NeoSearchField
-import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
-import com.browntowndev.enclave.core.ui.component.neo.NeoSelectionCard
-import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveFilterChip
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveIconButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSearchField
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSectionHeader
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSelectionCard
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSheetHeader
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.config.ApiModelPricingFormat
@@ -58,7 +58,7 @@ fun ModelSelectionBottomSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    NeoModalBottomSheet(
+    EnclaveModalBottomSheet(
         onDismissRequest = onDismissRequest,
         sheetState = sheetState,
     ) {
@@ -102,7 +102,7 @@ fun ModelSelectionContent(
                 .fillMaxWidth()
                 .fillMaxHeight(0.9f),
     ) {
-        NeoSheetHeader(
+        EnclaveSheetHeader(
             title = "Select Model",
             onDismiss = onDismissRequest,
         )
@@ -125,7 +125,7 @@ fun ModelSelectionContent(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            NeoIconButton(
+            EnclaveIconButton(
                 onClick = {
                     if (isProviderFiltering) {
                         onUpdateSearchQuery("")
@@ -151,7 +151,7 @@ fun ModelSelectionContent(
                 withShadow = true,
             )
 
-            NeoSearchField(
+            EnclaveSearchField(
                 value = searchQuery,
                 onValueChange = onUpdateSearchQuery,
                 placeholder =
@@ -176,20 +176,20 @@ fun ModelSelectionContent(
                 val hasPrice = availableModels.any { it.promptPrice != null || it.completionPrice != null }
 
                 if (hasCreated || hasPrice) {
-                    NeoFilterChip(
+                    EnclaveFilterChip(
                         label = "A-Z",
                         selected = sortOption == ModelSortOption.A_TO_Z,
                         onClick = { onUpdateSortOption(ModelSortOption.A_TO_Z) },
                     )
                     if (hasCreated) {
-                        NeoFilterChip(
+                        EnclaveFilterChip(
                             label = "Newest",
                             selected = sortOption == ModelSortOption.NEWEST,
                             onClick = { onUpdateSortOption(ModelSortOption.NEWEST) },
                         )
                     }
                     if (hasPrice) {
-                        NeoFilterChip(
+                        EnclaveFilterChip(
                             label = "Price",
                             selected = sortOption == ModelSortOption.PRICE_LOW_TO_HIGH,
                             onClick = { onUpdateSortOption(ModelSortOption.PRICE_LOW_TO_HIGH) },
@@ -205,7 +205,7 @@ fun ModelSelectionContent(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     providerFilters.forEach { provider ->
-                        NeoFilterChip(
+                        EnclaveFilterChip(
                             label = provider,
                             selected = true,
                             onClick = { onToggleProviderFilter(provider) },
@@ -228,7 +228,7 @@ fun ModelSelectionContent(
             }
             Spacer(modifier = Modifier.height(8.dp))
         } else {
-            NeoSectionHeader(text = "Select Providers")
+            EnclaveSectionHeader(text = "Select Providers")
         }
 
         val showCustomModel = !isProviderFiltering && searchQuery.isNotBlank() && filteredModels.none { it.modelId == searchQuery }
@@ -240,7 +240,7 @@ fun ModelSelectionContent(
             if (isProviderFiltering) {
                 items(filteredProviders, key = { it }) { provider ->
                     val isSelected = providerFilters.contains(provider)
-                    NeoSelectionCard(
+                    EnclaveSelectionCard(
                         title = provider,
                         isSelected = isSelected,
                         onClick = { onToggleProviderFilter(provider) },
@@ -249,7 +249,7 @@ fun ModelSelectionContent(
             } else {
                 if (showCustomModel) {
                     item(key = "custom:$searchQuery") {
-                        NeoSelectionCard(
+                        EnclaveSelectionCard(
                             title = "Use custom model: $searchQuery",
                             onClick = {
                                 onModelSelected(searchQuery)
@@ -260,7 +260,7 @@ fun ModelSelectionContent(
                 }
 
                 items(filteredModels, key = { it.modelId }) { model ->
-                    NeoSelectionCard(
+                    EnclaveSelectionCard(
                         title = model.name ?: model.modelId,
                         subtitle = modelSelectionSubtitle(model),
                         onClick = {

@@ -18,10 +18,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoSecondaryButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
-import com.browntowndev.enclave.core.ui.component.neo.NeoSelectionCard
+import com.browntowndev.enclave.core.ui.component.enclave.EnclavePrimaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSecondaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSectionHeader
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSelectionCard
 
 enum class StudioOverrideKind {
     LOCAL,
@@ -88,7 +88,7 @@ fun ModelPickerPane(
             }
         } else {
             if (assets.localAssets.isNotEmpty()) {
-                NeoSectionHeader(text = "On-Device")
+                EnclaveSectionHeader(text = "On-Device")
                 Spacer(modifier = Modifier.height(8.dp))
                 assets.localAssets.forEach { option ->
                     ModelPickerRow(option, selectedId, onStageSelection)
@@ -96,7 +96,7 @@ fun ModelPickerPane(
                 Spacer(modifier = Modifier.height(16.dp))
             }
             if (assets.apiAssets.isNotEmpty()) {
-                NeoSectionHeader(text = "API")
+                EnclaveSectionHeader(text = "API")
                 Spacer(modifier = Modifier.height(8.dp))
                 assets.apiAssets.forEach { option ->
                     ModelPickerRow(option, selectedId, onStageSelection)
@@ -104,7 +104,7 @@ fun ModelPickerPane(
                 Spacer(modifier = Modifier.height(16.dp))
             }
             if (assets.mediaAssets.isNotEmpty()) {
-                NeoSectionHeader(text = "Providers")
+                EnclaveSectionHeader(text = "Providers")
                 Spacer(modifier = Modifier.height(8.dp))
                 assets.mediaAssets.forEach { option ->
                     ModelPickerRow(option, selectedId, onStageSelection)
@@ -117,12 +117,12 @@ fun ModelPickerPane(
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            NeoSecondaryButton(
+            EnclaveSecondaryButton(
                 text = "Cancel",
                 onClick = onCancel,
                 modifier = Modifier.weight(1f),
             )
-            NeoPrimaryButton(
+            EnclavePrimaryButton(
                 text = "Confirm",
                 onClick = onConfirm,
                 enabled = selectedId != null,
@@ -139,7 +139,7 @@ private fun ModelPickerRow(
     selectedId: String?,
     onStageSelection: (StudioModelOptionUi) -> Unit,
 ) {
-    NeoSelectionCard(
+    EnclaveSelectionCard(
         title = option.title,
         subtitle = option.subtitle,
         isSelected = option.id == selectedId,

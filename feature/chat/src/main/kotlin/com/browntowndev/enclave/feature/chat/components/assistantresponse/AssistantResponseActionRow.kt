@@ -43,7 +43,7 @@ import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.browntowndev.enclave.core.ui.component.neo.NeoCircularProgressIndicator
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveCircularProgressIndicator
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.feature.chat.ChatMessage
 import kotlinx.coroutines.launch
@@ -147,7 +147,7 @@ internal fun AssistantResponseActionRow(
                                 modifier = Modifier.size(ActionIconButtonSize),
                                 contentAlignment = Alignment.Center,
                             ) {
-                                NeoCircularProgressIndicator(
+                                EnclaveCircularProgressIndicator(
                                     modifier = Modifier.size(ActionIconSize),
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )

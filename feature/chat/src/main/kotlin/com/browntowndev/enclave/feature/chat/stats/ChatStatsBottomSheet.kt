@@ -4,12 +4,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import com.browntowndev.enclave.core.ui.component.neo.NeoGroupDivider
-import com.browntowndev.enclave.core.ui.component.neo.NeoTelemetryBreakdownRow
-import com.browntowndev.enclave.core.ui.component.neo.NeoTelemetryMetricPanel
-import com.browntowndev.enclave.core.ui.component.neo.NeoTelemetryMetricRow
-import com.browntowndev.enclave.core.ui.component.neo.NeoTelemetrySectionTitle
-import com.browntowndev.enclave.core.ui.component.neo.NeoTelemetryStatsSheet
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveGroupDivider
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveTelemetryBreakdownRow
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveTelemetryMetricPanel
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveTelemetryMetricRow
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveTelemetrySectionTitle
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveTelemetryStatsSheet
 
 @Composable
 fun ChatStatsBottomSheet(
@@ -18,17 +18,17 @@ fun ChatStatsBottomSheet(
     modifier: Modifier = Modifier,
 ) {
     if (!state.isVisible) return
-    NeoTelemetryStatsSheet(
+    EnclaveTelemetryStatsSheet(
         title = state.title,
         onDismiss = onDismiss,
         sheetTestTag = "chat_stats_sheet",
         modifier = modifier,
     ) {
         Column(modifier = Modifier.testTag("chat_stats_title")) {
-            NeoTelemetrySectionTitle(title = "Summary")
-            NeoTelemetryMetricPanel {
+            EnclaveTelemetrySectionTitle(title = "Summary")
+            EnclaveTelemetryMetricPanel {
                 state.summaryRows.forEach { row ->
-                    NeoTelemetryMetricRow(
+                    EnclaveTelemetryMetricRow(
                         label = row.label,
                         value = row.value,
                         testTagSuffix = row.label.lowercase().replace(' ', '_'),
@@ -36,34 +36,34 @@ fun ChatStatsBottomSheet(
                 }
             }
             if (state.providerBreakdownRows.isNotEmpty()) {
-                NeoTelemetrySectionTitle(title = "By provider")
-                NeoTelemetryMetricPanel {
+                EnclaveTelemetrySectionTitle(title = "By provider")
+                EnclaveTelemetryMetricPanel {
                     state.providerBreakdownRows.forEach { row ->
                         val requestSuffix = row.requestCount?.let { " · $it requests" }.orEmpty()
-                        NeoTelemetryBreakdownRow(
+                        EnclaveTelemetryBreakdownRow(
                             primaryLabel = row.label,
                             costLabel = row.costLabel,
                             secondaryLabel = "${row.turnCount} turn${if (row.turnCount == 1) "" else "s"}$requestSuffix",
                             testTagSuffix = "provider_${row.label}",
                         )
                         if (row != state.providerBreakdownRows.last()) {
-                            NeoGroupDivider()
+                            EnclaveGroupDivider()
                         }
                     }
                 }
             }
             if (state.modelBreakdownRows.isNotEmpty()) {
-                NeoTelemetrySectionTitle(title = "By model")
-                NeoTelemetryMetricPanel {
+                EnclaveTelemetrySectionTitle(title = "By model")
+                EnclaveTelemetryMetricPanel {
                     state.modelBreakdownRows.forEach { row ->
-                        NeoTelemetryBreakdownRow(
+                        EnclaveTelemetryBreakdownRow(
                             primaryLabel = row.label,
                             costLabel = row.costLabel,
                             secondaryLabel = "${row.outputTokens} output tokens",
                             testTagSuffix = "model_${row.label}",
                         )
                         if (row != state.modelBreakdownRows.last()) {
-                            NeoGroupDivider()
+                            EnclaveGroupDivider()
                         }
                     }
                 }

@@ -34,14 +34,14 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.browntowndev.enclave.core.ui.component.PersistentTooltip
-import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
-import com.browntowndev.enclave.core.ui.component.neo.NeoNavRow
-import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
-import com.browntowndev.enclave.core.ui.component.neo.NeoSegmentedControl
-import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
-import com.browntowndev.enclave.core.ui.component.neo.NeoStepper
-import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
-import com.browntowndev.enclave.core.ui.component.neo.neoSurface
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveNavRow
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSectionHeader
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSegmentedControl
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSheetHeader
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveStepper
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorderColor
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurface
 import com.browntowndev.enclave.core.ui.component.shimmerEffect
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
@@ -110,7 +110,7 @@ fun TemplateChip(
                     .clip(EnclaveNeoTokens.shape)
                     .border(
                         width = EnclaveNeoTokens.borderWidth,
-                        color = if (isSelected) MaterialTheme.colorScheme.primary else neoBorderColor(),
+                        color = if (isSelected) MaterialTheme.colorScheme.primary else enclaveBorderColor(),
                         shape = EnclaveNeoTokens.shape,
                     ),
         ) {
@@ -216,7 +216,7 @@ fun StudioOptionsBottomSheet(
     onCancelModelPicker: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    NeoModalBottomSheet(
+    EnclaveModalBottomSheet(
         modifier = modifier,
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -244,7 +244,7 @@ fun PillSelector(
     modifier: Modifier = Modifier,
 ) {
     val selectedIndex = options.indexOf(selected).coerceAtLeast(0)
-    NeoSegmentedControl(
+    EnclaveSegmentedControl(
         options = options,
         selectedIndex = selectedIndex,
         onOptionSelected = { index -> onSelected(options[index]) },
@@ -474,12 +474,12 @@ fun StudioOptionsSheetContent(
                 .navigationBarsPadding(),
         horizontalAlignment = Alignment.Start,
     ) {
-        NeoSheetHeader(
+        EnclaveSheetHeader(
             title = "Studio Settings",
             onDismiss = onDismiss,
         )
 
-        NeoNavRow(
+        EnclaveNavRow(
             title = state.activeModelDisplayName ?: "Default",
             subtitle = state.resolvedModelTypeLabel,
             onClick = onOpenModelPicker,
@@ -543,7 +543,7 @@ private fun SettingsPane(
                 .verticalScroll(scrollState),
         horizontalAlignment = Alignment.Start,
     ) {
-        NeoSegmentedControl(
+        EnclaveSegmentedControl(
             options =
                 listOf(
                     MediaCapability.IMAGE.displayName,
@@ -607,7 +607,7 @@ private fun VisualSettingsSection(
         onTemplateSelected = onTemplateSelected,
     )
 
-    NeoSectionHeader(text = "General")
+    EnclaveSectionHeader(text = "General")
     Spacer(modifier = Modifier.height(EnclaveNeoTokens.rowSpacing))
 
     AspectRatioSettingsCard(
@@ -648,7 +648,7 @@ private fun VisualStylePresetsSection(
     selectedTemplateId: String?,
     onTemplateSelected: (StudioTemplate) -> Unit,
 ) {
-    NeoSectionHeader(text = "Visual Style Presets")
+    EnclaveSectionHeader(text = "Visual Style Presets")
     Spacer(modifier = Modifier.height(8.dp))
     StudioTemplateRow(
         templates = templates,
@@ -744,7 +744,7 @@ private fun VideoSettingsSection(
     isCapabilitiesLoading: Boolean,
     onUpdateSettings: (GenerationSettings) -> Unit,
 ) {
-    NeoSectionHeader(text = "Video")
+    EnclaveSectionHeader(text = "Video")
     Spacer(modifier = Modifier.height(EnclaveNeoTokens.rowSpacing))
 
     if (isCapabilitiesLoading) {
@@ -807,7 +807,7 @@ private fun ImageSettingsSection(
     onUpdateSettings: (GenerationSettings) -> Unit,
     onContinualModeChange: (Boolean) -> Unit,
 ) {
-    NeoSectionHeader(text = "Image")
+    EnclaveSectionHeader(text = "Image")
     Spacer(modifier = Modifier.height(EnclaveNeoTokens.rowSpacing))
 
     if (isCapabilitiesLoading) {
@@ -925,7 +925,7 @@ private fun MusicSettingsSection(
     val tempoRange =
         capabilities?.musicTempoRange?.let { it.first.toFloat()..it.last.toFloat() }
             ?: 60f..200f
-    NeoSectionHeader(text = "Music Configuration")
+    EnclaveSectionHeader(text = "Music Configuration")
     Spacer(modifier = Modifier.height(EnclaveNeoTokens.rowSpacing))
 
     if (isCapabilitiesLoading) {
@@ -1053,7 +1053,7 @@ private fun SettingsGroupDivider() {
     HorizontalDivider(
         modifier = Modifier.padding(horizontal = 16.dp),
         thickness = EnclaveNeoTokens.borderWidth,
-        color = neoBorderColor(),
+        color = enclaveBorderColor(),
     )
 }
 
@@ -1063,12 +1063,12 @@ private fun SettingsCard(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
-    val borderColor = neoBorderColor()
+    val borderColor = enclaveBorderColor()
     Box(
         modifier =
             modifier
                 .fillMaxWidth()
-                .neoSurface(
+                .enclaveSurface(
                     backgroundColor = MaterialTheme.colorScheme.surface,
                     borderColor = borderColor,
                     withShadow = false,
@@ -1156,7 +1156,7 @@ private fun GenerationCountPicker(
     onCountChange: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    NeoStepper(
+    EnclaveStepper(
         value = count,
         onValueChange = onCountChange,
         modifier = modifier,

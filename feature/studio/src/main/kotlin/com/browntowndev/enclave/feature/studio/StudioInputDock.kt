@@ -22,7 +22,7 @@ import com.browntowndev.enclave.core.ui.component.UniversalImageAttachment
 import com.browntowndev.enclave.core.ui.component.UniversalInputBar
 import com.browntowndev.enclave.core.ui.component.UniversalPromptTextField
 import com.browntowndev.enclave.core.ui.component.UniversalVoiceTrailingAction
-import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveIconButton
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.port.media.SpeechState
 import com.browntowndev.enclave.domain.port.media.isActiveVoiceInput
@@ -150,7 +150,7 @@ internal fun ReferenceImageAction(
     val shouldShow = mediaType == MediaCapability.IMAGE || mediaType == MediaCapability.VIDEO
 
     if (shouldShow) {
-        NeoIconButton(
+        EnclaveIconButton(
             onClick = onReferenceImageClick,
             icon = if (hasReferenceImage) Icons.Default.Edit else Icons.Default.AddPhotoAlternate,
             contentDescription = "Reference image",

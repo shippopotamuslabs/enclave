@@ -12,9 +12,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoSecondaryButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
+import com.browntowndev.enclave.core.ui.component.enclave.EnclavePrimaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSecondaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSectionHeader
 import com.browntowndev.enclave.domain.model.profile.AnalysisPass
 
 @Composable
@@ -32,7 +32,7 @@ internal fun AnalysisProgressStep(
                 .fillMaxSize()
                 .padding(16.dp),
     ) {
-        NeoSectionHeader(text = "Analysing your conversations")
+        EnclaveSectionHeader(text = "Analysing your conversations")
 
         Spacer(Modifier.height(16.dp))
 
@@ -40,13 +40,13 @@ internal fun AnalysisProgressStep(
             Text("Analysis failed: $errorMessage")
             Spacer(Modifier.height(24.dp))
             Row(modifier = Modifier.fillMaxWidth()) {
-                NeoSecondaryButton(
+                EnclaveSecondaryButton(
                     text = "Back",
                     onClick = onBack,
                     modifier = Modifier.weight(1f),
                 )
                 Spacer(Modifier.padding(horizontal = 4.dp))
-                NeoPrimaryButton(
+                EnclavePrimaryButton(
                     text = "Retry",
                     onClick = onRetry,
                     modifier = Modifier.weight(1f),

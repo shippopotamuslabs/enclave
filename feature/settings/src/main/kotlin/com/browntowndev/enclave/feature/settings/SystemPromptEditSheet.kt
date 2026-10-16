@@ -17,11 +17,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardCapitalization
-import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
-import com.browntowndev.enclave.core.ui.component.neo.NeoOutlinedTextField
-import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoSecondaryButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveOutlinedTextField
+import com.browntowndev.enclave.core.ui.component.enclave.EnclavePrimaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSecondaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSheetHeader
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.domain.model.inference.SystemPromptTemplates
 
@@ -36,7 +36,7 @@ fun SystemPromptEditSheet(
 ) {
     if (!visible) return
 
-    NeoModalBottomSheet(
+    EnclaveModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
     ) {
@@ -62,12 +62,12 @@ fun SystemPromptEditSheetContent(
                 .fillMaxWidth()
                 .fillMaxHeight(),
     ) {
-        NeoSheetHeader(
+        EnclaveSheetHeader(
             title = "Edit System Prompt",
             onDismiss = onDismiss,
         )
 
-        NeoSecondaryButton(
+        EnclaveSecondaryButton(
             text = "Import Template",
             onClick = { templateMenuExpanded = true },
             modifier = Modifier.fillMaxWidth(),
@@ -95,7 +95,7 @@ fun SystemPromptEditSheetContent(
                     .fillMaxWidth()
                     .weight(1f),
         ) {
-            NeoOutlinedTextField(
+            EnclaveOutlinedTextField(
                 value = prompt,
                 onValueChange = onPromptChange,
                 modifier = Modifier.fillMaxWidth(),
@@ -109,7 +109,7 @@ fun SystemPromptEditSheetContent(
 
         Spacer(modifier = Modifier.height(EnclaveNeoTokens.sectionSpacing))
 
-        NeoPrimaryButton(
+        EnclavePrimaryButton(
             text = "Done",
             onClick = onDismiss,
             modifier = Modifier.fillMaxWidth(),

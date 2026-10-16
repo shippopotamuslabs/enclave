@@ -12,9 +12,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoSectionHeader
-import com.browntowndev.enclave.core.ui.component.neo.NeoSelectionCard
+import com.browntowndev.enclave.core.ui.component.enclave.EnclavePrimaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSectionHeader
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSelectionCard
 import com.browntowndev.enclave.domain.model.config.ApiModelConfiguration
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 
@@ -31,7 +31,7 @@ internal fun ModelSelectStep(
                 .fillMaxSize()
                 .padding(16.dp),
     ) {
-        NeoSectionHeader(text = "Select analysis model")
+        EnclaveSectionHeader(text = "Select analysis model")
         Text("Choose one of your configured API models. This model will run all four analysis passes.")
         Spacer(Modifier.height(12.dp))
 
@@ -41,7 +41,7 @@ internal fun ModelSelectStep(
             LazyColumn(modifier = Modifier.weight(1f)) {
                 items(models, key = { it.id.value }) { config ->
                     val isSelected = config.id == selectedConfigId
-                    NeoSelectionCard(
+                    EnclaveSelectionCard(
                         title = config.displayName.ifBlank { config.modelId },
                         subtitle = config.modelId.takeIf { config.displayName.isNotBlank() },
                         isSelected = isSelected,
@@ -53,7 +53,7 @@ internal fun ModelSelectStep(
         }
 
         Spacer(Modifier.height(16.dp))
-        NeoPrimaryButton(
+        EnclavePrimaryButton(
             text = "Continue",
             onClick = onNext,
             enabled = selectedConfigId != null,

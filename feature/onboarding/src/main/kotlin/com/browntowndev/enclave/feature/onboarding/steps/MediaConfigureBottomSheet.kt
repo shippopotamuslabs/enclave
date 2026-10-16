@@ -18,11 +18,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.browntowndev.enclave.core.ui.component.neo.NeoApiKeyField
-import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
-import com.browntowndev.enclave.core.ui.component.neo.NeoOutlinedTextField
-import com.browntowndev.enclave.core.ui.component.neo.NeoPrimaryButton
-import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveApiKeyField
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveOutlinedTextField
+import com.browntowndev.enclave.core.ui.component.enclave.EnclavePrimaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSheetHeader
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
@@ -46,8 +46,8 @@ fun MediaConfigureBottomSheet(
 
     val isSaveEnabled = displayName.isNotBlank() && modelId.isNotBlank() && apiKey.isNotBlank()
 
-    NeoModalBottomSheet(onDismissRequest = onDismiss) {
-        NeoSheetHeader(
+    EnclaveModalBottomSheet(onDismissRequest = onDismiss) {
+        EnclaveSheetHeader(
             title = "Configure ${initialCapability.displayName} Generation",
             subtitle = "Set up ${initialCapability.displayName.lowercase()} generation for your assistant.",
             onDismiss = onDismiss,
@@ -61,7 +61,7 @@ fun MediaConfigureBottomSheet(
                 onExpandedChange = { providerExpanded = it },
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                NeoOutlinedTextField(
+                EnclaveOutlinedTextField(
                     value = provider.displayName,
                     onValueChange = {},
                     readOnly = true,
@@ -93,7 +93,7 @@ fun MediaConfigureBottomSheet(
                 onExpandedChange = { capabilityExpanded = it },
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                NeoOutlinedTextField(
+                EnclaveOutlinedTextField(
                     value = capability.displayName,
                     onValueChange = {},
                     readOnly = true,
@@ -120,7 +120,7 @@ fun MediaConfigureBottomSheet(
                 }
             }
 
-            NeoApiKeyField(
+            EnclaveApiKeyField(
                 label = "API Key",
                 value = apiKey,
                 onValueChange = { apiKey = it },
@@ -128,21 +128,21 @@ fun MediaConfigureBottomSheet(
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            NeoOutlinedTextField(
+            EnclaveOutlinedTextField(
                 value = displayName,
                 onValueChange = { displayName = it },
                 label = { Text("Display Name (e.g. xAI Images)") },
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            NeoOutlinedTextField(
+            EnclaveOutlinedTextField(
                 value = modelId,
                 onValueChange = { modelId = it },
                 label = { Text("Model ID") },
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            NeoPrimaryButton(
+            EnclavePrimaryButton(
                 text = "Save Media Provider",
                 onClick = {
                     onSave(

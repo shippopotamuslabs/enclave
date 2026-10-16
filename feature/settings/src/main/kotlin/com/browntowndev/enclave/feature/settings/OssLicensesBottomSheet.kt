@@ -25,10 +25,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.browntowndev.enclave.core.ui.component.neo.NeoModalBottomSheet
-import com.browntowndev.enclave.core.ui.component.neo.NeoSheetHeader
-import com.browntowndev.enclave.core.ui.component.neo.neoBorderColor
-import com.browntowndev.enclave.core.ui.component.neo.neoSurface
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSheetHeader
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorderColor
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurface
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 
@@ -40,12 +40,12 @@ fun OssLicensesBottomSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    NeoModalBottomSheet(
+    EnclaveModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         modifier = modifier,
     ) {
-        NeoSheetHeader(
+        EnclaveSheetHeader(
             title = "Licenses & Attributions",
             subtitle =
                 "Open-source libraries, bundled AI model terms, and third-party runtime notices " +
@@ -77,9 +77,9 @@ private fun OssLicenseCard(
         modifier =
             modifier
                 .fillMaxWidth()
-                .neoSurface(
+                .enclaveSurface(
                     backgroundColor = MaterialTheme.colorScheme.surface,
-                    borderColor = neoBorderColor(),
+                    borderColor = enclaveBorderColor(),
                     withShadow = false,
                 ).clickable { expanded = !expanded }
                 .padding(16.dp),
@@ -105,9 +105,9 @@ private fun OssLicenseCard(
                 color = MaterialTheme.colorScheme.primary,
                 modifier =
                     Modifier
-                        .neoSurface(
+                        .enclaveSurface(
                             backgroundColor = MaterialTheme.colorScheme.surfaceVariant,
-                            borderColor = neoBorderColor(),
+                            borderColor = enclaveBorderColor(),
                             withShadow = false,
                         ).padding(horizontal = 8.dp, vertical = 4.dp),
             )

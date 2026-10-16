@@ -30,7 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.browntowndev.enclave.core.ui.component.neo.NeoIconButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveIconButton
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 
 @Composable
@@ -79,7 +79,7 @@ fun ByokCustomHeadersScreen(
                         ),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                NeoIconButton(
+                EnclaveIconButton(
                     onClick = onNavigateBack,
                     icon = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Back",
@@ -91,7 +91,7 @@ fun ByokCustomHeadersScreen(
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
                 )
-                NeoIconButton(
+                EnclaveIconButton(
                     onClick = onAddHeader,
                     icon = Icons.Default.Add,
                     contentDescription = "Add Header",
