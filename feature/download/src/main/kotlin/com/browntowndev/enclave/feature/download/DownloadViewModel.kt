@@ -3,11 +3,10 @@ package com.browntowndev.enclave.feature.download
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.work.WorkInfo
-import com.browntowndev.enclave.core.data.download.WorkProgressParser
-import com.browntowndev.enclave.core.data.repository.DownloadWorkRepository
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
-import com.browntowndev.enclave.domain.model.download.DownloadKey
+import com.browntowndev.enclave.domain.model.download.DownloadWorkLifecycle
+import com.browntowndev.enclave.domain.usecase.download.ObserveDownloadWorkUseCase
+import com.browntowndev.enclave.domain.usecase.download.ParseDownloadProgressUseCase
 import com.browntowndev.enclave.domain.model.download.DownloadModelsResult
 import com.browntowndev.enclave.domain.model.download.DownloadState
 import com.browntowndev.enclave.domain.model.download.DownloadStatus
@@ -37,8 +36,8 @@ class DownloadViewModel
     @AssistedInject
     constructor(
         private val modelDownloadOrchestrator: ModelDownloadOrchestratorPort,
-        private val downloadWorkRepository: DownloadWorkRepository,
-        private val progressParser: WorkProgressParser,
+        private val observeDownloadWork: ObserveDownloadWorkUseCase,
+        private val parseDownloadProgress: ParseDownloadProgressUseCase,
         private val errorHandler: ViewModelErrorHandler,
         @Assisted private val modelsResult: DownloadModelsResult,
         @Assisted private val initialErrorMessage: String?,
@@ -363,40 +362,39 @@ class DownloadViewModel
             workObservationJob?.cancel()
             workObservationJob =
                 viewModelScope.launch {
-                    var previousState: WorkInfo.State? = null
+                    var previousState: DownloadWorkLifecycle? = null
 
                     // Subscribe directly to the chain-aware flow. No UUID polling needed —
-                    // the repository's selectBestWorkInfo always picks the active worker.
-                    downloadWorkRepository
-                        .observeDownloadProgress()
+                    // the observer's snapshot always reflects the active worker.
+                    observeDownloadWork()
                         .collect { workInfo ->
                             if (workInfo == null) return@collect
 
                             val currentTime = System.currentTimeMillis()
                             val shouldLog = currentTime - lastTraceLogTime >= THROTTLE_MS
 
-                            if (previousState != workInfo.state) {
+                            if (previousState != workInfo.lifecycle) {
                                 Log.d(
                                     TAG,
-                                    "[TRACE] observeWorkProgress: State changed ${previousState?.name ?: "NULL"} -> ${workInfo.state.name}",
+                                    "[TRACE] observeWorkProgress: State changed ${previousState?.name ?: "NULL"} -> ${workInfo.lifecycle.name}",
                                 )
-                                previousState = workInfo.state
+                                previousState = workInfo.lifecycle
                             }
 
                             if (shouldLog) {
                                 lastTraceLogTime = currentTime
-                                val progress = workInfo.progress.getLong(DownloadKey.PROGRESS.key, -1)
-                                val totalBytes = workInfo.progress.getLong(DownloadKey.TOTAL_BYTES.key, -1)
-                                val downloadedBytes = workInfo.progress.getLong(DownloadKey.BYTES_DOWNLOADED.key, -1)
+                                val progress = workInfo.progressPercent
+                                val totalBytes = workInfo.totalBytes
+                                val downloadedBytes = workInfo.downloadedBytes
                                 Log.d(
                                     TAG,
-                                    "[TRACE] observeWorkProgress: FLOW EMITTED - state=${workInfo.state}, " +
+                                    "[TRACE] observeWorkProgress: FLOW EMITTED - state=${workInfo.lifecycle}, " +
                                         "id=${workInfo.id}, progress=$progress, totalBytes=$totalBytes, downloadedBytes=$downloadedBytes",
                                 )
                             }
 
                             val currentDownloads = modelDownloadOrchestrator.downloadState.value.currentDownloads
-                            val progressUpdate = progressParser.parse(workInfo, currentDownloads)
+                            val progressUpdate = parseDownloadProgress(currentDownloads)
 
                             if (progressUpdate != null) {
                                 if (shouldLog) {
