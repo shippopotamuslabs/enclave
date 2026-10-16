@@ -14,10 +14,9 @@ import com.browntowndev.enclave.domain.model.settings.AppTheme
 import com.browntowndev.enclave.domain.model.settings.SearchProvider
 import com.browntowndev.enclave.domain.model.settings.SystemPromptOption
 import com.browntowndev.enclave.domain.model.telemetry.UsagePeriod
-import com.browntowndev.enclave.core.data.repository.DownloadWorkRepository
-import com.browntowndev.enclave.core.data.download.DownloadWorkChainObserver
 import com.browntowndev.enclave.domain.port.repository.EmbeddingProgressPort
 import com.browntowndev.enclave.domain.theme.ObserveThemePreferencesUseCase
+import com.browntowndev.enclave.domain.usecase.download.ObserveDownloadWorkUseCase
 import com.browntowndev.enclave.domain.theme.SetThemeFamilyUseCase
 import com.browntowndev.enclave.domain.theme.ThemeFamily
 import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
@@ -57,7 +56,7 @@ internal class SettingsViewModel
         private val observeUsageSpendSummaryUseCase: ObserveUsageSpendSummaryUseCase,
         private val errorHandler: ViewModelErrorHandler,
         private val embeddingProgressPort: EmbeddingProgressPort,
-        private val downloadWorkRepository: DownloadWorkRepository,
+        private val observeDownloadWorkUseCase: ObserveDownloadWorkUseCase,
         private val observeThemePreferencesUseCase: ObserveThemePreferencesUseCase,
         private val setThemeFamilyUseCase: SetThemeFamilyUseCase,
     ) : ViewModel() {
@@ -99,14 +98,9 @@ internal class SettingsViewModel
         private val localModelAssetsFlow = localModelUseCases.getLocalModelAssets()
         private val utilityModelsFlow = localModelUseCases.observeActiveUtilityModels()
         private val downloadTerminalEventsFlow =
-            downloadWorkRepository
-                .observeDownloadProgress()
-                .map { workInfo ->
-                    workInfo != null &&
-                        (
-                            DownloadWorkChainObserver.isTerminalSuccess(workInfo) ||
-                                DownloadWorkChainObserver.isTerminalFailure(workInfo)
-                        )
+            observeDownloadWorkUseCase()
+                .map { snapshot ->
+                    snapshot != null && (snapshot.isTerminalSuccess || snapshot.isTerminalFailure)
                 }.distinctUntilChanged()
 
         @OptIn(ExperimentalCoroutinesApi::class)
