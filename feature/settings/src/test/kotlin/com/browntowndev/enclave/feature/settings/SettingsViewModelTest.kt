@@ -1,5 +1,9 @@
 package com.browntowndev.enclave.feature.settings
 
+import com.browntowndev.enclave.core.testing.theme.FakeThemePreferencesRepository
+import com.browntowndev.enclave.domain.theme.ObserveThemePreferencesUseCase
+import com.browntowndev.enclave.domain.theme.SetThemeFamilyUseCase
+
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
@@ -337,6 +341,8 @@ class SettingsViewModelTest {
                 errorHandler = errorHandler,
                 embeddingProgressPort = embeddingProgressPort,
                 downloadWorkRepository = downloadWorkRepository,
+                observeThemePreferencesUseCase = ObserveThemePreferencesUseCase(FakeThemePreferencesRepository()),
+                setThemeFamilyUseCase = SetThemeFamilyUseCase(FakeThemePreferencesRepository()),
             )
     }
 
