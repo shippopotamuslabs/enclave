@@ -14,6 +14,8 @@ This contract defines the mandatory standards for unit testing in the Enclave pr
 | **ALWAYS** Use Turbine | Use the Turbine library for testing Kotlin Flows and StateFlows to ensure event-by-event verification. |
 | **ALWAYS** MainDispatcherExtension | In JUnit 5, use a custom `MainDispatcherExtension` to swap `Dispatchers.Main` for a `TestDispatcher`. |
 | **NEVER** Mock Android Classes | Do not mock `Context`, `SharedPreferences`, or `Bundle`. Use Robolectric's real implementations or appropriate fakes. |
+| **NEVER** Mock Owned Ports | Do not `mockk` Enclave repository/use-case ports defined in `:core:domain`. Use fakes from `:core:testing` (Detekt `ForbiddenMockKInTests`, ENC-4). |
+| **NEVER** `verify()` ViewModels | Do not use MockK `verify` / `coVerify` in `*ViewModelTest.kt` — assert UI state instead (Detekt `ForbiddenVerifyInViewModelTests`). |
 | **NEVER** Use JUnit 4 in New Tests | Avoid `@Rule`, `@Test(expected=...)`, and `@Before`. Migrated tests must be JUnit 5 compliant. |
 | **NEVER** Mock Implementation Details | Avoid mocking private methods or internal helper classes. Test the public API of the unit. |
 | **NEVER** Await Fire-and-Forget IO with `delay()` | Inside `runTest`, `delay(N)` advances *virtual* time (~0 wall-clock) and does **not** wait for `scope.launch(Dispatchers.IO) { … }`. Inject a `TestDispatcher` for the IO path and `advanceUntilIdle()`, or `join()` the background Jobs. See §3.3. |
@@ -23,7 +25,8 @@ This contract defines the mandatory standards for unit testing in the Enclave pr
 ## 2. Technical Stack
 
 - **JUnit 5:** The engine for all local unit tests.
-- **MockK:** Use only when a Fake is impractical (e.g., third-party SDKs, static calls).
+- **`:core:testing`:** Shared hand-written fakes (`Fake<Port>` per domain port, with `seed`/`setShouldFail`/`clear` toggles), `MainDispatcherRule`, fixtures. A new domain port must ship its fake in the same MR. Feature-local fakes only when single-use.
+- **MockK:** Use only when a Fake is impractical (third-party SDK boundaries, static Android APIs). Requires `@file:Suppress("ForbiddenMockKInTests")` with a one-line justification comment. Never for Enclave-owned ports, never `verify` in ViewModel tests.
 - **Turbine:** For all Flow/StateFlow assertions.
 - **Robolectric:** For tests requiring Android framework APIs on the JVM.
 - **StandardTestDispatcher:** Always use `StandardTestDispatcher` with `runTest` for coroutine testing.
@@ -150,3 +153,14 @@ Refer to the following files in `golden-test-examples/` for validated implementa
 ## 5. Implementation Mandate
 
 Any sub-agent or architect creating new features **MUST** include a matching unit test file in the `src/test` directory of the modified module, following these standards. Run the narrowest affected test task during iteration (for example, `./gradlew :feature:chat:testDebugUnitTest --tests "*ChatViewModelTest*"`), then broaden to `./gradlew testDebugUnitTest` for merge-sized or cross-module changes.
+
+### 5.1 Self-check (anti reward-hacking)
+After writing a test, break the production code under test (wrong return value, skipped persistence). The test **must fail**. If it still passes, the test is invalid — rewrite it before marking work complete.
+
+### 5.2 Screenshot & preview tests (ENC-4/ENC-19)
+- Shared `:core:ui` components carry `@Preview` covering **Tonal + Neo × Light + Dark** and Compose screenshot goldens (`validateDebugScreenshotTest`) once ENC-19 wiring lands; re-record only via the documented `screenshot-record` flow and review every regenerated PNG.
+- Screenshot tests run in CI only on UI-path changes (MR) and in full on the nightly pipeline (ENC-3). Device/emulator tests (`connectedDebugAndroidTest`) are nightly-only.
+- Firestore sync tests are unchanged by this section — Enclave sync coverage is ahead of Stratum and must not be replaced by Stratum patterns.
+
+### 5.3 Detekt & Linear gates
+`./gradlew detekt` must pass at `maxIssues: 0` including `ForbiddenMockKInTests` and `ForbiddenVerifyInViewModelTests`. Work follows `AGENTS.md` §3.7: one MR per Linear sub-issue with `Fixes ENC-xx` in the MR description.
