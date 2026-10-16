@@ -2,11 +2,10 @@ package com.browntowndev.enclave.feature.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.work.WorkInfo
-import com.browntowndev.enclave.core.data.download.DownloadWorkChainObserver
-import com.browntowndev.enclave.core.data.repository.DownloadWorkRepository
 import com.browntowndev.enclave.domain.model.config.LocalModelId
-import com.browntowndev.enclave.domain.model.inference.ModelType
+import com.browntowndev.enclave.domain.model.download.DownloadWorkLifecycle
+import com.browntowndev.enclave.domain.model.download.DownloadWorkSnapshot
+import com.browntowndev.enclave.domain.usecase.download.ObserveDownloadWorkUseCase
 import com.browntowndev.enclave.domain.usecase.modelconfig.ReDownloadModelPackUseCase
 import com.browntowndev.enclave.domain.usecase.modelconfig.ReDownloadModelUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -49,7 +48,7 @@ class ModelReDownloadViewModel
     constructor(
         private val reDownloadModelUseCase: ReDownloadModelUseCase,
         private val reDownloadModelPackUseCase: ReDownloadModelPackUseCase,
-        private val downloadWorkRepository: DownloadWorkRepository,
+        private val observeDownloadWorkUseCase: ObserveDownloadWorkUseCase,
     ) : ViewModel() {
         private companion object {
             const val SUCCESS_DELAY_MS = 2000L
@@ -102,8 +101,7 @@ class ModelReDownloadViewModel
         private fun observePackDownloadProgress(packId: String) {
             viewModelScope.launch {
                 var awaitingFinalizer = false
-                downloadWorkRepository
-                    .observeDownloadProgress()
+                observeDownloadWorkUseCase()
                     .takeWhile { workInfo ->
                         if (workInfo == null) {
                             if (awaitingFinalizer) {
@@ -115,25 +113,25 @@ class ModelReDownloadViewModel
                         }
 
                         when {
-                            DownloadWorkChainObserver.isTerminalSuccess(workInfo) -> {
+                            workInfo.isTerminalSuccess -> {
                                 markPackComplete(packId)
                                 return@takeWhile false
                             }
-                            DownloadWorkChainObserver.isTerminalFailure(workInfo) -> {
+                            workInfo.isTerminalFailure -> {
                                 markPackFailed(packId)
                                 return@takeWhile false
                             }
-                            DownloadWorkChainObserver.isIntermediateDownloadSuccess(workInfo) -> {
+                            workInfo.isIntermediateDownloadSuccess -> {
                                 awaitingFinalizer = true
                                 updatePackFinalizing(workInfo, packId)
                             }
-                            DownloadWorkChainObserver.isFinalizing(workInfo) -> {
+                            workInfo.isFinalizing -> {
                                 awaitingFinalizer = true
                                 updatePackFinalizing(workInfo, packId)
                             }
-                            workInfo.state == WorkInfo.State.RUNNING ||
-                                workInfo.state == WorkInfo.State.ENQUEUED ||
-                                workInfo.state == WorkInfo.State.BLOCKED -> {
+                            workInfo.lifecycle == DownloadWorkLifecycle.RUNNING ||
+                                workInfo.lifecycle == DownloadWorkLifecycle.ENQUEUED ||
+                                workInfo.lifecycle == DownloadWorkLifecycle.BLOCKED -> {
                                 updatePackDownloading(workInfo, packId)
                             }
                         }
@@ -145,8 +143,7 @@ class ModelReDownloadViewModel
         private fun observeDownloadProgress(modelId: LocalModelId) {
             viewModelScope.launch {
                 var awaitingFinalizer = false
-                downloadWorkRepository
-                    .observeDownloadProgress()
+                observeDownloadWorkUseCase()
                     .takeWhile { workInfo ->
                         if (workInfo == null) {
                             if (awaitingFinalizer) {
@@ -157,24 +154,21 @@ class ModelReDownloadViewModel
                             return@takeWhile false
                         }
 
-                        val modelProgress =
-                            workInfo.progress
-                                .getStringArray(com.browntowndev.enclave.domain.model.download.DownloadKey.FILES_PROGRESS.key)
-                                ?.find { it.contains(ModelType.UNASSIGNED.apiValue) }
+                        val modelProgress = workInfo.unassignedFileProgress
 
                         when {
-                            DownloadWorkChainObserver.isTerminalSuccess(workInfo) -> {
+                            workInfo.isTerminalSuccess -> {
                                 markModelComplete(modelId)
                                 return@takeWhile false
                             }
-                            DownloadWorkChainObserver.isTerminalFailure(workInfo) -> {
+                            workInfo.isTerminalFailure -> {
                                 markModelFailed(modelId)
                                 return@takeWhile false
                             }
-                            DownloadWorkChainObserver.isIntermediateDownloadSuccess(workInfo) ||
-                                DownloadWorkChainObserver.isFinalizing(workInfo) -> {
+                            workInfo.isIntermediateDownloadSuccess ||
+                                workInfo.isFinalizing -> {
                                 awaitingFinalizer = true
-                                val extractProgress = DownloadWorkChainObserver.readPostProcessProgress(workInfo)
+                                val extractProgress = workInfo.postProcessProgress
                                 _reDownloadStates.value = _reDownloadStates.value +
                                     (modelId to ReDownloadProgress.Finalizing(extractProgress))
                             }
@@ -220,18 +214,18 @@ class ModelReDownloadViewModel
         }
 
         private fun updatePackDownloading(
-            workInfo: WorkInfo,
+            workInfo: DownloadWorkSnapshot,
             packId: String,
         ) {
-            val aggregate = DownloadWorkChainObserver.readDownloadAggregateProgress(workInfo) ?: return
+            val aggregate = workInfo.aggregateProgress ?: return
             _packReDownloadStates.update { it + (packId to ReDownloadProgress.Downloading(aggregate)) }
         }
 
         private fun updatePackFinalizing(
-            workInfo: WorkInfo,
+            workInfo: DownloadWorkSnapshot,
             packId: String,
         ) {
-            val extractProgress = DownloadWorkChainObserver.readPostProcessProgress(workInfo)
+            val extractProgress = workInfo.postProcessProgress
             _packReDownloadStates.update { it + (packId to ReDownloadProgress.Finalizing(extractProgress)) }
         }
     }

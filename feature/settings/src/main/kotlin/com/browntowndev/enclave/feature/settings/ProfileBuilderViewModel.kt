@@ -3,10 +3,13 @@ package com.browntowndev.enclave.feature.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
-import com.browntowndev.enclave.domain.port.profile.ProfileAnalysisPort
-import com.browntowndev.enclave.domain.port.profile.ProfileExportIngestionPort
-import com.browntowndev.enclave.domain.port.repository.ApiModelRepositoryPort
-import com.browntowndev.enclave.domain.port.repository.MemoriesRepository
+import com.browntowndev.enclave.domain.usecase.profile.ClearProfileCorpusUseCase
+import com.browntowndev.enclave.domain.usecase.profile.GetLatestProfileSynthesisUseCase
+import com.browntowndev.enclave.domain.usecase.profile.ObserveApiModelConfigurationsUseCase
+import com.browntowndev.enclave.domain.usecase.profile.ObserveProfileAnalysisProgressUseCase
+import com.browntowndev.enclave.domain.usecase.profile.PrepareProfileCorpusUseCase
+import com.browntowndev.enclave.domain.usecase.profile.SavePsychProfileUseCase
+import com.browntowndev.enclave.domain.usecase.profile.StartProfileAnalysisUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -20,10 +23,13 @@ import javax.inject.Inject
 class ProfileBuilderViewModel
     @Inject
     constructor(
-        private val apiModelRepository: ApiModelRepositoryPort,
-        private val ingestionPort: ProfileExportIngestionPort,
-        private val analysisPort: ProfileAnalysisPort,
-        private val memoriesRepository: MemoriesRepository,
+        private val observeApiModelConfigurations: ObserveApiModelConfigurationsUseCase,
+        private val clearProfileCorpus: ClearProfileCorpusUseCase,
+        private val prepareProfileCorpus: PrepareProfileCorpusUseCase,
+        private val startProfileAnalysis: StartProfileAnalysisUseCase,
+        private val observeProfileAnalysisProgress: ObserveProfileAnalysisProgressUseCase,
+        private val getLatestProfileSynthesis: GetLatestProfileSynthesisUseCase,
+        private val savePsychProfile: SavePsychProfileUseCase,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(ProfileBuilderUiState())
         val uiState = _uiState.asStateFlow()
@@ -36,7 +42,7 @@ class ProfileBuilderViewModel
 
         private fun loadModels() {
             viewModelScope.launch {
-                apiModelRepository.observeAllConfigurations().collect { configs ->
+                observeApiModelConfigurations().collect { configs ->
                     _uiState.update { it.copy(configuredModels = configs) }
                 }
             }
@@ -85,7 +91,7 @@ class ProfileBuilderViewModel
                 try {
                     val corpusRunId = state.corpusRunId
                     val estimate =
-                        analysisPort.prepareCorpus(
+                        prepareProfileCorpus(
                             corpusRunId = corpusRunId,
                             fileUris = state.selectedFileUris,
                             configId = state.selectedConfigId,
@@ -119,7 +125,7 @@ class ProfileBuilderViewModel
 
             viewModelScope.launch {
                 try {
-                    analysisPort.startAnalysis(state.corpusRunId, configId)
+                    startProfileAnalysis(state.corpusRunId, configId)
                     observeWorkProgress()
                 } catch (e: Exception) {
                     _uiState.update {
@@ -137,7 +143,7 @@ class ProfileBuilderViewModel
             progressJob?.cancel()
             progressJob =
                 viewModelScope.launch {
-                    analysisPort.observeAnalysisProgress(_uiState.value.corpusRunId).collect { progress ->
+                    observeProfileAnalysisProgress(_uiState.value.corpusRunId).collect { progress ->
                         _uiState.update {
                             it.copy(
                                 currentPass = progress.currentPass,
@@ -157,7 +163,7 @@ class ProfileBuilderViewModel
 
         private fun loadProfileContent() {
             viewModelScope.launch {
-                val profileText = analysisPort.getLatestProfileSynthesis(_uiState.value.corpusRunId)
+                val profileText = getLatestProfileSynthesis(_uiState.value.corpusRunId)
                 if (profileText != null) {
                     _uiState.update {
                         it.copy(
@@ -187,26 +193,10 @@ class ProfileBuilderViewModel
             _uiState.update { it.copy(isSaving = true) }
             viewModelScope.launch {
                 try {
-                    // Single write policy: upsert memory on save
-                    val existing =
-                        memoriesRepository
-                            .getCoreMemories()
-                            .firstOrNull { it.category == com.browntowndev.enclave.domain.model.memory.MemoryCategory.PSYCH_PROFILE }
-                    if (existing != null) {
-                        memoriesRepository.updateMemory(
-                            existing.id,
-                            content,
-                            com.browntowndev.enclave.domain.model.memory.MemoryCategory.PSYCH_PROFILE,
-                        )
-                    } else {
-                        memoriesRepository.insertMemory(
-                            com.browntowndev.enclave.domain.model.memory.MemoryCategory.PSYCH_PROFILE,
-                            content,
-                        )
-                    }
+                    savePsychProfile(content)
                     _uiState.update { it.copy(isSaving = false, saved = true) }
                     // Purge raw corpus data in the background — does not block navigation
-                    launch { runCatching { ingestionPort.clearAll(state.corpusRunId) } }
+                    launch { runCatching { clearProfileCorpus(state.corpusRunId) } }
                 } catch (e: Exception) {
                     _uiState.update { it.copy(isSaving = false, errorMessage = "Save failed: ${e.message}") }
                 }
@@ -219,7 +209,7 @@ class ProfileBuilderViewModel
             if (!state.saved) {
                 // Purge transient data if flow was cancelled or abandoned before saving
                 kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
-                    runCatching { ingestionPort.clearAll(state.corpusRunId) }
+                    runCatching { clearProfileCorpus(state.corpusRunId) }
                 }
             }
         }
