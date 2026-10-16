@@ -1,7 +1,5 @@
 package com.browntowndev.enclave.feature.download
 
-import com.browntowndev.enclave.core.data.download.WorkProgressParser
-import com.browntowndev.enclave.core.data.repository.DownloadWorkRepository
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.config.LocalModelAsset
@@ -28,8 +26,6 @@ import org.junit.jupiter.api.extension.ExtendWith
 @ExtendWith(MainDispatcherRule::class)
 class DownloadViewModelUiModelTest {
     private val orchestrator = mockk<ModelDownloadOrchestratorPort>(relaxed = true)
-    private val workRepo = mockk<DownloadWorkRepository>(relaxed = true)
-    private val parser = mockk<WorkProgressParser>(relaxed = true)
     private val errorHandler = mockk<ViewModelErrorHandler>(relaxed = true)
     private val downloadStateFlow = MutableStateFlow(DownloadState(status = DownloadStatus.IDLE))
 
@@ -37,7 +33,6 @@ class DownloadViewModelUiModelTest {
     fun setup() {
         every { orchestrator.downloadState } returns downloadStateFlow
         every { orchestrator.snackbarMessages } returns flowOf()
-        every { workRepo.observeDownloadProgress() } returns flowOf()
     }
 
     @Test
@@ -69,8 +64,10 @@ class DownloadViewModelUiModelTest {
         val viewModel =
             DownloadViewModel(
                 modelDownloadOrchestrator = orchestrator,
-                downloadWorkRepository = workRepo,
-                progressParser = parser,
+                observeDownloadWork = com.browntowndev.enclave.domain.usecase.download.ObserveDownloadWorkUseCase(com.browntowndev.enclave.core.testing.download.FakeDownloadWorkObserverPort()),
+                parseDownloadProgress = com.browntowndev.enclave.domain.usecase.download.ParseDownloadProgressUseCase(object : com.browntowndev.enclave.domain.port.download.DownloadProgressParserPort {
+                        override fun parseProgress(currentDownloads: List<com.browntowndev.enclave.domain.model.download.FileProgress>) = null
+                    }),
                 errorHandler = errorHandler,
                 modelsResult = result,
                 initialErrorMessage = null,
@@ -102,8 +99,10 @@ class DownloadViewModelUiModelTest {
         val viewModel =
             DownloadViewModel(
                 modelDownloadOrchestrator = orchestrator,
-                downloadWorkRepository = workRepo,
-                progressParser = parser,
+                observeDownloadWork = com.browntowndev.enclave.domain.usecase.download.ObserveDownloadWorkUseCase(com.browntowndev.enclave.core.testing.download.FakeDownloadWorkObserverPort()),
+                parseDownloadProgress = com.browntowndev.enclave.domain.usecase.download.ParseDownloadProgressUseCase(object : com.browntowndev.enclave.domain.port.download.DownloadProgressParserPort {
+                        override fun parseProgress(currentDownloads: List<com.browntowndev.enclave.domain.model.download.FileProgress>) = null
+                    }),
                 errorHandler = errorHandler,
                 modelsResult = result,
                 initialErrorMessage = null,
@@ -152,8 +151,10 @@ class DownloadViewModelUiModelTest {
         val viewModel =
             DownloadViewModel(
                 modelDownloadOrchestrator = orchestrator,
-                downloadWorkRepository = workRepo,
-                progressParser = parser,
+                observeDownloadWork = com.browntowndev.enclave.domain.usecase.download.ObserveDownloadWorkUseCase(com.browntowndev.enclave.core.testing.download.FakeDownloadWorkObserverPort()),
+                parseDownloadProgress = com.browntowndev.enclave.domain.usecase.download.ParseDownloadProgressUseCase(object : com.browntowndev.enclave.domain.port.download.DownloadProgressParserPort {
+                        override fun parseProgress(currentDownloads: List<com.browntowndev.enclave.domain.model.download.FileProgress>) = null
+                    }),
                 errorHandler = errorHandler,
                 modelsResult = modelsResult,
                 initialErrorMessage = null,
@@ -201,8 +202,10 @@ class DownloadViewModelUiModelTest {
         val viewModel =
             DownloadViewModel(
                 modelDownloadOrchestrator = orchestrator,
-                downloadWorkRepository = workRepo,
-                progressParser = parser,
+                observeDownloadWork = com.browntowndev.enclave.domain.usecase.download.ObserveDownloadWorkUseCase(com.browntowndev.enclave.core.testing.download.FakeDownloadWorkObserverPort()),
+                parseDownloadProgress = com.browntowndev.enclave.domain.usecase.download.ParseDownloadProgressUseCase(object : com.browntowndev.enclave.domain.port.download.DownloadProgressParserPort {
+                        override fun parseProgress(currentDownloads: List<com.browntowndev.enclave.domain.model.download.FileProgress>) = null
+                    }),
                 errorHandler = errorHandler,
                 modelsResult = modelsResult,
                 initialErrorMessage = null,
@@ -233,8 +236,10 @@ class DownloadViewModelUiModelTest {
         val viewModel =
             DownloadViewModel(
                 modelDownloadOrchestrator = orchestrator,
-                downloadWorkRepository = workRepo,
-                progressParser = parser,
+                observeDownloadWork = com.browntowndev.enclave.domain.usecase.download.ObserveDownloadWorkUseCase(com.browntowndev.enclave.core.testing.download.FakeDownloadWorkObserverPort()),
+                parseDownloadProgress = com.browntowndev.enclave.domain.usecase.download.ParseDownloadProgressUseCase(object : com.browntowndev.enclave.domain.port.download.DownloadProgressParserPort {
+                        override fun parseProgress(currentDownloads: List<com.browntowndev.enclave.domain.model.download.FileProgress>) = null
+                    }),
                 errorHandler = errorHandler,
                 modelsResult = result,
                 initialErrorMessage = null,
