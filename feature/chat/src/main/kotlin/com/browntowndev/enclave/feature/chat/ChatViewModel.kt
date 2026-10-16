@@ -18,12 +18,15 @@ import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.error.ActiveModelConfigurationDecryptException
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnKey
-import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnSnapshotPort
+import com.browntowndev.enclave.domain.usecase.chat.ClearActiveChatTurnSnapshotUseCase
+import com.browntowndev.enclave.domain.usecase.chat.GetSelectedChatModeUseCase
+import com.browntowndev.enclave.domain.usecase.chat.MarkWebSearchSourcesExtractedUseCase
+import com.browntowndev.enclave.domain.usecase.chat.ObserveActiveChatTurnSnapshotUseCase
+import com.browntowndev.enclave.domain.usecase.chat.SetSelectedChatModeUseCase
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.media.SpeechState
 import com.browntowndev.enclave.domain.port.repository.SettingsData
 import com.browntowndev.enclave.domain.usecase.studio.ObserveChatStudioMediaUseCase
-import com.browntowndev.enclave.domain.port.repository.UiSelectionRepository
 import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
 import com.browntowndev.enclave.domain.usecase.chat.GetModelDisplayNameUseCase
 import com.browntowndev.enclave.domain.usecase.chat.MergeDbMessagesWithOptimisticUseCase
@@ -93,7 +96,9 @@ class ChatViewModel
         private val savedStateHandle: SavedStateHandle,
         inferenceLockManager: InferenceLockManager,
         private val modelDisplayNamesUseCase: GetModelDisplayNameUseCase,
-        private val activeChatTurnSnapshotPort: ActiveChatTurnSnapshotPort,
+        private val clearActiveChatTurnSnapshot: ClearActiveChatTurnSnapshotUseCase,
+        private val observeActiveChatTurnSnapshot: ObserveActiveChatTurnSnapshotUseCase,
+        private val markWebSearchSourcesExtracted: MarkWebSearchSourcesExtractedUseCase,
         private val errorHandler: ViewModelErrorHandler,
         private val loggingPort: LoggingPort,
         private val observeChatStudioMedia: ObserveChatStudioMediaUseCase,
@@ -111,7 +116,8 @@ class ChatViewModel
         private val chatMessageUiMapper: ChatMessageUiMapper,
         private val photoAttachmentPolicyResolver: PhotoAttachmentPolicyResolver,
         private val liveVoiceCoordinator: LiveVoiceCoordinator,
-        private val uiSelectionRepository: UiSelectionRepository,
+        private val getSelectedChatMode: GetSelectedChatModeUseCase,
+        private val setSelectedChatMode: SetSelectedChatModeUseCase,
         private val localModelAssetUiMapper: LocalModelAssetUiMapper,
         private val apiModelAssetUiMapper: ApiModelAssetUiMapper,
     ) : ViewModel() {
@@ -486,7 +492,7 @@ class ChatViewModel
             }
 
             viewModelScope.launch {
-                val persistedMode = uiSelectionRepository.selectedChatMode.first()
+                val persistedMode = getSelectedChatMode().first()
                 chatInputCoordinator.onModeChange(ChatModeMapper.run { persistedMode.toUi() })
             }
 
@@ -558,8 +564,7 @@ class ChatViewModel
                                 key = key,
                                 snapshot = null,
                             )
-                        activeChatTurnSnapshotPort
-                            .observe(key)
+                        observeActiveChatTurnSnapshot(key)
                             .conflate()
                             .distinctUntilChanged()
                             .collect { snapshot ->
@@ -674,7 +679,7 @@ class ChatViewModel
             }
             if (mode != ChatModeUi.OTHER) {
                 viewModelScope.launch {
-                    uiSelectionRepository.setChatMode(ChatModeMapper.run { mode.toDomain() })
+                    setSelectedChatMode(ChatModeMapper.run { mode.toDomain() })
                 }
             }
         }
@@ -803,7 +808,7 @@ class ChatViewModel
             speechInputCoordinator.stopListening()
             activeTurnKeyFlow.value?.let { key ->
                 viewModelScope.launch {
-                    activeChatTurnSnapshotPort.clear(key)
+                    clearActiveChatTurnSnapshot(key)
                     inferenceOrchestrator.acknowledgeTurn(key)
                 }
             }
@@ -812,7 +817,7 @@ class ChatViewModel
             chatInputCoordinator.clearModelOverride()
             _isModelOverrideSheetVisible.value = false
             viewModelScope.launch(start = CoroutineStart.UNDISPATCHED) {
-                val persistedMode = uiSelectionRepository.selectedChatMode.first()
+                val persistedMode = getSelectedChatMode().first()
                 chatInputCoordinator.onModeChange(ChatModeMapper.run { persistedMode.toUi() })
             }
             toolExecutionBannerCoordinator.clearBanner()
@@ -982,7 +987,7 @@ class ChatViewModel
         private fun markWebSearchSourceExtracted(url: String) {
             val key = activeTurnKeyFlow.value ?: return
             viewModelScope.launch {
-                activeChatTurnSnapshotPort.markWebSearchSourcesExtracted(
+                markWebSearchSourcesExtracted(
                     key = key,
                     urls = listOf(url),
                 )

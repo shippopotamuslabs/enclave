@@ -63,6 +63,7 @@ import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSheetHeader
 import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorderColor
 import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurface
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
+import com.browntowndev.enclave.core.ui.theme.SuccessGreen
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
@@ -84,7 +85,7 @@ private sealed interface LocalModelsSheetView {
     ) : LocalModelsSheetView
 }
 
-private val SUCCESS_COLOR = Color(0xFF4CAF50) // Material Green 500
+private val SUCCESS_COLOR = SuccessGreen // Material Green 500
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

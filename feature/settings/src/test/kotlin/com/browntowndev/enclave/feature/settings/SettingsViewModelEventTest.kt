@@ -213,7 +213,7 @@ class SettingsViewModelEventTest {
                 assignmentsDelegate = assignmentsDelegate,
                 deletionHelper = deletionHelper,
                 errorHandler = errorHandler,
-                embeddingProgressPort = embeddingProgressPort,
+                observeEmbeddingProgress = com.browntowndev.enclave.domain.usecase.settings.ObserveEmbeddingProgressUseCase(embeddingProgressPort),
                 observeDownloadWorkUseCase = com.browntowndev.enclave.domain.usecase.download.ObserveDownloadWorkUseCase(com.browntowndev.enclave.core.testing.download.FakeDownloadWorkObserverPort()),
                 observeThemePreferencesUseCase = ObserveThemePreferencesUseCase(FakeThemePreferencesRepository()),
                 setThemeFamilyUseCase = SetThemeFamilyUseCase(FakeThemePreferencesRepository()),

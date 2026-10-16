@@ -84,7 +84,6 @@ internal fun NavGraphBuilder.settingsByokConfigureRoute(
 }
 
 internal fun NavGraphBuilder.settingsTtsConfigureRoute(
-    onNavigate: (String) -> Unit,
     onPopBackStack: () -> Unit,
     graphBackStackEntry: (NavBackStackEntry) -> NavBackStackEntry,
 ) {
@@ -103,7 +102,6 @@ internal fun NavGraphBuilder.settingsTtsConfigureRoute(
 }
 
 internal fun NavGraphBuilder.settingsLiveVoiceConfigureRoute(
-    onNavigate: (String) -> Unit,
     onPopBackStack: () -> Unit,
     graphBackStackEntry: (NavBackStackEntry) -> NavBackStackEntry,
 ) {
@@ -122,7 +120,6 @@ internal fun NavGraphBuilder.settingsLiveVoiceConfigureRoute(
 }
 
 internal fun NavGraphBuilder.settingsMediaConfigureRoute(
-    onNavigate: (String) -> Unit,
     onPopBackStack: () -> Unit,
     graphBackStackEntry: (NavBackStackEntry) -> NavBackStackEntry,
 ) {
@@ -141,7 +138,6 @@ internal fun NavGraphBuilder.settingsMediaConfigureRoute(
 }
 
 internal fun NavGraphBuilder.settingsByokCustomHeadersRoute(
-    onNavigate: (String) -> Unit,
     onPopBackStack: () -> Unit,
     graphBackStackEntry: (NavBackStackEntry) -> NavBackStackEntry,
 ) {
@@ -160,7 +156,6 @@ internal fun NavGraphBuilder.settingsByokCustomHeadersRoute(
 }
 
 internal fun NavGraphBuilder.settingsLocalModelConfigureRoute(
-    onNavigate: (String) -> Unit,
     onPopBackStack: () -> Unit,
     graphBackStackEntry: (NavBackStackEntry) -> NavBackStackEntry,
 ) {
@@ -179,7 +174,6 @@ internal fun NavGraphBuilder.settingsLocalModelConfigureRoute(
 }
 
 internal fun NavGraphBuilder.settingsModelConfigureRoute(
-    onNavigate: (String) -> Unit,
     onPopBackStack: () -> Unit,
     graphBackStackEntry: (NavBackStackEntry) -> NavBackStackEntry,
 ) {
