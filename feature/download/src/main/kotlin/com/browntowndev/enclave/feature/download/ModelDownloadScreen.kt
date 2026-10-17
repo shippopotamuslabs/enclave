@@ -27,7 +27,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Error
@@ -36,18 +35,13 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SignalWifiOff
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -77,6 +71,10 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.browntowndev.enclave.core.data.util.formatBytes
 import com.browntowndev.enclave.core.ui.component.ShimmerText
+import com.browntowndev.enclave.core.ui.component.enclave.EnclavePanel
+import com.browntowndev.enclave.core.ui.component.enclave.EnclavePrimaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSecondaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveTextButton
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.core.ui.util.FeatureFlags
 import com.browntowndev.enclave.domain.model.download.DownloadModelsResult
@@ -484,12 +482,8 @@ private fun FileProgressItem(
         label = "statusColor",
     )
 
-    Card(
+    EnclavePanel(
         modifier = Modifier.fillMaxWidth(),
-        colors =
-            CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-            ),
     ) {
         Column(
             modifier =
@@ -756,111 +750,67 @@ private fun DownloadControls(
                 DownloadStatus.FINALIZING,
                 -> {
                     if (allowCancel) {
-                        OutlinedButton(
+                        EnclaveSecondaryButton(
+                            text = "Cancel",
                             onClick = onCancel,
                             modifier = Modifier.weight(1f),
-                        ) {
-                            Icon(
-                                Icons.Default.Cancel,
-                                contentDescription = "Cancel download",
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Cancel")
-                        }
+                        )
                     }
-                    Button(
+                    EnclavePrimaryButton(
+                        text = "Pause",
                         onClick = onPause,
                         modifier = Modifier.weight(1f),
-                    ) {
-                        Icon(
-                            Icons.Default.Pause,
-                            contentDescription = "Pause download",
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Pause")
-                    }
+                        icon = Icons.Default.Pause,
+                    )
                 }
                 DownloadStatus.PAUSED -> {
                     if (allowCancel) {
-                        OutlinedButton(
+                        EnclaveSecondaryButton(
+                            text = "Cancel",
                             onClick = onCancel,
                             modifier = Modifier.weight(1f),
-                        ) {
-                            Icon(
-                                Icons.Default.Cancel,
-                                contentDescription = "Cancel download",
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Cancel")
-                        }
+                        )
                     }
-                    Button(
+                    EnclavePrimaryButton(
+                        text = "Resume",
                         onClick = onResume,
                         modifier = Modifier.weight(1f),
-                    ) {
-                        Icon(
-                            Icons.Default.PlayArrow,
-                            contentDescription = "Resume download",
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Resume")
-                    }
+                        icon = Icons.Default.PlayArrow,
+                    )
                 }
                 DownloadStatus.WIFI_BLOCKED -> {
                     if (allowCancel) {
-                        OutlinedButton(
+                        EnclaveSecondaryButton(
+                            text = "Cancel",
                             onClick = onCancel,
                             modifier = Modifier.weight(1f),
-                        ) {
-                            Icon(
-                                Icons.Default.Cancel,
-                                contentDescription = "Cancel download",
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Cancel")
-                        }
+                        )
                     }
-                    Button(
+                    EnclavePrimaryButton(
+                        text = "Use Mobile Data",
                         onClick = onDownloadOnMobileData,
                         modifier = Modifier.weight(1f),
-                    ) {
-                        Icon(
-                            Icons.Default.SignalWifiOff,
-                            contentDescription = "Download on mobile data",
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Use Mobile Data")
-                    }
+                        icon = Icons.Default.SignalWifiOff,
+                    )
                 }
                 DownloadStatus.ERROR -> {
-                    Button(
+                    EnclavePrimaryButton(
+                        text = "Retry All",
                         onClick = onRetry,
                         modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Icon(
-                            Icons.Default.Refresh,
-                            contentDescription = "Retry all downloads",
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Retry All")
-                    }
+                        icon = Icons.Default.Refresh,
+                    )
                 }
                 else -> {
                     if (status != DownloadStatus.READY &&
                         status != DownloadStatus.FINALIZING &&
                         allowCancel
                     ) {
-                        OutlinedButton(
+                        EnclaveSecondaryButton(
+                            text = "Cancel",
                             onClick = onCancel,
                             modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Icon(
-                                Icons.Default.Cancel,
-                                contentDescription = "Cancel download",
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Cancel")
-                        }
+                        )
                     }
                 }
             }
@@ -873,12 +823,8 @@ private fun ErrorBanner(
     message: String,
     onRetry: () -> Unit,
 ) {
-    Card(
+    EnclavePanel(
         modifier = Modifier.fillMaxWidth(),
-        colors =
-            CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.errorContainer,
-            ),
     ) {
         Row(
             modifier =
@@ -900,9 +846,7 @@ private fun ErrorBanner(
                 color = MaterialTheme.colorScheme.onErrorContainer,
                 modifier = Modifier.weight(1f),
             )
-            TextButton(onClick = onRetry) {
-                Text("Retry")
-            }
+            EnclaveTextButton(text = "Retry", onClick = onRetry)
         }
     }
 }
@@ -976,14 +920,10 @@ private fun NotificationPermissionRationaleDialog(
             )
         },
         confirmButton = {
-            Button(onClick = onRequestPermission) {
-                Text("Enable Notifications")
-            }
+            EnclavePrimaryButton(text = "Enable Notifications", onClick = onRequestPermission)
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Not Now")
-            }
+            EnclaveTextButton(text = "Not Now", onClick = onDismiss)
         },
     )
 }

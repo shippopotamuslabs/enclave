@@ -11,17 +11,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -47,6 +42,8 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveFilterChip
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSecondaryIconButton
 import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorderColor
 import com.browntowndev.enclave.core.ui.component.enclave.enclaveShadowColor
 import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurface
@@ -200,28 +197,10 @@ private fun UserBubbleFileAttachments(attachments: List<FileAttachment>) {
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         attachments.forEach { attachment ->
-            AssistChip(
+            EnclaveFilterChip(
+                label = attachment.name,
+                selected = false,
                 onClick = { /* Open viewer potentially */ },
-                label = {
-                    Text(
-                        text = attachment.name,
-                        style = MaterialTheme.typography.labelMedium,
-                        maxLines = 1,
-                    )
-                },
-                leadingIcon = {
-                    Icon(
-                        painter = painterResource(R.drawable.document),
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                    )
-                },
-                colors =
-                    AssistChipDefaults.assistChipColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                        labelColor = MaterialTheme.colorScheme.onSurface,
-                    ),
-                border = null,
             )
         }
     }
@@ -265,13 +244,12 @@ private fun UserBubbleMessageBody(
                 fontFamily = FontFamily.Monospace,
                 modifier = Modifier.padding(end = 8.dp),
             )
-            IconButton(onClick = { onCopyCode(codeContent) }) {
-                Icon(
-                    painter = painterResource(R.drawable.content_copy),
-                    contentDescription = "Copy code",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            EnclaveSecondaryIconButton(
+                onClick = { onCopyCode(codeContent) },
+                icon = painterResource(R.drawable.content_copy),
+                contentDescription = "Copy code",
+                iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     } else {
         ExpandableTruncatableMessageText(
@@ -310,19 +288,16 @@ private fun FullscreenImageDialog(
                         .padding(16.dp),
                 contentScale = ContentScale.Fit,
             )
-            IconButton(
+            EnclaveSecondaryIconButton(
                 onClick = onDismiss,
+                icon = Icons.Default.Close,
+                contentDescription = "Close preview",
                 modifier =
                     Modifier
                         .align(Alignment.TopEnd)
                         .padding(16.dp),
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = "Close preview",
-                    tint = Color.White,
-                )
-            }
+                iconTint = Color.White,
+            )
         }
     }
 }

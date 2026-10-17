@@ -10,13 +10,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
@@ -24,12 +22,9 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -49,6 +44,7 @@ import com.browntowndev.enclave.core.ui.component.enclave.EnclavePrimaryButton
 import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSecondaryButton
 import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorder
 import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorderColor
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurface
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.config.OpenRouterDataCollectionPolicy
@@ -287,26 +283,28 @@ fun CustomHeadersList(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         if (customHeaders.isNotEmpty()) {
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth(),
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .enclaveSurface(
+                            backgroundColor = MaterialTheme.colorScheme.surfaceVariant,
+                            borderColor = enclaveBorderColor(),
+                        ).padding(12.dp),
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    customHeaders.take(3).forEach { header ->
-                        Text(
-                            text = "${header.key}: ${header.value}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    if (customHeaders.size > 3) {
-                        Text(
-                            text = "... and ${customHeaders.size - 3} more",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                customHeaders.take(3).forEach { header ->
+                    Text(
+                        text = "${header.key}: ${header.value}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (customHeaders.size > 3) {
+                    Text(
+                        text = "... and ${customHeaders.size - 3} more",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         }
@@ -467,9 +465,14 @@ fun PreviewByokCustomHeadersList() {
                 customHeaders = headers,
             )
 
-        Surface(
-            modifier = Modifier.padding(16.dp),
-            color = MaterialTheme.colorScheme.background,
+        Column(
+            modifier =
+                Modifier
+                    .padding(16.dp)
+                    .enclaveSurface(
+                        backgroundColor = MaterialTheme.colorScheme.background,
+                        borderColor = enclaveBorderColor(),
+                    ),
         ) {
             CustomHeadersList(
                 customHeaders = mockConfig.customHeaders,

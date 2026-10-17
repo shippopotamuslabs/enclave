@@ -26,11 +26,10 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveTextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
@@ -45,6 +44,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.browntowndev.enclave.core.ui.component.enclave.EnclaveModalBottomSheet
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveOutlinedTextField
 import com.browntowndev.enclave.core.ui.component.enclave.EnclavePrimaryButton
 import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSectionHeader
 import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSheetHeader
@@ -103,19 +103,13 @@ fun MemoriesBottomSheet(
                 title = { Text("Delete Memory?") },
                 text = { Text("This action cannot be undone.") },
                 confirmButton = {
-                    TextButton(
-                        onClick = {
+                    EnclaveTextButton(text = "Delete", onClick = {
                             onDeleteMemory(id)
                             memoryIdToDelete = null
-                        },
-                    ) {
-                        Text("Delete", color = MaterialTheme.colorScheme.error)
-                    }
+                        }, color = MaterialTheme.colorScheme.error)
                 },
                 dismissButton = {
-                    TextButton(onClick = { memoryIdToDelete = null }) {
-                        Text("Cancel")
-                    }
+                    EnclaveTextButton(text = "Cancel", onClick = { memoryIdToDelete = null })
                 },
             )
         }
@@ -282,14 +276,12 @@ private fun MemoryEditView(
             onExpandedChange = { expanded = !expanded },
             modifier = Modifier.fillMaxWidth(),
         ) {
-            OutlinedTextField(
+            EnclaveOutlinedTextField(
                 value = draft.category.displayName,
                 onValueChange = {},
                 readOnly = true,
                 label = { Text("Category") },
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
-                shape = EnclaveNeoTokens.shape,
                 modifier =
                     Modifier
                         .menuAnchor()
@@ -313,12 +305,11 @@ private fun MemoryEditView(
         }
 
         Column(modifier = Modifier.fillMaxWidth().weight(1f)) {
-            OutlinedTextField(
+            EnclaveOutlinedTextField(
                 value = draft.text,
                 onValueChange = { onUpdateDraft(it, draft.category) },
                 label = { Text("Memory") },
                 placeholder = { Text("Enter memory text...") },
-                shape = EnclaveNeoTokens.shape,
                 modifier = Modifier.fillMaxWidth().fillMaxHeight(),
                 minLines = MEMORY_TEXT_FIELD_MIN_LINES,
                 maxLines = Int.MAX_VALUE,
@@ -329,15 +320,11 @@ private fun MemoryEditView(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(EnclaveNeoTokens.rowSpacing),
         ) {
-            TextButton(
-                onClick = onCancel,
+            EnclaveTextButton(text = "Cancel", onClick = onCancel,
                 modifier =
                     Modifier
                         .weight(1f)
-                        .height(52.dp),
-            ) {
-                Text("Cancel")
-            }
+                        .height(52.dp),)
             EnclavePrimaryButton(
                 text = "Save",
                 onClick = onSave,

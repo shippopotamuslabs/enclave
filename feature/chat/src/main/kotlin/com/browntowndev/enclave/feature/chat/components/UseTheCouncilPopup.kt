@@ -17,17 +17,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSecondaryIconButton
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorderColor
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurface
 import com.browntowndev.enclave.feature.chat.R
 
 /**
@@ -46,25 +46,20 @@ fun UseTheCouncilPopup(
         exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
         modifier = modifier,
     ) {
-        Surface(
+        Row(
             modifier =
                 Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .clickable(onClick = onUseTheCouncil),
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.secondaryContainer,
-            tonalElevation = 4.dp,
+                    .enclaveSurface(
+                        backgroundColor = MaterialTheme.colorScheme.secondaryContainer,
+                        borderColor = enclaveBorderColor(),
+                        shape = RoundedCornerShape(16.dp),
+                    ).clickable(onClick = onUseTheCouncil)
+                    .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
                 // Icon
                 Icon(
                     imageVector = Icons.Default.Psychology,
@@ -92,17 +87,13 @@ fun UseTheCouncilPopup(
                 }
 
                 // Dismiss button
-                IconButton(
+                EnclaveSecondaryIconButton(
                     onClick = onDismiss,
-                    modifier = Modifier.size(24.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Dismiss",
-                        tint = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.5f),
-                    )
-                }
-            }
+                    icon = Icons.Default.Close,
+                    contentDescription = "Dismiss",
+                    size = 24.dp,
+                    iconTint = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.5f),
+                )
         }
     }
 }

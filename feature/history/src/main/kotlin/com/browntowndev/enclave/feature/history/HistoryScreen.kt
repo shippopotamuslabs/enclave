@@ -7,6 +7,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,15 +35,15 @@ import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -63,6 +64,7 @@ import com.browntowndev.enclave.core.ui.component.enclave.EnclaveModalBottomShee
 import com.browntowndev.enclave.core.ui.component.enclave.EnclaveNavRow
 import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSectionHeader
 import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSettingsSection
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveTextButton
 import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorderColor
 import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurface
 import com.browntowndev.enclave.core.ui.component.shimmerEffect
@@ -311,28 +313,20 @@ fun DeleteConfirmationDialog(
             Text(text = "This chat will be permanently deleted. This action cannot be undone.")
         },
         confirmButton = {
-            TextButton(
+            EnclaveTextButton(
+                text = "Delete",
                 onClick = onConfirm,
-                colors =
-                    ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error,
-                    ),
+                color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.testTag("ConfirmDeleteButton"),
-            ) {
-                Text("Delete")
-            }
+            )
         },
         dismissButton = {
-            TextButton(
+            EnclaveTextButton(
+                text = "Cancel",
                 onClick = onDismiss,
-                colors =
-                    ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.onSurface,
-                    ),
+                color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.testTag("CancelDeleteButton"),
-            ) {
-                Text("Cancel")
-            }
+            )
         },
         modifier = modifier,
     )
@@ -515,24 +509,20 @@ private fun BottomSheetOption(
     modifier: Modifier = Modifier,
     icon: @Composable () -> Unit,
 ) {
-    TextButton(
-        onClick = onClick,
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp),
-        colors = ButtonDefaults.textButtonColors(contentColor = contentColor),
-    ) {
+    // Non-simple content (icon + label): borderless clickable row preserving TextButton layout/tint.
+    CompositionLocalProvider(LocalContentColor provides contentColor) {
         Row(
             modifier =
-                Modifier
+                modifier
                     .fillMaxWidth()
+                    .padding(horizontal = 8.dp)
+                    .clickable(onClick = onClick)
                     .padding(vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             icon()
             Spacer(modifier = Modifier.width(16.dp))
-            Text(text = text, style = MaterialTheme.typography.bodyLarge)
+            Text(text = text, style = MaterialTheme.typography.bodyLarge, color = contentColor)
         }
     }
 }

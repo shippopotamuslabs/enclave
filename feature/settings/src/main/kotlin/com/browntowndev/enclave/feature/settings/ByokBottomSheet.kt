@@ -26,7 +26,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveTextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
@@ -189,9 +189,7 @@ fun ByokBottomSheet(
                 title = { Text("Cannot Delete Provider") },
                 text = { Text("At least one local or API model must remain. You cannot delete the last available provider.") },
                 confirmButton = {
-                    TextButton(onClick = onDismissDeletionSafety) {
-                        Text("OK")
-                    }
+                    EnclaveTextButton(text = "OK", onClick = onDismissDeletionSafety)
                 },
             )
         }
