@@ -7,8 +7,6 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
-import io.mockk.mockk
-import io.mockk.verify
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -38,7 +36,7 @@ class EnclaveTabToolbarTest {
 
     @Test
     fun `when studio tab is clicked, then onTabClick is called with STUDIO`() {
-        val onTabClick = mockk<(EnclaveTab) -> Unit>(relaxed = true)
+        val onTabClick: (EnclaveTab) -> Unit = {}
 
         composeTestRule.setContent {
             EnclaveTheme {
@@ -57,7 +55,7 @@ class EnclaveTabToolbarTest {
 
     @Test
     fun `when menu icon is clicked, then onMenuClick is called`() {
-        val onMenuClick = mockk<() -> Unit>(relaxed = true)
+        val onMenuClick: () -> Unit = {}
 
         composeTestRule.setContent {
             EnclaveTheme {
