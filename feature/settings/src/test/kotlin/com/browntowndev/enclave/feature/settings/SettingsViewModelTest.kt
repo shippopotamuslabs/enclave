@@ -8,6 +8,7 @@ import com.browntowndev.enclave.core.testing.MainDispatcherRule
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId
 import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
@@ -53,7 +54,6 @@ import com.browntowndev.enclave.domain.usecase.telemetry.ObserveUsageSpendSummar
 import org.junit.jupiter.api.DisplayName
 import com.browntowndev.enclave.feature.settings.usage.UsageSpendUiMapper
 import io.mockk.coEvery
-import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -129,6 +129,43 @@ class SettingsViewModelTest {
 
     private val localModelAssetsStateFlow = MutableStateFlow<List<LocalModelAsset>>(emptyList())
 
+    // ENC-27: recorded invocations replace MockK coVerify.
+    private data class SetDefaultModelArgs(
+        val modelType: ModelType,
+        val localConfigId: com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId?,
+        val apiConfigId: com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId?,
+        val ttsProviderId: com.browntowndev.enclave.domain.model.config.TtsProviderId?,
+        val mediaProviderId: com.browntowndev.enclave.domain.model.config.MediaProviderId?,
+        val liveVoiceProviderId: LiveVoiceProviderId?,
+    )
+
+    private data class ExecuteDeletionArgs(
+        val target: ModelDeletionTarget,
+        val modelTypesNeedingReassignment: List<ModelType>,
+        val replacementLocalConfigId: com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId?,
+        val replacementApiConfigId: com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId?,
+        val replacementMediaProviderId: com.browntowndev.enclave.domain.model.config.MediaProviderId?,
+    )
+
+    private val discoverModelsCalls = mutableListOf<ApiModelDiscoveryRequest>()
+    private val saveTtsProviderCalls = mutableListOf<TtsProviderDraft>()
+    private val setDefaultModelCalls = mutableListOf<SetDefaultModelArgs>()
+    private val clearDefaultModelCalls = mutableListOf<ModelType>()
+    private val saveApiProviderDraftCalls = mutableListOf<ApiProviderDraft>()
+    private val executeDeletionCalls = mutableListOf<ExecuteDeletionArgs>()
+    private val saveLocalModelPresetCalls = mutableListOf<LocalModelId>()
+    private val insertMemoryCalls = mutableListOf<Pair<MemoryCategory, String>>()
+    private val updateMemoryCalls = mutableListOf<Triple<String, String, MemoryCategory>>()
+    private val deleteMemoryCalls = mutableListOf<String>()
+    private val updateThemeCalls = mutableListOf<AppTheme>()
+    private val updateHapticCalls = mutableListOf<Boolean>()
+    private val updateBackgroundInferenceCalls = mutableListOf<Boolean>()
+    private val updateXSearchEnabledCalls = mutableListOf<Boolean>()
+    private val saveXApiKeyCalls = mutableListOf<String>()
+    private var loginWithGoogleCallCount = 0
+    private var logoutCallCount = 0
+    private var clearXApiKeyCallCount = 0
+
     private lateinit var viewModel: SettingsViewModel
 
     @BeforeEach
@@ -164,6 +201,46 @@ class SettingsViewModelTest {
         every { getTtsProvidersUseCase() } returns MutableStateFlow(emptyList())
         every { getMediaProvidersUseCase() } returns MutableStateFlow(emptyList())
         every { memoriesRepository.getAllMemoriesFlow() } returns MutableStateFlow(emptyList())
+        coEvery { updateThemeUseCase(any()) } coAnswers {
+            updateThemeCalls += firstArg<AppTheme>()
+            Unit
+        }
+        coEvery { updateHapticResponseUseCase(any()) } coAnswers {
+            updateHapticCalls += firstArg<Boolean>()
+            Unit
+        }
+        coEvery { updateBackgroundInferenceEnabledUseCase(any()) } coAnswers {
+            updateBackgroundInferenceCalls += firstArg<Boolean>()
+            Unit
+        }
+        coEvery { updateXSearchEnabledUseCase(any()) } coAnswers {
+            updateXSearchEnabledCalls += firstArg<Boolean>()
+            Unit
+        }
+        coEvery { saveXApiKeyUseCase(any()) } coAnswers {
+            saveXApiKeyCalls += firstArg<String>()
+            Unit
+        }
+        coEvery { clearXApiKeyUseCase() } coAnswers {
+            clearXApiKeyCallCount++
+            Unit
+        }
+        coEvery { setDefaultModelUseCase(any(), any(), any(), any(), any(), any()) } coAnswers {
+            setDefaultModelCalls +=
+                SetDefaultModelArgs(
+                    modelType = arg<ModelType>(0),
+                    localConfigId = arg<String?>(1)?.let { com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId(it) },
+                    apiConfigId = arg<String?>(2)?.let { com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId(it) },
+                    ttsProviderId = arg<String?>(3)?.let { com.browntowndev.enclave.domain.model.config.TtsProviderId(it) },
+                    mediaProviderId = arg<String?>(4)?.let { com.browntowndev.enclave.domain.model.config.MediaProviderId(it) },
+                    liveVoiceProviderId = arg<String?>(5)?.let { LiveVoiceProviderId(it) },
+                )
+            Unit
+        }
+        coEvery { clearDefaultModelUseCase(any()) } coAnswers {
+            clearDefaultModelCalls += firstArg<ModelType>()
+            Unit
+        }
         every { getAuthStateUseCase() } returns MutableStateFlow(com.browntowndev.enclave.domain.port.auth.AuthState.Loading)
         every { errorHandler.coroutineExceptionHandler(any(), any(), any()) } returns CoroutineExceptionHandler { _, _ -> }
 
@@ -347,24 +424,30 @@ class SettingsViewModelTest {
     @Test
     fun `onLoginWithGoogle calls loginWithGoogle`() =
         runTest {
-            coEvery { loginWithGoogleUseCase() } returns Result.success(UserProfile("uid", "Name", "email", null))
+            coEvery { loginWithGoogleUseCase() } coAnswers {
+                loginWithGoogleCallCount++
+                Result.success(UserProfile("uid", "Name", "email", null))
+            }
 
             viewModel.onLoginWithGoogle()
             advanceUntilIdle()
 
-            coVerify { loginWithGoogleUseCase() }
+            assertEquals(1, loginWithGoogleCallCount)
             assertTrue(viewModel.uiState.value.vaultReauthSheet is VaultReauthSheetState.EnterPassword)
         }
 
     @Test
     fun `onLogout signs out and clears data`() =
         runTest {
-            coEvery { logoutUseCase() } returns Result.success(Unit)
+            coEvery { logoutUseCase() } coAnswers {
+                logoutCallCount++
+                Result.success(Unit)
+            }
 
             viewModel.onLogout()
             advanceUntilIdle()
 
-            coVerify { logoutUseCase() }
+            assertEquals(1, logoutCallCount)
         }
 
     @Test
@@ -388,7 +471,8 @@ class SettingsViewModelTest {
     @Test
     fun `onFetchTtsModels discovers models from TTS draft`() =
         runTest {
-            coEvery { discoverApiModelsUseCase(any()) } returns
+            coEvery { discoverApiModelsUseCase(any()) } coAnswers {
+                discoverModelsCalls += firstArg<ApiModelDiscoveryRequest>()
                 ApiModelDiscoveryResult(
                     models =
                         listOf(
@@ -403,6 +487,7 @@ class SettingsViewModelTest {
                             credentialAlias = null,
                         ),
                 )
+            }
 
             viewModel.onStartCreateTtsProviderAsset()
             viewModel.onTtsAssetFieldChange(
@@ -417,16 +502,11 @@ class SettingsViewModelTest {
             viewModel.onFetchTtsModels()
             advanceUntilIdle()
 
-            coVerify {
-                discoverApiModelsUseCase(
-                    match { request ->
-                        request.provider == ApiProvider.GOOGLE &&
-                            request.currentApiKey == "google-key" &&
-                            request.credentialAlias == null &&
-                            request.selectedModelId == null
-                    },
-                )
-            }
+            assertEquals(1, discoverModelsCalls.size)
+            assertEquals(ApiProvider.GOOGLE, discoverModelsCalls.single().provider)
+            assertEquals("google-key", discoverModelsCalls.single().currentApiKey)
+            assertEquals(null, discoverModelsCalls.single().credentialAlias)
+            assertEquals(null, discoverModelsCalls.single().selectedModelId)
             assertEquals(
                 listOf("gemini-2.5-flash-preview-tts"),
                 viewModel.uiState.value.ttsProviderEditor.discovery.models
@@ -440,7 +520,10 @@ class SettingsViewModelTest {
             val ttsId =
                 com.browntowndev.enclave.domain.model.config
                     .TtsProviderId("new-tts-id")
-            coEvery { saveTtsProviderUseCase(any()) } returns Result.success(ttsId)
+            coEvery { saveTtsProviderUseCase(any()) } coAnswers {
+                saveTtsProviderCalls += firstArg<TtsProviderDraft>()
+                Result.success(ttsId)
+            }
 
             viewModel.onStartCreateTtsProviderAsset()
             viewModel.onTtsAssetFieldChange(
@@ -455,15 +538,12 @@ class SettingsViewModelTest {
             viewModel.onSaveTtsProvider(onSuccess = {})
             advanceUntilIdle()
 
-            coVerify {
-                saveTtsProviderUseCase(match { it.displayName == "Google TTS" })
-                setDefaultModelUseCase(
-                    modelType = ModelType.TTS,
-                    localConfigId = null,
-                    apiConfigId = null,
-                    ttsProviderId = ttsId,
-                )
-            }
+            assertEquals(1, saveTtsProviderCalls.size)
+            assertEquals("Google TTS", saveTtsProviderCalls.single().displayName)
+            assertEquals(
+                listOf(SetDefaultModelArgs(ModelType.TTS, null, null, ttsId, null, null)),
+                setDefaultModelCalls,
+            )
         }
 
     @Test
@@ -484,14 +564,10 @@ class SettingsViewModelTest {
             viewModel.onTtsAssetFieldChange(existingAsset.copy(useAsDefault = true))
             advanceUntilIdle()
 
-            coVerify {
-                setDefaultModelUseCase(
-                    modelType = ModelType.TTS,
-                    localConfigId = null,
-                    apiConfigId = null,
-                    ttsProviderId = ttsId,
-                )
-            }
+            assertEquals(
+                listOf(SetDefaultModelArgs(ModelType.TTS, null, null, ttsId, null, null)),
+                setDefaultModelCalls,
+            )
         }
 
     @Test
@@ -512,9 +588,7 @@ class SettingsViewModelTest {
             viewModel.onTtsAssetFieldChange(existingAsset.copy(useAsDefault = false))
             advanceUntilIdle()
 
-            coVerify {
-                clearDefaultModelUseCase(ModelType.TTS)
-            }
+            assertEquals(listOf(ModelType.TTS), clearDefaultModelCalls)
         }
 
     @Test
@@ -538,7 +612,7 @@ class SettingsViewModelTest {
             viewModel.onClearXApiKey()
             advanceUntilIdle()
 
-            coVerify { clearXApiKeyUseCase() }
+            assertEquals(1, clearXApiKeyCallCount)
             assertEquals("", viewModel.currentXApiKey.value)
         }
 
@@ -551,10 +625,8 @@ class SettingsViewModelTest {
             viewModel.onSaveXSearchSettings(onSuccess = {})
             advanceUntilIdle()
 
-            coVerify {
-                updateXSearchEnabledUseCase(true)
-                saveXApiKeyUseCase("x-api-key")
-            }
+            assertEquals(listOf(true), updateXSearchEnabledCalls)
+            assertEquals(listOf("x-api-key"), saveXApiKeyCalls)
             assertEquals("", viewModel.currentXApiKey.value)
             assertEquals(false, viewModel.uiState.value.xSearchEditor.enabled)
         }
@@ -563,14 +635,17 @@ class SettingsViewModelTest {
     fun `onSaveMemory inserts new memory when id is empty`() =
         runTest {
             val draft = StoredMemory(id = "", text = "New memory", category = MemoryCategory.PREFERENCES)
-            coEvery { memoriesRepository.insertMemory(draft.category, draft.text) } returns mockk()
+            coEvery { memoriesRepository.insertMemory(draft.category, draft.text) } coAnswers {
+                insertMemoryCalls += draft.category to draft.text
+                mockk()
+            }
 
             viewModel.onAddMemory()
             viewModel.onUpdateMemoryDraft(draft.text, draft.category)
             viewModel.onSaveMemory()
             advanceUntilIdle()
 
-            coVerify { memoriesRepository.insertMemory(draft.category, draft.text) }
+            assertEquals(listOf(draft.category to draft.text), insertMemoryCalls)
         }
 
     @Test
@@ -579,14 +654,17 @@ class SettingsViewModelTest {
             val existingMemory = StoredMemory(id = "mem-1", text = "Old memory", category = MemoryCategory.PREFERENCES)
             val updatedDraft = existingMemory.copy(text = "Updated memory")
 
-            coEvery { memoriesRepository.updateMemory(updatedDraft.id, updatedDraft.text, updatedDraft.category) } returns Unit
+            coEvery { memoriesRepository.updateMemory(updatedDraft.id, updatedDraft.text, updatedDraft.category) } coAnswers {
+                updateMemoryCalls += Triple(updatedDraft.id, updatedDraft.text, updatedDraft.category)
+                Unit
+            }
 
             viewModel.onEditMemory(existingMemory)
             viewModel.onUpdateMemoryDraft(updatedDraft.text, updatedDraft.category)
             viewModel.onSaveMemory()
             advanceUntilIdle()
 
-            coVerify { memoriesRepository.updateMemory(updatedDraft.id, updatedDraft.text, updatedDraft.category) }
+            assertEquals(listOf(Triple(updatedDraft.id, updatedDraft.text, updatedDraft.category)), updateMemoryCalls)
         }
 
     @Test
@@ -594,7 +672,7 @@ class SettingsViewModelTest {
         runTest {
             viewModel.onThemeChange(AppThemeUi.DARK)
             advanceUntilIdle()
-            coVerify { updateThemeUseCase(AppTheme.DARK) }
+            assertEquals(listOf(AppTheme.DARK), updateThemeCalls)
         }
 
     @Test
@@ -602,7 +680,7 @@ class SettingsViewModelTest {
         runTest {
             viewModel.onHapticResponseChange(false)
             advanceUntilIdle()
-            coVerify { updateHapticResponseUseCase(false) }
+            assertEquals(listOf(false), updateHapticCalls)
         }
 
     @Test
@@ -610,16 +688,19 @@ class SettingsViewModelTest {
         runTest {
             viewModel.onBackgroundInferenceChange(true)
             advanceUntilIdle()
-            coVerify { updateBackgroundInferenceEnabledUseCase(true) }
+            assertEquals(listOf(true), updateBackgroundInferenceCalls)
         }
 
     @Test
     fun `onDeleteMemory calls repository`() =
         runTest {
-            coEvery { memoriesRepository.deleteMemory("mem-1") } returns Unit
+            coEvery { memoriesRepository.deleteMemory("mem-1") } coAnswers {
+                deleteMemoryCalls += firstArg<String>()
+                Unit
+            }
             viewModel.onDeleteMemory("mem-1")
             advanceUntilIdle()
-            coVerify { memoriesRepository.deleteMemory("mem-1") }
+            assertEquals(listOf("mem-1"), deleteMemoryCalls)
         }
 
     @Test
@@ -627,18 +708,20 @@ class SettingsViewModelTest {
         runTest {
             val asset = MockSettingsData.localModels.first()
             val config = LocalModelConfigUi(displayName = "Config 1")
-            coEvery { saveLocalModelPresetUseCase(any(), any()) } returns
+            coEvery { saveLocalModelPresetUseCase(any(), any()) } coAnswers {
+                saveLocalModelPresetCalls += LocalModelId(firstArg<String>())
                 Result.success(
                     com.browntowndev.enclave.domain.model.config
                         .LocalModelConfigurationId("1"),
                 )
+            }
 
             viewModel.onSelectLocalModelAsset(asset)
             viewModel.onSelectLocalModelConfig(config)
             viewModel.onSaveLocalModelConfig(onSuccess = {})
             advanceUntilIdle()
 
-            coVerify { saveLocalModelPresetUseCase(asset.metadataId, any()) }
+            assertEquals(listOf(asset.metadataId), saveLocalModelPresetCalls)
         }
 
     @Test
@@ -715,11 +798,13 @@ class SettingsViewModelTest {
                     displayName = "My Preset",
                     contextWindow = "4096",
                 )
-            coEvery { saveLocalModelPresetUseCase(any(), any()) } returns
+            coEvery { saveLocalModelPresetUseCase(any(), any()) } coAnswers {
+                saveLocalModelPresetCalls += LocalModelId(firstArg<String>())
                 Result.success(
                     com.browntowndev.enclave.domain.model.config
                         .LocalModelConfigurationId("new-id"),
                 )
+            }
 
             viewModel.onSelectLocalModelAsset(asset)
             viewModel.onSelectLocalModelConfig(config)
@@ -728,7 +813,7 @@ class SettingsViewModelTest {
             viewModel.onSaveLocalModelConfig(onSuccess = {})
             advanceUntilIdle()
 
-            coVerify { saveLocalModelPresetUseCase(asset.metadataId, any()) }
+            assertEquals(listOf(asset.metadataId), saveLocalModelPresetCalls)
         }
 
     @Test
@@ -753,13 +838,15 @@ class SettingsViewModelTest {
                         ),
                     configurations = emptyList(),
                 )
-            coEvery { saveApiProviderDraftUseCase(any()) } returns
+            coEvery { saveApiProviderDraftUseCase(any()) } coAnswers {
+                saveApiProviderDraftCalls += firstArg<ApiProviderDraft>()
                 Result.success<com.browntowndev.enclave.domain.usecase.settings.ApiProviderDraftSaveResult>(
                     com.browntowndev.enclave.domain.usecase.settings.ApiProviderDraftSaveResult(
                         persistedAsset = persistedAsset,
                         createdPreset = null,
                     ),
                 )
+            }
 
             viewModel.onStartCreateApiModelAsset()
             viewModel.onApiModelAssetFieldChange(draft)
@@ -768,13 +855,9 @@ class SettingsViewModelTest {
             viewModel.onSaveApiCredentials(onSuccess = { _, _ -> })
             advanceUntilIdle()
 
-            coVerify {
-                saveApiProviderDraftUseCase(
-                    match { request ->
-                        request.id == draft.credentialsId && request.apiKey == "new-key"
-                    },
-                )
-            }
+            assertEquals(1, saveApiProviderDraftCalls.size)
+            assertEquals(draft.credentialsId, saveApiProviderDraftCalls.single().id)
+            assertEquals("new-key", saveApiProviderDraftCalls.single().apiKey)
             assertEquals(
                 "OpenAI",
                 viewModel.uiState.value.apiProviderEditor.assetDraft
@@ -799,7 +882,17 @@ class SettingsViewModelTest {
             coEvery { prepareModelDeletionUseCase(any()) } returns prepared
             coEvery {
                 executeModelDeletionWithReassignmentUseCase(any(), any(), any(), any(), any())
-            } returns Result.success<Unit>(Unit)
+            } coAnswers {
+                executeDeletionCalls +=
+                    ExecuteDeletionArgs(
+                        target = arg<ModelDeletionTarget>(0),
+                        modelTypesNeedingReassignment = arg<List<ModelType>>(1),
+                        replacementLocalConfigId = arg<String?>(2)?.let { com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId(it) },
+                        replacementApiConfigId = arg<String?>(3)?.let { com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId(it) },
+                        replacementMediaProviderId = arg<String?>(4)?.let { com.browntowndev.enclave.domain.model.config.MediaProviderId(it) },
+                    )
+                Result.success<Unit>(Unit)
+            }
 
             // Trigger deletion prep
             viewModel.onDeleteLocalModelAsset(target.id)
@@ -812,15 +905,18 @@ class SettingsViewModelTest {
             viewModel.onConfirmDeletionWithReassignment(replacementLocalConfigId = replacementConfigId, replacementApiConfigId = null)
             advanceUntilIdle()
 
-            coVerify {
-                executeModelDeletionWithReassignmentUseCase(
-                    target = target,
-                    modelTypesNeedingReassignment = listOf(ModelType.MAIN),
-                    replacementLocalConfigId = replacementConfigId,
-                    replacementApiConfigId = null,
-                    replacementMediaProviderId = null,
-                )
-            }
+            assertEquals(
+                listOf(
+                    ExecuteDeletionArgs(
+                        target = target,
+                        modelTypesNeedingReassignment = listOf(ModelType.MAIN),
+                        replacementLocalConfigId = replacementConfigId,
+                        replacementApiConfigId = null,
+                        replacementMediaProviderId = null,
+                    ),
+                ),
+                executeDeletionCalls,
+            )
         }
 
     @Test
@@ -873,7 +969,8 @@ class SettingsViewModelTest {
                     DiscoveredApiModel(id = "gpt-4o", isChatCapable = true), // Should be filtered out
                 )
 
-            coEvery { discoverApiModelsUseCase(any()) } returns
+            coEvery { discoverApiModelsUseCase(any()) } coAnswers {
+                discoverModelsCalls += firstArg<ApiModelDiscoveryRequest>()
                 ApiModelDiscoveryResult(
                     models = xaiModels,
                     scope =
@@ -883,6 +980,7 @@ class SettingsViewModelTest {
                             credentialAlias = "xai-alias",
                         ),
                 )
+            }
 
             // Mock starting media creation for xAI IMAGE
             viewModel.onStartCreateMediaProviderAsset()
@@ -1000,7 +1098,8 @@ class SettingsViewModelTest {
                     credentialAlias = "media-alias",
                 )
 
-            coEvery { discoverApiModelsUseCase(any()) } returns
+            coEvery { discoverApiModelsUseCase(any()) } coAnswers {
+                discoverModelsCalls += firstArg<ApiModelDiscoveryRequest>()
                 ApiModelDiscoveryResult(
                     models =
                         listOf(
@@ -1014,19 +1113,17 @@ class SettingsViewModelTest {
                             credentialAlias = "media-alias",
                         ),
                 )
+            }
 
             viewModel.onSelectMediaProviderAsset(mediaAsset)
             viewModel.onFetchMediaModels()
             advanceUntilIdle()
 
-            coVerify {
-                discoverApiModelsUseCase(
-                    match { request ->
-                        request.provider == ApiProvider.OPENAI &&
-                            request.credentialAlias == "media-alias"
-                    },
-                )
-            }
+            assertTrue(
+                discoverModelsCalls.any {
+                    it.provider == ApiProvider.OPENAI && it.credentialAlias == "media-alias"
+                },
+            )
         }
 
     @Test

@@ -5,7 +5,6 @@ import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.port.media.MediaSaverPort
 import com.browntowndev.enclave.domain.usecase.media.SaveMediaToGalleryUseCase
 import io.mockk.coEvery
-import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.Dispatchers
@@ -84,7 +83,6 @@ class FullscreenMediaSaveViewModelTest {
                 ),
             )
 
-            coVerify { mediaSaverPort.saveToGallery(any(), any()) }
             assertEquals(persistedUri, uriSlot.captured)
             assertEquals(MediaCapability.IMAGE, typeSlot.captured)
             file.delete()
