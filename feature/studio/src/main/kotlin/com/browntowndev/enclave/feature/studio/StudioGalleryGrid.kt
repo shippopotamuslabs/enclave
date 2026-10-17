@@ -69,6 +69,8 @@ import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurface
 import com.browntowndev.enclave.core.ui.component.shimmerEffect
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.feature.studio.components.PromptHeaderDivider
 
@@ -113,6 +115,7 @@ internal fun StudioGalleryPane(
     onMediaClick: (String) -> Unit,
     onMediaLongClick: (String) -> Unit,
     modifier: Modifier = Modifier,
+    hazeState: HazeState? = null,
 ) {
     Box(modifier = modifier) {
         if (groupedGallery.isEmpty() && !isGenerating) {
@@ -128,6 +131,7 @@ internal fun StudioGalleryPane(
                 topPadding = topPadding,
                 onMediaClick = onMediaClick,
                 onMediaLongClick = onMediaLongClick,
+                hazeState = hazeState,
             )
         }
     }
@@ -146,6 +150,7 @@ internal fun StudioGalleryList(
     onMediaClick: (String) -> Unit,
     onMediaLongClick: (String) -> Unit,
     modifier: Modifier = Modifier,
+    hazeState: HazeState? = null,
 ) {
     val promptHeaders =
         remember(
@@ -188,7 +193,10 @@ internal fun StudioGalleryList(
 
     LazyColumn(
         state = listState,
-        modifier = modifier.fillMaxSize(),
+        modifier =
+            modifier
+                .fillMaxSize()
+                .then(if (hazeState != null) Modifier.hazeSource(state = hazeState) else Modifier),
         contentPadding =
             PaddingValues(
                 top = topPadding,
@@ -312,6 +320,7 @@ internal fun StudioGalleryList(
                     )
             },
             omitTopBorder = true,
+            hazeState = hazeState,
             modifier =
                 Modifier
                     .fillMaxWidth()

@@ -39,6 +39,23 @@ class EnclaveThemeSpecTest {
     }
 
     @Test
+    fun glass_tonalEnabledWithTranslucentTint_neoDisabled() {
+        val tonalDark = TonalSpec.resolve(dark = true)
+        val tonalLight = TonalSpec.resolve(dark = false)
+        val neoDark = NeoBrutalistSpec.resolve(dark = true)
+        val neoLight = NeoBrutalistSpec.resolve(dark = false)
+
+        assertTrue(tonalDark.glass.enabled)
+        assertTrue(tonalLight.glass.enabled)
+        assertTrue(tonalDark.glass.tint.alpha < 1f)
+        assertTrue(tonalLight.glass.tint.alpha < 1f)
+        assertTrue(tonalDark.glass.blurRadius > 0.dp)
+        assertFalse(neoDark.glass.enabled)
+        assertFalse(neoLight.glass.enabled)
+        assertEquals(0.dp, neoDark.glass.blurRadius)
+    }
+
+    @Test
     fun colorMode_resolvesDarkFromSystemOnlyInSystemMode() {
         assertTrue(EnclaveColorMode.System.resolveDark(isSystemDark = true))
         assertFalse(EnclaveColorMode.System.resolveDark(isSystemDark = false))

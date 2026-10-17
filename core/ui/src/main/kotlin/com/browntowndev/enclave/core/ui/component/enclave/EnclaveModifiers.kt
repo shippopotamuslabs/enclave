@@ -15,12 +15,33 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.browntowndev.enclave.core.ui.theme.EnclaveThemeAccessor
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.hazeEffect
 
 @Composable
 fun enclaveBorderColor(): Color = EnclaveThemeAccessor.colors.borderStrong
 
 @Composable
 fun enclaveShadowColor(): Color = EnclaveThemeAccessor.elevations.hardShadowColor
+
+/**
+ * Blur-over-content effect driven by the active spec's glass tokens.
+ * No-op when the spec disables glass or no [hazeState] is supplied, so callers
+ * render solid chrome under opaque specs without branching on theme family.
+ */
+@Composable
+fun Modifier.enclaveGlassEffect(hazeState: HazeState?): Modifier {
+    val glass = EnclaveThemeAccessor.glass
+    if (!glass.enabled || hazeState == null) {
+        return this
+    }
+    return hazeEffect(state = hazeState) {
+        blurRadius = glass.blurRadius
+        tints = listOf(HazeTint(glass.tint))
+        noiseFactor = glass.noiseFactor
+    }
+}
 
 @Composable
 fun enclaveButtonShadowOffset(): Dp =

@@ -246,6 +246,7 @@ fun GalleryScreen(
                         showDeleteDialog = true
                     }
                 },
+                hazeState = hazeState,
             )
         },
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -410,8 +411,9 @@ private fun GalleryTopBar(
     onMoveClick: () -> Unit,
     onDeleteClick: () -> Unit,
     modifier: Modifier = Modifier,
+    hazeState: HazeState? = null,
 ) {
-    EnclaveAppBarChrome(modifier = modifier) {
+    EnclaveAppBarChrome(modifier = modifier, hazeState = hazeState) {
         if (selectedItemCount > 0) {
             EnclaveIconButton(
                 onClick = onClearSelectionClick,
