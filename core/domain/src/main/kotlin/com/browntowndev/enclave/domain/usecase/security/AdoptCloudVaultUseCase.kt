@@ -17,7 +17,7 @@ import javax.inject.Inject
  * Caller MUST surface user confirmation before invoking this use case — the destructive
  * `clearAllData` call cannot be undone.
  */
-class AdoptCloudVaultUseCase
+open class AdoptCloudVaultUseCase
     @Inject
     constructor(
         private val cryptoManager: CryptoManagerPort,
@@ -25,7 +25,7 @@ class AdoptCloudVaultUseCase
         private val cleanupRepository: CleanupRepository,
         private val biometricPort: BiometricPort,
     ) {
-        suspend operator fun invoke(payload: VaultReconciliationOutcome.MismatchRequiresClobber): Result<Unit> =
+        open suspend operator fun invoke(payload: VaultReconciliationOutcome.MismatchRequiresClobber): Result<Unit> =
             runCatching {
                 cleanupRepository.clearAllData()
                 cryptoManager.cacheDek(payload.cloudDek).getOrThrow()

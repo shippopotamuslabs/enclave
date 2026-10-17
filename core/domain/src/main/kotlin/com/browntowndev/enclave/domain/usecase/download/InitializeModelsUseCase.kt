@@ -30,7 +30,7 @@ import javax.inject.Inject
  * Use case for initializing models at app startup.
  * Fetches remote config, registers expected models in registry, and checks which models need to be downloaded.
  */
-class InitializeModelsUseCase
+open class InitializeModelsUseCase
     @Inject
     constructor(
         private val modelConfigFetcher: ModelConfigFetcherPort,
@@ -52,7 +52,7 @@ class InitializeModelsUseCase
          * Executes the model initialization logic.
          * @return DownloadModelsResult containing which models need to be downloaded
          */
-        suspend operator fun invoke(): DownloadModelsResult =
+        open suspend operator fun invoke(): DownloadModelsResult =
             withContext(Dispatchers.IO) {
                 checkModelsResult()
             }
