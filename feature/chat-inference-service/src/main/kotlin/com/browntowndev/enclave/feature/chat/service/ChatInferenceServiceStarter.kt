@@ -16,7 +16,7 @@ import javax.inject.Singleton
  * State observation is handled by [ChatInferenceServiceExecutor].
  */
 @Singleton
-class ChatInferenceServiceStarter
+open class ChatInferenceServiceStarter
     @Inject
     constructor(
         @ApplicationContext private val context: Context,
@@ -26,7 +26,7 @@ class ChatInferenceServiceStarter
             private const val TAG = "ChatInferenceStarter"
         }
 
-        fun startService(
+        open fun startService(
             prompt: String,
             userMessageId: MessageId,
             assistantMessageId: MessageId,
@@ -63,7 +63,7 @@ class ChatInferenceServiceStarter
             )
         }
 
-        fun startServiceWithOverride(
+        open fun startServiceWithOverride(
             prompt: String,
             userMessageId: MessageId,
             assistantMessageId: MessageId,
@@ -102,7 +102,7 @@ class ChatInferenceServiceStarter
             )
         }
 
-        fun stopInference() {
+        open fun stopInference() {
             loggingPort.info(TAG, "stopInference requested")
             val intent =
                 Intent(context, ChatInferenceService::class.java).apply {
