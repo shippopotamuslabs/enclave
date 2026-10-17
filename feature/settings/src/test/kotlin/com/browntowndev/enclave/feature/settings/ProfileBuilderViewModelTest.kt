@@ -20,7 +20,6 @@ import com.browntowndev.enclave.domain.usecase.profile.PrepareProfileCorpusUseCa
 import com.browntowndev.enclave.domain.usecase.profile.SavePsychProfileUseCase
 import com.browntowndev.enclave.domain.usecase.profile.StartProfileAnalysisUseCase
 import io.mockk.coEvery
-import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -55,13 +54,39 @@ class ProfileBuilderViewModelTest {
             ),
         )
 
+    // ENC-27: recorded invocations replace MockK coVerify.
+    private val startAnalysisCalls = mutableListOf<Pair<String, ApiModelConfigurationId>>()
+    private val observeProgressCalls = mutableListOf<String>()
+    private val insertMemoryCalls = mutableListOf<Pair<MemoryCategory, String>>()
+    private val updateMemoryCalls = mutableListOf<Triple<String, String, MemoryCategory?>>()
+    private val clearAllCalls = mutableListOf<String>()
+
     private lateinit var viewModel: ProfileBuilderViewModel
 
     @BeforeEach
     fun setup() {
         every { apiModelRepository.observeAllConfigurations() } returns configsFlow
         coEvery { memoriesRepository.getCoreMemories() } returns emptyList()
-        every { analysisPort.observeAnalysisProgress(any()) } returns progressFlow
+        every { analysisPort.observeAnalysisProgress(any()) } answers {
+            observeProgressCalls += firstArg<String>()
+            progressFlow
+        }
+        coEvery { analysisPort.startAnalysis(any(), any()) } coAnswers {
+            startAnalysisCalls += firstArg<String>() to ApiModelConfigurationId(secondArg<String>())
+            Unit
+        }
+        coEvery { memoriesRepository.insertMemory(any(), any()) } coAnswers {
+            insertMemoryCalls += firstArg<MemoryCategory>() to secondArg<String>()
+            mockk()
+        }
+        coEvery { memoriesRepository.updateMemory(any(), any(), any()) } coAnswers {
+            updateMemoryCalls += Triple(firstArg<String>(), secondArg<String>(), thirdArg<MemoryCategory?>())
+            Unit
+        }
+        coEvery { ingestionPort.clearAll(any()) } coAnswers {
+            clearAllCalls += firstArg<String>()
+            Unit
+        }
 
         viewModel =
             ProfileBuilderViewModel(
@@ -127,8 +152,8 @@ class ProfileBuilderViewModelTest {
             advanceUntilIdle()
 
             val runId = viewModel.uiState.value.corpusRunId
-            coVerify { analysisPort.startAnalysis(runId, configId) }
-            coVerify { analysisPort.observeAnalysisProgress(runId) }
+            assertEquals(listOf(runId to configId), startAnalysisCalls)
+            assertTrue(observeProgressCalls.contains(runId))
             assertTrue(viewModel.uiState.value.isAnalysisRunning)
             assertEquals(PROFILE_BUILDER_STEP_PROGRESS, viewModel.uiState.value.currentStep)
         }
@@ -144,14 +169,14 @@ class ProfileBuilderViewModelTest {
             advanceUntilIdle()
 
             // Verify start called once
-            coVerify(exactly = 1) { analysisPort.startAnalysis(any(), any()) }
+            assertEquals(1, startAnalysisCalls.size)
 
             // Start again
             viewModel.startAnalysis()
             advanceUntilIdle()
 
             // Should not call startAnalysis again
-            coVerify(exactly = 1) { analysisPort.startAnalysis(any(), any()) }
+            assertEquals(1, startAnalysisCalls.size)
         }
 
     @Test
@@ -210,8 +235,8 @@ class ProfileBuilderViewModelTest {
             viewModel.saveProfile()
             advanceUntilIdle()
 
-            coVerify { memoriesRepository.insertMemory(MemoryCategory.PSYCH_PROFILE, "Refined profile content.") }
-            coVerify { ingestionPort.clearAll(any()) }
+            assertEquals(listOf(MemoryCategory.PSYCH_PROFILE to "Refined profile content."), insertMemoryCalls)
+            assertEquals(1, clearAllCalls.size)
             assertTrue(viewModel.uiState.value.saved)
 
             // 2. Test Update
@@ -221,6 +246,6 @@ class ProfileBuilderViewModelTest {
             viewModel.saveProfile()
             advanceUntilIdle()
 
-            coVerify { memoriesRepository.updateMemory("mem-123", "Refined profile content.", MemoryCategory.PSYCH_PROFILE) }
+            assertEquals(listOf(Triple("mem-123", "Refined profile content.", MemoryCategory.PSYCH_PROFILE)), updateMemoryCalls)
         }
 }
