@@ -13,13 +13,13 @@ import javax.inject.Inject
  * Returns failure if the local store is missing salt or wrappedDek (the device cannot bootstrap
  * a vault it never had).
  */
-class BootstrapCloudVaultFromLocalUseCase
+open class BootstrapCloudVaultFromLocalUseCase
     @Inject
     constructor(
         private val vaultMetadataPort: VaultMetadataPort,
         private val cloudSyncPort: CloudSyncPort,
     ) {
-        suspend operator fun invoke(): Result<Unit> =
+        open suspend operator fun invoke(): Result<Unit> =
             runCatching {
                 val salt =
                     vaultMetadataPort
