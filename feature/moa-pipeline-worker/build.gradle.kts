@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.ksp)
     alias(libs.plugins.hilt)
+    alias(libs.plugins.apter.robolectric.junit5)
 }
 
 android {
@@ -50,12 +51,14 @@ dependencies {
     implementation(project(":feature:inference"))
 
     // Test dependencies
+    testImplementation(project(":core:testing"))
     testImplementation(libs.junit)
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.kotlin.test.junit5)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.mockk)
     testImplementation(libs.robolectric)
+    testImplementation(libs.apter.junit5.robolectric.extension)
     testImplementation(libs.androidx.test.core)
     testRuntimeOnly(libs.junit.vintage.engine)
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")

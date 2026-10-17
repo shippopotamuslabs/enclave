@@ -1,43 +1,40 @@
 package com.browntowndev.enclave.feature.moa
 
+import androidx.test.core.app.ApplicationProvider
+import com.browntowndev.enclave.core.testing.FakePipelineStateRepository
 import com.browntowndev.enclave.domain.model.chat.MessageGenerationState
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.model.inference.PipelineState
 import com.browntowndev.enclave.domain.model.inference.PipelineStep
-import com.browntowndev.enclave.domain.port.repository.PipelineStateRepository
 import com.browntowndev.enclave.feature.inference.InferenceEventBus
-import com.browntowndev.enclave.feature.moa.service.InferenceServiceStarter
-import io.mockk.coEvery
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.mockkObject
-import io.mockk.unmockkAll
-import io.mockk.verify
+import com.browntowndev.enclave.feature.moa.service.FakeInferenceServiceStarter
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
-import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 @OptIn(ExperimentalCoroutinesApi::class)
 class InferenceServicePipelineExecutorTest {
-    private lateinit var serviceStarter: InferenceServiceStarter
-    private lateinit var pipelineStateRepository: PipelineStateRepository
+    private lateinit var serviceStarter: FakeInferenceServiceStarter
+    private lateinit var pipelineStateRepository: FakePipelineStateRepository
     private lateinit var inferenceEventBus: InferenceEventBus
 
     private lateinit var executor: InferenceServicePipelineExecutor
 
     @BeforeEach
     fun setup() {
-        serviceStarter = mockk(relaxed = true)
-        pipelineStateRepository = mockk(relaxed = true)
+        serviceStarter = FakeInferenceServiceStarter(ApplicationProvider.getApplicationContext())
+        pipelineStateRepository = FakePipelineStateRepository()
         inferenceEventBus = InferenceEventBus()
 
         executor =
@@ -48,20 +45,9 @@ class InferenceServicePipelineExecutorTest {
             )
     }
 
-    @AfterEach
-    fun tearDown() {
-        unmockkAll()
-    }
-
     @Test
     fun `executePipeline collects thinking chunks until terminal FINAL StepCompleted`() =
         runTest {
-            mockkObject(PipelineState.Companion)
-            val mockState = mockk<PipelineState>()
-            every { mockState.toJson() } returns "{}"
-            every { mockState.currentStep } returns PipelineStep.DRAFT_ONE
-            every { PipelineState.createInitial(any(), any()) } returns mockState
-
             val chatId = "chat1"
             val emittedStates = mutableListOf<MessageGenerationState>()
 
@@ -101,11 +87,6 @@ class InferenceServicePipelineExecutorTest {
     @Test
     fun `executePipeline passes through terminal Finished state`() =
         runTest {
-            mockkObject(PipelineState.Companion)
-            val mockState = mockk<PipelineState>()
-            every { mockState.toJson() } returns "{}"
-            every { PipelineState.createInitial(any(), any()) } returns mockState
-
             val chatId = "chat1"
             val emittedStates = mutableListOf<MessageGenerationState>()
 
@@ -130,11 +111,6 @@ class InferenceServicePipelineExecutorTest {
     @Test
     fun `executePipeline terminates on Failed state`() =
         runTest {
-            mockkObject(PipelineState.Companion)
-            val mockState = mockk<PipelineState>()
-            every { mockState.toJson() } returns "{}"
-            every { PipelineState.createInitial(any(), any()) } returns mockState
-
             val chatId = "chat1"
             val emittedStates = mutableListOf<MessageGenerationState>()
 
@@ -159,11 +135,6 @@ class InferenceServicePipelineExecutorTest {
     @Test
     fun `executePipeline does not terminate on non-FINAL StepCompleted states`() =
         runTest {
-            mockkObject(PipelineState.Companion)
-            val mockState = mockk<PipelineState>()
-            every { mockState.toJson() } returns "{}"
-            every { PipelineState.createInitial(any(), any()) } returns mockState
-
             val chatId = "chat1"
             val emittedStates = mutableListOf<MessageGenerationState>()
 
@@ -211,18 +182,13 @@ class InferenceServicePipelineExecutorTest {
 
             executor.stopPipeline(pipelineId)
 
-            verify { serviceStarter.stopService() }
-            coEvery { pipelineStateRepository.clearPipelineState(pipelineId) }
+            assertEquals(1, serviceStarter.stopCount)
+            assertEquals(listOf(pipelineId), pipelineStateRepository.clearCalls)
         }
 
     @Test
     fun `executePipeline clears pipeline stream on collector cancellation before terminal state`() =
         runTest {
-            mockkObject(PipelineState.Companion)
-            val mockState = mockk<PipelineState>()
-            every { mockState.toJson() } returns "{}"
-            every { PipelineState.createInitial(any(), any()) } returns mockState
-
             val chatId = "chat1"
 
             val collectJob =
@@ -249,16 +215,9 @@ class InferenceServicePipelineExecutorTest {
     @Test
     fun `executePipeline clears pipeline stream when startService throws exception`() =
         runTest {
-            mockkObject(PipelineState.Companion)
-            val mockState = mockk<PipelineState>()
-            every { mockState.toJson() } returns "{}"
-            every { PipelineState.createInitial(any(), any()) } returns mockState
-
             val chatId = "chat1"
 
-            every {
-                serviceStarter.startService(any(), any(), any(), any(), any())
-            } throws IllegalStateException("Service start failed")
+            serviceStarter.startFailure = IllegalStateException("Service start failed")
 
             val thrown =
                 runCatching {
