@@ -14,9 +14,10 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
+import android.os.Looper
 import androidx.media3.common.Player
+import androidx.media3.common.SimpleBasePlayer
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
-import io.mockk.mockk
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -133,11 +134,24 @@ class VideoPlayerTest {
         }
     }
 
+    /**
+     * Minimal [Player] backed by media3's [SimpleBasePlayer] (ENC-28): the composable
+     * only registers listeners and reads videoSize, so an idle state is faithful.
+     */
+    private class FakePlayer : SimpleBasePlayer(Looper.getMainLooper()) {
+        override fun getState(): State =
+            State.Builder()
+                .setAvailableCommands(Player.Commands.Builder().addAllCommands().build())
+                .setPlaybackState(Player.STATE_IDLE)
+                .setPlayWhenReady(false, Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM)
+                .build()
+    }
+
     private class FakeVideoPlaybackHandle(
         autoPlay: Boolean = false,
         muted: Boolean = false,
     ) : VideoPlaybackHandle {
-        override val player: Player = mockk(relaxed = true)
+        override val player: Player = FakePlayer()
         override var playWhenReady: Boolean = autoPlay
         override var volume: Float = if (muted) 0f else 1f
         var released: Boolean = false

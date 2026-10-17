@@ -1,10 +1,9 @@
 package com.browntowndev.enclave.core.ui.error
 
 import app.cash.turbine.test
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.core.testing.TestClock
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -17,13 +16,13 @@ import org.junit.jupiter.api.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ViewModelErrorHandlerImplTest {
-    private lateinit var loggingPort: LoggingPort
+    private lateinit var loggingPort: FakeLoggingPort
     private lateinit var testClock: TestClock
     private lateinit var errorHandler: ViewModelErrorHandlerImpl
 
     @BeforeEach
     fun setup() {
-        loggingPort = mockk(relaxed = true)
+        loggingPort = FakeLoggingPort()
         testClock = TestClock()
         errorHandler = ViewModelErrorHandlerImpl(loggingPort, testClock)
     }
@@ -41,9 +40,10 @@ class ViewModelErrorHandlerImplTest {
                 assertEquals(userMessage, awaitItem())
             }
 
-            verify {
-                loggingPort.error(tag, message, throwable)
-            }
+            assertEquals(
+                listOf(FakeLoggingPort.ErrorCall(tag, message, throwable)),
+                loggingPort.errorCalls,
+            )
         }
 
     @Test
@@ -63,9 +63,10 @@ class ViewModelErrorHandlerImplTest {
                 expectNoEvents()
             }
 
-            verify(exactly = 3) {
-                loggingPort.error(tag, message, throwable)
-            }
+            assertEquals(
+                List(3) { FakeLoggingPort.ErrorCall(tag, message, throwable) },
+                loggingPort.errorCalls,
+            )
         }
 
     @Test
@@ -113,9 +114,10 @@ class ViewModelErrorHandlerImplTest {
                 expectNoEvents()
             }
 
-            verify {
-                loggingPort.error(tag, message, throwable)
-            }
+            assertEquals(
+                listOf(FakeLoggingPort.ErrorCall(tag, message, throwable)),
+                loggingPort.errorCalls,
+            )
         }
 
     @Test
@@ -130,8 +132,6 @@ class ViewModelErrorHandlerImplTest {
                 expectNoEvents()
             }
 
-            verify(exactly = 0) {
-                loggingPort.error(any(), any(), any())
-            }
+            assertEquals(emptyList<FakeLoggingPort.ErrorCall>(), loggingPort.errorCalls)
         }
 }
