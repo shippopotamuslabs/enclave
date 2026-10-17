@@ -370,7 +370,7 @@ class SettingsViewModelTest {
     @Test
     fun `initial state is correct`() =
         runTest {
-            assertEquals(AppTheme.SYSTEM, viewModel.uiState.value.home.theme)
+            assertEquals(AppThemeUi.SYSTEM, viewModel.uiState.value.home.theme)
             assertTrue(viewModel.uiState.value.home.hapticResponse)
         }
 
@@ -592,7 +592,7 @@ class SettingsViewModelTest {
     @Test
     fun `onThemeChange updates preferences`() =
         runTest {
-            viewModel.onThemeChange(AppTheme.DARK)
+            viewModel.onThemeChange(AppThemeUi.DARK)
             advanceUntilIdle()
             coVerify { updateThemeUseCase(AppTheme.DARK) }
         }
