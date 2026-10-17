@@ -48,6 +48,7 @@ dependencies {
     implementation(project(":feature:inference"))
 
     // Test dependencies
+    testImplementation(project(":core:testing"))
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.kotlin.test.junit5)
     testImplementation(libs.kotlinx.coroutines.test)

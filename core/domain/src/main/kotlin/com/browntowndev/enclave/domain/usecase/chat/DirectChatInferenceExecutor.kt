@@ -44,7 +44,7 @@ import javax.inject.Inject
  *
  * Pure Kotlin — no Android framework dependencies. Lives in `:domain`.
  */
-class DirectChatInferenceExecutor
+open class DirectChatInferenceExecutor
     @Inject
     constructor(
         private val inferenceFactory: InferenceFactoryPort,

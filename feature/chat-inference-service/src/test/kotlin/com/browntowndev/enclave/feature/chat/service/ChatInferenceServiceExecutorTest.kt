@@ -1,5 +1,7 @@
 package com.browntowndev.enclave.feature.chat.service
 
+import androidx.test.core.app.ApplicationProvider
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.ChatModelOverride
 import com.browntowndev.enclave.domain.model.chat.MessageGenerationState
@@ -7,20 +9,28 @@ import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class ChatInferenceServiceExecutorTest {
-    private val serviceStarter = mockk<ChatInferenceServiceStarter>(relaxed = true)
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
-    private val executor = ChatInferenceServiceExecutor(serviceStarter, loggingPort)
+    private lateinit var serviceStarter: FakeChatInferenceServiceStarter
+    private val loggingPort = FakeLoggingPort()
+    private lateinit var executor: ChatInferenceServiceExecutor
+
+    @org.junit.jupiter.api.BeforeEach
+    fun setUp() {
+        serviceStarter =
+            FakeChatInferenceServiceStarter(ApplicationProvider.getApplicationContext(), FakeLoggingPort())
+        executor = ChatInferenceServiceExecutor(serviceStarter, loggingPort)
+    }
 
     @Test
     fun `execute emits no states when the service starts successfully`() =
@@ -38,24 +48,26 @@ class ChatInferenceServiceExecutorTest {
                     ).toList()
 
             assertTrue(results.isEmpty())
-            verify(exactly = 1) {
-                serviceStarter.startService(
-                    prompt = "hello",
-                    userMessageId = MessageId("u1"),
-                    assistantMessageId = MessageId("a1"),
-                    chatId = ChatId("chat-1"),
-                    userHasImage = false,
-                    modelType = ModelType.FAST,
-                )
-            }
+            assertEquals(
+                listOf(
+                    FakeChatInferenceServiceStarter.StartCall(
+                        prompt = "hello",
+                        userMessageId = MessageId("u1"),
+                        assistantMessageId = MessageId("a1"),
+                        chatId = ChatId("chat-1"),
+                        userHasImage = false,
+                        modelType = ModelType.FAST,
+                        modelOverride = null,
+                    ),
+                ),
+                serviceStarter.startCalls,
+            )
         }
 
     @Test
     fun `execute emits Failed when service start is rejected`() =
         runTest {
-            every {
-                serviceStarter.startService(any(), any(), any(), any(), any(), any())
-            } throws IllegalStateException("foreground service start not allowed")
+            serviceStarter.startFailure = IllegalStateException("foreground service start not allowed")
 
             val results =
                 executor
@@ -71,9 +83,7 @@ class ChatInferenceServiceExecutorTest {
 
             assertEquals(1, results.size)
             assertTrue(results.single() is MessageGenerationState.Failed)
-            verify(exactly = 1) {
-                serviceStarter.startService(any(), any(), any(), any(), any(), any())
-            }
+            assertEquals(1, serviceStarter.startCalls.size)
         }
 
     @Test
@@ -116,21 +126,26 @@ class ChatInferenceServiceExecutorTest {
                     ).toList()
 
             assertTrue(results.isEmpty())
-            verify(exactly = 1) {
-                serviceStarter.startServiceWithOverride(
-                    prompt = "hello",
-                    userMessageId = MessageId("u1"),
-                    assistantMessageId = MessageId("a1"),
-                    chatId = ChatId("chat-1"),
-                    userHasImage = false,
-                    modelOverride = override,
-                )
-            }
+            assertEquals(
+                listOf(
+                    FakeChatInferenceServiceStarter.StartCall(
+                        prompt = "hello",
+                        userMessageId = MessageId("u1"),
+                        assistantMessageId = MessageId("a1"),
+                        chatId = ChatId("chat-1"),
+                        userHasImage = false,
+                        modelType = null,
+                        modelOverride = override,
+                    ),
+                ),
+                serviceStarter.startCalls,
+            )
         }
 
     @Test
     fun `stop calls serviceStarter stopInference`() {
         executor.stop()
-        verify { serviceStarter.stopInference() }
+
+        assertEquals(1, serviceStarter.stopInferenceCount)
     }
 }

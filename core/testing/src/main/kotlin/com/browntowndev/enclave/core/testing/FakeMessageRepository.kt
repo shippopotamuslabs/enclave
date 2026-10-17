@@ -51,8 +51,13 @@ class FakeMessageRepository(
     override suspend fun getMessageById(id: MessageId): Message? =
         messagesState.value.firstOrNull { it.id == id }
 
-    override suspend fun getMessagesForChat(chatId: ChatId): List<Message> =
-        messagesState.value.filter { it.chatId == chatId }
+    /** When set, [getMessagesForChat] throws this (ENC-28 failure injection). */
+    var getMessagesForChatFailure: Throwable? = null
+
+    override suspend fun getMessagesForChat(chatId: ChatId): List<Message> {
+        getMessagesForChatFailure?.let { throw it }
+        return messagesState.value.filter { it.chatId == chatId }
+    }
 
     override suspend fun saveVisionAnalysis(
         userMessageId: MessageId,

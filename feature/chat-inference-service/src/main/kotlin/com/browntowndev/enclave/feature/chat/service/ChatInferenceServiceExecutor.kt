@@ -24,7 +24,7 @@ import javax.inject.Singleton
  * terminal [MessageGenerationState.Failed] so the caller can persist the error.
  */
 @Singleton
-class ChatInferenceServiceExecutor
+open class ChatInferenceServiceExecutor
     @Inject
     constructor(
         private val serviceStarter: ChatInferenceServiceStarter,
