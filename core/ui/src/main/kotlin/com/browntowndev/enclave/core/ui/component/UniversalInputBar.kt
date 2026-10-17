@@ -86,6 +86,7 @@ import com.browntowndev.enclave.core.ui.component.enclave.rememberNeoDisabledCli
 import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorderColor
 import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurface
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
+import com.browntowndev.enclave.core.ui.theme.EnclaveThemeAccessor
 import com.browntowndev.enclave.domain.port.media.SpeechState
 import com.browntowndev.enclave.domain.port.media.isActiveVoiceInput
 import dev.chrisbanes.haze.HazeState
@@ -116,6 +117,7 @@ fun UniversalInputBar(
 ) {
     val focusManager = LocalFocusManager.current
     val borderColor = enclaveBorderColor()
+    val glass = EnclaveThemeAccessor.glass
 
     // Surface matches the bar face so the dock reads full-bleed edge-to-edge.
     Surface(
@@ -130,9 +132,18 @@ fun UniversalInputBar(
                     .then(
                         if (hazeState != null) {
                             Modifier.hazeEffect(state = hazeState) {
-                                blurRadius = 24.dp
-                                tints = listOf(HazeTint(Color.Black.copy(alpha = hazeAlpha)))
-                                noiseFactor = 0.15f
+                                blurRadius = if (glass.enabled) glass.blurRadius else 24.dp
+                                tints =
+                                    listOf(
+                                        HazeTint(
+                                            if (glass.enabled) {
+                                                glass.tint
+                                            } else {
+                                                Color.Black.copy(alpha = hazeAlpha)
+                                            },
+                                        ),
+                                    )
+                                noiseFactor = if (glass.enabled) glass.noiseFactor else 0.15f
                             }
                         } else {
                             Modifier.enclaveSurface(

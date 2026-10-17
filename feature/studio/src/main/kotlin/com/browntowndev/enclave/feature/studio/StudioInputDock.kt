@@ -23,7 +23,9 @@ import com.browntowndev.enclave.core.ui.component.UniversalInputBar
 import com.browntowndev.enclave.core.ui.component.UniversalPromptTextField
 import com.browntowndev.enclave.core.ui.component.UniversalVoiceTrailingAction
 import com.browntowndev.enclave.core.ui.component.enclave.EnclaveIconButton
+import com.browntowndev.enclave.core.ui.theme.EnclaveThemeAccessor
 import com.browntowndev.enclave.domain.model.config.MediaCapability
+import dev.chrisbanes.haze.HazeState
 import com.browntowndev.enclave.domain.port.media.SpeechState
 import com.browntowndev.enclave.domain.port.media.isActiveVoiceInput
 
@@ -45,6 +47,7 @@ internal fun StudioInputDock(
     onMicClick: () -> Unit,
     onGenerateClick: () -> Unit,
     modifier: Modifier = Modifier,
+    hazeState: HazeState? = null,
 ) {
     var isExpanded by rememberSaveable { mutableStateOf(false) }
 
@@ -58,6 +61,7 @@ internal fun StudioInputDock(
                 .fillMaxWidth(),
     ) {
         UniversalInputBar(
+            hazeState = if (EnclaveThemeAccessor.glass.enabled) hazeState else null,
             isExpanded = isExpanded,
             attachmentContent =
                 if (referenceImageUri != null) {

@@ -29,11 +29,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.graphics.Color
 import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSecondaryIconButton
 import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorderColor
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveGlassEffect
 import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurface
 import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurfaceEdges
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
+import com.browntowndev.enclave.core.ui.theme.EnclaveThemeAccessor
+import dev.chrisbanes.haze.HazeState
 
 private val PromptHeaderActionSize = EnclaveNeoTokens.iconTileSize
 private val PromptHeaderVerticalPadding = 10.dp
@@ -46,17 +50,19 @@ fun PromptHeaderDivider(
     omitTopBorder: Boolean = false,
     showSectionDivider: Boolean = false,
     modifier: Modifier = Modifier,
+    hazeState: HazeState? = null,
 ) {
     var localIsExpanded by rememberSaveable { mutableStateOf(false) }
     val expanded = isExpanded ?: localIsExpanded
     val updateExpanded = onExpandedChange ?: { value -> localIsExpanded = value }
     val clipboardManager = LocalClipboardManager.current
     val borderColor = enclaveBorderColor()
+    val glassEnabled = EnclaveThemeAccessor.glass.enabled && hazeState != null
     val headerBackground =
-        if (omitTopBorder) {
-            MaterialTheme.colorScheme.surface
-        } else {
-            MaterialTheme.colorScheme.surfaceVariant
+        when {
+            glassEnabled -> Color.Transparent
+            omitTopBorder -> MaterialTheme.colorScheme.surface
+            else -> MaterialTheme.colorScheme.surfaceVariant
         }
 
     Box(
@@ -64,6 +70,7 @@ fun PromptHeaderDivider(
             modifier
                 .zIndex(1f)
                 .fillMaxWidth()
+                .then(if (glassEnabled) Modifier.enclaveGlassEffect(hazeState) else Modifier)
                 .then(
                     when {
                         omitTopBorder -> {
