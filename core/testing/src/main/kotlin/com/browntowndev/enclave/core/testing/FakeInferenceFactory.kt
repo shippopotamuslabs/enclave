@@ -22,11 +22,23 @@ class FakeInferenceFactory(
 
     var blockGate: CompletableDeferred<Unit>? = null
 
+    /** When set, every with* call throws this instead of running the block (ENC-28). */
+    var invocationFailure: Throwable? = null
+
+    /** Invoked at the top of every with* call (ENC-28). */
+    var onEntered: (() -> Unit)? = null
+
+    private fun enter() {
+        onEntered?.invoke()
+        invocationFailure?.let { throw it }
+    }
+
     override suspend fun <T> withInferenceService(
         modelType: ModelType,
         block: suspend (LlmInferencePort) -> T,
     ): T {
         invokedModelTypes += modelType
+        enter()
         blockGate?.await()
         return block(llm)
     }
@@ -36,6 +48,7 @@ class FakeInferenceFactory(
         block: suspend (LlmInferencePort) -> T,
     ): T {
         invokedLocalConfigIds += configId
+        enter()
         blockGate?.await()
         return block(llm)
     }
@@ -45,6 +58,7 @@ class FakeInferenceFactory(
         block: suspend (LlmInferencePort) -> T,
     ): T {
         invokedApiConfigIds += configId
+        enter()
         blockGate?.await()
         return block(llm)
     }
@@ -54,6 +68,7 @@ class FakeInferenceFactory(
         block: suspend (LlmInferencePort) -> T,
     ): T {
         invokedApiConfigIds += configId
+        enter()
         blockGate?.await()
         return block(llm)
     }

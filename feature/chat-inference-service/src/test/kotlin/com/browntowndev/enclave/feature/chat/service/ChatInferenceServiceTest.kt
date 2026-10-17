@@ -6,49 +6,45 @@ import android.content.Intent
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.ProcessLifecycleOwner
-import com.browntowndev.enclave.domain.model.chat.AccumulatedMessages
-import com.browntowndev.enclave.domain.model.chat.MessageGenerationState
+import com.browntowndev.enclave.core.testing.FakeActiveChatTurnSnapshotPort
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
+import com.browntowndev.enclave.core.testing.FakeChatRepository
+import com.browntowndev.enclave.core.testing.FakeDefaultModelRepository
+import com.browntowndev.enclave.core.testing.FakeEmbeddingEngine
+import com.browntowndev.enclave.core.testing.FakeExtractedUrlTracker
+import com.browntowndev.enclave.core.testing.FakeInferenceFactory
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeMediaProviderRepository
+import com.browntowndev.enclave.core.testing.FakeMemoriesRepository
+import com.browntowndev.enclave.core.testing.FakeMessageRepository
+import com.browntowndev.enclave.core.testing.FakePromptComposer
+import com.browntowndev.enclave.core.testing.FakeSearchIntentClassifier
+import com.browntowndev.enclave.core.testing.FakeSettingsRepository
+import com.browntowndev.enclave.core.testing.FakeToolExecutor
+import com.browntowndev.enclave.domain.model.chat.MessageId
+import com.browntowndev.enclave.domain.model.chat.MessageSnapshot
+import com.browntowndev.enclave.domain.model.chat.MessageState
 import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.error.ActiveModelConfigurationDecryptException
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnSnapshotPort
 import com.browntowndev.enclave.domain.port.inference.CommittedInferencePromptPort
-import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
+import com.browntowndev.enclave.domain.usecase.chat.InMemoryMonotonicToolActivationStore
 import com.browntowndev.enclave.domain.port.inference.InferenceEvent
-import com.browntowndev.enclave.domain.port.inference.InferenceFactoryPort
-import com.browntowndev.enclave.domain.port.inference.LlmInferencePort
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
+import com.browntowndev.enclave.domain.port.inference.NoopCommittedInferencePromptPort
 import com.browntowndev.enclave.domain.port.inference.NoopOnDeviceInferenceCancellationPort
-import com.browntowndev.enclave.domain.port.inference.MonotonicToolActivationPort
-import com.browntowndev.enclave.domain.port.inference.PromptComposerPort
-import com.browntowndev.enclave.domain.port.inference.SearchIntentClassifierPort
-import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
-import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
-import com.browntowndev.enclave.domain.port.repository.MemoriesRepository
-import com.browntowndev.enclave.domain.port.repository.MessageRepository
-import com.browntowndev.enclave.domain.port.repository.SettingsData
-import com.browntowndev.enclave.domain.port.repository.SettingsRepository
 import com.browntowndev.enclave.domain.usecase.chat.ChatGenerationProgressPersister
-import com.browntowndev.enclave.domain.usecase.chat.ChatGenerationProgressSession
 import com.browntowndev.enclave.domain.usecase.chat.ChatHistoryRehydrator
 import com.browntowndev.enclave.domain.usecase.chat.ChatInferenceRequestPreparer
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.just
-import io.mockk.mockk
-import io.mockk.runs
-import io.mockk.spyk
-import io.mockk.verify
+import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManagerImpl
+import com.browntowndev.enclave.domain.usecase.media.GetProviderCapabilitiesUseCase
+import com.browntowndev.enclave.domain.usecase.media.MediaToolDefinitionFactory
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -61,6 +57,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowNotificationManager
 import tech.apter.junit.jupiter.robolectric.RobolectricExtension
@@ -69,6 +66,12 @@ import tech.apter.junit.jupiter.robolectric.RobolectricExtension
  * Exercises [ChatInferenceService] without Hilt component creation (feature module has no
  * @HiltAndroidApp). Dependencies are injected manually; [ChatInferenceService.onCreate] is not
  * invoked because it triggers Hilt injection.
+ *
+ * ENC-28: all Enclave ports are :core:testing fakes and the progress persister,
+ * rehydrator, and request preparer are the real objects wired over those fakes.
+ * Session behavior is asserted through its observable effects: the snapshots the
+ * service publishes for every applied state, the messages persisted into the
+ * fake repositories on terminal states, and the URL tracker's clears.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @ExtendWith(RobolectricExtension::class)
@@ -82,29 +85,34 @@ class ChatInferenceServiceTest {
     private lateinit var service: ChatInferenceService
     private val testDispatcher = StandardTestDispatcher()
 
-    private val inferenceFactory = mockk<InferenceFactoryPort>()
-    private val activeModelProvider = mockk<ActiveModelProviderPort>()
-    private val messageRepository = mockk<MessageRepository>(relaxed = true)
-    private val settingsRepository = mockk<SettingsRepository>()
-    private val memoriesRepository = mockk<MemoriesRepository>(relaxed = true)
-    private val embeddingEnginePort = mockk<EmbeddingEnginePort>(relaxed = true)
-    private val promptComposer = mockk<PromptComposerPort>(relaxed = true)
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
-    private val searchIntentClassifier = mockk<SearchIntentClassifierPort>(relaxed = true)
-    private val toolExecutor = mockk<ToolExecutorPort>(relaxed = true)
-    private val activeChatTurnSnapshotPort = mockk<ActiveChatTurnSnapshotPort>(relaxed = true)
-    private val defaultModelRepository = mockk<com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort>(relaxed = true)
-    private val mediaProviderRepository = mockk<com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort>(relaxed = true)
-    private val mediaToolDefinitionFactory = mockk<com.browntowndev.enclave.domain.usecase.media.MediaToolDefinitionFactory>(relaxed = true)
-    private val getProviderCapabilitiesUseCase =
-        mockk<com.browntowndev.enclave.domain.usecase.media.GetProviderCapabilitiesUseCase>(relaxed = true)
-    private val chatGenerationProgressPersister = mockk<ChatGenerationProgressPersister>()
-    private val monotonicToolActivation = mockk<MonotonicToolActivationPort>(relaxed = true)
-    private val committedInferencePrompts = mockk<CommittedInferencePromptPort>(relaxed = true)
-    private val inferenceLockManager = mockk<InferenceLockManager>(relaxed = true)
-
-    private val llmInferenceService = mockk<LlmInferencePort>()
-    private val progressSession = mockk<ChatGenerationProgressSession>()
+    private val inferenceFactory = FakeInferenceFactory()
+    private val llm = inferenceFactory.llm
+    private val activeModelProvider = FakeActiveModelProvider()
+    private val messageRepository = FakeMessageRepository()
+    private val settingsRepository = FakeSettingsRepository()
+    private val memoriesRepository = FakeMemoriesRepository()
+    private val embeddingEnginePort = FakeEmbeddingEngine()
+    private val promptComposer = FakePromptComposer()
+    private val loggingPort = FakeLoggingPort()
+    private val searchIntentClassifier = FakeSearchIntentClassifier()
+    private val toolExecutor = FakeToolExecutor()
+    private val activeChatTurnSnapshotPort = FakeActiveChatTurnSnapshotPort()
+    private val defaultModelRepository = FakeDefaultModelRepository()
+    private val mediaProviderRepository = FakeMediaProviderRepository()
+    private val mediaToolDefinitionFactory = MediaToolDefinitionFactory(GetProviderCapabilitiesUseCase())
+    private val getProviderCapabilitiesUseCase = GetProviderCapabilitiesUseCase()
+    private val extractedUrlTracker = FakeExtractedUrlTracker()
+    private val chatRepository = FakeChatRepository()
+    private val chatGenerationProgressPersister =
+        ChatGenerationProgressPersister(
+            chatRepository = chatRepository,
+            messageRepository = messageRepository,
+            embeddingEngine = embeddingEnginePort,
+            extractedUrlTracker = extractedUrlTracker,
+        )
+    private val monotonicToolActivation = InMemoryMonotonicToolActivationStore()
+    private val committedInferencePrompts: CommittedInferencePromptPort = NoopCommittedInferencePromptPort
+    private val inferenceLockManager = InferenceLockManagerImpl()
 
     @BeforeEach
     fun setUp() {
@@ -180,7 +188,7 @@ class ChatInferenceServiceTest {
         channelsMethod.isAccessible = true
         channelsMethod.invoke(service)
 
-        val activeConfig =
+        activeModelProvider.configuration =
             ActiveModelConfiguration(
                 modelId = "test-model",
                 id = LocalModelConfigurationId("fast"),
@@ -197,31 +205,7 @@ class ChatInferenceServiceTest {
                 thinkingEnabled = false,
                 isMultimodal = false,
             )
-        coEvery { activeModelProvider.getActiveConfiguration(any()) } returns activeConfig
-        every { settingsRepository.settingsFlow } returns flowOf(SettingsData())
-        coEvery { messageRepository.getMessagesForChat(any()) } returns emptyList()
-        coEvery { messageRepository.getMessageById(any()) } returns null
-        coEvery { messageRepository.resolveLatestImageBearingUserMessage(any(), any()) } returns null
-        coEvery { memoriesRepository.getCoreMemories() } returns emptyList()
-        coEvery { memoriesRepository.searchMemories(any(), any(), any(), any()) } returns emptyList()
-        coEvery { embeddingEnginePort.getEmbedding(any()) } returns floatArrayOf(0.1f, 0.2f)
-        coEvery { promptComposer.compose(any(), any(), any(), any(), any(), any(), any()) } returns "composed-prompt"
-
-        val accumulated = AccumulatedMessages(messages = emptyMap())
-        coEvery { progressSession.applyState(any()) } returns accumulated
-        coEvery { progressSession.flush(any()) } just runs
-        coEvery { progressSession.accumulatedMessages() } returns accumulated
-
-        coEvery {
-            chatGenerationProgressPersister.startSession(any(), any(), any(), any())
-        } returns progressSession
-
-        coEvery { inferenceFactory.withInferenceService<Any?>(any(), any()) } coAnswers {
-            val block = args[1] as suspend (LlmInferencePort) -> Any?
-            block(llmInferenceService)
-        }
-        every { llmInferenceService.sendPrompt(any(), any(), any()) } returns
-            flowOf(InferenceEvent.Finished(ModelType.FAST))
+        promptComposer.resultOverride = "composed-prompt"
     }
 
     private fun startIntent(userHasImage: Boolean = false): Intent =
@@ -242,6 +226,10 @@ class ChatInferenceServiceTest {
         return Shadows.shadowOf(notificationManager)
     }
 
+    /** Snapshots of the assistant message (a1) from every state the service applied, in order. */
+    private fun assistantSnapshots(): List<MessageSnapshot> =
+        activeChatTurnSnapshotPort.publishes.mapNotNull { it.second.messages[MessageId("a1")] }
+
     @Test
     @DisplayName("CIS1: Plain success path applies Finished state")
     fun plainSuccessPathAppliesFinishedState() =
@@ -249,33 +237,34 @@ class ChatInferenceServiceTest {
             service.onStartCommand(startIntent(), 0, 1)
             advanceUntilIdle()
 
-            verify { llmInferenceService.sendPrompt(any(), any(), any()) }
-            coVerify(exactly = 1) {
-                progressSession.applyState(match { it is MessageGenerationState.Finished })
-            }
+            assertTrue(llm.recordedPrompts.isNotEmpty(), "expected sendPrompt to be called")
+            assertEquals(
+                1,
+                assistantSnapshots().count { it.isComplete },
+                "expected exactly one terminal (Finished) state applied; snapshots=${assistantSnapshots()}",
+            )
+            assertTrue(
+                chatRepository.persistAllMessageDataCalls.any {
+                    it.messageId == MessageId("a1") && it.messageState == MessageState.COMPLETE
+                },
+                "expected the finished assistant message persisted; calls=${chatRepository.persistAllMessageDataCalls}",
+            )
         }
 
     @Test
     @DisplayName("CIS2: userHasImage emits Processing before stream")
     fun cis2_userHasImageEmitsProcessingBeforeStream() =
         runTest(testDispatcher) {
-            val appliedStates = mutableListOf<MessageGenerationState>()
-            coEvery { progressSession.applyState(any()) } answers {
-                appliedStates.add(firstArg())
-                AccumulatedMessages(messages = emptyMap())
-            }
-
             service.onStartCommand(startIntent(userHasImage = true), 0, 1)
             advanceUntilIdle()
 
-            assertTrue(appliedStates.isNotEmpty(), "expected at least one applyState call")
-            assertTrue(
-                appliedStates.first() is MessageGenerationState.Processing,
-                "first state should be Processing but was ${appliedStates.first()::class.simpleName}",
+            val snapshots = assistantSnapshots()
+            assertTrue(snapshots.isNotEmpty(), "expected at least one applied state")
+            assertEquals(
+                MessageState.PROCESSING,
+                snapshots.first().messageState,
+                "first applied state should be Processing",
             )
-            coVerify {
-                progressSession.applyState(match { it is MessageGenerationState.Processing })
-            }
         }
 
     @Test
@@ -283,37 +272,35 @@ class ChatInferenceServiceTest {
     fun cis5_actionStopWhileJobActiveUsesFinallyStopSelf() =
         runTest(testDispatcher) {
             val streamStarted = CompletableDeferred<Unit>()
-            every { llmInferenceService.sendPrompt(any(), any(), any()) } returns
+            llm.promptFlowOverride =
                 flow {
                     streamStarted.complete(Unit)
                     awaitCancellation()
                 }
 
-            val spiedService = spyk(service, recordPrivateCalls = false)
-            spiedService.onStartCommand(startIntent(), 0, 1)
+            service.onStartCommand(startIntent(), 0, 1)
             streamStarted.await()
             runCurrent()
 
-            spiedService.onStartCommand(
+            service.onStartCommand(
                 Intent(ChatInferenceService.ACTION_STOP),
                 0,
                 2,
             )
             advanceUntilIdle()
 
-            verify(atLeast = 1) { spiedService.stopSelf(1) }
+            assertTrue(shadowOf(service).isStoppedBySelf)
+            assertEquals(1, shadowOf(service).stopSelfId)
         }
 
     @Test
     @DisplayName("CIS3: ACTION_START invokes startForeground for ongoing notification")
     fun cis3_actionStartInvokesStartForeground() =
         runTest(testDispatcher) {
-            val spiedService = spyk(service, recordPrivateCalls = false)
-
-            spiedService.onStartCommand(startIntent(), 0, 1)
+            service.onStartCommand(startIntent(), 0, 1)
             advanceUntilIdle()
 
-            verify { spiedService.startForeground(ONGOING_NOTIFICATION_ID, any()) }
+            assertEquals(ONGOING_NOTIFICATION_ID, shadowOf(service).lastForegroundNotificationId)
         }
 
     @Test
@@ -365,10 +352,8 @@ class ChatInferenceServiceTest {
     @DisplayName("Scenario 3.1: Token Streaming Event Dispatch maps thinking and text events")
     fun testTokenStreamingEventDispatch() =
         runTest(testDispatcher) {
-            every {
-                llmInferenceService.sendPrompt(any(), any(), any())
-            } returns
-                flowOf(
+            llm.eventsToEmit =
+                listOf(
                     InferenceEvent.Thinking("Thinking chunk", ModelType.FAST),
                     InferenceEvent.PartialResponse("Response text", ModelType.FAST),
                     InferenceEvent.Finished(ModelType.FAST),
@@ -377,30 +362,28 @@ class ChatInferenceServiceTest {
             service.onStartCommand(startIntent(), 0, 1)
             advanceUntilIdle()
 
-            coVerify { activeChatTurnSnapshotPort.publish(any(), any()) }
-            coVerify { progressSession.applyState(match { it is MessageGenerationState.Finished }) }
+            assertTrue(activeChatTurnSnapshotPort.publishes.isNotEmpty(), "expected snapshots published")
+            assertEquals(1, assistantSnapshots().count { it.isComplete })
         }
 
     @Test
     @DisplayName("Scenario 3.2: Rehydration Failure Resilience continues generation")
     fun testRehydrationFailureResilience() =
         runTest(testDispatcher) {
-            coEvery { messageRepository.getMessagesForChat(any()) } throws RuntimeException("DB offline")
+            messageRepository.getMessagesForChatFailure = RuntimeException("DB offline")
 
             service.onStartCommand(startIntent(), 0, 1)
             advanceUntilIdle()
 
-            verify { llmInferenceService.sendPrompt(any(), any(), any()) }
-            coVerify { progressSession.applyState(match { it is MessageGenerationState.Finished }) }
+            assertTrue(llm.recordedPrompts.isNotEmpty(), "expected sendPrompt to be called")
+            assertEquals(1, assistantSnapshots().count { it.isComplete })
         }
 
     @Test
     @DisplayName("Scenario 3.4: Decrypt Exception publishes failure state")
     fun testDecryptExceptionPublishesFailureState() =
         runTest(testDispatcher) {
-            coEvery {
-                inferenceFactory.withInferenceService<Any?>(any(), any())
-            } throws
+            inferenceFactory.invocationFailure =
                 ActiveModelConfigurationDecryptException(
                     ModelType.FAST,
                     "Decrypt key error",
@@ -409,9 +392,15 @@ class ChatInferenceServiceTest {
             service.onStartCommand(startIntent(), 0, 1)
             advanceUntilIdle()
 
-            coVerify {
-                progressSession.applyState(match { it is MessageGenerationState.Failed })
-            }
+            assertTrue(llm.recordedPrompts.isEmpty(), "generation must not start on decrypt failure")
+            assertTrue(
+                extractedUrlTracker.clearCount >= 1,
+                "expected the Failed terminal state to be applied (terminal persist clears the tracker)",
+            )
+            assertTrue(
+                chatRepository.persistAllMessageDataCalls.any { it.messageId == MessageId("a1") },
+                "expected the failed assistant message persisted; calls=${chatRepository.persistAllMessageDataCalls}",
+            )
         }
 
     @Test
@@ -419,16 +408,8 @@ class ChatInferenceServiceTest {
     fun testJobCancellationCleanupFlushesState() =
         runTest(testDispatcher) {
             val blockStarted = CompletableDeferred<Unit>()
-            coEvery {
-                inferenceFactory.withInferenceService<Any?>(any(), any())
-            } coAnswers {
-                blockStarted.complete(Unit)
-                val block = args[1] as suspend (LlmInferencePort) -> Any?
-                block(llmInferenceService)
-            }
-            every {
-                llmInferenceService.sendPrompt(any(), any(), any())
-            } returns
+            inferenceFactory.onEntered = { blockStarted.complete(Unit) }
+            llm.promptFlowOverride =
                 flow {
                     emit(InferenceEvent.PartialResponse("partial", ModelType.FAST))
                     awaitCancellation()
@@ -440,6 +421,12 @@ class ChatInferenceServiceTest {
             service.onStartCommand(Intent(ChatInferenceService.ACTION_STOP), 0, 2)
             advanceUntilIdle()
 
-            coVerify(timeout = 2000) { progressSession.flush(markIncompleteAsCancelled = true) }
+            // flush(markIncompleteAsCancelled = true) persists the incomplete turn:
+            // the assistant message lands in the repository only via that flush.
+            assertTrue(
+                chatRepository.persistAllMessageDataCalls.any { it.messageId == MessageId("a1") },
+                "expected the cancelled assistant message flushed to the repository; calls=${chatRepository.persistAllMessageDataCalls}",
+            )
+            assertTrue(extractedUrlTracker.clearCount >= 1)
         }
 }

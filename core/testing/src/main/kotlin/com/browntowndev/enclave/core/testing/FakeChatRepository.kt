@@ -166,6 +166,15 @@ class FakeChatRepository(
     }
 
     @Suppress("LongParameterList")
+    /** Every persistAllMessageData call, recorded for assertions (ENC-28). */
+    data class PersistedMessageData(
+        val messageId: MessageId,
+        val content: String,
+        val messageState: MessageState,
+    )
+
+    val persistAllMessageDataCalls = mutableListOf<PersistedMessageData>()
+
     override suspend fun persistAllMessageData(
         messageId: MessageId,
         modelType: ModelType,
@@ -185,6 +194,7 @@ class FakeChatRepository(
         transcriptSegments: List<MessageTranscriptSegment>,
         telemetry: List<TurnTelemetry>,
     ) {
+        persistAllMessageDataCalls += PersistedMessageData(messageId, content, messageState)
         updateMessage(messageId) {
             it.copy(
                 content = Content(
