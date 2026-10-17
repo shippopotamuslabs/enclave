@@ -2,117 +2,122 @@ package com.browntowndev.enclave.feature.moa.service
 
 import android.app.NotificationManager
 import android.content.Intent
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
+import com.browntowndev.enclave.core.testing.FakeChatRepository
+import com.browntowndev.enclave.core.testing.FakeEmbeddingEngine
+import com.browntowndev.enclave.core.testing.FakeExtractedUrlTracker
+import com.browntowndev.enclave.core.testing.FakeInferenceFactory
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeMessageRepository
+import com.browntowndev.enclave.core.testing.FakePipelineStateRepository
 import com.browntowndev.enclave.domain.model.chat.MessageGenerationState
+import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
+import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.PipelineState
 import com.browntowndev.enclave.domain.model.inference.PipelineStep
-import com.browntowndev.enclave.domain.port.inference.InferenceEvent
-import com.browntowndev.enclave.domain.port.inference.InferenceFactoryPort
-import com.browntowndev.enclave.domain.port.inference.LlmInferencePort
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
-import com.browntowndev.enclave.domain.port.repository.PipelineStateRepository
 import com.browntowndev.enclave.domain.usecase.chat.ChatGenerationProgressPersister
 import com.browntowndev.enclave.feature.inference.InferenceEventBus
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.spyk
-import io.mockk.verify
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.RuntimeEnvironment
+import org.robolectric.Shadows.shadowOf
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
+/**
+ * ENC-28: this suite now runs the real [InferenceService] under Robolectric.
+ * Framework interactions are asserted through shadows (stopped-by-self,
+ * foreground state), Enclave ports are :core:testing fakes, and pipeline
+ * emissions are observed on the real [InferenceEventBus]. Thermal headroom is
+ * scripted through [HeadroomPowerManagerShadow].
+ */
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34], shadows = [HeadroomPowerManagerShadow::class])
 @OptIn(ExperimentalCoroutinesApi::class)
 class InferenceServiceTest {
     private lateinit var service: InferenceService
-    private val notificationManager = mockk<NotificationManager>(relaxed = true)
-    private val logger = mockk<LoggingPort>(relaxed = true)
-    private val inferenceFactory = mockk<InferenceFactoryPort>()
-    private val activeModelProvider = mockk<ActiveModelProviderPort>(relaxed = true)
-    private val inferenceEventBus = mockk<InferenceEventBus>(relaxed = true)
-    private val chatGenerationProgressPersister = mockk<ChatGenerationProgressPersister>(relaxed = true)
-    private val pipelineStateRepository = mockk<PipelineStateRepository>(relaxed = true)
-    private val llmInferenceService = mockk<LlmInferencePort>(relaxed = true)
-    private val powerManager = mockk<android.os.PowerManager>(relaxed = true)
-    private val testDispatcher = StandardTestDispatcher()
-    private var serviceCompletion = CompletableDeferred<Unit>()
 
-    private val invokedModelTypes = java.util.Collections.synchronizedList(mutableListOf<ModelType>())
+    private val logger = FakeLoggingPort()
+    private val inferenceFactory = FakeInferenceFactory()
+    private val activeModelProvider = FakeActiveModelProvider()
+    private val inferenceEventBus = InferenceEventBus()
+    private val pipelineStateRepository = FakePipelineStateRepository()
+    private val testDispatcher = StandardTestDispatcher()
+
+    private fun testActiveConfig(contextWindow: Int? = null) =
+        ActiveModelConfiguration(
+            id = LocalModelConfigurationId("test-config"),
+            isLocal = true,
+            name = "Test Model",
+            modelId = "test-model",
+            systemPrompt = null,
+            temperature = null,
+            topK = null,
+            topP = null,
+            maxTokens = null,
+            minP = null,
+            repetitionPenalty = null,
+            contextWindow = contextWindow,
+            thinkingEnabled = false,
+        )
 
     @BeforeEach
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
-        serviceCompletion = CompletableDeferred<Unit>()
-        invokedModelTypes.clear()
+        HeadroomPowerManagerShadow.headroomForecast = 0.5f
+        activeModelProvider.configuration = testActiveConfig()
 
-        service = spyk(InferenceService())
+        // Bare construction + manual injection, mirroring the chat-inference-service
+        // suite: onCreate is never invoked because it triggers Hilt injection, which
+        // requires a @HiltAndroidApp Application. The base context is attached so
+        // framework calls (getSystemService, startForeground) reach Robolectric.
+        service = InferenceService()
+        val attachBaseContextMethod =
+            android.content.ContextWrapper::class.java.getDeclaredMethod(
+                "attachBaseContext",
+                android.content.Context::class.java,
+            )
+        attachBaseContextMethod.isAccessible = true
+        attachBaseContextMethod.invoke(service, RuntimeEnvironment.getApplication())
 
         // Replace serviceScope with test dispatcher so pipeline runs synchronously under test control
         service.serviceScope = CoroutineScope(testDispatcher + SupervisorJob())
 
-        // Inject mocks
-        service.notificationManager = notificationManager
+        service.notificationManager =
+            RuntimeEnvironment.getApplication().getSystemService(NotificationManager::class.java)
         service.logger = logger
-        val lazyFactory = mockk<dagger.Lazy<InferenceFactoryPort>>()
-        every { lazyFactory.get() } returns inferenceFactory
-        service.inferenceFactoryProvider = lazyFactory
+        service.inferenceFactoryProvider = dagger.Lazy { inferenceFactory }
         service.activeModelProvider = activeModelProvider
         service.inferenceEventBus = inferenceEventBus
-        service.chatGenerationProgressPersister = chatGenerationProgressPersister
+        service.chatGenerationProgressPersister =
+            ChatGenerationProgressPersister(
+                chatRepository = FakeChatRepository(),
+                messageRepository = FakeMessageRepository(),
+                embeddingEngine = FakeEmbeddingEngine(),
+                extractedUrlTracker = FakeExtractedUrlTracker(),
+            )
         service.pipelineStateRepository = pipelineStateRepository
-        coEvery { pipelineStateRepository.persistPipelineState(any(), any()) } returns Unit
-        coEvery { pipelineStateRepository.clearPipelineState(any()) } returns Unit
-
-        // Mock PowerManager
-        every { service.getSystemService(android.content.Context.POWER_SERVICE) } returns powerManager
-        every { powerManager.getThermalHeadroom(any()) } returns 0.5f
-
-        // Mock active model config
-        val mockActiveConfig = mockk<com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration>(relaxed = true)
-        coEvery { activeModelProvider.getActiveConfiguration(any()) } returns mockActiveConfig
-
-        // Stub Service methods
-        every { service.startForeground(any(), any(), any()) } returns Unit
-        every { service.stopForeground(any<Int>()) } returns Unit
-        every { service.stopSelf() } answers {
-            serviceCompletion.complete(Unit)
-        }
-        every { service.stopSelf(any()) } answers {
-            serviceCompletion.complete(Unit)
-        }
-
-        // Mock internal methods to avoid Android framework calls
-        every { service.createCancelPendingIntent() } returns mockk(relaxed = true)
-        every { service.createProgressNotification(any(), any(), any()) } returns mockk(relaxed = true)
-
-        // Default inference behavior - track model types via side effect
-        coEvery {
-            inferenceFactory.withInferenceService(any<ModelType>(), any<suspend (LlmInferencePort) -> Unit>())
-        } coAnswers {
-            invokedModelTypes.add(firstArg())
-            val block = args[1] as suspend (LlmInferencePort) -> Unit
-            block(llmInferenceService)
-        }
-
-        every {
-            llmInferenceService.sendPrompt(any(), options = any(), closeConversation = any())
-        } returns flowOf(InferenceEvent.Finished(ModelType.FAST))
     }
 
     @AfterEach
@@ -120,158 +125,140 @@ class InferenceServiceTest {
         Dispatchers.resetMain()
     }
 
+    private fun startIntent(chatId: String, userMessage: String): Intent =
+        Intent().apply {
+            action = InferenceService.ACTION_START
+            putExtra(InferenceService.EXTRA_CHAT_ID, chatId)
+            putExtra(InferenceService.EXTRA_USER_MESSAGE, userMessage)
+        }
+
+    /** Opens the chat's pipeline stream and collects its states; cancel the returned job before the test ends. */
+    private fun TestScope.collectPipelineStates(chatId: String): Pair<MutableList<MessageGenerationState>, Job> {
+        val states = mutableListOf<MessageGenerationState>()
+        val job =
+            launch {
+                inferenceEventBus.openPipelineRequest(chatId).toList(states)
+            }
+        testDispatcher.scheduler.runCurrent()
+        return states to job
+    }
+
     @Test
     @DisplayName("ACTION_START executes full pipeline with all model types")
     fun actionStartExecutesFullPipeline() =
         runTest(testDispatcher) {
-            // Given
-            val intent = mockk<Intent>(relaxed = true)
-            every { intent.action } returns InferenceService.ACTION_START
-            every { intent.getStringExtra(InferenceService.EXTRA_CHAT_ID) } returns "chat-123"
-            every { intent.getStringExtra(InferenceService.EXTRA_USER_MESSAGE) } returns "hello"
+            // Hold the pipeline inside its first step so the foreground state is
+            // observable mid-run (completion removes the foreground notification).
+            val gate = CompletableDeferred<Unit>()
+            inferenceFactory.blockGate = gate
+            service.onStartCommand(startIntent("chat-123", "hello"), 0, 1)
+            testDispatcher.scheduler.advanceTimeBy(500)
 
-            // When
-            service.onStartCommand(intent, 0, 1)
+            assertNotNull(shadowOf(service).lastForegroundNotification)
 
-            // Advance dispatcher to execute the launched pipeline coroutine
+            gate.complete(Unit)
             advanceUntilIdle()
 
-            // Then - verify all pipeline steps were invoked
             assertTrue(
-                invokedModelTypes.contains(ModelType.DRAFT_ONE),
-                "Expected DRAFT_ONE in $invokedModelTypes",
+                inferenceFactory.invokedModelTypes.contains(ModelType.DRAFT_ONE),
+                "Expected DRAFT_ONE in ${inferenceFactory.invokedModelTypes}",
             )
             assertTrue(
-                invokedModelTypes.contains(ModelType.DRAFT_TWO),
-                "Expected DRAFT_TWO in $invokedModelTypes",
+                inferenceFactory.invokedModelTypes.contains(ModelType.DRAFT_TWO),
+                "Expected DRAFT_TWO in ${inferenceFactory.invokedModelTypes}",
             )
             assertTrue(
-                invokedModelTypes.contains(ModelType.MAIN),
-                "Expected MAIN in $invokedModelTypes",
+                inferenceFactory.invokedModelTypes.contains(ModelType.MAIN),
+                "Expected MAIN in ${inferenceFactory.invokedModelTypes}",
             )
             assertTrue(
-                invokedModelTypes.contains(ModelType.FINAL_SYNTHESIS),
-                "Expected FINAL_SYNTHESIS in $invokedModelTypes",
+                inferenceFactory.invokedModelTypes.contains(ModelType.FINAL_SYNTHESIS),
+                "Expected FINAL_SYNTHESIS in ${inferenceFactory.invokedModelTypes}",
             )
-
-            verify { service.startForeground(any(), any(), any()) }
+            assertTrue(shadowOf(service).isStoppedBySelf)
         }
 
     @Test
     @DisplayName("ACTION_STOP cancels pipeline and stops service")
     fun actionStopCancelsPipeline() =
         runTest(testDispatcher) {
-            // Given
-            val intentStop = mockk<Intent>(relaxed = true)
-            every { intentStop.action } returns InferenceService.ACTION_STOP
+            val intentStop =
+                Intent().apply {
+                    action = InferenceService.ACTION_STOP
+                }
 
-            // When
             service.onStartCommand(intentStop, 0, 1)
-
             advanceUntilIdle()
 
-            // Then
-            verify { service.stopForeground(any<Int>()) }
-            verify { service.stopSelf(any()) }
+            assertTrue(shadowOf(service).isForegroundStopped)
+            assertTrue(shadowOf(service).isStoppedBySelf)
         }
 
     @Test
     @DisplayName("Scenario 2.1: Invalid State JSON on Resume stops service")
     fun actionResumeWithInvalidStateJsonStopsService() =
         runTest(testDispatcher) {
-            // Given
-            val intent = mockk<Intent>(relaxed = true)
-            every { intent.action } returns InferenceService.ACTION_RESUME
-            every { intent.getStringExtra(InferenceService.EXTRA_CHAT_ID) } returns "chat-123"
-            every { intent.getStringExtra(InferenceService.EXTRA_STATE_JSON) } returns "invalid-json"
+            val intent =
+                Intent().apply {
+                    action = InferenceService.ACTION_RESUME
+                    putExtra(InferenceService.EXTRA_CHAT_ID, "chat-123")
+                    putExtra(InferenceService.EXTRA_STATE_JSON, "invalid-json")
+                }
 
-            // When
             service.onStartCommand(intent, 0, 1)
             advanceUntilIdle()
 
-            // Then
-            verify { service.stopSelf(any()) }
-            assertTrue(invokedModelTypes.isEmpty())
+            assertTrue(shadowOf(service).isStoppedBySelf)
+            assertTrue(inferenceFactory.invokedModelTypes.isEmpty())
         }
 
     @Test
     @DisplayName("Scenario 2.2: Concurrency - ACTION_START cancels active pipeline job")
     fun actionStartCancelsActiveJob() =
         runTest(testDispatcher) {
-            // Given: First job delays when executing to simulate active generation
-            val firstCompletable = CompletableDeferred<Unit>()
-            coEvery {
-                inferenceFactory.withInferenceService(any<ModelType>(), any<suspend (LlmInferencePort) -> Unit>())
-            } coAnswers {
-                invokedModelTypes.add(firstArg())
-                firstCompletable.await() // block/suspend until cancelled or completed
-                val block = args[1] as suspend (LlmInferencePort) -> Unit
-                block(llmInferenceService)
-            }
+            // Given: the factory gate holds the first job inside its first step
+            val gate = CompletableDeferred<Unit>()
+            inferenceFactory.blockGate = gate
 
-            val intent1 = mockk<Intent>(relaxed = true)
-            every { intent1.action } returns InferenceService.ACTION_START
-            every { intent1.getStringExtra(InferenceService.EXTRA_CHAT_ID) } returns "chat-123"
-            every { intent1.getStringExtra(InferenceService.EXTRA_USER_MESSAGE) } returns "hello"
-
-            // When: Start first job
-            service.onStartCommand(intent1, 0, 1)
+            service.onStartCommand(startIntent("chat-123", "hello"), 0, 1)
             testDispatcher.scheduler.advanceTimeBy(500) // let first job run and block
 
             // Start second job with new chat ID
-            val intent2 = mockk<Intent>(relaxed = true)
-            every { intent2.action } returns InferenceService.ACTION_START
-            every { intent2.getStringExtra(InferenceService.EXTRA_CHAT_ID) } returns "chat-456"
-            every { intent2.getStringExtra(InferenceService.EXTRA_USER_MESSAGE) } returns "world"
-
-            service.onStartCommand(intent2, 0, 2)
-            firstCompletable.complete(Unit) // unblock first job (which should be cancelled)
+            service.onStartCommand(startIntent("chat-456", "world"), 0, 2)
+            gate.complete(Unit) // unblock (the first job is already cancelled)
             advanceUntilIdle()
 
-            // Then: verify cancellation and termination of service
-            verify { service.stopSelf(any()) }
+            // Then: the surviving job ran to completion and stopped the service
+            assertTrue(shadowOf(service).isStoppedBySelf)
         }
 
     @Test
     @DisplayName("Scenario 2.3: Processing state is emitted before model starts")
     fun processingStateIsEmittedBeforeGeneration() =
         runTest(testDispatcher) {
-            // Given
-            val intent = mockk<Intent>(relaxed = true)
-            every { intent.action } returns InferenceService.ACTION_START
-            every { intent.getStringExtra(InferenceService.EXTRA_CHAT_ID) } returns "chat-123"
-            every { intent.getStringExtra(InferenceService.EXTRA_USER_MESSAGE) } returns "hello"
+            val (states, collectJob) = collectPipelineStates("chat-123")
 
-            // When
-            service.onStartCommand(intent, 0, 1)
+            service.onStartCommand(startIntent("chat-123", "hello"), 0, 1)
             advanceUntilIdle()
+            collectJob.cancel()
 
-            // Then: verify processing state was emitted for at least one model step
-            coVerify {
-                inferenceEventBus.emitPipelineState("chat-123", any<MessageGenerationState.Processing>())
-            }
+            assertTrue(
+                states.any { it is MessageGenerationState.Processing },
+                "Expected a Processing state in $states",
+            )
         }
 
     @Test
     @DisplayName("Scenario 2.4: Token budget falls back on zero context window")
     fun tokenBudgetFallsBackOnZeroContext() =
         runTest(testDispatcher) {
-            // Given: Mock config with zero context window
-            val mockActiveConfig = mockk<com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration>(relaxed = true)
-            every { mockActiveConfig.contextWindow } returns 0
-            coEvery { activeModelProvider.getActiveConfiguration(any()) } returns mockActiveConfig
+            activeModelProvider.configuration = testActiveConfig(contextWindow = 0)
 
-            val intent = mockk<Intent>(relaxed = true)
-            every { intent.action } returns InferenceService.ACTION_START
-            every { intent.getStringExtra(InferenceService.EXTRA_CHAT_ID) } returns "chat-123"
-            every { intent.getStringExtra(InferenceService.EXTRA_USER_MESSAGE) } returns "hello"
-
-            // When
-            service.onStartCommand(intent, 0, 1)
+            service.onStartCommand(startIntent("chat-123", "hello"), 0, 1)
             advanceUntilIdle()
 
-            // Then: Pipeline still runs to completion (budget does not throw)
-            assertTrue(invokedModelTypes.contains(ModelType.DRAFT_ONE))
+            // Pipeline still runs to completion (budget does not throw)
+            assertTrue(inferenceFactory.invokedModelTypes.contains(ModelType.DRAFT_ONE))
         }
 
     @Test
@@ -279,28 +266,22 @@ class InferenceServiceTest {
     fun thermalWatchdogFallbackCancelsPipeline() =
         runTest(testDispatcher) {
             // Given: Headroom forecasts severe throttling (>= 0.95)
-            every { powerManager.getThermalHeadroom(any()) } returns 0.96f
+            HeadroomPowerManagerShadow.headroomForecast = 0.96f
+            val (states, collectJob) = collectPipelineStates("chat-123")
 
-            val intent = mockk<Intent>(relaxed = true)
-            every { intent.action } returns InferenceService.ACTION_START
-            every { intent.getStringExtra(InferenceService.EXTRA_CHAT_ID) } returns "chat-123"
-            every { intent.getStringExtra(InferenceService.EXTRA_USER_MESSAGE) } returns "hello"
-
-            // When
-            service.onStartCommand(intent, 0, 1)
+            service.onStartCommand(startIntent("chat-123", "hello"), 0, 1)
             advanceUntilIdle()
+            collectJob.cancel()
 
             // Then: Pipeline fails and emits Failed state with thermal shutdown message
-            coVerify {
-                inferenceEventBus.emitPipelineState(
-                    "chat-123",
-                    match { state ->
-                        state is MessageGenerationState.Failed &&
-                            state.error.message == "response was killed by Android due to thermal shutdown"
-                    },
-                )
-            }
-            verify { service.stopSelf(any()) }
+            assertTrue(
+                states.any {
+                    it is MessageGenerationState.Failed &&
+                        it.error.message == "response was killed by Android due to thermal shutdown"
+                },
+                "Expected thermal Failed state in $states",
+            )
+            assertTrue(shadowOf(service).isStoppedBySelf)
         }
 
     @Test
@@ -318,53 +299,57 @@ class InferenceServiceTest {
                             PipelineStep.DRAFT_TWO to "draft-two-output",
                         ),
                 )
-            val stateJson = savedState.toJson()
+            val intent =
+                Intent().apply {
+                    action = InferenceService.ACTION_RESUME
+                    putExtra(InferenceService.EXTRA_CHAT_ID, "chat-123")
+                    putExtra(InferenceService.EXTRA_STATE_JSON, savedState.toJson())
+                }
 
-            val intent = mockk<Intent>(relaxed = true)
-            every { intent.action } returns InferenceService.ACTION_RESUME
-            every { intent.getStringExtra(InferenceService.EXTRA_CHAT_ID) } returns "chat-123"
-            every { intent.getStringExtra(InferenceService.EXTRA_STATE_JSON) } returns stateJson
-
+            val gate = CompletableDeferred<Unit>()
+            inferenceFactory.blockGate = gate
             service.onStartCommand(intent, 0, 1)
+            testDispatcher.scheduler.advanceTimeBy(500)
+
+            assertNotNull(shadowOf(service).lastForegroundNotification)
+
+            gate.complete(Unit)
             advanceUntilIdle()
 
             assertFalse(
-                invokedModelTypes.contains(ModelType.DRAFT_ONE),
+                inferenceFactory.invokedModelTypes.contains(ModelType.DRAFT_ONE),
                 "Resume must skip completed DRAFT_ONE",
             )
             assertFalse(
-                invokedModelTypes.contains(ModelType.DRAFT_TWO),
+                inferenceFactory.invokedModelTypes.contains(ModelType.DRAFT_TWO),
                 "Resume must skip completed DRAFT_TWO",
             )
             assertTrue(
-                invokedModelTypes.contains(ModelType.MAIN),
-                "Expected SYNTHESIS (MAIN) in $invokedModelTypes",
+                inferenceFactory.invokedModelTypes.contains(ModelType.MAIN),
+                "Expected SYNTHESIS (MAIN) in ${inferenceFactory.invokedModelTypes}",
             )
             assertTrue(
-                invokedModelTypes.contains(ModelType.FINAL_SYNTHESIS),
-                "Expected FINAL_SYNTHESIS in $invokedModelTypes",
+                inferenceFactory.invokedModelTypes.contains(ModelType.FINAL_SYNTHESIS),
+                "Expected FINAL_SYNTHESIS in ${inferenceFactory.invokedModelTypes}",
             )
-            verify { service.startForeground(any(), any(), any()) }
         }
 
     @Test
     @DisplayName("MOA3: Full pipeline completion publishes terminal Finished to InferenceEventBus")
     fun fullPipelineCompletionPublishesFinished() =
         runTest(testDispatcher) {
-            val intent = mockk<Intent>(relaxed = true)
-            every { intent.action } returns InferenceService.ACTION_START
-            every { intent.getStringExtra(InferenceService.EXTRA_CHAT_ID) } returns "chat-123"
-            every { intent.getStringExtra(InferenceService.EXTRA_USER_MESSAGE) } returns "hello"
+            val (states, collectJob) = collectPipelineStates("chat-123")
 
-            service.onStartCommand(intent, 0, 1)
+            service.onStartCommand(startIntent("chat-123", "hello"), 0, 1)
             advanceUntilIdle()
 
-            coVerify {
-                inferenceEventBus.emitPipelineState(
-                    "chat-123",
-                    MessageGenerationState.Finished(ModelType.FINAL_SYNTHESIS),
-                )
-            }
-            coVerify { inferenceEventBus.clearPipelineRequest("chat-123") }
+            assertTrue(
+                states.contains(MessageGenerationState.Finished(ModelType.FINAL_SYNTHESIS)),
+                "Expected terminal Finished in $states",
+            )
+            // The service itself cleared the stream on completion (checked before
+            // cancelling the collector, whose completion would also remove it).
+            assertFalse(inferenceEventBus.hasPipelineStream("chat-123"))
+            collectJob.cancel()
         }
 }
