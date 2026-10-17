@@ -16,6 +16,11 @@ class FakeMediaProviderRepository(
     /** Every (asset, apiKey) pair passed to [saveMediaProvider], in call order. */
     val savedCalls = mutableListOf<Pair<MediaProviderAsset, String?>>()
 
+    /** Replaces all providers at once (drives getMediaProviders emissions). */
+    fun emitProviders(providers: List<MediaProviderAsset>) {
+        state.value = providers
+    }
+
     override fun getMediaProviders(): Flow<List<MediaProviderAsset>> = state.asStateFlow()
 
     override suspend fun getMediaProvidersSync(): List<MediaProviderAsset> = state.value

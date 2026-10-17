@@ -2,29 +2,22 @@ package com.browntowndev.enclave.feature.studio.coordinators
 
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
-import com.browntowndev.enclave.domain.model.media.GenerationSettings
 import com.browntowndev.enclave.domain.model.media.ImageGenerationProgress
 import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
 import com.browntowndev.enclave.domain.model.media.StudioModelOverride
 import com.browntowndev.enclave.domain.model.media.VideoGenerationSettings
-import com.browntowndev.enclave.domain.port.media.StudioGenerationDispatcherPort
+import com.browntowndev.enclave.core.testing.FakeStudioRepository
 import com.browntowndev.enclave.domain.port.repository.ActiveStudioGeneration
 import com.browntowndev.enclave.domain.port.repository.StudioMediaAsset
-import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.feature.studio.ModerationEvent
 import com.browntowndev.enclave.feature.studio.StudioGenerationErrorMessages
 import com.browntowndev.enclave.feature.studio.VideoGenerationState
 import com.browntowndev.enclave.feature.studio.test.FakeStudioGenerationDispatcher
 import app.cash.turbine.test
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.slot
-import io.mockk.verify
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelChildren
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -37,32 +30,17 @@ import kotlin.coroutines.coroutineContext
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class StudioGenerationCoordinatorTest {
-    private val studioRepository = mockk<StudioRepositoryPort>(relaxed = true)
-    private val dispatcher = mockk<StudioGenerationDispatcherPort>(relaxed = true)
-    private val ephemeralMediaFlow = MutableStateFlow(emptyList<com.browntowndev.enclave.domain.port.repository.StudioMediaAsset>())
-    private val generationErrorFlow = MutableStateFlow<String?>(null)
-    private val generationProgressFlow = MutableStateFlow<ImageGenerationProgress?>(null)
-    private val activeGenerationFlow = MutableStateFlow<ActiveStudioGeneration?>(null)
+    private val studioRepository = FakeStudioRepository()
+    private val dispatcher = FakeStudioGenerationDispatcher()
+    private val ephemeralMediaFlow get() = studioRepository.ephemeralState
+    private val generationErrorFlow get() = studioRepository.generationErrorState
+    private val generationProgressFlow get() = studioRepository.generationProgressState
+    private val activeGenerationFlow get() = studioRepository.activeGenerationState
 
     private lateinit var coordinator: StudioGenerationCoordinator
 
     @BeforeEach
     fun setup() {
-        every { studioRepository.observeEphemeralMedia() } returns ephemeralMediaFlow
-        every { studioRepository.observeGenerationError() } returns generationErrorFlow
-        every { studioRepository.observeGenerationProgress() } returns generationProgressFlow
-        every { studioRepository.observeActiveGeneration() } returns activeGenerationFlow
-        every { studioRepository.reportActiveGeneration(any()) } answers {
-            if (activeGenerationFlow.value != null) {
-                false
-            } else {
-                activeGenerationFlow.value = firstArg()
-                true
-            }
-        }
-        every { studioRepository.clearActiveGeneration() } answers {
-            activeGenerationFlow.value = null
-        }
         coordinator = StudioGenerationCoordinator(studioRepository, dispatcher)
     }
 
@@ -80,7 +58,10 @@ class StudioGenerationCoordinatorTest {
 
             assertTrue(coordinator.isGenerating.value)
             assertEquals("prompt", activeGenerationFlow.value?.prompt)
-            verify { dispatcher.startGeneration("prompt", MediaCapability.IMAGE, ImageGenerationSettings(), any()) }
+            val started = dispatcher.startedCalls.single()
+            assertEquals("prompt", started.prompt)
+            assertEquals(MediaCapability.IMAGE, started.mediaType)
+            assertEquals(ImageGenerationSettings(), started.settings)
 
             coroutineContext[Job]?.cancelChildren(CancellationException("test complete"))
         }
@@ -126,7 +107,7 @@ class StudioGenerationCoordinatorTest {
         )
 
         assertEquals("Another media generation is already in progress.", coordinator.error.value)
-        verify(exactly = 0) { dispatcher.startGeneration(any(), any(), any(), any()) }
+        assertTrue(dispatcher.startedCalls.isEmpty())
     }
 
     @Test
@@ -176,19 +157,12 @@ class StudioGenerationCoordinatorTest {
                 mediaType = MediaCapability.IMAGE.name,
                 createdAt = 1L,
             )
-        val settingsSlot = slot<GenerationSettings>()
-
         coordinator.startDetailVideoGeneration(sourceAsset)
 
-        verify {
-            dispatcher.startGeneration(
-                "Animate this",
-                MediaCapability.VIDEO,
-                capture(settingsSlot),
-                any(),
-            )
-        }
-        val settings = settingsSlot.captured as VideoGenerationSettings
+        val started = dispatcher.startedCalls.single()
+        assertEquals("Animate this", started.prompt)
+        assertEquals(MediaCapability.VIDEO, started.mediaType)
+        val settings = started.settings as VideoGenerationSettings
         assertEquals("file://reference.jpg", settings.referenceImageUri)
         assertEquals(VideoGenerationState.Loading("source-1"), coordinator.videoGenerationState.value)
     }
@@ -206,7 +180,7 @@ class StudioGenerationCoordinatorTest {
             advanceUntilIdle()
             assertTrue(coordinator.isContinualGenerationActive.value)
             assertTrue(coordinator.isGenerating.value)
-            verify(exactly = 1) { dispatcher.startGeneration(any(), any(), any(), any()) }
+            assertEquals(1, dispatcher.startedCalls.size)
 
             activeGenerationFlow.value = null
             advanceUntilIdle()
@@ -214,7 +188,7 @@ class StudioGenerationCoordinatorTest {
             assertTrue(coordinator.isContinualGenerationActive.value)
 
             coordinator.onGenerativeScrollThresholdVisible("anchor-1", MediaCapability.IMAGE)
-            verify(exactly = 2) { dispatcher.startGeneration(any(), any(), any(), any()) }
+            assertEquals(2, dispatcher.startedCalls.size)
             advanceUntilIdle()
             assertTrue(coordinator.isGenerating.value)
 
@@ -223,14 +197,14 @@ class StudioGenerationCoordinatorTest {
             assertFalse(coordinator.isGenerating.value)
 
             coordinator.onGenerativeScrollThresholdVisible("anchor-2", MediaCapability.IMAGE)
-            verify(exactly = 3) { dispatcher.startGeneration(any(), any(), any(), any()) }
+            assertEquals(3, dispatcher.startedCalls.size)
 
             coordinator.stopGeneration()
             assertFalse(coordinator.isContinualGenerationActive.value)
             assertFalse(coordinator.isGenerating.value)
 
             coordinator.onGenerativeScrollThresholdVisible("anchor-3", MediaCapability.IMAGE)
-            verify(exactly = 3) { dispatcher.startGeneration(any(), any(), any(), any()) }
+            assertEquals(3, dispatcher.startedCalls.size)
 
             coroutineContext[Job]?.cancelChildren(CancellationException("test complete"))
         }

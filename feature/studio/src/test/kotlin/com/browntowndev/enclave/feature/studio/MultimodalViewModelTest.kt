@@ -1,6 +1,16 @@
 package com.browntowndev.enclave.feature.studio
 
 import app.cash.turbine.test
+import com.browntowndev.enclave.core.testing.FakeDefaultModelRepository
+import com.browntowndev.enclave.core.testing.FakeLocalModelRepository
+import com.browntowndev.enclave.core.testing.FakeMediaProviderRepository
+import com.browntowndev.enclave.core.testing.FakeModerationReportRepository
+import com.browntowndev.enclave.core.testing.FakeShareMediaPort
+import com.browntowndev.enclave.core.testing.FakeStudioRepository
+import com.browntowndev.enclave.core.testing.FakeTtsPlaybackController
+import com.browntowndev.enclave.core.testing.FakeUiSelectionRepository
+import com.browntowndev.enclave.domain.usecase.inference.SubmitModerationReportUseCase
+import com.browntowndev.enclave.feature.studio.test.FakeStudioGenerationDispatcher
 import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.download.ModelPackTestFixtures
@@ -31,7 +41,6 @@ import com.browntowndev.enclave.domain.port.repository.UiSelectionRepository
 import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
 import com.browntowndev.enclave.domain.usecase.chat.ListenToSpeechUseCase
 import com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase
-import com.browntowndev.enclave.domain.usecase.inference.SubmitModerationReportUseCase
 import com.browntowndev.enclave.domain.usecase.media.GetImageGenerationCapabilitiesUseCase
 import com.browntowndev.enclave.domain.usecase.media.GetStudioCapablePresetsUseCase
 import com.browntowndev.enclave.domain.usecase.media.ResolveMediaModelTypeUseCase
@@ -47,9 +56,6 @@ import com.browntowndev.enclave.feature.studio.coordinators.StudioPromptCoordina
 import com.browntowndev.enclave.feature.studio.coordinators.StudioRemoteCapabilitiesCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioSpeechCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioUiStateReducer
-import io.mockk.coEvery
-import io.mockk.every
-import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -73,18 +79,28 @@ import org.junit.jupiter.api.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class MultimodalViewModelTest {
     private val testDispatcher = UnconfinedTestDispatcher()
-    private val shareMediaPort = mockk<ShareMediaPort>(relaxed = true)
-    private val studioRepository = mockk<StudioRepositoryPort>(relaxed = true)
-    private val defaultModelRepository = mockk<DefaultModelRepositoryPort>(relaxed = true)
-    private val mediaProviderRepository = mockk<MediaProviderRepositoryPort>(relaxed = true)
-    private val resolveMediaProviderCapabilitiesUseCase = mockk<ResolveMediaProviderCapabilitiesUseCase>()
-    private val localModelRepository = mockk<LocalModelRepositoryPort>()
+    private val shareMediaPort = FakeShareMediaPort()
+    private val studioRepository = FakeStudioRepository()
+    private val defaultModelRepository = FakeDefaultModelRepository()
+    private val mediaProviderRepository = FakeMediaProviderRepository()
+    private val resolveMediaProviderCapabilitiesUseCase =
+        FakeResolveMediaProviderCapabilitiesUseCase(
+            ProviderCapabilities(
+                supportedAspectRatios = AspectRatio.entries.toList(),
+                supportedImageQualities = listOf(GenerationQuality.SPEED),
+                supportedVideoQualities = listOf(GenerationQuality.SPEED),
+                supportedVideoResolutions = listOf("480p"),
+                supportedVideoDurations = listOf(5),
+                supportsVideo = true,
+            ),
+        )
+    private val localModelRepository = FakeLocalModelRepository()
     private val getImageGenerationCapabilitiesUseCase =
         GetImageGenerationCapabilitiesUseCase(localModelRepository)
-    private val chatUseCases = mockk<ChatUseCases>()
-    private val listenToSpeechUseCase = mockk<ListenToSpeechUseCase>()
-    private val playbackController = mockk<TtsPlaybackControllerPort>(relaxed = true)
-    private val dispatcher = mockk<StudioGenerationDispatcherPort>(relaxed = true)
+    private val listenToSpeechUseCase = FakeListenToSpeechUseCase()
+    private val chatUseCases = FakeChatUseCases(listenToSpeechUseCase)
+    private val playbackController = FakeTtsPlaybackController()
+    private val dispatcher = FakeStudioGenerationDispatcher()
     private lateinit var generationCoordinator: StudioGenerationCoordinator
     private lateinit var albumSelectionCoordinator: StudioAlbumSelectionCoordinator
     private lateinit var speechCoordinator: StudioSpeechCoordinator
@@ -92,62 +108,35 @@ class MultimodalViewModelTest {
     private lateinit var studioUiStateReducer: StudioUiStateReducer
     private lateinit var promptCoordinator: StudioPromptCoordinator
 
-    private val allMediaFlow = MutableStateFlow<List<StudioMediaAsset>>(emptyList())
-    private val ephemeralMediaFlow = MutableStateFlow<List<StudioMediaAsset>>(emptyList())
-    private val allAlbumsFlow = MutableStateFlow<List<StudioAlbumAsset>>(emptyList())
-    private val generationErrorFlow = MutableStateFlow<String?>(null)
-    private val generationProgressFlow = MutableStateFlow<ImageGenerationProgress?>(null)
-    private val activeGenerationFlow = MutableStateFlow<ActiveStudioGeneration?>(null)
-    private val speechEvents = MutableSharedFlow<SpeechState>(extraBufferCapacity = 8)
+    private val allMediaFlow get() = studioRepository.mediaState
+    private val ephemeralMediaFlow get() = studioRepository.ephemeralState
+    private val allAlbumsFlow get() = studioRepository.albumsState
+    private val generationErrorFlow get() = studioRepository.generationErrorState
+    private val generationProgressFlow get() = studioRepository.generationProgressState
+    private val activeGenerationFlow get() = studioRepository.activeGenerationState
+    private val speechEvents get() = listenToSpeechUseCase.events
     private val moderationPort = MutablePromptModerationPort()
-    private val submitModerationReportUseCase = mockk<SubmitModerationReportUseCase>(relaxed = true)
+    private val moderationReportRepository = FakeModerationReportRepository()
+    private val submitModerationReportUseCase = SubmitModerationReportUseCase(moderationReportRepository)
 
-    // ENC-27: recorded invocations replace MockK verify; tests assert this
-    // recorded state instead of interaction verification.
-    private val startGenerationPrompts = mutableListOf<String>()
-    private val shareMediaCalls = mutableListOf<Pair<List<String>, String>>()
-    private val getMediaByIdCalls = mutableListOf<String>()
-    private val promoteEphemeralMediaCalls = mutableListOf<Pair<String, String>>()
-    private val addEphemeralMediaCalls = mutableListOf<StudioMediaAsset>()
-    private val moderationReportCalls = mutableListOf<Pair<String, String>>()
-    private val setStudioMediaTypeCalls = mutableListOf<MediaCapability>()
-    private var listenToSpeechCallCount = 0
-    private val uiSelectionRepository = mockk<UiSelectionRepository>(relaxed = true)
+    // ENC-27/28: recorded invocations on the fakes replace MockK verify; tests
+    // assert this recorded state instead of interaction verification.
+    private val startGenerationPrompts: List<String>
+        get() = dispatcher.startedCalls.map { it.prompt }
+    private val shareMediaCalls get() = shareMediaPort.shareMediaCalls
+    private val getMediaByIdCalls get() = studioRepository.getMediaByIdCalls
+    private val promoteEphemeralMediaCalls get() = studioRepository.promoteEphemeralMediaCalls
+    private val addEphemeralMediaCalls get() = studioRepository.addEphemeralMediaCalls
+    private val moderationReportCalls get() = moderationReportRepository.submittedReports
+    private val setStudioMediaTypeCalls get() = uiSelectionRepository.setStudioMediaTypeCalls
+    private val listenToSpeechCallCount get() = listenToSpeechUseCase.callCount
+    private val uiSelectionRepository = FakeUiSelectionRepository()
 
-    private lateinit var app: android.app.Application
     private lateinit var viewModel: MultimodalViewModel
 
     @BeforeEach
     fun setup() {
         Dispatchers.setMain(testDispatcher)
-        app = mockk<android.app.Application>(relaxed = true)
-
-        every { uiSelectionRepository.selectedStudioMediaType } returns flowOf(MediaCapability.IMAGE)
-
-        every { dispatcher.startGeneration(any(), any(), any(), any()) } answers {
-            startGenerationPrompts += firstArg<String>()
-            Unit
-        }
-        every { shareMediaPort.shareMedia(any(), any()) } answers {
-            shareMediaCalls += firstArg<List<String>>() to secondArg<String>()
-            Unit
-        }
-        coEvery { studioRepository.getMediaById(any()) } coAnswers {
-            getMediaByIdCalls += firstArg<String>()
-            null
-        }
-        coEvery { studioRepository.addEphemeralMedia(any()) } coAnswers {
-            addEphemeralMediaCalls += firstArg<StudioMediaAsset>()
-            Unit
-        }
-        coEvery { submitModerationReportUseCase(any(), any()) } coAnswers {
-            moderationReportCalls += firstArg<String>() to secondArg<String>()
-            Result.success(Unit)
-        }
-        coEvery { uiSelectionRepository.setStudioMediaType(any()) } coAnswers {
-            setStudioMediaTypeCalls += firstArg<MediaCapability>()
-            Unit
-        }
 
         val mediaProviderId = MediaProviderId("test-provider")
         val assignment =
@@ -180,33 +169,13 @@ class MultimodalViewModelTest {
                 mediaProviderId = mediaProviderId,
             )
 
-        every { defaultModelRepository.observeDefaults() } returns
-            flowOf(listOf(assignment, videoAssignment, musicAssignment, imageToVideoAssignment))
-        coEvery { defaultModelRepository.getDefault(ModelType.VIDEO_GENERATION) } returns videoAssignment
-        coEvery { defaultModelRepository.getDefault(ModelType.IMAGE_TO_VIDEO) } returns imageToVideoAssignment
-        coEvery { mediaProviderRepository.getMediaProvider(mediaProviderId) } returns providerAsset
-        every { mediaProviderRepository.getMediaProviders() } returns flowOf(listOf(providerAsset))
+        defaultModelRepository.seed(assignment)
+        defaultModelRepository.seed(videoAssignment)
+        defaultModelRepository.seed(musicAssignment)
+        defaultModelRepository.seed(imageToVideoAssignment)
+        kotlinx.coroutines.runBlocking { mediaProviderRepository.saveMediaProvider(providerAsset, null) }
 
-        every { studioRepository.observeAllMedia() } returns allMediaFlow
-        every { studioRepository.observeEphemeralMedia() } returns ephemeralMediaFlow
-        every { studioRepository.observeGenerationError() } returns generationErrorFlow
-        every { studioRepository.observeGenerationProgress() } returns generationProgressFlow
-        every { studioRepository.observeActiveGeneration() } returns activeGenerationFlow
-        every { studioRepository.reportActiveGeneration(any()) } answers {
-            if (activeGenerationFlow.value != null) {
-                false
-            } else {
-                activeGenerationFlow.value = firstArg()
-                true
-            }
-        }
-        every { studioRepository.clearActiveGeneration() } answers {
-            activeGenerationFlow.value = null
-        }
-        every { studioRepository.observeAllAlbums() } returns allAlbumsFlow
-        coEvery { studioRepository.updateMedia(any()) } returns Unit
-        coEvery { studioRepository.promoteEphemeralMedia(any(), any()) } coAnswers {
-            promoteEphemeralMediaCalls += firstArg<String>() to secondArg<String>()
+        studioRepository.saveMediaOverride =
             StudioMediaAsset(
                 id = "perm-1",
                 localUri = "files://permanent.jpg",
@@ -215,47 +184,20 @@ class MultimodalViewModelTest {
                 createdAt = 1L,
                 albumId = "album-123",
             )
-        }
-        coEvery { studioRepository.saveMedia(any<String>(), any(), any(), any(), any()) } returns
-            StudioMediaAsset(
-                id = "perm-1",
-                localUri = "files://permanent.jpg",
-                prompt = "test",
-                mediaType = "IMAGE",
-                createdAt = 1L,
-                albumId = "album-123",
-            )
+        studioRepository.cacheEphemeralUri = "cache://video.mp4"
 
-        coEvery { studioRepository.cacheEphemeralMedia(any(), MediaCapability.VIDEO.name) } returns "cache://video.mp4"
-        coEvery {
-            resolveMediaProviderCapabilitiesUseCase(any(), any())
-        } returns
-            ProviderCapabilities(
-                supportedAspectRatios = AspectRatio.entries.toList(),
-                supportedImageQualities = listOf(GenerationQuality.SPEED),
-                supportedVideoQualities = listOf(GenerationQuality.SPEED),
-                supportedVideoResolutions = listOf("480p"),
-                supportedVideoDurations = listOf(5),
-                supportsVideo = true,
-            )
-
-        coEvery {
-            localModelRepository.getAssetByConfigId(LocalModelConfigurationId("sd15-local-config"))
-        } returns ModelPackTestFixtures.diffusionAsset()
-        coEvery {
-            localModelRepository.getAssetByConfigId(LocalModelConfigurationId("sdxl-local-config"))
-        } returns ModelPackTestFixtures.sdxlDiffusionAsset()
-        coEvery {
-            localModelRepository.getAssetByConfigId(
-                LocalModelConfigurationId(ModelPackTestFixtures.JUGGERNAUT_CONFIG_ID),
-            )
-        } returns ModelPackTestFixtures.juggernautDiffusionAsset()
-
-        every { listenToSpeechUseCase.invoke(any(), any()) } answers {
-            listenToSpeechCallCount++
-            speechEvents
-        }
-        every { chatUseCases.listenToSpeechUseCase } returns listenToSpeechUseCase
+        localModelRepository.seedAssetForConfig(
+            LocalModelConfigurationId("sd15-local-config"),
+            ModelPackTestFixtures.diffusionAsset(),
+        )
+        localModelRepository.seedAssetForConfig(
+            LocalModelConfigurationId("sdxl-local-config"),
+            ModelPackTestFixtures.sdxlDiffusionAsset(),
+        )
+        localModelRepository.seedAssetForConfig(
+            LocalModelConfigurationId(ModelPackTestFixtures.JUGGERNAUT_CONFIG_ID),
+            ModelPackTestFixtures.juggernautDiffusionAsset(),
+        )
 
         generationCoordinator = StudioGenerationCoordinator(studioRepository, dispatcher)
         albumSelectionCoordinator = StudioAlbumSelectionCoordinator(studioRepository)
@@ -296,7 +238,8 @@ class MultimodalViewModelTest {
                     resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase(),
                     mediaProviderRepository = mediaProviderRepository,
                 ),
-            getStudioCapablePresetsUseCase = mockk<GetStudioCapablePresetsUseCase>(relaxed = true),
+            getStudioCapablePresetsUseCase =
+                com.browntowndev.enclave.domain.usecase.media.GetStudioCapablePresetsUseCase(localModelRepository, mediaProviderRepository),
         )
     }
 
@@ -420,7 +363,8 @@ class MultimodalViewModelTest {
                             resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase(),
                             mediaProviderRepository = mediaProviderRepository,
                         ),
-                    getStudioCapablePresetsUseCase = mockk<GetStudioCapablePresetsUseCase>(relaxed = true),
+                    getStudioCapablePresetsUseCase =
+                com.browntowndev.enclave.domain.usecase.media.GetStudioCapablePresetsUseCase(localModelRepository, mediaProviderRepository),
                 )
 
             moderationPort.scores =
@@ -477,7 +421,7 @@ class MultimodalViewModelTest {
                     supportedVideoDurations = emptyList(),
                     supportsVideo = false,
                 )
-            coEvery { resolveMediaProviderCapabilitiesUseCase(any(), any()) } returns capabilities
+            resolveMediaProviderCapabilitiesUseCase.result = capabilities
 
             viewModel = createViewModel()
             val job =
@@ -509,8 +453,8 @@ class MultimodalViewModelTest {
                     modelType = ModelType.IMAGE_GENERATION,
                     localConfigId = localConfigId,
                 )
-            every { defaultModelRepository.observeDefaults() } returns flowOf(listOf(localImageAssignment))
-            every { mediaProviderRepository.getMediaProviders() } returns flowOf(emptyList())
+            defaultModelRepository.emitDefaults(listOf(localImageAssignment))
+            mediaProviderRepository.emitProviders(emptyList())
 
             viewModel = createViewModel()
             val job =
@@ -559,9 +503,8 @@ class MultimodalViewModelTest {
                     modelType = ModelType.IMAGE_TO_VIDEO,
                     mediaProviderId = mediaProviderId,
                 )
-            every { defaultModelRepository.observeDefaults() } returns
-                flowOf(listOf(imageAssignment, videoAssignment, imageEditAssignment, imageToVideoAssignment))
-            every { mediaProviderRepository.getMediaProviders() } returns flowOf(listOf(falProvider))
+            defaultModelRepository.emitDefaults(listOf(imageAssignment, videoAssignment, imageEditAssignment, imageToVideoAssignment))
+            mediaProviderRepository.emitProviders(listOf(falProvider))
 
             val remoteFetchGate = CompletableDeferred<Unit>()
             val resolvedCapabilities =
@@ -573,10 +516,8 @@ class MultimodalViewModelTest {
                     supportedVideoDurations = listOf(5),
                     supportsVideo = true,
                 )
-            coEvery { resolveMediaProviderCapabilitiesUseCase(any(), any()) } coAnswers {
-                remoteFetchGate.await()
-                resolvedCapabilities
-            }
+            resolveMediaProviderCapabilitiesUseCase.result = resolvedCapabilities
+            resolveMediaProviderCapabilitiesUseCase.gate = remoteFetchGate
 
             viewModel = createViewModel()
             val job =
@@ -743,9 +684,7 @@ class MultimodalViewModelTest {
     fun `onSaveSelectedMediaToAlbum moves selected media and clears selection`() =
         runTest {
             val assetId = "asset-1"
-            coEvery {
-                studioRepository.saveMedia(any<String>(), any<String>(), any<String>(), any(), any())
-            } returns
+            studioRepository.promoteOverride =
                 StudioMediaAsset(
                     id = "perm-1",
                     localUri = "files://permanent.jpg",
@@ -815,7 +754,7 @@ class MultimodalViewModelTest {
         runTest {
             val assetId = "test-id"
             val asset = StudioMediaAsset(id = assetId, prompt = "original prompt", localUri = "uri", mediaType = "IMAGE", createdAt = 0L)
-            coEvery { studioRepository.getMediaById(assetId) } returns asset
+            studioRepository.emitMedia(listOf(asset))
 
             val job =
                 backgroundScope.launch(testDispatcher) {
@@ -865,17 +804,14 @@ class MultimodalViewModelTest {
         runTest {
             val assetId = "perm-1"
             val persistedUri = "file:///data/user/0/com.app/files/permanent.jpg"
-            coEvery { studioRepository.getMediaById(assetId) } coAnswers {
-                getMediaByIdCalls += firstArg<String>()
-                StudioMediaAsset(
+            studioRepository.emitMedia(listOf(StudioMediaAsset(
                     id = assetId,
                     localUri = persistedUri,
                     prompt = "test",
                     mediaType = "IMAGE",
                     createdAt = 1L,
                     albumId = "album-123",
-                )
-            }
+                )))
 
             val job =
                 backgroundScope.launch(testDispatcher) {
@@ -897,17 +833,14 @@ class MultimodalViewModelTest {
         runTest {
             val assetId = "perm-1"
             val persistedUri = "file:///data/user/0/com.app/files/permanent.jpg"
-            coEvery { studioRepository.getMediaById(assetId) } coAnswers {
-                getMediaByIdCalls += firstArg<String>()
-                StudioMediaAsset(
+            studioRepository.emitMedia(listOf(StudioMediaAsset(
                     id = assetId,
                     localUri = persistedUri,
                     prompt = "test",
                     mediaType = "IMAGE",
                     createdAt = 1L,
                     albumId = "album-123",
-                )
-            }
+                )))
 
             val job =
                 backgroundScope.launch(testDispatcher) {
@@ -932,15 +865,14 @@ class MultimodalViewModelTest {
             val persistedId = "perm-1"
             val persistedUri = "file:///data/user/0/com.app/files/permanent.jpg"
 
-            coEvery { studioRepository.getMediaById(persistedId) } returns
-                StudioMediaAsset(
+            studioRepository.emitMedia(listOf(StudioMediaAsset(
                     id = persistedId,
                     localUri = persistedUri,
                     prompt = "test",
                     mediaType = "IMAGE",
                     createdAt = 2L,
                     albumId = "album-123",
-                )
+                )))
 
             val job =
                 backgroundScope.launch(testDispatcher) {
@@ -977,7 +909,6 @@ class MultimodalViewModelTest {
                 }
 
             ephemeralMediaFlow.value = emptyList()
-            coEvery { studioRepository.getMediaById("missing") } returns null
             advanceUntilIdle()
 
             viewModel.shareSingleMedia("missing")
@@ -992,15 +923,14 @@ class MultimodalViewModelTest {
         runTest {
             val assetId = "perm-video"
             val persistedUri = "file:///data/user/0/com.app/files/video.mp4"
-            coEvery { studioRepository.getMediaById(assetId) } returns
-                StudioMediaAsset(
+            studioRepository.emitMedia(listOf(StudioMediaAsset(
                     id = assetId,
                     localUri = persistedUri,
                     prompt = "test",
                     mediaType = "VIDEO",
                     createdAt = 1L,
                     albumId = "album-123",
-                )
+                )))
 
             val job =
                 backgroundScope.launch(testDispatcher) {
@@ -1022,17 +952,14 @@ class MultimodalViewModelTest {
         runTest {
             val assetId = "perm-1"
             val persistedUri = "file:///data/user/0/com.app/files/permanent.jpg"
-            coEvery { studioRepository.getMediaById(assetId) } coAnswers {
-                getMediaByIdCalls += firstArg<String>()
-                StudioMediaAsset(
+            studioRepository.emitMedia(listOf(StudioMediaAsset(
                     id = assetId,
                     localUri = persistedUri,
                     prompt = "test",
                     mediaType = "IMAGE",
                     createdAt = 1L,
                     albumId = "album-123",
-                )
-            }
+                )))
 
             val job =
                 backgroundScope.launch(testDispatcher) {
@@ -1059,17 +986,14 @@ class MultimodalViewModelTest {
         runTest {
             val assetId = "perm-1"
             val persistedUri = "file:///data/user/0/com.app/files/permanent.jpg"
-            coEvery { studioRepository.getMediaById(assetId) } coAnswers {
-                getMediaByIdCalls += firstArg<String>()
-                StudioMediaAsset(
+            studioRepository.emitMedia(listOf(StudioMediaAsset(
                     id = assetId,
                     localUri = persistedUri,
                     prompt = "test",
                     mediaType = "IMAGE",
                     createdAt = 1L,
                     albumId = "album-123",
-                )
-            }
+                )))
 
             val job =
                 backgroundScope.launch(testDispatcher) {
@@ -1099,17 +1023,14 @@ class MultimodalViewModelTest {
         runTest {
             val assetId = "perm-1"
             val persistedUri = "file:///data/user/0/com.app/files/permanent.jpg"
-            coEvery { studioRepository.getMediaById(assetId) } coAnswers {
-                getMediaByIdCalls += firstArg<String>()
-                StudioMediaAsset(
+            studioRepository.emitMedia(listOf(StudioMediaAsset(
                     id = assetId,
                     localUri = persistedUri,
                     prompt = "test",
                     mediaType = "IMAGE",
                     createdAt = 1L,
                     albumId = "album-123",
-                )
-            }
+                )))
 
             val job =
                 backgroundScope.launch(testDispatcher) {
@@ -1206,7 +1127,7 @@ class MultimodalViewModelTest {
                     modelType = ModelType.IMAGE_GENERATION,
                     localConfigId = localConfigId,
                 )
-            every { defaultModelRepository.observeDefaults() } returns flowOf(listOf(localImageAssignment))
+            defaultModelRepository.emitDefaults(listOf(localImageAssignment))
             viewModel = createViewModel()
             val job =
                 backgroundScope.launch(testDispatcher) {
@@ -1230,7 +1151,7 @@ class MultimodalViewModelTest {
                     modelType = ModelType.IMAGE_GENERATION,
                     localConfigId = localConfigId,
                 )
-            every { defaultModelRepository.observeDefaults() } returns flowOf(listOf(localImageAssignment))
+            defaultModelRepository.emitDefaults(listOf(localImageAssignment))
             viewModel = createViewModel()
             val job =
                 backgroundScope.launch(testDispatcher) {
@@ -1252,7 +1173,7 @@ class MultimodalViewModelTest {
                     modelType = ModelType.IMAGE_GENERATION,
                     localConfigId = localConfigId,
                 )
-            every { defaultModelRepository.observeDefaults() } returns flowOf(listOf(localImageAssignment))
+            defaultModelRepository.emitDefaults(listOf(localImageAssignment))
 
             viewModel = createViewModel()
             val job =
@@ -1275,7 +1196,7 @@ class MultimodalViewModelTest {
                     modelType = ModelType.IMAGE_GENERATION,
                     localConfigId = localConfigId,
                 )
-            every { defaultModelRepository.observeDefaults() } returns flowOf(listOf(localImageAssignment))
+            defaultModelRepository.emitDefaults(listOf(localImageAssignment))
 
             viewModel = createViewModel()
             val job =
@@ -1299,10 +1220,8 @@ class MultimodalViewModelTest {
                     modelType = ModelType.IMAGE_EDIT,
                     localConfigId = localConfigId,
                 )
-            every { defaultModelRepository.observeDefaults() } returns flowOf(listOf(localImageAssignment))
-            every { mediaProviderRepository.getMediaProviders() } returns flowOf(emptyList())
-            coEvery { localModelRepository.getAssetByConfigId(localConfigId) } returns
-                ModelPackTestFixtures.juggernautDiffusionAsset()
+            defaultModelRepository.emitDefaults(listOf(localImageAssignment))
+            mediaProviderRepository.emitProviders(emptyList())
 
             viewModel = createViewModel()
             viewModel.onUpdateReferenceImage("file://reference.jpg")
@@ -1326,10 +1245,8 @@ class MultimodalViewModelTest {
                     modelType = ModelType.IMAGE_EDIT,
                     localConfigId = localConfigId,
                 )
-            every { defaultModelRepository.observeDefaults() } returns flowOf(listOf(localImageAssignment))
-            every { mediaProviderRepository.getMediaProviders() } returns flowOf(emptyList())
-            coEvery { localModelRepository.getAssetByConfigId(localConfigId) } returns
-                ModelPackTestFixtures.juggernautDiffusionAsset()
+            defaultModelRepository.emitDefaults(listOf(localImageAssignment))
+            mediaProviderRepository.emitProviders(emptyList())
 
             viewModel = createViewModel()
             viewModel.onUpdateReferenceImage("file://reference.jpg")
@@ -1348,7 +1265,7 @@ class MultimodalViewModelTest {
     @Test
     fun `init restores persisted non-default media type`() =
         runTest {
-            every { uiSelectionRepository.selectedStudioMediaType } returns flowOf(MediaCapability.VIDEO)
+            uiSelectionRepository.emitSelectedStudioMediaType(MediaCapability.VIDEO)
             viewModel = createViewModel()
             advanceUntilIdle()
 

@@ -21,12 +21,25 @@ import com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilit
 import com.browntowndev.enclave.domain.port.device.SnapdragonTierPort
 import com.browntowndev.enclave.domain.port.download.QnnPackInstallProgressListener
 import com.browntowndev.enclave.domain.port.download.QnnPackInstallerPort
+import com.browntowndev.enclave.domain.model.inference.ApiProvider
+import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
+import com.browntowndev.enclave.domain.model.config.OpenRouterModelEndpoint
+import com.browntowndev.enclave.domain.model.media.GenerationSettings
 import com.browntowndev.enclave.domain.port.media.GpuCapabilityPort
+import com.browntowndev.enclave.domain.port.media.MusicGenerationPort
+import com.browntowndev.enclave.domain.port.repository.ApiModelCatalogPort
+import com.browntowndev.enclave.domain.port.repository.ApiModelCatalogResult
+import com.browntowndev.enclave.domain.model.config.MediaProviderAsset
 import com.browntowndev.enclave.domain.port.media.LocalImageGenerationCapabilityPort
 import com.browntowndev.enclave.domain.port.repository.TrustedDomainRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.UtilityModelRepositoryPort
 import com.browntowndev.enclave.domain.port.security.ApiKeyProviderPort
+import com.browntowndev.enclave.domain.port.media.AudioCapturePort
+import com.browntowndev.enclave.domain.port.inference.WhisperInferencePort
+import com.browntowndev.enclave.domain.port.config.DistributionConfigurationPort
+import com.browntowndev.enclave.domain.port.repository.UtilityModelFilePort
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
 
 /**
@@ -134,4 +147,57 @@ class FakeUtilityModelRepository : UtilityModelRepositoryPort {
     override suspend fun upsert(metadata: UtilityModelMetadata): UtilityModelId = metadata.id
 
     override suspend fun softDelete(id: UtilityModelId) = Unit
+}
+
+class FakeDistributionConfiguration(
+    override val isPlayStoreFlavor: Boolean = false,
+) : DistributionConfigurationPort
+
+class FakeAudioCapture : AudioCapturePort {
+    override fun audioChunks(): Flow<FloatArray> = emptyFlow()
+}
+
+class FakeWhisperInference : WhisperInferencePort {
+    override suspend fun initialize(modelPath: String) = Unit
+
+    override suspend fun transcribe(samples: FloatArray): String = ""
+
+    override suspend fun close() = Unit
+}
+
+class FakeUtilityModelFile : UtilityModelFilePort {
+    override suspend fun resolveUtilityModelPath(utilityType: UtilityType): String? = null
+
+    override suspend fun resolveLocalModelPath(metadata: LocalModelMetadata): String? = null
+}
+
+class FakeMusicGenerationPort : MusicGenerationPort {
+    var result: Result<ByteArray> = Result.success(ByteArray(0))
+
+    override suspend fun generateMusic(
+        prompt: String,
+        provider: MediaProviderAsset,
+        settings: GenerationSettings,
+    ): Result<ByteArray> = result
+}
+
+class FakeApiModelCatalogPort : ApiModelCatalogPort {
+    override suspend fun fetchModels(
+        provider: ApiProvider,
+        apiKey: String,
+        baseUrl: String?,
+    ): ApiModelCatalogResult = ApiModelCatalogResult(models = emptyList())
+
+    override suspend fun fetchModel(
+        provider: ApiProvider,
+        apiKey: String,
+        modelId: String,
+        baseUrl: String?,
+    ): DiscoveredApiModel? = null
+
+    override suspend fun fetchModelEndpoints(
+        modelId: String,
+apiKey: String,
+        baseUrl: String?,
+    ): List<OpenRouterModelEndpoint> = emptyList()
 }

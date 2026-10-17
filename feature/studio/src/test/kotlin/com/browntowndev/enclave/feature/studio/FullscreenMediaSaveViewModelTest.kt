@@ -1,12 +1,9 @@
 package com.browntowndev.enclave.feature.studio
 
 import app.cash.turbine.test
+import com.browntowndev.enclave.core.testing.FakeMediaSaverPort
 import com.browntowndev.enclave.domain.model.config.MediaCapability
-import com.browntowndev.enclave.domain.port.media.MediaSaverPort
 import com.browntowndev.enclave.domain.usecase.media.SaveMediaToGalleryUseCase
-import io.mockk.coEvery
-import io.mockk.mockk
-import io.mockk.slot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -22,7 +19,7 @@ import java.io.File
 @OptIn(ExperimentalCoroutinesApi::class)
 class FullscreenMediaSaveViewModelTest {
     private val testDispatcher = UnconfinedTestDispatcher()
-    private val mediaSaverPort = mockk<MediaSaverPort>()
+    private val mediaSaverPort = FakeMediaSaverPort()
     private lateinit var viewModel: FullscreenMediaSaveViewModel
 
     @BeforeEach
@@ -39,8 +36,6 @@ class FullscreenMediaSaveViewModelTest {
     @Test
     fun saveToGallery_emitsSuccessMessageWhenSaveSucceeds() =
         runTest {
-            coEvery { mediaSaverPort.saveToGallery(any(), any()) } returns Result.success("content://saved")
-
             viewModel.saveFeedback.test {
                 viewModel.saveToGallery(sampleAsset())
                 assertEquals(FullscreenMediaSaveViewModel.SAVE_SUCCESS_MESSAGE, awaitItem())
@@ -51,7 +46,7 @@ class FullscreenMediaSaveViewModelTest {
     @Test
     fun saveToGallery_emitsFailureMessageWhenSaveFails() =
         runTest {
-            coEvery { mediaSaverPort.saveToGallery(any(), any()) } returns Result.failure(IllegalStateException("missing"))
+            mediaSaverPort.saveResult = Result.failure(IllegalStateException("missing"))
 
             viewModel.saveFeedback.test {
                 viewModel.saveToGallery(sampleAsset())
@@ -66,12 +61,6 @@ class FullscreenMediaSaveViewModelTest {
             val file = File.createTempFile("studio", ".jpg")
             file.writeBytes(byteArrayOf(1, 2, 3))
             val persistedUri = "file://${file.absolutePath}"
-            val uriSlot = slot<String>()
-            val typeSlot = slot<MediaCapability>()
-
-            coEvery {
-                mediaSaverPort.saveToGallery(capture(uriSlot), capture(typeSlot))
-            } returns Result.success("content://saved")
 
             viewModel.saveToGallery(
                 StudioMediaUi(
@@ -83,8 +72,7 @@ class FullscreenMediaSaveViewModelTest {
                 ),
             )
 
-            assertEquals(persistedUri, uriSlot.captured)
-            assertEquals(MediaCapability.IMAGE, typeSlot.captured)
+            assertEquals(listOf(persistedUri to MediaCapability.IMAGE), mediaSaverPort.saveCalls)
             file.delete()
         }
 
