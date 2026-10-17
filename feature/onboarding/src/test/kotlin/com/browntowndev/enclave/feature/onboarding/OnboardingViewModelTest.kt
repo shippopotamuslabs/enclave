@@ -175,7 +175,7 @@ class OnboardingViewModelTest {
             advanceUntilIdle()
 
             viewModel.onModelChoiceSelected(ModelChoice.API)
-            viewModel.onProviderSelected(ApiProvider.OPENROUTER)
+            viewModel.onProviderSelected(ApiProviderUi.OPENROUTER)
             viewModel.onApiKeyChanged("sk-test-key")
             viewModel.onDiscoverModels()
             advanceUntilIdle()
@@ -200,7 +200,7 @@ class OnboardingViewModelTest {
             advanceUntilIdle()
 
             viewModel.onModelChoiceSelected(ModelChoice.API)
-            viewModel.onProviderSelected(ApiProvider.OPENROUTER)
+            viewModel.onProviderSelected(ApiProviderUi.OPENROUTER)
             // apiKey remains ""
             viewModel.onNextStep()
             advanceUntilIdle()
@@ -221,7 +221,7 @@ class OnboardingViewModelTest {
             advanceUntilIdle()
 
             viewModel.onModelChoiceSelected(ModelChoice.API)
-            viewModel.onProviderSelected(ApiProvider.OPENROUTER)
+            viewModel.onProviderSelected(ApiProviderUi.OPENROUTER)
             viewModel.onApiKeyChanged("sk-valid-key")
             viewModel.onModelSelected("openrouter/gpt-4o")
             viewModel.onNextStep()
@@ -279,7 +279,7 @@ class OnboardingViewModelTest {
             viewModel.onNextStep()
             advanceUntilIdle()
             viewModel.onModelChoiceSelected(ModelChoice.API)
-            viewModel.onProviderSelected(ApiProvider.OPENROUTER)
+            viewModel.onProviderSelected(ApiProviderUi.OPENROUTER)
             viewModel.onApiKeyChanged("sk-valid-key")
             viewModel.onModelSelected("openrouter/gpt-4o")
             viewModel.onNextStep()
@@ -310,7 +310,7 @@ class OnboardingViewModelTest {
             viewModel.onNextStep()
             advanceUntilIdle()
             viewModel.onModelChoiceSelected(ModelChoice.API)
-            viewModel.onProviderSelected(ApiProvider.OPENROUTER)
+            viewModel.onProviderSelected(ApiProviderUi.OPENROUTER)
             viewModel.onApiKeyChanged("sk-valid-key")
             viewModel.onModelSelected("openrouter/gpt-4o")
             viewModel.onNextStep()
@@ -386,7 +386,7 @@ class OnboardingViewModelTest {
             viewModel.onNextStep()
             advanceUntilIdle()
             viewModel.onModelChoiceSelected(ModelChoice.API)
-            viewModel.onProviderSelected(ApiProvider.OPENROUTER)
+            viewModel.onProviderSelected(ApiProviderUi.OPENROUTER)
             viewModel.onApiKeyChanged("sk-valid-key")
             viewModel.onModelSelected("openrouter/gpt-4o")
             viewModel.onNextStep()
@@ -456,7 +456,7 @@ class OnboardingViewModelTest {
             viewModel.onNextStep()
             advanceUntilIdle()
             viewModel.onModelChoiceSelected(ModelChoice.API)
-            viewModel.onProviderSelected(ApiProvider.OPENROUTER)
+            viewModel.onProviderSelected(ApiProviderUi.OPENROUTER)
             viewModel.onApiKeyChanged("sk-valid-key")
             viewModel.onModelSelected("openrouter/gpt-4o")
             viewModel.onNextStep()
@@ -515,7 +515,7 @@ class OnboardingViewModelTest {
             viewModel.onNextStep()
             advanceUntilIdle()
             viewModel.onModelChoiceSelected(ModelChoice.API)
-            viewModel.onProviderSelected(ApiProvider.OPENROUTER)
+            viewModel.onProviderSelected(ApiProviderUi.OPENROUTER)
             viewModel.onApiKeyChanged("sk-valid-key")
             viewModel.onModelSelected("openrouter/gpt-4o")
             viewModel.onNextStep()
@@ -523,10 +523,10 @@ class OnboardingViewModelTest {
 
             // Configure TTS and Media
             val ttsDraft =
-                TtsProviderDraft(
-                    id = TtsProviderId("tts-id"),
+                TtsProviderDraftUi(
+                    id = "tts-id",
                     displayName = "My TTS",
-                    provider = ApiProvider.OPENAI,
+                    provider = ApiProviderUi.OPENAI,
                     voiceName = "voice",
                     baseUrl = null,
                     credentialAlias = "openai",
@@ -535,12 +535,12 @@ class OnboardingViewModelTest {
             viewModel.onSaveTtsProvider(ttsDraft)
 
             val mediaDraft =
-                MediaProviderDraft(
-                    id = MediaProviderId("media-id"),
+                MediaProviderDraftUi(
+                    id = "media-id",
                     displayName = "My Media",
-                    provider = ApiProvider.OPENAI,
+                    provider = ApiProviderUi.OPENAI,
                     modelId = "dall-e-3",
-                    capability = com.browntowndev.enclave.domain.model.config.MediaCapability.IMAGE,
+                    capability = MediaTypeUi.IMAGE,
                     baseUrl = null,
                     credentialAlias = "openai",
                     apiKey = "media-key",
@@ -561,8 +561,8 @@ class OnboardingViewModelTest {
                 advanceUntilIdle()
 
                 // Verify deferred saves are performed
-                coVerify(exactly = 1) { mockSaveTts(ttsDraft) }
-                coVerify(exactly = 1) { mockSaveMedia(match { it.id == mediaDraft.id }, "media-key") }
+                coVerify(exactly = 1) { mockSaveTts(ttsDraft.toDomain()) }
+                coVerify(exactly = 1) { mockSaveMedia(match { it.id.value == mediaDraft.id }, "media-key") }
 
                 assertTrue(fakeSettingsRepository.onboardingCompleted)
                 val event = awaitItem() as OnboardingEvent.NavigateToChat
@@ -584,7 +584,7 @@ class OnboardingViewModelTest {
             advanceUntilIdle()
 
             val state = viewModel.uiState.value
-            assertEquals(OnboardingFlowMode.RESTORED, state.flowMode)
+            assertEquals(OnboardingFlowModeUi.RESTORED, state.flowMode)
             assertEquals(ModelChoice.RESTORED, state.selectedModelChoice)
             assertEquals(0, state.currentStep)
         }
@@ -682,7 +682,7 @@ class OnboardingViewModelTest {
             viewModel.onBaseUrlChanged("https://custom-api.com")
             assertEquals("https://custom-api.com", viewModel.uiState.value.baseUrl)
 
-            viewModel.onProviderSelected(ApiProvider.OPENAI)
+            viewModel.onProviderSelected(ApiProviderUi.OPENAI)
             assertEquals("", viewModel.uiState.value.baseUrl)
         }
 
@@ -697,7 +697,7 @@ class OnboardingViewModelTest {
             advanceUntilIdle()
 
             viewModel.onModelChoiceSelected(ModelChoice.API)
-            viewModel.onProviderSelected(ApiProvider.OPENAI)
+            viewModel.onProviderSelected(ApiProviderUi.OPENAI)
             viewModel.onApiKeyChanged("sk-test-key")
             viewModel.onBaseUrlChanged("https://my-custom-endpoint.com")
             viewModel.onDiscoverModels()
@@ -726,7 +726,7 @@ class OnboardingViewModelTest {
             viewModel.onNextStep()
             advanceUntilIdle()
             viewModel.onModelChoiceSelected(ModelChoice.API)
-            viewModel.onProviderSelected(ApiProvider.OPENAI)
+            viewModel.onProviderSelected(ApiProviderUi.OPENAI)
             viewModel.onApiKeyChanged("sk-valid-key")
             viewModel.onBaseUrlChanged("https://my-custom-endpoint.com")
             viewModel.onModelSelected("gpt-4o")

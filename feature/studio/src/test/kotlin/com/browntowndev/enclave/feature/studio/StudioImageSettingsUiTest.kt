@@ -31,8 +31,12 @@ class StudioImageSettingsUiTest {
         StudioOptionsSheetContent(
           state =
             StudioUiState(
-              settings = ImageGenerationSettings(imageResolution = "1024x1024", diffusionSteps = 8),
-              capabilities = capabilities,
+              settings =
+                ImageGenerationSettings(
+                  imageResolution = "1024x1024",
+                  diffusionSteps = 8,
+                ).toUi(),
+              capabilities = capabilities.toUi(),
             ),
           onDismiss = {},
           onUpdateSettings = {},
@@ -58,8 +62,12 @@ class StudioImageSettingsUiTest {
         StudioOptionsSheetContent(
           state =
             StudioUiState(
-              settings = ImageGenerationSettings(imageResolution = "1024x1024", diffusionSteps = 8),
-              capabilities = capabilities,
+              settings =
+                ImageGenerationSettings(
+                  imageResolution = "1024x1024",
+                  diffusionSteps = 8,
+                ).toUi(),
+              capabilities = capabilities.toUi(),
             ),
           onDismiss = {},
           onUpdateSettings = {},
@@ -89,8 +97,11 @@ class StudioImageSettingsUiTest {
         StudioOptionsSheetContent(
           state =
             StudioUiState(
-              settings = ImageGenerationSettings(imageResolution = "512x512"),
-              capabilities = capabilities,
+              settings =
+                ImageGenerationSettings(
+                  imageResolution = "512x512",
+                ).toUi(),
+              capabilities = capabilities.toUi(),
             ),
           onDismiss = {},
           onUpdateSettings = {},
@@ -123,8 +134,8 @@ class StudioImageSettingsUiTest {
                   diffusionSteps = 8,
                   referenceImageUri = "content://reference",
                   img2ImgDenoiseStrength = 0.4f,
-                ),
-              capabilities = capabilities,
+                ).toUi(),
+              capabilities = capabilities.toUi(),
             ),
           onDismiss = {},
           onUpdateSettings = {},
@@ -149,8 +160,12 @@ class StudioImageSettingsUiTest {
         StudioOptionsSheetContent(
           state =
             StudioUiState(
-              settings = ImageGenerationSettings(imageResolution = "1024x1024", diffusionSteps = 8),
-              capabilities = capabilities,
+              settings =
+                ImageGenerationSettings(
+                  imageResolution = "1024x1024",
+                  diffusionSteps = 8,
+                ).toUi(),
+              capabilities = capabilities.toUi(),
             ),
           onDismiss = {},
           onUpdateSettings = {},

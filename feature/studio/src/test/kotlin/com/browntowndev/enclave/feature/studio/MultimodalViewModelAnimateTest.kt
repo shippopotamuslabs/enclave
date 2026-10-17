@@ -259,9 +259,9 @@ class MultimodalViewModelAnimateTest {
             advanceUntilIdle()
 
             // Then
-            assertEquals(MediaCapability.VIDEO, viewModel.uiState.value.mediaType)
+            assertEquals(StudioMediaTypeUi.VIDEO, viewModel.uiState.value.mediaType)
             assertEquals("", viewModel.uiState.value.prompt)
-            val settings = viewModel.uiState.value.settings as VideoGenerationSettings
+            val settings = viewModel.uiState.value.settings as StudioVideoSettingsUi
             assertNull(settings.referenceImageUri)
             job.cancel()
         }

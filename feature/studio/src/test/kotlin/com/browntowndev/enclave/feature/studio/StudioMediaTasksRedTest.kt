@@ -346,8 +346,8 @@ class StudioMediaTasksRedTest {
             EnclaveTheme {
                 StudioInputDock(
                     prompt = "",
-                    speechState = SpeechState.Idle,
-                    mediaType = mediaType,
+                    speechState = SpeechState.Idle.toUi(),
+                    mediaType = mediaType.toUi(),
                     hasImageEditModel = hasImageEditModel,
                     hasImageToVideoModel = hasImageToVideoModel,
                     referenceImageUri = null,

@@ -60,7 +60,7 @@ class ByokConfigureFormsTest {
         composeTestRule.setContent {
             EnclaveTheme {
                 OpenRouterRoutingSection(
-                    routing = OpenRouterRoutingConfiguration(),
+                    routing = OpenRouterRoutingConfiguration().toUi(),
                     onRoutingChange = {},
                     canSelectTargetProvider = true,
                     onShowProvidersSheet = { onShowProvidersSheetCalled = true }
@@ -81,7 +81,7 @@ class ByokConfigureFormsTest {
         composeTestRule.setContent {
             EnclaveTheme {
                 OpenRouterRoutingSection(
-                    routing = OpenRouterRoutingConfiguration(),
+                    routing = OpenRouterRoutingConfiguration().toUi(),
                     onRoutingChange = {},
                     canSelectTargetProvider = false,
                     onShowProvidersSheet = { onShowProvidersSheetCalled = true }
