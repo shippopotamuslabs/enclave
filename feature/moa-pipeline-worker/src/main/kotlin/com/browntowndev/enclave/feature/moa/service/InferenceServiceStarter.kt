@@ -11,7 +11,7 @@ import javax.inject.Singleton
  * Used by PipelineExecutorPort to control the foreground service.
  */
 @Singleton
-class InferenceServiceStarter
+open class InferenceServiceStarter
     @Inject
     constructor(
         @ApplicationContext private val context: Context,
@@ -60,7 +60,7 @@ class InferenceServiceStarter
          * @param stateJson Optional serialized pipeline state for resuming
          * @throws SecurityException if foreground service permission not granted
          */
-        fun startService(
+        open fun startService(
             chatId: String,
             userMessage: String,
             stateJson: String? = null,
@@ -82,7 +82,7 @@ class InferenceServiceStarter
          * Stops the inference service gracefully.
          * Sends a stop action intent to the service.
          */
-        fun stopService() {
+        open fun stopService() {
             val intent = createStopIntent()
             try {
                 context.startService(intent)
