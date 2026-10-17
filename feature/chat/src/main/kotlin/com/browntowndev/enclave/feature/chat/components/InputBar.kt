@@ -53,16 +53,17 @@ import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorderColor
 import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurface
 import com.browntowndev.enclave.core.ui.component.enclave.rememberNeoDisabledClick
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
-import com.browntowndev.enclave.domain.port.media.SpeechState
-import com.browntowndev.enclave.domain.port.media.isActiveVoiceInput
 import com.browntowndev.enclave.feature.chat.ChatModeUi
+import com.browntowndev.enclave.feature.chat.ChatSpeechStateUi
+import com.browntowndev.enclave.feature.chat.isActiveVoiceInput
+import com.browntowndev.enclave.feature.chat.toSpeechState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Suppress("LongParameterList", "UnusedParameter")
 @Composable
 fun InputBar(
     inputText: String,
-    speechState: SpeechState,
+    speechState: ChatSpeechStateUi,
     selectedImageUris: List<String>,
     selectedFileName: String?,
     isPhotoAttachmentEnabled: Boolean,
@@ -158,7 +159,7 @@ fun InputBar(
                 },
             ),
         attachmentContent = {
-            AnimatedVisibility(visible = selectedImageUris.isNotEmpty() && speechState == SpeechState.Idle) {
+            AnimatedVisibility(visible = selectedImageUris.isNotEmpty() && speechState == ChatSpeechStateUi.Idle) {
                 Row(
                     modifier =
                         Modifier
@@ -175,7 +176,7 @@ fun InputBar(
                 }
             }
 
-            AnimatedVisibility(visible = selectedFileName != null && speechState == SpeechState.Idle) {
+            AnimatedVisibility(visible = selectedFileName != null && speechState == ChatSpeechStateUi.Idle) {
                 Row(
                     modifier =
                         Modifier
@@ -220,7 +221,7 @@ fun InputBar(
             UniversalPromptTextField(
                 value = inputText,
                 onValueChange = onInputChange,
-                speechState = speechState,
+                speechState = speechState.toSpeechState(),
                 idlePlaceholder = "Enter the Enclave",
                 isExpanded = isExpanded,
                 focusRequester = focusRequester,
@@ -241,7 +242,7 @@ fun InputBar(
         trailingAction = {
             UniversalVoiceTrailingAction(
                 inputText = inputText,
-                speechState = speechState,
+                speechState = speechState.toSpeechState(),
                 isGenerating = isGenerating,
                 canStop = canStop,
                 onSend = onSend,

@@ -15,14 +15,13 @@ import androidx.compose.ui.unit.dp
 import com.browntowndev.enclave.core.ui.component.enclave.EnclavePrimaryButton
 import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSectionHeader
 import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSelectionCard
-import com.browntowndev.enclave.domain.model.config.ApiModelConfiguration
-import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.enclave.feature.settings.ConfiguredModelUi
 
 @Composable
 internal fun ModelSelectStep(
-    models: List<ApiModelConfiguration>,
-    selectedConfigId: ApiModelConfigurationId?,
-    onModelSelected: (ApiModelConfigurationId) -> Unit,
+    models: List<ConfiguredModelUi>,
+    selectedConfigId: String?,
+    onModelSelected: (String) -> Unit,
     onNext: () -> Unit,
 ) {
     Column(
@@ -39,7 +38,7 @@ internal fun ModelSelectStep(
             Text("No API models configured. Go to Settings → Models to add one.")
         } else {
             LazyColumn(modifier = Modifier.weight(1f)) {
-                items(models, key = { it.id.value }) { config ->
+                items(models, key = { it.id }) { config ->
                     val isSelected = config.id == selectedConfigId
                     EnclaveSelectionCard(
                         title = config.displayName.ifBlank { config.modelId },

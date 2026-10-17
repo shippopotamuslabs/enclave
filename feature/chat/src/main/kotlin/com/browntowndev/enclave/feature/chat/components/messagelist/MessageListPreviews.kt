@@ -841,7 +841,7 @@ fun PreviewMessageListWithToolCall() {
             modifier = Modifier.fillMaxSize(),
             isPreview = isPreview,
             hasActiveIndicator = true,
-            activeIndicatorMessageId = messageId,
+            activeIndicatorMessageId = messageId.value,
             activeToolCallBanner =
                 ToolCallBannerUi(
                     kind = ToolCallBannerKind.SEARCH,

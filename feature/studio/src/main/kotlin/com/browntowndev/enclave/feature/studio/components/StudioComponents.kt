@@ -51,11 +51,18 @@ import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurface
 import com.browntowndev.enclave.core.ui.component.shimmerEffect
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
-import com.browntowndev.enclave.domain.model.config.MediaCapability
-import com.browntowndev.enclave.domain.model.media.*
 import com.browntowndev.enclave.feature.studio.ModelPickerPane
 import com.browntowndev.enclave.feature.studio.R
+import com.browntowndev.enclave.feature.studio.StudioAspectRatioUi
+import com.browntowndev.enclave.feature.studio.StudioCapabilitiesUi
 import com.browntowndev.enclave.feature.studio.StudioCapablePresetsUi
+import com.browntowndev.enclave.feature.studio.StudioGenerationSettingsUi
+import com.browntowndev.enclave.feature.studio.StudioImageSettingsUi
+import com.browntowndev.enclave.feature.studio.StudioMediaTypeUi
+import com.browntowndev.enclave.feature.studio.StudioMusicSettingsUi
+import com.browntowndev.enclave.feature.studio.StudioQualityUi
+import com.browntowndev.enclave.feature.studio.StudioTemplateUi
+import com.browntowndev.enclave.feature.studio.StudioVideoSettingsUi
 import com.browntowndev.enclave.feature.studio.StudioModelOptionUi
 import com.browntowndev.enclave.feature.studio.StudioOverrideKind
 import com.browntowndev.enclave.feature.studio.StudioSheetView
@@ -64,9 +71,9 @@ import kotlin.math.roundToInt
 
 @Composable
 fun StudioTemplateRow(
-    templates: List<StudioTemplate>,
+    templates: List<StudioTemplateUi>,
     selectedTemplateId: String?,
-    onTemplateSelected: (StudioTemplate) -> Unit,
+    onTemplateSelected: (StudioTemplateUi) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyRow(
@@ -86,7 +93,7 @@ fun StudioTemplateRow(
 
 @Composable
 fun TemplateChip(
-    template: StudioTemplate,
+    template: StudioTemplateUi,
     isSelected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -212,10 +219,10 @@ fun SettingRow(
 fun StudioOptionsBottomSheet(
     state: StudioUiState,
     onDismiss: () -> Unit,
-    onUpdateSettings: (GenerationSettings) -> Unit,
+    onUpdateSettings: (StudioGenerationSettingsUi) -> Unit,
     onContinualModeChange: (Boolean) -> Unit,
-    onMediaTypeChange: (MediaCapability) -> Unit,
-    onTemplateSelected: (StudioTemplate) -> Unit,
+    onMediaTypeChange: (StudioMediaTypeUi) -> Unit,
+    onTemplateSelected: (StudioTemplateUi) -> Unit,
     onOpenModelPicker: () -> Unit = {},
     onStageModelSelection: (StudioModelOptionUi) -> Unit = {},
     onConfirmModelSelection: () -> Unit = {},
@@ -385,9 +392,9 @@ private fun StudioAspectRatioShimmer(modifier: Modifier = Modifier) {
 
 @Composable
 private fun VideoDurationControl(
-    settings: VideoGenerationSettings,
+    settings: StudioVideoSettingsUi,
     durationOptions: List<String>,
-    onUpdateSettings: (VideoGenerationSettings) -> Unit,
+    onUpdateSettings: (StudioVideoSettingsUi) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (durationOptions.size > MAX_DURATION_PILL_OPTIONS) {
@@ -462,10 +469,10 @@ private fun VideoDurationControl(
 fun StudioOptionsSheetContent(
     state: StudioUiState,
     onDismiss: () -> Unit,
-    onUpdateSettings: (GenerationSettings) -> Unit,
+    onUpdateSettings: (StudioGenerationSettingsUi) -> Unit,
     onContinualModeChange: (Boolean) -> Unit,
-    onMediaTypeChange: (MediaCapability) -> Unit,
-    onTemplateSelected: (StudioTemplate) -> Unit,
+    onMediaTypeChange: (StudioMediaTypeUi) -> Unit,
+    onTemplateSelected: (StudioTemplateUi) -> Unit,
     onOpenModelPicker: () -> Unit = {},
     onStageModelSelection: (StudioModelOptionUi) -> Unit = {},
     onConfirmModelSelection: () -> Unit = {},
@@ -536,10 +543,10 @@ fun StudioOptionsSheetContent(
 @Composable
 private fun SettingsPane(
     state: StudioUiState,
-    onUpdateSettings: (GenerationSettings) -> Unit,
+    onUpdateSettings: (StudioGenerationSettingsUi) -> Unit,
     onContinualModeChange: (Boolean) -> Unit,
-    onMediaTypeChange: (MediaCapability) -> Unit,
-    onTemplateSelected: (StudioTemplate) -> Unit,
+    onMediaTypeChange: (StudioMediaTypeUi) -> Unit,
+    onTemplateSelected: (StudioTemplateUi) -> Unit,
 ) {
     val scrollState = rememberScrollState()
     Column(
@@ -552,22 +559,22 @@ private fun SettingsPane(
         EnclaveSegmentedControl(
             options =
                 listOf(
-                    MediaCapability.IMAGE.displayName,
-                    MediaCapability.VIDEO.displayName,
-                    MediaCapability.MUSIC.displayName,
+                    StudioMediaTypeUi.IMAGE.displayName,
+                    StudioMediaTypeUi.VIDEO.displayName,
+                    StudioMediaTypeUi.MUSIC.displayName,
                 ),
             selectedIndex =
                 when (state.mediaType) {
-                    MediaCapability.IMAGE -> 0
-                    MediaCapability.VIDEO -> 1
-                    MediaCapability.MUSIC -> 2
+                    StudioMediaTypeUi.IMAGE -> 0
+                    StudioMediaTypeUi.VIDEO -> 1
+                    StudioMediaTypeUi.MUSIC -> 2
                 },
             onOptionSelected = { index ->
                 val type =
                     when (index) {
-                        0 -> MediaCapability.IMAGE
-                        1 -> MediaCapability.VIDEO
-                        else -> MediaCapability.MUSIC
+                        0 -> StudioMediaTypeUi.IMAGE
+                        1 -> StudioMediaTypeUi.VIDEO
+                        else -> StudioMediaTypeUi.MUSIC
                     }
                 onMediaTypeChange(type)
             },
@@ -578,8 +585,8 @@ private fun SettingsPane(
         )
 
         when (state.mediaType) {
-            MediaCapability.IMAGE,
-            MediaCapability.VIDEO,
+            StudioMediaTypeUi.IMAGE,
+            StudioMediaTypeUi.VIDEO,
             -> {
                 VisualSettingsSection(
                     state = state,
@@ -588,9 +595,9 @@ private fun SettingsPane(
                     onTemplateSelected = onTemplateSelected,
                 )
             }
-            MediaCapability.MUSIC -> {
+            StudioMediaTypeUi.MUSIC -> {
                 MusicSettingsSection(
-                    settings = state.settings as? MusicGenerationSettings ?: MusicGenerationSettings(),
+                    settings = state.settings as? StudioMusicSettingsUi ?: StudioMusicSettingsUi(),
                     capabilities = state.capabilities,
                     isCapabilitiesLoading = state.isCapabilitiesLoading,
                     onUpdateSettings = onUpdateSettings,
@@ -603,9 +610,9 @@ private fun SettingsPane(
 @Composable
 private fun VisualSettingsSection(
     state: StudioUiState,
-    onUpdateSettings: (GenerationSettings) -> Unit,
+    onUpdateSettings: (StudioGenerationSettingsUi) -> Unit,
     onContinualModeChange: (Boolean) -> Unit,
-    onTemplateSelected: (StudioTemplate) -> Unit,
+    onTemplateSelected: (StudioTemplateUi) -> Unit,
 ) {
     VisualStylePresetsSection(
         templates = state.templates,
@@ -626,17 +633,17 @@ private fun VisualSettingsSection(
     Spacer(modifier = Modifier.height(24.dp))
 
     when (state.mediaType) {
-        MediaCapability.VIDEO -> {
+        StudioMediaTypeUi.VIDEO -> {
             VideoSettingsSection(
-                settings = state.settings as? VideoGenerationSettings ?: VideoGenerationSettings(),
+                settings = state.settings as? StudioVideoSettingsUi ?: StudioVideoSettingsUi(),
                 capabilities = state.capabilities,
                 isCapabilitiesLoading = state.isCapabilitiesLoading,
                 onUpdateSettings = onUpdateSettings,
             )
         }
-        MediaCapability.IMAGE -> {
+        StudioMediaTypeUi.IMAGE -> {
             ImageSettingsSection(
-                settings = state.settings as? ImageGenerationSettings ?: ImageGenerationSettings(),
+                settings = state.settings as? StudioImageSettingsUi ?: StudioImageSettingsUi(),
                 capabilities = state.capabilities,
                 isCapabilitiesLoading = state.isCapabilitiesLoading,
                 continualMode = state.continualMode,
@@ -644,15 +651,15 @@ private fun VisualSettingsSection(
                 onContinualModeChange = onContinualModeChange,
             )
         }
-        MediaCapability.MUSIC -> Unit
+        StudioMediaTypeUi.MUSIC -> Unit
     }
 }
 
 @Composable
 private fun VisualStylePresetsSection(
-    templates: List<StudioTemplate>,
+    templates: List<StudioTemplateUi>,
     selectedTemplateId: String?,
-    onTemplateSelected: (StudioTemplate) -> Unit,
+    onTemplateSelected: (StudioTemplateUi) -> Unit,
 ) {
     EnclaveSectionHeader(text = "Visual Style Presets")
     Spacer(modifier = Modifier.height(8.dp))
@@ -666,10 +673,10 @@ private fun VisualStylePresetsSection(
 
 @Composable
 private fun AspectRatioSettingsCard(
-    settings: GenerationSettings,
-    capabilities: ProviderCapabilities?,
+    settings: StudioGenerationSettingsUi,
+    capabilities: StudioCapabilitiesUi?,
     isCapabilitiesLoading: Boolean,
-    onUpdateSettings: (GenerationSettings) -> Unit,
+    onUpdateSettings: (StudioGenerationSettingsUi) -> Unit,
 ) {
     SettingsCard {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -698,10 +705,10 @@ private fun AspectRatioSettingsCard(
 
 @Composable
 private fun AspectRatioSettingsContent(
-    settings: GenerationSettings,
-    capabilities: ProviderCapabilities?,
+    settings: StudioGenerationSettingsUi,
+    capabilities: StudioCapabilitiesUi?,
     isCapabilitiesLoading: Boolean,
-    onUpdateSettings: (GenerationSettings) -> Unit,
+    onUpdateSettings: (StudioGenerationSettingsUi) -> Unit,
 ) {
     if (isCapabilitiesLoading) {
         StudioAspectRatioShimmer()
@@ -723,9 +730,9 @@ private fun AspectRatioSettingsContent(
 
     val currentRatio =
         when (settings) {
-            is ImageGenerationSettings -> settings.aspectRatio
-            is VideoGenerationSettings -> settings.aspectRatio
-            is MusicGenerationSettings -> AspectRatio.ONE_ONE
+            is StudioImageSettingsUi -> settings.aspectRatio
+            is StudioVideoSettingsUi -> settings.aspectRatio
+            is StudioMusicSettingsUi -> StudioAspectRatioUi.ONE_ONE
         }
 
     AspectRatioSelector(
@@ -734,9 +741,9 @@ private fun AspectRatioSettingsContent(
         onSelected = { ratio ->
             val updated =
                 when (settings) {
-                    is ImageGenerationSettings -> settings.copy(aspectRatio = ratio)
-                    is VideoGenerationSettings -> settings.copy(aspectRatio = ratio)
-                    is MusicGenerationSettings -> settings
+                    is StudioImageSettingsUi -> settings.copy(aspectRatio = ratio)
+                    is StudioVideoSettingsUi -> settings.copy(aspectRatio = ratio)
+                    is StudioMusicSettingsUi -> settings
                 }
             onUpdateSettings(updated)
         },
@@ -745,10 +752,10 @@ private fun AspectRatioSettingsContent(
 
 @Composable
 private fun VideoSettingsSection(
-    settings: VideoGenerationSettings,
-    capabilities: ProviderCapabilities?,
+    settings: StudioVideoSettingsUi,
+    capabilities: StudioCapabilitiesUi?,
     isCapabilitiesLoading: Boolean,
-    onUpdateSettings: (GenerationSettings) -> Unit,
+    onUpdateSettings: (StudioGenerationSettingsUi) -> Unit,
 ) {
     EnclaveSectionHeader(text = "Video")
     Spacer(modifier = Modifier.height(EnclaveNeoTokens.rowSpacing))
@@ -806,11 +813,11 @@ private fun VideoSettingsSection(
 
 @Composable
 private fun ImageSettingsSection(
-    settings: ImageGenerationSettings,
-    capabilities: ProviderCapabilities?,
+    settings: StudioImageSettingsUi,
+    capabilities: StudioCapabilitiesUi?,
     isCapabilitiesLoading: Boolean,
     continualMode: Boolean,
-    onUpdateSettings: (GenerationSettings) -> Unit,
+    onUpdateSettings: (StudioGenerationSettingsUi) -> Unit,
     onContinualModeChange: (Boolean) -> Unit,
 ) {
     EnclaveSectionHeader(text = "Image")
@@ -920,16 +927,16 @@ private fun ImageSettingsSection(
 
 @Composable
 private fun MusicSettingsSection(
-    settings: MusicGenerationSettings,
-    capabilities: ProviderCapabilities?,
+    settings: StudioMusicSettingsUi,
+    capabilities: StudioCapabilitiesUi?,
     isCapabilitiesLoading: Boolean,
-    onUpdateSettings: (GenerationSettings) -> Unit,
+    onUpdateSettings: (StudioGenerationSettingsUi) -> Unit,
 ) {
     val durationRange =
-        capabilities?.musicDurationRange?.let { it.first.toFloat()..it.last.toFloat() }
+        capabilities?.let { it.musicDurationStart.toFloat()..it.musicDurationEnd.toFloat() }
             ?: 5f..120f
     val tempoRange =
-        capabilities?.musicTempoRange?.let { it.first.toFloat()..it.last.toFloat() }
+        capabilities?.let { it.musicTempoStart.toFloat()..it.musicTempoEnd.toFloat() }
             ?: 60f..200f
     EnclaveSectionHeader(text = "Music Configuration")
     Spacer(modifier = Modifier.height(EnclaveNeoTokens.rowSpacing))
@@ -973,12 +980,12 @@ private const val IMG2IMG_DENOISE_TOOLTIP =
 
 @Composable
 private fun Img2ImgDenoiseSetting(
-    settings: ImageGenerationSettings,
-    onUpdateSettings: (ImageGenerationSettings) -> Unit,
+    settings: StudioImageSettingsUi,
+    onUpdateSettings: (StudioImageSettingsUi) -> Unit,
 ) {
     val denoiseRange =
-        LocalImageGenerationModelPolicy.MIN_IMG2IMG_DENOISE_STRENGTH..
-            LocalImageGenerationModelPolicy.MAX_IMG2IMG_DENOISE_STRENGTH
+        StudioImageSettingsUi.MIN_IMG2IMG_DENOISE_STRENGTH..
+            StudioImageSettingsUi.MAX_IMG2IMG_DENOISE_STRENGTH
     val value = settings.img2ImgDenoiseStrength.coerceIn(denoiseRange)
     val valueLabel = "${(value * 100).roundToInt()}%"
 
@@ -1087,9 +1094,9 @@ private fun SettingsCard(
 
 @Composable
 fun AspectRatioSelector(
-    selected: AspectRatio,
-    options: List<AspectRatio>,
-    onSelected: (AspectRatio) -> Unit,
+    selected: StudioAspectRatioUi,
+    options: List<StudioAspectRatioUi>,
+    onSelected: (StudioAspectRatioUi) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyRow(
@@ -1102,15 +1109,15 @@ fun AspectRatioSelector(
             val isSelected = selected == ratio
             val ratioValue =
                 when (ratio) {
-                    AspectRatio.ONE_ONE -> 1f
-                    AspectRatio.THREE_FOUR -> 3f / 4f
-                    AspectRatio.FOUR_THREE -> 4f / 3f
-                    AspectRatio.NINE_SIXTEEN -> 9f / 16f
-                    AspectRatio.SIXTEEN_NINE -> 16f / 9f
-                    AspectRatio.TWO_THREE -> 2f / 3f
-                    AspectRatio.THREE_TWO -> 3f / 2f
-                    AspectRatio.TWENTY_ONE_NINE -> 21f / 9f
-                    AspectRatio.FIVE_FOUR -> 5f / 4f
+                    StudioAspectRatioUi.ONE_ONE -> 1f
+                    StudioAspectRatioUi.THREE_FOUR -> 3f / 4f
+                    StudioAspectRatioUi.FOUR_THREE -> 4f / 3f
+                    StudioAspectRatioUi.NINE_SIXTEEN -> 9f / 16f
+                    StudioAspectRatioUi.SIXTEEN_NINE -> 16f / 9f
+                    StudioAspectRatioUi.TWO_THREE -> 2f / 3f
+                    StudioAspectRatioUi.THREE_TWO -> 3f / 2f
+                    StudioAspectRatioUi.TWENTY_ONE_NINE -> 21f / 9f
+                    StudioAspectRatioUi.FIVE_FOUR -> 5f / 4f
                 }
 
             Column(
@@ -1166,33 +1173,33 @@ private fun GenerationCountPicker(
         value = count,
         onValueChange = onCountChange,
         modifier = modifier,
-        min = ImageGenerationSettings.MIN_GENERATION_COUNT,
-        max = ImageGenerationSettings.MAX_GENERATION_COUNT,
+        min = StudioImageSettingsUi.MIN_GENERATION_COUNT,
+        max = StudioImageSettingsUi.MAX_GENERATION_COUNT,
     )
 }
 
 private val previewImageTemplates =
     listOf(
-        StudioTemplate("1", "Cyberpunk", "cyberpunk", "Neon lighting, ", " 8k"),
-        StudioTemplate("2", "Oil Painting", "oil_painting", "Oil painting of ", " canvas"),
-        StudioTemplate("3", "Anime", "anime", "Anime style ", " vibrant"),
-        StudioTemplate("4", "Cinematic", "cinematic", "Cinematic shot ", " dramatic"),
+        StudioTemplateUi("1", "Cyberpunk", "cyberpunk", "Neon lighting, ", " 8k"),
+        StudioTemplateUi("2", "Oil Painting", "oil_painting", "Oil painting of ", " canvas"),
+        StudioTemplateUi("3", "Anime", "anime", "Anime style ", " vibrant"),
+        StudioTemplateUi("4", "Cinematic", "cinematic", "Cinematic shot ", " dramatic"),
     )
 
 private val previewStudioCapabilities =
-    ProviderCapabilities(
+    StudioCapabilitiesUi(
         supportedAspectRatios =
             listOf(
-                AspectRatio.ONE_ONE,
-                AspectRatio.THREE_FOUR,
-                AspectRatio.FOUR_THREE,
-                AspectRatio.NINE_SIXTEEN,
-                AspectRatio.SIXTEEN_NINE,
-                AspectRatio.TWO_THREE,
-                AspectRatio.THREE_TWO,
+                StudioAspectRatioUi.ONE_ONE,
+                StudioAspectRatioUi.THREE_FOUR,
+                StudioAspectRatioUi.FOUR_THREE,
+                StudioAspectRatioUi.NINE_SIXTEEN,
+                StudioAspectRatioUi.SIXTEEN_NINE,
+                StudioAspectRatioUi.TWO_THREE,
+                StudioAspectRatioUi.THREE_TWO,
             ),
-        supportedImageQualities = listOf(GenerationQuality.SPEED, GenerationQuality.QUALITY),
-        supportedVideoQualities = listOf(GenerationQuality.SPEED, GenerationQuality.QUALITY),
+        supportedImageQualities = listOf(StudioQualityUi.SPEED, StudioQualityUi.QUALITY),
+        supportedVideoQualities = listOf(StudioQualityUi.SPEED, StudioQualityUi.QUALITY),
         supportedVideoResolutions = listOf("720p", "1080p"),
         supportedVideoDurations = listOf(5, 10),
         supportsVideo = true,
@@ -1212,10 +1219,10 @@ private val previewPickerAssets =
 fun PreviewStudioOptionsImage() {
     val state =
         StudioUiState(
-            mediaType = MediaCapability.IMAGE,
+            mediaType = StudioMediaTypeUi.IMAGE,
             templates = previewImageTemplates,
             selectedTemplateId = "1",
-            settings = ImageGenerationSettings(),
+            settings = StudioImageSettingsUi(),
             capabilities = previewStudioCapabilities,
             continualMode = false,
             resolvedModelTypeLabel = "Image Generation",
@@ -1243,10 +1250,10 @@ fun PreviewStudioOptionsImage() {
 fun PreviewStudioOptionsImageDark() {
     val state =
         StudioUiState(
-            mediaType = MediaCapability.IMAGE,
+            mediaType = StudioMediaTypeUi.IMAGE,
             templates = previewImageTemplates,
             selectedTemplateId = "1",
-            settings = ImageGenerationSettings(),
+            settings = StudioImageSettingsUi(),
             capabilities = previewStudioCapabilities,
             continualMode = false,
             resolvedModelTypeLabel = "Image Generation",
@@ -1274,7 +1281,7 @@ fun PreviewStudioOptionsImageDark() {
 fun PreviewStudioOptionsMusic() {
     val state =
         StudioUiState(
-            mediaType = MediaCapability.MUSIC,
+            mediaType = StudioMediaTypeUi.MUSIC,
         )
     EnclaveTheme {
         Box(modifier = Modifier.background(MaterialTheme.colorScheme.surface)) {
@@ -1299,7 +1306,7 @@ fun PreviewStudioOptionsMusic() {
 fun PreviewStudioOptionsModelPicker() {
     val state =
         StudioUiState(
-            mediaType = MediaCapability.IMAGE,
+            mediaType = StudioMediaTypeUi.IMAGE,
             isModelPickerVisible = true,
             selectedModelIdInPicker = "fal-2",
             modelPickerAssets = previewPickerAssets,
@@ -1329,7 +1336,7 @@ fun PreviewStudioOptionsModelPicker() {
 fun PreviewStudioOptionsEmptyCatalog() {
     val state =
         StudioUiState(
-            mediaType = MediaCapability.IMAGE,
+            mediaType = StudioMediaTypeUi.IMAGE,
             isModelPickerVisible = true,
             selectedModelIdInPicker = null,
             modelPickerAssets = StudioCapablePresetsUi.EMPTY,

@@ -72,7 +72,6 @@ import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.config.TtsProviderId
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.memory.MemoryCategory
-import com.browntowndev.enclave.domain.model.settings.AppTheme
 import com.browntowndev.enclave.domain.model.settings.SearchProvider
 import com.browntowndev.enclave.feature.settings.usage.UsageSpendBottomSheet
 
@@ -85,7 +84,7 @@ fun SettingsScreen(
     onNavigateToProfileBuilder: () -> Unit = {},
     onLoginClick: () -> Unit,
     onLogoutClick: () -> Unit,
-    onThemeChange: (AppTheme) -> Unit,
+    onThemeChange: (AppThemeUi) -> Unit,
     onThemeFamilyChange: (ThemeFamilyUi) -> Unit = {},
     onHapticResponseChange: (Boolean) -> Unit,
     onBackgroundInferenceChange: (Boolean) -> Unit,
@@ -703,8 +702,8 @@ fun ThemeFamilySelection(
 
 @Composable
 fun ThemeSelection(
-    selectedTheme: AppTheme,
-    onThemeChange: (AppTheme) -> Unit,
+    selectedTheme: AppThemeUi,
+    onThemeChange: (AppThemeUi) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
@@ -713,14 +712,14 @@ fun ThemeSelection(
         ) {
             ThemeOption(
                 text = "System",
-                selected = selectedTheme == AppTheme.SYSTEM,
-                onClick = { onThemeChange(AppTheme.SYSTEM) },
+                selected = selectedTheme == AppThemeUi.SYSTEM,
+                onClick = { onThemeChange(AppThemeUi.SYSTEM) },
                 modifier = Modifier.weight(1f),
             )
             ThemeOption(
                 text = "Dynamic",
-                selected = selectedTheme == AppTheme.DYNAMIC,
-                onClick = { onThemeChange(AppTheme.DYNAMIC) },
+                selected = selectedTheme == AppThemeUi.DYNAMIC,
+                onClick = { onThemeChange(AppThemeUi.DYNAMIC) },
                 modifier = Modifier.weight(1f),
             )
         }
@@ -730,14 +729,14 @@ fun ThemeSelection(
         ) {
             ThemeOption(
                 text = "Light",
-                selected = selectedTheme == AppTheme.LIGHT,
-                onClick = { onThemeChange(AppTheme.LIGHT) },
+                selected = selectedTheme == AppThemeUi.LIGHT,
+                onClick = { onThemeChange(AppThemeUi.LIGHT) },
                 modifier = Modifier.weight(1f),
             )
             ThemeOption(
                 text = "Dark",
-                selected = selectedTheme == AppTheme.DARK,
-                onClick = { onThemeChange(AppTheme.DARK) },
+                selected = selectedTheme == AppThemeUi.DARK,
+                onClick = { onThemeChange(AppThemeUi.DARK) },
                 modifier = Modifier.weight(1f),
             )
         }

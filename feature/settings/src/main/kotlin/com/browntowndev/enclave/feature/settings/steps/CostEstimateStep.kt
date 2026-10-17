@@ -26,12 +26,12 @@ import com.browntowndev.enclave.core.ui.component.enclave.EnclavePanel
 import com.browntowndev.enclave.core.ui.component.enclave.EnclavePrimaryButton
 import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSecondaryButton
 import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSectionHeader
-import com.browntowndev.enclave.domain.model.profile.ProfileCostEstimate
+import com.browntowndev.enclave.feature.settings.ProfileCostEstimateUi
 
 @Composable
 internal fun CostEstimateStep(
     isLoading: Boolean,
-    estimate: ProfileCostEstimate?,
+    estimate: ProfileCostEstimateUi?,
     onBack: () -> Unit,
     onStartAnalysis: () -> Unit,
 ) {

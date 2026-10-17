@@ -24,19 +24,16 @@ import com.browntowndev.enclave.core.ui.component.UniversalPromptTextField
 import com.browntowndev.enclave.core.ui.component.UniversalVoiceTrailingAction
 import com.browntowndev.enclave.core.ui.component.enclave.EnclaveIconButton
 import com.browntowndev.enclave.core.ui.theme.EnclaveThemeAccessor
-import com.browntowndev.enclave.domain.model.config.MediaCapability
 import dev.chrisbanes.haze.HazeState
-import com.browntowndev.enclave.domain.port.media.SpeechState
-import com.browntowndev.enclave.domain.port.media.isActiveVoiceInput
 
 @Composable
 @Suppress("LongParameterList")
 internal fun StudioInputDock(
     prompt: String,
-    speechState: SpeechState,
-    mediaType: MediaCapability,
+    speechState: StudioSpeechStateUi,
+    mediaType: StudioMediaTypeUi,
     referenceImageUri: String?,
-    referenceMediaType: MediaCapability?,
+    referenceMediaType: StudioMediaTypeUi?,
     isGenerating: Boolean,
     isContinualGenerationActive: Boolean,
     hasImageEditModel: Boolean,
@@ -68,7 +65,7 @@ internal fun StudioInputDock(
                     {
                         UniversalImageAttachment(
                             uri = referenceImageUri,
-                            isVideo = referenceMediaType == MediaCapability.VIDEO,
+                            isVideo = referenceMediaType == StudioMediaTypeUi.VIDEO,
                             onClear = onClearReferenceImage,
                             modifier = Modifier.padding(start = 16.dp, top = 8.dp),
                         )
@@ -103,7 +100,7 @@ internal fun StudioInputDock(
             trailingAction = {
                 UniversalVoiceTrailingAction(
                     inputText = prompt,
-                    speechState = speechState,
+                    speechState = speechState.toDomain(),
                     isGenerating = isGenerating || isContinualGenerationActive,
                     canStop = true,
                     onSend = { onGenerateClick() },
@@ -121,7 +118,7 @@ internal fun StudioInputDock(
 @Composable
 internal fun StudioPromptField(
     prompt: String,
-    speechState: SpeechState,
+    speechState: StudioSpeechStateUi,
     isExpanded: Boolean,
     onPromptChange: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -129,7 +126,7 @@ internal fun StudioPromptField(
     UniversalPromptTextField(
         value = prompt,
         onValueChange = onPromptChange,
-        speechState = speechState,
+        speechState = speechState.toDomain(),
         idlePlaceholder = "Describe what to create...",
         isExpanded = isExpanded,
         modifier = modifier,
@@ -139,7 +136,7 @@ internal fun StudioPromptField(
 
 @Composable
 internal fun ReferenceImageAction(
-    mediaType: MediaCapability,
+    mediaType: StudioMediaTypeUi,
     hasReferenceImage: Boolean,
     hasImageEditModel: Boolean,
     hasImageToVideoModel: Boolean,
@@ -147,11 +144,11 @@ internal fun ReferenceImageAction(
 ) {
     val isEnabled =
         when (mediaType) {
-            MediaCapability.IMAGE -> hasImageEditModel
-            MediaCapability.VIDEO -> hasImageToVideoModel
+            StudioMediaTypeUi.IMAGE -> hasImageEditModel
+            StudioMediaTypeUi.VIDEO -> hasImageToVideoModel
             else -> false
         }
-    val shouldShow = mediaType == MediaCapability.IMAGE || mediaType == MediaCapability.VIDEO
+    val shouldShow = mediaType == StudioMediaTypeUi.IMAGE || mediaType == StudioMediaTypeUi.VIDEO
 
     if (shouldShow) {
         EnclaveIconButton(

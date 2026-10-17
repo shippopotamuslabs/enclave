@@ -92,7 +92,7 @@ import java.util.Locale
  */
 @Composable
 fun ModelDownloadScreen(
-    modelsResult: DownloadModelsResult?,
+    modelsResult: DownloadModelsResultUi?,
     errorMessage: String? = null,
     onReady: () -> Unit = {},
     refreshDownloadPlan: DownloadPlanRefresher? = null,
@@ -101,7 +101,7 @@ fun ModelDownloadScreen(
             key = (modelsResult?.modelsToDownload ?: emptyList()).hashCode().toString(),
             creationCallback = { factory ->
                 val safeModelsResult =
-                    modelsResult ?: DownloadModelsResult(
+                    modelsResult?.toDomain() ?: DownloadModelsResult(
                         allModels = emptyMap(),
                         modelsToDownload = emptyList(),
                         scanResult =

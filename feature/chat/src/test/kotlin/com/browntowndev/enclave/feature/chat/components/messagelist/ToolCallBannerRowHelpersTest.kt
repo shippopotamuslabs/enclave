@@ -20,9 +20,9 @@ class ToolCallBannerRowHelpersTest {
         val message = assistantMessage()
         assertSame(
             banner,
-            resolveActiveToolCallBanner(message, MessageId("msg"), banner),
+            resolveActiveToolCallBanner(message, "msg", banner),
         )
-        assertNull(resolveActiveToolCallBanner(message, MessageId("other"), banner))
+        assertNull(resolveActiveToolCallBanner(message, "other", banner))
     }
 
     @Test
@@ -37,7 +37,7 @@ class ToolCallBannerRowHelpersTest {
                 formattedTimestamp = "10:00",
             )
 
-        assertNull(resolveActiveToolCallBanner(message, MessageId("msg"), banner))
+        assertNull(resolveActiveToolCallBanner(message, "msg", banner))
     }
 
     private fun assistantMessage() =

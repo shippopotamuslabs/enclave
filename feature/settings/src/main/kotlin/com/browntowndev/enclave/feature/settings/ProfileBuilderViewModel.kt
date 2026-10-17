@@ -43,12 +43,12 @@ class ProfileBuilderViewModel
         private fun loadModels() {
             viewModelScope.launch {
                 observeApiModelConfigurations().collect { configs ->
-                    _uiState.update { it.copy(configuredModels = configs) }
+                    _uiState.update { it.copy(configuredModels = configs.map { config -> config.toUi() }) }
                 }
             }
         }
 
-        fun onModelSelected(configId: ApiModelConfigurationId) {
+        fun onModelSelected(configId: String) {
             _uiState.update { it.copy(selectedConfigId = configId) }
         }
 
@@ -94,9 +94,9 @@ class ProfileBuilderViewModel
                         prepareProfileCorpus(
                             corpusRunId = corpusRunId,
                             fileUris = state.selectedFileUris,
-                            configId = state.selectedConfigId,
+                            configId = state.selectedConfigId?.let { ApiModelConfigurationId(it) },
                         )
-                    _uiState.update { it.copy(isPreparingCorpus = false, costEstimate = estimate) }
+                    _uiState.update { it.copy(isPreparingCorpus = false, costEstimate = estimate.toUi()) }
                 } catch (e: Exception) {
                     _uiState.update {
                         it.copy(
@@ -125,7 +125,7 @@ class ProfileBuilderViewModel
 
             viewModelScope.launch {
                 try {
-                    startProfileAnalysis(state.corpusRunId, configId)
+                    startProfileAnalysis(state.corpusRunId, ApiModelConfigurationId(configId))
                     observeWorkProgress()
                 } catch (e: Exception) {
                     _uiState.update {

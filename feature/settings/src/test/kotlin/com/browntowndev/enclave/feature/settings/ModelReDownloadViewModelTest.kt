@@ -83,11 +83,11 @@ class ModelReDownloadViewModelTest {
             val succeeded = snapshot(DownloadWorkLifecycle.SUCCEEDED, isTerminalSuccess = true)
             workFlow = flowOf(running, succeeded)
 
-            viewModel.reDownloadModel(modelId)
+            viewModel.reDownloadModel(modelId.value)
             advanceUntilIdle()
 
-            val finalState = viewModel.reDownloadStates.value[modelId]
-            assertTrue(finalState is ReDownloadProgress.Complete || finalState == null)
+            val finalState = viewModel.reDownloadStates.value[modelId.value]
+            assertTrue(finalState is ReDownloadProgressUi.Complete || finalState == null)
         }
 
     @Test
@@ -96,12 +96,12 @@ class ModelReDownloadViewModelTest {
             val modelId = LocalModelId("test")
             coEvery { reDownloadModelUseCase(modelId) } returns Result.failure(Exception("Fetch failed"))
 
-            viewModel.reDownloadModel(modelId)
+            viewModel.reDownloadModel(modelId.value)
             advanceUntilIdle()
 
-            val finalState = viewModel.reDownloadStates.value[modelId]
-            assertTrue(finalState is ReDownloadProgress.Failed || finalState == null)
-            if (finalState is ReDownloadProgress.Failed) {
+            val finalState = viewModel.reDownloadStates.value[modelId.value]
+            assertTrue(finalState is ReDownloadProgressUi.Failed || finalState == null)
+            if (finalState is ReDownloadProgressUi.Failed) {
                 assertEquals("Fetch failed", finalState.error)
             }
         }
@@ -125,11 +125,11 @@ class ModelReDownloadViewModelTest {
             val finalizerSucceeded = snapshot(DownloadWorkLifecycle.SUCCEEDED, isTerminalSuccess = true)
             workFlow = flowOf(downloaderSucceeded, finalizerSucceeded)
 
-            viewModel.reDownloadModel(modelId)
+            viewModel.reDownloadModel(modelId.value)
             advanceUntilIdle()
 
-            val finalState = viewModel.reDownloadStates.value[modelId]
-            assertTrue(finalState is ReDownloadProgress.Complete || finalState == null)
+            val finalState = viewModel.reDownloadStates.value[modelId.value]
+            assertTrue(finalState is ReDownloadProgressUi.Complete || finalState == null)
         }
 
     @Test
@@ -158,6 +158,6 @@ class ModelReDownloadViewModelTest {
             advanceUntilIdle()
 
             val finalState = viewModel.packReDownloadStates.value["sdxl-t2i"]
-            assertTrue(finalState is ReDownloadProgress.Complete || finalState == null)
+            assertTrue(finalState is ReDownloadProgressUi.Complete || finalState == null)
         }
 }

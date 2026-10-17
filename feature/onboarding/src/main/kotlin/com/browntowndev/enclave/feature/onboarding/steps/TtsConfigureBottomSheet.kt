@@ -24,25 +24,24 @@ import com.browntowndev.enclave.core.ui.component.enclave.EnclaveOutlinedTextFie
 import com.browntowndev.enclave.core.ui.component.enclave.EnclavePrimaryButton
 import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSheetHeader
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
-import com.browntowndev.enclave.domain.model.config.TtsProviderId
-import com.browntowndev.enclave.domain.model.inference.ApiProvider
-import com.browntowndev.enclave.domain.model.inference.TtsVoices
-import com.browntowndev.enclave.domain.usecase.settings.TtsProviderDraft
+import com.browntowndev.enclave.feature.onboarding.ApiProviderUi
+import com.browntowndev.enclave.feature.onboarding.TtsProviderDraftUi
+import com.browntowndev.enclave.feature.onboarding.ttsVoicesForProvider
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TtsConfigureBottomSheet(
     onDismiss: () -> Unit,
-    onSave: (TtsProviderDraft) -> Unit,
+    onSave: (TtsProviderDraftUi) -> Unit,
 ) {
-    var provider by remember { mutableStateOf(ApiProvider.XAI) }
+    var provider by remember { mutableStateOf(ApiProviderUi.XAI) }
     var apiKey by remember { mutableStateOf("") }
     var displayName by remember { mutableStateOf("") }
     var voiceName by remember { mutableStateOf("") }
     var providerExpanded by remember { mutableStateOf(false) }
     var voiceExpanded by remember { mutableStateOf(false) }
 
-    val voices = TtsVoices.getVoicesForProvider(provider)
+    val voices = ttsVoicesForProvider(provider)
     val isSaveEnabled = displayName.isNotBlank() && voiceName.isNotBlank() && apiKey.isNotBlank()
 
     EnclaveModalBottomSheet(onDismissRequest = onDismiss) {
@@ -75,7 +74,7 @@ fun TtsConfigureBottomSheet(
                     expanded = providerExpanded,
                     onDismissRequest = { providerExpanded = false },
                 ) {
-                    listOf(ApiProvider.OPENAI, ApiProvider.XAI, ApiProvider.GOOGLE, ApiProvider.FAL).forEach { p ->
+                    listOf(ApiProviderUi.OPENAI, ApiProviderUi.XAI, ApiProviderUi.GOOGLE, ApiProviderUi.FAL).forEach { p ->
                         DropdownMenuItem(
                             text = { Text(p.displayName) },
                             onClick = {
@@ -139,8 +138,8 @@ fun TtsConfigureBottomSheet(
                 text = "Save TTS Provider",
                 onClick = {
                     onSave(
-                        TtsProviderDraft(
-                            id = TtsProviderId(""),
+                        TtsProviderDraftUi(
+                            id = "",
                             displayName = displayName,
                             provider = provider,
                             voiceName = voiceName,
