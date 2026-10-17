@@ -1,5 +1,11 @@
 package com.browntowndev.enclave.feature.history
+import com.browntowndev.enclave.core.testing.FakeChatRepository
+import com.browntowndev.enclave.core.testing.FakeEmbeddingEngine
+import com.browntowndev.enclave.core.testing.FakeMessageRepository
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
+import com.browntowndev.enclave.domain.model.chat.Content
+import com.browntowndev.enclave.domain.model.chat.Message
+import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.chat.Chat
 import com.browntowndev.enclave.domain.model.chat.ChatId
@@ -8,13 +14,8 @@ import com.browntowndev.enclave.domain.usecase.chat.GetAllChatsUseCase
 import com.browntowndev.enclave.domain.usecase.chat.RenameChatUseCase
 import com.browntowndev.enclave.domain.usecase.chat.SearchChatsUseCase
 import com.browntowndev.enclave.domain.usecase.chat.TogglePinChatUseCase
-import io.mockk.coEvery
-import io.mockk.every
-import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -37,16 +38,15 @@ class HistoryViewModelTest {
     @RegisterExtension
     val mainDispatcherRule = MainDispatcherRule(testDispatcher)
 
-    private lateinit var mockGetAllChatsUseCase: GetAllChatsUseCase
-    private lateinit var mockSearchChatsUseCase: SearchChatsUseCase
-    private lateinit var mockDeleteChatUseCase: DeleteChatUseCase
-    private lateinit var mockRenameChatUseCase: RenameChatUseCase
-    private lateinit var mockTogglePinChatUseCase: TogglePinChatUseCase
-
-    // ENC-27: recorded invocations replace MockK verify/coVerify.
-    private val togglePinCalls = mutableListOf<ChatId>()
-    private val deleteChatCalls = mutableListOf<ChatId>()
-    private val searchQueries = mutableListOf<String>()
+    // ENC-28: real use cases over :core:testing fakes; recorded invocations live on the fakes.
+    private lateinit var fakeChatRepository: FakeChatRepository
+    private lateinit var fakeMessageRepository: FakeMessageRepository
+    private lateinit var fakeEmbeddingEngine: FakeEmbeddingEngine
+    private lateinit var getAllChatsUseCase: GetAllChatsUseCase
+    private lateinit var searchChatsUseCase: SearchChatsUseCase
+    private lateinit var deleteChatUseCase: DeleteChatUseCase
+    private lateinit var renameChatUseCase: RenameChatUseCase
+    private lateinit var togglePinChatUseCase: TogglePinChatUseCase
     private data class RecordedError(
         val tag: String,
         val message: String,
@@ -71,7 +71,7 @@ class HistoryViewModelTest {
                 }
         }
 
-    private lateinit var mockErrorHandler: ViewModelErrorHandler
+    private lateinit var errorHandler: ViewModelErrorHandler
     private lateinit var viewModel: HistoryViewModel
 
     private val today =
@@ -125,22 +125,25 @@ class HistoryViewModelTest {
 
     @BeforeEach
     fun setup() {
-        mockGetAllChatsUseCase = mockk(relaxed = true)
-        mockSearchChatsUseCase = mockk(relaxed = true)
-        mockDeleteChatUseCase = mockk(relaxed = true)
-        mockRenameChatUseCase = mockk(relaxed = true)
-        mockTogglePinChatUseCase = mockk(relaxed = true)
-        mockErrorHandler = fakeErrorHandler
+        fakeChatRepository = FakeChatRepository()
+        fakeMessageRepository = FakeMessageRepository()
+        fakeEmbeddingEngine = FakeEmbeddingEngine()
+        getAllChatsUseCase = GetAllChatsUseCase(fakeChatRepository)
+        searchChatsUseCase = SearchChatsUseCase(fakeChatRepository, fakeMessageRepository, fakeEmbeddingEngine)
+        deleteChatUseCase = DeleteChatUseCase(fakeChatRepository)
+        renameChatUseCase = RenameChatUseCase(fakeChatRepository)
+        togglePinChatUseCase = TogglePinChatUseCase(fakeChatRepository)
+        errorHandler = fakeErrorHandler
     }
 
     private fun createViewModel(): HistoryViewModel =
         HistoryViewModel(
-            getAllChatsUseCase = mockGetAllChatsUseCase,
-            searchChatsUseCase = mockSearchChatsUseCase,
-            deleteChatUseCase = mockDeleteChatUseCase,
-            renameChatUseCase = mockRenameChatUseCase,
-            togglePinChatUseCase = mockTogglePinChatUseCase,
-            errorHandler = mockErrorHandler,
+            getAllChatsUseCase = getAllChatsUseCase,
+            searchChatsUseCase = searchChatsUseCase,
+            deleteChatUseCase = deleteChatUseCase,
+            renameChatUseCase = renameChatUseCase,
+            togglePinChatUseCase = togglePinChatUseCase,
+            errorHandler = errorHandler,
         )
 
     @Test
@@ -153,13 +156,12 @@ class HistoryViewModelTest {
                     createTestChat(ChatId("3"), "Gamma", oct24, pinned = false),
                     createTestChat(ChatId("4"), "Delta", today, pinned = false),
                 )
-            val chatsFlow = MutableStateFlow<List<Chat>>(emptyList())
-            every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
+            fakeChatRepository.seedChats(emptyList())
 
             viewModel = createViewModel()
             backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
 
-            chatsFlow.value = testChats
+            fakeChatRepository.setChats(testChats)
             advanceUntilIdle()
 
             val state = viewModel.uiState.value
@@ -172,13 +174,12 @@ class HistoryViewModelTest {
     fun `B2 maps Chat to HistoryChat correctly`() =
         runTest(testDispatcher) {
             val testChat = createTestChat(ChatId("42"), "Test Chat", today, pinned = false)
-            val chatsFlow = MutableStateFlow<List<Chat>>(emptyList())
-            every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
+            fakeChatRepository.seedChats(emptyList())
 
             viewModel = createViewModel()
             backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
 
-            chatsFlow.value = listOf(testChat)
+            fakeChatRepository.setChats(listOf(testChat))
             advanceUntilIdle()
 
             val state = viewModel.uiState.value
@@ -194,13 +195,12 @@ class HistoryViewModelTest {
     fun `B3 pinned chats appear in pinned section`() =
         runTest(testDispatcher) {
             val pinnedChat = createTestChat(ChatId("1"), "Pinned Chat", today, pinned = true)
-            val chatsFlow = MutableStateFlow<List<Chat>>(emptyList())
-            every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
+            fakeChatRepository.seedChats(emptyList())
 
             viewModel = createViewModel()
             backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
 
-            chatsFlow.value = listOf(pinnedChat)
+            fakeChatRepository.setChats(listOf(pinnedChat))
             advanceUntilIdle()
 
             val state = viewModel.uiState.value
@@ -212,13 +212,12 @@ class HistoryViewModelTest {
     fun `B4 unpinned chats appear in recent section`() =
         runTest(testDispatcher) {
             val unpinnedChat = createTestChat(ChatId("1"), "Recent Chat", today, pinned = false)
-            val chatsFlow = MutableStateFlow<List<Chat>>(emptyList())
-            every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
+            fakeChatRepository.seedChats(emptyList())
 
             viewModel = createViewModel()
             backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
 
-            chatsFlow.value = listOf(unpinnedChat)
+            fakeChatRepository.setChats(listOf(unpinnedChat))
             advanceUntilIdle()
 
             val state = viewModel.uiState.value
@@ -229,8 +228,7 @@ class HistoryViewModelTest {
     @Test
     fun `B5 empty database produces empty lists`() =
         runTest(testDispatcher) {
-            val chatsFlow = MutableStateFlow<List<Chat>>(emptyList())
-            every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
+            fakeChatRepository.seedChats(emptyList())
 
             viewModel = createViewModel()
             backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
@@ -249,13 +247,12 @@ class HistoryViewModelTest {
             val chat1 = createTestChat(ChatId("1"), "Most Recent", Date(1700), pinned = false)
             val chat2 = createTestChat(ChatId("2"), "Middle", Date(1500), pinned = false)
             val chat3 = createTestChat(ChatId("3"), "Oldest", Date(1200), pinned = false)
-            val chatsFlow = MutableStateFlow<List<Chat>>(emptyList())
-            every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
+            fakeChatRepository.seedChats(emptyList())
 
             viewModel = createViewModel()
             backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
 
-            chatsFlow.value = listOf(chat1, chat2, chat3)
+            fakeChatRepository.setChats(listOf(chat1, chat2, chat3))
             advanceUntilIdle()
 
             val state = viewModel.uiState.value
@@ -268,8 +265,7 @@ class HistoryViewModelTest {
     @Test
     fun `B7 loading state managed correctly`() =
         runTest(testDispatcher) {
-            val chatsFlow = MutableStateFlow<List<Chat>>(emptyList())
-            every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
+            fakeChatRepository.seedChats(emptyList())
 
             viewModel = createViewModel()
             // Check initial value directly before any collectors or flow emissions
@@ -280,13 +276,12 @@ class HistoryViewModelTest {
     fun `B8 loading state false after data arrives`() =
         runTest(testDispatcher) {
             val testChat = createTestChat(ChatId("1"), "Test", today, pinned = false)
-            val chatsFlow = MutableStateFlow<List<Chat>>(emptyList())
-            every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
+            fakeChatRepository.seedChats(emptyList())
 
             viewModel = createViewModel()
             backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
 
-            chatsFlow.value = listOf(testChat)
+            fakeChatRepository.setChats(listOf(testChat))
             advanceUntilIdle()
 
             val state = viewModel.uiState.value
@@ -298,13 +293,12 @@ class HistoryViewModelTest {
         runTest(testDispatcher) {
             val chat1 = createTestChat(ChatId("1"), "Older Pinned", Date(1000), pinned = true)
             val chat2 = createTestChat(ChatId("2"), "Newer Pinned", Date(2000), pinned = true)
-            val chatsFlow = MutableStateFlow<List<Chat>>(emptyList())
-            every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
+            fakeChatRepository.seedChats(emptyList())
 
             viewModel = createViewModel()
             backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
 
-            chatsFlow.value = listOf(chat1, chat2)
+            fakeChatRepository.setChats(listOf(chat1, chat2))
             advanceUntilIdle()
 
             val state = viewModel.uiState.value
@@ -319,7 +313,7 @@ class HistoryViewModelTest {
             // Given
             val chatId = ChatId("1")
             val exception = RuntimeException("Delete Error")
-            coEvery { mockDeleteChatUseCase.invoke(chatId) } throws exception
+            fakeChatRepository.deleteFailure = exception
 
             viewModel = createViewModel()
 
@@ -348,12 +342,7 @@ class HistoryViewModelTest {
         runTest(testDispatcher) {
             val chatId = ChatId("pin-me")
             val unpinned = createTestChat(chatId, "To Pin", today, pinned = false)
-            val chatsFlow = MutableStateFlow(listOf(unpinned))
-            every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
-            coEvery { mockTogglePinChatUseCase.invoke(chatId) } coAnswers {
-                togglePinCalls += chatId
-                chatsFlow.value = listOf(unpinned.copy(pinned = true))
-            }
+            fakeChatRepository.seedChats(listOf(unpinned))
 
             viewModel = createViewModel()
             backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
@@ -369,7 +358,7 @@ class HistoryViewModelTest {
             state = viewModel.uiState.value
             assertTrue(state.pinnedChats.any { it.id == chatId })
             assertFalse(state.otherChats.any { it.id == chatId })
-            assertEquals(listOf(chatId), togglePinCalls)
+            assertEquals(listOf(chatId), fakeChatRepository.togglePinCalls)
         }
 
     @Test
@@ -378,12 +367,7 @@ class HistoryViewModelTest {
             val chatId = ChatId("delete-me")
             val toDelete = createTestChat(chatId, "Delete Me", today, pinned = false)
             val toKeep = createTestChat(ChatId("keep"), "Keep Me", today, pinned = false)
-            val chatsFlow = MutableStateFlow(listOf(toDelete, toKeep))
-            every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
-            coEvery { mockDeleteChatUseCase.invoke(chatId) } coAnswers {
-                deleteChatCalls += chatId
-                chatsFlow.value = listOf(toKeep)
-            }
+            fakeChatRepository.seedChats(listOf(toDelete, toKeep))
 
             viewModel = createViewModel()
             backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
@@ -398,7 +382,7 @@ class HistoryViewModelTest {
             assertEquals(1, state.otherChats.size)
             assertEquals(ChatId("keep"), state.otherChats.first().id)
             assertFalse(state.otherChats.any { it.id == chatId })
-            assertEquals(listOf(chatId), deleteChatCalls)
+            assertEquals(listOf(chatId), fakeChatRepository.deleteCalls)
         }
 
     // Suite C: Relative Date Formatting Tests
@@ -416,13 +400,12 @@ class HistoryViewModelTest {
                         set(Calendar.MILLISECOND, 0)
                     }.time
             val testChat = createTestChat(ChatId("1"), "Test", todayDate, pinned = false)
-            val chatsFlow = MutableStateFlow<List<Chat>>(emptyList())
-            every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
+            fakeChatRepository.seedChats(emptyList())
 
             viewModel = createViewModel()
             backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
 
-            chatsFlow.value = listOf(testChat)
+            fakeChatRepository.setChats(listOf(testChat))
             advanceUntilIdle()
 
             val state = viewModel.uiState.value
@@ -443,13 +426,12 @@ class HistoryViewModelTest {
                         set(Calendar.MILLISECOND, 0)
                     }.time
             val testChat = createTestChat(ChatId("1"), "Test", yesterdayDate, pinned = false)
-            val chatsFlow = MutableStateFlow<List<Chat>>(emptyList())
-            every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
+            fakeChatRepository.seedChats(emptyList())
 
             viewModel = createViewModel()
             backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
 
-            chatsFlow.value = listOf(testChat)
+            fakeChatRepository.setChats(listOf(testChat))
             advanceUntilIdle()
 
             val state = viewModel.uiState.value
@@ -471,13 +453,12 @@ class HistoryViewModelTest {
                         set(Calendar.MILLISECOND, 0)
                     }.time
             val testChat = createTestChat(ChatId("1"), "Test", oct24Date, pinned = false)
-            val chatsFlow = MutableStateFlow<List<Chat>>(emptyList())
-            every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
+            fakeChatRepository.seedChats(emptyList())
 
             viewModel = createViewModel()
             backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
 
-            chatsFlow.value = listOf(testChat)
+            fakeChatRepository.setChats(listOf(testChat))
             advanceUntilIdle()
 
             val state = viewModel.uiState.value
@@ -503,13 +484,12 @@ class HistoryViewModelTest {
 
             try {
                 val testChat = createTestChat(ChatId("1"), "Test", utcDate, pinned = false)
-                val chatsFlow = MutableStateFlow<List<Chat>>(emptyList())
-                every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
-
+                fakeChatRepository.seedChats(emptyList())
+    
                 viewModel = createViewModel()
                 backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
 
-                chatsFlow.value = listOf(testChat)
+                fakeChatRepository.setChats(listOf(testChat))
                 advanceUntilIdle()
 
                 val state = viewModel.uiState.value
@@ -528,10 +508,7 @@ class HistoryViewModelTest {
     @Test
     fun `E1 repository throws on getAllChats handled gracefully`() =
         runTest(testDispatcher) {
-            every { mockGetAllChatsUseCase.invoke() } returns
-                flow {
-                    throw RuntimeException("DB Error")
-                }
+            fakeChatRepository.getAllChatsFailure = RuntimeException("DB Error")
 
             viewModel = createViewModel()
             backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
@@ -551,13 +528,12 @@ class HistoryViewModelTest {
                     createTestChat(ChatId("1"), "Chat A", today, pinned = false),
                     createTestChat(ChatId("2"), "Chat B", today, pinned = false),
                 )
-            val chatsFlow = MutableStateFlow<List<Chat>>(emptyList())
-            every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
+            fakeChatRepository.seedChats(emptyList())
 
             viewModel = createViewModel()
             backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
 
-            chatsFlow.value = unpinnedChats
+            fakeChatRepository.setChats(unpinnedChats)
             advanceUntilIdle()
 
             val state = viewModel.uiState.value
@@ -573,13 +549,12 @@ class HistoryViewModelTest {
                     createTestChat(ChatId("1"), "Chat A", today, pinned = true),
                     createTestChat(ChatId("2"), "Chat B", today, pinned = true),
                 )
-            val chatsFlow = MutableStateFlow<List<Chat>>(emptyList())
-            every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
+            fakeChatRepository.seedChats(emptyList())
 
             viewModel = createViewModel()
             backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
 
-            chatsFlow.value = pinnedChats
+            fakeChatRepository.setChats(pinnedChats)
             advanceUntilIdle()
 
             val state = viewModel.uiState.value
@@ -590,15 +565,13 @@ class HistoryViewModelTest {
     @Test
     fun `E4 non-existent chat toggle handled gracefully`() =
         runTest(testDispatcher) {
-            val chatsFlow = MutableStateFlow<List<Chat>>(emptyList())
-            every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
+            fakeChatRepository.seedChats(emptyList())
 
             viewModel = createViewModel()
             backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
             advanceUntilIdle()
 
             val nonExistentId = ChatId("9999")
-            coEvery { mockTogglePinChatUseCase.invoke(nonExistentId) } throws IllegalArgumentException("Chat not found")
             viewModel.pinChat(nonExistentId)
             viewModel.unpinChat(nonExistentId)
             advanceUntilIdle()
@@ -652,13 +625,12 @@ class HistoryViewModelTest {
                     createTestChat(ChatId("2"), "Beta", yesterdayDate, pinned = false),
                     createTestChat(ChatId("3"), "Gamma", oct15Date, pinned = true),
                 )
-            val chatsFlow = MutableStateFlow<List<Chat>>(emptyList())
-            every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
+            fakeChatRepository.seedChats(emptyList())
 
             viewModel = createViewModel()
             backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
 
-            chatsFlow.value = chats
+            fakeChatRepository.setChats(chats)
             advanceUntilIdle()
 
             val state = viewModel.uiState.value
@@ -692,8 +664,7 @@ class HistoryViewModelTest {
                     createTestChat(ChatId("2"), "Chat 2", today, pinned = false),
                     createTestChat(ChatId("3"), "Chat 3", today, pinned = false),
                 )
-            val chatsFlow = MutableStateFlow(testChats)
-            every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
+            fakeChatRepository.seedChats(testChats)
 
             viewModel = createViewModel()
             backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
@@ -710,12 +681,9 @@ class HistoryViewModelTest {
     @Test
     fun `Scenario 2 Search by Chat Name`() =
         runTest(testDispatcher) {
-            val allChatsFlow = MutableStateFlow<List<Chat>>(emptyList())
             val matchingChat = createTestChat(ChatId("1"), "Project Plan", today, false)
-            val searchChatsFlow = MutableStateFlow(listOf(matchingChat))
-
-            every { mockGetAllChatsUseCase.invoke() } returns allChatsFlow
-            every { mockSearchChatsUseCase.invoke("Project") } returns searchChatsFlow
+            val otherChat = createTestChat(ChatId("2"), "Random Chat", today, false)
+            fakeChatRepository.seedChats(listOf(matchingChat, otherChat))
 
             viewModel = createViewModel()
             backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
@@ -733,12 +701,16 @@ class HistoryViewModelTest {
     @Test
     fun `Scenario 3 Search by Message Content`() =
         runTest(testDispatcher) {
-            val allChatsFlow = MutableStateFlow<List<Chat>>(emptyList())
             val matchingChat = createTestChat(ChatId("10"), "Kotlin Chat", today, false)
-            val searchChatsFlow = MutableStateFlow(listOf(matchingChat))
-
-            every { mockGetAllChatsUseCase.invoke() } returns allChatsFlow
-            every { mockSearchChatsUseCase.invoke("coroutines") } returns searchChatsFlow
+            fakeChatRepository.seedChats(listOf(matchingChat))
+            val matchingMessage =
+                Message(
+                    id = MessageId("msg-coroutines"),
+                    chatId = ChatId("10"),
+                    content = Content("coroutines deep dive"),
+                )
+            fakeChatRepository.seedMessages(listOf(matchingMessage))
+            fakeMessageRepository.similarMessageIds = listOf(MessageId("msg-coroutines"))
 
             viewModel = createViewModel()
             backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
@@ -755,11 +727,12 @@ class HistoryViewModelTest {
     @Test
     fun `Scenario 4 No Matching Results`() =
         runTest(testDispatcher) {
-            val allChatsFlow = MutableStateFlow<List<Chat>>(emptyList())
-            val searchChatsFlow = MutableStateFlow<List<Chat>>(emptyList())
-
-            every { mockGetAllChatsUseCase.invoke() } returns allChatsFlow
-            every { mockSearchChatsUseCase.invoke("xyz123nonexistent") } returns searchChatsFlow
+            fakeChatRepository.seedChats(
+                listOf(
+                    createTestChat(ChatId("1"), "Alpha", today, false),
+                    createTestChat(ChatId("2"), "Beta", today, false),
+                ),
+            )
 
             viewModel = createViewModel()
             backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
@@ -775,14 +748,7 @@ class HistoryViewModelTest {
     @Test
     fun `Scenario 5 Search Query Debouncing`() =
         runTest(testDispatcher) {
-            val allChatsFlow = MutableStateFlow<List<Chat>>(emptyList())
-            val searchChatsFlow = MutableStateFlow<List<Chat>>(emptyList())
-
-            every { mockGetAllChatsUseCase.invoke() } returns allChatsFlow
-            every { mockSearchChatsUseCase.invoke(any()) } answers {
-                searchQueries += firstArg<String>()
-                searchChatsFlow
-            }
+            fakeChatRepository.seedChats(emptyList())
 
             viewModel = createViewModel()
             backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
@@ -796,12 +762,12 @@ class HistoryViewModelTest {
 
             advanceUntilIdle()
 
-            // Verify that the use case was only invoked exactly once with the final string.
+            // Verify that search was only invoked exactly once with the final string.
             // ENC-27: invocation-count assertion — debounced intermediate queries
             // produce identical empty UiState, so this cannot be a state assertion;
-            // the queries are recorded by the stub above instead of MockK verify.
-            assertEquals(1, searchQueries.count { it == "hello" })
-            assertTrue(searchQueries.none { it in listOf("h", "he", "hel", "hell") })
+            // the queries are recorded by FakeChatRepository instead of MockK verify.
+            assertEquals(1, fakeChatRepository.searchQueries.count { it == "hello" })
+            assertTrue(fakeChatRepository.searchQueries.none { it in listOf("h", "he", "hel", "hell") })
         }
 
     @Test
@@ -809,19 +775,13 @@ class HistoryViewModelTest {
         runTest(testDispatcher) {
             val testChats =
                 listOf(
-                    createTestChat(ChatId("1"), "Chat 1", today, false),
+                    createTestChat(ChatId("1"), "Project Chat", today, false),
                     createTestChat(ChatId("2"), "Chat 2", today, false),
                     createTestChat(ChatId("3"), "Chat 3", today, false),
                     createTestChat(ChatId("4"), "Chat 4", today, false),
                     createTestChat(ChatId("5"), "Chat 5", today, false),
                 )
-            val allChatsFlow = MutableStateFlow(testChats)
-            val searchResult = createTestChat(ChatId("1"), "Project Chat", today, false)
-            val searchChatsFlow = MutableStateFlow(listOf(searchResult))
-
-            every { mockGetAllChatsUseCase.invoke() } returns allChatsFlow
-            every { mockSearchChatsUseCase.invoke("Project") } returns searchChatsFlow
-            every { mockSearchChatsUseCase.invoke("") } returns allChatsFlow
+            fakeChatRepository.seedChats(testChats)
 
             viewModel = createViewModel()
             backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
@@ -849,14 +809,8 @@ class HistoryViewModelTest {
             // In this unit test, we verify that the ViewModel correctly passes the "raw"
             // special character query to the use case without crashing.
             // The actual crash prevention (Sanitization) is verified in FtsSanitizerTest.
-            val searchChatsFlow = MutableStateFlow<List<Chat>>(emptyList())
             val invalidQuery = "\"*^\" OR AND"
 
-            every { mockGetAllChatsUseCase.invoke() } returns MutableStateFlow(emptyList())
-            every { mockSearchChatsUseCase.invoke(invalidQuery) } answers {
-                searchQueries += firstArg<String>()
-                searchChatsFlow
-            }
 
             viewModel = createViewModel()
             backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
@@ -864,10 +818,10 @@ class HistoryViewModelTest {
             viewModel.onSearchQueryChange(invalidQuery)
             advanceUntilIdle()
 
-            // Ensure it reached the use case.
+            // Ensure it reached the repository unchanged through the real use case.
             // ENC-27: raw-query pass-through is an invocation argument assertion;
-            // see the debounce recording stub above.
-            assertTrue(searchQueries.contains(invalidQuery))
+            // see the debounce recording above.
+            assertTrue(fakeChatRepository.searchQueries.contains(invalidQuery))
             assertTrue(
                 viewModel.uiState.value.otherChats
                     .isEmpty(),
