@@ -9,17 +9,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,6 +27,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.browntowndev.enclave.core.ui.component.enclave.EnclaveIconButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclavePrimaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveOutlinedTextField
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 
 @Composable
@@ -117,12 +115,11 @@ fun ByokCustomHeadersScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Button(
+                    EnclavePrimaryButton(
+                        text = "Add First Header",
                         onClick = onAddHeader,
                         modifier = Modifier.padding(top = 16.dp),
-                    ) {
-                        Text("Add First Header")
-                    }
+                    )
                 }
             } else {
                 LazyColumn(
@@ -141,17 +138,15 @@ fun ByokCustomHeadersScreen(
                     }
                 }
 
-                Button(
+                EnclavePrimaryButton(
+                    text = "Done",
                     onClick = onNavigateBack,
                     enabled = isDoneEnabled,
                     modifier =
                         Modifier
                             .fillMaxWidth()
                             .padding(vertical = 16.dp),
-                    shape = RoundedCornerShape(12.dp),
-                ) {
-                    Text("Done")
-                }
+                )
             }
         }
     }
@@ -168,34 +163,31 @@ fun HeaderRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        OutlinedTextField(
+        EnclaveOutlinedTextField(
             value = header.key,
             onValueChange = { onHeaderChange(header.copy(key = it)) },
             label = { Text("Name") },
             modifier = Modifier.weight(1f),
-            shape = RoundedCornerShape(8.dp),
             singleLine = true,
             keyboardOptions =
                 androidx.compose.foundation.text
                     .KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Next),
         )
-        OutlinedTextField(
+        EnclaveOutlinedTextField(
             value = header.value,
             onValueChange = { onHeaderChange(header.copy(value = it)) },
             label = { Text("Value") },
             modifier = Modifier.weight(1.5f),
-            shape = RoundedCornerShape(8.dp),
             singleLine = true,
             keyboardOptions =
                 androidx.compose.foundation.text
                     .KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
         )
-        IconButton(onClick = onDelete) {
-            Icon(
-                Icons.Default.Delete,
-                contentDescription = "Delete header",
-                tint = MaterialTheme.colorScheme.error,
-            )
-        }
+        EnclaveIconButton(
+            onClick = onDelete,
+            icon = Icons.Default.Delete,
+            contentDescription = "Delete header",
+            iconTint = MaterialTheme.colorScheme.error,
+        )
     }
 }

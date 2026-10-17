@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -24,6 +23,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.browntowndev.enclave.core.ui.component.XIcon
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorderColor
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurface
 import com.browntowndev.enclave.feature.chat.WebSearchSourceUi
 import com.browntowndev.enclave.feature.chat.R
 import java.net.URI
@@ -47,12 +48,17 @@ fun WebSearchSourceRow(
                 .padding(vertical = 12.dp, horizontal = 4.dp),
     ) {
         // Small square for the domain/favicon placeholder or X icon
-        Surface(
-            shape = RoundedCornerShape(4.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            modifier = Modifier.size(24.dp),
+        Box(
+            modifier =
+                Modifier
+                    .size(24.dp)
+                    .enclaveSurface(
+                        backgroundColor = MaterialTheme.colorScheme.surfaceVariant,
+                        borderColor = enclaveBorderColor(),
+                        shape = RoundedCornerShape(4.dp),
+                    ),
+            contentAlignment = Alignment.Center,
         ) {
-            Box(contentAlignment = Alignment.Center) {
                 if (isXSource) {
                     Icon(
                         imageVector = XIcon,
@@ -70,7 +76,6 @@ fun WebSearchSourceRow(
                             ),
                     )
                 }
-            }
         }
 
         Spacer(modifier = Modifier.width(12.dp))

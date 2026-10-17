@@ -9,11 +9,8 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -21,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSecondaryIconButton
 import com.browntowndev.enclave.feature.chat.R
 
 @Composable
@@ -38,29 +36,21 @@ internal fun BubbleActions(
         Row(
             modifier = Modifier.padding(top = 4.dp, end = 12.dp),
         ) {
-            IconButton(
+            EnclaveSecondaryIconButton(
                 onClick = onEditClick,
-                modifier = Modifier.size(32.dp),
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Edit,
-                    contentDescription = "Edit Message",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(16.dp),
-                )
-            }
+                icon = Icons.Default.Edit,
+                contentDescription = "Edit Message",
+                size = 32.dp,
+                iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
 
-            IconButton(
+            EnclaveSecondaryIconButton(
                 onClick = onCopyClick,
-                modifier = Modifier.size(32.dp),
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.content_copy),
-                    contentDescription = "Copy message",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(16.dp),
-                )
-            }
+                icon = painterResource(R.drawable.content_copy),
+                contentDescription = "Copy message",
+                size = 32.dp,
+                iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

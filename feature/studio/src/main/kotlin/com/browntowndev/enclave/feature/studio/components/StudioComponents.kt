@@ -21,7 +21,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -1215,7 +1221,7 @@ fun PreviewStudioOptionsImage() {
             resolvedModelTypeLabel = "Image Generation",
         )
     EnclaveTheme(darkTheme = false) {
-        Surface(color = MaterialTheme.colorScheme.surface) {
+        Box(modifier = Modifier.background(MaterialTheme.colorScheme.surface)) {
             StudioOptionsSheetContent(
                 state = state,
                 onDismiss = {},
@@ -1246,7 +1252,7 @@ fun PreviewStudioOptionsImageDark() {
             resolvedModelTypeLabel = "Image Generation",
         )
     EnclaveTheme(darkTheme = true) {
-        Surface(color = MaterialTheme.colorScheme.surface) {
+        Box(modifier = Modifier.background(MaterialTheme.colorScheme.surface)) {
             StudioOptionsSheetContent(
                 state = state,
                 onDismiss = {},
@@ -1271,7 +1277,7 @@ fun PreviewStudioOptionsMusic() {
             mediaType = MediaCapability.MUSIC,
         )
     EnclaveTheme {
-        Surface(color = MaterialTheme.colorScheme.surface) {
+        Box(modifier = Modifier.background(MaterialTheme.colorScheme.surface)) {
             StudioOptionsSheetContent(
                 state = state,
                 onDismiss = {},
@@ -1301,7 +1307,7 @@ fun PreviewStudioOptionsModelPicker() {
             resolvedModelTypeLabel = "Image Generation",
         )
     EnclaveTheme {
-        Surface(color = MaterialTheme.colorScheme.surface) {
+        Box(modifier = Modifier.background(MaterialTheme.colorScheme.surface)) {
             StudioOptionsSheetContent(
                 state = state,
                 onDismiss = {},
@@ -1330,7 +1336,7 @@ fun PreviewStudioOptionsEmptyCatalog() {
             resolvedModelTypeLabel = "Image Generation",
         )
     EnclaveTheme {
-        Surface(color = MaterialTheme.colorScheme.surface) {
+        Box(modifier = Modifier.background(MaterialTheme.colorScheme.surface)) {
             StudioOptionsSheetContent(
                 state = state,
                 onDismiss = {},

@@ -31,12 +31,11 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveTextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
@@ -233,9 +232,7 @@ fun LocalModelsBottomSheetContent(
                 title = { Text("Cannot Delete Model") },
                 text = { Text("At least one local or API model must remain. You cannot delete the last available model.") },
                 confirmButton = {
-                    TextButton(onClick = onDismissDeletionSafety) {
-                        Text("OK")
-                    }
+                    EnclaveTextButton(text = "OK", onClick = onDismissDeletionSafety)
                 },
             )
         }
@@ -452,17 +449,14 @@ private fun LocalModelAssetCard(
                 ) {
                     when (reDownloadProgress) {
                         null, ReDownloadProgress.Idle -> {
-                            IconButton(
+                            EnclaveIconButton(
                                 onClick = onReDownloadClick,
+                                icon = Icons.Default.Download,
+                                contentDescription = "Download Model ${asset.friendlyName}",
                                 modifier = Modifier.size(24.dp),
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Download,
-                                    contentDescription = "Download Model ${asset.friendlyName}",
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(20.dp),
-                                )
-                            }
+                                size = 24.dp,
+                                withShadow = false,
+                            )
                         }
                         is ReDownloadProgress.Preparing -> {
                             EnclaveCircularProgressIndicator(modifier = Modifier.size(20.dp))
@@ -742,17 +736,14 @@ private fun ModelPackCard(
                 ) {
                     when (reDownloadProgress) {
                         null, ReDownloadProgress.Idle -> {
-                            IconButton(
+                            EnclaveIconButton(
                                 onClick = if (pack.isDiffusionSoftDeleted) onReDownload else onDownload,
+                                icon = Icons.Default.Download,
+                                contentDescription = "Download ${pack.displayName}",
                                 modifier = Modifier.size(24.dp),
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Download,
-                                    contentDescription = "Download ${pack.displayName}",
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(20.dp),
-                                )
-                            }
+                                size = 24.dp,
+                                withShadow = false,
+                            )
                         }
                         ReDownloadProgress.Preparing -> {
                             EnclaveCircularProgressIndicator(modifier = Modifier.size(20.dp))

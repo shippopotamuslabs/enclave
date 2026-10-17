@@ -15,7 +15,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveTextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -148,22 +148,16 @@ fun SearchSkillBottomSheet(
                 }
             },
             confirmButton = {
-                TextButton(
-                    onClick = {
+                EnclaveTextButton(text = "Switch", onClick = {
                         if (dontShowAgain) {
                             onUpdateShowSearchProviderSwitchAlert(false)
                         }
                         onSearchProviderChange(targetProvider)
                         showSwitchConfirm = null
-                    },
-                ) {
-                    Text("Switch")
-                }
+                    },)
             },
             dismissButton = {
-                TextButton(onClick = { showSwitchConfirm = null }) {
-                    Text("Cancel")
-                }
+                EnclaveTextButton(text = "Cancel", onClick = { showSwitchConfirm = null })
             },
         )
     }
