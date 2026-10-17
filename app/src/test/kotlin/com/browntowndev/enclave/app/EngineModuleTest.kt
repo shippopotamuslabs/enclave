@@ -1,23 +1,27 @@
 package com.browntowndev.enclave.app
 
-import android.content.Context
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
+import com.browntowndev.enclave.core.testing.FakeEmbeddingEngine
+import com.browntowndev.enclave.core.testing.FakeLocalModelRepository
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeToolExecutor
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
-import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
-import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.enclave.feature.inference.ConversationManagerImpl
-import io.mockk.coEvery
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.RuntimeEnvironment
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
 /**
  * Tests for EngineModule model provider behavior.
  * These tests verify fixes for Bug #5 (model registration crash on missing models).
  */
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34], application = android.app.Application::class)
 class EngineModuleTest {
     /**
      * Verify that ConversationManager throws when no active configuration is registered.
@@ -27,15 +31,17 @@ class EngineModuleTest {
     @Test
     fun `conversation manager throws when no active configuration exists`() =
         runTest {
-            val context = mockk<Context>(relaxed = true)
-            val localModelRepository = mockk<LocalModelRepositoryPort>()
-            val activeModelProvider = mockk<ActiveModelProviderPort>()
-            val loggingPort = mockk<LoggingPort>(relaxed = true)
-            val toolExecutor = mockk<ToolExecutorPort>(relaxed = true)
-
-            coEvery { activeModelProvider.getActiveConfiguration(ModelType.MAIN) } returns null
-
-            val manager = ConversationManagerImpl(context, localModelRepository, activeModelProvider, loggingPort, toolExecutor, mockk(relaxed = true))
+            val context = RuntimeEnvironment.getApplication()
+            // FakeActiveModelProvider has no configuration, so lookups return null.
+            val manager =
+                ConversationManagerImpl(
+                    context,
+                    FakeLocalModelRepository(),
+                    FakeActiveModelProvider(),
+                    FakeLoggingPort(),
+                    FakeToolExecutor(),
+                    FakeEmbeddingEngine(),
+                )
 
             assertThrows<IllegalStateException> {
                 manager.getConversation(ModelType.MAIN, null)

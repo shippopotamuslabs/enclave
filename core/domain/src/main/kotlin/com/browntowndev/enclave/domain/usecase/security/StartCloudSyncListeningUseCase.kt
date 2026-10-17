@@ -10,12 +10,12 @@ import javax.inject.Inject
  * shared by main and settings entry points. Fails (without starting the listener) when
  * any step returns a failure, so callers get exact upstream error propagation.
  */
-class StartCloudSyncListeningUseCase
+open class StartCloudSyncListeningUseCase
     @Inject
     constructor(
         private val cloudSyncPort: CloudSyncPort,
     ) {
-        suspend operator fun invoke(
+        open suspend operator fun invoke(
             uploadLocalFirst: Boolean = true,
             onProgress: (suspend (CloudSyncReplayProgress) -> Unit)? = null,
         ): Result<Unit> {

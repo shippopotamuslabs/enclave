@@ -17,7 +17,7 @@ import javax.inject.Inject
  *  - [VaultReconciliationOutcome.MismatchRequiresClobber] → MUST surface user confirmation
  *    before invoking [AdoptCloudVaultUseCase] (destructive).
  */
-class DetectVaultReconciliationStateUseCase
+open class DetectVaultReconciliationStateUseCase
     @Inject
     constructor(
         private val cryptoManager: CryptoManagerPort,
@@ -25,7 +25,7 @@ class DetectVaultReconciliationStateUseCase
         private val cloudSyncPort: CloudSyncPort,
     ) {
         @Suppress("ReturnCount")
-        suspend operator fun invoke(password: String): Result<VaultReconciliationOutcome> =
+        open suspend operator fun invoke(password: String): Result<VaultReconciliationOutcome> =
             runCatching {
                 val cloudMetadata =
                     cloudSyncPort.fetchVaultMetadata().getOrNull()

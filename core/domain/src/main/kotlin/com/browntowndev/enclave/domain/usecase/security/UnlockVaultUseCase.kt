@@ -13,14 +13,14 @@ import javax.inject.Inject
  * - Wrong password → `unwrapDek` fails (typically with `AEADBadTagException`) → `Result.failure`.
  * - On failure, no key is cached and no side effects are persisted.
  */
-class UnlockVaultUseCase
+open class UnlockVaultUseCase
     @Inject
     constructor(
         private val cryptoManager: CryptoManagerPort,
         private val apiModelRepository: ApiModelRepositoryPort,
         private val apiKeyProvider: ApiKeyProviderPort,
     ) {
-        suspend operator fun invoke(
+        open suspend operator fun invoke(
             password: String,
             salt: ByteArray,
             wrappedDek: ByteArray,

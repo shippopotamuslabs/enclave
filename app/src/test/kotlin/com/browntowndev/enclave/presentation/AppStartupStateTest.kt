@@ -2,10 +2,12 @@ package com.browntowndev.enclave.presentation
 
 import com.browntowndev.enclave.core.ui.component.vault.VaultAuthUiState
 import com.browntowndev.enclave.domain.model.config.LocalModelAsset
+import com.browntowndev.enclave.domain.model.config.LocalModelId
+import com.browntowndev.enclave.domain.model.config.LocalModelMetadata
 import com.browntowndev.enclave.domain.model.download.DownloadModelsResult
+import com.browntowndev.enclave.domain.model.download.ModelScanResult
+import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.presentation.navigation.Routes
-import io.mockk.every
-import io.mockk.mockk
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -63,14 +65,12 @@ class AppStartupStateTest {
 
     @Test
     fun `initialRoute should be MODEL_DOWNLOAD when modelsResult has modelsToDownload`() {
-        val mockModelsResult = mockk<DownloadModelsResult>()
-        val mockAsset = mockk<LocalModelAsset>()
-        every { mockModelsResult.modelsToDownload } returns listOf(mockAsset)
+        val modelsResult = modelsResult(modelsToDownload = listOf(sampleAsset()))
 
         val readyState =
             AppStartupState.Ready(
                 authState = VaultAuthUiState.Unauthenticated,
-                modelsResult = mockModelsResult,
+                modelsResult = modelsResult,
             )
 
         assertEquals(Routes.MODEL_DOWNLOAD, readyState.initialRoute)
@@ -89,15 +89,41 @@ class AppStartupStateTest {
 
     @Test
     fun `initialRoute should be CHAT when no initializationError and modelsToDownload is empty`() {
-        val mockModelsResult = mockk<DownloadModelsResult>()
-        every { mockModelsResult.modelsToDownload } returns emptyList()
+        val modelsResult = modelsResult(modelsToDownload = emptyList())
 
         val readyState =
             AppStartupState.Ready(
                 authState = VaultAuthUiState.Unauthenticated,
-                modelsResult = mockModelsResult,
+                modelsResult = modelsResult,
             )
 
         assertEquals(Routes.CHAT, readyState.initialRoute)
     }
+
+    private fun modelsResult(modelsToDownload: List<LocalModelAsset>): DownloadModelsResult =
+        DownloadModelsResult(
+            allModels = emptyMap(),
+            modelsToDownload = modelsToDownload,
+            scanResult =
+                ModelScanResult(
+                    missingModels = emptyList(),
+                    partialDownloads = emptyMap(),
+                    allValid = true,
+                ),
+        )
+
+    private fun sampleAsset(): LocalModelAsset =
+        LocalModelAsset(
+            metadata =
+                LocalModelMetadata(
+                    id = LocalModelId("test-model"),
+                    huggingFaceModelName = "hf/test-model",
+                    remoteFileName = "model.litertlm",
+                    localFileName = "model.litertlm",
+                    sha256 = "abc123",
+                    sizeInBytes = 1,
+                    modelFileFormat = ModelFileFormat.LITERTLM,
+                ),
+            configurations = emptyList(),
+        )
 }

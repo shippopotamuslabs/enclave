@@ -11,12 +11,12 @@ import javax.inject.Inject
  *
  * Returned blob layout: `iv (12 bytes) || aesGcm(KEK, dek)` — same as [CryptoManagerPort.wrapDek].
  */
-class CreateVaultUseCase
+open class CreateVaultUseCase
     @Inject
     constructor(
         private val cryptoManager: CryptoManagerPort,
     ) {
-        suspend operator fun invoke(
+        open suspend operator fun invoke(
             password: String,
             salt: ByteArray,
         ): Result<ByteArray> {
