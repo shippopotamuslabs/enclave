@@ -14,20 +14,29 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
+import com.browntowndev.enclave.core.ui.theme.EnclaveThemeAccessor
+import dev.chrisbanes.haze.HazeState
 
 /**
  * Top app bar chrome: extends [color] behind the status bar, pads content below it, bottom rule.
+ * When [hazeState] is supplied and the active spec enables glass, the bar renders as a
+ * translucent blur over the haze source instead of a solid [color] surface.
  */
 @Composable
 fun EnclaveAppBarChrome(
     modifier: Modifier = Modifier,
     color: Color = MaterialTheme.colorScheme.surface,
+    hazeState: HazeState? = null,
     content: @Composable RowScope.() -> Unit,
 ) {
+    val glassEnabled = EnclaveThemeAccessor.glass.enabled && hazeState != null
     EnclaveSystemBarStyle(color = color)
     Surface(
-        modifier = modifier.fillMaxWidth(),
-        color = color,
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .then(if (glassEnabled) Modifier.enclaveGlassEffect(hazeState) else Modifier),
+        color = if (glassEnabled) Color.Transparent else color,
     ) {
         Column {
             Row(

@@ -36,6 +36,8 @@ import com.browntowndev.enclave.core.ui.component.enclave.EnclaveIconButton
 import com.browntowndev.enclave.core.ui.component.sheet.MoveToAlbumBottomSheet
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.domain.model.config.MediaCapability
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.rememberHazeState
 import com.browntowndev.enclave.domain.model.media.VisualGenerationSettings
 import com.browntowndev.enclave.feature.studio.components.StudioOptionsBottomSheet
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -54,6 +56,7 @@ fun StudioScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
+    val hazeState = rememberHazeState()
     val context = LocalContext.current
     val visibleGallery = remember(uiState.gallery) { uiState.gallery }
     val groupedGallery = uiState.groupedGallery
@@ -163,6 +166,7 @@ fun StudioScreen(
                 onShareClick = { viewModel.shareMedia(uiState.selectedMediaItemIds) },
                 onNavigateToHistory = onNavigateToHistory,
                 onNavigateToGallery = onNavigateToGallery,
+                hazeState = hazeState,
             )
         },
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -197,6 +201,7 @@ fun StudioScreen(
                     }
                 },
                 modifier = Modifier.weight(1f),
+                hazeState = hazeState,
             )
 
             StudioInputDock(
@@ -243,6 +248,7 @@ fun StudioScreen(
                     }
                     viewModel.generate()
                 },
+                hazeState = hazeState,
             )
         }
     }
@@ -285,8 +291,9 @@ private fun StudioTopBar(
     onNavigateToHistory: () -> Unit,
     onNavigateToGallery: () -> Unit,
     modifier: Modifier = Modifier,
+    hazeState: HazeState? = null,
 ) {
-    EnclaveAppBarChrome(modifier = modifier) {
+    EnclaveAppBarChrome(modifier = modifier, hazeState = hazeState) {
         if (selectedCount > 0) {
             EnclaveIconButton(
                 onClick = onClearSelection,
