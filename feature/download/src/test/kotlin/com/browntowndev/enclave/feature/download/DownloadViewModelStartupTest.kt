@@ -1,7 +1,6 @@
 package com.browntowndev.enclave.feature.download
 
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
-import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.config.LocalModelAsset
 import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.config.LocalModelMetadata
@@ -11,18 +10,12 @@ import com.browntowndev.enclave.domain.model.download.DownloadState
 import com.browntowndev.enclave.domain.model.download.DownloadStatus
 import com.browntowndev.enclave.domain.model.download.ModelScanResult
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
-import com.browntowndev.enclave.domain.port.download.ModelDownloadOrchestratorPort
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.verify
+import com.browntowndev.enclave.core.testing.download.FakeModelDownloadOrchestrator
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
@@ -32,9 +25,9 @@ import java.util.UUID
 @ExtendWith(MainDispatcherRule::class)
 @OptIn(ExperimentalCoroutinesApi::class)
 class DownloadViewModelStartupTest {
-    private val orchestrator = mockk<ModelDownloadOrchestratorPort>(relaxed = true)
-    private val errorHandler = mockk<ViewModelErrorHandler>(relaxed = true)
-    private val downloadStateFlow = MutableStateFlow(DownloadState(status = DownloadStatus.IDLE))
+    private val orchestrator = FakeModelDownloadOrchestrator()
+    private val errorHandler = FakeViewModelErrorHandler()
+    private val downloadStateFlow = orchestrator.downloadStateFlow
 
     private val testAsset =
         LocalModelAsset(
@@ -65,11 +58,8 @@ class DownloadViewModelStartupTest {
 
     @BeforeEach
     fun setup() {
-        every { orchestrator.downloadState } returns downloadStateFlow
-        every { orchestrator.snackbarMessages } returns flowOf()
-        coEvery { orchestrator.startDownloads(modelsResult = modelsResult, wifiOnly = true) } answers {
+        orchestrator.onStartDownloads = {
             downloadStateFlow.value = downloadStateFlow.value.copy(status = DownloadStatus.DOWNLOADING)
-            true
         }
     }
 
@@ -98,9 +88,7 @@ class DownloadViewModelStartupTest {
             val viewModel = createViewModel(autoStartDownloads = true)
             advanceUntilIdle()
 
-            coVerify(exactly = 1) {
-                orchestrator.startDownloads(modelsResult = modelsResult, wifiOnly = true)
-            }
+            assertEquals(listOf(modelsResult to true), orchestrator.startCalls)
             assertEquals(DownloadStatus.DOWNLOADING, viewModel.downloadState.value.status)
         }
 
@@ -114,9 +102,7 @@ class DownloadViewModelStartupTest {
             viewModel.checkModels()
             advanceUntilIdle()
 
-            coVerify(exactly = 1) {
-                orchestrator.startDownloads(modelsResult = modelsResult, wifiOnly = true)
-            }
+            assertEquals(listOf(modelsResult to true), orchestrator.startCalls)
         }
 
     @Test
@@ -128,7 +114,7 @@ class DownloadViewModelStartupTest {
 
             // The VM must push its modelsResult back into the orchestrator so the cached
             // startupModelsResult and currentDownloads reflect API-onboarding suppression.
-            verify(exactly = 1) { orchestrator.initializeWithStartupResult(modelsResult) }
+            assertEquals(listOf(modelsResult), orchestrator.initializeCalls)
             assertEquals(DownloadStatus.IDLE, viewModel.downloadState.value.status)
         }
 
@@ -142,7 +128,7 @@ class DownloadViewModelStartupTest {
             advanceUntilIdle()
 
             // Re-init must be skipped to avoid cancelling in-flight WorkManager jobs.
-            verify(exactly = 0) { orchestrator.initializeWithStartupResult(any()) }
+            assertTrue(orchestrator.initializeCalls.isEmpty())
             assertEquals(DownloadStatus.DOWNLOADING, viewModel.downloadState.value.status)
         }
 
@@ -166,8 +152,8 @@ class DownloadViewModelStartupTest {
 
             // Even on the error path, the cache must be refreshed so a later Retry uses the
             // filtered set rather than the unfiltered startup snapshot.
-            verify(exactly = 1) { orchestrator.initializeWithStartupResult(modelsResult) }
-            verify { orchestrator.setError("boom") }
+            assertEquals(listOf(modelsResult), orchestrator.initializeCalls)
+            assertEquals(listOf("boom"), orchestrator.setErrorCalls)
         }
 
     @Test
@@ -197,15 +183,11 @@ class DownloadViewModelStartupTest {
                         currentDownloads: List<com.browntowndev.enclave.domain.model.download.FileProgress>,
                     ) = downloadingUpdate
                 }
-            coEvery { orchestrator.updateFromProgressUpdate(any()) } coAnswers {
-                val update = firstArg<DownloadProgressUpdate>()
-                downloadStateFlow.value = downloadStateFlow.value.copy(status = update.status)
-            }
 
             val viewModel = createViewModel(autoStartDownloads = false)
             advanceUntilIdle()
 
             assertEquals(DownloadStatus.DOWNLOADING, viewModel.downloadState.value.status)
-            coVerify(exactly = 1) { orchestrator.updateFromProgressUpdate(downloadingUpdate) }
+            assertEquals(listOf(downloadingUpdate), orchestrator.progressUpdates)
         }
 }
