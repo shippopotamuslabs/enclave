@@ -41,6 +41,18 @@ data class EnclaveElevations(
     val hardShadowColor: Color,
 )
 
+/**
+ * Translucent blur-over-content treatment for bars floating over scrolling media.
+ * Disabled specs render those bars solid/opaque instead.
+ */
+@Immutable
+data class EnclaveGlass(
+    val enabled: Boolean,
+    val tint: Color,
+    val blurRadius: Dp,
+    val noiseFactor: Float,
+)
+
 @Immutable
 data class EnclaveThemeSpec(
     val id: EnclaveThemeId,
@@ -48,7 +60,24 @@ data class EnclaveThemeSpec(
     val colors: EnclaveColors,
     val shapes: EnclaveShapes,
     val elevations: EnclaveElevations,
+    val glass: EnclaveGlass,
 )
+
+internal fun tonalGlass(dark: Boolean): EnclaveGlass =
+    EnclaveGlass(
+        enabled = true,
+        tint = if (dark) Color.Black.copy(alpha = 0.4f) else Color.White.copy(alpha = 0.55f),
+        blurRadius = 24.dp,
+        noiseFactor = 0.15f,
+    )
+
+internal fun opaqueGlass(): EnclaveGlass =
+    EnclaveGlass(
+        enabled = false,
+        tint = Color.Transparent,
+        blurRadius = 0.dp,
+        noiseFactor = 0f,
+    )
 
 internal fun tonalShapes(): EnclaveShapes =
     EnclaveShapes(

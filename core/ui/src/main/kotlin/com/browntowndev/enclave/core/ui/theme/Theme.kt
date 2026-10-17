@@ -35,6 +35,9 @@ object EnclaveThemeAccessor {
     val elevations: EnclaveElevations
         @Composable get() = LocalEnclaveTheme.current.elevations
 
+    val glass: EnclaveGlass
+        @Composable get() = LocalEnclaveTheme.current.glass
+
     val spec: EnclaveThemeSpec
         @Composable get() = LocalEnclaveTheme.current
 }

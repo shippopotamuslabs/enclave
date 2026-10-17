@@ -31,6 +31,7 @@ object NeoBrutalistSpec {
                 useHardShadow = true,
                 hardShadowColor = DarkNeoShadow,
             ),
+            glass = opaqueGlass(),
         )
 
     private fun lightSpec(): EnclaveThemeSpec =
@@ -58,5 +59,6 @@ object NeoBrutalistSpec {
                 useHardShadow = true,
                 hardShadowColor = LightNeoShadow,
             ),
+            glass = opaqueGlass(),
         )
 }

@@ -32,6 +32,7 @@ object TonalSpec {
                 useHardShadow = false,
                 hardShadowColor = Color.Transparent,
             ),
+            glass = tonalGlass(dark = true),
         )
 
     private fun lightSpec(): EnclaveThemeSpec =
@@ -59,5 +60,6 @@ object TonalSpec {
                 useHardShadow = false,
                 hardShadowColor = Color.Transparent,
             ),
+            glass = tonalGlass(dark = false),
         )
 }
