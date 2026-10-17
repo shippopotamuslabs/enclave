@@ -14,8 +14,13 @@ data class StartedArgs(
 )
 
 class FakeStudioGenerationDispatcher : StudioGenerationDispatcherPort {
-    var lastStarted: StartedArgs? = null
+    val startedCalls = mutableListOf<StartedArgs>()
+
+    var stopCount = 0
         private set
+
+    val lastStarted: StartedArgs?
+        get() = startedCalls.lastOrNull()
 
     override fun startGeneration(
         prompt: String,
@@ -24,7 +29,7 @@ class FakeStudioGenerationDispatcher : StudioGenerationDispatcherPort {
         generationId: String,
         override: StudioModelOverride?,
     ) {
-        lastStarted =
+        startedCalls +=
             StartedArgs(
                 prompt = prompt,
                 mediaType = mediaType,
@@ -35,6 +40,6 @@ class FakeStudioGenerationDispatcher : StudioGenerationDispatcherPort {
     }
 
     override fun stopGeneration() {
-        // no-op
+        stopCount++
     }
 }

@@ -13,20 +13,18 @@ import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
 import com.browntowndev.enclave.domain.model.media.ProviderCapabilities
 import com.browntowndev.enclave.domain.model.media.StudioModelOverride
 import com.browntowndev.enclave.domain.model.media.VideoGenerationSettings
-import com.browntowndev.enclave.domain.port.media.ShareMediaPort
+import com.browntowndev.enclave.core.testing.FakeDefaultModelRepository
+import com.browntowndev.enclave.core.testing.FakeLocalModelRepository
+import com.browntowndev.enclave.core.testing.FakeMediaProviderRepository
+import com.browntowndev.enclave.core.testing.FakeModerationReportRepository
+import com.browntowndev.enclave.core.testing.FakeShareMediaPort
+import com.browntowndev.enclave.core.testing.FakeStudioRepository
+import com.browntowndev.enclave.core.testing.FakeTtsPlaybackController
+import com.browntowndev.enclave.core.testing.FakeUiSelectionRepository
 import com.browntowndev.enclave.domain.port.media.SpeechState
-import com.browntowndev.enclave.domain.port.media.TtsPlaybackControllerPort
 import com.browntowndev.enclave.domain.port.repository.ActiveStudioGeneration
-import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
-import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
-import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.StudioAlbumAsset
 import com.browntowndev.enclave.domain.port.repository.StudioMediaAsset
-import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
-import com.browntowndev.enclave.domain.port.repository.UiSelectionRepository
-import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
-import com.browntowndev.enclave.domain.usecase.chat.ListenToSpeechUseCase
-import com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase
 import com.browntowndev.enclave.domain.usecase.inference.SubmitModerationReportUseCase
 import com.browntowndev.enclave.domain.usecase.media.GetImageGenerationCapabilitiesUseCase
 import com.browntowndev.enclave.domain.usecase.media.GetStudioCapablePresetsUseCase
@@ -44,14 +42,8 @@ import com.browntowndev.enclave.feature.studio.coordinators.StudioRemoteCapabili
 import com.browntowndev.enclave.feature.studio.coordinators.StudioSpeechCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioUiStateReducer
 import com.browntowndev.enclave.feature.studio.test.FakeStudioGenerationDispatcher
-import io.mockk.coEvery
-import io.mockk.every
-import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -72,23 +64,35 @@ import org.junit.jupiter.api.Test
 class MultimodalViewModelOverrideTest {
     private val testDispatcher = UnconfinedTestDispatcher()
 
-    private val defaultModelRepository = mockk<DefaultModelRepositoryPort>(relaxed = true)
-    private val mediaProviderRepository = mockk<MediaProviderRepositoryPort>(relaxed = true)
-    private val studioRepository = mockk<StudioRepositoryPort>(relaxed = true)
-    private val localModelRepository = mockk<LocalModelRepositoryPort>()
-    private val submitModerationReportUseCase = mockk<SubmitModerationReportUseCase>(relaxed = true)
-    private val uiSelectionRepository = mockk<UiSelectionRepository>(relaxed = true)
-    private val shareMediaPort = mockk<ShareMediaPort>(relaxed = true)
-    private val playbackController = mockk<TtsPlaybackControllerPort>(relaxed = true)
-    private val resolveMediaProviderCapabilitiesUseCase = mockk<ResolveMediaProviderCapabilitiesUseCase>()
+    private val defaultModelRepository = FakeDefaultModelRepository()
+    private val mediaProviderRepository = FakeMediaProviderRepository()
+    private val studioRepository = FakeStudioRepository()
+    private val localModelRepository = FakeLocalModelRepository()
+    private val moderationReportRepository = FakeModerationReportRepository()
+    private val submitModerationReportUseCase = SubmitModerationReportUseCase(moderationReportRepository)
+    private val uiSelectionRepository = FakeUiSelectionRepository()
+    private val shareMediaPort = FakeShareMediaPort()
+    private val playbackController = FakeTtsPlaybackController()
+    private val resolveMediaProviderCapabilitiesUseCase =
+        FakeResolveMediaProviderCapabilitiesUseCase(
+            ProviderCapabilities(
+                supportedAspectRatios = emptyList(),
+                supportedImageQualities = emptyList(),
+                supportedVideoQualities = emptyList(),
+                supportedVideoResolutions = emptyList(),
+                supportedVideoDurations = emptyList(),
+                supportsVideo = false,
+            ),
+        )
+    private val listenToSpeechUseCase = FakeListenToSpeechUseCase()
 
-    private val activeGenerationFlow = MutableStateFlow<ActiveStudioGeneration?>(null)
-    private val ephemeralMediaFlow = MutableStateFlow<List<StudioMediaAsset>>(emptyList())
-    private val allMediaFlow = MutableStateFlow<List<StudioMediaAsset>>(emptyList())
-    private val allAlbumsFlow = MutableStateFlow<List<StudioAlbumAsset>>(emptyList())
-    private val generationErrorFlow = MutableStateFlow<String?>(null)
-    private val generationProgressFlow = MutableStateFlow<ImageGenerationProgress?>(null)
-    private val speechEvents = MutableSharedFlow<SpeechState>(extraBufferCapacity = 8)
+    private val activeGenerationFlow get() = studioRepository.activeGenerationState
+    private val ephemeralMediaFlow get() = studioRepository.ephemeralState
+    private val allMediaFlow get() = studioRepository.mediaState
+    private val allAlbumsFlow get() = studioRepository.albumsState
+    private val generationErrorFlow get() = studioRepository.generationErrorState
+    private val generationProgressFlow get() = studioRepository.generationProgressState
+    private val speechEvents get() = listenToSpeechUseCase.events
 
     private val fakeDispatcher = FakeStudioGenerationDispatcher()
     private lateinit var overrideCoordinator: StudioModelOverrideCoordinator
@@ -114,10 +118,8 @@ class MultimodalViewModelOverrideTest {
                 displayName = "Default Video",
             )
 
-        every { uiSelectionRepository.selectedStudioMediaType } returns flowOf(MediaCapability.IMAGE)
-        every { defaultModelRepository.observeDefaults() } returns
-            flowOf(listOf(imageAssignment, videoAssignment))
-        every { localModelRepository.observeAllLocalAssets() } returns flowOf(emptyList())
+        defaultModelRepository.seed(imageAssignment)
+        defaultModelRepository.seed(videoAssignment)
         val studioProviders =
             listOf(
                 provider("fal-t2i", MediaCapability.IMAGE, setOf(MediaTask.TEXT_TO_IMAGE)),
@@ -125,34 +127,8 @@ class MultimodalViewModelOverrideTest {
                 provider("fal-t2v", MediaCapability.VIDEO, setOf(MediaTask.TEXT_TO_VIDEO)),
                 provider("fal-i2v", MediaCapability.VIDEO, setOf(MediaTask.IMAGE_TO_VIDEO)),
             )
-        every { mediaProviderRepository.getMediaProviders() } returns flowOf(studioProviders)
-        coEvery { mediaProviderRepository.getMediaProvidersSync() } returns studioProviders
-        coEvery { resolveMediaProviderCapabilitiesUseCase(any(), any()) } returns
-            ProviderCapabilities(
-                supportedAspectRatios = emptyList(),
-                supportedImageQualities = emptyList(),
-                supportedVideoQualities = emptyList(),
-                supportedVideoResolutions = emptyList(),
-                supportedVideoDurations = emptyList(),
-                supportsVideo = false,
-            )
-
-        every { studioRepository.observeAllMedia() } returns allMediaFlow
-        every { studioRepository.observeEphemeralMedia() } returns ephemeralMediaFlow
-        every { studioRepository.observeGenerationError() } returns generationErrorFlow
-        every { studioRepository.observeGenerationProgress() } returns generationProgressFlow
-        every { studioRepository.observeActiveGeneration() } returns activeGenerationFlow
-        every { studioRepository.observeAllAlbums() } returns allAlbumsFlow
-        every { studioRepository.reportActiveGeneration(any()) } answers {
-            if (activeGenerationFlow.value != null) {
-                false
-            } else {
-                activeGenerationFlow.value = firstArg()
-                true
-            }
-        }
-        every { studioRepository.clearActiveGeneration() } answers {
-            activeGenerationFlow.value = null
+        kotlinx.coroutines.runBlocking {
+            studioProviders.forEach { mediaProviderRepository.saveMediaProvider(it, null) }
         }
 
         overrideCoordinator = StudioModelOverrideCoordinator()
@@ -164,10 +140,7 @@ class MultimodalViewModelOverrideTest {
             )
 
         val albumSelectionCoordinator = StudioAlbumSelectionCoordinator(studioRepository)
-        val listenToSpeechUseCase = mockk<ListenToSpeechUseCase>()
-        every { listenToSpeechUseCase.invoke(any(), any()) } returns speechEvents
-        val chatUseCases = mockk<ChatUseCases>()
-        every { chatUseCases.listenToSpeechUseCase } returns listenToSpeechUseCase
+        val chatUseCases = FakeChatUseCases(listenToSpeechUseCase)
         val speechCoordinator = StudioSpeechCoordinator(chatUseCases)
         val playbackCoordinator = StudioPlaybackCoordinator(playbackController)
         val promptCoordinator = StudioPromptCoordinator(generationCoordinator, studioRepository)

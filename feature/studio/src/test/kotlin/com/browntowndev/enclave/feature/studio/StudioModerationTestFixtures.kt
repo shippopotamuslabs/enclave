@@ -5,9 +5,6 @@ import com.browntowndev.enclave.domain.port.inference.PromptModerationPort
 import com.browntowndev.enclave.domain.port.inference.PromptModerationScores
 import com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase
 import com.browntowndev.enclave.domain.usecase.inference.ShouldModeratePromptUseCase
-import io.mockk.coEvery
-import io.mockk.mockk
-
 internal fun allowPromptModerationUseCase(): ModeratePromptUseCase =
     ModeratePromptUseCase(
         object : PromptModerationPort {
@@ -18,9 +15,7 @@ internal fun allowPromptModerationUseCase(): ModeratePromptUseCase =
     )
 
 internal fun allowShouldModeratePromptUseCase(shouldModerate: Boolean = true): ShouldModeratePromptUseCase =
-    mockk<ShouldModeratePromptUseCase>(relaxed = true) {
-        coEvery { this@mockk.invoke(any<com.browntowndev.enclave.domain.model.inference.ModelType>()) } returns shouldModerate
-    }
+    FakeShouldModeratePromptUseCase(shouldModerate)
 
 internal object NoOpLoggingPort : LoggingPort {
     override fun debug(tag: String, message: String) = Unit

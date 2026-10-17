@@ -1,13 +1,10 @@
 package com.browntowndev.enclave.feature.studio.coordinators
 
+import com.browntowndev.enclave.core.testing.FakeShareMediaPort
+import com.browntowndev.enclave.core.testing.FakeStudioRepository
 import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
-import com.browntowndev.enclave.domain.port.media.ShareMediaPort
 import com.browntowndev.enclave.domain.port.repository.StudioMediaAsset
-import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
-import io.mockk.coEvery
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.verify
+import com.browntowndev.enclave.feature.studio.test.FakeStudioGenerationDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,9 +22,10 @@ import org.junit.jupiter.api.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class StudioMediaActionsCoordinatorTest {
     private val testDispatcher = UnconfinedTestDispatcher()
-    private val shareMediaPort = mockk<ShareMediaPort>(relaxed = true)
-    private val studioRepository = mockk<StudioRepositoryPort>(relaxed = true)
-    private val generationCoordinator = StudioGenerationCoordinator(studioRepository, mockk(relaxed = true))
+    private val shareMediaPort = FakeShareMediaPort()
+    private val studioRepository = FakeStudioRepository()
+    private val generationCoordinator =
+        StudioGenerationCoordinator(studioRepository, FakeStudioGenerationDispatcher())
     private val sessionMediaFlow = MutableStateFlow<List<com.browntowndev.enclave.feature.studio.StudioMediaUi>>(emptyList())
     private lateinit var promptCoordinator: StudioPromptCoordinator
     private lateinit var coordinator: StudioMediaActionsCoordinator
@@ -35,7 +33,6 @@ class StudioMediaActionsCoordinatorTest {
     @BeforeEach
     fun setup() {
         Dispatchers.setMain(testDispatcher)
-        every { studioRepository.observeEphemeralMedia() } returns flowOf(emptyList())
         promptCoordinator = StudioPromptCoordinator(generationCoordinator, studioRepository)
         coordinator = StudioMediaActionsCoordinator(shareMediaPort, studioRepository, generationCoordinator)
         coordinator.attach(
@@ -54,34 +51,40 @@ class StudioMediaActionsCoordinatorTest {
     fun shareSingleMedia_resolvesPersistedAssetFromRepository() =
         runTest {
             val persistedUri = "file:///data/user/0/com.app/files/permanent.jpg"
-            coEvery { studioRepository.getMediaById("perm-1") } returns
-                StudioMediaAsset(
-                    id = "perm-1",
-                    localUri = persistedUri,
-                    prompt = "test",
-                    mediaType = "IMAGE",
-                    createdAt = 1L,
-                    albumId = "album-1",
-                )
+            studioRepository.emitMedia(
+                listOf(
+                    StudioMediaAsset(
+                        id = "perm-1",
+                        localUri = persistedUri,
+                        prompt = "test",
+                        mediaType = "IMAGE",
+                        createdAt = 1L,
+                        albumId = "album-1",
+                    ),
+                ),
+            )
 
             coordinator.shareSingleMedia("perm-1")
             advanceUntilIdle()
 
-            verify { shareMediaPort.shareMedia(listOf(persistedUri), "image/*") }
+            assertEquals(listOf(listOf(persistedUri) to "image/*"), shareMediaPort.shareMediaCalls)
         }
 
     @Test
     fun onEditMedia_fromUserAction_setsReferenceImageOnPromptCoordinator() =
         runTest {
             val persistedUri = "file:///data/user/0/com.app/files/permanent.jpg"
-            coEvery { studioRepository.getMediaById("perm-1") } returns
-                StudioMediaAsset(
-                    id = "perm-1",
-                    localUri = persistedUri,
-                    prompt = "test",
-                    mediaType = "IMAGE",
-                    createdAt = 1L,
-                )
+            studioRepository.emitMedia(
+                listOf(
+                    StudioMediaAsset(
+                        id = "perm-1",
+                        localUri = persistedUri,
+                        prompt = "test",
+                        mediaType = "IMAGE",
+                        createdAt = 1L,
+                    ),
+                ),
+            )
 
             coordinator.onEditMedia(
                 prompt = promptCoordinator,

@@ -11,7 +11,7 @@ import com.browntowndev.enclave.domain.port.repository.TrustedDomainRepositoryPo
 import java.net.URI
 import javax.inject.Inject
 
-class ShouldModeratePromptUseCase
+open class ShouldModeratePromptUseCase
     @Inject
     constructor(
         private val distributionConfig: DistributionConfigurationPort,
@@ -19,7 +19,7 @@ class ShouldModeratePromptUseCase
         private val trustedDomainRepository: TrustedDomainRepositoryPort,
         private val loggingPort: LoggingPort,
     ) {
-        suspend operator fun invoke(modelType: ModelType): Boolean {
+        open suspend operator fun invoke(modelType: ModelType): Boolean {
             if (!distributionConfig.isPlayStoreFlavor) {
                 loggingPort.debug(TAG, "Skipping moderation: not playStore flavor")
                 return false
