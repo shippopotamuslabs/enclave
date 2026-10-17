@@ -44,6 +44,7 @@ dependencies {
     testImplementation(libs.kotlin.test.junit5)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.mockk)
+    testImplementation(project(":core:testing"))
     testImplementation(libs.robolectric)
     testRuntimeOnly(libs.junit.vintage.engine)
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
