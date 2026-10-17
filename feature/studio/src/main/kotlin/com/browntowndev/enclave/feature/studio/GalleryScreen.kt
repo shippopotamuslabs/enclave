@@ -55,13 +55,11 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
@@ -92,6 +90,7 @@ import com.browntowndev.enclave.core.ui.component.dialog.RenameAlbumDialog
 import com.browntowndev.enclave.core.ui.component.enclave.EnclaveAppBarChrome
 import com.browntowndev.enclave.core.ui.component.enclave.EnclaveIconButton
 import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSelectionMark
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveTextButton
 import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorderColor
 import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurface
 import com.browntowndev.enclave.core.ui.component.sheet.MoveToAlbumBottomSheet
@@ -1030,17 +1029,14 @@ private fun DeleteDialog(
         title = { Text("Delete Media") },
         text = { Text("Are you sure you want to delete $itemCount selected items? This action cannot be undone.") },
         confirmButton = {
-            TextButton(
+            EnclaveTextButton(
+                text = "Delete",
                 onClick = onConfirm,
-                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-            ) {
-                Text("Delete")
-            }
+                color = MaterialTheme.colorScheme.error,
+            )
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
+            EnclaveTextButton(text = "Cancel", onClick = onDismiss)
         },
         modifier = modifier,
     )
@@ -1058,17 +1054,14 @@ private fun DeleteAlbumsDialog(
         title = { Text("Delete Albums") },
         text = { Text("Delete $itemCount album(s)? Media inside will be moved to the Default Album.") },
         confirmButton = {
-            TextButton(
+            EnclaveTextButton(
+                text = "Delete",
                 onClick = onConfirm,
-                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-            ) {
-                Text("Delete")
-            }
+                color = MaterialTheme.colorScheme.error,
+            )
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
+            EnclaveTextButton(text = "Cancel", onClick = onDismiss)
         },
         modifier = modifier,
     )

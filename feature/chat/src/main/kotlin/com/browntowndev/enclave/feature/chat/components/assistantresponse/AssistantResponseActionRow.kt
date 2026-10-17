@@ -25,11 +25,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -44,6 +41,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.browntowndev.enclave.core.ui.component.enclave.EnclaveCircularProgressIndicator
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSecondaryIconButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveTextButton
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorderColor
+import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurface
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.feature.chat.ChatMessage
 import kotlinx.coroutines.launch
@@ -80,19 +81,19 @@ internal fun AssistantResponseActionRow(
                 Text("Submit feedback that this response should have been blocked by moderation?")
             },
             confirmButton = {
-                TextButton(
+                EnclaveTextButton(
+                    text = "Report",
                     onClick = {
                         onReportClick(message.id)
                         showReportDialog = false
                     },
-                ) {
-                    Text("Report")
-                }
+                )
             },
             dismissButton = {
-                TextButton(onClick = { showReportDialog = false }) {
-                    Text("Cancel")
-                }
+                EnclaveTextButton(
+                    text = "Cancel",
+                    onClick = { showReportDialog = false },
+                )
             },
         )
     }
@@ -110,19 +111,15 @@ internal fun AssistantResponseActionRow(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(0.dp),
             ) {
-                IconButton(
+                EnclaveSecondaryIconButton(
                     onClick = { onShareClick(message.id) },
-                    modifier = Modifier.size(ActionIconButtonSize),
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Share,
-                        contentDescription = "Share",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                        modifier = Modifier.size(ActionIconSize),
-                    )
-                }
+                    icon = Icons.Default.Share,
+                    contentDescription = "Share",
+                    size = ActionIconButtonSize,
+                    iconTint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                )
 
-                IconButton(
+                EnclaveSecondaryIconButton(
                     onClick = {
                         coroutineScope.launch {
                             clipboardManager.setClipEntry(
@@ -130,15 +127,11 @@ internal fun AssistantResponseActionRow(
                             )
                         }
                     },
-                    modifier = Modifier.size(ActionIconButtonSize),
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.ContentCopy,
-                        contentDescription = "Copy response",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(16.dp),
-                    )
-                }
+                    icon = Icons.Filled.ContentCopy,
+                    contentDescription = "Copy response",
+                    size = ActionIconButtonSize,
+                    iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
 
                 if (hasTtsProviderAssigned) {
                     when {
@@ -154,91 +147,76 @@ internal fun AssistantResponseActionRow(
                             }
                         }
                         isPlayingTts -> {
-                            IconButton(
+                            EnclaveSecondaryIconButton(
                                 onClick = onPauseAudio,
-                                modifier = Modifier.size(ActionIconButtonSize),
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.Pause,
-                                    contentDescription = "Pause audio",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(ActionIconSize),
-                                )
-                            }
+                                icon = Icons.Filled.Pause,
+                                contentDescription = "Pause audio",
+                                size = ActionIconButtonSize,
+                                iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
                         isPausedTts -> {
-                            IconButton(
+                            EnclaveSecondaryIconButton(
                                 onClick = { onPlayAudio(contentText) },
-                                modifier = Modifier.size(ActionIconButtonSize),
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.PlayArrow,
-                                    contentDescription = "Resume audio",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(ActionIconSize),
-                                )
-                            }
+                                icon = Icons.Filled.PlayArrow,
+                                contentDescription = "Resume audio",
+                                size = ActionIconButtonSize,
+                                iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
                         else -> {
-                            IconButton(
+                            EnclaveSecondaryIconButton(
                                 onClick = { onPlayAudio(contentText) },
-                                modifier = Modifier.size(ActionIconButtonSize),
-                            ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.VolumeUp,
-                                    contentDescription = "Read aloud",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(ActionIconSize),
-                                )
-                            }
+                                icon = Icons.AutoMirrored.Filled.VolumeUp,
+                                contentDescription = "Read aloud",
+                                size = ActionIconButtonSize,
+                                iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
                     }
                 }
 
                 if (message.webSearchSources.isNotEmpty()) {
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier =
                             Modifier
                                 .padding(start = 4.dp)
-                                .clickable { onShowSources() },
+                                .enclaveSurface(
+                                    backgroundColor =
+                                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    borderColor = enclaveBorderColor(),
+                                    shape = RoundedCornerShape(16.dp),
+                                ).clickable { onShowSources() }
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.Link,
-                                contentDescription = null,
-                                modifier = Modifier.size(14.dp),
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Sources",
-                                style =
-                                    MaterialTheme.typography.labelMedium.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 12.sp,
-                                    ),
-                            )
-                        }
+                        Icon(
+                            imageVector = Icons.Filled.Link,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(14.dp),
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Sources",
+                            style =
+                                MaterialTheme.typography.labelMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp,
+                                ),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
 
                 Box {
-                    IconButton(
+                    EnclaveSecondaryIconButton(
                         onClick = { overflowExpanded = true },
-                        modifier = Modifier.size(ActionIconButtonSize),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.MoreVert,
-                            contentDescription = "More response actions",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(ActionIconSize),
-                        )
-                    }
+                        icon = Icons.Default.MoreVert,
+                        contentDescription = "More response actions",
+                        size = ActionIconButtonSize,
+                        iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                     DropdownMenu(
                         expanded = overflowExpanded,
                         onDismissRequest = { overflowExpanded = false },

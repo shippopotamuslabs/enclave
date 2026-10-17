@@ -1,6 +1,5 @@
 package com.browntowndev.enclave.feature.chat.components.assistantresponse
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -22,7 +21,6 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -164,21 +162,19 @@ internal fun ArtifactCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
-        onClick = onClick,
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
         modifier =
             modifier
                 .width(280.dp)
-                .height(110.dp),
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-        tonalElevation = 2.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+                .height(110.dp)
+                .enclaveSurface(
+                    backgroundColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    borderColor = enclaveBorderColor(),
+                    shape = RoundedCornerShape(16.dp),
+                ).clickable(onClick = onClick)
+                .padding(12.dp),
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(12.dp),
-        ) {
             Box(
                 modifier =
                     Modifier
@@ -198,9 +194,13 @@ internal fun ArtifactCard(
                         modifier = Modifier.size(32.dp),
                     )
                     Spacer(modifier = Modifier.height(4.dp))
-                    Surface(
-                        color = MaterialTheme.colorScheme.primary,
-                        shape = RoundedCornerShape(4.dp),
+                    Box(
+                        modifier =
+                            Modifier.enclaveSurface(
+                                backgroundColor = MaterialTheme.colorScheme.primary,
+                                borderColor = MaterialTheme.colorScheme.primary,
+                                shape = RoundedCornerShape(4.dp),
+                            ),
                     ) {
                         Text(
                             text = card.badgeLabel,
@@ -259,7 +259,6 @@ internal fun ArtifactCard(
                     )
                 }
             }
-        }
     }
 }
 
@@ -276,21 +275,19 @@ internal fun MediaCard(
     val primaryType = mediaTypes.firstOrNull()
     val count = uris.size
 
-    Surface(
-        onClick = { if (!loadError) onClick(uris, mediaTypes, prompts) },
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
         modifier =
             modifier
                 .fillMaxWidth()
-                .height(110.dp),
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-        tonalElevation = 2.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+                .height(110.dp)
+                .enclaveSurface(
+                    backgroundColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    borderColor = enclaveBorderColor(),
+                    shape = RoundedCornerShape(16.dp),
+                ).clickable { if (!loadError) onClick(uris, mediaTypes, prompts) }
+                .padding(12.dp),
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(12.dp),
-        ) {
             Box(
                 modifier =
                     Modifier
@@ -397,6 +394,5 @@ internal fun MediaCard(
                     }
                 }
             }
-        }
     }
 }

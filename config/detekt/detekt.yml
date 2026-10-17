@@ -16,7 +16,7 @@ config:
 # (ENC-27), ForbiddenMockKInTests (ENC-28).
 enclave:
   ForbiddenMaterialComposeInFeatures:
-    active: false
+    active: true
   ForbiddenRawColorLiteralInFeatures:
     active: true
   ForbiddenMockKInTests:

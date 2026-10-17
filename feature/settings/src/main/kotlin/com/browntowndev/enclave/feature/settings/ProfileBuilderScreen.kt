@@ -13,19 +13,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveBackScreenHeader
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.feature.settings.steps.AnalysisProgressStep
 import com.browntowndev.enclave.feature.settings.steps.CostEstimateStep
@@ -70,14 +65,7 @@ internal fun ProfileBuilderScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Psychological Profile") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-            )
+            EnclaveBackScreenHeader(title = "Psychological Profile", onBackClick = onBack)
         },
     ) { paddingValues ->
         Column(

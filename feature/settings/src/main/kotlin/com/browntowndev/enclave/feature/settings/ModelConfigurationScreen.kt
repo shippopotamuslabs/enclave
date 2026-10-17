@@ -28,8 +28,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
@@ -53,6 +51,7 @@ import com.browntowndev.enclave.core.ui.component.assignment.AssignmentSelection
 import com.browntowndev.enclave.core.ui.component.assignment.ApiModelAssetUi
 import com.browntowndev.enclave.core.ui.component.assignment.LocalModelAssetUi
 import com.browntowndev.enclave.core.ui.component.enclave.EnclaveBackScreenHeader
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveChevronCard
 import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSectionHeader
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
@@ -375,73 +374,15 @@ private fun AssignmentAssetCard(
     isSelected: Boolean = false,
     onClick: () -> Unit,
 ) {
-    Card(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .let { m ->
-                    if (isSelected) {
-                        m.border(
-                            width = 1.dp,
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                            shape = RoundedCornerShape(16.dp),
-                        )
-                    } else {
-                        m
-                    }
-                }.clickable(onClick = onClick)
-                .defaultMinSize(minHeight = 48.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors =
-            CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-            ),
-    ) {
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    if (isMultimodal) {
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Icon(
-                            imageVector = Icons.Default.Visibility,
-                            contentDescription = "Vision capable",
-                            modifier = Modifier.size(16.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 2.dp),
-                )
-                Text(
-                    text = "$presetCount Preset(s) available",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            }
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = "View presets",
-                modifier = Modifier.padding(start = 4.dp),
-            )
-        }
-    }
+    EnclaveChevronCard(
+        title = title,
+        subtitle = subtitle,
+        footer = "$presetCount Preset(s) available",
+        isMultimodal = isMultimodal,
+        isSelected = isSelected,
+        onClick = onClick,
+        modifier = Modifier.defaultMinSize(minHeight = 48.dp),
+    )
 }
 
 @Composable

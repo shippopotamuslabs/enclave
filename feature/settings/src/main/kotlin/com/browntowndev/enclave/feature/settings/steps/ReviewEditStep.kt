@@ -9,12 +9,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.browntowndev.enclave.core.ui.component.enclave.EnclavePrimaryButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveOutlinedTextField
 import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSecondaryButton
 import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSectionHeader
 
@@ -36,7 +36,7 @@ internal fun ReviewEditStep(
         Text("Edit the profile before saving. It will be injected at the start of every new conversation.")
         Spacer(Modifier.height(12.dp))
 
-        OutlinedTextField(
+        EnclaveOutlinedTextField(
             value = profileContent,
             onValueChange = onContentEdited,
             modifier =

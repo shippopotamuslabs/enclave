@@ -26,7 +26,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveTextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -262,11 +262,11 @@ fun ModelSelectionField(
             horizontalArrangement = Arrangement.End,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TextButton(
+            EnclaveTextButton(
                 onClick = callbacks.onFetchModels,
                 enabled = !discovery.isLoading && canFetchModels,
             ) {
-                if (discovery.isLoading) {
+if (discovery.isLoading) {
                     EnclaveCircularProgressIndicator(
                         modifier = Modifier.padding(end = 8.dp).size(16.dp),
                     )
@@ -282,7 +282,7 @@ fun ModelSelectionField(
                     )
                     Text(if (!hasModels) "Discover Models" else "Refresh Models")
                 }
-            }
+}
         }
     }
 
@@ -526,16 +526,12 @@ fun ReusableCredentialDropdown(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.End,
     ) {
-        TextButton(onClick = { reusableCredentialDropdownExpanded = true }) {
-            Text(
-                text =
+        EnclaveTextButton(text =
                     if (selectedReusableCredential == null) {
                         "Use Existing"
                     } else {
                         "Using ${selectedReusableCredential.displayName}"
-                    },
-            )
-        }
+                    }, onClick = { reusableCredentialDropdownExpanded = true })
         DropdownMenu(
             expanded = reusableCredentialDropdownExpanded,
             onDismissRequest = { reusableCredentialDropdownExpanded = false },
@@ -635,11 +631,11 @@ fun CredentialsConfigurationForm(
             horizontalArrangement = Arrangement.End,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TextButton(
+            EnclaveTextButton(
                 onClick = onTestConnection,
                 enabled = canTestConnection && connectionTestStatus != ApiConnectionTestStatus.TESTING,
             ) {
-                when (connectionTestStatus) {
+when (connectionTestStatus) {
                     ApiConnectionTestStatus.TESTING -> {
                         EnclaveCircularProgressIndicator(
                             modifier = Modifier.padding(end = 8.dp).size(16.dp),
@@ -659,7 +655,7 @@ fun CredentialsConfigurationForm(
                     }
                     ApiConnectionTestStatus.IDLE -> Text("Test")
                 }
-            }
+}
         }
 
         EnclaveOutlinedTextField(
