@@ -1,39 +1,37 @@
 package com.browntowndev.enclave.feature.download
 
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
-import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.config.LocalModelAsset
 import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.config.LocalModelMetadata
 import com.browntowndev.enclave.domain.model.config.UtilityType
 import com.browntowndev.enclave.domain.model.download.DownloadModelsResult
-import com.browntowndev.enclave.domain.model.download.DownloadState
-import com.browntowndev.enclave.domain.model.download.DownloadStatus
 import com.browntowndev.enclave.domain.model.download.FileProgress
 import com.browntowndev.enclave.domain.model.download.FileStatus
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.port.download.ModelDownloadOrchestratorPort
-import io.mockk.every
-import io.mockk.mockk
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.flowOf
+import com.browntowndev.enclave.core.testing.download.FakeModelDownloadOrchestrator
+import com.browntowndev.enclave.domain.model.download.ModelScanResult
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 
 @ExtendWith(MainDispatcherRule::class)
 class DownloadViewModelUiModelTest {
-    private val orchestrator = mockk<ModelDownloadOrchestratorPort>(relaxed = true)
-    private val errorHandler = mockk<ViewModelErrorHandler>(relaxed = true)
-    private val downloadStateFlow = MutableStateFlow(DownloadState(status = DownloadStatus.IDLE))
+    private val orchestrator = FakeModelDownloadOrchestrator()
+    private val errorHandler = FakeViewModelErrorHandler()
 
-    @BeforeEach
-    fun setup() {
-        every { orchestrator.downloadState } returns downloadStateFlow
-        every { orchestrator.snackbarMessages } returns flowOf()
-    }
+    private val emptyResult =
+        DownloadModelsResult(
+            allModels = emptyMap(),
+            modelsToDownload = emptyList(),
+            scanResult =
+                ModelScanResult(
+                    missingModels = emptyList(),
+                    partialDownloads = emptyMap(),
+                    allValid = true,
+                ),
+        )
 
     @Test
     fun `ModelType displayName returns correct names`() {
@@ -59,7 +57,7 @@ class DownloadViewModelUiModelTest {
                 modelTypes = listOf(ModelType.DRAFT_ONE),
             )
 
-        val result = mockk<DownloadModelsResult>(relaxed = true)
+        val result = emptyResult
 
         val viewModel =
             DownloadViewModel(
@@ -94,7 +92,7 @@ class DownloadViewModelUiModelTest {
                 modelTypes = listOf(ModelType.VISION, ModelType.DRAFT_ONE),
             )
 
-        val result = mockk<DownloadModelsResult>(relaxed = true)
+        val result = emptyResult
 
         val viewModel =
             DownloadViewModel(
@@ -135,9 +133,17 @@ class DownloadViewModelUiModelTest {
                 configurations = emptyList(),
             )
         val modelsResult =
-            mockk<DownloadModelsResult>(relaxed = true) {
-                every { utilityAssets } returns listOf(utilityAsset)
-            }
+            DownloadModelsResult(
+                allModels = emptyMap(),
+                utilityAssets = listOf(utilityAsset),
+                modelsToDownload = emptyList(),
+                scanResult =
+                    ModelScanResult(
+                        missingModels = emptyList(),
+                        partialDownloads = emptyMap(),
+                        allValid = true,
+                    ),
+            )
         val progress =
             FileProgress(
                 filename = "ggml-base.en.bin",
@@ -186,9 +192,17 @@ class DownloadViewModelUiModelTest {
                 configurations = emptyList(),
             )
         val modelsResult =
-            mockk<DownloadModelsResult>(relaxed = true) {
-                every { utilityAssets } returns listOf(utilityAsset)
-            }
+            DownloadModelsResult(
+                allModels = emptyMap(),
+                utilityAssets = listOf(utilityAsset),
+                modelsToDownload = emptyList(),
+                scanResult =
+                    ModelScanResult(
+                        missingModels = emptyList(),
+                        partialDownloads = emptyMap(),
+                        allValid = true,
+                    ),
+            )
         val progress =
             FileProgress(
                 filename = "model_quantized.onnx",
@@ -231,7 +245,7 @@ class DownloadViewModelUiModelTest {
                 modelTypes = listOf(ModelType.MAIN),
             )
 
-        val result = mockk<DownloadModelsResult>(relaxed = true)
+        val result = emptyResult
 
         val viewModel =
             DownloadViewModel(

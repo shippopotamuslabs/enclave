@@ -1,43 +1,33 @@
 package com.browntowndev.enclave.feature.download
 
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
-import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.config.LocalModelAsset
 import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.config.LocalModelMetadata
 import com.browntowndev.enclave.domain.model.download.DownloadModelsResult
-import com.browntowndev.enclave.domain.model.download.DownloadState
 import com.browntowndev.enclave.domain.model.download.DownloadStatus
 import com.browntowndev.enclave.domain.model.download.FileProgress
 import com.browntowndev.enclave.domain.model.download.FileStatus
 import com.browntowndev.enclave.domain.model.download.ModelScanResult
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.port.download.ModelDownloadOrchestratorPort
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.verify
+import com.browntowndev.enclave.core.testing.download.FakeModelDownloadOrchestrator
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 
 @ExtendWith(MainDispatcherRule::class)
 @OptIn(ExperimentalCoroutinesApi::class)
 class DownloadViewModelActionsTest {
-    private val orchestrator = mockk<ModelDownloadOrchestratorPort>(relaxed = true)
-    private val refreshDownloadPlan = mockk<DownloadPlanRefresher>(relaxed = true)
-    private val errorHandler = mockk<ViewModelErrorHandler>(relaxed = true)
-    private val downloadStateFlow = MutableStateFlow(DownloadState(status = DownloadStatus.IDLE))
+    private val orchestrator = FakeModelDownloadOrchestrator()
+    private val refreshDownloadPlan = RecordingDownloadPlanRefresher()
+    private val errorHandler = FakeViewModelErrorHandler()
+    private val downloadStateFlow = orchestrator.downloadStateFlow
 
     private val testMetadata =
         LocalModelMetadata(
@@ -68,12 +58,6 @@ class DownloadViewModelActionsTest {
                 ),
         )
 
-    @BeforeEach
-    fun setup() {
-        every { orchestrator.downloadState } returns downloadStateFlow
-        every { orchestrator.snackbarMessages } returns flowOf()
-    }
-
     private fun createViewModel(
         modelsResult: DownloadModelsResult = testModelsResult,
         initialErrorMessage: String? = null,
@@ -102,7 +86,7 @@ class DownloadViewModelActionsTest {
             viewModel.startDownloads()
             advanceUntilIdle()
 
-            coVerify { orchestrator.startDownloads(modelsResult = testModelsResult, wifiOnly = true) }
+            assertEquals(listOf(testModelsResult to true), orchestrator.startCalls)
         }
 
     @Test
@@ -115,7 +99,7 @@ class DownloadViewModelActionsTest {
             viewModel.startDownloads()
             advanceUntilIdle()
 
-            coVerify(exactly = 1) { orchestrator.startDownloads(modelsResult = testModelsResult, wifiOnly = true) }
+            assertEquals(listOf(testModelsResult to true), orchestrator.startCalls)
         }
 
     @Test
@@ -129,7 +113,7 @@ class DownloadViewModelActionsTest {
 
             viewModel.pauseDownloads()
 
-            verify { orchestrator.pauseDownloads() }
+            assertEquals(1, orchestrator.pauseCount)
         }
 
     @Test
@@ -141,7 +125,7 @@ class DownloadViewModelActionsTest {
             viewModel.resumeDownloads()
             advanceUntilIdle()
 
-            coVerify { orchestrator.resumeDownloads() }
+            assertEquals(1, orchestrator.resumeCount)
         }
 
     @Test
@@ -153,7 +137,7 @@ class DownloadViewModelActionsTest {
             viewModel.cancelDownloads()
             advanceUntilIdle()
 
-            coVerify { orchestrator.cancelDownloads() }
+            assertEquals(1, orchestrator.cancelCount)
         }
 
     @Test
@@ -165,9 +149,9 @@ class DownloadViewModelActionsTest {
             viewModel.retryFailed()
             advanceUntilIdle()
 
-            coVerify { refreshDownloadPlan.refresh() }
-            verify { orchestrator.pauseDownloads() }
-            coVerify { orchestrator.retryFailed() }
+            assertEquals(1, refreshDownloadPlan.refreshCount)
+            assertEquals(1, orchestrator.pauseCount)
+            assertEquals(1, orchestrator.retryCount)
         }
 
     @Test
@@ -182,7 +166,7 @@ class DownloadViewModelActionsTest {
             advanceUntilIdle()
 
             assertFalse(viewModel.wifiOnly.value)
-            coVerify { orchestrator.downloadOnMobileData() }
+            assertEquals(1, orchestrator.downloadOnMobileDataCount)
         }
 
     @Test
@@ -210,7 +194,7 @@ class DownloadViewModelActionsTest {
                 )
             advanceUntilIdle()
 
-            verify { orchestrator.setError("Initialization failed") }
+            assertEquals(listOf("Initialization failed"), orchestrator.setErrorCalls)
         }
 
     @Test
@@ -219,7 +203,7 @@ class DownloadViewModelActionsTest {
             val viewModel = createViewModel(autoStartDownloads = true)
             advanceUntilIdle()
 
-            coVerify { orchestrator.startDownloads(modelsResult = testModelsResult, wifiOnly = true) }
+            assertEquals(listOf(testModelsResult to true), orchestrator.startCalls)
         }
 
     @Test
@@ -243,7 +227,7 @@ class DownloadViewModelActionsTest {
                 )
             advanceUntilIdle()
 
-            coVerify(exactly = 0) { orchestrator.startDownloads(any<DownloadModelsResult>(), any()) }
+            assertTrue(orchestrator.startCalls.isEmpty())
         }
 
     @Test
@@ -255,7 +239,7 @@ class DownloadViewModelActionsTest {
             viewModel.checkModels()
             advanceUntilIdle()
 
-            coVerify { orchestrator.startDownloads(modelsResult = testModelsResult, wifiOnly = true) }
+            assertEquals(listOf(testModelsResult to true), orchestrator.startCalls)
         }
 
     @Test
@@ -318,7 +302,7 @@ class DownloadViewModelActionsTest {
             viewModel.startDownloads()
             advanceUntilIdle()
 
-            coVerify(exactly = 2) { orchestrator.startDownloads(modelsResult = testModelsResult, wifiOnly = true) }
+            assertEquals(listOf(testModelsResult to true, testModelsResult to true), orchestrator.startCalls)
         }
 
     @Test
