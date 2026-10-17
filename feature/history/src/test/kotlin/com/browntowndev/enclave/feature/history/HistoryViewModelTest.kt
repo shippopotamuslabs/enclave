@@ -42,6 +42,11 @@ class HistoryViewModelTest {
     private lateinit var mockDeleteChatUseCase: DeleteChatUseCase
     private lateinit var mockRenameChatUseCase: RenameChatUseCase
     private lateinit var mockTogglePinChatUseCase: TogglePinChatUseCase
+
+    // ENC-27: recorded invocations replace MockK verify/coVerify.
+    private val togglePinCalls = mutableListOf<ChatId>()
+    private val deleteChatCalls = mutableListOf<ChatId>()
+    private val searchQueries = mutableListOf<String>()
     private data class RecordedError(
         val tag: String,
         val message: String,
@@ -346,6 +351,7 @@ class HistoryViewModelTest {
             val chatsFlow = MutableStateFlow(listOf(unpinned))
             every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
             coEvery { mockTogglePinChatUseCase.invoke(chatId) } coAnswers {
+                togglePinCalls += chatId
                 chatsFlow.value = listOf(unpinned.copy(pinned = true))
             }
 
@@ -363,7 +369,7 @@ class HistoryViewModelTest {
             state = viewModel.uiState.value
             assertTrue(state.pinnedChats.any { it.id == chatId })
             assertFalse(state.otherChats.any { it.id == chatId })
-            io.mockk.coVerify(exactly = 1) { mockTogglePinChatUseCase.invoke(chatId) }
+            assertEquals(listOf(chatId), togglePinCalls)
         }
 
     @Test
@@ -375,6 +381,7 @@ class HistoryViewModelTest {
             val chatsFlow = MutableStateFlow(listOf(toDelete, toKeep))
             every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
             coEvery { mockDeleteChatUseCase.invoke(chatId) } coAnswers {
+                deleteChatCalls += chatId
                 chatsFlow.value = listOf(toKeep)
             }
 
@@ -391,7 +398,7 @@ class HistoryViewModelTest {
             assertEquals(1, state.otherChats.size)
             assertEquals(ChatId("keep"), state.otherChats.first().id)
             assertFalse(state.otherChats.any { it.id == chatId })
-            io.mockk.coVerify(exactly = 1) { mockDeleteChatUseCase.invoke(chatId) }
+            assertEquals(listOf(chatId), deleteChatCalls)
         }
 
     // Suite C: Relative Date Formatting Tests
@@ -772,7 +779,10 @@ class HistoryViewModelTest {
             val searchChatsFlow = MutableStateFlow<List<Chat>>(emptyList())
 
             every { mockGetAllChatsUseCase.invoke() } returns allChatsFlow
-            every { mockSearchChatsUseCase.invoke(any()) } returns searchChatsFlow
+            every { mockSearchChatsUseCase.invoke(any()) } answers {
+                searchQueries += firstArg<String>()
+                searchChatsFlow
+            }
 
             viewModel = createViewModel()
             backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
@@ -786,16 +796,12 @@ class HistoryViewModelTest {
 
             advanceUntilIdle()
 
-            // Verify that the use case was only invoked exactly once with the final string
-            // ENC-18: invocation-count assertion — debounced intermediate queries
-            // produce identical empty UiState, so this cannot be a state assertion.
-            // Kept under the UNIT_TESTING.md MockK-boundary justification until the
-            // ForbiddenVerifyInViewModelTests rule is enabled (ENC-10 follow-up).
-            io.mockk.verify(exactly = 1) { mockSearchChatsUseCase.invoke("hello") }
-            io.mockk.verify(exactly = 0) { mockSearchChatsUseCase.invoke("h") }
-            io.mockk.verify(exactly = 0) { mockSearchChatsUseCase.invoke("he") }
-            io.mockk.verify(exactly = 0) { mockSearchChatsUseCase.invoke("hel") }
-            io.mockk.verify(exactly = 0) { mockSearchChatsUseCase.invoke("hell") }
+            // Verify that the use case was only invoked exactly once with the final string.
+            // ENC-27: invocation-count assertion — debounced intermediate queries
+            // produce identical empty UiState, so this cannot be a state assertion;
+            // the queries are recorded by the stub above instead of MockK verify.
+            assertEquals(1, searchQueries.count { it == "hello" })
+            assertTrue(searchQueries.none { it in listOf("h", "he", "hel", "hell") })
         }
 
     @Test
@@ -847,7 +853,10 @@ class HistoryViewModelTest {
             val invalidQuery = "\"*^\" OR AND"
 
             every { mockGetAllChatsUseCase.invoke() } returns MutableStateFlow(emptyList())
-            every { mockSearchChatsUseCase.invoke(invalidQuery) } returns searchChatsFlow
+            every { mockSearchChatsUseCase.invoke(invalidQuery) } answers {
+                searchQueries += firstArg<String>()
+                searchChatsFlow
+            }
 
             viewModel = createViewModel()
             backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
@@ -855,10 +864,10 @@ class HistoryViewModelTest {
             viewModel.onSearchQueryChange(invalidQuery)
             advanceUntilIdle()
 
-            // Ensure it reached the use case
-            // ENC-18: raw-query pass-through is an invocation argument assertion;
-            // see debounce justification above.
-            io.mockk.verify { mockSearchChatsUseCase.invoke(invalidQuery) }
+            // Ensure it reached the use case.
+            // ENC-27: raw-query pass-through is an invocation argument assertion;
+            // see the debounce recording stub above.
+            assertTrue(searchQueries.contains(invalidQuery))
             assertTrue(
                 viewModel.uiState.value.otherChats
                     .isEmpty(),

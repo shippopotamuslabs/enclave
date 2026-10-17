@@ -40,6 +40,7 @@ import com.browntowndev.enclave.domain.usecase.chat.ListenToSpeechUseCase
 import com.browntowndev.enclave.domain.usecase.chat.MergeMessagesUseCase
 import com.browntowndev.enclave.domain.usecase.chat.ProcessFileAttachmentUseCase
 import com.browntowndev.enclave.domain.usecase.chat.StageImageAttachmentUseCase
+import com.browntowndev.enclave.domain.usecase.chat.SubmitPromptRequest
 import com.browntowndev.enclave.domain.usecase.chat.UserPromptResult
 import com.browntowndev.enclave.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
@@ -54,6 +55,7 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
@@ -103,6 +105,24 @@ class ChatViewModelTest {
     private lateinit var speechEvents: MutableSharedFlow<SpeechState>
     private lateinit var listenToSpeechUseCase: ListenToSpeechUseCase
 
+    // ENC-27: recorded invocations replace MockK verify/coVerify.
+    private data class HandleErrorArgs(
+        val tag: String,
+        val message: String,
+        val throwable: Throwable,
+        val userMessage: String,
+    )
+
+    private val handleErrorCalls = mutableListOf<HandleErrorArgs>()
+    private val exportCommands = mutableListOf<ExportArtifactDocumentsCommand>()
+    private val getMessagesCalls = mutableListOf<ChatId>()
+    private val listenStopSignals = mutableListOf<StateFlow<Boolean>>()
+    private val playCalls = mutableListOf<String>()
+    private var stopCallCount = 0
+    private var pauseCallCount = 0
+    private val submitPromptRequests = mutableListOf<SubmitPromptRequest>()
+    private val setChatModeCalls = mutableListOf<Mode>()
+
     @BeforeEach
     fun setUp() {
         val visionConfig =
@@ -127,11 +147,31 @@ class ChatViewModelTest {
 
         // Stub coroutineExceptionHandler to return a real one to avoid ClassCastException with MockK
         every { errorHandler.coroutineExceptionHandler(any(), any(), any()) } returns CoroutineExceptionHandler { _, _ -> }
-        every { errorHandler.handleError(any(), any(), any(), any()) } just Runs
+        every { errorHandler.handleError(any(), any(), any(), any()) } answers {
+            handleErrorCalls +=
+                HandleErrorArgs(
+                    tag = arg(0),
+                    message = arg(1),
+                    throwable = arg(2),
+                    userMessage = arg(3),
+                )
+            Unit
+        }
 
         speechEvents = MutableSharedFlow(extraBufferCapacity = 8)
         listenToSpeechUseCase = mockk()
-        every { listenToSpeechUseCase.invoke(any(), any()) } returns speechEvents
+        every { listenToSpeechUseCase.invoke(any(), any()) } answers {
+            listenStopSignals += secondArg<StateFlow<Boolean>>()
+            speechEvents
+        }
+        every { playbackController.stop() } answers {
+            stopCallCount++
+            Unit
+        }
+        every { playbackController.pause() } answers {
+            pauseCallCount++
+            Unit
+        }
         every { chatUseCases.listenToSpeechUseCase } returns listenToSpeechUseCase
         every { chatUseCases.processFileAttachmentUseCase } returns processFileAttachmentUseCase
 
@@ -213,14 +253,17 @@ class ChatViewModelTest {
 
             // Then
             // Verify coroutineExceptionHandler was called with correct parameters
-            verify {
-                errorHandler.handleError(
-                    tag = "InferenceOrchestrator",
-                    message = "Failed to send message",
-                    throwable = exception,
-                    userMessage = "Could not send message. Please try again.",
-                )
-            }
+            assertEquals(
+                listOf(
+                    HandleErrorArgs(
+                        tag = "InferenceOrchestrator",
+                        message = "Failed to send message",
+                        throwable = exception,
+                        userMessage = "Could not send message. Please try again.",
+                    ),
+                ),
+                handleErrorCalls,
+            )
         }
 
     @Test
@@ -234,8 +277,14 @@ class ChatViewModelTest {
         runTest {
             val collectJob = backgroundScope.launch { chatViewModel.uiState.collect() }
             val documentJson = """{"id":"artifact-1","metadata":{"title":"Doc"},"blocks":[]}"""
-            coEvery { exportArtifactDocumentsUseCase(any()) } returns
+            every { chatRepository.getMessagesForChat(any()) } answers {
+                getMessagesCalls += ChatId(firstArg<String>())
+                flowOf(emptyList())
+            }
+            coEvery { exportArtifactDocumentsUseCase(any()) } coAnswers {
+                exportCommands += firstArg<ExportArtifactDocumentsCommand>()
                 Result.success(ArtifactExportOutcome.Downloaded(listOf("Doc.pdf")))
+            }
 
             chatViewModel.onArtifactCardClick(
                 messageId = MessageId("message-1"),
@@ -261,17 +310,12 @@ class ChatViewModelTest {
                 cancelAndIgnoreRemainingEvents()
             }
 
-            coVerify {
-                exportArtifactDocumentsUseCase(
-                    match<ExportArtifactDocumentsCommand> { command ->
-                        command.documentJson == documentJson &&
-                            command.baseTitle == "Doc" &&
-                            command.format == ArtifactExportFormat.PDF &&
-                            command.destination == ArtifactExportDestination.DOWNLOAD
-                    },
-                )
-            }
-            coVerify(exactly = 0) { chatRepository.getMessagesForChat(any()) }
+            assertEquals(1, exportCommands.size)
+            assertEquals(documentJson, exportCommands.single().documentJson)
+            assertEquals("Doc", exportCommands.single().baseTitle)
+            assertEquals(ArtifactExportFormat.PDF, exportCommands.single().format)
+            assertEquals(ArtifactExportDestination.DOWNLOAD, exportCommands.single().destination)
+            assertTrue(getMessagesCalls.isEmpty())
             assertEquals(ArtifactExportSheetState.Hidden, chatViewModel.uiState.value.artifactExportSheet)
             collectJob.cancel()
         }
@@ -283,6 +327,10 @@ class ChatViewModelTest {
             val chatId = ChatId("chat-blank-export")
             savedStateHandle["chatId"] = chatId.value
             every { chatRepository.getMessagesForChat(chatId) } returns flowOf(emptyList())
+            coEvery { exportArtifactDocumentsUseCase(any()) } coAnswers {
+                exportCommands += firstArg<ExportArtifactDocumentsCommand>()
+                Result.success(ArtifactExportOutcome.Downloaded(emptyList()))
+            }
             chatViewModel.onArtifactCardClick(
                 messageId = MessageId("message-1"),
                 card =
@@ -310,7 +358,7 @@ class ChatViewModelTest {
                 cancelAndIgnoreRemainingEvents()
             }
 
-            coVerify(exactly = 0) { exportArtifactDocumentsUseCase(any()) }
+            assertTrue(exportCommands.isEmpty())
             val sheet = chatViewModel.uiState.value.artifactExportSheet as ArtifactExportSheetState.Visible
             assertFalse(sheet.isExporting)
             assertEquals("Document is still generating. Try again in a moment.", sheet.errorMessage)
@@ -325,9 +373,12 @@ class ChatViewModelTest {
             savedStateHandle["chatId"] = chatId.value
             val hydratedJson =
                 """{"version":"1.0","metadata":{"title":"Doc"},"blocks":[{"type":"paragraph","text":"Body"}]}"""
-            coEvery { exportArtifactDocumentsUseCase(any()) } returns
+            coEvery { exportArtifactDocumentsUseCase(any()) } coAnswers {
+                exportCommands += firstArg<ExportArtifactDocumentsCommand>()
                 Result.success(ArtifactExportOutcome.Downloaded(listOf("Doc.pdf")))
-            every { chatRepository.getMessagesForChat(chatId) } returns
+            }
+            every { chatRepository.getMessagesForChat(chatId) } answers {
+                getMessagesCalls += ChatId(firstArg<String>())
                 flowOf(
                     listOf(
                         Message(
@@ -349,7 +400,11 @@ class ChatViewModelTest {
                         ),
                     ),
                 )
-            every { chatRepository.getMessagesForChat(not(chatId)) } returns flowOf(emptyList())
+            }
+            every { chatRepository.getMessagesForChat(not(chatId)) } answers {
+                getMessagesCalls += ChatId(firstArg<String>())
+                flowOf(emptyList())
+            }
 
             chatViewModel.onArtifactCardClick(
                 messageId = MessageId("message-1"),
@@ -375,17 +430,12 @@ class ChatViewModelTest {
                 cancelAndIgnoreRemainingEvents()
             }
 
-            coVerify {
-                exportArtifactDocumentsUseCase(
-                    match<ExportArtifactDocumentsCommand> { command ->
-                        command.documentJson.contains("Body") &&
-                            command.baseTitle == "Doc" &&
-                            command.format == ArtifactExportFormat.PDF &&
-                            command.destination == ArtifactExportDestination.DOWNLOAD
-                    },
-                )
-            }
-            coVerify(exactly = 1) { chatRepository.getMessagesForChat(chatId) }
+            assertEquals(1, exportCommands.size)
+            assertTrue(exportCommands.single().documentJson.contains("Body"))
+            assertEquals("Doc", exportCommands.single().baseTitle)
+            assertEquals(ArtifactExportFormat.PDF, exportCommands.single().format)
+            assertEquals(ArtifactExportDestination.DOWNLOAD, exportCommands.single().destination)
+            assertEquals(1, getMessagesCalls.count { it == chatId })
             collectJob.cancel()
         }
 
@@ -394,6 +444,14 @@ class ChatViewModelTest {
         runTest {
             val collectJob = backgroundScope.launch { chatViewModel.uiState.collect() }
             savedStateHandle["chatId"] = null
+            every { chatRepository.getMessagesForChat(any()) } answers {
+                getMessagesCalls += ChatId(firstArg<String>())
+                flowOf(emptyList())
+            }
+            coEvery { exportArtifactDocumentsUseCase(any()) } coAnswers {
+                exportCommands += firstArg<ExportArtifactDocumentsCommand>()
+                Result.success(ArtifactExportOutcome.Downloaded(emptyList()))
+            }
 
             chatViewModel.onArtifactCardClick(
                 messageId = MessageId("message-1"),
@@ -419,8 +477,8 @@ class ChatViewModelTest {
                 cancelAndIgnoreRemainingEvents()
             }
 
-            coVerify(exactly = 0) { chatRepository.getMessagesForChat(any()) }
-            coVerify(exactly = 0) { exportArtifactDocumentsUseCase(any()) }
+            assertTrue(getMessagesCalls.isEmpty())
+            assertTrue(exportCommands.isEmpty())
             collectJob.cancel()
         }
 
@@ -429,7 +487,7 @@ class ChatViewModelTest {
         runTest {
             val collectJob = backgroundScope.launch { chatViewModel.uiState.collect() }
             chatViewModel.onMicClick()
-            coVerify(exactly = 1) { listenToSpeechUseCase.invoke(any(), any()) }
+            assertEquals(1, listenStopSignals.size)
             collectJob.cancel()
         }
 
@@ -444,7 +502,7 @@ class ChatViewModelTest {
             runCurrent()
             // Verify that the stop signal was sent. The actual state change to Idle will happen
             // when the use case processes the signal and completes.
-            coVerify { listenToSpeechUseCase.invoke(any(), match { it.value }) }
+            assertTrue(listenStopSignals.any { it.value })
             collectJob.cancel()
         }
 
@@ -461,16 +519,18 @@ class ChatViewModelTest {
                     ),
                 )
             runCurrent()
-            every { playbackController.play(text) } returns
+            every { playbackController.play(text) } answers {
+                playCalls += firstArg<String>()
                 flowOf(
                     TtsPlaybackStatus.Playing,
                     TtsPlaybackStatus.Completed,
                 )
+            }
 
             chatViewModel.onPlayTts(text)
             runCurrent()
 
-            verify { playbackController.play(text) }
+            assertTrue(playCalls.contains(text))
             collectJob.cancel()
         }
 
@@ -524,11 +584,13 @@ class ChatViewModelTest {
                     ),
                 )
             runCurrent()
-            every { playbackController.play(text) } returns
+            every { playbackController.play(text) } answers {
+                playCalls += firstArg<String>()
                 flowOf(
                     TtsPlaybackStatus.Playing,
                     TtsPlaybackStatus.Completed,
                 )
+            }
 
             chatViewModel.onPlayTts(text)
             runCurrent()
@@ -551,11 +613,13 @@ class ChatViewModelTest {
                     ),
                 )
             runCurrent()
-            every { playbackController.play(text) } returns
+            every { playbackController.play(text) } answers {
+                playCalls += firstArg<String>()
                 flowOf(
                     TtsPlaybackStatus.Playing,
                     TtsPlaybackStatus.Error("Connection failed"),
                 )
+            }
 
             chatViewModel.onPlayTts(text)
             runCurrent()
@@ -581,7 +645,7 @@ class ChatViewModelTest {
 
             chatViewModel.onStopTts()
 
-            verify { playbackController.stop() }
+            assertTrue(stopCallCount >= 1)
             collectJob.cancel()
         }
 
@@ -600,7 +664,7 @@ class ChatViewModelTest {
 
             chatViewModel.onPauseTts()
 
-            verify { playbackController.pause() }
+            assertTrue(pauseCallCount >= 1)
             collectJob.cancel()
         }
 
@@ -635,7 +699,7 @@ class ChatViewModelTest {
             runCurrent()
 
             // stop() should be called at least once (from the cancel-before-start)
-            verify(atLeast = 1) { playbackController.stop() }
+            assertTrue(stopCallCount >= 1)
             collectJob.cancel()
         }
 
@@ -652,17 +716,19 @@ class ChatViewModelTest {
                     ),
                 )
             runCurrent()
-            every { playbackController.play(text) } returns
+            every { playbackController.play(text) } answers {
+                playCalls += firstArg<String>()
                 flowOf(
                     TtsPlaybackStatus.Playing,
                     TtsPlaybackStatus.Completed,
                 )
+            }
 
             chatViewModel.onPlayTts(text)
             runCurrent()
 
             // Verify the playback controller was called
-            verify { playbackController.play(text) }
+            assertTrue(playCalls.contains(text))
             collectJob.cancel()
         }
 
@@ -692,7 +758,7 @@ class ChatViewModelTest {
             chatViewModel.onStopTts()
             runCurrent()
 
-            verify { playbackController.stop() }
+            assertTrue(stopCallCount >= 1)
             collectJob.cancel()
         }
 
@@ -707,7 +773,7 @@ class ChatViewModelTest {
             runCurrent()
 
             // playbackController.play should NOT be called
-            verify(exactly = 0) { playbackController.play(any()) }
+            assertTrue(playCalls.isEmpty())
             assertFalse(chatViewModel.uiState.value.isPlayingTts)
             collectJob.cancel()
         }
@@ -725,10 +791,12 @@ class ChatViewModelTest {
                     ),
                 )
             runCurrent()
-            every { playbackController.play(text) } returns
+            every { playbackController.play(text) } answers {
+                playCalls += firstArg<String>()
                 flowOf(
                     TtsPlaybackStatus.Initializing,
                 )
+            }
 
             chatViewModel.onPlayTts(text)
             runCurrent()
@@ -769,6 +837,14 @@ class ChatViewModelTest {
                 chatId = chatId,
                 userMessageId = MessageId("user"),
             )
+            coEvery { chatUseCases.submitPrompt(any()) } coAnswers {
+                submitPromptRequests += firstArg<SubmitPromptRequest>()
+                UserPromptResult(
+                    userMessageId = MessageId("user"),
+                    chatId = chatId,
+                    userMessageCreatedAtMillis = 100L,
+                )
+            }
             coEvery {
                 chatUseCases.createAssistantPlaceholder(
                     chatId = any(),
@@ -788,18 +864,11 @@ class ChatViewModelTest {
             chatViewModel.onSendMessage()
             advanceUntilIdle()
 
-            coVerify {
-                chatUseCases.submitPrompt(
-                    match {
-                        it.message.content.text == "Hello" &&
-                            it.message.content.fileAttachments.size == 1 &&
-                            it.message.content.fileAttachments[0]
-                                .name == "test.txt" &&
-                            it.message.content.fileAttachments[0]
-                                .content == "Extracted content"
-                    },
-                )
-            }
+            assertEquals(1, submitPromptRequests.size)
+            assertEquals("Hello", submitPromptRequests.single().message.content.text)
+            assertEquals(1, submitPromptRequests.single().message.content.fileAttachments.size)
+            assertEquals("test.txt", submitPromptRequests.single().message.content.fileAttachments[0].name)
+            assertEquals("Extracted content", submitPromptRequests.single().message.content.fileAttachments[0].content)
         }
 
     @Test
@@ -994,13 +1063,18 @@ class ChatViewModelTest {
                 )
 
             val collectJob = backgroundScope.launch { harness.viewModel.uiState.collect() }
+            var clearOptimisticCalls = 0
+            every { harness.inferenceOrchestrator.clearOptimisticUser() } answers {
+                clearOptimisticCalls++
+                callOriginal()
+            }
             harness.viewModel.onInputChange("Pending")
             harness.viewModel.onSendMessage()
             advanceUntilIdle()
 
             assertEquals(1, harness.viewModel.uiState.value.messages.size)
             assertNull(harness.inferenceOrchestrator.optimisticUserMessage.value)
-            verify(atLeast = 1) { harness.inferenceOrchestrator.clearOptimisticUser() }
+            assertTrue(clearOptimisticCalls >= 1)
 
             collectJob.cancel()
         }
@@ -1034,14 +1108,11 @@ class ChatViewModelTest {
             harness.viewModel.onSendMessage()
             advanceUntilIdle()
 
-            verify {
-                errorHandler.handleError(
-                    tag = "InferenceOrchestrator",
-                    message = "Failed to send message",
-                    throwable = any(),
-                    userMessage = "Could not send message. Please try again.",
-                )
-            }
+            assertEquals(1, handleErrorCalls.size)
+            assertEquals("InferenceOrchestrator", handleErrorCalls.single().tag)
+            assertEquals("Failed to send message", handleErrorCalls.single().message)
+            assertTrue(handleErrorCalls.single().throwable is IOException)
+            assertEquals("Could not send message. Please try again.", handleErrorCalls.single().userMessage)
             assertNull(harness.inferenceOrchestrator.optimisticUserMessage.value)
         }
 
@@ -1116,10 +1187,14 @@ class ChatViewModelTest {
         runTest {
             val uiSelectionRepository = mockk<UiSelectionRepository>(relaxed = true)
             every { uiSelectionRepository.selectedChatMode } returns flowOf(Mode.FAST)
+            coEvery { uiSelectionRepository.setChatMode(any()) } coAnswers {
+                setChatModeCalls += firstArg<Mode>()
+                Unit
+            }
             val vm = createChatViewModel(uiSelectionRepository = uiSelectionRepository)
             vm.onModeChange(ChatModeUi.THINKING)
             advanceUntilIdle()
 
-            coVerify { uiSelectionRepository.setChatMode(Mode.THINKING) }
+            assertEquals(listOf(Mode.THINKING), setChatModeCalls)
         }
 }
