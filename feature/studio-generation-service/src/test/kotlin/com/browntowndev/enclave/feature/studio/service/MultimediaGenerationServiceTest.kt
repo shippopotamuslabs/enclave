@@ -8,21 +8,14 @@ import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.media.GeneratedMediaAsset
 import com.browntowndev.enclave.domain.model.media.ImageGenerationProgress
 import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
-import com.browntowndev.enclave.domain.model.media.MediaGenerationRequest
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.media.LocalImageGenerationCancelPort
-import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
-import com.browntowndev.enclave.domain.usecase.media.GenerateMediaUseCase
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.slot
-import io.mockk.verify
+import com.browntowndev.enclave.core.testing.FakeLocalImageGenerationCancelPort
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeStudioRepository
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNotNull
 import org.junit.Before
 import org.junit.Test
@@ -35,10 +28,10 @@ import java.lang.reflect.Field
 @RunWith(org.robolectric.RobolectricTestRunner::class)
 @Config(sdk = [34])
 class MultimediaGenerationServiceTest {
-    private val generateMediaUseCase = mockk<GenerateMediaUseCase>(relaxed = true)
-    private val studioRepository = mockk<StudioRepositoryPort>(relaxed = true)
-    private val localImageGenerationCancelPort = mockk<LocalImageGenerationCancelPort>(relaxed = true)
-    private val logger = mockk<LoggingPort>(relaxed = true)
+    private val generateMediaUseCase = FakeGenerateMediaUseCase()
+    private val studioRepository = FakeStudioRepository()
+    private val localImageGenerationCancelPort = FakeLocalImageGenerationCancelPort()
+    private val logger = FakeLoggingPort()
 
     private lateinit var service: MultimediaGenerationService
 
@@ -51,17 +44,16 @@ class MultimediaGenerationServiceTest {
         inject("studioRepository", studioRepository)
         inject("localImageGenerationCancelPort", localImageGenerationCancelPort)
         inject("logger", logger)
-        every { studioRepository.hasActiveGeneration() } returns false
     }
 
     @Test
     fun `S-STU-01 IMAGE start invokes GenerateMediaUseCase exactly once`() {
-        coEvery { generateMediaUseCase(any(), any()) } returns Result.success(emptyList())
+        generateMediaUseCase.result = Result.success(emptyList())
 
         service.onStartCommand(startImageIntent(prompt = "hello"), 0, 1)
         awaitServiceWork()
 
-        coVerify(exactly = 1) { generateMediaUseCase(any(), any()) }
+        assertEquals(1, generateMediaUseCase.calls.size)
     }
 
     @Test
@@ -73,7 +65,7 @@ class MultimediaGenerationServiceTest {
 
     @Test
     fun `S-STU-03 Success path does not call reportGenerationError`() {
-        coEvery { generateMediaUseCase(any(), any()) } returns
+        generateMediaUseCase.result =
             Result.success(
                 listOf(
                     GeneratedMediaAsset(
@@ -89,20 +81,21 @@ class MultimediaGenerationServiceTest {
         service.onStartCommand(startImageIntent(prompt = "hello"), 0, 1)
         awaitServiceWork()
 
-        coVerify(exactly = 0) { studioRepository.reportGenerationError(any()) }
+        assertTrue(studioRepository.reportGenerationErrorCalls.isEmpty())
     }
 
     @Test
     fun `S-STU-04 Use case failure calls reportGenerationError with provider message`() {
-        coEvery { generateMediaUseCase(any(), any()) } returns
+        generateMediaUseCase.result =
             Result.failure(IllegalStateException("No image generation provider assigned"))
 
         service.onStartCommand(startImageIntent(prompt = "hello"), 0, 1)
         awaitServiceWork()
 
-        coVerify(exactly = 1) {
-            studioRepository.reportGenerationError("No image generation provider assigned")
-        }
+        assertEquals(
+            listOf("No image generation provider assigned"),
+            studioRepository.reportGenerationErrorCalls,
+        )
     }
 
     @Test
@@ -116,13 +109,12 @@ class MultimediaGenerationServiceTest {
         service.onStartCommand(intent, 0, 1)
         awaitServiceWork()
 
-        coVerify(exactly = 0) { generateMediaUseCase(any(), any()) }
+        assertTrue(generateMediaUseCase.calls.isEmpty())
     }
 
     @Test
     fun `S-STU-06 Intent image settings with generationCount 3 reach use case request`() {
-        val requestSlot = slot<MediaGenerationRequest>()
-        coEvery { generateMediaUseCase(capture(requestSlot), any()) } returns Result.success(emptyList())
+        generateMediaUseCase.result = Result.success(emptyList())
 
         val intent =
             startImageIntent(prompt = "hello").apply {
@@ -135,7 +127,7 @@ class MultimediaGenerationServiceTest {
         service.onStartCommand(intent, 0, 1)
         awaitServiceWork()
 
-        val settings = requestSlot.captured.settings
+        val settings = generateMediaUseCase.calls.single().settings
         assertEquals(ImageGenerationSettings::class.java, settings.javaClass)
         assertEquals(3, (settings as ImageGenerationSettings).generationCount)
     }
@@ -150,7 +142,7 @@ class MultimediaGenerationServiceTest {
         service.onStartCommand(intent, 0, 1)
         awaitServiceWork()
 
-        coVerify(exactly = 0) { generateMediaUseCase(any(), any()) }
+        assertTrue(generateMediaUseCase.calls.isEmpty())
     }
 
     @Test
@@ -162,26 +154,21 @@ class MultimediaGenerationServiceTest {
 
         service.onStartCommand(intent, 0, 1)
 
-        verify(exactly = 1) { localImageGenerationCancelPort.cancelActiveGeneration() }
+        assertEquals(1, localImageGenerationCancelPort.cancelCount)
     }
 
     @Test
     fun `E-STU-03 stale job finally clears only owned generation`() {
-        every { studioRepository.hasActiveGeneration() } returnsMany listOf(false, true)
-        every { studioRepository.clearGenerationProgressIfOwned("gen-1") } returns true
-        every { studioRepository.clearActiveGenerationIfOwned("gen-1") } returns false
-        coEvery { generateMediaUseCase(any(), any()) } coAnswers {
-            delay(200)
-            Result.success(emptyList())
-        }
+        generateMediaUseCase.result = Result.success(emptyList())
+        generateMediaUseCase.delayMs = 200
 
         service.onStartCommand(startImageIntent(prompt = "first", generationId = "gen-1"), 0, 1)
         runBlocking { delay(50) }
         service.onStartCommand(startImageIntent(prompt = "second", generationId = "gen-2"), 0, 2)
         awaitServiceWork()
 
-        verify { studioRepository.clearActiveGenerationIfOwned("gen-1") }
-        verify(exactly = 0) { studioRepository.clearActiveGeneration() }
+        assertTrue(studioRepository.clearActiveGenerationIfOwnedCalls.contains("gen-1"))
+        assertEquals(0, studioRepository.clearActiveGenerationCount)
     }
 
     @Test
@@ -204,56 +191,62 @@ class MultimediaGenerationServiceTest {
 
     @Test
     fun `E-STU-04 start proceeds when coordinator already claimed active generation`() {
-        every { studioRepository.hasActiveGeneration() } returns true
-        coEvery { generateMediaUseCase(any(), any()) } returns Result.success(emptyList())
+        studioRepository.activeGenerationState.value =
+            com.browntowndev.enclave.domain.port.repository.ActiveStudioGeneration(
+                id = "claimed",
+                prompt = "other",
+                mediaType = MediaCapability.IMAGE,
+                settings = ImageGenerationSettings(),
+            )
+        generateMediaUseCase.result = Result.success(emptyList())
 
         service.onStartCommand(startImageIntent(prompt = "claimed"), 0, 1)
         awaitServiceWork()
 
-        coVerify(exactly = 1) { generateMediaUseCase(any(), any()) }
+        assertEquals(1, generateMediaUseCase.calls.size)
     }
 
     @Test
     fun `S-STU-10 duplicate start while generation active is ignored`() {
-        coEvery { generateMediaUseCase(any(), any()) } coAnswers {
-            delay(1_000)
-            Result.success(emptyList())
-        }
+        generateMediaUseCase.result = Result.success(emptyList())
+        generateMediaUseCase.delayMs = 1_000
 
         service.onStartCommand(startImageIntent(prompt = "first"), 0, 1)
         service.onStartCommand(startImageIntent(prompt = "second"), 0, 2)
         runBlocking { delay(100) }
 
-        coVerify(exactly = 1) { generateMediaUseCase(any(), any()) }
+        assertEquals(1, generateMediaUseCase.calls.size)
         service.onDestroy()
     }
 
     @Test
     fun `M-STU-01 Studio IMAGE uses GenerateMediaUseCase not ImageGenerationPort`() {
-        val requestSlot = slot<MediaGenerationRequest>()
-        coEvery { generateMediaUseCase(capture(requestSlot), any()) } returns Result.success(emptyList())
+        generateMediaUseCase.result = Result.success(emptyList())
 
         service.onStartCommand(startImageIntent(prompt = "port-check"), 0, 1)
         awaitServiceWork()
 
-        coVerify(exactly = 1) { generateMediaUseCase(any(), any()) }
-        assertEquals("port-check", requestSlot.captured.prompt)
-        assertEquals(MediaCapability.IMAGE, requestSlot.captured.capability)
+        assertEquals(1, generateMediaUseCase.calls.size)
+        assertEquals("port-check", generateMediaUseCase.calls.single().prompt)
+        assertEquals(MediaCapability.IMAGE, generateMediaUseCase.calls.single().capability)
     }
 
     @Test
     fun `S-STU-08 image progress is reported and cleared`() {
-        val progressSlot = slot<(ImageGenerationProgress) -> Unit>()
-        coEvery { generateMediaUseCase(any(), capture(progressSlot)) } answers {
-            progressSlot.captured(ImageGenerationProgress.LoadingModel)
-            Result.success(emptyList())
-        }
+        generateMediaUseCase.result = Result.success(emptyList())
+        generateMediaUseCase.progressToEmit = ImageGenerationProgress.LoadingModel
 
         service.onStartCommand(startImageIntent(prompt = "hello"), 0, 1)
         awaitServiceWork()
 
-        verify(exactly = 1) { studioRepository.reportGenerationProgress(ImageGenerationProgress.LoadingModel) }
-        verify(exactly = 1) { studioRepository.clearGenerationProgressIfOwned("test-generation-id") }
+        assertEquals(
+            listOf(ImageGenerationProgress.LoadingModel),
+            studioRepository.reportGenerationProgressCalls,
+        )
+        assertEquals(
+            listOf("test-generation-id"),
+            studioRepository.clearGenerationProgressIfOwnedCalls,
+        )
     }
 
     private fun startImageIntent(

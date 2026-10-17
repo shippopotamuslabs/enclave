@@ -24,6 +24,11 @@ class FakeStudioRepository : StudioRepositoryPort {
     val activeGenerationState = MutableStateFlow<ActiveStudioGeneration?>(null)
 
     val getMediaByIdCalls = mutableListOf<String>()
+    val reportGenerationErrorCalls = mutableListOf<String?>()
+    val reportGenerationProgressCalls = mutableListOf<ImageGenerationProgress?>()
+    val clearActiveGenerationIfOwnedCalls = mutableListOf<String>()
+    val clearGenerationProgressIfOwnedCalls = mutableListOf<String>()
+    var clearActiveGenerationCount = 0
     val addEphemeralMediaCalls = mutableListOf<StudioMediaAsset>()
     val promoteEphemeralMediaCalls = mutableListOf<Pair<String, String?>>()
     val saveMediaCalls = mutableListOf<String>()
@@ -71,6 +76,7 @@ class FakeStudioRepository : StudioRepositoryPort {
     override fun observeActiveGeneration(): Flow<ActiveStudioGeneration?> = activeGenerationState
 
     override suspend fun reportGenerationError(message: String?) {
+        reportGenerationErrorCalls += message
         generationErrorState.value = message
     }
 
@@ -79,6 +85,7 @@ class FakeStudioRepository : StudioRepositoryPort {
     }
 
     override fun reportGenerationProgress(progress: ImageGenerationProgress?) {
+        reportGenerationProgressCalls += progress
         generationProgressState.value = progress
     }
 
@@ -95,16 +102,19 @@ class FakeStudioRepository : StudioRepositoryPort {
     override fun hasActiveGeneration(): Boolean = activeGenerationState.value != null
 
     override fun clearActiveGeneration() {
+        clearActiveGenerationCount++
         activeGenerationState.value = null
     }
 
     override fun clearActiveGenerationIfOwned(generationId: String): Boolean {
+        clearActiveGenerationIfOwnedCalls += generationId
         if (activeGenerationState.value?.id != generationId) return false
         activeGenerationState.value = null
         return true
     }
 
     override fun clearGenerationProgressIfOwned(generationId: String): Boolean {
+        clearGenerationProgressIfOwnedCalls += generationId
         if (activeGenerationState.value?.id != generationId) return false
         generationProgressState.value = null
         return true

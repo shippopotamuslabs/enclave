@@ -3,7 +3,11 @@ package com.browntowndev.enclave.core.testing
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.chat.Mode
 import com.browntowndev.enclave.domain.model.media.ShareDocumentBytesInput
+import com.browntowndev.enclave.domain.model.media.ImageGenerationProgress
+import com.browntowndev.enclave.domain.port.media.ImageGenerationPort
+import com.browntowndev.enclave.domain.port.media.LocalImageGenerationCancelPort
 import com.browntowndev.enclave.domain.port.media.MediaSaverPort
+import com.browntowndev.enclave.domain.port.media.VideoGenerationPort
 import com.browntowndev.enclave.domain.port.media.TtsPlaybackControllerPort
 import com.browntowndev.enclave.domain.port.media.ShareMediaPort
 import com.browntowndev.enclave.domain.port.repository.ModerationReportRepositoryPort
@@ -93,4 +97,44 @@ class FakeTtsPlaybackController : TtsPlaybackControllerPort {
     override fun pause() = Unit
 
     override fun resume() = Unit
+}
+
+/** Recording [LocalImageGenerationCancelPort] fake (ENC-28). */
+class FakeLocalImageGenerationCancelPort : LocalImageGenerationCancelPort {
+    var cancelCount = 0
+
+    override fun cancelActiveGeneration() {
+        cancelCount++
+    }
+}
+
+/** Recording [ImageGenerationPort] fake (ENC-28). */
+class FakeImageGenerationPort : ImageGenerationPort {
+    var result: Result<List<ByteArray>> = Result.success(emptyList())
+    val calls = mutableListOf<String>()
+
+    override suspend fun generateImage(
+        prompt: String,
+        target: com.browntowndev.enclave.domain.model.media.ImageGenerationTarget,
+        settings: com.browntowndev.enclave.domain.model.media.GenerationSettings,
+        onProgress: (ImageGenerationProgress) -> Unit,
+    ): Result<List<ByteArray>> {
+        calls += prompt
+        return result
+    }
+}
+
+/** Recording [VideoGenerationPort] fake (ENC-28). */
+class FakeVideoGenerationPort : VideoGenerationPort {
+    var result: Result<ByteArray> = Result.success(ByteArray(0))
+    val calls = mutableListOf<String>()
+
+    override suspend fun generateVideo(
+        prompt: String,
+        provider: com.browntowndev.enclave.domain.model.config.MediaProviderAsset,
+        settings: com.browntowndev.enclave.domain.model.media.GenerationSettings,
+    ): Result<ByteArray> {
+        calls += prompt
+        return result
+    }
 }
