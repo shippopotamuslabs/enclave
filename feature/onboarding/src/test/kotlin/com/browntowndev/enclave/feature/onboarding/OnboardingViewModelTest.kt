@@ -5,7 +5,14 @@ import com.browntowndev.enclave.domain.usecase.onboarding.ConfirmAgeUseCase
 import com.browntowndev.enclave.domain.usecase.onboarding.SetAutomaticErrorTrackingUseCase
 
 import app.cash.turbine.test
+import com.browntowndev.enclave.core.testing.FakeFetchApiProviderModelDetailUseCase
+import com.browntowndev.enclave.core.testing.FakeFetchApiProviderModelsUseCase
+import com.browntowndev.enclave.core.testing.FakeMediaProviderRepository
+import com.browntowndev.enclave.core.testing.FakeResolveOnboardingFlowModeUseCase
+import com.browntowndev.enclave.core.testing.FakeTtsProviderRepository
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
+import com.browntowndev.enclave.domain.model.config.TtsProviderAsset
+import com.browntowndev.enclave.domain.port.repository.ApiModelCatalogResult
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.config.MediaProviderAsset
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
@@ -18,16 +25,10 @@ import com.browntowndev.enclave.domain.usecase.onboarding.BulkAssignApiProviderU
 import com.browntowndev.enclave.domain.usecase.FakeSettingsRepository
 import com.browntowndev.enclave.domain.usecase.media.SaveMediaProviderUseCase
 import com.browntowndev.enclave.domain.usecase.onboarding.ResolveOnboardingFlowModeUseCase
-import com.browntowndev.enclave.domain.usecase.settings.ApiModelDiscoveryRequest
-import com.browntowndev.enclave.domain.usecase.settings.ApiModelDiscoveryResult
-import com.browntowndev.enclave.domain.usecase.settings.ApiModelDiscoveryScope
 import com.browntowndev.enclave.domain.usecase.settings.DiscoverApiModelsUseCase
 import com.browntowndev.enclave.domain.usecase.settings.SaveTtsProviderUseCase
-import com.browntowndev.enclave.domain.usecase.settings.TtsProviderDraft
 import com.browntowndev.enclave.domain.usecase.usecase.FakeBulkAssignApiProviderUseCase
 import com.browntowndev.enclave.domain.usecase.usecase.FakeLoggingPort
-import io.mockk.coEvery
-import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -47,16 +48,15 @@ class OnboardingViewModelTest {
     private lateinit var fakeBulkAssign: FakeBulkAssignApiProviderUseCase
     private lateinit var fakeLogging: FakeLoggingPort
 
-    // Concrete classes that cannot be subclassed — use mockk
-    private val mockDiscoverModels: DiscoverApiModelsUseCase = mockk(relaxed = true)
-    private val mockSaveTts: SaveTtsProviderUseCase = mockk(relaxed = true)
-    private val mockSaveMedia: SaveMediaProviderUseCase = mockk(relaxed = true)
-    private val mockResolveFlowMode: ResolveOnboardingFlowModeUseCase = mockk()
-
-    // ENC-27: recorded invocations replace MockK coVerify.
-    private val discoverModelsCalls = mutableListOf<ApiModelDiscoveryRequest>()
-    private val saveTtsCalls = mutableListOf<TtsProviderDraft>()
-    private val saveMediaCalls = mutableListOf<Pair<MediaProviderAsset, String>>()
+    // ENC-28: fakes from :core:testing; the real use cases run over them.
+    private lateinit var fakeTtsRepository: FakeTtsProviderRepository
+    private lateinit var fakeMediaRepository: FakeMediaProviderRepository
+    private lateinit var fakeFetchModels: FakeFetchApiProviderModelsUseCase
+    private lateinit var fakeFetchDetail: FakeFetchApiProviderModelDetailUseCase
+    private lateinit var fakeResolveFlowMode: FakeResolveOnboardingFlowModeUseCase
+    private lateinit var discoverModels: DiscoverApiModelsUseCase
+    private lateinit var saveTts: SaveTtsProviderUseCase
+    private lateinit var saveMedia: SaveMediaProviderUseCase
 
     private lateinit var viewModel: OnboardingViewModel
 
@@ -65,29 +65,15 @@ class OnboardingViewModelTest {
         fakeSettingsRepository = FakeSettingsRepository()
         fakeBulkAssign = FakeBulkAssignApiProviderUseCase()
         fakeLogging = FakeLoggingPort()
-
-        // Default: discover returns empty list
-        coEvery { mockDiscoverModels(any()) } coAnswers {
-            discoverModelsCalls += firstArg<ApiModelDiscoveryRequest>()
-            ApiModelDiscoveryResult(
-                models = emptyList(),
-                scope =
-                    ApiModelDiscoveryScope(
-                        provider = ApiProvider.OPENROUTER,
-                        baseUrl = "",
-                        credentialAlias = null,
-                    ),
-            )
-        }
-        coEvery { mockSaveTts(any()) } coAnswers {
-            saveTtsCalls += firstArg<TtsProviderDraft>()
-            Result.success(TtsProviderId("fake-tts"))
-        }
-        coEvery { mockSaveMedia(any(), any()) } coAnswers {
-            saveMediaCalls += firstArg<MediaProviderAsset>() to secondArg<String>()
-            MediaProviderId("fake-media")
-        }
-        coEvery { mockResolveFlowMode() } returns OnboardingFlowMode.FULL
+        fakeTtsRepository = FakeTtsProviderRepository()
+        fakeMediaRepository = FakeMediaProviderRepository()
+        // Default: discovery returns an empty catalog.
+        fakeFetchModels = FakeFetchApiProviderModelsUseCase()
+        fakeFetchDetail = FakeFetchApiProviderModelDetailUseCase()
+        fakeResolveFlowMode = FakeResolveOnboardingFlowModeUseCase()
+        discoverModels = DiscoverApiModelsUseCase(fakeFetchModels, fakeFetchDetail)
+        saveTts = SaveTtsProviderUseCase(fakeTtsRepository)
+        saveMedia = SaveMediaProviderUseCase(fakeMediaRepository)
 
         viewModel =
             OnboardingViewModel(
@@ -95,25 +81,25 @@ class OnboardingViewModelTest {
                 setAutomaticErrorTracking = SetAutomaticErrorTrackingUseCase(fakeSettingsRepository),
                 completeOnboarding = CompleteOnboardingUseCase(fakeSettingsRepository),
                 bulkAssignApiProviderUseCase = fakeBulkAssign,
-                discoverApiModelsUseCase = mockDiscoverModels,
-                saveTtsProviderUseCase = mockSaveTts,
-                saveMediaProviderUseCase = mockSaveMedia,
-                resolveOnboardingFlowModeUseCase = mockResolveFlowMode,
+                discoverApiModelsUseCase = discoverModels,
+                saveTtsProviderUseCase = saveTts,
+                saveMediaProviderUseCase = saveMedia,
+                resolveOnboardingFlowModeUseCase = fakeResolveFlowMode,
                 loggingPort = fakeLogging,
             )
     }
 
     private fun createViewModelWithFlowMode(flowMode: OnboardingFlowMode): OnboardingViewModel {
-        coEvery { mockResolveFlowMode() } returns flowMode
+        fakeResolveFlowMode.mode = flowMode
         return OnboardingViewModel(
             confirmAge = ConfirmAgeUseCase(fakeSettingsRepository),
             setAutomaticErrorTracking = SetAutomaticErrorTrackingUseCase(fakeSettingsRepository),
             completeOnboarding = CompleteOnboardingUseCase(fakeSettingsRepository),
             bulkAssignApiProviderUseCase = fakeBulkAssign,
-            discoverApiModelsUseCase = mockDiscoverModels,
-            saveTtsProviderUseCase = mockSaveTts,
-            saveMediaProviderUseCase = mockSaveMedia,
-            resolveOnboardingFlowModeUseCase = mockResolveFlowMode,
+            discoverApiModelsUseCase = discoverModels,
+            saveTtsProviderUseCase = saveTts,
+            saveMediaProviderUseCase = saveMedia,
+            resolveOnboardingFlowModeUseCase = fakeResolveFlowMode,
             loggingPort = fakeLogging,
         )
     }
@@ -172,16 +158,7 @@ class OnboardingViewModelTest {
                     DiscoveredApiModel(id = "openrouter/gpt-4o"),
                     DiscoveredApiModel(id = "openrouter/claude-3-haiku"),
                 )
-            coEvery { mockDiscoverModels(any()) } returns
-                ApiModelDiscoveryResult(
-                    models = expectedModels,
-                    scope =
-                        ApiModelDiscoveryScope(
-                            provider = ApiProvider.OPENROUTER,
-                            baseUrl = "",
-                            credentialAlias = null,
-                        ),
-                )
+            fakeFetchModels.result = ApiModelCatalogResult(models = expectedModels)
 
             // Navigate to step 1
             viewModel.onAgeConfirmedChange(true)
@@ -307,8 +284,8 @@ class OnboardingViewModelTest {
 
             assertEquals(3, viewModel.uiState.value.currentStep)
             // Verify no saves were called
-            assertTrue(saveTtsCalls.isEmpty())
-            assertTrue(saveMediaCalls.isEmpty())
+            assertTrue(fakeTtsRepository.savedCalls.isEmpty())
+            assertTrue(fakeMediaRepository.savedCalls.isEmpty())
         }
 
     // -------- OB-10 --------
@@ -564,8 +541,8 @@ class OnboardingViewModelTest {
             advanceUntilIdle()
 
             // Verify no immediate save
-            assertTrue(saveTtsCalls.isEmpty())
-            assertTrue(saveMediaCalls.isEmpty())
+            assertTrue(fakeTtsRepository.savedCalls.isEmpty())
+            assertTrue(fakeMediaRepository.savedCalls.isEmpty())
 
             // Complete onboarding (step 2 -> step 3 -> complete)
             viewModel.onNextStep()
@@ -576,10 +553,24 @@ class OnboardingViewModelTest {
                 advanceUntilIdle()
 
                 // Verify deferred saves are performed
-                assertEquals(listOf(ttsDraft.toDomain()), saveTtsCalls)
-                assertEquals(1, saveMediaCalls.size)
-                assertEquals(mediaDraft.id, saveMediaCalls.single().first.id.value)
-                assertEquals("media-key", saveMediaCalls.single().second)
+                val expectedDraft = ttsDraft.toDomain()
+                assertEquals(
+                    listOf(
+                        TtsProviderAsset(
+                            id = expectedDraft.id,
+                            displayName = expectedDraft.displayName,
+                            provider = expectedDraft.provider,
+                            voiceName = expectedDraft.voiceName,
+                            modelName = expectedDraft.modelName,
+                            baseUrl = expectedDraft.baseUrl,
+                            credentialAlias = expectedDraft.credentialAlias,
+                        ) to expectedDraft.apiKey,
+                    ),
+                    fakeTtsRepository.savedCalls,
+                )
+                assertEquals(1, fakeMediaRepository.savedCalls.size)
+                assertEquals(mediaDraft.id, fakeMediaRepository.savedCalls.single().first.id.value)
+                assertEquals("media-key", fakeMediaRepository.savedCalls.single().second)
 
                 assertTrue(fakeSettingsRepository.onboardingCompleted)
                 val event = awaitItem() as OnboardingEvent.NavigateToChat
@@ -720,10 +711,10 @@ class OnboardingViewModelTest {
             viewModel.onDiscoverModels()
             advanceUntilIdle()
 
-            assertEquals(1, discoverModelsCalls.size)
-            assertEquals(ApiProvider.OPENAI, discoverModelsCalls.single().provider)
-            assertEquals("sk-test-key", discoverModelsCalls.single().currentApiKey)
-            assertEquals("https://my-custom-endpoint.com", discoverModelsCalls.single().baseUrl)
+            assertEquals(1, fakeFetchModels.calls.size)
+            assertEquals(ApiProvider.OPENAI, fakeFetchModels.calls.single().provider)
+            assertEquals("sk-test-key", fakeFetchModels.calls.single().currentApiKey)
+            assertEquals("https://my-custom-endpoint.com", fakeFetchModels.calls.single().baseUrl)
         }
 
     @Test
