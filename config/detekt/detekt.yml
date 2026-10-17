@@ -22,7 +22,7 @@ enclave:
   ForbiddenMockKInTests:
     active: false
   ForbiddenVerifyInViewModelTests:
-    active: false
+    active: true
   ForbiddenRepositoryInViewModel:
     active: true
   ForbiddenDomainTypeInComposable:

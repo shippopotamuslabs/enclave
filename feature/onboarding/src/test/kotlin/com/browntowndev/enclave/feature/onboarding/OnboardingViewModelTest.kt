@@ -7,6 +7,7 @@ import com.browntowndev.enclave.domain.usecase.onboarding.SetAutomaticErrorTrack
 import app.cash.turbine.test
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
+import com.browntowndev.enclave.domain.model.config.MediaProviderAsset
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.config.TtsProviderId
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
@@ -17,14 +18,15 @@ import com.browntowndev.enclave.domain.usecase.onboarding.BulkAssignApiProviderU
 import com.browntowndev.enclave.domain.usecase.FakeSettingsRepository
 import com.browntowndev.enclave.domain.usecase.media.SaveMediaProviderUseCase
 import com.browntowndev.enclave.domain.usecase.onboarding.ResolveOnboardingFlowModeUseCase
+import com.browntowndev.enclave.domain.usecase.settings.ApiModelDiscoveryRequest
 import com.browntowndev.enclave.domain.usecase.settings.ApiModelDiscoveryResult
 import com.browntowndev.enclave.domain.usecase.settings.ApiModelDiscoveryScope
 import com.browntowndev.enclave.domain.usecase.settings.DiscoverApiModelsUseCase
 import com.browntowndev.enclave.domain.usecase.settings.SaveTtsProviderUseCase
+import com.browntowndev.enclave.domain.usecase.settings.TtsProviderDraft
 import com.browntowndev.enclave.domain.usecase.usecase.FakeBulkAssignApiProviderUseCase
 import com.browntowndev.enclave.domain.usecase.usecase.FakeLoggingPort
 import io.mockk.coEvery
-import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -51,6 +53,11 @@ class OnboardingViewModelTest {
     private val mockSaveMedia: SaveMediaProviderUseCase = mockk(relaxed = true)
     private val mockResolveFlowMode: ResolveOnboardingFlowModeUseCase = mockk()
 
+    // ENC-27: recorded invocations replace MockK coVerify.
+    private val discoverModelsCalls = mutableListOf<ApiModelDiscoveryRequest>()
+    private val saveTtsCalls = mutableListOf<TtsProviderDraft>()
+    private val saveMediaCalls = mutableListOf<Pair<MediaProviderAsset, String>>()
+
     private lateinit var viewModel: OnboardingViewModel
 
     @BeforeEach
@@ -60,7 +67,8 @@ class OnboardingViewModelTest {
         fakeLogging = FakeLoggingPort()
 
         // Default: discover returns empty list
-        coEvery { mockDiscoverModels(any()) } returns
+        coEvery { mockDiscoverModels(any()) } coAnswers {
+            discoverModelsCalls += firstArg<ApiModelDiscoveryRequest>()
             ApiModelDiscoveryResult(
                 models = emptyList(),
                 scope =
@@ -70,8 +78,15 @@ class OnboardingViewModelTest {
                         credentialAlias = null,
                     ),
             )
-        coEvery { mockSaveTts(any()) } returns Result.success(TtsProviderId("fake-tts"))
-        coEvery { mockSaveMedia(any(), any()) } returns MediaProviderId("fake-media")
+        }
+        coEvery { mockSaveTts(any()) } coAnswers {
+            saveTtsCalls += firstArg<TtsProviderDraft>()
+            Result.success(TtsProviderId("fake-tts"))
+        }
+        coEvery { mockSaveMedia(any(), any()) } coAnswers {
+            saveMediaCalls += firstArg<MediaProviderAsset>() to secondArg<String>()
+            MediaProviderId("fake-media")
+        }
         coEvery { mockResolveFlowMode() } returns OnboardingFlowMode.FULL
 
         viewModel =
@@ -292,8 +307,8 @@ class OnboardingViewModelTest {
 
             assertEquals(3, viewModel.uiState.value.currentStep)
             // Verify no saves were called
-            coVerify(exactly = 0) { mockSaveTts(any()) }
-            coVerify(exactly = 0) { mockSaveMedia(any(), any()) }
+            assertTrue(saveTtsCalls.isEmpty())
+            assertTrue(saveMediaCalls.isEmpty())
         }
 
     // -------- OB-10 --------
@@ -549,8 +564,8 @@ class OnboardingViewModelTest {
             advanceUntilIdle()
 
             // Verify no immediate save
-            coVerify(exactly = 0) { mockSaveTts(any()) }
-            coVerify(exactly = 0) { mockSaveMedia(any(), any()) }
+            assertTrue(saveTtsCalls.isEmpty())
+            assertTrue(saveMediaCalls.isEmpty())
 
             // Complete onboarding (step 2 -> step 3 -> complete)
             viewModel.onNextStep()
@@ -561,8 +576,10 @@ class OnboardingViewModelTest {
                 advanceUntilIdle()
 
                 // Verify deferred saves are performed
-                coVerify(exactly = 1) { mockSaveTts(ttsDraft.toDomain()) }
-                coVerify(exactly = 1) { mockSaveMedia(match { it.id.value == mediaDraft.id }, "media-key") }
+                assertEquals(listOf(ttsDraft.toDomain()), saveTtsCalls)
+                assertEquals(1, saveMediaCalls.size)
+                assertEquals(mediaDraft.id, saveMediaCalls.single().first.id.value)
+                assertEquals("media-key", saveMediaCalls.single().second)
 
                 assertTrue(fakeSettingsRepository.onboardingCompleted)
                 val event = awaitItem() as OnboardingEvent.NavigateToChat
@@ -703,15 +720,10 @@ class OnboardingViewModelTest {
             viewModel.onDiscoverModels()
             advanceUntilIdle()
 
-            coVerify {
-                mockDiscoverModels(
-                    match {
-                        it.provider == ApiProvider.OPENAI &&
-                            it.currentApiKey == "sk-test-key" &&
-                            it.baseUrl == "https://my-custom-endpoint.com"
-                    },
-                )
-            }
+            assertEquals(1, discoverModelsCalls.size)
+            assertEquals(ApiProvider.OPENAI, discoverModelsCalls.single().provider)
+            assertEquals("sk-test-key", discoverModelsCalls.single().currentApiKey)
+            assertEquals("https://my-custom-endpoint.com", discoverModelsCalls.single().baseUrl)
         }
 
     @Test

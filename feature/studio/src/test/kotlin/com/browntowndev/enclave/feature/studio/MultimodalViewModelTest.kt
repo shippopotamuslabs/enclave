@@ -48,10 +48,8 @@ import com.browntowndev.enclave.feature.studio.coordinators.StudioRemoteCapabili
 import com.browntowndev.enclave.feature.studio.coordinators.StudioSpeechCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioUiStateReducer
 import io.mockk.coEvery
-import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -103,6 +101,17 @@ class MultimodalViewModelTest {
     private val speechEvents = MutableSharedFlow<SpeechState>(extraBufferCapacity = 8)
     private val moderationPort = MutablePromptModerationPort()
     private val submitModerationReportUseCase = mockk<SubmitModerationReportUseCase>(relaxed = true)
+
+    // ENC-27: recorded invocations replace MockK verify; tests assert this
+    // recorded state instead of interaction verification.
+    private val startGenerationPrompts = mutableListOf<String>()
+    private val shareMediaCalls = mutableListOf<Pair<List<String>, String>>()
+    private val getMediaByIdCalls = mutableListOf<String>()
+    private val promoteEphemeralMediaCalls = mutableListOf<Pair<String, String>>()
+    private val addEphemeralMediaCalls = mutableListOf<StudioMediaAsset>()
+    private val moderationReportCalls = mutableListOf<Pair<String, String>>()
+    private val setStudioMediaTypeCalls = mutableListOf<MediaCapability>()
+    private var listenToSpeechCallCount = 0
     private val uiSelectionRepository = mockk<UiSelectionRepository>(relaxed = true)
 
     private lateinit var app: android.app.Application
@@ -114,6 +123,31 @@ class MultimodalViewModelTest {
         app = mockk<android.app.Application>(relaxed = true)
 
         every { uiSelectionRepository.selectedStudioMediaType } returns flowOf(MediaCapability.IMAGE)
+
+        every { dispatcher.startGeneration(any(), any(), any(), any()) } answers {
+            startGenerationPrompts += firstArg<String>()
+            Unit
+        }
+        every { shareMediaPort.shareMedia(any(), any()) } answers {
+            shareMediaCalls += firstArg<List<String>>() to secondArg<String>()
+            Unit
+        }
+        coEvery { studioRepository.getMediaById(any()) } coAnswers {
+            getMediaByIdCalls += firstArg<String>()
+            null
+        }
+        coEvery { studioRepository.addEphemeralMedia(any()) } coAnswers {
+            addEphemeralMediaCalls += firstArg<StudioMediaAsset>()
+            Unit
+        }
+        coEvery { submitModerationReportUseCase(any(), any()) } coAnswers {
+            moderationReportCalls += firstArg<String>() to secondArg<String>()
+            Result.success(Unit)
+        }
+        coEvery { uiSelectionRepository.setStudioMediaType(any()) } coAnswers {
+            setStudioMediaTypeCalls += firstArg<MediaCapability>()
+            Unit
+        }
 
         val mediaProviderId = MediaProviderId("test-provider")
         val assignment =
@@ -171,7 +205,8 @@ class MultimodalViewModelTest {
         }
         every { studioRepository.observeAllAlbums() } returns allAlbumsFlow
         coEvery { studioRepository.updateMedia(any()) } returns Unit
-        coEvery { studioRepository.promoteEphemeralMedia(any(), any()) } returns
+        coEvery { studioRepository.promoteEphemeralMedia(any(), any()) } coAnswers {
+            promoteEphemeralMediaCalls += firstArg<String>() to secondArg<String>()
             StudioMediaAsset(
                 id = "perm-1",
                 localUri = "files://permanent.jpg",
@@ -180,6 +215,7 @@ class MultimodalViewModelTest {
                 createdAt = 1L,
                 albumId = "album-123",
             )
+        }
         coEvery { studioRepository.saveMedia(any<String>(), any(), any(), any(), any()) } returns
             StudioMediaAsset(
                 id = "perm-1",
@@ -215,7 +251,10 @@ class MultimodalViewModelTest {
             )
         } returns ModelPackTestFixtures.juggernautDiffusionAsset()
 
-        every { listenToSpeechUseCase.invoke(any(), any()) } returns speechEvents
+        every { listenToSpeechUseCase.invoke(any(), any()) } answers {
+            listenToSpeechCallCount++
+            speechEvents
+        }
         every { chatUseCases.listenToSpeechUseCase } returns listenToSpeechUseCase
 
         generationCoordinator = StudioGenerationCoordinator(studioRepository, dispatcher)
@@ -327,7 +366,7 @@ class MultimodalViewModelTest {
 
             assertFalse(viewModel.uiState.value.isGenerating)
             assertNull(viewModel.uiState.value.error)
-            verify(exactly = 0) { dispatcher.startGeneration(any(), any(), any(), any()) }
+            assertEquals(0, startGenerationPrompts.size)
             job.cancel()
         }
 
@@ -343,7 +382,7 @@ class MultimodalViewModelTest {
                 viewModel.reportBlockedPrompt("false positive prompt")
                 advanceUntilIdle()
 
-                coVerify { submitModerationReportUseCase("false positive prompt", "blocked") }
+                assertEquals(listOf("false positive prompt" to "blocked"), moderationReportCalls)
                 val event = awaitItem()
                 assertEquals(ModerationEvent.ReportSubmitted, event)
                 cancelAndIgnoreRemainingEvents()
@@ -400,7 +439,7 @@ class MultimodalViewModelTest {
             advanceUntilIdle()
 
             // Verify that moderation didn't block and generation dispatcher was triggered
-            verify(exactly = 1) { dispatcher.startGeneration(any(), any(), any(), any()) }
+            assertEquals(1, startGenerationPrompts.size)
             job.cancel()
         }
 
@@ -620,7 +659,7 @@ class MultimodalViewModelTest {
             assertEquals("", viewModel.uiState.value.prompt)
 
             advanceUntilIdle()
-            verify { dispatcher.startGeneration(any(), any(), any(), any()) }
+            assertEquals(1, startGenerationPrompts.size)
             job.cancel()
         }
 
@@ -637,11 +676,11 @@ class MultimodalViewModelTest {
 
             // Before generate, threshold hit is ignored
             viewModel.onGenerativeScrollThresholdVisible(anchorAssetId = "anchor-0")
-            verify(exactly = 0) { dispatcher.startGeneration(any(), any(), any(), any()) }
+            assertEquals(0, startGenerationPrompts.size)
 
             // Initial generate
             viewModel.generate()
-            verify(exactly = 1) { dispatcher.startGeneration(any(), any(), any(), any()) }
+            assertEquals(1, startGenerationPrompts.size)
             assertTrue(viewModel.uiState.value.isGenerating)
 
             // Simulate generation completion to reset active generation tracking
@@ -653,7 +692,7 @@ class MultimodalViewModelTest {
 
             // First threshold hit
             viewModel.onGenerativeScrollThresholdVisible(anchorAssetId = "anchor-1")
-            verify(exactly = 2) { dispatcher.startGeneration(any(), any(), any(), any()) }
+            assertEquals(2, startGenerationPrompts.size)
             assertTrue(viewModel.uiState.value.isGenerating)
 
             // Simulate second completion
@@ -665,11 +704,11 @@ class MultimodalViewModelTest {
 
             // Second threshold hit with same anchor should be ignored (internal consumedScrollAnchors)
             viewModel.onGenerativeScrollThresholdVisible(anchorAssetId = "anchor-1")
-            verify(exactly = 2) { dispatcher.startGeneration(any(), any(), any(), any()) }
+            assertEquals(2, startGenerationPrompts.size)
 
             // Third threshold hit with new anchor should work
             viewModel.onGenerativeScrollThresholdVisible(anchorAssetId = "anchor-2")
-            verify(exactly = 3) { dispatcher.startGeneration(any(), any(), any(), any()) }
+            assertEquals(3, startGenerationPrompts.size)
 
             job.cancel()
         }
@@ -696,7 +735,7 @@ class MultimodalViewModelTest {
             viewModel.onGenerativeScrollThresholdVisible(anchorAssetId = "anchor-1")
 
             assertFalse(viewModel.uiState.value.isContinualGenerationActive)
-            verify(exactly = 1) { dispatcher.startGeneration(any(), any(), any(), any()) }
+            assertEquals(1, startGenerationPrompts.size)
             job.cancel()
         }
 
@@ -766,7 +805,7 @@ class MultimodalViewModelTest {
                     .albumId,
             )
 
-            coVerify { studioRepository.promoteEphemeralMedia(assetId, "album-123") }
+            assertEquals(listOf(assetId to "album-123"), promoteEphemeralMediaCalls)
 
             job.cancel()
         }
@@ -790,7 +829,7 @@ class MultimodalViewModelTest {
             )
             advanceUntilIdle()
 
-            verify { dispatcher.startGeneration(any(), any(), any(), any()) }
+            assertEquals(1, startGenerationPrompts.size)
             job.cancel()
         }
 
@@ -817,7 +856,7 @@ class MultimodalViewModelTest {
 
             viewModel.shareMedia(setOf(assetId))
             advanceUntilIdle()
-            verify { shareMediaPort.shareMedia(listOf("cache://ephemeral.jpg"), "*/*") }
+            assertEquals(listOf(listOf("cache://ephemeral.jpg") to "*/*"), shareMediaCalls)
             job.cancel()
         }
 
@@ -826,7 +865,8 @@ class MultimodalViewModelTest {
         runTest {
             val assetId = "perm-1"
             val persistedUri = "file:///data/user/0/com.app/files/permanent.jpg"
-            coEvery { studioRepository.getMediaById(assetId) } returns
+            coEvery { studioRepository.getMediaById(assetId) } coAnswers {
+                getMediaByIdCalls += firstArg<String>()
                 StudioMediaAsset(
                     id = assetId,
                     localUri = persistedUri,
@@ -835,6 +875,7 @@ class MultimodalViewModelTest {
                     createdAt = 1L,
                     albumId = "album-123",
                 )
+            }
 
             val job =
                 backgroundScope.launch(testDispatcher) {
@@ -847,7 +888,7 @@ class MultimodalViewModelTest {
             viewModel.shareSingleMedia(assetId)
             advanceUntilIdle()
 
-            verify { shareMediaPort.shareMedia(listOf(persistedUri), "image/*") }
+            assertEquals(listOf(listOf(persistedUri) to "image/*"), shareMediaCalls)
             job.cancel()
         }
 
@@ -856,7 +897,8 @@ class MultimodalViewModelTest {
         runTest {
             val assetId = "perm-1"
             val persistedUri = "file:///data/user/0/com.app/files/permanent.jpg"
-            coEvery { studioRepository.getMediaById(assetId) } returns
+            coEvery { studioRepository.getMediaById(assetId) } coAnswers {
+                getMediaByIdCalls += firstArg<String>()
                 StudioMediaAsset(
                     id = assetId,
                     localUri = persistedUri,
@@ -865,6 +907,7 @@ class MultimodalViewModelTest {
                     createdAt = 1L,
                     albumId = "album-123",
                 )
+            }
 
             val job =
                 backgroundScope.launch(testDispatcher) {
@@ -877,7 +920,7 @@ class MultimodalViewModelTest {
             viewModel.shareMedia(setOf(assetId))
             advanceUntilIdle()
 
-            verify { shareMediaPort.shareMedia(listOf(persistedUri), "*/*") }
+            assertEquals(listOf(listOf(persistedUri) to "*/*"), shareMediaCalls)
             job.cancel()
         }
 
@@ -919,12 +962,9 @@ class MultimodalViewModelTest {
             viewModel.shareMedia(setOf(ephemeralId, persistedId))
             advanceUntilIdle()
 
-            verify {
-                shareMediaPort.shareMedia(
-                    match { it.toSet() == setOf(ephemeralUri, persistedUri) },
-                    "*/*",
-                )
-            }
+            assertEquals(1, shareMediaCalls.size)
+            assertEquals(setOf(ephemeralUri, persistedUri), shareMediaCalls.single().first.toSet())
+            assertEquals("*/*", shareMediaCalls.single().second)
             job.cancel()
         }
 
@@ -943,7 +983,7 @@ class MultimodalViewModelTest {
             viewModel.shareSingleMedia("missing")
             advanceUntilIdle()
 
-            verify(exactly = 0) { shareMediaPort.shareMedia(any(), any()) }
+            assertTrue(shareMediaCalls.isEmpty())
             job.cancel()
         }
 
@@ -973,7 +1013,7 @@ class MultimodalViewModelTest {
             viewModel.shareSingleMedia(assetId)
             advanceUntilIdle()
 
-            verify { shareMediaPort.shareMedia(listOf(persistedUri), "video/*") }
+            assertEquals(listOf(listOf(persistedUri) to "video/*"), shareMediaCalls)
             job.cancel()
         }
 
@@ -982,7 +1022,8 @@ class MultimodalViewModelTest {
         runTest {
             val assetId = "perm-1"
             val persistedUri = "file:///data/user/0/com.app/files/permanent.jpg"
-            coEvery { studioRepository.getMediaById(assetId) } returns
+            coEvery { studioRepository.getMediaById(assetId) } coAnswers {
+                getMediaByIdCalls += firstArg<String>()
                 StudioMediaAsset(
                     id = assetId,
                     localUri = persistedUri,
@@ -991,6 +1032,7 @@ class MultimodalViewModelTest {
                     createdAt = 1L,
                     albumId = "album-123",
                 )
+            }
 
             val job =
                 backgroundScope.launch(testDispatcher) {
@@ -1017,7 +1059,8 @@ class MultimodalViewModelTest {
         runTest {
             val assetId = "perm-1"
             val persistedUri = "file:///data/user/0/com.app/files/permanent.jpg"
-            coEvery { studioRepository.getMediaById(assetId) } returns
+            coEvery { studioRepository.getMediaById(assetId) } coAnswers {
+                getMediaByIdCalls += firstArg<String>()
                 StudioMediaAsset(
                     id = assetId,
                     localUri = persistedUri,
@@ -1026,6 +1069,7 @@ class MultimodalViewModelTest {
                     createdAt = 1L,
                     albumId = "album-123",
                 )
+            }
 
             val job =
                 backgroundScope.launch(testDispatcher) {
@@ -1046,7 +1090,7 @@ class MultimodalViewModelTest {
             )
             advanceUntilIdle()
 
-            coVerify(exactly = 2) { studioRepository.getMediaById(assetId) }
+            assertEquals(listOf(assetId, assetId), getMediaByIdCalls)
             job.cancel()
         }
 
@@ -1055,7 +1099,8 @@ class MultimodalViewModelTest {
         runTest {
             val assetId = "perm-1"
             val persistedUri = "file:///data/user/0/com.app/files/permanent.jpg"
-            coEvery { studioRepository.getMediaById(assetId) } returns
+            coEvery { studioRepository.getMediaById(assetId) } coAnswers {
+                getMediaByIdCalls += firstArg<String>()
                 StudioMediaAsset(
                     id = assetId,
                     localUri = persistedUri,
@@ -1064,6 +1109,7 @@ class MultimodalViewModelTest {
                     createdAt = 1L,
                     albumId = "album-123",
                 )
+            }
 
             val job =
                 backgroundScope.launch(testDispatcher) {
@@ -1082,7 +1128,7 @@ class MultimodalViewModelTest {
             )
             advanceUntilIdle()
 
-            coVerify(exactly = 1) { studioRepository.getMediaById(assetId) }
+            assertEquals(listOf(assetId), getMediaByIdCalls)
             job.cancel()
         }
 
@@ -1102,7 +1148,7 @@ class MultimodalViewModelTest {
             val settings = viewModel.uiState.value.settings as StudioImageSettingsUi
             assertNull(settings.referenceImageUri)
 
-            coVerify(exactly = 0) { studioRepository.getMediaById(any()) }
+            assertTrue(getMediaByIdCalls.isEmpty())
             job.cancel()
         }
 
@@ -1114,7 +1160,7 @@ class MultimodalViewModelTest {
                     viewModel.uiState.collect {}
                 }
             viewModel.onMicClick()
-            verify(exactly = 1) { listenToSpeechUseCase.invoke(any(), any()) }
+            assertEquals(1, listenToSpeechCallCount)
             job.cancel()
         }
 
@@ -1143,7 +1189,7 @@ class MultimodalViewModelTest {
             advanceUntilIdle()
 
             // Then
-            coVerify { studioRepository.addEphemeralMedia(any()) }
+            assertEquals(1, addEphemeralMediaCalls.size)
             assertEquals("", viewModel.uiState.value.prompt)
             val settings = viewModel.uiState.value.settings as StudioImageSettingsUi
             assertNull(settings.referenceImageUri)
@@ -1315,6 +1361,6 @@ class MultimodalViewModelTest {
             viewModel.onMediaTypeChange(MediaCapability.MUSIC.toUi())
             advanceUntilIdle()
 
-            coVerify { uiSelectionRepository.setStudioMediaType(MediaCapability.MUSIC) }
+            assertEquals(listOf(MediaCapability.MUSIC), setStudioMediaTypeCalls)
         }
 }
