@@ -24,16 +24,16 @@ import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSheetHeader
 import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorderColor
 import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurface
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
-import com.browntowndev.enclave.domain.model.inference.ApiProvider
-import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
+import com.browntowndev.enclave.feature.onboarding.ApiProviderUi
+import com.browntowndev.enclave.feature.onboarding.DiscoveredApiModelUi
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ApiProviderConfigureBottomSheet(
-    provider: ApiProvider,
+    provider: ApiProviderUi,
     apiKey: String,
     baseUrl: String,
-    discoveredModels: List<DiscoveredApiModel>,
+    discoveredModels: List<DiscoveredApiModelUi>,
     selectedModelId: String,
     isDiscoveringModels: Boolean,
     discoveryError: String?,

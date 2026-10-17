@@ -15,11 +15,10 @@ import com.browntowndev.enclave.core.ui.component.enclave.EnclaveOutlinedTextFie
 import com.browntowndev.enclave.core.ui.component.enclave.EnclaveTelemetryMetricPanel
 import com.browntowndev.enclave.core.ui.component.enclave.EnclaveTelemetryMetricRow
 import com.browntowndev.enclave.domain.model.config.ApiModelPricingFormat
-import com.browntowndev.enclave.domain.model.inference.ApiProvider
 
 @Composable
 fun ApiModelPricingConfiguration(
-    provider: ApiProvider,
+    provider: ApiProviderUi,
     config: ApiModelConfigUi,
     selectedModelMetadata: DiscoveredApiModelUi?,
     onConfigChange: (ApiModelConfigUi) -> Unit,

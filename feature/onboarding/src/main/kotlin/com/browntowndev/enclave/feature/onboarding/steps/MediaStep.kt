@@ -37,9 +37,9 @@ import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorderColor
 import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurface
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
-import com.browntowndev.enclave.domain.model.config.MediaCapability
-import com.browntowndev.enclave.domain.usecase.settings.MediaProviderDraft
-import com.browntowndev.enclave.domain.usecase.settings.TtsProviderDraft
+import com.browntowndev.enclave.feature.onboarding.MediaProviderDraftUi
+import com.browntowndev.enclave.feature.onboarding.MediaTypeUi
+import com.browntowndev.enclave.feature.onboarding.TtsProviderDraftUi
 
 private enum class ActiveSheet { TTS, IMAGE_VIDEO, MUSIC }
 
@@ -48,8 +48,8 @@ private enum class ActiveSheet { TTS, IMAGE_VIDEO, MUSIC }
 fun MediaStep(
     isTtsConfigured: Boolean,
     isMediaConfigured: Boolean,
-    onSaveTtsProvider: (TtsProviderDraft) -> Unit,
-    onSaveMediaProvider: (MediaProviderDraft) -> Unit,
+    onSaveTtsProvider: (TtsProviderDraftUi) -> Unit,
+    onSaveMediaProvider: (MediaProviderDraftUi) -> Unit,
     onSkipMedia: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
@@ -162,7 +162,7 @@ fun MediaStep(
             )
         ActiveSheet.IMAGE_VIDEO ->
             MediaConfigureBottomSheet(
-                initialCapability = MediaCapability.IMAGE,
+                initialCapability = MediaTypeUi.IMAGE,
                 onDismiss = { activeSheet = null },
                 onSave = { draft ->
                     onSaveMediaProvider(draft)
@@ -171,7 +171,7 @@ fun MediaStep(
             )
         ActiveSheet.MUSIC ->
             MediaConfigureBottomSheet(
-                initialCapability = MediaCapability.MUSIC,
+                initialCapability = MediaTypeUi.MUSIC,
                 onDismiss = { activeSheet = null },
                 onSave = { draft ->
                     onSaveMediaProvider(draft)

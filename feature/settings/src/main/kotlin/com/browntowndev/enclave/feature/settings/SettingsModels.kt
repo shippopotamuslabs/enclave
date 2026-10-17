@@ -8,15 +8,12 @@ import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.config.MediaTask
 import com.browntowndev.enclave.domain.model.config.ModelConfigurationId
-import com.browntowndev.enclave.domain.model.config.OpenRouterModelEndpoint
 import com.browntowndev.enclave.domain.model.config.OpenRouterRoutingConfiguration
 import com.browntowndev.enclave.domain.model.config.TtsProviderId
-import com.browntowndev.enclave.domain.model.inference.ApiModelParameterSupport
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ModelSource
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.memory.MemoryCategory
-import com.browntowndev.enclave.domain.model.settings.AppTheme
 import com.browntowndev.enclave.domain.model.settings.SearchProvider
 import com.browntowndev.enclave.domain.model.settings.SystemPromptOption
 import com.browntowndev.enclave.domain.usecase.settings.ModelDeletionTarget
@@ -127,7 +124,7 @@ enum class ThemeFamilyUi {
 
 @Immutable
 data class SettingsHomeUiState(
-    val theme: AppTheme = AppTheme.SYSTEM,
+    val theme: AppThemeUi = AppThemeUi.SYSTEM,
     val themeFamily: ThemeFamilyUi = ThemeFamilyUi.NeoBrutalist,
     val hapticResponse: Boolean = true,
     val backgroundInferenceEnabled: Boolean = true,
@@ -297,7 +294,7 @@ data class ModelDiscoveryFieldCallbacks(
 
 @Immutable
 data class OpenRouterEndpointsUiState(
-    val endpoints: List<OpenRouterModelEndpoint> = emptyList(),
+    val endpoints: List<OpenRouterModelEndpointUi> = emptyList(),
     val isLoading: Boolean = false,
     val hasError: Boolean = false,
 )
@@ -307,7 +304,7 @@ data class ApiProviderEditorUiState(
     val assetDraft: ApiModelAssetUi? = null,
     val selectedReusableCredential: ReusableApiCredentialUi? = null,
     val presetDraft: ApiModelConfigUi? = null,
-    val parameterSupport: ApiModelParameterSupport = ApiModelParameterSupport.DEFAULT,
+    val parameterSupport: ApiModelParameterSupportUi = ApiModelParameterSupportUi.DEFAULT,
     val discovery: ApiModelDiscoveryUiState = ApiModelDiscoveryUiState(),
     val connectionTestStatus: ApiConnectionTestStatus = ApiConnectionTestStatus.IDLE,
     val isOpenRouterProvidersSheetOpen: Boolean = false,
@@ -344,7 +341,7 @@ data class ModelAssignmentsUiState(
 data class DeletionFlowUiState(
     val showLastModelAlert: Boolean = false,
     val pendingTarget: PendingDeletionTarget? = null,
-    val modelTypesNeedingReassignment: List<ModelType> = emptyList(),
+    val modelTypesNeedingReassignment: List<ModelTypeUi> = emptyList(),
     val reassignmentOptions: List<ReassignmentOptionUi> = emptyList(),
 )
 
@@ -692,7 +689,7 @@ object MockSettingsData {
 
     val baseUiState =
         SettingsUiState(
-            home = SettingsHomeUiState(theme = AppTheme.SYSTEM),
+            home = SettingsHomeUiState(theme = AppThemeUi.SYSTEM),
             memories =
                 MemoriesUiState(
                     memories =

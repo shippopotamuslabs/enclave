@@ -8,7 +8,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
-import com.browntowndev.enclave.domain.port.media.SpeechState
+import com.browntowndev.enclave.feature.chat.ChatSpeechStateUi
 import com.browntowndev.enclave.feature.chat.ChatModeUi
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -30,7 +30,7 @@ class InputBarTest {
         composeTestRule.setContent {
             InputBar(
                 inputText = "",
-                speechState = SpeechState.Idle,
+                speechState = ChatSpeechStateUi.Idle,
                 selectedImageUris = emptyList(),
                 selectedFileName = null,
                 isPhotoAttachmentEnabled = true,
@@ -66,7 +66,7 @@ class InputBarTest {
         composeTestRule.setContent {
             InputBar(
                 inputText = "",
-                speechState = SpeechState.Idle,
+                speechState = ChatSpeechStateUi.Idle,
                 selectedImageUris = emptyList(),
                 selectedFileName = fileName,
                 isPhotoAttachmentEnabled = true,
@@ -99,7 +99,7 @@ class InputBarTest {
         composeTestRule.setContent {
             InputBar(
                 inputText = "",
-                speechState = SpeechState.Idle,
+                speechState = ChatSpeechStateUi.Idle,
                 selectedImageUris = emptyList(),
                 selectedFileName = null,
                 isPhotoAttachmentEnabled = true,
@@ -137,7 +137,7 @@ class InputBarTest {
         composeTestRule.setContent {
             InputBar(
                 inputText = "",
-                speechState = SpeechState.Idle,
+                speechState = ChatSpeechStateUi.Idle,
                 selectedImageUris = emptyList(),
                 selectedFileName = null,
                 isPhotoAttachmentEnabled = true,
@@ -173,7 +173,7 @@ class InputBarTest {
         composeTestRule.setContent {
             InputBar(
                 inputText = "",
-                speechState = SpeechState.Idle,
+                speechState = ChatSpeechStateUi.Idle,
                 selectedImageUris = emptyList(),
                 selectedFileName = null,
                 isPhotoAttachmentEnabled = true,
@@ -208,7 +208,7 @@ class InputBarTest {
         composeTestRule.setContent {
             InputBar(
                 inputText = "Hello World",
-                speechState = SpeechState.Idle,
+                speechState = ChatSpeechStateUi.Idle,
                 selectedImageUris = emptyList(),
                 selectedFileName = null,
                 isPhotoAttachmentEnabled = true,

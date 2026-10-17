@@ -45,7 +45,7 @@ fun NavGraphBuilder.chatNavGraph(
             onNewChat = actions.onNewChatFromChat,
             onNavigateToStudio = actions.onNavigateToStudio,
             onShowSnackbar = actions.onShowSnackbar,
-            navigationChatId = navigationChatId,
+            navigationChatId = navigationChatId?.value,
         )
     }
 
@@ -110,7 +110,7 @@ private fun SharedChatRoute(
         onNewChat = actions.onNewChatFromShared,
         onNavigateToStudio = actions.onNavigateToStudio,
         onShowSnackbar = actions.onShowSnackbar,
-        onNavigateToImportedChat = actions.onNavigateToImportedChat,
+        onNavigateToImportedChat = { chatIdValue -> actions.onNavigateToImportedChat(ChatId(chatIdValue)) },
         viewModel = chatViewModel,
     )
 }

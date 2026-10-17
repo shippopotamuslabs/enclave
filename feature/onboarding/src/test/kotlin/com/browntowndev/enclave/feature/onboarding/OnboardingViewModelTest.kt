@@ -20,9 +20,7 @@ import com.browntowndev.enclave.domain.usecase.onboarding.ResolveOnboardingFlowM
 import com.browntowndev.enclave.domain.usecase.settings.ApiModelDiscoveryResult
 import com.browntowndev.enclave.domain.usecase.settings.ApiModelDiscoveryScope
 import com.browntowndev.enclave.domain.usecase.settings.DiscoverApiModelsUseCase
-import com.browntowndev.enclave.domain.usecase.settings.MediaProviderDraft
 import com.browntowndev.enclave.domain.usecase.settings.SaveTtsProviderUseCase
-import com.browntowndev.enclave.domain.usecase.settings.TtsProviderDraft
 import com.browntowndev.enclave.domain.usecase.usecase.FakeBulkAssignApiProviderUseCase
 import com.browntowndev.enclave.domain.usecase.usecase.FakeLoggingPort
 import io.mockk.coEvery

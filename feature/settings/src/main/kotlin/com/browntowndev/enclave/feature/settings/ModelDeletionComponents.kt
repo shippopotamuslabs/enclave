@@ -28,11 +28,10 @@ import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.inference.ModelSource
-import com.browntowndev.enclave.domain.model.inference.ModelType
 
 @Composable
 fun ReassignmentView(
-    modelTypes: List<ModelType>,
+    modelTypes: List<ModelTypeUi>,
     reassignmentOptions: List<ReassignmentOptionUi>,
     onConfirm: (LocalModelConfigurationId?, ApiModelConfigurationId?, MediaProviderId?) -> Unit,
     onDismiss: () -> Unit,

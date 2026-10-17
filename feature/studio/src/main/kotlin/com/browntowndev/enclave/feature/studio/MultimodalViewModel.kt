@@ -6,10 +6,8 @@ import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.model.media.GenerationSettings
 import com.browntowndev.enclave.domain.model.media.ProviderCapabilities
 import com.browntowndev.enclave.domain.model.media.StudioModelOverride
-import com.browntowndev.enclave.domain.model.media.StudioTemplate
 
 import com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase
 import com.browntowndev.enclave.domain.usecase.inference.ShouldModeratePromptUseCase
@@ -409,9 +407,9 @@ class MultimodalViewModel
             promptCoordinator.onSettingsToggle()
         }
 
-        fun onUpdateSettings(newSettings: GenerationSettings) {
+        fun onUpdateSettings(newSettings: StudioGenerationSettingsUi) {
             val previousModelType = currentResolvedModelType()
-            promptCoordinator.onUpdateSettings(newSettings)
+            promptCoordinator.onUpdateSettings(newSettings.toDomain())
             resolvedModelCoordinator.revalidateOverrideIfModelTypeChanged(
                 overrideCoordinator = overrideCoordinator,
                 previousModelType = previousModelType,
@@ -425,16 +423,17 @@ class MultimodalViewModel
             promptCoordinator.onContinualModeToggle(enabled)
         }
 
-        fun onMediaTypeChange(type: MediaCapability) {
+        fun onMediaTypeChange(type: StudioMediaTypeUi) {
             overrideCoordinator.clearForCapabilityChange()
-            promptCoordinator.onMediaTypeChange(type)
+            val domainType = type.toDomain()
+            promptCoordinator.onMediaTypeChange(domainType)
             viewModelScope.launch {
-                setSelectedStudioMediaType(type)
+                setSelectedStudioMediaType(domainType)
             }
         }
 
-        fun onTemplateSelected(template: StudioTemplate) {
-            promptCoordinator.onTemplateSelected(template)
+        fun onTemplateSelected(template: StudioTemplateUi) {
+            promptCoordinator.onTemplateSelected(template.toDomain())
         }
 
         fun onOpenModelPicker() {

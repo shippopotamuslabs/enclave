@@ -318,7 +318,7 @@ fun ByokConfigureScreen(
                 )
             } else if (selectedConfig != null) {
                 PresetConfigurationForm(
-                    provider = draftAsset.provider,
+                    provider = draftAsset.provider.toUi(),
                     parameterSupport = uiState.apiProviderEditor.parameterSupport,
                     config = selectedConfig,
                     selectedModelMetadata =

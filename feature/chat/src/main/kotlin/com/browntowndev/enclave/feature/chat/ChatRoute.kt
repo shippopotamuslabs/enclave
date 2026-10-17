@@ -26,13 +26,13 @@ fun ChatRoute(
     onShowSnackbar: (message: String, actionLabel: String?, onActionClick: (() -> Unit)?) -> Unit,
     onNewChat: () -> Unit,
     onNavigateToStudio: (ids: List<String>, uris: List<String>, types: List<String>, prompts: List<String>) -> Unit,
-    navigationChatId: ChatId? = null,
-    onNavigateToImportedChat: (ChatId) -> Unit = {},
+    navigationChatId: String? = null,
+    onNavigateToImportedChat: (String) -> Unit = {},
     viewModel: ChatViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    val chatIdFromNavigation = navigationChatId ?: viewModel.initialChatId
+    val chatIdFromNavigation = navigationChatId?.let { ChatId(it) } ?: viewModel.initialChatId
 
     LaunchedEffect(chatIdFromNavigation) {
         chatIdFromNavigation?.let(viewModel::onNavigationChatIdChanged)
@@ -51,7 +51,7 @@ fun ChatRoute(
                         Intent.createChooser(intent, context.getString(R.string.chat_share_chooser_title)),
                     )
                 }
-                is ShareUiEvent.ImportedChat -> onNavigateToImportedChat(event.chatId)
+                is ShareUiEvent.ImportedChat -> onNavigateToImportedChat(event.chatId.value)
             }
         }
     }

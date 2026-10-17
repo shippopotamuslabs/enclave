@@ -1,21 +1,18 @@
 package com.browntowndev.enclave.feature.settings
 
-import com.browntowndev.enclave.domain.model.config.ApiModelConfiguration
-import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
-import com.browntowndev.enclave.domain.model.profile.ProfileCostEstimate
 import java.util.UUID
 
 data class ProfileBuilderUiState(
     val currentStep: Int = 0,
     // Step 0: model selection
-    val configuredModels: List<ApiModelConfiguration> = emptyList(),
-    val selectedConfigId: ApiModelConfigurationId? = null,
+    val configuredModels: List<ConfiguredModelUi> = emptyList(),
+    val selectedConfigId: String? = null,
     // Step 1: file import
     val selectedFileUris: List<String> = emptyList(),
     val selectedFileNames: List<String> = emptyList(),
     // Step 2: cost estimate
     val isPreparingCorpus: Boolean = false,
-    val costEstimate: ProfileCostEstimate? = null,
+    val costEstimate: ProfileCostEstimateUi? = null,
     val corpusRunId: String = UUID.randomUUID().toString(),
     // Step 3: analysis progress
     val analysisWorkId: String? = null,
@@ -31,7 +28,7 @@ data class ProfileBuilderUiState(
     // General
     val errorMessage: String? = null,
 ) {
-    val selectedModel: ApiModelConfiguration?
+    val selectedModel: ConfiguredModelUi?
         get() = configuredModels.firstOrNull { it.id == selectedConfigId }
 
     val canProceedFromStep0: Boolean

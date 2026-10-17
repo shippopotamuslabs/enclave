@@ -157,7 +157,7 @@ fun ChatScreen(
                             messages = uiState.messages,
                             hasActiveIndicator = uiState.hasActiveIndicator,
                             activeToolCallBanner = uiState.activeToolCallBanner,
-                            activeIndicatorMessageId = uiState.activeIndicatorMessageId,
+                            activeIndicatorMessageId = uiState.activeIndicatorMessageId?.value,
                             hasTtsProviderAssigned = uiState.hasTtsProviderAssigned,
                             isPlayingTts = uiState.isPlayingTts,
                             isLoadingTts = uiState.isLoadingTts,
@@ -189,7 +189,7 @@ fun ChatScreen(
                         InputBar(
                             modifier = Modifier.fillMaxWidth(),
                             inputText = uiState.inputText,
-                            speechState = uiState.speechState,
+                            speechState = uiState.speechState.toChatSpeechStateUi(),
                             selectedImageUris = uiState.selectedImageUris,
                             selectedFileName = uiState.selectedFileName,
                             isPhotoAttachmentEnabled = uiState.isPhotoAttachmentEnabled,

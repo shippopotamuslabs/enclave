@@ -5,6 +5,7 @@ import androidx.navigation.compose.composable
 import com.browntowndev.enclave.domain.model.download.DownloadModelsResult
 import com.browntowndev.enclave.feature.download.DownloadPlanRefresher
 import com.browntowndev.enclave.feature.download.ModelDownloadScreen
+import com.browntowndev.enclave.feature.download.toUi
 
 fun NavGraphBuilder.downloadGraph(
     modelsResultProvider: () -> DownloadModelsResult?,
@@ -18,7 +19,7 @@ fun NavGraphBuilder.downloadGraph(
         exitTransition = { slideOutToStartTransition() },
     ) {
         ModelDownloadScreen(
-            modelsResult = modelsResultProvider(),
+            modelsResult = modelsResultProvider()?.toUi(),
             errorMessage = errorMessage,
             onReady = onReady,
             refreshDownloadPlan = refreshDownloadPlan,

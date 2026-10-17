@@ -35,10 +35,8 @@ import com.browntowndev.enclave.core.ui.component.enclave.EnclaveAppBarChrome
 import com.browntowndev.enclave.core.ui.component.enclave.EnclaveIconButton
 import com.browntowndev.enclave.core.ui.component.sheet.MoveToAlbumBottomSheet
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
-import com.browntowndev.enclave.domain.model.config.MediaCapability
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.rememberHazeState
-import com.browntowndev.enclave.domain.model.media.VisualGenerationSettings
 import com.browntowndev.enclave.feature.studio.components.StudioOptionsBottomSheet
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
@@ -208,7 +206,7 @@ fun StudioScreen(
                 prompt = uiState.prompt,
                 speechState = uiState.speechState,
                 mediaType = uiState.mediaType,
-                referenceImageUri = (uiState.settings as? VisualGenerationSettings)?.referenceImageUri,
+                referenceImageUri = uiState.settings.referenceImageUriOrNull,
                 referenceMediaType = uiState.referenceMediaType,
                 isGenerating = uiState.isGenerating,
                 isContinualGenerationActive = uiState.isContinualGenerationActive,
@@ -217,16 +215,16 @@ fun StudioScreen(
                 onPromptChange = viewModel::onPromptChange,
                 onReferenceImageClick = {
                     val isEnabled = when (uiState.mediaType) {
-                        MediaCapability.IMAGE -> uiState.hasImageEditModel
-                        MediaCapability.VIDEO -> uiState.hasImageToVideoModel
+                        StudioMediaTypeUi.IMAGE -> uiState.hasImageEditModel
+                        StudioMediaTypeUi.VIDEO -> uiState.hasImageToVideoModel
                         else -> false
                     }
                     if (isEnabled) {
                         imagePickerLauncher.launch("image/*")
                     } else {
                         val message = when (uiState.mediaType) {
-                            MediaCapability.IMAGE -> STUDIO_REFERENCE_IMAGE_EDIT_UNAVAILABLE
-                            MediaCapability.VIDEO -> STUDIO_REFERENCE_I2V_UNAVAILABLE
+                            StudioMediaTypeUi.IMAGE -> STUDIO_REFERENCE_IMAGE_EDIT_UNAVAILABLE
+                            StudioMediaTypeUi.VIDEO -> STUDIO_REFERENCE_I2V_UNAVAILABLE
                             else -> ""
                         }
                         if (message.isNotEmpty()) {
@@ -281,7 +279,7 @@ fun StudioScreen(
 @Composable
 private fun StudioTopBar(
     selectedCount: Int,
-    mediaType: MediaCapability,
+    mediaType: StudioMediaTypeUi,
     activeModelDisplayName: String?,
     isSettingsOpen: Boolean,
     onMediaTypeClick: () -> Unit,

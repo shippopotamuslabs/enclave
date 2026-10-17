@@ -19,29 +19,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/**
- * State representing the re-download progress of a specific local model.
- */
-sealed class ReDownloadProgress {
-    object Idle : ReDownloadProgress()
-
-    object Preparing : ReDownloadProgress()
-
-    data class Downloading(
-        val progress: Float,
-    ) : ReDownloadProgress()
-
-    data class Finalizing(
-        val progress: Float?,
-    ) : ReDownloadProgress()
-
-    object Complete : ReDownloadProgress()
-
-    data class Failed(
-        val error: String,
-    ) : ReDownloadProgress()
-}
-
 @HiltViewModel
 class ModelReDownloadViewModel
     @Inject
@@ -55,22 +32,22 @@ class ModelReDownloadViewModel
             const val FAILURE_DELAY_MS = 3000L
         }
 
-        private val _reDownloadStates = MutableStateFlow<Map<LocalModelId, ReDownloadProgress>>(emptyMap())
-        val reDownloadStates: StateFlow<Map<LocalModelId, ReDownloadProgress>> = _reDownloadStates.asStateFlow()
+        private val _reDownloadStates = MutableStateFlow<Map<String, ReDownloadProgressUi>>(emptyMap())
+        val reDownloadStates: StateFlow<Map<String, ReDownloadProgressUi>> = _reDownloadStates.asStateFlow()
 
-        private val _packReDownloadStates = MutableStateFlow<Map<String, ReDownloadProgress>>(emptyMap())
-        val packReDownloadStates: StateFlow<Map<String, ReDownloadProgress>> = _packReDownloadStates.asStateFlow()
+        private val _packReDownloadStates = MutableStateFlow<Map<String, ReDownloadProgressUi>>(emptyMap())
+        val packReDownloadStates: StateFlow<Map<String, ReDownloadProgressUi>> = _packReDownloadStates.asStateFlow()
 
-        fun reDownloadModel(modelId: LocalModelId) {
+        fun reDownloadModel(modelId: String) {
             viewModelScope.launch {
-                _reDownloadStates.value = _reDownloadStates.value + (modelId to ReDownloadProgress.Preparing)
+                _reDownloadStates.value = _reDownloadStates.value + (modelId to ReDownloadProgressUi.Preparing)
 
-                reDownloadModelUseCase(modelId)
+                reDownloadModelUseCase(LocalModelId(modelId))
                     .onSuccess {
                         observeDownloadProgress(modelId)
                     }.onFailure { error ->
                         _reDownloadStates.value = _reDownloadStates.value +
-                            (modelId to ReDownloadProgress.Failed(error.message ?: "Unknown error"))
+                            (modelId to ReDownloadProgressUi.Failed(error.message ?: "Unknown error"))
                         delay(FAILURE_DELAY_MS)
                         _reDownloadStates.value = _reDownloadStates.value - modelId
                     }
@@ -79,7 +56,7 @@ class ModelReDownloadViewModel
 
         fun reDownloadPack(packId: String) {
             viewModelScope.launch {
-                _packReDownloadStates.update { it + (packId to ReDownloadProgress.Preparing) }
+                _packReDownloadStates.update { it + (packId to ReDownloadProgressUi.Preparing) }
 
                 reDownloadModelPackUseCase(packId)
                     .onSuccess { scheduled ->
@@ -90,7 +67,7 @@ class ModelReDownloadViewModel
                         }
                     }.onFailure { error ->
                         _packReDownloadStates.update {
-                            it + (packId to ReDownloadProgress.Failed(error.message ?: "Unknown error"))
+                            it + (packId to ReDownloadProgressUi.Failed(error.message ?: "Unknown error"))
                         }
                         delay(FAILURE_DELAY_MS)
                         _packReDownloadStates.update { it - packId }
@@ -140,7 +117,7 @@ class ModelReDownloadViewModel
             }
         }
 
-        private fun observeDownloadProgress(modelId: LocalModelId) {
+        private fun observeDownloadProgress(modelId: String) {
             viewModelScope.launch {
                 var awaitingFinalizer = false
                 observeDownloadWorkUseCase()
@@ -170,7 +147,7 @@ class ModelReDownloadViewModel
                                 awaitingFinalizer = true
                                 val extractProgress = workInfo.postProcessProgress
                                 _reDownloadStates.value = _reDownloadStates.value +
-                                    (modelId to ReDownloadProgress.Finalizing(extractProgress))
+                                    (modelId to ReDownloadProgressUi.Finalizing(extractProgress))
                             }
                             modelProgress != null -> {
                                 val parts = modelProgress.split("|")
@@ -179,7 +156,7 @@ class ModelReDownloadViewModel
                                     val total = parts[2].toLongOrNull() ?: 1L
                                     val progress = if (total > 0) downloaded.toFloat() / total else 0f
                                     _reDownloadStates.value = _reDownloadStates.value +
-                                        (modelId to ReDownloadProgress.Downloading(progress))
+                                        (modelId to ReDownloadProgressUi.Downloading(progress))
                                 }
                             }
                         }
@@ -189,26 +166,26 @@ class ModelReDownloadViewModel
         }
 
         private suspend fun markPackComplete(packId: String) {
-            _packReDownloadStates.update { it + (packId to ReDownloadProgress.Complete) }
+            _packReDownloadStates.update { it + (packId to ReDownloadProgressUi.Complete) }
             delay(SUCCESS_DELAY_MS)
             _packReDownloadStates.update { it - packId }
         }
 
         private suspend fun markPackFailed(packId: String) {
-            _packReDownloadStates.update { it + (packId to ReDownloadProgress.Failed("Download failed")) }
+            _packReDownloadStates.update { it + (packId to ReDownloadProgressUi.Failed("Download failed")) }
             delay(FAILURE_DELAY_MS)
             _packReDownloadStates.update { it - packId }
         }
 
-        private suspend fun markModelComplete(modelId: LocalModelId) {
-            _reDownloadStates.value = _reDownloadStates.value + (modelId to ReDownloadProgress.Complete)
+        private suspend fun markModelComplete(modelId: String) {
+            _reDownloadStates.value = _reDownloadStates.value + (modelId to ReDownloadProgressUi.Complete)
             delay(SUCCESS_DELAY_MS)
             _reDownloadStates.value = _reDownloadStates.value - modelId
         }
 
-        private suspend fun markModelFailed(modelId: LocalModelId) {
+        private suspend fun markModelFailed(modelId: String) {
             _reDownloadStates.value = _reDownloadStates.value +
-                (modelId to ReDownloadProgress.Failed("Download failed"))
+                (modelId to ReDownloadProgressUi.Failed("Download failed"))
             delay(FAILURE_DELAY_MS)
             _reDownloadStates.value = _reDownloadStates.value - modelId
         }
@@ -218,7 +195,7 @@ class ModelReDownloadViewModel
             packId: String,
         ) {
             val aggregate = workInfo.aggregateProgress ?: return
-            _packReDownloadStates.update { it + (packId to ReDownloadProgress.Downloading(aggregate)) }
+            _packReDownloadStates.update { it + (packId to ReDownloadProgressUi.Downloading(aggregate)) }
         }
 
         private fun updatePackFinalizing(
@@ -226,6 +203,6 @@ class ModelReDownloadViewModel
             packId: String,
         ) {
             val extractProgress = workInfo.postProcessProgress
-            _packReDownloadStates.update { it + (packId to ReDownloadProgress.Finalizing(extractProgress)) }
+            _packReDownloadStates.update { it + (packId to ReDownloadProgressUi.Finalizing(extractProgress)) }
         }
     }

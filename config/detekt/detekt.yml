@@ -26,11 +26,11 @@ enclave:
   ForbiddenRepositoryInViewModel:
     active: true
   ForbiddenDomainTypeInComposable:
-    active: false
+    active: true
   ForbiddenPortInViewModel:
     active: true
   ForbiddenDomainTypeInUiState:
-    active: false
+    active: true
   ForbiddenUseCaseInFeatureMapper:
     active: true
 
