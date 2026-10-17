@@ -18,20 +18,21 @@ import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.media.AspectRatio
 import com.browntowndev.enclave.domain.model.media.GenerationQuality
 import com.browntowndev.enclave.domain.model.media.ProviderCapabilities
-import com.browntowndev.enclave.domain.port.media.ShareMediaPort
+import com.browntowndev.enclave.core.testing.FakeDefaultModelRepository
+import com.browntowndev.enclave.core.testing.FakeLocalModelRepository
+import com.browntowndev.enclave.core.testing.FakeMediaProviderRepository
+import com.browntowndev.enclave.core.testing.FakeModerationReportRepository
+import com.browntowndev.enclave.core.testing.FakeShareMediaPort
+import com.browntowndev.enclave.core.testing.FakeStudioRepository
+import com.browntowndev.enclave.core.testing.FakeTtsPlaybackController
+import com.browntowndev.enclave.core.testing.FakeUiSelectionRepository
 import com.browntowndev.enclave.domain.port.media.SpeechState
-import com.browntowndev.enclave.domain.port.media.StudioGenerationDispatcherPort
-import com.browntowndev.enclave.domain.port.media.TtsPlaybackControllerPort
-import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
-import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
-import com.browntowndev.enclave.domain.port.repository.StudioAlbumAsset
 import com.browntowndev.enclave.domain.port.repository.StudioMediaAsset
-import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
-import com.browntowndev.enclave.domain.port.repository.UiSelectionRepository
-import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
-import com.browntowndev.enclave.domain.usecase.chat.ListenToSpeechUseCase
+import com.browntowndev.enclave.domain.usecase.media.GetImageGenerationCapabilitiesUseCase
+import com.browntowndev.enclave.domain.usecase.media.GetStudioCapablePresetsUseCase
 import com.browntowndev.enclave.domain.usecase.media.ResolveMediaModelTypeUseCase
-import com.browntowndev.enclave.domain.usecase.media.ResolveMediaProviderCapabilitiesUseCase
+import com.browntowndev.enclave.domain.usecase.inference.SubmitModerationReportUseCase
+import com.browntowndev.enclave.feature.studio.test.FakeStudioGenerationDispatcher
 import com.browntowndev.enclave.feature.studio.coordinators.StudioAlbumSelectionCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioCapabilitiesCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioGenerationCoordinator
@@ -43,15 +44,8 @@ import com.browntowndev.enclave.feature.studio.coordinators.StudioPromptCoordina
 import com.browntowndev.enclave.feature.studio.coordinators.StudioRemoteCapabilitiesCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioSpeechCoordinator
 import com.browntowndev.enclave.feature.studio.coordinators.StudioUiStateReducer
-import io.mockk.coEvery
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -77,39 +71,13 @@ class StudioMediaTasksRedTest {
     val composeTestRule = createComposeRule()
 
     private val testDispatcher = UnconfinedTestDispatcher()
-    private val shareMediaPort = mockk<ShareMediaPort>(relaxed = true)
-    private val studioRepository = mockk<StudioRepositoryPort>(relaxed = true)
-    private val defaultModelRepository = mockk<DefaultModelRepositoryPort>(relaxed = true)
-    private val mediaProviderRepository = mockk<MediaProviderRepositoryPort>(relaxed = true)
-    private val resolveMediaProviderCapabilitiesUseCase = mockk<ResolveMediaProviderCapabilitiesUseCase>()
-    private val chatUseCases = mockk<ChatUseCases>()
-    private val listenToSpeechUseCase = mockk<ListenToSpeechUseCase>()
-    private val playbackController = mockk<TtsPlaybackControllerPort>(relaxed = true)
-    private val dispatcher = mockk<StudioGenerationDispatcherPort>(relaxed = true)
-    private val defaultsFlow = MutableStateFlow<List<DefaultModelAssignment>>(emptyList())
-    private val mediaProvidersFlow = MutableStateFlow<List<MediaProviderAsset>>(emptyList())
-    private val ephemeralMediaFlow = MutableStateFlow<List<StudioMediaAsset>>(emptyList())
-    private val generationErrorFlow = MutableStateFlow<String?>(null)
-    private val speechEvents = MutableSharedFlow<SpeechState>(extraBufferCapacity = 8)
-    private val seenCapabilityProviderIds = mutableListOf<String?>()
-
-    private lateinit var generationCoordinator: StudioGenerationCoordinator
-    private lateinit var viewModel: MultimodalViewModel
-
-    @Before
-    fun setup() {
-        Dispatchers.setMain(testDispatcher)
-        every { defaultModelRepository.observeDefaults() } returns defaultsFlow
-        every { mediaProviderRepository.getMediaProviders() } returns mediaProvidersFlow
-        every { studioRepository.observeAllMedia() } returns flowOf(emptyList())
-        every { studioRepository.observeEphemeralMedia() } returns ephemeralMediaFlow
-        every { studioRepository.observeGenerationError() } returns generationErrorFlow
-        every { studioRepository.observeAllAlbums() } returns flowOf(emptyList<StudioAlbumAsset>())
-        every { listenToSpeechUseCase.invoke(any(), any()) } returns speechEvents
-        every { chatUseCases.listenToSpeechUseCase } returns listenToSpeechUseCase
-        coEvery { studioRepository.getMediaById(any()) } returns referenceAsset()
-        coEvery { resolveMediaProviderCapabilitiesUseCase(any(), any()) } coAnswers {
-            seenCapabilityProviderIds += firstArg<MediaProviderAsset?>()?.id?.value
+    private val shareMediaPort = FakeShareMediaPort()
+    private val studioRepository = FakeStudioRepository()
+    private val defaultModelRepository = FakeDefaultModelRepository()
+    private val mediaProviderRepository = FakeMediaProviderRepository()
+    private val localModelRepository = FakeLocalModelRepository()
+    private val resolveMediaProviderCapabilitiesUseCase =
+        FakeResolveMediaProviderCapabilitiesUseCase(
             ProviderCapabilities(
                 supportedAspectRatios = AspectRatio.entries.toList(),
                 supportedImageQualities = listOf(GenerationQuality.SPEED),
@@ -117,8 +85,26 @@ class StudioMediaTasksRedTest {
                 supportedVideoResolutions = listOf("480p"),
                 supportedVideoDurations = listOf(5),
                 supportsVideo = false,
-            )
-        }
+            ),
+        )
+    private val listenToSpeechUseCase = FakeListenToSpeechUseCase()
+    private val chatUseCases = FakeChatUseCases(listenToSpeechUseCase)
+    private val playbackController = FakeTtsPlaybackController()
+    private val dispatcher = FakeStudioGenerationDispatcher()
+    private val ephemeralMediaFlow get() = studioRepository.ephemeralState
+    private val generationErrorFlow get() = studioRepository.generationErrorState
+    private val speechEvents get() = listenToSpeechUseCase.events
+
+    private val seenCapabilityProviderIds: List<String?>
+        get() = resolveMediaProviderCapabilitiesUseCase.calls.map { it.first?.id?.value }
+
+    private lateinit var generationCoordinator: StudioGenerationCoordinator
+    private lateinit var viewModel: MultimodalViewModel
+
+    @Before
+    fun setup() {
+        Dispatchers.setMain(testDispatcher)
+        studioRepository.emitMedia(listOf(referenceAsset()))
         generationCoordinator = StudioGenerationCoordinator(studioRepository, dispatcher)
         viewModel = createViewModel()
     }
@@ -133,12 +119,13 @@ class StudioMediaTasksRedTest {
         runTest {
             val imageProvider = mediaProvider("text-to-image", MediaCapability.IMAGE)
             val editProvider = mediaProvider("image-edit", MediaCapability.IMAGE)
-            defaultsFlow.value =
+            defaultModelRepository.emitDefaults(
                 listOf(
                     default(ModelType.IMAGE_GENERATION, imageProvider.id),
                     default(ModelType.IMAGE_EDIT, editProvider.id),
-                )
-            mediaProvidersFlow.value = listOf(imageProvider, editProvider)
+                ),
+            )
+            mediaProviderRepository.emitProviders(listOf(imageProvider, editProvider))
 
             viewModel.uiState.test {
                 awaitItem()
@@ -153,11 +140,12 @@ class StudioMediaTasksRedTest {
     @Test
     fun `VM-02 task-flag state reflects edit and image-to-video defaults`() =
         runTest {
-            defaultsFlow.value =
+            defaultModelRepository.emitDefaults(
                 listOf(
                     default(ModelType.IMAGE_EDIT, MediaProviderId("image-edit")),
                     default(ModelType.IMAGE_TO_VIDEO, MediaProviderId("image-to-video")),
-                )
+                ),
+            )
 
             viewModel.uiState.test {
                 val state = awaitItem()
@@ -171,13 +159,14 @@ class StudioMediaTasksRedTest {
     @Test
     fun `VM-02b local image edit default enables reference image affordance`() =
         runTest {
-            defaultsFlow.value =
+            defaultModelRepository.emitDefaults(
                 listOf(
                     DefaultModelAssignment(
                         modelType = ModelType.IMAGE_EDIT,
                         localConfigId = LocalModelConfigurationId("sdxl-local-config"),
                     ),
-                )
+                ),
+            )
 
             viewModel.uiState.test {
                 val state = awaitItem()
@@ -190,7 +179,7 @@ class StudioMediaTasksRedTest {
     @Test
     fun `VM-03 absent image-to-video default yields false task flags`() =
         runTest {
-            defaultsFlow.value = emptyList()
+            defaultModelRepository.emitDefaults(emptyList())
 
             viewModel.uiState.test {
                 val state = awaitItem()
@@ -204,7 +193,7 @@ class StudioMediaTasksRedTest {
     @Test
     fun `VM-04 animate without image-to-video default emits error and skips generation`() =
         runTest {
-            defaultsFlow.value = listOf(default(ModelType.VIDEO_GENERATION, MediaProviderId("text-to-video")))
+            defaultModelRepository.emitDefaults(listOf(default(ModelType.VIDEO_GENERATION, MediaProviderId("text-to-video"))))
 
             viewModel.uiState.test {
                 val initialState = awaitItem()
@@ -227,14 +216,14 @@ class StudioMediaTasksRedTest {
                 cancelAndIgnoreRemainingEvents()
             }
 
-            verify(exactly = 0) { dispatcher.startGeneration(any(), any(), any(), any()) }
+            assertTrue(dispatcher.startedCalls.isEmpty())
         }
 
     @Test
     fun `COORD-01 coordinator blocks detail video generation without image-to-video default`() {
         generationCoordinator.startDetailVideoGeneration(referenceAsset(), hasImageToVideoModel = false)
 
-        verify(exactly = 0) { dispatcher.startGeneration(any(), any(), any(), any()) }
+        assertTrue(dispatcher.startedCalls.isEmpty())
         assertEquals(
             VideoGenerationState.Error(
                 sourceAssetId = "asset-1",
@@ -305,17 +294,14 @@ class StudioMediaTasksRedTest {
         val promptCoordinator = StudioPromptCoordinator(generationCoordinator, studioRepository)
         val mediaActionsCoordinator =
             StudioMediaActionsCoordinator(shareMediaPort, studioRepository, generationCoordinator)
-        val uiSelectionRepository =
-            mockk<UiSelectionRepository>(relaxed = true) {
-                every { selectedStudioMediaType } returns flowOf(MediaCapability.IMAGE)
-            }
+        val uiSelectionRepository = FakeUiSelectionRepository()
         return MultimodalViewModel(
             observeDefaultModelAssignments = com.browntowndev.enclave.domain.usecase.studio.ObserveDefaultModelAssignmentsUseCase(defaultModelRepository),
             getMediaProviders = com.browntowndev.enclave.domain.usecase.studio.GetMediaProvidersUseCase(mediaProviderRepository),
             moderatePromptUseCase = allowPromptModerationUseCase(),
             shouldModeratePromptUseCase = allowShouldModeratePromptUseCase(),
-            submitModerationReportUseCase = mockk(relaxed = true),
-            getImageGenerationCapabilitiesUseCase = mockk(relaxed = true),
+            submitModerationReportUseCase = SubmitModerationReportUseCase(FakeModerationReportRepository()),
+            getImageGenerationCapabilitiesUseCase = GetImageGenerationCapabilitiesUseCase(localModelRepository),
             generationCoordinator = generationCoordinator,
             albumSelectionCoordinator = albumSelectionCoordinator,
             speechCoordinator = StudioSpeechCoordinator(chatUseCases),
@@ -333,7 +319,7 @@ class StudioMediaTasksRedTest {
                     resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase(),
                     mediaProviderRepository = mediaProviderRepository,
                 ),
-            getStudioCapablePresetsUseCase = mockk(relaxed = true),
+            getStudioCapablePresetsUseCase = GetStudioCapablePresetsUseCase(localModelRepository, mediaProviderRepository),
         )
     }
 

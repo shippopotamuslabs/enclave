@@ -9,14 +9,14 @@ import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPor
 import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
 import javax.inject.Inject
 
-class GenerateMusicUseCase
+open class GenerateMusicUseCase
     @Inject
     constructor(
         private val defaultModelRepository: DefaultModelRepositoryPort,
         private val mediaProviderRepository: MediaProviderRepositoryPort,
         private val musicGenerationPort: MusicGenerationPort,
     ) {
-        suspend operator fun invoke(
+        open suspend operator fun invoke(
             prompt: String,
             settings: GenerationSettings,
             override: StudioModelOverride? = null,

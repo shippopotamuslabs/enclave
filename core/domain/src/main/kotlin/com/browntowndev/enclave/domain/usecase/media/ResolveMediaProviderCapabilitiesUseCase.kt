@@ -10,14 +10,14 @@ import com.browntowndev.enclave.domain.port.repository.ApiModelCatalogPort
 import com.browntowndev.enclave.domain.port.security.ApiKeyProviderPort
 import javax.inject.Inject
 
-class ResolveMediaProviderCapabilitiesUseCase
+open class ResolveMediaProviderCapabilitiesUseCase
     @Inject
     constructor(
         private val getProviderCapabilitiesUseCase: GetProviderCapabilitiesUseCase,
         private val apiModelCatalog: ApiModelCatalogPort,
         private val apiKeyProvider: ApiKeyProviderPort,
     ) {
-        suspend operator fun invoke(
+        open suspend operator fun invoke(
             mediaProvider: MediaProviderAsset?,
             mediaCapability: MediaCapability,
         ): ProviderCapabilities {

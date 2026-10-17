@@ -8,8 +8,6 @@ import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPor
 import com.browntowndev.enclave.domain.port.repository.StudioAlbumAsset
 import com.browntowndev.enclave.domain.port.repository.StudioMediaAsset
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
-import io.mockk.every
-import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -49,12 +47,11 @@ class GalleryViewModelTest {
 
             override fun shareDocumentBytes(items: List<com.browntowndev.enclave.domain.model.media.ShareDocumentBytesInput>) = Unit
         }
-    private val defaultModelRepository = mockk<DefaultModelRepositoryPort>(relaxed = true)
+    private val defaultModelRepository = com.browntowndev.enclave.core.testing.FakeDefaultModelRepository()
 
     @BeforeEach
     fun setup() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
-        every { defaultModelRepository.observeDefaults() } returns flowOf(emptyList())
     }
 
     @AfterEach

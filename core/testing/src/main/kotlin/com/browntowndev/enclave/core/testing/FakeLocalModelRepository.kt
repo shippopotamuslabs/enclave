@@ -99,6 +99,29 @@ class FakeLocalModelRepository : LocalModelRepositoryPort {
         configsById.entries.removeIf { it.value.first.metadata.id == localModelId }
     }
 
+    /**
+     * Seeds [asset] as the asset behind [configId] so getAssetByConfigId resolves
+     * it. The stored configuration is a neutral stand-in; only the asset matters
+     * to capability resolution.
+     */
+    fun seedAssetForConfig(configId: LocalModelConfigurationId, asset: LocalModelAsset) {
+        if (assets.none { it.metadata.id == asset.metadata.id }) assets += asset
+        configsById[configId] =
+            asset to
+                LocalModelConfiguration(
+                    id = configId,
+                    localModelId = asset.metadata.id,
+                    displayName = asset.metadata.id.value,
+                    maxTokens = 512,
+                    contextWindow = 2048,
+                    temperature = 0.7,
+                    topP = 1.0,
+                    topK = null,
+                    repetitionPenalty = 1.0,
+                    systemPrompt = "",
+                )
+    }
+
     fun setAssets(newAssets: List<LocalModelAsset>) {
         assets.clear()
         assets.addAll(newAssets)
