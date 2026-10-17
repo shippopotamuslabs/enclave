@@ -17,6 +17,11 @@ import kotlinx.coroutines.flow.update
 class FakeDefaultModelRepository : DefaultModelRepositoryPort {
     private val defaultsFlow = MutableStateFlow<List<DefaultModelAssignment>>(emptyList())
 
+    /** Replaces all defaults at once (drives observeDefaults emissions). */
+    fun emitDefaults(assignments: List<DefaultModelAssignment>) {
+        defaultsFlow.value = assignments
+    }
+
     fun seed(assignment: DefaultModelAssignment) {
         defaultsFlow.update { current -> current.filterNot { it.modelType == assignment.modelType } + assignment }
     }

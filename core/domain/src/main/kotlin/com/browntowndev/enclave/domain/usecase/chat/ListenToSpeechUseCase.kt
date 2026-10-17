@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.takeWhile
 import javax.inject.Inject
 
-class ListenToSpeechUseCase
+open class ListenToSpeechUseCase
     @Inject
     constructor(
         private val audioCapturePort: AudioCapturePort,
@@ -21,7 +21,7 @@ class ListenToSpeechUseCase
         private val utilityModelFilePort: UtilityModelFilePort,
         private val clock: Clock,
     ) {
-        operator fun invoke(
+        open operator fun invoke(
             initialText: String = "",
             stopSignal: StateFlow<Boolean>,
         ): Flow<SpeechState> =

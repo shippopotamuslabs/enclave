@@ -4,16 +4,17 @@ import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
 import com.browntowndev.enclave.domain.model.media.MusicGenerationSettings
 import com.browntowndev.enclave.domain.model.media.VideoGenerationSettings
+import com.browntowndev.enclave.core.testing.FakeStudioRepository
 import com.browntowndev.enclave.domain.port.repository.ActiveStudioGeneration
-import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
-import io.mockk.mockk
+import com.browntowndev.enclave.feature.studio.test.FakeStudioGenerationDispatcher
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class StudioPromptCoordinatorTest {
-    private val generationCoordinator = mockk<StudioGenerationCoordinator>(relaxed = true)
-    private val studioRepository = mockk<StudioRepositoryPort>(relaxed = true)
+    private val studioRepository = FakeStudioRepository()
+    private val generationCoordinator =
+        StudioGenerationCoordinator(studioRepository, FakeStudioGenerationDispatcher())
 
     @Test
     fun `restoreLastMediaType sets media type and matching default settings`() {
