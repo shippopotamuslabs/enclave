@@ -1,5 +1,5 @@
 [versions]
-agp = "9.2.1"
+agp = "9.4.1"
 detekt = "1.23.8"
 animation = "1.11.2"
 coreKtx = "1.18.0"
