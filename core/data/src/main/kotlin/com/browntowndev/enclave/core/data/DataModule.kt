@@ -489,6 +489,12 @@ abstract class DataRepositoryModule {
 
     @Binds
     @Singleton
+    abstract fun bindBiometricCipherPort(
+        impl: com.browntowndev.enclave.core.data.security.AndroidBiometricManager,
+    ): com.browntowndev.enclave.domain.port.security.BiometricCipherPort
+
+    @Binds
+    @Singleton
     abstract fun bindCleanupRepository(
         impl: com.browntowndev.enclave.core.data.repository.CleanupRepositoryImpl,
     ): com.browntowndev.enclave.domain.port.repository.CleanupRepository

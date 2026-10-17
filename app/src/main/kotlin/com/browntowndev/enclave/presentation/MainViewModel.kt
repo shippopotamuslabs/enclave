@@ -2,26 +2,22 @@ package com.browntowndev.enclave.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.browntowndev.enclave.core.data.security.AndroidBiometricManager
 import com.browntowndev.enclave.core.ui.component.vault.VaultAuthUiState
 import com.browntowndev.enclave.core.ui.component.vault.toVaultAuthUiState
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.download.DownloadModelsResult
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.repository.CloudSyncPort
-import com.browntowndev.enclave.domain.port.repository.SettingsRepository
-import com.browntowndev.enclave.domain.port.repository.SyncOrchestrator
-import com.browntowndev.enclave.domain.port.security.BiometricPort
-import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
-import com.browntowndev.enclave.domain.port.security.VaultMetadataPort
-import com.browntowndev.enclave.domain.security.VaultKeystoreAliases
 import com.browntowndev.enclave.domain.usecase.auth.GetAuthStateUseCase
 import com.browntowndev.enclave.domain.usecase.auth.LoginWithGoogleUseCase
-import com.browntowndev.enclave.domain.usecase.auth.LoginWithGoogleUseCase.Companion.VAULT_VERIFICATION_MAGIC_STRING
 import com.browntowndev.enclave.domain.usecase.download.InitializeModelsUseCase
 import com.browntowndev.enclave.domain.usecase.security.AdoptCloudVaultUseCase
 import com.browntowndev.enclave.domain.usecase.security.BootstrapCloudVaultFromLocalUseCase
 import com.browntowndev.enclave.domain.usecase.security.CreateVaultUseCase
+import com.browntowndev.enclave.domain.usecase.security.DecryptBiometricDekUseCase
+import com.browntowndev.enclave.domain.usecase.security.GetBiometricDecryptCipherUseCase
+import com.browntowndev.enclave.domain.usecase.security.GetBiometricEncryptCipherUseCase
+import com.browntowndev.enclave.domain.usecase.security.StoreBiometricDekUseCase
+import com.browntowndev.enclave.domain.usecase.security.VaultSessionInteractor
 import com.browntowndev.enclave.domain.usecase.security.DetectVaultReconciliationStateUseCase
 import com.browntowndev.enclave.domain.usecase.security.UnlockVaultUseCase
 import com.browntowndev.enclave.domain.usecase.security.VaultReconciliationOutcome
@@ -84,11 +80,11 @@ class MainViewModel
         private val getAuthStateUseCase: GetAuthStateUseCase,
         private val loginWithGoogleUseCase: LoginWithGoogleUseCase,
         private val initializeModelsUseCase: InitializeModelsUseCase,
-        private val cryptoManager: CryptoManagerPort,
-        private val cloudSyncPort: CloudSyncPort,
-        private val vaultMetadataPort: VaultMetadataPort,
-        private val biometricPort: BiometricPort,
-        private val biometricManager: AndroidBiometricManager,
+        private val vaultSession: VaultSessionInteractor,
+        private val getBiometricEncryptCipherUseCase: GetBiometricEncryptCipherUseCase,
+        private val getBiometricDecryptCipherUseCase: GetBiometricDecryptCipherUseCase,
+        private val storeBiometricDekUseCase: StoreBiometricDekUseCase,
+        private val decryptBiometricDekUseCase: DecryptBiometricDekUseCase,
         private val createVaultUseCase: CreateVaultUseCase,
         private val unlockVaultUseCase: UnlockVaultUseCase,
         private val detectVaultReconciliationStateUseCase: DetectVaultReconciliationStateUseCase,
@@ -96,8 +92,6 @@ class MainViewModel
         private val bootstrapCloudVaultFromLocalUseCase: BootstrapCloudVaultFromLocalUseCase,
         private val loggingPort: LoggingPort,
         private val errorHandler: ViewModelErrorHandler,
-        private val settingsRepository: SettingsRepository,
-        private val syncOrchestrator: SyncOrchestrator,
     ) : ViewModel() {
         companion object {
             private const val TAG = "MainViewModel"
@@ -115,11 +109,8 @@ class MainViewModel
         @Suppress("TooGenericExceptionCaught")
         private fun initializeApp() {
             viewModelScope.launch {
-                val isLocked = !cryptoManager.hasCachedKey()
-                val isBioPossible =
-                    isLocked &&
-                        biometricPort.isBiometricAvailable() &&
-                        biometricPort.hasSecureValue(VaultKeystoreAliases.VAULT_DEK_SECURE_KEY)
+                val isLocked = vaultSession.isVaultLocked()
+                val isBioPossible = vaultSession.isBiometricUnlockPossible(isLocked)
 
                 loggingPort.debug(TAG, "initializeApp: isLocked=$isLocked, isBioPossible=$isBioPossible")
 
@@ -164,14 +155,10 @@ class MainViewModel
             isVaultLocked: Boolean,
             isBiometricUnlockPossible: Boolean,
         ) {
-            val onboardingCompleted =
-                settingsRepository
-                    .settingsFlow
-                    .first()
-                    .onboardingCompleted
+            val onboardingCompleted = vaultSession.onboardingCompleted()
             getAuthStateUseCase().collect { authState ->
                 val vaultAuthUiState = authState.toVaultAuthUiState()
-                val dekCached = cryptoManager.hasCachedKey()
+                val dekCached = !vaultSession.isVaultLocked()
                 val vaultLockedNow = !dekCached
                 _startupState.update {
                     if (it is AppStartupState.Ready) {
@@ -205,7 +192,7 @@ class MainViewModel
             viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to sign in with Google", "Failed to sign in")) {
                 loginWithGoogleUseCase().getOrThrow()
                 pendingVaultReconciliationPayload = null
-                if (cryptoManager.hasCachedKey()) {
+                if (!vaultSession.isVaultLocked()) {
                     // Sign-in can finish after the user already unlocked locally (slow OAuth). Do not
                     // wipe the session or return to the unlock gate.
                     loggingPort.debug(TAG, "loginWithGoogle: vault already unlocked, preserving session")
@@ -226,14 +213,14 @@ class MainViewModel
                 }
                 // Locked vault: drop cached DEK and defer cloud sync until password unlock + reconcile.
                 // Re-check after the slow OAuth hop — unlock may have finished while the browser was open.
-                if (cryptoManager.hasCachedKey()) {
+                if (!vaultSession.isVaultLocked()) {
                     loggingPort.debug(TAG, "loginWithGoogle: vault unlocked during OAuth, preserving session")
                     commitVaultUnlocked()
                     startCloudListenerIfEligible()
                     return@launch
                 }
-                cryptoManager.clearKey()
-                cloudSyncPort.stopListening()
+                vaultSession.clearCachedKey()
+                vaultSession.stopCloudListening()
                 _startupState.update {
                     if (it is AppStartupState.Ready) {
                         it.copy(
@@ -263,10 +250,10 @@ class MainViewModel
                 }
 
                 try {
-                    val (saltBase64, salt) = resolveOrCreateSalt()
+                    val (saltBase64, salt) = vaultSession.resolveOrCreateSalt()
 
-                    val wrappedDekBase64 = resolveWrappedDek()
-                    val verificationCiphertext = resolveVerification()
+                    val wrappedDekBase64 = vaultSession.resolveWrappedDek()
+                    val verificationCiphertext = vaultSession.resolveVerification()
 
                     if (wrappedDekBase64.isNullOrBlank()) {
                         // First-time vault creation: generate DEK, wrap with KEK, persist.
@@ -280,12 +267,12 @@ class MainViewModel
                             return@launch
                         }
                         val wrapped = createResult.getOrThrow()
-                        val newWrappedBase64 = android.util.Base64.encodeToString(wrapped, android.util.Base64.NO_WRAP)
-                        persistWrappedDek(newWrappedBase64, salt = saltBase64)
-                        ensureVerificationStored(verificationCiphertext)
+                        val newWrappedBase64 = vaultSession.encodeBase64(wrapped)
+                        vaultSession.persistWrappedDek(newWrappedBase64, salt = saltBase64)
+                        vaultSession.ensureVerificationStored(verificationCiphertext)
                     } else {
                         // Existing vault: derive KEK, unwrap DEK, cache.
-                        val wrappedBytes = android.util.Base64.decode(wrappedDekBase64, android.util.Base64.NO_WRAP)
+                        val wrappedBytes = vaultSession.decodeBase64(wrappedDekBase64)
                         val unlockResult = unlockVaultUseCase(password, salt, wrappedBytes)
                         if (unlockResult.isFailure) {
                             loggingPort.error(TAG, "unlockVault: Wrong password (DEK unwrap failed)", unlockResult.exceptionOrNull())
@@ -298,7 +285,7 @@ class MainViewModel
                         if (!verifyMagicOrFail(verificationCiphertext)) {
                             return@launch
                         }
-                        ensureVerificationStored(verificationCiphertext)
+                        vaultSession.ensureVerificationStored(verificationCiphertext)
                     }
 
                     loggingPort.debug(TAG, "unlockVault: Vault unlocked successfully")
@@ -312,7 +299,7 @@ class MainViewModel
                     }
 
                     val readyAfterReconcile = startupState.value as? AppStartupState.Ready
-                    val requestBiometricEnrollment = shouldRequestBiometricEnrollment(enableBiometric)
+                    val requestBiometricEnrollment = vaultSession.shouldRequestBiometricEnrollment(enableBiometric)
                     if (requestBiometricEnrollment) {
                         loggingPort.debug(TAG, "unlockVault: Biometric opt-in detected, requesting enrollment")
                         if (readyAfterReconcile?.pendingVaultReconciliation == null) {
@@ -355,88 +342,6 @@ class MainViewModel
                         }
                     }
                 }
-            }
-        }
-
-        private fun shouldRequestBiometricEnrollment(enableBiometric: Boolean): Boolean =
-            enableBiometric &&
-                biometricPort.isBiometricAvailable() &&
-                !biometricPort.hasSecureValue(VaultKeystoreAliases.VAULT_DEK_SECURE_KEY)
-
-        private suspend fun resolveOrCreateSalt(): Pair<String, ByteArray> {
-            var saltBase64 = vaultMetadataPort.getVaultSalt()?.takeIf { it.isNotBlank() }
-            if (saltBase64 == null) {
-                saltBase64 = cloudSyncPort.getVaultSalt().getOrNull()?.takeIf { it.isNotBlank() }
-                if (saltBase64 != null) {
-                    vaultMetadataPort.saveVaultSalt(saltBase64)
-                }
-            }
-            if (saltBase64 == null) {
-                loggingPort.info(TAG, "resolveOrCreateSalt: No salt anywhere, generating new")
-                val newSalt = cryptoManager.generateSalt()
-                saltBase64 = android.util.Base64.encodeToString(newSalt, android.util.Base64.NO_WRAP)
-                vaultMetadataPort.saveVaultSalt(saltBase64)
-                runCatching { cloudSyncPort.updateVaultSalt(saltBase64) }
-            }
-            val salt = android.util.Base64.decode(saltBase64, android.util.Base64.NO_WRAP)
-            return saltBase64 to salt
-        }
-
-        private suspend fun resolveWrappedDek(): String? {
-            var blob = vaultMetadataPort.getWrappedDek()?.takeIf { it.isNotBlank() }
-            if (blob == null) {
-                blob = cloudSyncPort.getWrappedDek().getOrNull()?.takeIf { it.isNotBlank() }
-                if (blob != null) {
-                    vaultMetadataPort.saveWrappedDek(blob)
-                }
-            }
-            return blob
-        }
-
-        private suspend fun resolveVerification(): String? {
-            var verification = vaultMetadataPort.getVaultVerificationData()?.takeIf { it.isNotBlank() }
-            if (verification == null) {
-                verification = cloudSyncPort.getVaultVerificationData().getOrNull()?.takeIf { it.isNotBlank() }
-                if (verification != null) {
-                    vaultMetadataPort.saveVaultVerificationData(verification)
-                }
-            }
-            return verification
-        }
-
-        /** Cloud anchor first so biometric unlock proves the DEK still matches remote vault state. */
-        private suspend fun resolveVerificationPreferCloud(): String? {
-            var verification = cloudSyncPort.getVaultVerificationData().getOrNull()?.takeIf { it.isNotBlank() }
-            if (verification != null) {
-                vaultMetadataPort.saveVaultVerificationData(verification)
-                return verification
-            }
-            return vaultMetadataPort.getVaultVerificationData()?.takeIf { it.isNotBlank() }
-        }
-
-        private suspend fun persistWrappedDek(
-            wrappedBase64: String,
-            salt: String,
-        ) {
-            vaultMetadataPort.saveWrappedDek(wrappedBase64)
-            runCatching {
-                cloudSyncPort.uploadVaultMetadata(
-                    com.browntowndev.enclave.domain.model.security.VaultMetadata(
-                        salt = salt,
-                        verification = null,
-                        wrappedDek = wrappedBase64,
-                    ),
-                )
-            }
-        }
-
-        private suspend fun ensureVerificationStored(existing: String?) {
-            if (existing != null) return
-            val encryptResult = cryptoManager.encrypt(VAULT_VERIFICATION_MAGIC_STRING)
-            encryptResult.onSuccess { ciphertext ->
-                val base64Ciphertext = android.util.Base64.encodeToString(ciphertext, android.util.Base64.NO_WRAP)
-                vaultMetadataPort.saveVaultVerificationData(base64Ciphertext)
-                runCatching { cloudSyncPort.updateVaultVerificationData(base64Ciphertext) }
             }
         }
 
@@ -501,7 +406,7 @@ class MainViewModel
         private suspend fun startCloudSyncAndListen(initialUpload: Boolean): Boolean {
             val progressJob =
                 viewModelScope.launch {
-                    syncOrchestrator.syncProgress.collect { progress ->
+                    vaultSession.syncProgress.collect { progress ->
                         _startupState.update { state ->
                             if (state is AppStartupState.Ready) {
                                 state.copy(
@@ -515,7 +420,7 @@ class MainViewModel
                     }
                 }
 
-            val result = syncOrchestrator.startInitialSync(initialUpload)
+            val result = vaultSession.startInitialSync(initialUpload)
             progressJob.cancel()
 
             val isSuccess = result.isSuccess
@@ -634,21 +539,10 @@ class MainViewModel
             }
         }
 
-        private fun verifyMagic(
-            verificationCiphertext: String?,
-            requireVerification: Boolean = false,
-        ): Boolean {
-            if (verificationCiphertext == null) return !requireVerification
-            val ciphertextBytes = android.util.Base64.decode(verificationCiphertext, android.util.Base64.DEFAULT)
-            val decryptResult = cryptoManager.decrypt(ciphertextBytes)
-            return decryptResult.isSuccess && decryptResult.getOrNull() == VAULT_VERIFICATION_MAGIC_STRING
-        }
-
-        @Suppress("ReturnCount")
         private fun verifyMagicOrFail(verificationCiphertext: String?): Boolean {
-            if (verifyMagic(verificationCiphertext)) return true
+            if (vaultSession.verifyMagic(verificationCiphertext)) return true
             loggingPort.error(TAG, "verifyMagicOrFail: Verification mismatch — DEK does not decrypt magic string")
-            cryptoManager.clearKey()
+            vaultSession.clearCachedKey()
             _startupState.update {
                 if (it is AppStartupState.Ready) it.copy(vaultErrorMessage = "Incorrect Vault Password") else it
             }
@@ -657,8 +551,7 @@ class MainViewModel
 
         private fun invalidateStaleBiometricUnlock(failureMessage: String) {
             loggingPort.error(TAG, "invalidateStaleBiometricUnlock: $failureMessage")
-            cryptoManager.clearKey()
-            biometricPort.clearSecureValue(VaultKeystoreAliases.VAULT_DEK_SECURE_KEY)
+            vaultSession.clearKeyAndBiometricValue()
             _startupState.update {
                 if (it is AppStartupState.Ready) {
                     it.copy(
@@ -679,14 +572,14 @@ class MainViewModel
             startCloudSyncAndListen(initialUpload = false)
         }
 
-        fun getBiometricEncryptCipher(): Cipher? = biometricManager.getEncryptCipher(VaultKeystoreAliases.VAULT_DEK_SECURE_KEY)
+        fun getBiometricEncryptCipher(): Cipher? = getBiometricEncryptCipherUseCase()
 
         /**
          * Persists the currently cached DEK behind the biometric-bound AndroidKeyStore key.
          */
         fun finalizeBiometricEnrollment(cipher: Cipher) {
             viewModelScope.launch {
-                val dek = cryptoManager.getCachedDek()
+                val dek = vaultSession.getCachedDek()
                 if (dek == null) {
                     loggingPort.error(TAG, "finalizeBiometricEnrollment: vault is locked, cannot enroll")
                     _startupState.update {
@@ -694,18 +587,11 @@ class MainViewModel
                     }
                     return@launch
                 }
-                val result =
-                    biometricManager.storeSecureBytesWithCipher(
-                        VaultKeystoreAliases.VAULT_DEK_SECURE_KEY,
-                        dek,
-                        cipher,
-                    )
+                val result = storeBiometricDekUseCase(dek, cipher)
                 _startupState.update {
                     if (it is AppStartupState.Ready) {
                         val bioPossibleNow =
-                            result.isSuccess &&
-                                biometricPort.isBiometricAvailable() &&
-                                biometricPort.hasSecureValue(VaultKeystoreAliases.VAULT_DEK_SECURE_KEY)
+                            result.isSuccess && vaultSession.isBiometricAvailableWithSecureValue()
                         if (!result.isSuccess) {
                             loggingPort.error(
                                 TAG,
@@ -739,8 +625,8 @@ class MainViewModel
         }
 
         fun getBiometricDecryptCipher(): Cipher? {
-            val cipher = biometricManager.getDecryptCipher(VaultKeystoreAliases.VAULT_DEK_SECURE_KEY)
-            if (cipher == null && biometricPort.hasSecureValue(VaultKeystoreAliases.VAULT_DEK_SECURE_KEY)) {
+            val cipher = getBiometricDecryptCipherUseCase()
+            if (cipher == null && vaultSession.hasBiometricSecureValue()) {
                 loggingPort.error(
                     TAG,
                     "getBiometricDecryptCipher: Cipher is null but has secure value. Invalidate stale biometric credentials.",
@@ -771,11 +657,7 @@ class MainViewModel
                 }
 
                 try {
-                    val dek =
-                        biometricManager.decryptBytesWithCipher(
-                            VaultKeystoreAliases.VAULT_DEK_SECURE_KEY,
-                            cipher,
-                        )
+                    val dek = decryptBiometricDekUseCase(cipher)
                     if (dek == null) {
                         loggingPort.error(TAG, "unlockWithBiometricCipher: Failed to unwrap DEK")
                         invalidateStaleBiometricUnlock(
@@ -783,7 +665,7 @@ class MainViewModel
                         )
                         return@launch
                     }
-                    val cached = cryptoManager.cacheDek(dek)
+                    val cached = vaultSession.cacheDek(dek)
                     if (cached.isFailure) {
                         loggingPort.error(
                             TAG,
@@ -798,7 +680,7 @@ class MainViewModel
 
                     val biometricFailureMessage =
                         "Could not unlock with biometrics. Enter your vault password."
-                    if (!verifyMagic(resolveVerificationPreferCloud(), requireVerification = true)) {
+                    if (!vaultSession.verifyMagic(vaultSession.resolveVerificationPreferCloud(), requireVerification = true)) {
                         invalidateStaleBiometricUnlock(biometricFailureMessage)
                         return@launch
                     }

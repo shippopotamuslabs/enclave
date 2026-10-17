@@ -8,6 +8,7 @@ import com.browntowndev.enclave.domain.model.download.ModelScanResult
 import com.browntowndev.enclave.domain.port.auth.AuthState
 import com.browntowndev.enclave.domain.port.repository.CloudSyncPort
 import com.browntowndev.enclave.domain.port.repository.SyncOrchestrator
+import com.browntowndev.enclave.domain.port.security.BiometricCipherPort
 import com.browntowndev.enclave.domain.port.security.BiometricPort
 import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
 import com.browntowndev.enclave.domain.port.security.VaultMetadataPort
@@ -18,6 +19,11 @@ import com.browntowndev.enclave.domain.usecase.download.InitializeModelsUseCase
 import com.browntowndev.enclave.domain.usecase.security.AdoptCloudVaultUseCase
 import com.browntowndev.enclave.domain.usecase.security.BootstrapCloudVaultFromLocalUseCase
 import com.browntowndev.enclave.domain.usecase.security.CreateVaultUseCase
+import com.browntowndev.enclave.domain.usecase.security.DecryptBiometricDekUseCase
+import com.browntowndev.enclave.domain.usecase.security.GetBiometricDecryptCipherUseCase
+import com.browntowndev.enclave.domain.usecase.security.GetBiometricEncryptCipherUseCase
+import com.browntowndev.enclave.domain.usecase.security.StoreBiometricDekUseCase
+import com.browntowndev.enclave.domain.usecase.security.VaultSessionInteractor
 import com.browntowndev.enclave.domain.usecase.security.DetectVaultReconciliationStateUseCase
 import com.browntowndev.enclave.domain.usecase.security.StartCloudSyncListeningUseCase
 import com.browntowndev.enclave.domain.usecase.security.UnlockVaultUseCase
@@ -37,6 +43,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.RegisterExtension
+import javax.crypto.Cipher
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MainViewModelOnboardingTest {
@@ -101,16 +108,43 @@ class MainViewModelOnboardingTest {
             val syncOrchestrator = mockk<SyncOrchestrator>(relaxed = true)
 
             // When: MainViewModel is constructed with the fake settings (onboardingCompleted=false)
+            // ENC-24: ports are wrapped in VaultSessionInteractor + cipher use cases.
+            val cipherPort =
+                object : BiometricCipherPort {
+                    override fun getEncryptCipher(key: String): Cipher? = biometricManager.getEncryptCipher(key)
+
+                    override fun getDecryptCipher(key: String): Cipher? = biometricManager.getDecryptCipher(key)
+
+                    override suspend fun storeSecureBytesWithCipher(
+                        key: String,
+                        value: ByteArray,
+                        cipher: Cipher,
+                    ): Result<Unit> = biometricManager.storeSecureBytesWithCipher(key, value, cipher)
+
+                    override fun decryptBytesWithCipher(
+                        key: String,
+                        cipher: Cipher,
+                    ): ByteArray? = biometricManager.decryptBytesWithCipher(key, cipher)
+                }
             val viewModel =
                 MainViewModel(
                     getAuthStateUseCase = getAuthStateUseCase,
                     loginWithGoogleUseCase = loginWithGoogleUseCase,
                     initializeModelsUseCase = initializeModelsUseCase,
-                    cryptoManager = cryptoManager,
-                    cloudSyncPort = cloudSyncPort,
-                    vaultMetadataPort = vaultMetadataPort,
-                    biometricPort = biometricPort,
-                    biometricManager = biometricManager,
+                    vaultSession =
+                        VaultSessionInteractor(
+                            cryptoManager = cryptoManager,
+                            cloudSyncPort = cloudSyncPort,
+                            vaultMetadataPort = vaultMetadataPort,
+                            biometricPort = biometricPort,
+                            settingsRepository = fakeSettingsRepository,
+                            syncOrchestrator = syncOrchestrator,
+                            loggingPort = loggingPort,
+                        ),
+                    getBiometricEncryptCipherUseCase = GetBiometricEncryptCipherUseCase(cipherPort),
+                    getBiometricDecryptCipherUseCase = GetBiometricDecryptCipherUseCase(cipherPort),
+                    storeBiometricDekUseCase = StoreBiometricDekUseCase(cipherPort),
+                    decryptBiometricDekUseCase = DecryptBiometricDekUseCase(cipherPort),
                     createVaultUseCase = createVaultUseCase,
                     unlockVaultUseCase = unlockVaultUseCase,
                     detectVaultReconciliationStateUseCase = detectVaultReconciliationStateUseCase,
@@ -118,8 +152,6 @@ class MainViewModelOnboardingTest {
                     bootstrapCloudVaultFromLocalUseCase = bootstrapCloudVaultFromLocalUseCase,
                     loggingPort = loggingPort,
                     errorHandler = errorHandler,
-                    settingsRepository = fakeSettingsRepository,
-                    syncOrchestrator = syncOrchestrator,
                 )
 
             advanceUntilIdle()
