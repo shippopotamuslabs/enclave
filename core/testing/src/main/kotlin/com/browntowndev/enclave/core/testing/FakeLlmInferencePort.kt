@@ -22,6 +22,9 @@ class FakeLlmInferencePort : LlmInferencePort {
 
     var eventsToEmit: List<InferenceEvent> = listOf(InferenceEvent.Finished(ModelType.FAST))
 
+    /** When set, prompts return this flow instead of [eventsToEmit] (e.g. a hanging stream). */
+    var promptFlowOverride: Flow<InferenceEvent>? = null
+
     val recordedPrompts = mutableListOf<RecordedPrompt>()
     val historyCalls = mutableListOf<List<ChatMessage>>()
     var closeSessionCount = 0
@@ -29,7 +32,7 @@ class FakeLlmInferencePort : LlmInferencePort {
 
     override fun sendPrompt(prompt: String, closeConversation: Boolean): Flow<InferenceEvent> {
         recordedPrompts += RecordedPrompt(prompt, null, closeConversation)
-        return eventsToEmit.asFlow()
+        return promptFlowOverride ?: eventsToEmit.asFlow()
     }
 
     override fun sendPrompt(
@@ -38,7 +41,7 @@ class FakeLlmInferencePort : LlmInferencePort {
         closeConversation: Boolean,
     ): Flow<InferenceEvent> {
         recordedPrompts += RecordedPrompt(prompt, options, closeConversation)
-        return eventsToEmit.asFlow()
+        return promptFlowOverride ?: eventsToEmit.asFlow()
     }
 
     override suspend fun setHistory(messages: List<ChatMessage>) {
