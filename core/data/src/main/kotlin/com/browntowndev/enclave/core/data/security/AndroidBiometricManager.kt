@@ -28,6 +28,7 @@ import android.security.keystore.KeyProperties
 import android.util.Base64
 import androidx.biometric.BiometricManager
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.domain.port.security.BiometricCipherPort
 import com.browntowndev.enclave.domain.port.security.BiometricPort
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.security.KeyStore
@@ -44,7 +45,7 @@ class AndroidBiometricManager
     constructor(
         @ApplicationContext private val context: Context,
         private val loggingPort: LoggingPort,
-    ) : BiometricPort {
+    ) : BiometricPort, BiometricCipherPort {
         private val keyStore: KeyStore by lazy {
             KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         }
@@ -78,7 +79,7 @@ class AndroidBiometricManager
                 ),
             )
 
-        fun getEncryptCipher(key: String): Cipher? {
+        override fun getEncryptCipher(key: String): Cipher? {
             loggingPort.debug(TAG, "getEncryptCipher: key=$key")
             return try {
                 deleteKey()
@@ -98,7 +99,7 @@ class AndroidBiometricManager
             cipher: Cipher,
         ): Result<Unit> = storeSecureBytesWithCipher(key, value.toByteArray(Charsets.UTF_8), cipher)
 
-        suspend fun storeSecureBytesWithCipher(
+        override suspend fun storeSecureBytesWithCipher(
             key: String,
             value: ByteArray,
             cipher: Cipher,
@@ -171,7 +172,7 @@ class AndroidBiometricManager
         /**
          * [BiometricPort] implementation: cipher for decrypt flow after IV is loaded from prefs.
          */
-        fun getDecryptCipher(key: String): Cipher? {
+        override fun getDecryptCipher(key: String): Cipher? {
             loggingPort.debug(TAG, "getDecryptCipher: key=$key")
             val ivBase64 = sharedPrefs.getString("${key}_iv", null) ?: return null
             val iv = Base64.decode(ivBase64, Base64.NO_WRAP)
@@ -197,7 +198,7 @@ class AndroidBiometricManager
             cipher: Cipher,
         ): String? = decryptBytesWithCipher(key, cipher)?.let { String(it, Charsets.UTF_8) }
 
-        fun decryptBytesWithCipher(
+        override fun decryptBytesWithCipher(
             key: String,
             cipher: Cipher,
         ): ByteArray? {
