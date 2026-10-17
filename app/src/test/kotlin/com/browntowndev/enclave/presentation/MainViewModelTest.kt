@@ -11,6 +11,7 @@ import com.browntowndev.enclave.domain.port.repository.CloudSyncPort
 import com.browntowndev.enclave.domain.port.repository.SettingsRepository
 import com.browntowndev.enclave.domain.port.repository.SyncOrchestrator
 import com.browntowndev.enclave.domain.port.repository.SyncProgress
+import com.browntowndev.enclave.domain.port.security.BiometricCipherPort
 import com.browntowndev.enclave.domain.port.security.BiometricPort
 import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
 import com.browntowndev.enclave.domain.port.security.VaultMetadataPort
@@ -22,6 +23,11 @@ import com.browntowndev.enclave.domain.usecase.download.InitializeModelsUseCase
 import com.browntowndev.enclave.domain.usecase.security.AdoptCloudVaultUseCase
 import com.browntowndev.enclave.domain.usecase.security.BootstrapCloudVaultFromLocalUseCase
 import com.browntowndev.enclave.domain.usecase.security.CreateVaultUseCase
+import com.browntowndev.enclave.domain.usecase.security.DecryptBiometricDekUseCase
+import com.browntowndev.enclave.domain.usecase.security.GetBiometricDecryptCipherUseCase
+import com.browntowndev.enclave.domain.usecase.security.GetBiometricEncryptCipherUseCase
+import com.browntowndev.enclave.domain.usecase.security.StoreBiometricDekUseCase
+import com.browntowndev.enclave.domain.usecase.security.VaultSessionInteractor
 import com.browntowndev.enclave.domain.usecase.security.DetectVaultReconciliationStateUseCase
 import com.browntowndev.enclave.domain.usecase.security.StartCloudSyncListeningUseCase
 import com.browntowndev.enclave.domain.usecase.security.UnlockVaultUseCase
@@ -117,16 +123,45 @@ class MainViewModelTest {
         errHandler: ViewModelErrorHandler = errorHandler,
         settings: SettingsRepository = settingsRepository,
         syncOrch: SyncOrchestrator = syncOrchestrator,
-    ): MainViewModel =
-        MainViewModel(
+    ): MainViewModel {
+        // ENC-24: the ViewModel now depends on VaultSessionInteractor + biometric cipher
+        // use cases; tests keep mocking the underlying ports and wrap them here.
+        val vaultSession =
+            VaultSessionInteractor(
+                cryptoManager = crypto,
+                cloudSyncPort = cloudSync,
+                vaultMetadataPort = vaultMetadata,
+                biometricPort = biometric,
+                settingsRepository = settings,
+                syncOrchestrator = syncOrch,
+                loggingPort = logging,
+            )
+        val cipherPort =
+            object : BiometricCipherPort {
+                override fun getEncryptCipher(key: String): Cipher? = bioManager.getEncryptCipher(key)
+
+                override fun getDecryptCipher(key: String): Cipher? = bioManager.getDecryptCipher(key)
+
+                override suspend fun storeSecureBytesWithCipher(
+                    key: String,
+                    value: ByteArray,
+                    cipher: Cipher,
+                ): Result<Unit> = bioManager.storeSecureBytesWithCipher(key, value, cipher)
+
+                override fun decryptBytesWithCipher(
+                    key: String,
+                    cipher: Cipher,
+                ): ByteArray? = bioManager.decryptBytesWithCipher(key, cipher)
+            }
+        return MainViewModel(
             getAuthState,
             loginWithGoogle,
             initializeModels,
-            crypto,
-            cloudSync,
-            vaultMetadata,
-            biometric,
-            bioManager,
+            vaultSession,
+            GetBiometricEncryptCipherUseCase(cipherPort),
+            GetBiometricDecryptCipherUseCase(cipherPort),
+            StoreBiometricDekUseCase(cipherPort),
+            DecryptBiometricDekUseCase(cipherPort),
             createVault,
             unlockVault,
             detectReconciliation,
@@ -134,9 +169,8 @@ class MainViewModelTest {
             bootstrapCloud,
             logging,
             errHandler,
-            settings,
-            syncOrch,
         )
+    }
 
     @BeforeEach
     fun setUp() {
@@ -150,6 +184,12 @@ class MainViewModelTest {
         }
 
         coEvery { initializeModelsUseCase() } returns initializedModelsResult
+        every { cryptoManager.encodeBase64(any()) } answers {
+            Base64.getEncoder().encodeToString(firstArg())
+        }
+        every { cryptoManager.decodeBase64(any()) } answers {
+            Base64.getDecoder().decode(firstArg<String>())
+        }
         every { cryptoManager.hasCachedKey() } returns false
         justRun { cryptoManager.clearKey() }
         every { biometricPort.isBiometricAvailable() } returns false
@@ -535,7 +575,7 @@ class MainViewModelTest {
             val ciphertextBytes = byteArrayOf(1, 2, 3)
             every { cryptoManager.decrypt(any<ByteArray>(), any()) } returns
                 Result.success(LoginWithGoogleUseCase.VAULT_VERIFICATION_MAGIC_STRING)
-            every { android.util.Base64.decode(cloudVerification, android.util.Base64.DEFAULT) } returns ciphertextBytes
+            every { cryptoManager.decodeBase64(cloudVerification) } returns ciphertextBytes
 
             viewModel =
                 createViewModel()

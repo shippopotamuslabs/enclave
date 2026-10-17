@@ -13,8 +13,7 @@ config:
 # ENC-22 after remediation; still-inactive rules have per-rule follow-ups:
 # ForbiddenMaterialComposeInFeatures (ENC-25), ForbiddenDomainTypeInComposable
 # + ForbiddenDomainTypeInUiState (ENC-26), ForbiddenVerifyInViewModelTests
-# (ENC-27), ForbiddenMockKInTests (ENC-28). MainViewModel is excluded from
-# the ViewModel rules until its vault use-case refactor (ENC-24).
+# (ENC-27), ForbiddenMockKInTests (ENC-28).
 enclave:
   ForbiddenMaterialComposeInFeatures:
     active: false
@@ -26,14 +25,10 @@ enclave:
     active: false
   ForbiddenRepositoryInViewModel:
     active: true
-    excludes:
-      - '**/app/src/main/kotlin/com/browntowndev/enclave/presentation/MainViewModel.kt'
   ForbiddenDomainTypeInComposable:
     active: false
   ForbiddenPortInViewModel:
     active: true
-    excludes:
-      - '**/app/src/main/kotlin/com/browntowndev/enclave/presentation/MainViewModel.kt'
   ForbiddenDomainTypeInUiState:
     active: false
   ForbiddenUseCaseInFeatureMapper:
