@@ -1,40 +1,33 @@
 package com.browntowndev.enclave.app
 
-import com.browntowndev.enclave.core.data.security.AndroidBiometricManager
+import com.browntowndev.enclave.core.testing.FakeAuthManager
+import com.browntowndev.enclave.core.testing.FakeBiometricPort
+import com.browntowndev.enclave.core.testing.FakeCloudSyncPort
+import com.browntowndev.enclave.core.testing.FakeCryptoManagerPort
+import com.browntowndev.enclave.core.testing.FakeSyncOrchestrator
+import com.browntowndev.enclave.core.testing.FakeVaultMetadataPort
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
-import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
-import com.browntowndev.enclave.domain.model.download.DownloadModelsResult
-import com.browntowndev.enclave.domain.model.download.ModelScanResult
-import com.browntowndev.enclave.domain.port.auth.AuthState
-import com.browntowndev.enclave.domain.port.repository.CloudSyncPort
-import com.browntowndev.enclave.domain.port.repository.SyncOrchestrator
-import com.browntowndev.enclave.domain.port.security.BiometricCipherPort
-import com.browntowndev.enclave.domain.port.security.BiometricPort
-import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
-import com.browntowndev.enclave.domain.port.security.VaultMetadataPort
 import com.browntowndev.enclave.domain.usecase.FakeSettingsRepository
 import com.browntowndev.enclave.domain.usecase.auth.GetAuthStateUseCase
 import com.browntowndev.enclave.domain.usecase.auth.LoginWithGoogleUseCase
-import com.browntowndev.enclave.domain.usecase.download.InitializeModelsUseCase
-import com.browntowndev.enclave.domain.usecase.security.AdoptCloudVaultUseCase
-import com.browntowndev.enclave.domain.usecase.security.BootstrapCloudVaultFromLocalUseCase
-import com.browntowndev.enclave.domain.usecase.security.CreateVaultUseCase
 import com.browntowndev.enclave.domain.usecase.security.DecryptBiometricDekUseCase
 import com.browntowndev.enclave.domain.usecase.security.GetBiometricDecryptCipherUseCase
 import com.browntowndev.enclave.domain.usecase.security.GetBiometricEncryptCipherUseCase
 import com.browntowndev.enclave.domain.usecase.security.StoreBiometricDekUseCase
 import com.browntowndev.enclave.domain.usecase.security.VaultSessionInteractor
-import com.browntowndev.enclave.domain.usecase.security.DetectVaultReconciliationStateUseCase
-import com.browntowndev.enclave.domain.usecase.security.StartCloudSyncListeningUseCase
-import com.browntowndev.enclave.domain.usecase.security.UnlockVaultUseCase
 import com.browntowndev.enclave.presentation.AppStartupState
 import com.browntowndev.enclave.presentation.MainViewModel
+import com.browntowndev.enclave.testing.FakeAdoptCloudVaultUseCase
+import com.browntowndev.enclave.testing.FakeBiometricCipherPort
+import com.browntowndev.enclave.testing.FakeBootstrapCloudVaultFromLocalUseCase
+import com.browntowndev.enclave.testing.FakeCreateVaultUseCase
+import com.browntowndev.enclave.testing.FakeDetectVaultReconciliationStateUseCase
+import com.browntowndev.enclave.testing.FakeInitializeModelsUseCase
 import com.browntowndev.enclave.testing.FakeLoggingPort
-import io.mockk.coEvery
-import io.mockk.every
-import io.mockk.mockk
+import com.browntowndev.enclave.testing.FakeUnlockVaultUseCase
+import com.browntowndev.enclave.testing.FakeViewModelErrorHandler
+import com.browntowndev.enclave.testing.emptyModelsResult
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -43,7 +36,6 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.RegisterExtension
-import javax.crypto.Cipher
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MainViewModelOnboardingTest {
@@ -63,73 +55,25 @@ class MainViewModelOnboardingTest {
             // The default FakeSettingsRepository already emits onboardingCompleted = false
             val fakeSettingsRepository = FakeSettingsRepository()
 
-            val initializedModelsResult =
-                DownloadModelsResult(
-                    allModels = emptyMap(),
-                    modelsToDownload = emptyList(),
-                    scanResult =
-                        ModelScanResult(
-                            missingModels = emptyList(),
-                            partialDownloads = emptyMap(),
-                            allValid = true,
-                        ),
-                )
+            val initializeModelsUseCase =
+                FakeInitializeModelsUseCase().apply { result = emptyModelsResult() }
 
-            val getAuthStateUseCase = mockk<GetAuthStateUseCase>()
-            val loginWithGoogleUseCase = mockk<LoginWithGoogleUseCase>()
-            val initializeModelsUseCase = mockk<InitializeModelsUseCase>()
-            val cryptoManager = mockk<CryptoManagerPort>()
-            val cloudSyncPort = mockk<CloudSyncPort>()
-            val vaultMetadataPort = mockk<VaultMetadataPort>()
-            val biometricPort = mockk<BiometricPort>(relaxUnitFun = true)
-            val biometricManager = mockk<AndroidBiometricManager>(relaxUnitFun = true)
-            val createVaultUseCase = mockk<CreateVaultUseCase>()
-            val unlockVaultUseCase = mockk<UnlockVaultUseCase>()
-            val detectVaultReconciliationStateUseCase = mockk<DetectVaultReconciliationStateUseCase>()
-            val adoptCloudVaultUseCase = mockk<AdoptCloudVaultUseCase>()
-            val bootstrapCloudVaultFromLocalUseCase = mockk<BootstrapCloudVaultFromLocalUseCase>()
-            val startCloudSyncListeningUseCase = mockk<StartCloudSyncListeningUseCase>()
+            // Default FakeAuthManager is Unauthenticated.
+            val authManager = FakeAuthManager()
+            val cryptoManager = FakeCryptoManagerPort().apply { hasCachedKeyValue = true }
+            val cloudSyncPort = FakeCloudSyncPort()
+            val vaultMetadataPort = FakeVaultMetadataPort()
+            val biometricPort = FakeBiometricPort()
+            val cipherPort = FakeBiometricCipherPort()
             val loggingPort = FakeLoggingPort()
-            val errorHandler = mockk<ViewModelErrorHandler>()
-
-            // Vault is unlocked: hasCachedKey() returns true
-            every { cryptoManager.hasCachedKey() } returns true
-            every { biometricPort.isBiometricAvailable() } returns false
-            every { biometricPort.hasSecureValue(any()) } returns false
-            every { biometricManager.getEncryptCipher(any()) } returns null
-            every { biometricManager.getDecryptCipher(any()) } returns null
-            every { getAuthStateUseCase() } returns MutableStateFlow(AuthState.Unauthenticated)
-            every { errorHandler.coroutineExceptionHandler(any(), any(), any()) } returns
-                kotlinx.coroutines.CoroutineExceptionHandler { _, _ -> }
-
-            // initializeModelsUseCase returns empty modelsToDownload
-            coEvery { initializeModelsUseCase() } returns initializedModelsResult
-
-            val syncOrchestrator = mockk<SyncOrchestrator>(relaxed = true)
+            val errorHandler = FakeViewModelErrorHandler()
 
             // When: MainViewModel is constructed with the fake settings (onboardingCompleted=false)
             // ENC-24: ports are wrapped in VaultSessionInteractor + cipher use cases.
-            val cipherPort =
-                object : BiometricCipherPort {
-                    override fun getEncryptCipher(key: String): Cipher? = biometricManager.getEncryptCipher(key)
-
-                    override fun getDecryptCipher(key: String): Cipher? = biometricManager.getDecryptCipher(key)
-
-                    override suspend fun storeSecureBytesWithCipher(
-                        key: String,
-                        value: ByteArray,
-                        cipher: Cipher,
-                    ): Result<Unit> = biometricManager.storeSecureBytesWithCipher(key, value, cipher)
-
-                    override fun decryptBytesWithCipher(
-                        key: String,
-                        cipher: Cipher,
-                    ): ByteArray? = biometricManager.decryptBytesWithCipher(key, cipher)
-                }
             val viewModel =
                 MainViewModel(
-                    getAuthStateUseCase = getAuthStateUseCase,
-                    loginWithGoogleUseCase = loginWithGoogleUseCase,
+                    getAuthStateUseCase = GetAuthStateUseCase(authManager),
+                    loginWithGoogleUseCase = LoginWithGoogleUseCase(authManager, loggingPort),
                     initializeModelsUseCase = initializeModelsUseCase,
                     vaultSession =
                         VaultSessionInteractor(
@@ -138,18 +82,18 @@ class MainViewModelOnboardingTest {
                             vaultMetadataPort = vaultMetadataPort,
                             biometricPort = biometricPort,
                             settingsRepository = fakeSettingsRepository,
-                            syncOrchestrator = syncOrchestrator,
+                            syncOrchestrator = FakeSyncOrchestrator(),
                             loggingPort = loggingPort,
                         ),
                     getBiometricEncryptCipherUseCase = GetBiometricEncryptCipherUseCase(cipherPort),
                     getBiometricDecryptCipherUseCase = GetBiometricDecryptCipherUseCase(cipherPort),
                     storeBiometricDekUseCase = StoreBiometricDekUseCase(cipherPort),
                     decryptBiometricDekUseCase = DecryptBiometricDekUseCase(cipherPort),
-                    createVaultUseCase = createVaultUseCase,
-                    unlockVaultUseCase = unlockVaultUseCase,
-                    detectVaultReconciliationStateUseCase = detectVaultReconciliationStateUseCase,
-                    adoptCloudVaultUseCase = adoptCloudVaultUseCase,
-                    bootstrapCloudVaultFromLocalUseCase = bootstrapCloudVaultFromLocalUseCase,
+                    createVaultUseCase = FakeCreateVaultUseCase(),
+                    unlockVaultUseCase = FakeUnlockVaultUseCase(),
+                    detectVaultReconciliationStateUseCase = FakeDetectVaultReconciliationStateUseCase(),
+                    adoptCloudVaultUseCase = FakeAdoptCloudVaultUseCase(),
+                    bootstrapCloudVaultFromLocalUseCase = FakeBootstrapCloudVaultFromLocalUseCase(),
                     loggingPort = loggingPort,
                     errorHandler = errorHandler,
                 )
