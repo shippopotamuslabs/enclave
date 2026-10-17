@@ -16,7 +16,7 @@ import com.browntowndev.enclave.domain.util.Clock
 import java.util.UUID
 import javax.inject.Inject
 
-class GenerateMediaUseCase
+open class GenerateMediaUseCase
     @Inject
     constructor(
         private val generateImageUseCase: GenerateImageUseCase,
@@ -27,7 +27,7 @@ class GenerateMediaUseCase
         private val studioRepository: StudioRepositoryPort,
         private val clock: Clock,
     ) {
-        suspend operator fun invoke(
+        open suspend operator fun invoke(
             request: MediaGenerationRequest,
             onImageProgress: (ImageGenerationProgress) -> Unit = {},
         ): Result<List<GeneratedMediaAsset>> {
