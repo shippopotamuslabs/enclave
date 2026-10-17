@@ -53,9 +53,7 @@ import com.browntowndev.enclave.core.ui.component.enclave.enclaveOutlinedTextFie
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
-import com.browntowndev.enclave.domain.model.inference.ApiModelParameterSupport
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
-import com.browntowndev.enclave.domain.model.inference.ApiReasoningControlStyle
 import com.browntowndev.enclave.domain.model.inference.DeepSeekEndpoint
 import com.browntowndev.enclave.domain.model.inference.ZaiEndpoint
 
@@ -140,23 +138,23 @@ fun ProviderSelectionField(
             shape = EnclaveNeoTokens.shape,
             containerColor = MaterialTheme.colorScheme.surface,
         ) {
-            ApiProvider.entries.filter(ApiProvider::supportsChat).forEach { provider ->
+            ApiProviderUi.entries.filter(ApiProviderUi::supportsChat).forEach { provider ->
                 DropdownMenuItem(
                     text = { Text(provider.displayName) },
                     onClick = {
                         val nextBaseUrl =
                             when {
-                                provider == ApiProvider.DEEPSEEK -> DeepSeekEndpoint.OFFICIAL.baseUrl
-                                provider == ApiProvider.ZAI -> ZaiEndpoint.PUBLIC.baseUrl
-                                asset.provider == ApiProvider.ZAI -> provider.defaultBaseUrl()
+                                provider == ApiProviderUi.DEEPSEEK -> DeepSeekEndpoint.OFFICIAL.baseUrl
+                                provider == ApiProviderUi.ZAI -> ZaiEndpoint.PUBLIC.baseUrl
+                                asset.provider == ApiProvider.ZAI -> provider.defaultBaseUrl
                                 asset.baseUrl.isNullOrBlank() ||
                                     asset.baseUrl == asset.provider.defaultBaseUrl() ->
-                                    provider.defaultBaseUrl()
+                                    provider.defaultBaseUrl
                                 else -> asset.baseUrl
                             }
                         onAssetChange(
                             asset.copy(
-                                provider = provider,
+                                provider = provider.toDomain(),
                                 baseUrl = nextBaseUrl,
                             ),
                         )
@@ -765,7 +763,7 @@ fun ContextConfiguration(
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun ParameterExclusionSection(
-    parameterSupport: ApiModelParameterSupport,
+    parameterSupport: ApiModelParameterSupportUi,
     config: ApiModelConfigUi,
     onConfigChange: (ApiModelConfigUi) -> Unit,
 ) {
@@ -853,7 +851,7 @@ private fun ParameterExclusionChip(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TuningConfiguration(
-    parameterSupport: ApiModelParameterSupport,
+    parameterSupport: ApiModelParameterSupportUi,
     config: ApiModelConfigUi,
     onConfigChange: (ApiModelConfigUi) -> Unit,
 ) {
@@ -888,7 +886,7 @@ fun TuningConfiguration(
                 onValueChange = {},
                 readOnly = true,
                 label = {
-                    Text(if (reasoningPolicy.controlStyle == ApiReasoningControlStyle.XAI_MULTI_AGENT) "Agent Count" else "Reasoning")
+                    Text(if (reasoningPolicy.controlStyle == ApiReasoningControlStyleUi.XAI_MULTI_AGENT) "Agent Count" else "Reasoning")
                 },
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = reasoningDropdownExpanded) },
                 modifier =
@@ -897,7 +895,7 @@ fun TuningConfiguration(
                         .fillMaxWidth(),
                 placeholder = {
                     Text(
-                        if (reasoningPolicy.controlStyle == ApiReasoningControlStyle.XAI_MULTI_AGENT) {
+                        if (reasoningPolicy.controlStyle == ApiReasoningControlStyleUi.XAI_MULTI_AGENT) {
                             "Select agent count"
                         } else {
                             "Select reasoning level"
@@ -916,7 +914,7 @@ fun TuningConfiguration(
                     DropdownMenuItem(
                         text = { Text(option.label) },
                         onClick = {
-                            onConfigChange(config.copy(reasoningEffort = option.effort))
+                            onConfigChange(config.copy(reasoningEffort = option.effort.toDomain()))
                             reasoningDropdownExpanded = false
                         },
                     )
@@ -926,7 +924,7 @@ fun TuningConfiguration(
 
         Text(
             text =
-                if (reasoningPolicy.controlStyle == ApiReasoningControlStyle.XAI_MULTI_AGENT) {
+                if (reasoningPolicy.controlStyle == ApiReasoningControlStyleUi.XAI_MULTI_AGENT) {
                     "xAI multi-agent maps 4 agents to low reasoning and 16 agents to high reasoning."
                 } else {
                     "Reasoning support varies by provider and model."
@@ -998,8 +996,8 @@ fun TuningConfiguration(
 @Suppress("LongParameterList")
 @Composable
 fun PresetConfigurationForm(
-    provider: ApiProvider,
-    parameterSupport: ApiModelParameterSupport,
+    provider: ApiProviderUi,
+    parameterSupport: ApiModelParameterSupportUi,
     config: ApiModelConfigUi,
     selectedModelMetadata: DiscoveredApiModelUi?,
     discovery: ApiModelDiscoveryUiState,
@@ -1048,10 +1046,10 @@ fun PresetConfigurationForm(
             },
         )
 
-        if (provider == ApiProvider.OPENROUTER) {
+        if (provider == ApiProviderUi.OPENROUTER) {
             OpenRouterRoutingCard(
-                routing = config.openRouterRouting,
-                onRoutingChange = { onConfigChange(config.copy(openRouterRouting = it)) },
+                routing = config.openRouterRouting.toUi(),
+                onRoutingChange = { onConfigChange(config.copy(openRouterRouting = it.toDomain())) },
                 canSelectTargetProvider = config.modelId.isNotBlank(),
                 onShowProvidersSheet = onShowOpenRouterProvidersSheet,
             )
@@ -1258,17 +1256,17 @@ fun PreviewByokConfigureOpenRouterPreset() {
     }
 }
 
-internal fun freshApiPresetDraft(provider: ApiProvider): ApiModelConfigUi =
+internal fun freshApiPresetDraft(provider: ApiProviderUi): ApiModelConfigUi =
     ApiModelConfigUi(
-        temperature = provider.defaultPresetTemperature(),
+        temperature = provider.defaultPresetTemperature,
         isFreshPreset = true,
     )
 
-internal fun ApiModelConfigUi.applyProviderPresetDefaultsIfFresh(provider: ApiProvider): ApiModelConfigUi {
+internal fun ApiModelConfigUi.applyProviderPresetDefaultsIfFresh(provider: ApiProviderUi): ApiModelConfigUi {
     if (!isFreshPreset) return this
-    val recommendedTemperature = provider.defaultPresetTemperature()
+    val recommendedTemperature = provider.defaultPresetTemperature
     val updated =
-        if (temperature == ApiProvider.GENERIC_PRESET_TEMPERATURE && temperature != recommendedTemperature) {
+        if (temperature == ApiProviderUi.GENERIC_PRESET_TEMPERATURE && temperature != recommendedTemperature) {
             copy(temperature = recommendedTemperature)
         } else {
             this

@@ -24,19 +24,18 @@ import com.browntowndev.enclave.core.ui.component.enclave.EnclaveOutlinedTextFie
 import com.browntowndev.enclave.core.ui.component.enclave.EnclavePrimaryButton
 import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSheetHeader
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
-import com.browntowndev.enclave.domain.model.config.MediaCapability
-import com.browntowndev.enclave.domain.model.config.MediaProviderId
-import com.browntowndev.enclave.domain.model.inference.ApiProvider
-import com.browntowndev.enclave.domain.usecase.settings.MediaProviderDraft
+import com.browntowndev.enclave.feature.onboarding.ApiProviderUi
+import com.browntowndev.enclave.feature.onboarding.MediaProviderDraftUi
+import com.browntowndev.enclave.feature.onboarding.MediaTypeUi
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MediaConfigureBottomSheet(
-    initialCapability: MediaCapability,
+    initialCapability: MediaTypeUi,
     onDismiss: () -> Unit,
-    onSave: (MediaProviderDraft) -> Unit,
+    onSave: (MediaProviderDraftUi) -> Unit,
 ) {
-    var provider by remember { mutableStateOf(ApiProvider.XAI) }
+    var provider by remember { mutableStateOf(ApiProviderUi.XAI) }
     var apiKey by remember { mutableStateOf("") }
     var displayName by remember { mutableStateOf("") }
     var modelId by remember { mutableStateOf("") }
@@ -76,7 +75,7 @@ fun MediaConfigureBottomSheet(
                     expanded = providerExpanded,
                     onDismissRequest = { providerExpanded = false },
                 ) {
-                    listOf(ApiProvider.OPENAI, ApiProvider.XAI, ApiProvider.GOOGLE, ApiProvider.FAL).forEach { p ->
+                    listOf(ApiProviderUi.OPENAI, ApiProviderUi.XAI, ApiProviderUi.GOOGLE, ApiProviderUi.FAL).forEach { p ->
                         DropdownMenuItem(
                             text = { Text(p.displayName) },
                             onClick = {
@@ -108,7 +107,7 @@ fun MediaConfigureBottomSheet(
                     expanded = capabilityExpanded,
                     onDismissRequest = { capabilityExpanded = false },
                 ) {
-                    MediaCapability.entries.forEach { cap ->
+                    MediaTypeUi.entries.forEach { cap ->
                         DropdownMenuItem(
                             text = { Text(cap.displayName) },
                             onClick = {
@@ -146,8 +145,8 @@ fun MediaConfigureBottomSheet(
                 text = "Save Media Provider",
                 onClick = {
                     onSave(
-                        MediaProviderDraft(
-                            id = MediaProviderId(""),
+                        MediaProviderDraftUi(
+                            id = "",
                             displayName = displayName,
                             provider = provider,
                             modelId = modelId,

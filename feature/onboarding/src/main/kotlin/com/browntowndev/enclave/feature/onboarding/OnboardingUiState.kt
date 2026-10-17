@@ -1,30 +1,24 @@
 package com.browntowndev.enclave.feature.onboarding
 
-import com.browntowndev.enclave.domain.model.inference.ApiProvider
-import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
-import com.browntowndev.enclave.domain.model.onboarding.OnboardingFlowMode
-import com.browntowndev.enclave.domain.usecase.settings.MediaProviderDraft
-import com.browntowndev.enclave.domain.usecase.settings.TtsProviderDraft
-
 data class OnboardingUiState(
-    val flowMode: OnboardingFlowMode = OnboardingFlowMode.FULL,
+    val flowMode: OnboardingFlowModeUi = OnboardingFlowModeUi.FULL,
     val currentStep: Int = 0,
     val ageConfirmed: Boolean = false,
     val automaticErrorTrackingEnabled: Boolean = false,
     val tosReviewed: Boolean = false,
     val tosAccepted: Boolean = false,
     val selectedModelChoice: ModelChoice = ModelChoice.UNDECIDED,
-    val selectedProvider: ApiProvider? = null,
+    val selectedProvider: ApiProviderUi? = null,
     val apiKey: String = "",
     val baseUrl: String = "",
-    val discoveredModels: List<DiscoveredApiModel> = emptyList(),
+    val discoveredModels: List<DiscoveredApiModelUi> = emptyList(),
     val selectedModelId: String = "",
     val isDiscoveringModels: Boolean = false,
     val discoveryError: String? = null,
     val isSaving: Boolean = false,
     val saveError: String? = null,
-    val ttsProviderDraft: TtsProviderDraft? = null,
-    val mediaProviderDraft: MediaProviderDraft? = null,
+    val ttsProviderDraft: TtsProviderDraftUi? = null,
+    val mediaProviderDraft: MediaProviderDraftUi? = null,
     val isTtsConfigured: Boolean = false,
     val isMediaConfigured: Boolean = false,
 )

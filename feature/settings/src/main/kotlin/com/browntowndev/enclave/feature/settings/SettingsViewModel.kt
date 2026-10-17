@@ -10,7 +10,6 @@ import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.config.TtsProviderId
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.memory.MemoryCategory
-import com.browntowndev.enclave.domain.model.settings.AppTheme
 import com.browntowndev.enclave.domain.model.settings.SearchProvider
 import com.browntowndev.enclave.domain.model.settings.SystemPromptOption
 import com.browntowndev.enclave.domain.model.telemetry.UsagePeriod
@@ -192,7 +191,7 @@ internal class SettingsViewModel
         }
 
         // --- General / Auth ---
-        fun onThemeChange(theme: AppTheme) = generalDelegate.onThemeChange(viewModelScope, TAG, theme)
+        fun onThemeChange(theme: AppThemeUi) = generalDelegate.onThemeChange(viewModelScope, TAG, theme.toDomain())
 
         fun onHapticResponseChange(enabled: Boolean) = generalDelegate.onHapticResponseChange(viewModelScope, TAG, enabled)
 

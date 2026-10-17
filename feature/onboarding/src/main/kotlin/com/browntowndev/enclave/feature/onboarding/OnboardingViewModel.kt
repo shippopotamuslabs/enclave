@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.browntowndev.enclave.domain.model.config.ApiCredentials
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
-import com.browntowndev.enclave.domain.model.onboarding.OnboardingFlowMode
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.usecase.onboarding.CompleteOnboardingUseCase
 import com.browntowndev.enclave.domain.usecase.onboarding.ConfirmAgeUseCase
@@ -54,6 +53,10 @@ class OnboardingViewModel
         private val _events = Channel<OnboardingEvent>(Channel.UNLIMITED)
         val events = _events.receiveAsFlow()
 
+        private var selectedProviderDomain: ApiProvider? = null
+        private var ttsProviderDraftDomain: TtsProviderDraft? = null
+        private var mediaProviderDraftDomain: MediaProviderDraft? = null
+
         init {
             viewModelScope.launch {
                 refreshFlowMode()
@@ -61,14 +64,14 @@ class OnboardingViewModel
         }
 
         private suspend fun refreshFlowMode() {
-            val flowMode = resolveOnboardingFlowModeUseCase()
+            val flowMode = resolveOnboardingFlowModeUseCase().toUi()
             _uiState.update { state ->
                 state.copy(
                     flowMode = flowMode,
                     selectedModelChoice =
                         when (flowMode) {
-                            OnboardingFlowMode.RESTORED -> ModelChoice.RESTORED
-                            OnboardingFlowMode.FULL ->
+                            OnboardingFlowModeUi.RESTORED -> ModelChoice.RESTORED
+                            OnboardingFlowModeUi.FULL ->
                                 if (state.selectedModelChoice == ModelChoice.RESTORED) {
                                     ModelChoice.UNDECIDED
                                 } else {
@@ -100,7 +103,7 @@ class OnboardingViewModel
             when (state.currentStep) {
                 0 -> {
                     if (!state.ageConfirmed || !state.tosAccepted) return
-                    if (state.flowMode == OnboardingFlowMode.RESTORED) {
+                    if (state.flowMode == OnboardingFlowModeUi.RESTORED) {
                         onCompleteOnboarding()
                         return
                     }
@@ -142,7 +145,8 @@ class OnboardingViewModel
             _uiState.update { it.copy(selectedModelChoice = choice) }
         }
 
-        fun onProviderSelected(provider: ApiProvider) {
+        fun onProviderSelected(provider: ApiProviderUi) {
+            selectedProviderDomain = provider.toDomain()
             _uiState.update { state ->
                 if (state.selectedProvider != provider) {
                     state.copy(
@@ -169,7 +173,7 @@ class OnboardingViewModel
 
         fun onDiscoverModels() {
             val state = _uiState.value
-            val provider = state.selectedProvider ?: return
+            val provider = selectedProviderDomain ?: state.selectedProvider?.toDomain() ?: return
             _uiState.update { it.copy(isDiscoveringModels = true, discoveryError = null) }
             viewModelScope.launch {
                 try {
@@ -185,7 +189,7 @@ class OnboardingViewModel
                     _uiState.update {
                         it.copy(
                             isDiscoveringModels = false,
-                            discoveredModels = result.models,
+                            discoveredModels = result.models.map { it.toUi() },
                             discoveryError = null,
                         )
                     }
@@ -209,11 +213,13 @@ class OnboardingViewModel
             _uiState.update { it.copy(currentStep = 3) }
         }
 
-        fun onSaveTtsProvider(draft: TtsProviderDraft) {
+        fun onSaveTtsProvider(draft: TtsProviderDraftUi) {
+            ttsProviderDraftDomain = draft.toDomain()
             _uiState.update { it.copy(ttsProviderDraft = draft, isTtsConfigured = true) }
         }
 
-        fun onSaveMediaProvider(draft: MediaProviderDraft) {
+        fun onSaveMediaProvider(draft: MediaProviderDraftUi) {
+            mediaProviderDraftDomain = draft.toDomain()
             _uiState.update { it.copy(mediaProviderDraft = draft, isMediaConfigured = true) }
         }
 
@@ -229,7 +235,7 @@ class OnboardingViewModel
             }
 
             viewModelScope.launch {
-                if (state.flowMode == OnboardingFlowMode.FULL) {
+                if (state.flowMode == OnboardingFlowModeUi.FULL) {
                     refreshFlowMode()
                 }
                 val latestState = _uiState.value
@@ -240,7 +246,7 @@ class OnboardingViewModel
 
                 if (latestState.selectedModelChoice == ModelChoice.API) {
                     val provider =
-                        latestState.selectedProvider ?: run {
+                        selectedProviderDomain ?: latestState.selectedProvider?.toDomain() ?: run {
                             _uiState.update { it.copy(isSaving = false, saveError = "No provider selected") }
                             return@launch
                         }
@@ -273,7 +279,7 @@ class OnboardingViewModel
                 }
 
                 // Save deferred TTS provider if configured
-                latestState.ttsProviderDraft?.let { ttsDraft ->
+                (ttsProviderDraftDomain ?: latestState.ttsProviderDraft?.toDomain())?.let { ttsDraft ->
                     val result = saveTtsProviderUseCase(ttsDraft)
                     if (result.isFailure) {
                         loggingPort.error(TAG, "Failed to save TTS provider during completion", result.exceptionOrNull())
@@ -288,7 +294,7 @@ class OnboardingViewModel
                 }
 
                 // Save deferred Media provider if configured
-                latestState.mediaProviderDraft?.let { mediaDraft ->
+                (mediaProviderDraftDomain ?: latestState.mediaProviderDraft?.toDomain())?.let { mediaDraft ->
                     try {
                         val asset =
                             com.browntowndev.enclave.domain.model.config.MediaProviderAsset(
@@ -318,7 +324,7 @@ class OnboardingViewModel
                     apiSlots.addAll(BulkAssignApiProviderUseCase.TEXT_SLOTS)
                     apiSlots.add(ModelType.VISION)
                 }
-                if (latestState.mediaProviderDraft != null) {
+                if (mediaProviderDraftDomain != null || latestState.mediaProviderDraft != null) {
                     apiSlots.add(ModelType.IMAGE_GENERATION)
                     apiSlots.add(ModelType.IMAGE_EDIT)
                 }

@@ -1,12 +1,6 @@
 package com.browntowndev.enclave.feature.studio
 
 import androidx.compose.runtime.Immutable
-import com.browntowndev.enclave.domain.model.config.MediaCapability
-import com.browntowndev.enclave.domain.model.media.GenerationSettings
-import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
-import com.browntowndev.enclave.domain.model.media.ProviderCapabilities
-import com.browntowndev.enclave.domain.model.media.StudioTemplate
-import com.browntowndev.enclave.domain.port.media.SpeechState
 
 sealed interface VideoGenerationState {
     data object Idle : VideoGenerationState
@@ -32,24 +26,24 @@ data class StudioUiState(
     val isGenerating: Boolean = false,
     val activeGenerationPrompt: String? = null,
     val generationProgressLabel: String? = null,
-    val mediaType: MediaCapability = MediaCapability.IMAGE,
+    val mediaType: StudioMediaTypeUi = StudioMediaTypeUi.IMAGE,
     val gallery: List<StudioMediaUi> = emptyList(),
     val selectedMediaItemIds: Set<String> = emptySet(),
     val albums: List<GalleryAlbumUi> = emptyList(),
-    val settings: GenerationSettings = ImageGenerationSettings(),
-    val capabilities: ProviderCapabilities? = null,
+    val settings: StudioGenerationSettingsUi = StudioImageSettingsUi(),
+    val capabilities: StudioCapabilitiesUi? = null,
     /** True while fal OpenAPI-backed capability options are being fetched. */
     val isCapabilitiesLoading: Boolean = false,
-    val templates: List<StudioTemplate> = emptyList(),
+    val templates: List<StudioTemplateUi> = emptyList(),
     val selectedTemplateId: String? = null,
     val isSettingsOpen: Boolean = false,
     val isSaveBottomSheetOpen: Boolean = false,
     val continualMode: Boolean = false,
     val isContinualGenerationActive: Boolean = false,
     val error: String? = null,
-    val referenceMediaType: MediaCapability? = null,
+    val referenceMediaType: StudioMediaTypeUi? = null,
     val videoGenerationState: VideoGenerationState = VideoGenerationState.Idle,
-    val speechState: SpeechState = SpeechState.Idle,
+    val speechState: StudioSpeechStateUi = StudioSpeechStateUi.Idle,
     val isPlayingTts: Boolean = false,
     val groupedGallery: List<StudioGalleryGroup> = emptyList(),
     val activeGenerationRemainingPlaceholderCount: Int = 0,

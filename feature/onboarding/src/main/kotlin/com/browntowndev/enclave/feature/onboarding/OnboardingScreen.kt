@@ -11,11 +11,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
-import com.browntowndev.enclave.domain.model.inference.ApiProvider
-import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
-import com.browntowndev.enclave.domain.model.onboarding.OnboardingFlowMode
-import com.browntowndev.enclave.domain.usecase.settings.MediaProviderDraft
-import com.browntowndev.enclave.domain.usecase.settings.TtsProviderDraft
 import com.browntowndev.enclave.feature.onboarding.steps.CompletionStep
 import com.browntowndev.enclave.feature.onboarding.steps.MediaStep
 import com.browntowndev.enclave.feature.onboarding.steps.ModelChoiceStep
@@ -35,21 +30,21 @@ fun OnboardingScreen(
     onNextStep: () -> Unit,
     onPreviousStep: () -> Unit,
     onModelChoiceSelected: (ModelChoice) -> Unit,
-    onProviderSelected: (ApiProvider) -> Unit,
+    onProviderSelected: (ApiProviderUi) -> Unit,
     onApiKeyChanged: (String) -> Unit,
     onBaseUrlChanged: (String) -> Unit,
     onDiscoverModels: () -> Unit,
     onModelSelected: (String) -> Unit,
     onSkipMedia: () -> Unit,
-    onSaveTtsProvider: (TtsProviderDraft) -> Unit,
-    onSaveMediaProvider: (MediaProviderDraft) -> Unit,
+    onSaveTtsProvider: (TtsProviderDraftUi) -> Unit,
+    onSaveMediaProvider: (MediaProviderDraftUi) -> Unit,
     onCompleteOnboarding: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val stepCount =
         when (uiState.flowMode) {
-            OnboardingFlowMode.FULL -> FULL_ONBOARDING_STEP_COUNT
-            OnboardingFlowMode.RESTORED -> RESTORED_ONBOARDING_STEP_COUNT
+            OnboardingFlowModeUi.FULL -> FULL_ONBOARDING_STEP_COUNT
+            OnboardingFlowModeUi.RESTORED -> RESTORED_ONBOARDING_STEP_COUNT
         }
     val pagerState =
         rememberPagerState(
@@ -77,7 +72,7 @@ fun OnboardingScreen(
             userScrollEnabled = false,
         ) { page ->
             when (uiState.flowMode) {
-                OnboardingFlowMode.RESTORED ->
+                OnboardingFlowModeUi.RESTORED ->
                     WelcomeAgeGateStep(
                         ageConfirmed = uiState.ageConfirmed,
                         onAgeConfirmedChange = onAgeConfirmedChange,
@@ -93,7 +88,7 @@ fun OnboardingScreen(
                         continueButtonText = "GET STARTED",
                         modifier = Modifier.fillMaxSize(),
                     )
-                OnboardingFlowMode.FULL ->
+                OnboardingFlowModeUi.FULL ->
                     when (page) {
                         0 ->
                             WelcomeAgeGateStep(
@@ -188,7 +183,7 @@ internal fun OnboardingScreenDarkPreview() {
                 OnboardingUiState(
                     currentStep = 1,
                     selectedModelChoice = ModelChoice.LOCAL,
-                    discoveredModels = listOf(DiscoveredApiModel(id = "model-1")),
+                    discoveredModels = listOf(DiscoveredApiModelUi(id = "model-1")),
                 ),
             onAgeConfirmedChange = {},
             onAutomaticErrorTrackingChange = {},

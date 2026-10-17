@@ -302,7 +302,7 @@ class SettingsUiStateAssembler
             return SettingsUiState(
                 home =
                     SettingsHomeUiState(
-                        theme = persistedSettings.theme,
+                        theme = persistedSettings.theme.toUi(),
                         hapticResponse = persistedSettings.hapticResponse,
                         backgroundInferenceEnabled = persistedSettings.backgroundInferenceEnabled,
                         auth = authState.toUi(),
@@ -386,11 +386,11 @@ class SettingsUiStateAssembler
                         selectedReusableCredential = selectedReusableCredential,
                         presetDraft = normalizedPresetDraft,
                         connectionTestStatus = apiState.connectionTestStatus,
-                        parameterSupport = parameterSupport,
+                        parameterSupport = parameterSupport.toUi(),
                         isOpenRouterProvidersSheetOpen = apiState.isOpenRouterProvidersSheetOpen,
                         openRouterEndpointsState =
                             OpenRouterEndpointsUiState(
-                                endpoints = apiState.openRouterEndpoints,
+                                endpoints = apiState.openRouterEndpoints.map { endpoint -> endpoint.toUi() },
                                 isLoading = apiState.isLoadingEndpoints,
                                 hasError = apiState.endpointFetchError,
                             ),
@@ -498,7 +498,7 @@ class SettingsUiStateAssembler
                     DeletionFlowUiState(
                         showLastModelAlert = deletionState.showLastModelAlert,
                         pendingTarget = deletionState.pendingTarget,
-                        modelTypesNeedingReassignment = deletionState.modelTypesNeedingReassignment,
+                        modelTypesNeedingReassignment = deletionState.modelTypesNeedingReassignment.map { modelType -> modelType.toUi() },
                         reassignmentOptions = deletionState.reassignmentOptions,
                     ),
                 vaultReauthSheet = vaultReauthSheet,
