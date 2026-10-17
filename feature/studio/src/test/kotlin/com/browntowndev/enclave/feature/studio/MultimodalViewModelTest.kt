@@ -448,8 +448,14 @@ class MultimodalViewModelTest {
             advanceUntilIdle()
 
             val state = viewModel.uiState.value
-            assertEquals(listOf(AspectRatio.ONE_ONE, AspectRatio.SIXTEEN_NINE), state.capabilities?.supportedAspectRatios)
-            assertEquals(listOf(GenerationQuality.SPEED, GenerationQuality.HD), state.capabilities?.supportedImageQualities)
+            assertEquals(
+                listOf(AspectRatio.ONE_ONE.toUi(), AspectRatio.SIXTEEN_NINE.toUi()),
+                state.capabilities?.supportedAspectRatios,
+            )
+            assertEquals(
+                listOf(GenerationQuality.SPEED.toUi(), GenerationQuality.HD.toUi()),
+                state.capabilities?.supportedImageQualities,
+            )
             job.cancel()
         }
 
@@ -475,7 +481,7 @@ class MultimodalViewModelTest {
             advanceUntilIdle()
 
             val state = viewModel.uiState.value
-            assertEquals(listOf(AspectRatio.ONE_ONE), state.capabilities?.supportedAspectRatios)
+            assertEquals(listOf(AspectRatio.ONE_ONE.toUi()), state.capabilities?.supportedAspectRatios)
             assertEquals(listOf("512x512"), state.capabilities?.supportedImageResolutions)
             assertFalse(state.isCapabilitiesLoading)
             job.cancel()
@@ -542,7 +548,7 @@ class MultimodalViewModelTest {
 
             assertTrue(viewModel.uiState.value.isCapabilitiesLoading)
 
-            viewModel.onMediaTypeChange(MediaCapability.VIDEO)
+            viewModel.onMediaTypeChange(MediaCapability.VIDEO.toUi())
             assertTrue(
                 viewModel.uiState.value.isCapabilitiesLoading,
                 "Loading must stay active until the superseding fetch completes",
@@ -551,7 +557,7 @@ class MultimodalViewModelTest {
             remoteFetchGate.complete(Unit)
             advanceUntilIdle()
             assertFalse(viewModel.uiState.value.isCapabilitiesLoading)
-            assertEquals(resolvedCapabilities, viewModel.uiState.value.capabilities)
+            assertEquals(resolvedCapabilities.toUi(), viewModel.uiState.value.capabilities)
             job.cancel()
         }
 
@@ -1000,7 +1006,7 @@ class MultimodalViewModelTest {
             )
             advanceUntilIdle()
 
-            val settings = viewModel.uiState.value.settings as ImageGenerationSettings
+            val settings = viewModel.uiState.value.settings as StudioImageSettingsUi
             assertEquals(persistedUri, settings.referenceImageUri)
 
             job.cancel()
@@ -1093,7 +1099,7 @@ class MultimodalViewModelTest {
             )
             advanceUntilIdle()
 
-            val settings = viewModel.uiState.value.settings as ImageGenerationSettings
+            val settings = viewModel.uiState.value.settings as StudioImageSettingsUi
             assertNull(settings.referenceImageUri)
 
             coVerify(exactly = 0) { studioRepository.getMediaById(any()) }
@@ -1139,7 +1145,7 @@ class MultimodalViewModelTest {
             // Then
             coVerify { studioRepository.addEphemeralMedia(any()) }
             assertEquals("", viewModel.uiState.value.prompt)
-            val settings = viewModel.uiState.value.settings as ImageGenerationSettings
+            val settings = viewModel.uiState.value.settings as StudioImageSettingsUi
             assertNull(settings.referenceImageUri)
 
             job.cancel()
@@ -1306,7 +1312,7 @@ class MultimodalViewModelTest {
     @Test
     fun `onMediaTypeChange persists the media type`() =
         runTest {
-            viewModel.onMediaTypeChange(MediaCapability.MUSIC)
+            viewModel.onMediaTypeChange(MediaCapability.MUSIC.toUi())
             advanceUntilIdle()
 
             coVerify { uiSelectionRepository.setStudioMediaType(MediaCapability.MUSIC) }

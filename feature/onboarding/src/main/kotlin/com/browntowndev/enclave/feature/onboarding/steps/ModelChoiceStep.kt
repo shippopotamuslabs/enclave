@@ -35,22 +35,22 @@ import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorderColor
 import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurface
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
-import com.browntowndev.enclave.domain.model.inference.ApiProvider
-import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
+import com.browntowndev.enclave.feature.onboarding.ApiProviderUi
+import com.browntowndev.enclave.feature.onboarding.DiscoveredApiModelUi
 import com.browntowndev.enclave.feature.onboarding.ModelChoice
 
 @Composable
 fun ModelChoiceStep(
     selectedModelChoice: ModelChoice,
-    selectedProvider: ApiProvider?,
+    selectedProvider: ApiProviderUi?,
     apiKey: String,
     baseUrl: String,
-    discoveredModels: List<DiscoveredApiModel>,
+    discoveredModels: List<DiscoveredApiModelUi>,
     selectedModelId: String,
     isDiscoveringModels: Boolean,
     discoveryError: String?,
     onModelChoiceSelected: (ModelChoice) -> Unit,
-    onProviderSelected: (ApiProvider) -> Unit,
+    onProviderSelected: (ApiProviderUi) -> Unit,
     onApiKeyChanged: (String) -> Unit,
     onBaseUrlChanged: (String) -> Unit,
     onDiscoverModels: () -> Unit,
@@ -195,10 +195,10 @@ fun ModelChoiceStep(
                                 .padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        ApiProvider.entries.filter(ApiProvider::supportsChat).forEach { provider ->
+                        ApiProviderUi.entries.filter(ApiProviderUi::supportsChat).forEach { provider ->
                             val isSelected = selectedProvider == provider
                             val label =
-                                if (provider == ApiProvider.OPENROUTER) {
+                                if (provider == ApiProviderUi.OPENROUTER) {
                                     "${provider.displayName} (Recommended)"
                                 } else {
                                     provider.displayName
@@ -330,10 +330,10 @@ internal fun ModelChoiceStepDarkPreview() {
     EnclaveTheme(darkTheme = true) {
         ModelChoiceStep(
             selectedModelChoice = ModelChoice.API,
-            selectedProvider = ApiProvider.OPENROUTER,
+            selectedProvider = ApiProviderUi.OPENROUTER,
             apiKey = "sk-test",
             baseUrl = "",
-            discoveredModels = listOf(DiscoveredApiModel(id = "openrouter/gpt-4o")),
+            discoveredModels = listOf(DiscoveredApiModelUi(id = "openrouter/gpt-4o")),
             selectedModelId = "openrouter/gpt-4o",
             isDiscoveringModels = false,
             discoveryError = null,

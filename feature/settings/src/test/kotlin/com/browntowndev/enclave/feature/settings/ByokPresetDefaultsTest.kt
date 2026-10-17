@@ -1,7 +1,6 @@
 package com.browntowndev.enclave.feature.settings
 
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
-import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Test
@@ -9,7 +8,7 @@ import org.junit.jupiter.api.Test
 class ByokPresetDefaultsTest {
     @Test
     fun `freshApiPresetDraft uses ZAI recommended temperature`() {
-        val draft = freshApiPresetDraft(ApiProvider.ZAI)
+        val draft = freshApiPresetDraft(ApiProviderUi.ZAI)
 
         assertEquals(1.0, draft.temperature)
         assertEquals(true, draft.isFreshPreset)
@@ -19,7 +18,7 @@ class ByokPresetDefaultsTest {
     fun `applyProviderPresetDefaultsIfFresh updates unsaved ZAI preset from generic default`() {
         val normalized =
             ApiModelConfigUi(isFreshPreset = true)
-                .applyProviderPresetDefaultsIfFresh(ApiProvider.ZAI)
+                .applyProviderPresetDefaultsIfFresh(ApiProviderUi.ZAI)
 
         assertEquals(1.0, normalized.temperature)
         assertFalse(normalized.isFreshPreset)
@@ -33,7 +32,7 @@ class ByokPresetDefaultsTest {
                 displayName = "Default Preset",
                 modelId = "",
                 isFreshPreset = true,
-            ).applyProviderPresetDefaultsIfFresh(ApiProvider.ZAI)
+            ).applyProviderPresetDefaultsIfFresh(ApiProviderUi.ZAI)
 
         assertEquals(1.0, normalized.temperature)
         assertFalse(normalized.isFreshPreset)
@@ -45,7 +44,7 @@ class ByokPresetDefaultsTest {
             ApiModelConfigUi(
                 temperature = 0.5,
                 isFreshPreset = true,
-            ).applyProviderPresetDefaultsIfFresh(ApiProvider.ZAI)
+            ).applyProviderPresetDefaultsIfFresh(ApiProviderUi.ZAI)
 
         assertEquals(0.5, normalized.temperature)
         assertFalse(normalized.isFreshPreset)
@@ -57,14 +56,14 @@ class ByokPresetDefaultsTest {
             ApiModelConfigUi(
                 temperature = 0.7,
                 isFreshPreset = false,
-            ).applyProviderPresetDefaultsIfFresh(ApiProvider.ZAI)
+            ).applyProviderPresetDefaultsIfFresh(ApiProviderUi.ZAI)
 
         assertEquals(0.7, normalized.temperature)
     }
 
     @Test
     fun `SCN-UI-005 fresh DeepSeek preset uses generic temperature 0 dot 7`() {
-        val draft = freshApiPresetDraft(ApiProvider.DEEPSEEK)
+        val draft = freshApiPresetDraft(ApiProviderUi.DEEPSEEK)
         assertEquals(0.7, draft.temperature)
         assertEquals(true, draft.isFreshPreset)
     }
@@ -77,7 +76,7 @@ class ByokPresetDefaultsTest {
                 displayName = "Creative",
                 modelId = "glm-4.6",
                 temperature = 0.7,
-            ).applyProviderPresetDefaultsIfFresh(ApiProvider.ZAI)
+            ).applyProviderPresetDefaultsIfFresh(ApiProviderUi.ZAI)
 
         assertEquals(0.7, normalized.temperature)
     }

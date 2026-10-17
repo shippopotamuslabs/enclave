@@ -3,15 +3,16 @@ package com.browntowndev.enclave.feature.studio.coordinators
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.media.GenerationSettings
 import com.browntowndev.enclave.domain.model.media.ProviderCapabilities
-import com.browntowndev.enclave.domain.model.media.StudioTemplate
 import com.browntowndev.enclave.domain.port.media.SpeechState
 import com.browntowndev.enclave.feature.studio.GalleryAlbumUi
 import com.browntowndev.enclave.feature.studio.StudioCapablePresetsUi
 import com.browntowndev.enclave.feature.studio.StudioGalleryGroup
 import com.browntowndev.enclave.feature.studio.computeStudioActiveGenerationRemainingPlaceholders
 import com.browntowndev.enclave.feature.studio.StudioMediaUi
+import com.browntowndev.enclave.feature.studio.StudioTemplateUi
 import com.browntowndev.enclave.feature.studio.StudioUiState
 import com.browntowndev.enclave.feature.studio.VideoGenerationState
+import com.browntowndev.enclave.feature.studio.toUi
 import javax.inject.Inject
 
 class StudioUiStateReducer
@@ -79,14 +80,14 @@ class StudioUiStateReducer
                 isGenerating = params.isGenerating,
                 activeGenerationPrompt = if (params.isGenerating) params.lastSubmittedPrompt else null,
                 generationProgressLabel = params.generationProgressLabel,
-                mediaType = params.mediaType,
+                mediaType = params.mediaType.toUi(),
                 gallery = gallery,
                 groupedGallery = groupedGallery,
                 activeGenerationRemainingPlaceholderCount = activeGenerationRemainingPlaceholderCount,
                 selectedMediaItemIds = params.selectedMediaItemIds,
                 albums = params.albums,
-                settings = params.settings,
-                capabilities = params.capabilities,
+                settings = params.settings.toUi(),
+                capabilities = params.capabilities?.toUi(),
                 isCapabilitiesLoading = params.isCapabilitiesLoading,
                 templates = templates,
                 selectedTemplateId = params.selectedTemplateId,
@@ -95,9 +96,9 @@ class StudioUiStateReducer
                 continualMode = params.continualMode,
                 isContinualGenerationActive = params.isContinualGenerationActive,
                 error = params.error,
-                referenceMediaType = params.referenceMediaType,
+                referenceMediaType = params.referenceMediaType?.toUi(),
                 videoGenerationState = params.videoGenerationState,
-                speechState = params.speechState,
+                speechState = params.speechState.toUi(),
                 isPlayingTts = params.isPlayingTts,
                 hasImageEditModel = params.hasImageEditModel,
                 hasImageToVideoModel = params.hasImageToVideoModel,
@@ -112,28 +113,28 @@ class StudioUiStateReducer
         private companion object {
             private val IMAGE_TEMPLATES =
                 listOf(
-                    StudioTemplate(
+                    StudioTemplateUi(
                         id = "1",
                         name = "Cyberpunk",
                         exampleUri = "cyberpunk",
                         promptPrefix = "Neon lighting, futuristic city, cyberpunk style, ",
                         promptSuffix = " ultra detailed, 8k",
                     ),
-                    StudioTemplate(
+                    StudioTemplateUi(
                         id = "2",
                         name = "Oil Painting",
                         exampleUri = "oil_painting",
                         promptPrefix = "Oil painting of ",
                         promptSuffix = ", thick brushstrokes, canvas texture",
                     ),
-                    StudioTemplate(
+                    StudioTemplateUi(
                         id = "3",
                         name = "Anime",
                         exampleUri = "anime",
                         promptPrefix = "Anime style illustration of ",
                         promptSuffix = ", vibrant colors, clean lines",
                     ),
-                    StudioTemplate(
+                    StudioTemplateUi(
                         id = "4",
                         name = "Cinematic",
                         exampleUri = "cinematic",
@@ -144,10 +145,10 @@ class StudioUiStateReducer
 
             private val MUSIC_TEMPLATES =
                 listOf(
-                    StudioTemplate("m1", "Lo-Fi", "", "Lo-Fi hip hop beat, ", " relaxing, study"),
-                    StudioTemplate("m2", "Techno", "", "High energy techno, ", " 130bpm, club"),
-                    StudioTemplate("m3", "Orchestral", "", "Epic orchestral soundtrack, ", " cinematic, dramatic"),
-                    StudioTemplate("m4", "Ambient", "", "Ambient electronic, ", " atmospheric, calm"),
+                    StudioTemplateUi("m1", "Lo-Fi", "", "Lo-Fi hip hop beat, ", " relaxing, study"),
+                    StudioTemplateUi("m2", "Techno", "", "High energy techno, ", " 130bpm, club"),
+                    StudioTemplateUi("m3", "Orchestral", "", "Epic orchestral soundtrack, ", " cinematic, dramatic"),
+                    StudioTemplateUi("m4", "Ambient", "", "Ambient electronic, ", " atmospheric, calm"),
                 )
         }
     }

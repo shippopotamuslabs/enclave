@@ -47,17 +47,12 @@ import com.browntowndev.enclave.core.ui.component.enclave.enclaveBorderColor
 import com.browntowndev.enclave.core.ui.component.enclave.enclaveSurface
 import com.browntowndev.enclave.core.ui.theme.EnclaveNeoTokens
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
-import com.browntowndev.enclave.domain.model.config.OpenRouterDataCollectionPolicy
-import com.browntowndev.enclave.domain.model.config.OpenRouterProviderSort
-import com.browntowndev.enclave.domain.model.config.OpenRouterRoutingConfiguration
-import com.browntowndev.enclave.domain.model.inference.ApiReasoningControlStyle
 import com.browntowndev.enclave.domain.model.inference.ApiReasoningEffort
-import com.browntowndev.enclave.domain.model.inference.ApiReasoningPolicy
 
 @Composable
 fun OpenRouterRoutingCard(
-    routing: OpenRouterRoutingConfiguration,
-    onRoutingChange: (OpenRouterRoutingConfiguration) -> Unit,
+    routing: OpenRouterRoutingUi,
+    onRoutingChange: (OpenRouterRoutingUi) -> Unit,
     canSelectTargetProvider: Boolean = false,
     onShowProvidersSheet: () -> Unit = {},
 ) {
@@ -75,8 +70,8 @@ fun OpenRouterRoutingCard(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OpenRouterRoutingSection(
-    routing: OpenRouterRoutingConfiguration,
-    onRoutingChange: (OpenRouterRoutingConfiguration) -> Unit,
+    routing: OpenRouterRoutingUi,
+    onRoutingChange: (OpenRouterRoutingUi) -> Unit,
     canSelectTargetProvider: Boolean = false,
     onShowProvidersSheet: () -> Unit = {},
 ) {
@@ -157,7 +152,7 @@ fun OpenRouterRoutingSection(
                     shape = EnclaveNeoTokens.shape,
                     containerColor = MaterialTheme.colorScheme.surface,
                 ) {
-                    OpenRouterProviderSort.entries.forEach { sort ->
+                    OpenRouterProviderSortUi.entries.forEach { sort ->
                         DropdownMenuItem(
                             text = { Text(sort.displayName) },
                             onClick = {
@@ -179,14 +174,14 @@ fun OpenRouterRoutingSection(
             RoutingSwitchRow(
                 label = "Allow Data Collection",
                 description = "Allow providers to collect and store prompts and completions.",
-                checked = routing.dataCollectionPolicy == OpenRouterDataCollectionPolicy.ALLOW,
+                checked = routing.dataCollectionPolicy == OpenRouterDataCollectionPolicyUi.ALLOW,
                 onCheckedChange = { allowed ->
                     onRoutingChange(
                         routing.copy(
                             dataCollectionPolicy = if (allowed) {
-                                OpenRouterDataCollectionPolicy.ALLOW
+                                OpenRouterDataCollectionPolicyUi.ALLOW
                             } else {
-                                OpenRouterDataCollectionPolicy.DENY
+                                OpenRouterDataCollectionPolicyUi.DENY
                             }
                         )
                     )
@@ -234,15 +229,15 @@ fun RoutingSwitchRow(
 
 internal data class ReasoningOptionUi(
     val label: String,
-    val effort: ApiReasoningEffort,
+    val effort: ApiReasoningEffortUi,
 )
 
-internal fun reasoningOptions(policy: ApiReasoningPolicy): List<ReasoningOptionUi> =
+internal fun reasoningOptions(policy: ApiReasoningPolicyUi): List<ReasoningOptionUi> =
     policy.supportedEfforts.map { effort ->
         ReasoningOptionUi(
             label =
-                if (policy.controlStyle == ApiReasoningControlStyle.XAI_MULTI_AGENT) {
-                    if (effort == ApiReasoningEffort.HIGH || effort == ApiReasoningEffort.XHIGH) {
+                if (policy.controlStyle == ApiReasoningControlStyleUi.XAI_MULTI_AGENT) {
+                    if (effort == ApiReasoningEffortUi.HIGH || effort == ApiReasoningEffortUi.XHIGH) {
                         "16 agents"
                     } else {
                         "4 agents"
@@ -256,20 +251,21 @@ internal fun reasoningOptions(policy: ApiReasoningPolicy): List<ReasoningOptionU
 
 internal fun reasoningSelectionLabel(
     effort: ApiReasoningEffort?,
-    policy: ApiReasoningPolicy,
+    policy: ApiReasoningPolicyUi,
 ): String {
     if (effort == null) {
         return ""
     }
 
-    return if (policy.controlStyle == ApiReasoningControlStyle.XAI_MULTI_AGENT) {
-        if (effort == ApiReasoningEffort.HIGH || effort == ApiReasoningEffort.XHIGH) {
+    val effortUi = effort.toUi()
+    return if (policy.controlStyle == ApiReasoningControlStyleUi.XAI_MULTI_AGENT) {
+        if (effortUi == ApiReasoningEffortUi.HIGH || effortUi == ApiReasoningEffortUi.XHIGH) {
             "16 agents"
         } else {
             "4 agents"
         }
     } else {
-        effort.displayName
+        effortUi.displayName
     }
 }
 

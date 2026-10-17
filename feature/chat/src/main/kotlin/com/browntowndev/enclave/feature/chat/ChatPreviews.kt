@@ -8,7 +8,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import com.browntowndev.enclave.core.ui.theme.EnclaveTheme
-import com.browntowndev.enclave.domain.port.media.SpeechState
 import com.browntowndev.enclave.feature.chat.components.InputBar
 
 @Preview(showBackground = true, name = "Chat top bar — dark")
@@ -58,7 +57,7 @@ fun PreviewChatInputBarDark() {
             InputBar(
                 modifier = Modifier.fillMaxWidth(),
                 inputText = "Hello World",
-                speechState = SpeechState.Idle,
+                speechState = ChatSpeechStateUi.Idle,
                 selectedImageUris = emptyList(),
                 selectedFileName = "test_file.txt",
                 isPhotoAttachmentEnabled = true,

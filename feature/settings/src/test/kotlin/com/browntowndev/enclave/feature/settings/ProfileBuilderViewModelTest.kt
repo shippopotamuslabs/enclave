@@ -1,6 +1,7 @@
 package com.browntowndev.enclave.feature.settings
 
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
+import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.config.ApiModelConfiguration
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.memory.Memory
@@ -77,11 +78,17 @@ class ProfileBuilderViewModelTest {
     @Test
     fun `initial state loads configurations`() =
         runTest {
-            val config = mockk<ApiModelConfiguration>()
+            val config =
+                ApiModelConfiguration(
+                    id = ApiModelConfigurationId("config-1"),
+                    apiCredentialsId = ApiCredentialsId("cred-1"),
+                    modelId = "gpt-test",
+                    displayName = "Test Config",
+                )
             configsFlow.value = listOf(config)
             advanceUntilIdle()
 
-            assertEquals(listOf(config), viewModel.uiState.value.configuredModels)
+            assertEquals(listOf(config.toUi()), viewModel.uiState.value.configuredModels)
         }
 
     @Test
@@ -106,7 +113,7 @@ class ProfileBuilderViewModelTest {
 
             val state = viewModel.uiState.value
             assertFalse(state.isPreparingCorpus)
-            assertEquals(estimate, state.costEstimate)
+            assertEquals(estimate.toUi(), state.costEstimate)
             assertEquals(PROFILE_BUILDER_STEP_COST, state.currentStep)
         }
 
@@ -114,7 +121,7 @@ class ProfileBuilderViewModelTest {
     fun `startAnalysis starts analysis and registers observer`() =
         runTest {
             val configId = ApiModelConfigurationId("config-abc")
-            viewModel.onModelSelected(configId)
+            viewModel.onModelSelected(configId.value)
 
             viewModel.startAnalysis()
             advanceUntilIdle()
@@ -130,7 +137,7 @@ class ProfileBuilderViewModelTest {
     fun `double-start is protected by run guard`() =
         runTest {
             val configId = ApiModelConfigurationId("config-abc")
-            viewModel.onModelSelected(configId)
+            viewModel.onModelSelected(configId.value)
 
             // Set analysis running state manually
             viewModel.startAnalysis()
@@ -151,7 +158,7 @@ class ProfileBuilderViewModelTest {
     fun `progress updates are collected and fetch synthesis on complete`() =
         runTest {
             val configId = ApiModelConfigurationId("config-abc")
-            viewModel.onModelSelected(configId)
+            viewModel.onModelSelected(configId.value)
 
             coEvery { analysisPort.getLatestProfileSynthesis(any()) } returns "Tends toward extreme focus."
 

@@ -263,7 +263,7 @@ class MultimodalViewModelOverrideTest {
             commitOverride(StudioModelOverride.MediaProvider(MediaProviderId("fal-t2i"), "Fal Aura"))
             advanceUntilIdle()
 
-            viewModel.onMediaTypeChange(MediaCapability.VIDEO)
+            viewModel.onMediaTypeChange(MediaCapability.VIDEO.toUi())
             advanceUntilIdle()
 
             assertNull(overrideCoordinator.state.value.committedOverride)
@@ -374,7 +374,7 @@ class MultimodalViewModelOverrideTest {
             backgroundScope.launch(testDispatcher) { viewModel.uiState.collect {} }
             advanceUntilIdle()
 
-            viewModel.onMediaTypeChange(MediaCapability.VIDEO)
+            viewModel.onMediaTypeChange(MediaCapability.VIDEO.toUi())
             advanceUntilIdle()
             overrideCoordinator.openPicker(ModelType.VIDEO_GENERATION, null)
             overrideCoordinator.stageSelection(

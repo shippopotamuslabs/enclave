@@ -61,7 +61,7 @@ private sealed interface ByokSheetView {
     ) : ByokSheetView
 
     data class Reassignment(
-        val modelTypes: List<ModelType>,
+        val modelTypes: List<ModelTypeUi>,
         val options: List<ReassignmentOptionUi>,
     ) : ByokSheetView
 }
@@ -143,7 +143,7 @@ fun ByokBottomSheet(
                             },
                             onAddConfig = {
                                 hideAndNavigate {
-                                    onSelectApiModelConfig(freshApiPresetDraft(state.asset.provider))
+                                    onSelectApiModelConfig(freshApiPresetDraft(state.asset.provider.toUi()))
                                     onNavigateToByokConfigure()
                                 }
                             },

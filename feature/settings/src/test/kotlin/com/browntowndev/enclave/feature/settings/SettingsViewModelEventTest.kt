@@ -9,7 +9,6 @@ import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.config.*
 import com.browntowndev.enclave.domain.model.memory.Memory
 import com.browntowndev.enclave.domain.model.memory.MemoryCategory
-import com.browntowndev.enclave.domain.model.settings.AppTheme
 import com.browntowndev.enclave.domain.model.settings.SearchProvider
 import com.browntowndev.enclave.domain.port.repository.MemoriesRepository
 import com.browntowndev.enclave.domain.port.repository.SettingsData
@@ -288,7 +287,7 @@ class SettingsViewModelEventTest {
     @Test
     fun `onThemeChange updates uiState`() =
         runTest {
-            viewModel.onThemeChange(AppTheme.DARK)
+            viewModel.onThemeChange(AppThemeUi.DARK)
             // Similar to above, verifying no crash.
         }
 

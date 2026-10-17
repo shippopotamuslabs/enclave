@@ -48,7 +48,6 @@ import com.browntowndev.enclave.core.ui.theme.ProviderTier2
 import com.browntowndev.enclave.core.ui.theme.ProviderTier3
 import com.browntowndev.enclave.core.ui.theme.ProviderTierFast
 import com.browntowndev.enclave.domain.model.config.ApiModelPricingFormat
-import com.browntowndev.enclave.domain.model.config.OpenRouterModelEndpoint
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -93,25 +92,25 @@ internal fun OpenRouterProvidersSheetContent(
         when (currentSortOption) {
             ProviderSortOption.PRICE -> {
                 openRouterEndpointsState.endpoints.sortedWith(
-                    compareBy<OpenRouterModelEndpoint> { it.promptPriceUsdPerMillion + it.completionPriceUsdPerMillion }
+                    compareBy<OpenRouterModelEndpointUi> { it.promptPriceUsdPerMillion + it.completionPriceUsdPerMillion }
                         .thenBy { it.providerName }
                 )
             }
             ProviderSortOption.LATENCY -> {
                 openRouterEndpointsState.endpoints.sortedWith(
-                    compareBy<OpenRouterModelEndpoint> { it.latency30m ?: Double.MAX_VALUE }
+                    compareBy<OpenRouterModelEndpointUi> { it.latency30m ?: Double.MAX_VALUE }
                         .thenBy { it.providerName }
                 )
             }
             ProviderSortOption.THROUGHPUT -> {
                 openRouterEndpointsState.endpoints.sortedWith(
-                    compareByDescending<OpenRouterModelEndpoint> { it.throughput30m ?: -1.0 }
+                    compareByDescending<OpenRouterModelEndpointUi> { it.throughput30m ?: -1.0 }
                         .thenBy { it.providerName }
                 )
             }
             ProviderSortOption.UPTIME -> {
                 openRouterEndpointsState.endpoints.sortedWith(
-                    compareByDescending<OpenRouterModelEndpoint> { it.uptime1d ?: -1.0 }
+                    compareByDescending<OpenRouterModelEndpointUi> { it.uptime1d ?: -1.0 }
                         .thenBy { it.providerName }
                 )
             }
@@ -381,7 +380,7 @@ fun MetricRow(
 
 @Composable
 fun OpenRouterEndpointCard(
-    endpoint: OpenRouterModelEndpoint,
+    endpoint: OpenRouterModelEndpointUi,
     isSelected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -577,7 +576,7 @@ fun PreviewOpenRouterProvidersBottomSheet() {
                 OpenRouterEndpointsUiState(
                     endpoints =
                         listOf(
-                            OpenRouterModelEndpoint(
+                            OpenRouterModelEndpointUi(
                                 providerName = "Together",
                                 providerSlug = "together",
                                 contextLength = 131_072,
@@ -589,7 +588,7 @@ fun PreviewOpenRouterProvidersBottomSheet() {
                                 latency30m = 0.25,
                                 throughput30m = 45.0,
                             ),
-                            OpenRouterModelEndpoint(
+                            OpenRouterModelEndpointUi(
                                 providerName = "DeepInfra",
                                 providerSlug = "deepinfra",
                                 contextLength = 131_072,
@@ -601,7 +600,7 @@ fun PreviewOpenRouterProvidersBottomSheet() {
                                 latency30m = 0.12,
                                 throughput30m = 120.0,
                             ),
-                            OpenRouterModelEndpoint(
+                            OpenRouterModelEndpointUi(
                                 providerName = "Lepton",
                                 providerSlug = "lepton",
                                 contextLength = 65_536,
@@ -613,7 +612,7 @@ fun PreviewOpenRouterProvidersBottomSheet() {
                                 latency30m = null,
                                 throughput30m = null,
                             ),
-                            OpenRouterModelEndpoint(
+                            OpenRouterModelEndpointUi(
                                 providerName = "OpenPipe",
                                 providerSlug = "openpipe",
                                 contextLength = 8_192,
@@ -625,7 +624,7 @@ fun PreviewOpenRouterProvidersBottomSheet() {
                                 latency30m = 3.5,
                                 throughput30m = 5.0,
                             ),
-                            OpenRouterModelEndpoint(
+                            OpenRouterModelEndpointUi(
                                 providerName = "Fireworks",
                                 providerSlug = "fireworks",
                                 contextLength = 16_384,

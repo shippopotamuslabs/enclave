@@ -33,7 +33,7 @@ import com.browntowndev.enclave.feature.settings.steps.ReviewEditStep
 internal fun ProfileBuilderScreen(
     uiState: ProfileBuilderUiState,
     onBack: () -> Unit,
-    onModelSelected: (com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId) -> Unit,
+    onModelSelected: (String) -> Unit,
     onFilesSelected: (uris: List<String>, names: List<String>) -> Unit,
     onProceedFromFiles: () -> Unit,
     onStartAnalysis: () -> Unit,

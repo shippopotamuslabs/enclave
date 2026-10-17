@@ -68,7 +68,6 @@ import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
-import com.browntowndev.enclave.domain.model.inference.ModelType
 import kotlinx.coroutines.launch
 
 private sealed interface LocalModelsSheetView {
@@ -79,7 +78,7 @@ private sealed interface LocalModelsSheetView {
     ) : LocalModelsSheetView
 
     data class Reassignment(
-        val modelTypes: List<ModelType>,
+        val modelTypes: List<ModelTypeUi>,
         val options: List<ReassignmentOptionUi>,
     ) : LocalModelsSheetView
 }
@@ -126,7 +125,7 @@ fun LocalModelsBottomSheet(
 @Composable
 fun LocalModelsBottomSheetContent(
     uiState: SettingsUiState,
-    reDownloadStates: Map<LocalModelId, ReDownloadProgress>,
+    reDownloadStates: Map<String, ReDownloadProgressUi>,
     onDismiss: () -> Unit,
     onNavigateToLocalModelConfigure: () -> Unit,
     onSelectLocalModelAsset: (LocalModelAssetUi?) -> Unit,
@@ -135,10 +134,10 @@ fun LocalModelsBottomSheetContent(
     onDeleteLocalModelConfig: (LocalModelConfigurationId) -> Unit,
     onConfirmDeletionWithReassignment: (LocalModelConfigurationId?, ApiModelConfigurationId?, MediaProviderId?) -> Unit,
     onDismissDeletionSafety: () -> Unit,
-    onReDownloadModel: (LocalModelId) -> Unit,
+    onReDownloadModel: (String) -> Unit,
     onDownloadModelPack: (String) -> Unit,
     onDeleteModelPack: (String) -> Unit,
-    packReDownloadStates: Map<String, ReDownloadProgress> = emptyMap(),
+    packReDownloadStates: Map<String, ReDownloadProgressUi> = emptyMap(),
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var pendingDeleteTarget by remember { mutableStateOf<LocalDeleteTarget?>(null) }
@@ -274,12 +273,12 @@ private fun LocalModelAssetListView(
     modelPacks: List<ModelPackUi>,
     localModels: List<LocalModelAssetUi>,
     availableToDownloadModels: List<LocalModelAssetUi>,
-    reDownloadStates: Map<LocalModelId, ReDownloadProgress>,
-    packReDownloadStates: Map<String, ReDownloadProgress>,
+    reDownloadStates: Map<String, ReDownloadProgressUi>,
+    packReDownloadStates: Map<String, ReDownloadProgressUi>,
     onDismiss: () -> Unit,
     onSelectAsset: (LocalModelAssetUi) -> Unit,
     onRequestDeleteAsset: (LocalModelAssetUi) -> Unit,
-    onReDownloadModel: (LocalModelId) -> Unit,
+    onReDownloadModel: (String) -> Unit,
     onDownloadModelPack: (String) -> Unit,
     onRequestDeleteModelPack: (ModelPackUi) -> Unit,
 ) {
@@ -315,16 +314,16 @@ private fun LocalModelAssetListView(
                 items(displayedLocalModels, key = { it.metadataId.value }) { asset ->
                     LocalModelAssetCard(
                         asset = asset,
-                        reDownloadProgress = reDownloadStates[asset.metadataId],
+                        reDownloadProgress = reDownloadStates[asset.metadataId.value],
                         onSelectAsset = {
                             if (asset.isSoftDeleted) {
-                                onReDownloadModel(asset.metadataId)
+                                onReDownloadModel(asset.metadataId.value)
                             } else {
                                 onSelectAsset(asset)
                             }
                         },
                         onRequestDeleteAsset = onRequestDeleteAsset,
-                        onReDownloadClick = { onReDownloadModel(asset.metadataId) },
+                        onReDownloadClick = { onReDownloadModel(asset.metadataId.value) },
                     )
                 }
             }
@@ -337,10 +336,10 @@ private fun LocalModelAssetListView(
                 items(displayedAvailableToDownloadModels, key = { "dl_${it.metadataId.value}" }) { asset ->
                     LocalModelAssetCard(
                         asset = asset,
-                        reDownloadProgress = reDownloadStates[asset.metadataId],
-                        onSelectAsset = { onReDownloadModel(asset.metadataId) },
+                        reDownloadProgress = reDownloadStates[asset.metadataId.value],
+                        onSelectAsset = { onReDownloadModel(asset.metadataId.value) },
                         onRequestDeleteAsset = null,
-                        onReDownloadClick = { onReDownloadModel(asset.metadataId) },
+                        onReDownloadClick = { onReDownloadModel(asset.metadataId.value) },
                     )
                 }
             }
@@ -360,7 +359,7 @@ private fun LocalModelAssetListView(
 
 private fun LazyListScope.modelPacksSection(
     modelPacks: List<ModelPackUi>,
-    packReDownloadStates: Map<String, ReDownloadProgress>,
+    packReDownloadStates: Map<String, ReDownloadProgressUi>,
     onDownloadModelPack: (String) -> Unit,
     onRequestDeleteModelPack: (ModelPackUi) -> Unit,
 ) {
@@ -384,7 +383,7 @@ private fun LazyListScope.modelPacksSection(
 @Composable
 private fun LocalModelAssetCard(
     asset: LocalModelAssetUi,
-    reDownloadProgress: ReDownloadProgress?,
+    reDownloadProgress: ReDownloadProgressUi?,
     onSelectAsset: (LocalModelAssetUi) -> Unit,
     onRequestDeleteAsset: ((LocalModelAssetUi) -> Unit)?,
     onReDownloadClick: () -> Unit,
@@ -448,7 +447,7 @@ private fun LocalModelAssetCard(
                     contentAlignment = Alignment.Center,
                 ) {
                     when (reDownloadProgress) {
-                        null, ReDownloadProgress.Idle -> {
+                        null, ReDownloadProgressUi.Idle -> {
                             EnclaveIconButton(
                                 onClick = onReDownloadClick,
                                 icon = Icons.Default.Download,
@@ -458,16 +457,16 @@ private fun LocalModelAssetCard(
                                 withShadow = false,
                             )
                         }
-                        is ReDownloadProgress.Preparing -> {
+                        is ReDownloadProgressUi.Preparing -> {
                             EnclaveCircularProgressIndicator(modifier = Modifier.size(20.dp))
                         }
-                        is ReDownloadProgress.Downloading -> {
+                        is ReDownloadProgressUi.Downloading -> {
                             EnclaveCircularProgressIndicator(
                                 progress = { reDownloadProgress.progress },
                                 modifier = Modifier.size(20.dp),
                             )
                         }
-                        is ReDownloadProgress.Finalizing -> {
+                        is ReDownloadProgressUi.Finalizing -> {
                             if (reDownloadProgress.progress != null) {
                                 EnclaveCircularProgressIndicator(
                                     progress = { reDownloadProgress.progress },
@@ -477,7 +476,7 @@ private fun LocalModelAssetCard(
                                 EnclaveCircularProgressIndicator(modifier = Modifier.size(20.dp))
                             }
                         }
-                        is ReDownloadProgress.Complete -> {
+                        is ReDownloadProgressUi.Complete -> {
                             Icon(
                                 imageVector = Icons.Default.CheckCircle,
                                 contentDescription = "Download Complete",
@@ -485,7 +484,7 @@ private fun LocalModelAssetCard(
                                 modifier = Modifier.size(20.dp),
                             )
                         }
-                        is ReDownloadProgress.Failed -> {
+                        is ReDownloadProgressUi.Failed -> {
                             Icon(
                                 imageVector = Icons.Default.Error,
                                 contentDescription = "Download Failed: ${reDownloadProgress.error}",
@@ -658,7 +657,7 @@ private fun LocalModelConfigListView(
 @Composable
 private fun ModelPackCard(
     pack: ModelPackUi,
-    reDownloadProgress: ReDownloadProgress?,
+    reDownloadProgress: ReDownloadProgressUi?,
     onDownload: () -> Unit,
     onReDownload: () -> Unit,
     onRequestDelete: () -> Unit,
@@ -735,7 +734,7 @@ private fun ModelPackCard(
                     contentAlignment = Alignment.Center,
                 ) {
                     when (reDownloadProgress) {
-                        null, ReDownloadProgress.Idle -> {
+                        null, ReDownloadProgressUi.Idle -> {
                             EnclaveIconButton(
                                 onClick = if (pack.isDiffusionSoftDeleted) onReDownload else onDownload,
                                 icon = Icons.Default.Download,
@@ -745,16 +744,16 @@ private fun ModelPackCard(
                                 withShadow = false,
                             )
                         }
-                        ReDownloadProgress.Preparing -> {
+                        ReDownloadProgressUi.Preparing -> {
                             EnclaveCircularProgressIndicator(modifier = Modifier.size(20.dp))
                         }
-                        is ReDownloadProgress.Downloading -> {
+                        is ReDownloadProgressUi.Downloading -> {
                             EnclaveCircularProgressIndicator(
                                 progress = { reDownloadProgress.progress },
                                 modifier = Modifier.size(20.dp),
                             )
                         }
-                        is ReDownloadProgress.Finalizing -> {
+                        is ReDownloadProgressUi.Finalizing -> {
                             if (reDownloadProgress.progress != null) {
                                 EnclaveCircularProgressIndicator(
                                     progress = { reDownloadProgress.progress },
@@ -764,7 +763,7 @@ private fun ModelPackCard(
                                 EnclaveCircularProgressIndicator(modifier = Modifier.size(20.dp))
                             }
                         }
-                        ReDownloadProgress.Complete -> {
+                        ReDownloadProgressUi.Complete -> {
                             Icon(
                                 imageVector = Icons.Default.CheckCircle,
                                 contentDescription = "Download complete",
@@ -772,7 +771,7 @@ private fun ModelPackCard(
                                 modifier = Modifier.size(20.dp),
                             )
                         }
-                        is ReDownloadProgress.Failed -> {
+                        is ReDownloadProgressUi.Failed -> {
                             Icon(
                                 imageVector = Icons.Default.Error,
                                 contentDescription = "Download failed",
