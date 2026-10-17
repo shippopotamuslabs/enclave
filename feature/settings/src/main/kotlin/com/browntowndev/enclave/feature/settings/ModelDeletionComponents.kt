@@ -11,7 +11,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveTextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -117,14 +117,10 @@ fun DeleteConfirmationDialog(
         title = { Text(title) },
         text = { Text(message) },
         confirmButton = {
-            TextButton(onClick = onConfirm) {
-                Text(confirmLabel)
-            }
+            EnclaveTextButton(text = confirmLabel, onClick = onConfirm)
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
+            EnclaveTextButton(text = "Cancel", onClick = onDismiss)
         },
     )
 }

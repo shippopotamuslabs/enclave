@@ -33,7 +33,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveTextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -244,12 +244,12 @@ fun LiveVoiceConfigureScreen(
                     )
                 }
 
-                TextButton(
+                EnclaveTextButton(
                     onClick = onFetchLiveVoiceModels,
                     enabled = !discovery.isLoading && (apiKey.isNotBlank() || isKeySaved),
                     modifier = Modifier.align(Alignment.End),
                 ) {
-                    if (discovery.isLoading) {
+if (discovery.isLoading) {
                         EnclaveCircularProgressIndicator(modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Loading models\u2026")
@@ -262,7 +262,7 @@ fun LiveVoiceConfigureScreen(
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(if (hasModels) "Refresh Models" else "Discover Models")
                     }
-                }
+}
             }
 
             if (draft.provider == ApiProvider.OPENAI || draft.provider == ApiProvider.XAI) {
