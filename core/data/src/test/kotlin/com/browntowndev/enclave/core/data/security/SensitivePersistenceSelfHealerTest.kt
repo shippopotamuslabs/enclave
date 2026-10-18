@@ -3,11 +3,7 @@ package com.browntowndev.enclave.core.data.security
 import com.browntowndev.enclave.core.data.security.DecryptFailedException
 import com.browntowndev.enclave.core.data.security.MalformedEnvelopeException
 import com.browntowndev.enclave.core.data.security.MalformedEnvelopeReason
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.slot
-import io.mockk.verify
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
@@ -15,22 +11,21 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class SensitivePersistenceSelfHealerTest {
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
+    private val loggingPort = FakeLoggingPort()
 
     @Test
     fun repairString_plaintextAndUnlocked_returnsEncryptedEnvelopeAndSanitizedWarning() {
-        val messageSlot = slot<String>()
-        every { loggingPort.warning(any(), capture(messageSlot)) } returns Unit
         val healer = SensitivePersistenceSelfHealer(FakeLocalDataEncryptionService(), loggingPort)
 
         val result = healer.repairString(messageContentRef, "msg-1", "secret text")
 
         assertEquals(SensitiveRepairAction.REPAIRED, result.action)
         assertEquals("PCENC:v1:aes-gcm:secret text", result.value)
-        assertTrue(messageSlot.captured.contains("MessageEntity"))
-        assertTrue(messageSlot.captured.contains("content"))
-        assertFalse(messageSlot.captured.contains("secret text"))
-        assertFalse(messageSlot.captured.contains("PCENC:"))
+        val message = loggingPort.warningCalls.last().second
+        assertTrue(message.contains("MessageEntity"))
+        assertTrue(message.contains("content"))
+        assertFalse(message.contains("secret text"))
+        assertFalse(message.contains("PCENC:"))
     }
 
     @Test
@@ -41,7 +36,7 @@ class SensitivePersistenceSelfHealerTest {
 
         assertEquals(SensitiveRepairAction.DEFERRED_LOCKED, result.action)
         assertEquals("secret text", result.value)
-        verify { loggingPort.warning(any(), match { it.contains("DEFERRED_LOCKED") }) }
+        assertTrue(loggingPort.warningCalls.any { (_, message) -> message.contains("DEFERRED_LOCKED") })
     }
 
     @Test
@@ -58,15 +53,14 @@ class SensitivePersistenceSelfHealerTest {
 
     @Test
     fun decryptForRead_invalidCiphertext_returnsNullAndLogsMetadataOnly() {
-        val messageSlot = slot<String>()
-        every { loggingPort.warning(any(), capture(messageSlot)) } returns Unit
         val healer = SensitivePersistenceSelfHealer(ThrowingDecryptEncryptionService(), loggingPort)
 
         val result = healer.decryptForRead(messageContentRef, "msg-1", "PCENC:v1:aes-gcm:not-valid")
 
         assertNull(result)
-        assertTrue(messageSlot.captured.contains("REJECTED_INVALID_CIPHERTEXT"))
-        assertFalse(messageSlot.captured.contains("not-valid"))
+        val message = loggingPort.warningCalls.last().second
+        assertTrue(message.contains("REJECTED_INVALID_CIPHERTEXT"))
+        assertFalse(message.contains("not-valid"))
     }
 
     @Test
@@ -83,8 +77,6 @@ class SensitivePersistenceSelfHealerTest {
 
     @Test
     fun decryptForRead_malformedEnvelope_emitsRejectedMalformedEnvelopeAction() {
-        val messageSlot = slot<String>()
-        every { loggingPort.warning(any(), capture(messageSlot)) } returns Unit
         val healer = SensitivePersistenceSelfHealer(MalformedThrowingEncryptionService(), loggingPort)
 
         val result =
@@ -95,13 +87,11 @@ class SensitivePersistenceSelfHealerTest {
             )
 
         assertNull(result)
-        assertTrue(messageSlot.captured.contains("REJECTED_MALFORMED_ENVELOPE"))
+        assertTrue(loggingPort.warningCalls.last().second.contains("REJECTED_MALFORMED_ENVELOPE"))
     }
 
     @Test
     fun decryptForRead_decryptFailed_emitsRejectedInvalidCiphertextAction() {
-        val messageSlot = slot<String>()
-        every { loggingPort.warning(any(), capture(messageSlot)) } returns Unit
         val healer = SensitivePersistenceSelfHealer(DecryptFailedThrowingEncryptionService(), loggingPort)
 
         val result =
@@ -112,7 +102,7 @@ class SensitivePersistenceSelfHealerTest {
             )
 
         assertNull(result)
-        assertTrue(messageSlot.captured.contains("REJECTED_INVALID_CIPHERTEXT"))
+        assertTrue(loggingPort.warningCalls.last().second.contains("REJECTED_INVALID_CIPHERTEXT"))
     }
 
     private companion object {

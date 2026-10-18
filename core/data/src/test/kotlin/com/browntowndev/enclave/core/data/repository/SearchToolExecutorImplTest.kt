@@ -1,34 +1,36 @@
 package com.browntowndev.enclave.core.data.repository
 
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeSettingsRepository
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
 import com.browntowndev.enclave.domain.model.settings.SearchProvider
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.repository.SettingsData
-import com.browntowndev.enclave.domain.port.repository.SettingsRepository
-import io.mockk.every
-import io.mockk.mockk
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import kotlin.test.assertFailsWith
 
+/**
+ * Translated from MockK to hand-written fakes (ENC-28): the settings port
+ * is the `:core:testing` fake seeded with the required [SettingsData], and
+ * the two search repositories are subclass fakes over the production open
+ * seams returning canned payloads.
+ */
 class SearchToolExecutorImplTest {
     @Test
     fun `execute delegates to Tavily repository when search is enabled and Tavily is selected`() =
         runTest {
-            val settingsRepository = mockk<SettingsRepository>()
-            val tavilySearchRepository = mockk<TavilySearchRepository>()
-            val exaSearchRepository = mockk<ExaSearchRepository>()
-            every { settingsRepository.settingsFlow } returns
-                flowOf(SettingsData(searchEnabled = true, searchProvider = SearchProvider.TAVILY))
-            every { tavilySearchRepository.search("android 17 local network") } returns
-                """{"query":"android 17 local network","results":[]}"""
+            val settingsRepository =
+                FakeSettingsRepository(SettingsData(searchEnabled = true, searchProvider = SearchProvider.TAVILY))
+            val tavilySearchRepository = FakeTavilySearchRepository()
+            val exaSearchRepository = FakeExaSearchRepository()
+            tavilySearchRepository.resultsByQuery =
+                mapOf("android 17 local network" to """{"query":"android 17 local network","results":[]}""")
 
             val executor =
                 SearchToolExecutorImpl(
-                    loggingPort = mockk<LoggingPort>(relaxed = true),
+                    loggingPort = FakeLoggingPort(),
                     settingsRepository = settingsRepository,
                     tavilySearchRepository = tavilySearchRepository,
                     exaSearchRepository = exaSearchRepository,
@@ -50,16 +52,16 @@ class SearchToolExecutorImplTest {
     @Test
     fun `execute delegates to Exa repository when search is enabled and Exa is selected`() =
         runTest {
-            val settingsRepository = mockk<SettingsRepository>()
-            val tavilySearchRepository = mockk<TavilySearchRepository>()
-            val exaSearchRepository = mockk<ExaSearchRepository>()
-            every { settingsRepository.settingsFlow } returns
-                flowOf(SettingsData(searchEnabled = true, searchProvider = SearchProvider.EXA))
-            every { exaSearchRepository.search("android 17 local network") } returns """{"query":"android 17 local network","results":[]}"""
+            val settingsRepository =
+                FakeSettingsRepository(SettingsData(searchEnabled = true, searchProvider = SearchProvider.EXA))
+            val tavilySearchRepository = FakeTavilySearchRepository()
+            val exaSearchRepository = FakeExaSearchRepository()
+            exaSearchRepository.resultsByQuery =
+                mapOf("android 17 local network" to """{"query":"android 17 local network","results":[]}""")
 
             val executor =
                 SearchToolExecutorImpl(
-                    loggingPort = mockk<LoggingPort>(relaxed = true),
+                    loggingPort = FakeLoggingPort(),
                     settingsRepository = settingsRepository,
                     tavilySearchRepository = tavilySearchRepository,
                     exaSearchRepository = exaSearchRepository,
@@ -81,17 +83,14 @@ class SearchToolExecutorImplTest {
     @Test
     fun `execute throws IllegalStateException when search is disabled`() =
         runTest {
-            val settingsRepository = mockk<SettingsRepository>()
-            val tavilySearchRepository = mockk<TavilySearchRepository>()
-            val exaSearchRepository = mockk<ExaSearchRepository>()
-            every { settingsRepository.settingsFlow } returns flowOf(SettingsData(searchEnabled = false))
+            val settingsRepository = FakeSettingsRepository(SettingsData(searchEnabled = false))
 
             val executor =
                 SearchToolExecutorImpl(
-                    loggingPort = mockk<LoggingPort>(relaxed = true),
+                    loggingPort = FakeLoggingPort(),
                     settingsRepository = settingsRepository,
-                    tavilySearchRepository = tavilySearchRepository,
-                    exaSearchRepository = exaSearchRepository,
+                    tavilySearchRepository = FakeTavilySearchRepository(),
+                    exaSearchRepository = FakeExaSearchRepository(),
                 )
 
             assertFailsWith<IllegalStateException> {
@@ -111,10 +110,10 @@ class SearchToolExecutorImplTest {
         runTest {
             val executor =
                 SearchToolExecutorImpl(
-                    loggingPort = mockk<LoggingPort>(relaxed = true),
-                    settingsRepository = mockk(),
-                    tavilySearchRepository = mockk(),
-                    exaSearchRepository = mockk(),
+                    loggingPort = FakeLoggingPort(),
+                    settingsRepository = FakeSettingsRepository(),
+                    tavilySearchRepository = FakeTavilySearchRepository(),
+                    exaSearchRepository = FakeExaSearchRepository(),
                 )
             assertFailsWith<IllegalArgumentException> {
                 executor.execute(
@@ -133,10 +132,10 @@ class SearchToolExecutorImplTest {
         runTest {
             val executor =
                 SearchToolExecutorImpl(
-                    loggingPort = mockk<LoggingPort>(relaxed = true),
-                    settingsRepository = mockk(),
-                    tavilySearchRepository = mockk(),
-                    exaSearchRepository = mockk(),
+                    loggingPort = FakeLoggingPort(),
+                    settingsRepository = FakeSettingsRepository(),
+                    tavilySearchRepository = FakeTavilySearchRepository(),
+                    exaSearchRepository = FakeExaSearchRepository(),
                 )
             assertFailsWith<IllegalArgumentException> {
                 executor.execute(
@@ -153,17 +152,16 @@ class SearchToolExecutorImplTest {
     @Test
     fun `execute preserves escaped quotes in query arguments`() =
         runTest {
-            val settingsRepository = mockk<SettingsRepository>()
-            val tavilySearchRepository = mockk<TavilySearchRepository>()
-            val exaSearchRepository = mockk<ExaSearchRepository>()
-            every { settingsRepository.settingsFlow } returns
-                flowOf(SettingsData(searchEnabled = true, searchProvider = SearchProvider.TAVILY))
-            every { tavilySearchRepository.search("""android "agent" news""") } returns
-                """{"query":"android \"agent\" news","results":[]}"""
+            val settingsRepository =
+                FakeSettingsRepository(SettingsData(searchEnabled = true, searchProvider = SearchProvider.TAVILY))
+            val tavilySearchRepository = FakeTavilySearchRepository()
+            val exaSearchRepository = FakeExaSearchRepository()
+            tavilySearchRepository.resultsByQuery =
+                mapOf("""android "agent" news""" to """{"query":"android \"agent\" news","results":[]}""")
 
             val executor =
                 SearchToolExecutorImpl(
-                    loggingPort = mockk<LoggingPort>(relaxed = true),
+                    loggingPort = FakeLoggingPort(),
                     settingsRepository = settingsRepository,
                     tavilySearchRepository = tavilySearchRepository,
                     exaSearchRepository = exaSearchRepository,
@@ -185,16 +183,15 @@ class SearchToolExecutorImplTest {
     @Test
     fun `execute returns error JSON when Tavily repository throws IOException`() =
         runTest {
-            val settingsRepository = mockk<SettingsRepository>()
-            val tavilySearchRepository = mockk<TavilySearchRepository>()
-            val exaSearchRepository = mockk<ExaSearchRepository>()
-            every { settingsRepository.settingsFlow } returns
-                flowOf(SettingsData(searchEnabled = true, searchProvider = SearchProvider.TAVILY))
-            every { tavilySearchRepository.search(any()) } throws java.io.IOException("Connection timed out")
+            val settingsRepository =
+                FakeSettingsRepository(SettingsData(searchEnabled = true, searchProvider = SearchProvider.TAVILY))
+            val tavilySearchRepository = FakeTavilySearchRepository()
+            val exaSearchRepository = FakeExaSearchRepository()
+            tavilySearchRepository.searchFailure = java.io.IOException("Connection timed out")
 
             val executor =
                 SearchToolExecutorImpl(
-                    loggingPort = mockk<LoggingPort>(relaxed = true),
+                    loggingPort = FakeLoggingPort(),
                     settingsRepository = settingsRepository,
                     tavilySearchRepository = tavilySearchRepository,
                     exaSearchRepository = exaSearchRepository,

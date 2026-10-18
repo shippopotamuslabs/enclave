@@ -1,8 +1,8 @@
 package com.browntowndev.enclave.core.data.media
 
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.media.StreamingAudioConfig
-import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -22,11 +22,11 @@ import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 @Config(sdk = [34])
 class AndroidStreamingAudioPlayerTest {
     private lateinit var player: AndroidStreamingAudioPlayer
-    private val mockLogger: LoggingPort = mockk(relaxed = true)
+    private val fakeLogger: LoggingPort = FakeLoggingPort()
 
     @BeforeEach
     fun setUp() {
-        player = AndroidStreamingAudioPlayer(mockLogger)
+        player = AndroidStreamingAudioPlayer(fakeLogger)
     }
 
     @Test

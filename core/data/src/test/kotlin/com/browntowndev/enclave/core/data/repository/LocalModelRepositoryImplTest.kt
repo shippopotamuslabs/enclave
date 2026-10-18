@@ -4,7 +4,6 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.browntowndev.enclave.core.data.local.EnclaveDatabase
 import com.browntowndev.enclave.core.data.security.SensitiveRoomReadRepairApplier
-import com.browntowndev.enclave.core.data.sync.CloudSyncTrigger
 import com.browntowndev.enclave.domain.model.config.LocalModelAsset
 import com.browntowndev.enclave.domain.model.config.LocalModelConfiguration
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
@@ -13,7 +12,6 @@ import com.browntowndev.enclave.domain.model.config.LocalModelMetadata
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.repository.TransactionProvider
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -28,8 +26,8 @@ import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 class LocalModelRepositoryImplTest {
     private lateinit var database: EnclaveDatabase
     private lateinit var repository: LocalModelRepositoryImpl
-    private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
-    private val readRepairApplier = mockk<SensitiveRoomReadRepairApplier>(relaxed = true)
+    private lateinit var syncTrigger: RecordingCloudSyncTrigger
+    private lateinit var readRepairApplier: SensitiveRoomReadRepairApplier
 
     private val fakeTransactionProvider =
         object : TransactionProvider {
@@ -38,6 +36,7 @@ class LocalModelRepositoryImplTest {
 
     @BeforeEach
     fun setup() {
+        syncTrigger = RecordingCloudSyncTrigger()
         database =
             Room
                 .inMemoryDatabaseBuilder(
@@ -45,6 +44,7 @@ class LocalModelRepositoryImplTest {
                     EnclaveDatabase::class.java,
                 ).allowMainThreadQueries()
                 .build()
+        readRepairApplier = database.realReadRepairApplier()
 
         repository =
             LocalModelRepositoryImpl(

@@ -1,63 +1,43 @@
 package com.browntowndev.enclave.core.data.repository
 
-import com.browntowndev.enclave.core.data.local.ChatSummaryDao
-import com.browntowndev.enclave.core.data.local.EmbeddingDao
-import com.browntowndev.enclave.core.data.local.MessageDao
-import com.browntowndev.enclave.core.data.local.MessageVisionAnalysisDao
-import com.browntowndev.enclave.core.data.security.SensitivePersistenceSelfHealer
-import com.browntowndev.enclave.core.data.security.SensitiveRoomReadRepairApplier
-import com.browntowndev.enclave.core.data.sync.CloudSyncTrigger
+import com.browntowndev.enclave.core.data.local.EnclaveDatabase
+import com.browntowndev.enclave.core.data.local.messageDao
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.Content
 import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.Role
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.junit.jupiter.api.extension.ExtendWith
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 import java.util.UUID
+import org.robolectric.annotation.Config as RoboConfig
 
+/**
+ * Translated from MockK to a real in-memory Room database (ENC-28):
+ * persistence assertions read the stored rows back through the real DAOs,
+ * and the transaction test forces the file insert to fail with a SQLite
+ * trigger so the message insert must roll back.
+ */
+@ExtendWith(RobolectricExtension::class)
+@RoboConfig(sdk = [34])
 class MessageRepositoryImplSaveMessageTest {
-    private lateinit var messageDao: MessageDao
-    private lateinit var messageVisionAnalysisDao: MessageVisionAnalysisDao
-    private lateinit var chatSummaryDao: ChatSummaryDao
-    private lateinit var embeddingDao: EmbeddingDao
-    private lateinit var transactionProvider: com.browntowndev.enclave.domain.port.repository.TransactionProvider
-    private lateinit var healer: SensitivePersistenceSelfHealer
-    private val readRepairApplier = mockk<SensitiveRoomReadRepairApplier>(relaxed = true)
+    private lateinit var database: EnclaveDatabase
     private lateinit var repository: MessageRepositoryImpl
-    private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
 
     @BeforeEach
     fun setup() {
-        messageDao = mockk(relaxed = true)
-        messageVisionAnalysisDao = mockk(relaxed = true)
-        chatSummaryDao = mockk(relaxed = true)
-        embeddingDao = mockk(relaxed = true)
-        transactionProvider = mockk(relaxed = true)
-        healer = testSensitiveSelfHealer(FakeLocalDataEncryptionService())
+        database = createInMemoryEnclaveDatabase()
+        repository = createMessageRepositoryImpl(database)
+    }
 
-        // Default behavior for transactionProvider to just execute the block
-        coEvery { transactionProvider.runInTransaction<Any>(any()) } coAnswers {
-            val block = firstArg<suspend () -> Any>()
-            block()
-        }
-
-        repository =
-            createMessageRepositoryImpl(
-                syncTrigger = syncTrigger,
-                messageDao = messageDao,
-                messageVisionAnalysisDao = messageVisionAnalysisDao,
-                chatSummaryDao = chatSummaryDao,
-                embeddingDao = embeddingDao,
-                transactionProvider = transactionProvider,
-                healer = healer,
-                readRepairApplier = readRepairApplier,
-            )
+    @AfterEach
+    fun tearDown() {
+        database.close()
     }
 
     @Test
@@ -82,8 +62,8 @@ class MessageRepositoryImplSaveMessageTest {
             assert(exception.message?.contains("must have a chatId before persisting") == true)
             assert(exception.message?.contains("CreateUserMessageUseCase") == true)
 
-            // Verify DAO was never called
-            coVerify(exactly = 0) { messageDao.upsert(any()) }
+            // Verify nothing was persisted
+            assert(database.messageQueryDao().getAllIds().isEmpty())
         }
 
     @Test
@@ -92,6 +72,7 @@ class MessageRepositoryImplSaveMessageTest {
             // Given - a valid message with a chatId
             val messageId = MessageId(UUID.randomUUID().toString())
             val chatId = ChatId(UUID.randomUUID().toString())
+            database.seedChat(chatId)
             val message =
                 Message(
                     id = messageId,
@@ -100,14 +81,13 @@ class MessageRepositoryImplSaveMessageTest {
                     role = Role.USER,
                 )
 
-            coEvery { messageDao.upsert(any()) } returns 1L
-
             // When
             val result = repository.saveMessage(message)
 
             // Then
             assert(result == messageId)
-            coVerify { messageDao.upsert(match { it.content == "PCENC:v1:aes-gcm:Test message" }) }
+            val stored = database.messageQueryDao().getMessageById(messageId)
+            assert(stored?.message?.content == "PCENC:v1:aes-gcm:Test message")
         }
 
     @Test
@@ -115,6 +95,7 @@ class MessageRepositoryImplSaveMessageTest {
         runTest {
             val messageId = MessageId(UUID.randomUUID().toString())
             val chatId = ChatId(UUID.randomUUID().toString())
+            database.seedChat(chatId)
             val attachment =
                 com.browntowndev.enclave.domain.model.chat.FileAttachment(
                     name = "secret.txt",
@@ -128,18 +109,12 @@ class MessageRepositoryImplSaveMessageTest {
                     role = Role.USER,
                 )
 
-            coEvery { messageDao.upsert(any()) } returns 1L
-
             repository.saveMessage(message)
 
-            coVerify {
-                messageDao.insertFiles(
-                    match { files ->
-                        files.single().name == "PCENC:v1:aes-gcm:secret.txt" &&
-                            files.single().content == "PCENC:v1:aes-gcm:private attachment"
-                    },
-                )
-            }
+            val storedFiles = database.messageDao().getMessageById(messageId)?.files.orEmpty()
+            assert(storedFiles.size == 1)
+            assert(storedFiles.single().name == "PCENC:v1:aes-gcm:secret.txt")
+            assert(storedFiles.single().content == "PCENC:v1:aes-gcm:private attachment")
         }
 
     @Test
@@ -148,6 +123,7 @@ class MessageRepositoryImplSaveMessageTest {
             // Given
             val messageId = MessageId(UUID.randomUUID().toString())
             val chatId = ChatId(UUID.randomUUID().toString())
+            database.seedChat(chatId)
             val attachment =
                 com.browntowndev.enclave.domain.model.chat.FileAttachment(
                     name = "test.txt",
@@ -161,16 +137,20 @@ class MessageRepositoryImplSaveMessageTest {
                     role = Role.USER,
                 )
 
-            coEvery { messageDao.upsert(any()) } returns 1L
-            coEvery { messageDao.insertFiles(any()) } throws RuntimeException("Database error")
+            // Force every message_file insert to abort, so the surrounding
+            // transaction must roll back the message insert with it.
+            database.openHelper.writableDatabase.execSQL(
+                "CREATE TRIGGER fail_message_file_insert BEFORE INSERT ON message_file " +
+                    "BEGIN SELECT RAISE(ABORT, 'Database error'); END",
+            )
 
             // When & Then
             assertThrows<RuntimeException> {
                 repository.saveMessage(message)
             }
 
-            coVerify { transactionProvider.runInTransaction<Any>(any()) }
-            coVerify { messageDao.upsert(any()) }
-            coVerify { messageDao.insertFiles(any()) }
+            // The transaction rolled back: no message row survives the failed file insert.
+            assert(database.messageQueryDao().getMessageById(messageId) == null)
+            assert(database.messageQueryDao().getAllIds().isEmpty())
         }
 }

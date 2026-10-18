@@ -3,8 +3,8 @@ package com.browntowndev.enclave.core.data.repository
 import com.browntowndev.enclave.core.data.security.CryptoAtRestEncryptionService
 import com.browntowndev.enclave.core.data.security.LocalDataEncryptionService
 import com.browntowndev.enclave.core.data.security.SensitivePersistenceSelfHealer
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import io.mockk.mockk
 
 internal class FakeLocalDataEncryptionService : LocalDataEncryptionService {
     var lastEncryptAad: ByteArray? = null
@@ -35,5 +35,5 @@ internal class FakeLocalDataEncryptionService : LocalDataEncryptionService {
 
 internal fun testSensitiveSelfHealer(
     localEncryption: LocalDataEncryptionService = FakeLocalDataEncryptionService(),
-    loggingPort: LoggingPort = mockk(relaxed = true),
+    loggingPort: LoggingPort = FakeLoggingPort(),
 ): SensitivePersistenceSelfHealer = SensitivePersistenceSelfHealer(localEncryption, loggingPort)

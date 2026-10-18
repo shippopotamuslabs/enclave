@@ -1,29 +1,58 @@
+@file:Suppress("ForbiddenMockKInTests")
+
+// MockK retained only for the Firebase Firestore SDK surface (FirebaseFirestore / DocumentSnapshot / aggregate queries), which has no JVM fake.
+
 package com.browntowndev.enclave.core.data.remote.firestore
 
+import androidx.test.core.app.ApplicationProvider
+import com.browntowndev.enclave.core.data.local.ApiCredentialsDao
+import com.browntowndev.enclave.core.data.testWorkManager
+import com.browntowndev.enclave.core.data.local.ApiModelConfigurationsDao
 import com.browntowndev.enclave.core.data.local.ChatDao
-import com.browntowndev.enclave.core.data.local.EnclaveDatabase
+import com.browntowndev.enclave.core.data.local.DefaultModelsDao
+import com.browntowndev.enclave.core.data.local.DocumentDao
+import com.browntowndev.enclave.core.data.local.EmbeddingDao
+import com.browntowndev.enclave.core.data.local.LiveVoiceProviderDao
+import com.browntowndev.enclave.core.data.local.LocalModelConfigurationsDao
+import com.browntowndev.enclave.core.data.local.LocalModelsDao
+import com.browntowndev.enclave.core.data.local.MediaProviderDao
+import com.browntowndev.enclave.core.data.local.MemoriesDao
+import com.browntowndev.enclave.core.data.local.MessageFileDao
+import com.browntowndev.enclave.core.data.local.MessageVisionAnalysisDao
+import com.browntowndev.enclave.core.data.local.StudioAlbumDao
+import com.browntowndev.enclave.core.data.local.TtsProviderDao
+import com.browntowndev.enclave.core.data.local.UtilityModelsDao
+import com.browntowndev.enclave.core.data.local.WebSearchSourceDao
 import com.browntowndev.enclave.core.data.remote.EntitySyncAdapter
 import com.browntowndev.enclave.core.data.remote.FirestoreDataSource
-import com.browntowndev.enclave.core.data.remote.FirestoreSensitiveFieldRepairer
 import com.browntowndev.enclave.core.data.remote.FirestoreSyncDependenciesFacade
+import com.browntowndev.enclave.core.data.repository.FakeLocalDataEncryptionService
+import com.browntowndev.enclave.core.data.repository.FakeStudioMediaDao
 import com.browntowndev.enclave.core.data.repository.SettingsRepositoryImpl
-import com.browntowndev.enclave.core.data.sync.EmbeddingRegenerationCoordinator
+import com.browntowndev.enclave.core.data.security.SensitivePersistenceSelfHealer
+import com.browntowndev.enclave.core.data.sync.CloudSyncTrigger
 import com.browntowndev.enclave.core.data.sync.SearchToolSettingsSyncQueue
+import com.browntowndev.enclave.core.testing.FakeCloudSyncPort
+import com.browntowndev.enclave.core.testing.FakeCryptoManagerPort
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.model.sync.CloudSyncReplayProgress
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.repository.CloudSyncPort
-import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
 import com.browntowndev.enclave.domain.usecase.security.StartCloudSyncListeningUseCase
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.functions.FirebaseFunctions
 import io.mockk.*
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 import org.junit.jupiter.api.assertThrows
 import java.util.concurrent.atomic.AtomicBoolean
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class FirestoreSyncDocumentCacheTest {
     private val firestore = mockk<FirebaseFirestore>()
     private val cache = FirestoreSyncDocumentCache(firestore)
@@ -76,10 +105,12 @@ class FirestoreSyncDocumentCacheTest {
         syncEventApplier: FirestoreSyncEventDispatcher,
         documentCache: FirestoreSyncDocumentCache,
         externalScope: kotlinx.coroutines.CoroutineScope,
-        chatDao: ChatDao = mockk(relaxed = true),
+        chatDao: ChatDao = FakeChatDao(),
     ): FirestoreDataSource {
-        val cryptoManager = mockk<CryptoManagerPort>(relaxed = true)
-        every { cryptoManager.hasCachedKey() } returns true
+        val cryptoManager = FakeCryptoManagerPort()
+        cryptoManager.hasCachedKeyValue = true
+        val localEncryption = FakeLocalDataEncryptionService()
+        val loggingPort = FakeLoggingPort()
 
         val facade =
             FirestoreSyncDependenciesFacade.forTests(
@@ -87,42 +118,42 @@ class FirestoreSyncDocumentCacheTest {
                 chatSyncDaos =
                     ChatSyncDaos(
                         chatDao = chatDao,
-                        messageDao = mockk(relaxed = true),
-                        chatSummaryDao = mockk(relaxed = true),
-                        messageFileDao = mockk(relaxed = true),
-                        messageVisionAnalysisDao = mockk(relaxed = true),
-                        messageTranscriptSegmentDao = mockk(relaxed = true),
-                        messageInferenceTelemetryDao = mockk(relaxed = true),
-                        webSearchSourceDao = mockk(relaxed = true),
-                        documentDao = mockk(relaxed = true),
-                        embeddingDao = mockk(relaxed = true),
-                        firestoreSyncPlaceholderDao = mockk(relaxed = true),
+                        messageDao = FakeMessageDaoBundle(FakeEnclaveDatabase()).messageDao,
+                        chatSummaryDao = FakeChatSummaryDao(),
+                        messageFileDao = recordingDao<MessageFileDao>().dao,
+                        messageVisionAnalysisDao = recordingDao<MessageVisionAnalysisDao>().dao,
+                        messageTranscriptSegmentDao = FakeMessageTranscriptSegmentDao(),
+                        messageInferenceTelemetryDao = FakeMessageInferenceTelemetryDao(),
+                        webSearchSourceDao = recordingDao<WebSearchSourceDao>().dao,
+                        documentDao = recordingDao<DocumentDao>().dao,
+                        embeddingDao = recordingDao<EmbeddingDao>().dao,
+                        firestoreSyncPlaceholderDao = FakeFirestoreSyncPlaceholderDao(),
                     ),
                 configSyncDaos =
                     ConfigSyncDaos(
-                        memoriesDao = mockk(relaxed = true),
-                        ttsProviderDao = mockk(relaxed = true),
-                        liveVoiceProviderDao = mockk(relaxed = true),
-                        mediaProviderDao = mockk(relaxed = true),
-                        apiModelConfigurationsDao = mockk(relaxed = true),
-                        localModelsDao = mockk(relaxed = true),
-                        apiCredentialsDao = mockk(relaxed = true),
-                        localModelConfigurationsDao = mockk(relaxed = true),
-                        defaultModelsDao = mockk(relaxed = true),
-                        utilityModelsDao = mockk(relaxed = true),
+                        memoriesDao = recordingDao<MemoriesDao>().dao,
+                        ttsProviderDao = recordingDao<TtsProviderDao>().dao,
+                        liveVoiceProviderDao = recordingDao<LiveVoiceProviderDao>().dao,
+                        mediaProviderDao = recordingDao<MediaProviderDao>().dao,
+                        apiModelConfigurationsDao = recordingDao<ApiModelConfigurationsDao>().dao,
+                        localModelsDao = recordingDao<LocalModelsDao>().dao,
+                        apiCredentialsDao = recordingDao<ApiCredentialsDao>().dao,
+                        localModelConfigurationsDao = recordingDao<LocalModelConfigurationsDao>().dao,
+                        defaultModelsDao = recordingDao<DefaultModelsDao>().dao,
+                        utilityModelsDao = recordingDao<UtilityModelsDao>().dao,
                     ),
                 studioSyncDaos =
                     StudioSyncDaos(
-                        studioMediaDao = mockk(relaxed = true),
-                        studioAlbumDao = mockk(relaxed = true),
+                        studioMediaDao = FakeStudioMediaDao(),
+                        studioAlbumDao = recordingDao<StudioAlbumDao>().dao,
                     ),
-                apiKeyManager = mockk(relaxed = true),
+                apiKeyManager = testApiKeyManager(),
                 cryptoManager = cryptoManager,
-                loggingPort = mockk(relaxed = true),
+                loggingPort = loggingPort,
                 userIdProvider = { "user_123" },
-                embeddingCoordinator = mockk(relaxed = true),
-                localEncryption = mockk(relaxed = true),
-                sensitiveSelfHealer = mockk(relaxed = true),
+                embeddingCoordinator = testEmbeddingRegenerationCoordinator(),
+                localEncryption = localEncryption,
+                sensitiveSelfHealer = SensitivePersistenceSelfHealer(localEncryption, loggingPort),
                 purgeInProgress = AtomicBoolean(false),
                 syncEventFeedClient = syncEventFeedClient,
                 syncEventApplier = syncEventApplier,
@@ -138,17 +169,29 @@ class FirestoreSyncDocumentCacheTest {
                                     ),
                             ) { java.io.File.createTempFile("search-settings-", ".preferences_pb") },
                     ),
-                settingsRepository = mockk<SettingsRepositoryImpl>(relaxed = true),
+                settingsRepository =
+                    SettingsRepositoryImpl(
+                        dataStore = FakePreferencesDataStore(),
+                        apiKeyManager = testApiKeyManager(),
+                    ),
                 feedIntegrityRecovery =
                     FirestoreSyncFeedIntegrityRecovery(
-                        metaClient = mockk(relaxed = true),
-                        callableClient = mockk(relaxed = true),
-                        entityReconciler = mockk(relaxed = true),
+                        metaClient = FakeFirestoreSyncFeedMetaClient(firestore),
+                        callableClient =
+                            FakeFirestoreSyncFeedCallableClient(mockk<FirebaseFunctions>(relaxed = true)),
+                        entityReconciler = FakeFirestoreSyncEntityReconciler(firestore = firestore),
                         syncStateStore = syncStateStore,
-                        loggingPort = mockk(relaxed = true),
+                        loggingPort = loggingPort,
                     ),
             )
-        return FirestoreDataSource(facade, externalScope, mockk(relaxed = true))
+        return FirestoreDataSource(
+            facade,
+            externalScope,
+            CloudSyncTrigger(
+                testWorkManager(ApplicationProvider.getApplicationContext()),
+                FakeLoggingPort(),
+            ),
+        )
     }
 
     @Test
@@ -197,9 +240,9 @@ class FirestoreSyncDocumentCacheTest {
             mockDocument("users/user_123/messages/msg1", mapOf("chat_id" to "chat1"))
             mockDocument("users/user_123/chats/chat1", null)
 
-            val localStore = mockk<FirestoreSyncLocalStore>(relaxed = true)
-            val stateStore = mockk<FirestoreSyncStateStore>(relaxed = true)
-            coEvery { stateStore.lastAppliedSequence("user_123") } returns 99L
+            val localStore = RecordingSyncLocalStore()
+            val stateStore = FakeSyncStateStore()
+            stateStore.sequence = 99L
 
             val applier =
                 FirestoreSyncEventApplier(
@@ -217,23 +260,23 @@ class FirestoreSyncDocumentCacheTest {
 
             assertEquals("missing required parent chats/chat1 for messages/msg1", exception.message)
 
-            coVerify(exactly = 0) { localStore.upsert(any(), any(), any(), any()) }
-            coVerify(exactly = 0) { stateStore.setLastAppliedSequence("user_123", 100) }
+            assertTrue(localStore.upsertCalls.isEmpty())
+            assertTrue(stateStore.setLastAppliedCalls.none { it == ("user_123" to 100L) })
         }
 
     @Test
     fun `SCENARIO-03 RoomFirestoreSyncLocalStore decodes from cached snapshots first`() =
         runTest {
-            val database = mockk<EnclaveDatabase>(relaxed = true)
+            val database = FakeEnclaveDatabase()
             val adapterLookup =
                 mapOf<String, EntitySyncAdapter<*>>(
-                    "chats" to mockk<EntitySyncAdapter<Any>>(relaxed = true),
+                    "chats" to FakeSyncAdapter<Any>(collectionPath = "chats", fromFirestoreResult = Any()),
                 )
-            val repairer = mockk<FirestoreSensitiveFieldRepairer>()
-            val embeddingCoordinator = mockk<EmbeddingRegenerationCoordinator>(relaxed = true)
-            val loggingPort = mockk<LoggingPort>(relaxed = true)
-            val syncStateStore = mockk<FirestoreSyncStateStore>(relaxed = true)
-            val pendingSyncLookup = mockk<FirestoreSyncPendingSyncLookup>(relaxed = true)
+            val repairer = FakeFirestoreSensitiveFieldRepairer()
+            val embeddingCoordinator = testEmbeddingRegenerationCoordinator()
+            val loggingPort = FakeLoggingPort()
+            val syncStateStore = FakeSyncStateStore()
+            val pendingSyncLookup = FirestoreSyncPendingSyncLookup(database)
 
             val localStore =
                 RoomFirestoreSyncLocalStore(
@@ -265,8 +308,7 @@ class FirestoreSyncDocumentCacheTest {
             val event = syncEvent(sequence = 100, collectionPath = "chats", entityId = "chat1")
             cache.prefetch("user_123", listOf(event))
 
-            every { repairer.repairInbound("chats", "chat1", any()) } answers { it.invocation.args[2] as Map<String, Any?> }
-
+            // The fake repairer's default is identity repair, as the stub provided.
             localStore.upsert("chats", "chat1", mapOf("name" to "Chat 1"), null)
 
             // Verifies the store used the cached snapshot rather than doing another network get
@@ -276,16 +318,16 @@ class FirestoreSyncDocumentCacheTest {
     @Test
     fun `SCENARIO-04 Sensitive field repair invalidates cached snapshot before decode`() =
         runTest {
-            val database = mockk<EnclaveDatabase>(relaxed = true)
+            val database = FakeEnclaveDatabase()
             val adapterLookup =
                 mapOf<String, EntitySyncAdapter<*>>(
-                    "api_keys" to mockk<EntitySyncAdapter<Any>>(relaxed = true),
+                    "api_keys" to FakeSyncAdapter<Any>(collectionPath = "api_keys", fromFirestoreResult = Any()),
                 )
-            val repairer = mockk<FirestoreSensitiveFieldRepairer>()
-            val embeddingCoordinator = mockk<EmbeddingRegenerationCoordinator>(relaxed = true)
-            val loggingPort = mockk<LoggingPort>(relaxed = true)
-            val syncStateStore = mockk<FirestoreSyncStateStore>(relaxed = true)
-            val pendingSyncLookup = mockk<FirestoreSyncPendingSyncLookup>(relaxed = true)
+            val repairer = FakeFirestoreSensitiveFieldRepairer()
+            val embeddingCoordinator = testEmbeddingRegenerationCoordinator()
+            val loggingPort = FakeLoggingPort()
+            val syncStateStore = FakeSyncStateStore()
+            val pendingSyncLookup = FirestoreSyncPendingSyncLookup(database)
 
             val localStore =
                 RoomFirestoreSyncLocalStore(
@@ -333,7 +375,14 @@ class FirestoreSyncDocumentCacheTest {
             val event = syncEvent(sequence = 100, collectionPath = "api_keys", entityId = "key1")
             cache.prefetch("user_123", listOf(event))
 
-            every { repairer.repairInbound("api_keys", "key1", originalData) } returns repairedData
+            // Scripted repair result for exactly the stubbed call shape.
+            repairer.repairInboundHandler = { collectionPath, entityId, data ->
+                if (collectionPath == "api_keys" && entityId == "key1" && data == originalData) {
+                    repairedData
+                } else {
+                    data
+                }
+            }
 
             localStore.upsert("api_keys", "key1", originalData, null)
 
@@ -345,9 +394,9 @@ class FirestoreSyncDocumentCacheTest {
     @Test
     fun `SCENARIO-05 Aggregation count query falls back to indeterminate progress on failure`() =
         runTest {
-            val port = mockk<CloudSyncPort>(relaxed = true)
-            coEvery { port.getRemainingEventsCount() } returns Result.failure(RuntimeException("Network error"))
-            coEvery { port.syncRemoteChangesFromCloud() } returns
+            val port = FakeCloudSyncPort()
+            port.remainingEventsResult = Result.failure(RuntimeException("Network error"))
+            port.syncRemoteResult =
                 Result.success(
                     com.browntowndev.enclave.domain.model.sync.CloudSyncEventReplayResult(
                         eventsApplied = 0,
@@ -373,17 +422,18 @@ class FirestoreSyncDocumentCacheTest {
     @Test
     fun `SCENARIO-06 Replay clears document cache even when apply fails`() =
         runTest {
-            val cacheDouble = mockk<FirestoreSyncDocumentCache>(relaxed = true)
+            val cacheDouble = RecordingDocumentCache(firestore)
 
-            val syncStateStore = mockk<FirestoreSyncStateStore>(relaxed = true)
-            coEvery { syncStateStore.lastAppliedSequence("user_123") } returns 99L
+            val syncStateStore = FakeSyncStateStore()
+            syncStateStore.sequence = 99L
 
-            val syncEventFeedClient = mockk<FirestoreSyncEventFeedClient>(relaxed = true)
             val event = syncEvent(sequence = 100, collectionPath = "chats", entityId = "chat1")
-            coEvery { syncEventFeedClient.fetchNextPage("user_123", 99L) } returns listOf(event)
+            val gateway = FakeFeedQueryGateway()
+            gateway.fetchResult = listOf(event)
+            val syncEventFeedClient = FirestoreSyncEventFeedClient(gateway = gateway)
 
-            val syncEventApplier = mockk<FirestoreSyncEventDispatcher>()
-            coEvery { syncEventApplier.apply("user_123", event) } throws RuntimeException("Apply failed")
+            val syncEventApplier = RecordingSyncEventDispatcher()
+            syncEventApplier.applyThrowable = RuntimeException("Apply failed")
 
             val dataSource =
                 createTestDataSource(
@@ -398,22 +448,22 @@ class FirestoreSyncDocumentCacheTest {
             val result = dataSource.syncRemoteChangesFromCloud()
 
             assertTrue(result.isFailure)
-            verify(exactly = 1) { cacheDouble.clear() }
-            coVerify(exactly = 0) { syncStateStore.setLastAppliedSequence("user_123", 100) }
+            assertEquals(1, cacheDouble.clearCalls)
+            assertTrue(syncStateStore.setLastAppliedCalls.none { it == ("user_123" to 100L) })
         }
 
     @Test
     fun `SCENARIO-07 Remaining event count is computed after stale cursor recovery`() =
         runTest {
-            val chatDao = mockk<ChatDao>(relaxed = true)
-            coEvery { chatDao.countActiveChats() } returns 0
+            // Shared ordering log across the state store and chat DAO (the Firestore
+            // collection call is verified separately on the SDK mock below).
+            val orderLog = mutableListOf<String>()
+            val chatDao = FakeChatDao()
+            chatDao.events = orderLog
 
-            val syncStateStore = mockk<FirestoreSyncStateStore>(relaxed = true)
-            var seq = 100L
-            coEvery { syncStateStore.lastAppliedSequence("user_123") } answers { seq }
-            coEvery { syncStateStore.setLastAppliedSequence("user_123", any()) } answers {
-                seq = it.invocation.args[1] as Long
-            }
+            val syncStateStore = FakeSyncStateStore()
+            syncStateStore.events = orderLog
+            syncStateStore.sequence = 100L
 
             val collectionRef = mockk<com.google.firebase.firestore.CollectionReference>()
             val query = mockk<com.google.firebase.firestore.Query>()
@@ -433,8 +483,8 @@ class FirestoreSyncDocumentCacheTest {
                 createTestDataSource(
                     firestore = firestore,
                     syncStateStore = syncStateStore,
-                    syncEventFeedClient = mockk(),
-                    syncEventApplier = mockk(),
+                    syncEventFeedClient = FirestoreSyncEventFeedClient(gateway = FakeFeedQueryGateway()),
+                    syncEventApplier = RecordingSyncEventDispatcher(),
                     documentCache = cache,
                     chatDao = chatDao,
                     externalScope = this,
@@ -449,41 +499,44 @@ class FirestoreSyncDocumentCacheTest {
 
             assertTrue(result.isSuccess)
             assertEquals(42L, result.getOrThrow())
-            assertEquals(0L, seq) // Cursor was recovered to 0
+            assertEquals(0L, syncStateStore.sequence) // Cursor was recovered to 0
 
-            coVerify(ordering = io.mockk.Ordering.SEQUENCE) {
-                syncStateStore.lastAppliedSequence("user_123")
-                chatDao.countActiveChats()
-                syncStateStore.setLastAppliedSequence("user_123", 0L)
-                syncStateStore.lastAppliedSequence("user_123")
-                firestore.collection("users/user_123/sync_events")
-            }
+            // Relative order of the recovery interactions, as the previous
+            // Ordering.SEQUENCE coVerify asserted (the firestore.collection call
+            // terminates the sequence and is verified on the SDK mock).
+            val firstSequenceAt = orderLog.indexOf("lastAppliedSequence")
+            val countAt = orderLog.indexOf("countActiveChats")
+            val resetAt = orderLog.indexOf("setLastAppliedSequence")
+            val secondSequenceAt = orderLog.lastIndexOf("lastAppliedSequence")
+            assertTrue(firstSequenceAt >= 0, "lastAppliedSequence must be read first: $orderLog")
+            assertTrue(countAt > firstSequenceAt, "countActiveChats must follow the first read: $orderLog")
+            assertTrue(resetAt > countAt, "the cursor reset must follow the empty check: $orderLog")
+            assertTrue(secondSequenceAt > resetAt, "lastAppliedSequence must be re-read after the reset: $orderLog")
+            verify(exactly = 1) { firestore.collection("users/user_123/sync_events") }
         }
 
     @Test
     fun `SCENARIO-08 Live-drain prefetches only contiguous events starting from last applied sequence`() =
         runTest {
-            val cacheDouble = mockk<FirestoreSyncDocumentCache>(relaxed = true)
+            val cacheDouble = RecordingDocumentCache(firestore)
 
-            val syncStateStore = mockk<FirestoreSyncStateStore>(relaxed = true)
-            coEvery { syncStateStore.lastAppliedSequence("user_123") } returns 50L
+            val syncStateStore = FakeSyncStateStore()
+            syncStateStore.sequence = 50L
 
-            var listenerCallback: (suspend (List<FirestoreSyncEvent>) -> Unit)? = null
-            val syncEventFeedClient = mockk<FirestoreSyncEventFeedClient>()
-            coEvery { syncEventFeedClient.attachLiveListener("user_123", 50L, any()) } answers {
-                listenerCallback = thirdArg()
-                mockk(relaxed = true)
-            }
+            val gateway = FakeFeedQueryGateway()
+            val syncEventFeedClient = FirestoreSyncEventFeedClient(gateway = gateway)
 
-            val syncEventApplier = mockk<FirestoreSyncEventDispatcher>(relaxed = true)
-            coEvery { syncEventApplier.apply("user_123", any()) } answers {
-                val event = secondArg<FirestoreSyncEvent>()
-                FirestoreSyncEventApplier.ApplyResult(appliedCount = 1, lastAppliedSequence = event.sequence)
-            }
+            // The recording dispatcher's default result mirrors the previous stub:
+            // ApplyResult(appliedCount = 1, lastAppliedSequence = event.sequence).
+            val syncEventApplier = RecordingSyncEventDispatcher()
 
-            val ctx = mockk<FirestoreSyncContext>(relaxed = true)
-            every { ctx.userIdProvider() } returns "user_123"
-            every { ctx.cryptoManager.hasCachedKey() } returns true
+            val cryptoManager = FakeCryptoManagerPort()
+            cryptoManager.hasCachedKeyValue = true
+            val ctx =
+                testSyncContext(
+                    cryptoManager = cryptoManager,
+                    userId = "user_123",
+                )
 
             val coordinator =
                 FirestoreListenerCoordinator(
@@ -498,6 +551,7 @@ class FirestoreSyncDocumentCacheTest {
             coordinator.startListening()
 
             runCurrent()
+            val listenerCallback = gateway.listenerCallbacks.singleOrNull()
             assertNotNull(listenerCallback)
 
             val events =
@@ -509,31 +563,27 @@ class FirestoreSyncDocumentCacheTest {
 
             listenerCallback!!.invoke(events)
 
-            coVerify(exactly = 1) {
-                cacheDouble.prefetch(
-                    "user_123",
-                    match { list ->
-                        list.size == 2 && list[0].sequence == 51L && list[1].sequence == 52L
-                    },
-                )
-            }
+            assertEquals(1, cacheDouble.prefetchCalls.size)
+            val (prefetchUserId, prefetchedEvents) = cacheDouble.prefetchCalls.single()
+            assertEquals("user_123", prefetchUserId)
+            assertEquals(listOf(51L, 52L), prefetchedEvents.map { it.sequence })
 
-            verify(exactly = 1) { cacheDouble.clear() }
+            assertEquals(1, cacheDouble.clearCalls)
         }
 
     @Test
     fun `SCENARIO-19 Cache bypass detection (Mutation Defense)`() =
         runTest {
-            val database = mockk<EnclaveDatabase>(relaxed = true)
+            val database = FakeEnclaveDatabase()
             val adapterLookup =
                 mapOf<String, EntitySyncAdapter<*>>(
-                    "chats" to mockk<EntitySyncAdapter<Any>>(relaxed = true),
+                    "chats" to FakeSyncAdapter<Any>(collectionPath = "chats", fromFirestoreResult = Any()),
                 )
-            val repairer = mockk<FirestoreSensitiveFieldRepairer>()
-            val embeddingCoordinator = mockk<EmbeddingRegenerationCoordinator>(relaxed = true)
-            val loggingPort = mockk<LoggingPort>(relaxed = true)
-            val syncStateStore = mockk<FirestoreSyncStateStore>(relaxed = true)
-            val pendingSyncLookup = mockk<FirestoreSyncPendingSyncLookup>(relaxed = true)
+            val repairer = FakeFirestoreSensitiveFieldRepairer()
+            val embeddingCoordinator = testEmbeddingRegenerationCoordinator()
+            val loggingPort = FakeLoggingPort()
+            val syncStateStore = FakeSyncStateStore()
+            val pendingSyncLookup = FirestoreSyncPendingSyncLookup(database)
 
             val localStore =
                 RoomFirestoreSyncLocalStore(
@@ -575,7 +625,7 @@ class FirestoreSyncDocumentCacheTest {
                 verify(exactly = 1) { docRef.get() }
             }
 
-            every { repairer.repairInbound("chats", any(), any()) } answers { it.invocation.args[2] as Map<String, Any?> }
+            // The fake repairer's default is identity repair, as the stub provided.
 
             for (i in 1..5) {
                 localStore.upsert("chats", "chat$i", mapOf("name" to "Chat Name"), null)

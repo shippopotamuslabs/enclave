@@ -24,7 +24,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class DownloadWorkScheduler
+open class DownloadWorkScheduler
     @Inject
     constructor(
         @param:ApplicationContext private val context: Context,
@@ -35,7 +35,7 @@ class DownloadWorkScheduler
             private const val MAX_WORK_DATA_BYTES = Data.MAX_DATA_BYTES
         }
 
-        override fun enqueue(request: DownloadWorkRequest) {
+        open override fun enqueue(request: DownloadWorkRequest) {
             // Build network constraints
             val networkType = if (request.wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED
             val constraints =
@@ -100,11 +100,11 @@ class DownloadWorkScheduler
                 .enqueue()
         }
 
-        override fun cancel() {
+        open override fun cancel() {
             workManager.cancelUniqueWork(ModelConfig.WORK_TAG)
         }
 
-        override suspend fun cleanupTempFiles() {
+        open override suspend fun cleanupTempFiles() {
             withContext(Dispatchers.IO) {
                 val modelsDir = File(context.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
                 modelsDir.listFiles()?.forEach { file ->

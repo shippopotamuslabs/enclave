@@ -9,14 +9,14 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.tasks.await
 
-internal class FirestoreSyncDocumentCache(
+internal open class FirestoreSyncDocumentCache(
     private val firestore: FirebaseFirestore,
     private val maxConcurrency: Int = 4,
 ) : FirestoreSyncSourceDocumentStore {
     private val cache = mutableMapOf<String, DocumentSnapshot>()
     private val semaphore = Semaphore(maxConcurrency)
 
-    suspend fun prefetch(
+    open suspend fun prefetch(
         userId: String,
         events: List<FirestoreSyncEvent>,
     ) {
@@ -111,13 +111,13 @@ internal class FirestoreSyncDocumentCache(
         }
     }
 
-    fun clear() {
+    open fun clear() {
         synchronized(cache) {
             cache.clear()
         }
     }
 
-    override suspend fun getDocument(path: String): Map<String, Any?>? {
+    open override suspend fun getDocument(path: String): Map<String, Any?>? {
         val cached = getCachedSnapshot(path)
         if (cached != null) {
             return cached.data

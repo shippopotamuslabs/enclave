@@ -1,64 +1,56 @@
+@file:Suppress("ForbiddenMockKInTests")
+// MockK is used only for Firebase SDK classes (FirebaseFirestore, WriteBatch, DocumentReference), third-party SDK types with no hand-writable fakes (ENC-28).
+
 package com.browntowndev.enclave.core.data.remote
 
+import com.browntowndev.enclave.core.data.FakeApiKeyManager
 import com.browntowndev.enclave.core.data.repository.FakeLocalDataEncryptionService
-import com.browntowndev.enclave.core.data.security.ApiKeyManager
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
+import com.browntowndev.enclave.core.testing.FakeCryptoManagerPort
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.WriteBatch
-import io.mockk.*
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.slot
+import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
 @OptIn(ExperimentalCoroutinesApi::class)
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class ApiKeyManagerSyncAdapterTest {
     private val firestore = mockk<FirebaseFirestore>()
-    private val apiKeyManager = mockk<ApiKeyManager>(relaxed = true)
-    private val cryptoManager = mockk<CryptoManagerPort>(relaxed = true)
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
+    private val apiKeyManager = FakeApiKeyManager()
+    private val cryptoManager = FakeCryptoManagerPort()
+    private val loggingPort = FakeLoggingPort()
     private val testScope = TestScope(UnconfinedTestDispatcher())
     private lateinit var dataSource: FirestoreDataSource
 
     @BeforeEach
     fun setup() {
-        every { cryptoManager.hasCachedKey() } returns true
-        every { cryptoManager.encrypt(any()) } returns Result.success("encrypted".toByteArray())
+        cryptoManager.hasCachedKeyValue = true
+        cryptoManager.encryptResult = Result.success("encrypted".toByteArray())
 
         dataSource =
             createTestFirestoreDataSource(
-                documentDao = mockk(relaxed = true),
                 firestore = firestore,
-                chatDao = mockk(relaxed = true),
-                messageDao = mockk(relaxed = true),
-                messageTranscriptSegmentDao = mockk(relaxed = true),
-                memoriesDao = mockk(relaxed = true),
-                webSearchSourceDao = mockk(relaxed = true),
-                ttsProviderDao = mockk(relaxed = true),
-                mediaProviderDao = mockk(relaxed = true),
-                apiModelConfigurationsDao = mockk(relaxed = true),
-                localModelsDao = mockk(relaxed = true),
-                apiCredentialsDao = mockk(relaxed = true),
-                localModelConfigurationsDao = mockk(relaxed = true),
-                defaultModelsDao = mockk(relaxed = true),
-                studioMediaDao = mockk(relaxed = true),
-                studioAlbumDao = mockk(relaxed = true),
-                messageFileDao = mockk(relaxed = true),
-                messageVisionAnalysisDao = mockk(relaxed = true),
-                chatSummaryDao = mockk(relaxed = true),
-                embeddingDao = mockk(relaxed = true),
                 apiKeyManager = apiKeyManager,
                 cryptoManager = cryptoManager,
                 loggingPort = loggingPort,
                 externalScope = testScope,
                 userIdProvider = { "test-user-id" },
-                embeddingCoordinator = mockk(relaxed = true),
                 localEncryption = FakeLocalDataEncryptionService(),
             )
     }
@@ -66,9 +58,9 @@ class ApiKeyManagerSyncAdapterTest {
     @Test
     fun `syncPendingChanges pushes dirty aliases to Firestore`() =
         runTest {
-            coEvery { apiKeyManager.getClaimedSyncAliases() } returns setOf("tavily_web_search")
-            coEvery { apiKeyManager.getClaimedDeleteAliases() } returns emptySet()
-            every { apiKeyManager.get("tavily_web_search") } returns "sk-tavily-123"
+            apiKeyManager.claimedSyncAliases = setOf("tavily_web_search")
+            apiKeyManager.claimedDeleteAliases = emptySet()
+            apiKeyManager.storedValues["tavily_web_search"] = "sk-tavily-123"
 
             val batch = mockk<WriteBatch>()
             val batchFunctionSlot = slot<WriteBatch.Function>()
@@ -84,14 +76,14 @@ class ApiKeyManagerSyncAdapterTest {
             batchFunctionSlot.captured.apply(batch)
 
             verify { batch.set(docRef, match<Map<String, Any>> { it["alias"] == "tavily_web_search" }, any()) }
-            coVerify { apiKeyManager.clearClaimedSync(listOf("tavily_web_search")) }
+            assertEquals(listOf(listOf("tavily_web_search")), apiKeyManager.clearClaimedSyncCalls)
         }
 
     @Test
     fun `syncPendingChanges handles deleted aliases`() =
         runTest {
-            coEvery { apiKeyManager.getClaimedSyncAliases() } returns emptySet()
-            coEvery { apiKeyManager.getClaimedDeleteAliases() } returns setOf("exa_web_search")
+            apiKeyManager.claimedSyncAliases = emptySet()
+            apiKeyManager.claimedDeleteAliases = setOf("exa_web_search")
 
             val batch = mockk<WriteBatch>()
             val batchFunctionSlot = slot<WriteBatch.Function>()
@@ -107,27 +99,27 @@ class ApiKeyManagerSyncAdapterTest {
             batchFunctionSlot.captured.apply(batch)
 
             verify { batch.delete(docRef) }
-            coVerify { apiKeyManager.clearClaimedDelete(listOf("exa_web_search")) }
+            assertEquals(listOf(listOf("exa_web_search")), apiKeyManager.clearClaimedDeleteCalls)
         }
 
     @Test
     fun `syncPendingChanges clears blank claimed aliases without Firestore write`() =
         runTest {
-            coEvery { apiKeyManager.getClaimedSyncAliases() } returns setOf("")
-            coEvery { apiKeyManager.getClaimedDeleteAliases() } returns setOf(" ")
+            apiKeyManager.claimedSyncAliases = setOf("")
+            apiKeyManager.claimedDeleteAliases = setOf(" ")
 
             val result = dataSource.syncPendingChanges()
 
             assertTrue(result.isSuccess)
             verify(exactly = 0) { firestore.runBatch(any()) }
-            coVerify { apiKeyManager.clearClaimedSync(listOf("")) }
-            coVerify { apiKeyManager.clearClaimedDelete(listOf(" ")) }
+            assertEquals(listOf(listOf("")), apiKeyManager.clearClaimedSyncCalls)
+            assertEquals(listOf(listOf(" ")), apiKeyManager.clearClaimedDeleteCalls)
         }
 
     @Test
     fun `sync aborts when vault is locked`() =
         runTest {
-            every { cryptoManager.hasCachedKey() } returns false
+            cryptoManager.hasCachedKeyValue = false
 
             val result = dataSource.syncPendingChanges()
 

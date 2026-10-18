@@ -1,6 +1,11 @@
+@file:Suppress("ForbiddenMockKInTests")
+// MockK is used only for Firebase SDK classes (FirebaseAuth/FirebaseUser) and androidx CredentialManager, third-party SDK types with no hand-writable fakes (ENC-28).
+
 package com.browntowndev.enclave.core.data.auth
 
+import android.content.Context
 import androidx.credentials.CredentialManager
+import androidx.test.core.app.ApplicationProvider
 import com.browntowndev.enclave.domain.port.auth.AuthState
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
@@ -16,20 +21,27 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
 @OptIn(ExperimentalCoroutinesApi::class)
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class FirebaseGoogleAuthManagerTest {
     private val firebaseAuth = mockk<FirebaseAuth>(relaxed = true)
     private val credentialManager = mockk<CredentialManager>(relaxed = true)
     private val testScope = TestScope(UnconfinedTestDispatcher())
+    private lateinit var context: Context
 
     private lateinit var authManager: FirebaseGoogleAuthManager
 
     @BeforeEach
     fun setup() {
+        context = ApplicationProvider.getApplicationContext()
         authManager =
             FirebaseGoogleAuthManager(
-                context = mockk(relaxed = true),
+                context = context,
                 firebaseAuth = firebaseAuth,
                 credentialManager = credentialManager,
                 externalScope = testScope,
@@ -54,7 +66,7 @@ class FirebaseGoogleAuthManagerTest {
             // Re-init to trigger listener registration
             authManager =
                 FirebaseGoogleAuthManager(
-                    context = mockk(relaxed = true),
+                    context = context,
                     firebaseAuth = firebaseAuth,
                     credentialManager = credentialManager,
                     externalScope = testScope,

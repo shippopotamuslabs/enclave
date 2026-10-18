@@ -38,7 +38,7 @@ private data class SearchHistoryResult(
 )
 
 @Singleton
-class SearchChatHistoryToolExecutor
+open class SearchChatHistoryToolExecutor
     @Inject
     constructor(
         private val loggingPort: LoggingPort,
@@ -54,7 +54,7 @@ class SearchChatHistoryToolExecutor
             private const val CONTEXT_AFTER = 2
         }
 
-        override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
+        open override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
             require(request.toolName == ToolDefinition.SEARCH_CHAT_HISTORY.name) {
                 "Unsupported tool: ${request.toolName}"
             }

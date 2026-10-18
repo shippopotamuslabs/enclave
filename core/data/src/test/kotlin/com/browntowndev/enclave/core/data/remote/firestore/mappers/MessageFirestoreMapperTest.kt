@@ -1,14 +1,13 @@
+@file:Suppress("ForbiddenMockKInTests")
+
+// MockK retained only for the Firebase Firestore SDK surface (DocumentSnapshot), which has no JVM fake.
+
 package com.browntowndev.enclave.core.data.remote.firestore.mappers
 
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncContext
-import com.browntowndev.enclave.core.data.remote.testFirestoreSyncDaos
-import com.browntowndev.enclave.core.data.repository.FakeLocalDataEncryptionService
-import com.browntowndev.enclave.core.data.security.SensitivePersistenceSelfHealer
+import com.browntowndev.enclave.core.data.remote.firestore.testSyncContext
 import com.browntowndev.enclave.domain.model.chat.MessageState
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
 import com.google.firebase.firestore.DocumentSnapshot
-import com.google.firebase.firestore.FirebaseFirestore
 import io.mockk.every
 import io.mockk.mockk
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -19,7 +18,9 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
-import java.util.concurrent.atomic.AtomicBoolean
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
 /**
  * Tests for [MessageFirestoreMapper].
@@ -30,27 +31,14 @@ import java.util.concurrent.atomic.AtomicBoolean
  * inference and are meaningless once that session ends.  Restoring them as-is causes the
  * InputBar to show the "stop" icon on existing chats opened in a new session.
  */
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class MessageFirestoreMapperTest {
     private lateinit var ctx: FirestoreSyncContext
 
     @BeforeEach
     fun setup() {
-        val localEncryption = FakeLocalDataEncryptionService()
-        val loggingPort = mockk<LoggingPort>(relaxed = true)
-        ctx =
-            FirestoreSyncContext(
-                firestore = mockk<FirebaseFirestore>(relaxed = true),
-                daos = testFirestoreSyncDaos(),
-                localEncryption = localEncryption,
-                sensitiveSelfHealer = SensitivePersistenceSelfHealer(localEncryption, loggingPort),
-                firestoreSensitiveFieldRepairer = mockk(relaxed = true),
-                cryptoManager = mockk<CryptoManagerPort>(relaxed = true),
-                loggingPort = loggingPort,
-                apiKeyManager = mockk(relaxed = true),
-                embeddingCoordinator = mockk(relaxed = true),
-                userIdProvider = { "user-1" },
-                purgeInProgress = AtomicBoolean(false),
-            )
+        ctx = testSyncContext()
     }
 
     // -----------------------------------------------------------------------

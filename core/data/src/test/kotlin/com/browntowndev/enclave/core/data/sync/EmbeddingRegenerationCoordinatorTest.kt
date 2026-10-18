@@ -1,27 +1,49 @@
 package com.browntowndev.enclave.core.data.sync
 
-import androidx.work.ExistingWorkPolicy
-import androidx.work.OneTimeWorkRequest
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import androidx.work.Configuration
+import androidx.work.WorkInfo
 import androidx.work.WorkManager
-import io.mockk.mockk
-import io.mockk.verify
+import androidx.work.testing.WorkManagerTestInitHelper
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class EmbeddingRegenerationCoordinatorTest {
-    private val workManager: WorkManager = mockk(relaxed = true)
+    private lateinit var workManager: WorkManager
     private val testScope = kotlinx.coroutines.test.TestScope()
     private lateinit var coordinator: EmbeddingRegenerationCoordinator
 
     @BeforeEach
     fun setup() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        // Both executors synchronous (the DownloadWorkScheduler / TestDoubles house
+        // pattern): enqueued work stays ENQUEUED under the test driver, so scheduling
+        // is observable as WorkInfo state on the real WorkManager. A no-op main
+        // executor drops WorkManager's main-thread state/constraint posts and lets
+        // work start mid-test, corrupting those observations.
+        val config =
+            Configuration
+                .Builder()
+                .setTaskExecutor(androidx.work.impl.utils.SynchronousExecutor())
+                .setExecutor(androidx.work.impl.utils.SynchronousExecutor())
+                .build()
+        WorkManagerTestInitHelper.initializeTestWorkManager(context, config)
+        workManager = WorkManager.getInstance(context)
         coordinator = EmbeddingRegenerationCoordinator(workManager, testScope)
     }
 
     private fun advancePastDebounce() = testScope.testScheduler.advanceTimeBy(501)
+
+    private fun regenWork(): List<WorkInfo> = workManager.getWorkInfosForUniqueWork("enclave_embedding_regen").get()
 
     @Test
     fun `enqueueMessage adds to in-memory queue and triggers worker`() =
@@ -32,13 +54,9 @@ class EmbeddingRegenerationCoordinatorTest {
 
             val pending = coordinator.consumePending()
             assertTrue(pending.messageIds.contains("msg1"))
-            verify {
-                workManager.enqueueUniqueWork(
-                    "enclave_embedding_regen",
-                    ExistingWorkPolicy.KEEP,
-                    any<OneTimeWorkRequest>(),
-                )
-            }
+            val work = regenWork()
+            assertEquals(1, work.size)
+            assertTrue(work.single().tags.contains(EmbeddingRegenerationWorker::class.java.name))
         }
 
     @Test
@@ -98,13 +116,7 @@ class EmbeddingRegenerationCoordinatorTest {
 
             val pending = coordinator.consumePending()
             assertTrue(pending.fullScanPending)
-            verify {
-                workManager.enqueueUniqueWork(
-                    "enclave_embedding_regen",
-                    ExistingWorkPolicy.KEEP,
-                    any<OneTimeWorkRequest>(),
-                )
-            }
+            assertEquals(1, regenWork().size)
         }
 
     @Test
@@ -115,27 +127,29 @@ class EmbeddingRegenerationCoordinatorTest {
             coordinator.enqueueMemory("mem1")
             advancePastDebounce()
 
-            verify(exactly = 1) {
-                workManager.enqueueUniqueWork(
-                    "enclave_embedding_regen",
-                    ExistingWorkPolicy.KEEP,
-                    any<OneTimeWorkRequest>(),
-                )
-            }
+            // The whole burst produced exactly one unique work request.
+            assertEquals(1, regenWork().size)
+            val firstWorkId = regenWork().single().id
 
             coordinator.consumePending()
+            // Simulate the scheduled worker having run to completion on the
+            // WorkManager side, then notify the coordinator as production does.
+            workManager.cancelUniqueWork("enclave_embedding_regen")
             coordinator.onWorkerFinished()
 
             coordinator.enqueueDocument("doc1")
             advancePastDebounce()
 
-            verify(exactly = 2) {
-                workManager.enqueueUniqueWork(
-                    "enclave_embedding_regen",
-                    ExistingWorkPolicy.KEEP,
-                    any<OneTimeWorkRequest>(),
-                )
-            }
+            // A second, distinct work request was scheduled after the worker finished.
+            // Against a real WorkManager the finished request's WorkSpec row is
+            // deleted by the follow-up enqueue (EnqueueRunnable prune), so the count
+            // stays 1 — the FakeWorkManager-era expectation of 2 records cannot
+            // occur. "Second request scheduled" is asserted in its observable form:
+            // the single remaining record is ENQUEUED with a different id.
+            val work = regenWork()
+            assertEquals(1, work.size)
+            assertEquals(WorkInfo.State.ENQUEUED, work.single().state)
+            assertTrue(work.single().id != firstWorkId)
         }
 
     @Test

@@ -11,9 +11,9 @@ import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.port.inference.InferenceEvent
 import com.browntowndev.enclave.domain.port.inference.LlmInferencePort
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.usecase.chat.ChatHistoryRehydrator
-import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
@@ -32,7 +32,7 @@ import java.util.Date
 @Config(sdk = [34])
 class ChatHistoryRehydratorIntegrationTest {
     private lateinit var database: EnclaveDatabase
-    private val logger = mockk<LoggingPort>(relaxed = true)
+    private val logger = FakeLoggingPort()
 
     @BeforeEach
     fun setup() {

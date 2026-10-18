@@ -78,7 +78,7 @@ data class XSearchPaginatedResult(
 )
 
 @Singleton
-class XSearchRepository
+open class XSearchRepository
     @Inject
     constructor(
         private val okHttpClient: OkHttpClient,
@@ -302,7 +302,7 @@ class XSearchRepository
                 },
             )
 
-        fun search(
+        open fun search(
             query: String,
             sortOrder: String = "relevancy",
         ): String {

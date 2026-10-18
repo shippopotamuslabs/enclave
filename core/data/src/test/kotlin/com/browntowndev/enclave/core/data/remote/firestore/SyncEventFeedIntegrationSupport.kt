@@ -1,21 +1,41 @@
+@file:Suppress("ForbiddenMockKInTests")
+
+// MockK retained only for the Firebase Firestore SDK surface (DocumentSnapshot), which has no JVM fake.
+
 package com.browntowndev.enclave.core.data.remote.firestore
 
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import com.browntowndev.enclave.core.data.local.ApiCredentialsDao
+import com.browntowndev.enclave.core.data.local.ApiModelConfigurationsDao
 import com.browntowndev.enclave.core.data.local.ChatDao
 import com.browntowndev.enclave.core.data.local.ChatEntity
-import com.browntowndev.enclave.core.data.local.EnclaveDatabase
+import com.browntowndev.enclave.core.data.local.DefaultModelsDao
+import com.browntowndev.enclave.core.data.local.DocumentDao
+import com.browntowndev.enclave.core.data.local.EmbeddingDao
+import com.browntowndev.enclave.core.data.local.LiveVoiceProviderDao
+import com.browntowndev.enclave.core.data.local.LocalModelConfigurationsDao
+import com.browntowndev.enclave.core.data.local.LocalModelsDao
+import com.browntowndev.enclave.core.data.local.MediaProviderDao
+import com.browntowndev.enclave.core.data.local.MemoriesDao
+import com.browntowndev.enclave.core.data.local.MessageFileDao
+import com.browntowndev.enclave.core.data.local.MessageVisionAnalysisDao
+import com.browntowndev.enclave.core.data.local.StudioAlbumDao
+import com.browntowndev.enclave.core.data.local.TtsProviderDao
+import com.browntowndev.enclave.core.data.local.UtilityModelsDao
+import com.browntowndev.enclave.core.data.local.WebSearchSourceDao
 import com.browntowndev.enclave.core.data.remote.FirestoreSensitiveFieldRepairer
 import com.browntowndev.enclave.core.data.remote.firestore.handlers.ChatSyncHandler
 import com.browntowndev.enclave.core.data.remote.firestore.handlers.StudioMediaSyncHandler
 import com.browntowndev.enclave.core.data.repository.FakeLocalDataEncryptionService
+import com.browntowndev.enclave.core.data.repository.FakeStudioMediaDao
 import com.browntowndev.enclave.core.data.repository.testSensitiveSelfHealer
-import com.browntowndev.enclave.core.data.security.ApiKeyManager
 import com.browntowndev.enclave.core.data.security.LocalDataEncryptionService
 import com.browntowndev.enclave.core.data.security.StaticSensitiveFieldCatalog
-import com.browntowndev.enclave.core.data.sync.EmbeddingRegenerationCoordinator
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
 import com.google.firebase.firestore.DocumentSnapshot
-import com.google.firebase.firestore.FirebaseFirestore
 import io.mockk.every
 import io.mockk.mockk
 import java.util.concurrent.atomic.AtomicBoolean
@@ -33,7 +53,7 @@ internal data class ChatHydrationApplierBundle(
 internal fun buildChatHydrationApplier(
     chatDao: ChatDao,
     cryptoManager: CryptoManagerPort,
-    loggingPort: LoggingPort = mockk(relaxed = true),
+    loggingPort: LoggingPort = FakeLoggingPort(),
     localEncryption: LocalDataEncryptionService = FakeLocalDataEncryptionService(),
     stateStore: FirestoreSyncStateStore = FirestoreSyncStateStore(),
 ): ChatHydrationApplierBundle {
@@ -58,7 +78,7 @@ internal fun buildChatHydrationApplier(
 internal fun buildStudioMediaHydrationApplier(
     studioMediaDao: com.browntowndev.enclave.core.data.local.StudioMediaDao,
     cryptoManager: CryptoManagerPort,
-    loggingPort: LoggingPort = mockk(relaxed = true),
+    loggingPort: LoggingPort = FakeLoggingPort(),
     localEncryption: LocalDataEncryptionService = FakeLocalDataEncryptionService(),
 ): Pair<FirestoreSyncEventApplier, SharedFakeSyncSourceDocumentStore> {
     val sourceDocuments = SharedFakeSyncSourceDocumentStore()
@@ -103,50 +123,49 @@ internal class SharedFakeSyncSourceDocumentStore : FirestoreSyncSourceDocumentSt
 }
 
 internal fun buildTestSyncContext(
-    chatDao: ChatDao = mockk(relaxed = true),
-    studioMediaDao: com.browntowndev.enclave.core.data.local.StudioMediaDao = mockk(relaxed = true),
+    context: Context = ApplicationProvider.getApplicationContext(),
+    chatDao: ChatDao = FakeChatDao(),
+    studioMediaDao: com.browntowndev.enclave.core.data.local.StudioMediaDao = FakeStudioMediaDao(),
     cryptoManager: CryptoManagerPort,
     loggingPort: LoggingPort,
     localEncryption: LocalDataEncryptionService,
 ): FirestoreSyncContext {
     val healer = testSensitiveSelfHealer(localEncryption, loggingPort)
-    val firestore = mockk<FirebaseFirestore>(relaxed = true)
-    val database = mockk<EnclaveDatabase>(relaxed = true)
     return FirestoreSyncDependencies(
-        firestore = firestore,
+        firestore = fakeFirestore(),
         daos =
             FirestoreSyncDaos.from(
                 chatSyncDaos =
                     ChatSyncDaos(
                         chatDao = chatDao,
-                        messageDao = mockk(relaxed = true),
-                        chatSummaryDao = mockk(relaxed = true),
-                        messageFileDao = mockk(relaxed = true),
-                        messageVisionAnalysisDao = mockk(relaxed = true),
-                        messageTranscriptSegmentDao = mockk(relaxed = true),
-                        messageInferenceTelemetryDao = mockk(relaxed = true),
-                        webSearchSourceDao = mockk(relaxed = true),
-                        documentDao = mockk(relaxed = true),
-                        embeddingDao = mockk(relaxed = true),
-                        firestoreSyncPlaceholderDao = mockk(relaxed = true),
+                        messageDao = FakeMessageDaoBundle(FakeEnclaveDatabase()).messageDao,
+                        chatSummaryDao = FakeChatSummaryDao(),
+                        messageFileDao = recordingDao<MessageFileDao>().dao,
+                        messageVisionAnalysisDao = recordingDao<MessageVisionAnalysisDao>().dao,
+                        messageTranscriptSegmentDao = FakeMessageTranscriptSegmentDao(),
+                        messageInferenceTelemetryDao = FakeMessageInferenceTelemetryDao(),
+                        webSearchSourceDao = recordingDao<WebSearchSourceDao>().dao,
+                        documentDao = recordingDao<DocumentDao>().dao,
+                        embeddingDao = recordingDao<EmbeddingDao>().dao,
+                        firestoreSyncPlaceholderDao = FakeFirestoreSyncPlaceholderDao(),
                     ),
                 configSyncDaos =
                     ConfigSyncDaos(
-                        memoriesDao = mockk(relaxed = true),
-                        ttsProviderDao = mockk(relaxed = true),
-                        liveVoiceProviderDao = mockk(relaxed = true),
-                        mediaProviderDao = mockk(relaxed = true),
-                        apiModelConfigurationsDao = mockk(relaxed = true),
-                        localModelsDao = mockk(relaxed = true),
-                        apiCredentialsDao = mockk(relaxed = true),
-                        localModelConfigurationsDao = mockk(relaxed = true),
-                        defaultModelsDao = mockk(relaxed = true),
-                        utilityModelsDao = mockk(relaxed = true),
+                        memoriesDao = recordingDao<MemoriesDao>().dao,
+                        ttsProviderDao = recordingDao<TtsProviderDao>().dao,
+                        liveVoiceProviderDao = recordingDao<LiveVoiceProviderDao>().dao,
+                        mediaProviderDao = recordingDao<MediaProviderDao>().dao,
+                        apiModelConfigurationsDao = recordingDao<ApiModelConfigurationsDao>().dao,
+                        localModelsDao = recordingDao<LocalModelsDao>().dao,
+                        apiCredentialsDao = recordingDao<ApiCredentialsDao>().dao,
+                        localModelConfigurationsDao = recordingDao<LocalModelConfigurationsDao>().dao,
+                        defaultModelsDao = recordingDao<DefaultModelsDao>().dao,
+                        utilityModelsDao = recordingDao<UtilityModelsDao>().dao,
                     ),
                 studioSyncDaos =
                     StudioSyncDaos(
                         studioMediaDao = studioMediaDao,
-                        studioAlbumDao = mockk(relaxed = true),
+                        studioAlbumDao = recordingDao<StudioAlbumDao>().dao,
                     ),
             ),
         localEncryption = localEncryption,
@@ -158,8 +177,8 @@ internal fun buildTestSyncContext(
             ),
         cryptoManager = cryptoManager,
         loggingPort = loggingPort,
-        apiKeyManager = mockk<ApiKeyManager>(relaxed = true),
-        embeddingCoordinator = mockk<EmbeddingRegenerationCoordinator>(relaxed = true),
+        apiKeyManager = testApiKeyManager(),
+        embeddingCoordinator = testEmbeddingRegenerationCoordinator(context),
         userIdProvider = { "alice" },
         purgeInProgress = AtomicBoolean(false),
     ).toContext()
@@ -246,17 +265,24 @@ internal fun encryptedChatSourcePayload(
     )
 }
 
+/**
+ * The recorded upserts of a [FakeChatDao] — the fake-era replacement for the
+ * MockK capture stub. The fake's `getChatById` returns null for unseeded ids,
+ * matching the stubbed behavior the capture helper used to install.
+ */
 internal fun captureChatUpserts(chatDao: ChatDao): MutableList<ChatEntity> {
-    val captured = mutableListOf<ChatEntity>()
-    io.mockk.coEvery { chatDao.getChatById(any()) } returns null
-    io.mockk.coEvery { chatDao.upsert(capture(captured)) } returns 1L
-    return captured
+    require(chatDao is FakeChatDao) {
+        "captureChatUpserts requires a FakeChatDao so upserts are recorded, got ${chatDao::class.simpleName}"
+    }
+    return chatDao.upsertedChats
 }
 
+/** The recorded inserts of the repository suite's [FakeStudioMediaDao]. */
 internal fun captureStudioMediaUpserts(
     studioMediaDao: com.browntowndev.enclave.core.data.local.StudioMediaDao,
 ): MutableList<com.browntowndev.enclave.core.data.local.StudioMediaEntity> {
-    val captured = mutableListOf<com.browntowndev.enclave.core.data.local.StudioMediaEntity>()
-    io.mockk.coEvery { studioMediaDao.insertMedia(capture(captured)) } returns Unit
-    return captured
+    require(studioMediaDao is FakeStudioMediaDao) {
+        "captureStudioMediaUpserts requires a FakeStudioMediaDao so inserts are recorded, got ${studioMediaDao::class.simpleName}"
+    }
+    return studioMediaDao.insertCalls
 }

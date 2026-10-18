@@ -18,8 +18,12 @@ class FakeEmbeddingEngine(
     /** When set, [getEmbedding] returns this vector for every text without a per-text entry (ENC-28). */
     var uniformEmbedding: FloatArray? = null
 
+    /** When set, [getEmbedding] throws it after recording the query (ENC-28). */
+    var failure: Throwable? = null
+
     override suspend fun getEmbedding(text: String): FloatArray {
         queries += text
+        failure?.let { throw it }
         embeddingsByText[text]?.let { return it }
         uniformEmbedding?.let { return it }
         val seed = text.hashCode()

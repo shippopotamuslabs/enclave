@@ -9,9 +9,8 @@ import com.browntowndev.enclave.domain.model.config.RemoteModelAsset
 import com.browntowndev.enclave.domain.model.config.RemoteModelConfiguration
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
+import com.browntowndev.enclave.core.testing.FakeModelConfigFetcher
 import com.browntowndev.enclave.domain.port.repository.ModelConfigFetcherPort
-import io.mockk.coEvery
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -19,11 +18,13 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class ModelConfigFetcherTest {
+    private lateinit var fakeFetcher: FakeModelConfigFetcher
     private lateinit var mockFetcher: ModelConfigFetcherPort
 
     @BeforeEach
     fun setup() {
-        mockFetcher = mockk()
+        fakeFetcher = FakeModelConfigFetcher()
+        mockFetcher = fakeFetcher
     }
 
     @Test
@@ -62,7 +63,7 @@ class ModelConfigFetcherTest {
                     ),
                 )
 
-            coEvery { mockFetcher.fetchRemoteConfig() } returns Result.success(mockAssets)
+            fakeFetcher.fetchRemoteConfigResult = Result.success(mockAssets)
 
             // When
             val result = mockFetcher.fetchRemoteConfig()
@@ -76,7 +77,7 @@ class ModelConfigFetcherTest {
     fun fetchRemoteConfig_returnsFailure_whenNetworkError() =
         runTest {
             // Given
-            coEvery { mockFetcher.fetchRemoteConfig() } returns Result.failure(Exception("Network error"))
+            fakeFetcher.fetchRemoteConfigResult = Result.failure(Exception("Network error"))
 
             // When
             val result = mockFetcher.fetchRemoteConfig()
@@ -206,7 +207,7 @@ class ModelConfigFetcherTest {
                     ),
                 )
 
-            coEvery { mockFetcher.toLocalModelAssets(remoteAssets) } returns expectedModelAssets
+            fakeFetcher.localModelAssetsResult = expectedModelAssets
 
             // When
             val modelAssets = mockFetcher.toLocalModelAssets(remoteAssets)
@@ -296,7 +297,7 @@ class ModelConfigFetcherTest {
                     ),
                 )
 
-            coEvery { mockFetcher.fetchRemoteConfig() } returns Result.success(mockAssets)
+            fakeFetcher.fetchRemoteConfigResult = Result.success(mockAssets)
 
             // When
             val result = mockFetcher.fetchRemoteConfig()

@@ -1,58 +1,63 @@
 package com.browntowndev.enclave.core.data.repository
 
+import android.content.Context
+import androidx.room.Room
+import androidx.test.core.app.ApplicationProvider
 import com.browntowndev.enclave.core.data.local.ChatDao
-import com.browntowndev.enclave.core.data.local.DocumentDao
-import com.browntowndev.enclave.core.data.local.MessageDao
-import com.browntowndev.enclave.core.data.local.MessageTranscriptSegmentDao
-import com.browntowndev.enclave.core.data.local.WebSearchSourceDao
-import com.browntowndev.enclave.core.data.security.SensitiveRoomReadRepairApplier
-import com.browntowndev.enclave.core.data.sync.CloudSyncTrigger
+import com.browntowndev.enclave.core.data.local.ChatEntity
+import com.browntowndev.enclave.core.data.local.EnclaveDatabase
+import com.browntowndev.enclave.core.data.local.MessageEntity
+import com.browntowndev.enclave.core.data.local.dao.message.MessageDao
+import com.browntowndev.enclave.core.data.local.messageDao
+import com.browntowndev.enclave.core.testing.FakeTransactionProvider
 import com.browntowndev.enclave.domain.model.chat.Chat
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.MessageState
+import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
+import java.util.Date
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class ChatRepositorySyncTest {
-    private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
-    private val chatDao = mockk<ChatDao>(relaxed = true)
-    private val messageDao = mockk<MessageDao>(relaxed = true)
-    private val messageTranscriptSegmentDao = mockk<MessageTranscriptSegmentDao>(relaxed = true)
-    private val webSearchSourceDao = mockk<WebSearchSourceDao>(relaxed = true)
-    private val documentDao = mockk<DocumentDao>(relaxed = true)
-    private val transactionProvider = mockk<com.browntowndev.enclave.domain.port.repository.TransactionProvider>(relaxed = true)
-    private val readRepairApplier = mockk<SensitiveRoomReadRepairApplier>(relaxed = true)
+    private lateinit var database: EnclaveDatabase
+    private lateinit var syncTrigger: RecordingCloudSyncTrigger
+    private lateinit var transactionProvider: FakeTransactionProvider
+    private lateinit var chatDao: ChatDao
+    private lateinit var messageDao: MessageDao
 
     private lateinit var repository: ChatRepositoryImpl
 
     @BeforeEach
     fun setup() {
-        // Mock transaction provider to run the block immediately
-        coEvery { transactionProvider.runInTransaction<Any>(any()) } answers {
-            runTest { (it.invocation.args[0] as suspend () -> Any).invoke() }
-        }
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        database =
+            Room
+                .inMemoryDatabaseBuilder(context, EnclaveDatabase::class.java)
+                .allowMainThreadQueries()
+                .build()
+        syncTrigger = RecordingCloudSyncTrigger()
+        transactionProvider = FakeTransactionProvider()
+        chatDao = database.chatDao()
+        messageDao = database.messageDao()
+        repository = database.chatRepositoryImpl(syncTrigger, transactionProvider)
+    }
 
-        repository =
-            ChatRepositoryImpl(
-                syncTrigger = syncTrigger,
-                chatDao = chatDao,
-                messageDao = messageDao,
-                messageTranscriptSegmentDao = messageTranscriptSegmentDao,
-                webSearchSourceDao = webSearchSourceDao,
-                documentDao = documentDao,
-                transactionProvider = transactionProvider,
-                cleanupDao = mockk(relaxed = true),
-                messageInferenceTelemetryDao = mockk(relaxed = true),
-                messageFileDao = mockk(relaxed = true),
-                healer = testSensitiveSelfHealer(FakeLocalDataEncryptionService()),
-                readRepairApplier = readRepairApplier,
-            )
+    @AfterEach
+    fun tearDown() {
+        database.close()
     }
 
     @Test
@@ -62,27 +67,48 @@ class ChatRepositorySyncTest {
                 Chat(
                     id = ChatId("id"),
                     name = "Chat",
-                    created = java.util.Date(),
-                    lastModified = java.util.Date(),
+                    created = Date(),
+                    lastModified = Date(),
                 )
 
             repository.createChat(chat)
 
-            coVerify {
-                chatDao.upsert(match { it.pendingSync == 1 })
-                syncTrigger.trigger()
-            }
+            val stored = chatDao.getChatById(ChatId("id"))
+            assertEquals(1, stored?.pendingSync)
+            assertEquals(1, syncTrigger.triggerCalls)
         }
 
     @Test
     fun `createAssistantMessage sets pendingSync to 1 and triggers sync`() =
         runTest {
-            repository.createAssistantMessage(ChatId("chat-id"), MessageId("user-id"), ModelType.FAST, null)
+            chatDao.upsert(
+                ChatEntity(
+                    id = ChatId("chat-id"),
+                    name = "Chat",
+                    created = Date(),
+                    lastModified = Date(),
+                    pinned = false,
+                ),
+            )
+            // createAssistantMessage writes the assistant row with
+            // user_message_id = "user-id", a self-FK to message.id: the parent user
+            // message row must exist first or the upsert violates the FK (invisible
+            // under the MockK DAOs, a SQLiteConstraintException under real Room).
+            messageDao.upsert(
+                MessageEntity(
+                    id = MessageId("user-id"),
+                    chatId = ChatId("chat-id"),
+                    content = "Question",
+                    role = Role.USER,
+                ),
+            )
 
-            coVerify {
-                messageDao.upsert(match { it.pendingSync == 1 })
-                syncTrigger.trigger()
-            }
+            val messageId = repository.createAssistantMessage(ChatId("chat-id"), MessageId("user-id"), ModelType.FAST, null)
+
+            val stored = messageDao.getMessageById(messageId)
+            assertNotNull(stored)
+            assertEquals(1, stored!!.message.pendingSync)
+            assertEquals(1, syncTrigger.triggerCalls)
         }
 
     @Test
@@ -90,23 +116,27 @@ class ChatRepositorySyncTest {
         runTest {
             repository.updateMessageState(MessageId("id"), MessageState.COMPLETE)
 
-            coVerify {
-                syncTrigger.trigger()
-            }
+            assertEquals(1, syncTrigger.triggerCalls)
         }
 
     @Test
     fun `deleteChat triggers sync`() =
         runTest {
-            coEvery { chatDao.softDeleteById(any(), any()) } returns 1
+            chatDao.upsert(
+                ChatEntity(
+                    id = ChatId("id"),
+                    name = "Chat",
+                    created = Date(),
+                    lastModified = Date(),
+                    pinned = false,
+                ),
+            )
+
             repository.deleteChat(ChatId("id"))
 
-            coVerify {
-                transactionProvider.runInTransaction<Any>(any())
-                messageDao.softDeleteAllActiveByChatId(ChatId("id"), any())
-                chatDao.softDeleteById(ChatId("id"), any())
-                documentDao.softDeleteByChatId(ChatId("id"), any())
-                syncTrigger.trigger()
-            }
+            assertEquals(1, transactionProvider.runInTransactionCallCount)
+            assertNull(chatDao.getChatById(ChatId("id")))
+            assertTrue(messageDao.getMessagesByChatId(ChatId("id")).isEmpty())
+            assertEquals(1, syncTrigger.triggerCalls)
         }
 }

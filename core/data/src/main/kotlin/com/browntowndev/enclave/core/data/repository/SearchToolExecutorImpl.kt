@@ -14,7 +14,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class SearchToolExecutorImpl
+open class SearchToolExecutorImpl
     @Inject
     constructor(
         private val loggingPort: LoggingPort,
@@ -27,7 +27,7 @@ class SearchToolExecutorImpl
             private const val TAG = "SearchToolExecutor"
         }
 
-        override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
+        open override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
             val startedAtMs = System.currentTimeMillis()
             requireSupportedTool(request.toolName)
             val params = request.parameters as WebSearchParams

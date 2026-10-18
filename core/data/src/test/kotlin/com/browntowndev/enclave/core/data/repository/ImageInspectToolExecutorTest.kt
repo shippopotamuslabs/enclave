@@ -1,5 +1,8 @@
 package com.browntowndev.enclave.core.data.repository
 
+import com.browntowndev.enclave.core.testing.FakeInferenceFactory
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeMessageRepository
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.Content
 import com.browntowndev.enclave.domain.model.chat.Message
@@ -9,27 +12,47 @@ import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
-import com.browntowndev.enclave.domain.port.repository.MessageRepository
-import io.mockk.coEvery
-import io.mockk.mockk
+import com.browntowndev.enclave.domain.port.inference.InferenceEvent
+import com.browntowndev.enclave.domain.usecase.chat.AnalyzeImageUseCase
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import javax.inject.Provider
 import kotlin.test.assertFailsWith
 
 class ImageInspectToolExecutorTest {
+    private fun analyzeImageUseCase(factory: FakeInferenceFactory) =
+        AnalyzeImageUseCase(
+            inferenceFactoryProvider = Provider { factory },
+            loggingPort = FakeLoggingPort(),
+        )
+
+    private fun executor(
+        messageRepository: FakeMessageRepository,
+        factory: FakeInferenceFactory,
+    ) = ImageInspectToolExecutor(
+        loggingPort = FakeLoggingPort(),
+        messageRepository = messageRepository,
+        analyzeImageUseCase = analyzeImageUseCase(factory),
+    )
+
+    private fun factoryReturning(analysis: String): FakeInferenceFactory {
+        val factory = FakeInferenceFactory()
+        factory.llm.eventsToEmit =
+            listOf(
+                InferenceEvent.PartialResponse(analysis, ModelType.VISION),
+                InferenceEvent.Finished(ModelType.VISION),
+            )
+        return factory
+    }
+
     @Test
     fun `attached_image_inspect validates question`() =
         runTest {
-            val executor =
-                ImageInspectToolExecutor(
-                    loggingPort = mockk(relaxed = true),
-                    messageRepository = mockk(relaxed = true),
-                    analyzeImageUseCase = mockk(),
-                )
+            val executor = executor(FakeMessageRepository(), FakeInferenceFactory())
 
             assertFailsWith<IllegalArgumentException> {
                 executor.execute(
@@ -46,28 +69,15 @@ class ImageInspectToolExecutorTest {
     @Test
     fun `attached_image_inspect loads resolved URI and calls AnalyzeImageUseCase`() =
         runTest {
-            val messageRepository = mockk<MessageRepository>()
-            coEvery {
-                messageRepository.resolveLatestImageBearingUserMessage(any(), any())
-            } returns
+            val messageRepository = FakeMessageRepository()
+            messageRepository.resolvedImageTarget =
                 ResolvedImageTarget(
                     userMessageId = MessageId("msg-1"),
                     imageUris = listOf("file:///photo.jpg"),
                 )
+            val factory = factoryReturning("A detailed description of the image.")
 
-            val urisSlot = io.mockk.slot<List<String>>()
-            val promptSlot = io.mockk.slot<String>()
-            val analyzeImageUseCase = mockk<com.browntowndev.enclave.domain.usecase.chat.AnalyzeImageUseCase>()
-            coEvery { analyzeImageUseCase(capture(urisSlot), capture(promptSlot)) } answers {
-                "A detailed description of the image."
-            }
-
-            val executor =
-                ImageInspectToolExecutor(
-                    loggingPort = mockk(relaxed = true),
-                    messageRepository = messageRepository,
-                    analyzeImageUseCase = analyzeImageUseCase,
-                )
+            val executor = executor(messageRepository, factory)
 
             val result =
                 executor.execute(
@@ -82,45 +92,36 @@ class ImageInspectToolExecutorTest {
                 )
 
             assertEquals(ToolDefinition.ATTACHED_IMAGE_INSPECT.name, result.toolName)
-            assertEquals(listOf("file:///photo.jpg"), urisSlot.captured)
-            assertEquals("What color is the bicycle?", promptSlot.captured)
+            val recorded = factory.llm.recordedPrompts.single()
+            assertEquals(listOf("file:///photo.jpg"), recorded.options?.imageUris)
+            assertTrue(recorded.prompt.endsWith("User request: What color is the bicycle?"))
         }
 
     @Test
     fun `attached_image_inspect falls back to latest image when user message id is unavailable`() =
         runTest {
-            val messageRepository = mockk<MessageRepository>()
-            coEvery {
-                messageRepository.getMessagesForChat(any())
-            } returns
-                listOf(
-                    Message(
-                        id = MessageId("msg-2"),
-                        chatId = ChatId("chat-1"),
-                        content = Content(text = "What is in this image?", imageUris = listOf("file:///photo.jpg")),
-                        role = Role.USER,
-                        createdAt = 2L,
-                    ),
-                    Message(
-                        id = MessageId("msg-1"),
-                        chatId = ChatId("chat-1"),
-                        content = Content(text = "Earlier text only"),
-                        role = Role.USER,
-                        createdAt = 1L,
+            val messageRepository =
+                FakeMessageRepository(
+                    listOf(
+                        Message(
+                            id = MessageId("msg-2"),
+                            chatId = ChatId("chat-1"),
+                            content = Content(text = "What is in this image?", imageUris = listOf("file:///photo.jpg")),
+                            role = Role.USER,
+                            createdAt = 2L,
+                        ),
+                        Message(
+                            id = MessageId("msg-1"),
+                            chatId = ChatId("chat-1"),
+                            content = Content(text = "Earlier text only"),
+                            role = Role.USER,
+                            createdAt = 1L,
+                        ),
                     ),
                 )
+            val factory = factoryReturning("A detailed description of the image.")
 
-            val urisSlot = io.mockk.slot<List<String>>()
-            val promptSlot = io.mockk.slot<String>()
-            val analyzeImageUseCase = mockk<com.browntowndev.enclave.domain.usecase.chat.AnalyzeImageUseCase>()
-            coEvery { analyzeImageUseCase(capture(urisSlot), capture(promptSlot)) } returns "A detailed description of the image."
-
-            val executor =
-                ImageInspectToolExecutor(
-                    loggingPort = mockk(relaxed = true),
-                    messageRepository = messageRepository,
-                    analyzeImageUseCase = analyzeImageUseCase,
-                )
+            val executor = executor(messageRepository, factory)
 
             val result =
                 executor.execute(
@@ -134,31 +135,23 @@ class ImageInspectToolExecutorTest {
                 )
 
             assertEquals(ToolDefinition.ATTACHED_IMAGE_INSPECT.name, result.toolName)
-            assertEquals(listOf("file:///photo.jpg"), urisSlot.captured)
-            assertEquals("What is in the image?", promptSlot.captured)
+            val recorded = factory.llm.recordedPrompts.single()
+            assertEquals(listOf("file:///photo.jpg"), recorded.options?.imageUris)
+            assertTrue(recorded.prompt.endsWith("User request: What is in the image?"))
         }
 
     @Test
     fun `returns expected JSON payload with resolved message metadata and analysis`() =
         runTest {
-            val messageRepository = mockk<MessageRepository>()
-            coEvery {
-                messageRepository.resolveLatestImageBearingUserMessage(any(), any())
-            } returns
+            val messageRepository = FakeMessageRepository()
+            messageRepository.resolvedImageTarget =
                 ResolvedImageTarget(
                     userMessageId = MessageId("msg-1"),
                     imageUris = listOf("file:///photo.jpg"),
                 )
+            val factory = factoryReturning("A red bicycle by a blue wall.")
 
-            val analyzeImageUseCase = mockk<com.browntowndev.enclave.domain.usecase.chat.AnalyzeImageUseCase>()
-            coEvery { analyzeImageUseCase(any(), any()) } returns "A red bicycle by a blue wall."
-
-            val executor =
-                ImageInspectToolExecutor(
-                    loggingPort = mockk(relaxed = true),
-                    messageRepository = messageRepository,
-                    analyzeImageUseCase = analyzeImageUseCase,
-                )
+            val executor = executor(messageRepository, factory)
 
             val result =
                 executor.execute(
@@ -182,24 +175,16 @@ class ImageInspectToolExecutorTest {
     @Test
     fun `returns controlled error payload when vision analysis throws`() =
         runTest {
-            val messageRepository = mockk<MessageRepository>()
-            coEvery {
-                messageRepository.resolveLatestImageBearingUserMessage(any(), any())
-            } returns
+            val messageRepository = FakeMessageRepository()
+            messageRepository.resolvedImageTarget =
                 ResolvedImageTarget(
                     userMessageId = MessageId("msg-1"),
                     imageUris = listOf("file:///photo.jpg"),
                 )
+            val factory = FakeInferenceFactory()
+            factory.invocationFailure = IllegalStateException("Vision API exploded")
 
-            val analyzeImageUseCase = mockk<com.browntowndev.enclave.domain.usecase.chat.AnalyzeImageUseCase>()
-            coEvery { analyzeImageUseCase(any(), any()) } throws IllegalStateException("Vision API exploded")
-
-            val executor =
-                ImageInspectToolExecutor(
-                    loggingPort = mockk(relaxed = true),
-                    messageRepository = messageRepository,
-                    analyzeImageUseCase = analyzeImageUseCase,
-                )
+            val executor = executor(messageRepository, factory)
 
             val result =
                 executor.execute(
@@ -220,20 +205,8 @@ class ImageInspectToolExecutorTest {
     @Test
     fun `produces controlled failure when no image is resolvable`() =
         runTest {
-            val messageRepository = mockk<MessageRepository>()
-            coEvery {
-                messageRepository.getMessagesForChat(any())
-            } returns emptyList()
-            coEvery {
-                messageRepository.resolveLatestImageBearingUserMessage(any(), any())
-            } returns null
-
-            val executor =
-                ImageInspectToolExecutor(
-                    loggingPort = mockk(relaxed = true),
-                    messageRepository = messageRepository,
-                    analyzeImageUseCase = mockk(),
-                )
+            val messageRepository = FakeMessageRepository()
+            val executor = executor(messageRepository, FakeInferenceFactory())
 
             val result =
                 executor.execute(
@@ -257,12 +230,7 @@ class ImageInspectToolExecutorTest {
     @Test
     fun `search tool behavior remains unchanged - rejects unsupported tool name`() =
         runTest {
-            val executor =
-                ImageInspectToolExecutor(
-                    loggingPort = mockk(relaxed = true),
-                    messageRepository = mockk(relaxed = true),
-                    analyzeImageUseCase = mockk(),
-                )
+            val executor = executor(FakeMessageRepository(), FakeInferenceFactory())
 
             assertFailsWith<IllegalArgumentException> {
                 executor.execute(
@@ -279,24 +247,15 @@ class ImageInspectToolExecutorTest {
     @Test
     fun `handles special characters in question and analysis`() =
         runTest {
-            val messageRepository = mockk<MessageRepository>()
-            coEvery {
-                messageRepository.resolveLatestImageBearingUserMessage(any(), any())
-            } returns
+            val messageRepository = FakeMessageRepository()
+            messageRepository.resolvedImageTarget =
                 ResolvedImageTarget(
                     userMessageId = MessageId("msg-1"),
                     imageUris = listOf("file:///photo.jpg"),
                 )
+            val factory = factoryReturning("Analysis with \"quotes\" and\nnewlines.")
 
-            val analyzeImageUseCase = mockk<com.browntowndev.enclave.domain.usecase.chat.AnalyzeImageUseCase>()
-            coEvery { analyzeImageUseCase(any(), any()) } returns "Analysis with \"quotes\" and\nnewlines."
-
-            val executor =
-                ImageInspectToolExecutor(
-                    loggingPort = mockk(relaxed = true),
-                    messageRepository = messageRepository,
-                    analyzeImageUseCase = analyzeImageUseCase,
-                )
+            val executor = executor(messageRepository, factory)
 
             val result =
                 executor.execute(

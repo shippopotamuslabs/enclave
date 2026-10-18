@@ -21,7 +21,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class SearchArtifactToolExecutor
+open class SearchArtifactToolExecutor
     @Inject
     constructor(
         private val documentDao: DocumentDao,
@@ -30,7 +30,7 @@ class SearchArtifactToolExecutor
     ) : ToolExecutorPort {
         private val json = Json { ignoreUnknownKeys = true }
 
-        override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
+        open override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
             val params = request.parameters as SearchArtifactParams
 
             if (!isSafeArtifactId(params.artifactId)) {

@@ -1,36 +1,66 @@
 package com.browntowndev.enclave.core.data.repository
 
-import com.browntowndev.enclave.core.data.local.MediaProviderDao
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import com.browntowndev.enclave.core.data.local.EnclaveDatabase
 import com.browntowndev.enclave.core.data.local.MediaProviderEntity
 import com.browntowndev.enclave.core.data.security.ApiKeyManager
-import com.browntowndev.enclave.core.data.security.SensitiveRoomReadRepairApplier
-import com.browntowndev.enclave.core.data.sync.CloudSyncTrigger
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.config.MediaProviderAsset
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.mockk
-import io.mockk.verify
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
+import org.robolectric.annotation.Config as RoboConfig
 
+/**
+ * Translated from MockK to hand-written fakes (ENC-28): a recording DAO
+ * fake, a real [ApiKeyManager] over Robolectric prefs (key saves/deletes
+ * are asserted as stored state), and a recording sync trigger. The
+ * incidental read-repair applier is the real implementation over an
+ * in-memory Room database.
+ */
+@ExtendWith(RobolectricExtension::class)
+@RoboConfig(sdk = [34])
 class MediaProviderRepositoryImplTest {
-    private val mediaProviderDao: MediaProviderDao = mockk()
-    private val apiKeyManager: ApiKeyManager = mockk(relaxed = true)
-    private val syncTrigger: CloudSyncTrigger = mockk(relaxed = true)
-    private val readRepairApplier = mockk<SensitiveRoomReadRepairApplier>(relaxed = true)
-    private val healer = testSensitiveSelfHealer(FakeLocalDataEncryptionService())
+    private lateinit var database: EnclaveDatabase
+    private val mediaProviderDao = FakeMediaProviderDao()
+    private lateinit var apiKeyManager: ApiKeyManager
+    private lateinit var syncTrigger: RecordingCloudSyncTrigger
+    private val healer = testSensitiveSelfHealer(FakeLocalDataEncryptionService(), FakeLoggingPort())
     private lateinit var repository: MediaProviderRepositoryImpl
 
     @BeforeEach
     fun setUp() {
-        repository = MediaProviderRepositoryImpl(syncTrigger, mediaProviderDao, apiKeyManager, healer, readRepairApplier)
+        syncTrigger = RecordingCloudSyncTrigger()
+        database = createInMemoryEnclaveDatabase()
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        apiKeyManager =
+            testApiKeyManager(context, CoroutineScope(SupervisorJob() + Dispatchers.Default), "media_provider_test_prefs")
+        repository =
+            MediaProviderRepositoryImpl(
+                syncTrigger,
+                mediaProviderDao,
+                apiKeyManager,
+                healer,
+                database.realReadRepairApplier(),
+            )
+    }
+
+    @AfterEach
+    fun tearDown() {
+        database.close()
     }
 
     @Test
@@ -40,7 +70,7 @@ class MediaProviderRepositoryImplTest {
                 listOf(
                     MediaProviderEntity("1", "Imagen", ApiProvider.GOOGLE, MediaCapability.IMAGE, "imagen-3", null, "google-key"),
                 )
-            coEvery { mediaProviderDao.observeAllMediaProviders() } returns flowOf(entities)
+            mediaProviderDao.observedEntities = entities
 
             val result = repository.getMediaProviders().first()
 
@@ -64,13 +94,12 @@ class MediaProviderRepositoryImplTest {
                     null,
                     "google-key",
                 )
-            coEvery { mediaProviderDao.upsert(any()) } returns Unit
 
             val resultId = repository.saveMediaProvider(asset, "api-key")
 
             assertEquals("1", resultId.value)
-            coVerify { mediaProviderDao.upsert(any()) }
-            verify { apiKeyManager.save("google-key", "api-key") }
+            assertEquals(1, mediaProviderDao.upsertCalls.size)
+            assertEquals("api-key", apiKeyManager.get("google-key"))
         }
 
     @Test
@@ -86,27 +115,16 @@ class MediaProviderRepositoryImplTest {
                     null,
                     "",
                 )
-            coEvery { mediaProviderDao.upsert(any()) } returns Unit
 
             repository.saveMediaProvider(asset, "api-key")
 
-            coVerify {
-                mediaProviderDao.upsert(match { it.credentialAlias == "media-42" })
-            }
-            verify { apiKeyManager.save("media-42", "api-key") }
+            assertEquals("media-42", mediaProviderDao.upsertCalls.single().credentialAlias)
+            assertEquals("api-key", apiKeyManager.get("media-42"))
         }
 
     @Test
     fun `saveMediaProvider stores sensitive fields encrypted and reads them decrypted`() =
         runTest {
-            val encryptedRepository =
-                MediaProviderRepositoryImpl(
-                    syncTrigger,
-                    mediaProviderDao,
-                    apiKeyManager,
-                    healer,
-                    readRepairApplier,
-                )
             val asset =
                 MediaProviderAsset(
                     MediaProviderId("1"),
@@ -117,8 +135,7 @@ class MediaProviderRepositoryImplTest {
                     "https://api.google.com",
                     "google-key",
                 )
-            coEvery { mediaProviderDao.upsert(any()) } returns Unit
-            coEvery { mediaProviderDao.getMediaProvider("1") } returns
+            mediaProviderDao.entities["1"] =
                 MediaProviderEntity(
                     "1",
                     "PCENC:v1:aes-gcm:Imagen",
@@ -129,18 +146,13 @@ class MediaProviderRepositoryImplTest {
                     "google-key",
                 )
 
-            encryptedRepository.saveMediaProvider(asset, null)
-            val loaded = encryptedRepository.getMediaProvider(MediaProviderId("1"))
+            repository.saveMediaProvider(asset, null)
+            val loaded = repository.getMediaProvider(MediaProviderId("1"))
 
-            coVerify {
-                mediaProviderDao.upsert(
-                    match {
-                        it.displayName == "PCENC:v1:aes-gcm:Imagen" &&
-                            it.modelName == "PCENC:v1:aes-gcm:imagen-3" &&
-                            it.baseUrl == "PCENC:v1:aes-gcm:https://api.google.com"
-                    },
-                )
-            }
+            val upserted = mediaProviderDao.upsertCalls.single()
+            assertEquals("PCENC:v1:aes-gcm:Imagen", upserted.displayName)
+            assertEquals("PCENC:v1:aes-gcm:imagen-3", upserted.modelName)
+            assertEquals("PCENC:v1:aes-gcm:https://api.google.com", upserted.baseUrl)
             assertEquals(asset.displayName, loaded?.displayName)
             assertEquals(asset.modelName, loaded?.modelName)
             assertEquals(asset.baseUrl, loaded?.baseUrl)
@@ -150,13 +162,13 @@ class MediaProviderRepositoryImplTest {
     fun `deleteMediaProvider deletes entity and removes API key`() =
         runTest {
             val entity = MediaProviderEntity("1", "Imagen", ApiProvider.GOOGLE, MediaCapability.IMAGE, null, null, "google-key")
-            coEvery { mediaProviderDao.getMediaProvider("1") } returns entity
-            coEvery { mediaProviderDao.softDeleteById("1", any()) } returns Unit
+            mediaProviderDao.entities["1"] = entity
+            apiKeyManager.save("google-key", "api-key")
 
             repository.deleteMediaProvider(MediaProviderId("1"))
 
-            coVerify { mediaProviderDao.softDeleteById("1", any()) }
-            verify { apiKeyManager.delete("google-key") }
+            assertEquals(listOf("1"), mediaProviderDao.softDeleteCalls.map { it.first })
+            assertNull(apiKeyManager.get("google-key"))
         }
 
     @Test
@@ -164,33 +176,31 @@ class MediaProviderRepositoryImplTest {
         runTest {
             val asset =
                 MediaProviderAsset(MediaProviderId("1"), "Imagen", ApiProvider.GOOGLE, MediaCapability.IMAGE, null, null, "google-key")
-            coEvery { mediaProviderDao.upsert(any()) } returns Unit
 
             repository.saveMediaProvider(asset, null)
 
-            verify(exactly = 1) { syncTrigger.trigger() }
+            assertEquals(1, syncTrigger.triggerCalls)
         }
 
     @Test
     fun `deleteMediaProvider calls triggerSync once`() =
         runTest {
             val entity = MediaProviderEntity("1", "Imagen", ApiProvider.GOOGLE, MediaCapability.IMAGE, null, null, "google-key")
-            coEvery { mediaProviderDao.getMediaProvider("1") } returns entity
-            coEvery { mediaProviderDao.softDeleteById("1", any()) } returns Unit
+            mediaProviderDao.entities["1"] = entity
 
             repository.deleteMediaProvider(MediaProviderId("1"))
 
-            verify(exactly = 1) { syncTrigger.trigger() }
+            assertEquals(1, syncTrigger.triggerCalls)
         }
 
     @Test
     fun `getMediaProviders read-only does not call triggerSync`() =
         runTest {
-            coEvery { mediaProviderDao.observeAllMediaProviders() } returns flowOf(emptyList())
+            mediaProviderDao.observedEntities = emptyList()
 
             repository.getMediaProviders().first()
 
-            verify(exactly = 0) { syncTrigger.trigger() }
+            assertEquals(0, syncTrigger.triggerCalls)
         }
 
     @Test
@@ -198,12 +208,9 @@ class MediaProviderRepositoryImplTest {
         runTest {
             val asset =
                 MediaProviderAsset(MediaProviderId("42"), "Kling", ApiProvider.OPENAI, MediaCapability.VIDEO, null, null, "kling-key")
-            coEvery { mediaProviderDao.upsert(any()) } returns Unit
 
             repository.saveMediaProvider(asset, null)
 
-            coVerify {
-                mediaProviderDao.upsert(match { it.pendingSync == 1 })
-            }
+            assertEquals(1, mediaProviderDao.upsertCalls.single().pendingSync)
         }
 }

@@ -44,7 +44,11 @@ class FakeMemoriesRepository(
 
     override suspend fun getMemoryById(id: String): Memory? = state.value.firstOrNull { it.id == id }
 
+    /** When set, [deleteMemory] throws this instead of deleting (ENC-28, data batch). */
+    var deleteFailure: Throwable? = null
+
     override suspend fun deleteMemory(id: String) {
+        deleteFailure?.let { throw it }
         deleteCalls += id
         state.value = state.value.filterNot { it.id == id }
     }

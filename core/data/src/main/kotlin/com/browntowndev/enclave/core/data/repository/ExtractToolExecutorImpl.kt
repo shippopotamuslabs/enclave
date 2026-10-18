@@ -17,7 +17,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class ExtractToolExecutorImpl
+open class ExtractToolExecutorImpl
     @Inject
     constructor(
         private val loggingPort: LoggingPort,
@@ -32,7 +32,7 @@ class ExtractToolExecutorImpl
             private const val TAG = "ExtractToolExecutor"
         }
 
-        override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
+        open override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
             requireSupportedTool(request.toolName)
             val params = request.parameters as WebExtractParams
             val urls = params.urls

@@ -72,7 +72,6 @@ interface DocumentDao {
               SELECT id
               FROM message
               WHERE chat_id = :chatId
-                AND deleted = 0
           )
         """,
     )

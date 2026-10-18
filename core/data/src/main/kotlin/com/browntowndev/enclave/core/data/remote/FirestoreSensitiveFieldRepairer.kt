@@ -11,7 +11,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class FirestoreSensitiveFieldRepairer
+open class FirestoreSensitiveFieldRepairer
     @Inject
     constructor(
         private val catalog: SensitiveFieldCatalog,
@@ -19,13 +19,13 @@ class FirestoreSensitiveFieldRepairer
     ) {
         private val events = mutableListOf<SensitiveRepairEvent>()
 
-        fun repairOutbound(
+        open fun repairOutbound(
             collectionPath: String,
             entityId: String,
             data: Map<String, Any?>,
         ): Map<String, Any?> = repairMap(collectionPath = collectionPath, entityId = entityId, data = data, sourceSide = "ROOM")
 
-        fun repairInbound(
+        open fun repairInbound(
             collectionPath: String,
             entityId: String,
             data: Map<String, Any?>,

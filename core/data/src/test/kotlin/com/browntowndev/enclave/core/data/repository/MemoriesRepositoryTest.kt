@@ -1,83 +1,51 @@
 package com.browntowndev.enclave.core.data.repository
 
-import androidx.sqlite.db.SupportSQLiteQuery
-import com.browntowndev.enclave.core.data.local.EmbeddingDao
-import com.browntowndev.enclave.core.data.local.MemoriesDao
+import com.browntowndev.enclave.core.data.local.EnclaveDatabase
 import com.browntowndev.enclave.core.data.local.MemoriesEntity
 import com.browntowndev.enclave.core.data.local.MemoryEmbeddingMatch
-import com.browntowndev.enclave.core.data.security.SensitiveRoomReadRepairApplier
-import com.browntowndev.enclave.core.data.sync.CloudSyncTrigger
+import com.browntowndev.enclave.core.testing.FakeEmbeddingEngine
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeTransactionProvider
 import com.browntowndev.enclave.domain.model.memory.MemoryCategory
 import com.browntowndev.enclave.domain.model.memory.MemoryRetrievalPolicy
-import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.enclave.domain.port.repository.MemoriesRepository
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.slot
-import io.mockk.verify
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
+import org.robolectric.annotation.Config as RoboConfig
 
+/**
+ * Translated from MockK to hand-written fakes (ENC-28): the DAOs under test
+ * are recording fakes (the assertions target the entities and raw SQL the
+ * repository builds), the embedding engine is the `:core:testing` fake, the
+ * sync trigger records its calls, and the incidental cleanup DAO /
+ * read-repair applier are the real implementations over an in-memory Room
+ * database.
+ */
+@ExtendWith(RobolectricExtension::class)
+@RoboConfig(sdk = [34])
 class MemoriesRepositoryTest {
-    private lateinit var memoriesDao: MemoriesDao
-    private lateinit var embeddingDao: EmbeddingDao
-    private lateinit var embeddingEngine: EmbeddingEnginePort
+    private lateinit var database: EnclaveDatabase
+    private lateinit var memoriesDao: FakeMemoriesDao
+    private lateinit var embeddingDao: FakeEmbeddingDao
+    private lateinit var embeddingEngine: FakeEmbeddingEngine
     private lateinit var repository: MemoriesRepository
-    private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
-
-    private val fakeEncryption =
-        object : com.browntowndev.enclave.core.data.security.LocalDataEncryptionService {
-            override fun encryptString(
-                plaintext: String,
-                aad: ByteArray,
-            ): String = "PCENC:v1:aes-gcm:$plaintext"
-
-            override fun decryptString(
-                stored: String,
-                aad: ByteArray,
-            ): String = stored.removePrefix("PCENC:v1:aes-gcm:")
-
-            override fun isEncrypted(stored: String): Boolean = stored.startsWith("PCENC:v1:aes-gcm:")
-        }
-    private val noOpLogger =
-        object : com.browntowndev.enclave.domain.port.inference.LoggingPort {
-            override fun debug(
-                tag: String,
-                message: String,
-            ) = Unit
-
-            override fun info(
-                tag: String,
-                message: String,
-            ) = Unit
-
-            override fun warning(
-                tag: String,
-                message: String,
-            ) = Unit
-
-            override fun error(
-                tag: String,
-                message: String,
-                throwable: Throwable?,
-            ) = Unit
-        }
-    private val healer =
-        com.browntowndev.enclave.core.data.security
-            .SensitivePersistenceSelfHealer(fakeEncryption, noOpLogger)
-    private val readRepairApplier = mockk<SensitiveRoomReadRepairApplier>(relaxed = true)
+    private lateinit var syncTrigger: RecordingCloudSyncTrigger
+    private val healer = testSensitiveSelfHealer(FakeLocalDataEncryptionService(), FakeLoggingPort())
 
     @BeforeEach
     fun setup() {
-        memoriesDao = mockk(relaxed = true)
-        embeddingDao = mockk(relaxed = true)
-        embeddingEngine = mockk(relaxed = true)
+        syncTrigger = RecordingCloudSyncTrigger()
+        database = createInMemoryEnclaveDatabase()
+        memoriesDao = FakeMemoriesDao()
+        embeddingDao = FakeEmbeddingDao()
+        embeddingEngine = FakeEmbeddingEngine()
         repository =
             MemoriesRepositoryImpl(
                 syncTrigger,
@@ -85,10 +53,15 @@ class MemoriesRepositoryTest {
                 embeddingDao,
                 embeddingEngine,
                 healer,
-                readRepairApplier,
-                cleanupDao = mockk(relaxed = true),
-                transactionProvider = mockk(relaxed = true),
+                database.realReadRepairApplier(),
+                cleanupDao = database.cleanupDao(),
+                transactionProvider = FakeTransactionProvider(),
             )
+    }
+
+    @AfterEach
+    fun tearDown() {
+        database.close()
     }
 
     @Test
@@ -98,13 +71,13 @@ class MemoriesRepositoryTest {
                 listOf(
                     MemoriesEntity(category = MemoryCategory.FACTS, content = "Fact 1"),
                 )
-            every { memoriesDao.getAllMemoriesFlow() } returns flowOf(entities)
+            memoriesDao.flowEntities = entities
 
             val result = repository.getAllMemoriesFlow().first()
 
             assertEquals(entities.size, result.size)
             assertEquals(entities[0].content, result[0].content)
-            coVerify { memoriesDao.getAllMemoriesFlow() }
+            assertEquals(1, memoriesDao.getAllMemoriesFlowCalls)
         }
 
     @Test
@@ -116,17 +89,18 @@ class MemoriesRepositoryTest {
                     MemoriesEntity(category = MemoryCategory.PREFERENCES, content = "I like blue"),
                     MemoriesEntity(category = MemoryCategory.PSYCH_PROFILE, content = "Profile content."),
                 )
-            coEvery { memoriesDao.getMemoriesByCategories(any()) } returns coreEntities
+            coreEntities.forEach { memoriesDao.entities[it.id] = it }
 
             val result = repository.getCoreMemories()
 
             assertEquals(coreEntities.size, result.size)
             assertEquals(coreEntities[0].content, result[0].content)
-            coVerify {
-                memoriesDao.getMemoriesByCategories(
+            assertEquals(
+                listOf(
                     listOf(MemoryCategory.CORE_IDENTITY, MemoryCategory.PREFERENCES, MemoryCategory.PSYCH_PROFILE),
-                )
-            }
+                ),
+                memoriesDao.getMemoriesByCategoriesCalls,
+            )
         }
 
     @Test
@@ -135,18 +109,16 @@ class MemoriesRepositoryTest {
             val category = MemoryCategory.FACTS
             val content = "New fact"
             val vector = floatArrayOf(0.1f, 0.2f)
-            coEvery { embeddingEngine.getEmbedding(content) } returns vector
+            embeddingEngine.embeddingsByText[content] = vector
 
             val result = repository.insertMemory(category, content)
 
             assertEquals(category, result.category)
             assertEquals(content, result.content)
-            coVerify { memoriesDao.insertMemory(any()) }
-            coVerify { embeddingEngine.getEmbedding(content) }
+            assertEquals(1, memoriesDao.insertCalls.size)
+            assertEquals(listOf(content), embeddingEngine.queries)
 
-            val querySlot = slot<SupportSQLiteQuery>()
-            coVerify { embeddingDao.insertEmbedding(capture(querySlot)) }
-            val sql = querySlot.captured.sql
+            val sql = embeddingDao.insertEmbeddingQueries.single()
             assert(sql.contains("INSERT OR REPLACE INTO memory_embeddings"))
             assert(sql.contains(result.id))
             assert(sql.contains("[0.1,0.2]"))
@@ -155,31 +127,16 @@ class MemoriesRepositoryTest {
     @Test
     fun `insertMemory stores content encrypted and returns plaintext domain model`() =
         runTest {
-            val encryptedRepository =
-                MemoriesRepositoryImpl(
-                    syncTrigger,
-                    memoriesDao,
-                    embeddingDao,
-                    embeddingEngine,
-                    healer,
-                    readRepairApplier,
-                    cleanupDao = mockk(relaxed = true),
-                    transactionProvider = mockk(relaxed = true),
-                )
             val category = MemoryCategory.FACTS
             val content = "Private memory"
-            coEvery { embeddingEngine.getEmbedding(content) } returns floatArrayOf(0.1f)
+            embeddingEngine.embeddingsByText[content] = floatArrayOf(0.1f)
 
-            val result = encryptedRepository.insertMemory(category, content)
+            val result = repository.insertMemory(category, content)
 
             assertEquals(content, result.content)
-            coVerify {
-                memoriesDao.insertMemory(
-                    match {
-                        it.category == category && it.content == "PCENC:v1:aes-gcm:Private memory"
-                    },
-                )
-            }
+            val inserted = memoriesDao.insertCalls.single()
+            assertEquals(category, inserted.category)
+            assertEquals("PCENC:v1:aes-gcm:Private memory", inserted.content)
         }
 
     @Test
@@ -189,18 +146,17 @@ class MemoriesRepositoryTest {
             val existing = MemoriesEntity(id = id, category = MemoryCategory.FACTS, content = "Old content")
             val newContent = "Updated content"
             val vector = floatArrayOf(0.3f, 0.4f)
-
-            coEvery { memoriesDao.getMemoryById(id) } returns existing
-            coEvery { embeddingEngine.getEmbedding(newContent) } returns vector
+            memoriesDao.entities[id] = existing
+            embeddingEngine.embeddingsByText[newContent] = vector
 
             repository.updateMemory(id, newContent)
 
-            coVerify { memoriesDao.updateMemory(match { it.id == id && it.content == "PCENC:v1:aes-gcm:$newContent" }) }
-            coVerify { embeddingEngine.getEmbedding(newContent) }
+            val updated = memoriesDao.updateCalls.single()
+            assertEquals(id, updated.id)
+            assertEquals("PCENC:v1:aes-gcm:$newContent", updated.content)
+            assertEquals(listOf(newContent), embeddingEngine.queries)
 
-            val querySlot = slot<SupportSQLiteQuery>()
-            coVerify { embeddingDao.insertEmbedding(capture(querySlot)) }
-            val sql = querySlot.captured.sql
+            val sql = embeddingDao.insertEmbeddingQueries.single()
             assert(sql.contains("INSERT OR REPLACE INTO memory_embeddings"))
             assert(sql.contains(id))
             assert(sql.contains("[0.3,0.4]"))
@@ -211,16 +167,13 @@ class MemoriesRepositoryTest {
         runTest {
             val id = "memory-1"
             val existing = MemoriesEntity(id = id, category = MemoryCategory.FACTS, content = "Content")
-
-            coEvery { memoriesDao.getMemoryById(id) } returns existing
+            memoriesDao.entities[id] = existing
 
             repository.deleteMemory(id)
 
-            coVerify { memoriesDao.softDeleteById(id, any()) }
+            assertEquals(listOf(id), memoriesDao.softDeleteCalls.map { it.first })
 
-            val querySlot = slot<SupportSQLiteQuery>()
-            coVerify { embeddingDao.insertEmbedding(capture(querySlot)) }
-            val sql = querySlot.captured.sql
+            val sql = embeddingDao.insertEmbeddingQueries.single()
             assert(sql.contains("DELETE FROM memory_embeddings WHERE id = 'memory-1'"))
         }
 
@@ -235,19 +188,15 @@ class MemoriesRepositoryTest {
                     category = MemoryCategory.FACTS,
                     content = "Result",
                 )
-
-            coEvery { embeddingDao.searchMemoryEmbeddingMatches(any()) } returns
-                listOf(MemoryEmbeddingMatch(id = "fact-1", distance = 0.2f))
-            coEvery { memoriesDao.getMemoryById("fact-1") } returns fact
+            embeddingDao.matches = listOf(MemoryEmbeddingMatch(id = "fact-1", distance = 0.2f))
+            memoriesDao.entities[fact.id] = fact
 
             val result = repository.searchMemories(queryVector, limit)
 
             assertEquals(1, result.size)
             assertEquals(fact.content, result[0].content)
 
-            val querySlot = slot<SupportSQLiteQuery>()
-            coVerify { embeddingDao.searchMemoryEmbeddingMatches(capture(querySlot)) }
-            val sql = querySlot.captured.sql
+            val sql = embeddingDao.searchMatchesQueries.single()
             assert(sql.contains("SELECT id, distance"))
             assert(sql.contains("FROM memory_embeddings"))
             assert(sql.contains("WHERE vector MATCH '[0.5,0.6]' AND k = 3"))
@@ -275,16 +224,15 @@ class MemoriesRepositoryTest {
                     category = MemoryCategory.CORE_IDENTITY,
                     content = "User is a developer",
                 )
-
-            coEvery { embeddingDao.searchMemoryEmbeddingMatches(any()) } returns
+            embeddingDao.matches =
                 listOf(
                     MemoryEmbeddingMatch(id = "core-1", distance = 0.1f),
                     MemoryEmbeddingMatch(id = "fact-2", distance = 0.9f),
                     MemoryEmbeddingMatch(id = "fact-1", distance = 0.4f),
                 )
-            coEvery { memoriesDao.getMemoryById("core-1") } returns coreIdentity
-            coEvery { memoriesDao.getMemoryById("fact-2") } returns irrelevantFact
-            coEvery { memoriesDao.getMemoryById("fact-1") } returns relevantFact
+            memoriesDao.entities[coreIdentity.id] = coreIdentity
+            memoriesDao.entities[irrelevantFact.id] = irrelevantFact
+            memoriesDao.entities[relevantFact.id] = relevantFact
 
             val result =
                 repository.searchMemories(
@@ -297,9 +245,7 @@ class MemoriesRepositoryTest {
             assertEquals(1, result.size)
             assertEquals(relevantFact.content, result[0].content)
 
-            val querySlot = slot<SupportSQLiteQuery>()
-            coVerify { embeddingDao.searchMemoryEmbeddingMatches(capture(querySlot)) }
-            val sql = querySlot.captured.sql
+            val sql = embeddingDao.searchMatchesQueries.single()
             assert(sql.contains("AND k = ${MemoryRetrievalPolicy.SEARCH_CANDIDATE_POOL}"))
         }
 
@@ -320,14 +266,13 @@ class MemoriesRepositoryTest {
                     category = MemoryCategory.FACTS,
                     content = "Active",
                 )
-
-            coEvery { embeddingDao.searchMemoryEmbeddingMatches(any()) } returns
+            embeddingDao.matches =
                 listOf(
                     MemoryEmbeddingMatch(id = "fact-1", distance = 0.1f),
                     MemoryEmbeddingMatch(id = "fact-2", distance = 0.2f),
                 )
-            coEvery { memoriesDao.getMemoryById("fact-1") } returns deletedFact
-            coEvery { memoriesDao.getMemoryById("fact-2") } returns activeFact
+            memoriesDao.entities[deletedFact.id] = deletedFact
+            memoriesDao.entities[activeFact.id] = activeFact
 
             val result = repository.searchMemories(queryVector, limit = 5)
 
@@ -338,70 +283,66 @@ class MemoriesRepositoryTest {
     @Test
     fun `insertMemory calls triggerSync once`() =
         runTest {
-            coEvery { embeddingEngine.getEmbedding(any()) } returns floatArrayOf(0.1f)
+            embeddingEngine.uniformEmbedding = floatArrayOf(0.1f)
 
             repository.insertMemory(MemoryCategory.FACTS, "New fact")
 
-            verify(exactly = 1) { syncTrigger.trigger() }
+            assertEquals(1, syncTrigger.triggerCalls)
         }
 
     @Test
     fun `updateMemory calls triggerSync once`() =
         runTest {
             val id = "mem-1"
-            coEvery { memoriesDao.getMemoryById(id) } returns MemoriesEntity(id = id, category = MemoryCategory.FACTS, content = "Old")
-            coEvery { embeddingEngine.getEmbedding(any()) } returns floatArrayOf(0.1f)
+            memoriesDao.entities[id] = MemoriesEntity(id = id, category = MemoryCategory.FACTS, content = "Old")
+            embeddingEngine.uniformEmbedding = floatArrayOf(0.1f)
 
             repository.updateMemory(id, "New content")
 
-            verify(exactly = 1) { syncTrigger.trigger() }
+            assertEquals(1, syncTrigger.triggerCalls)
         }
 
     @Test
     fun `deleteMemory calls triggerSync once`() =
         runTest {
             val id = "mem-1"
-            coEvery { memoriesDao.getMemoryById(id) } returns MemoriesEntity(id = id, category = MemoryCategory.FACTS, content = "Content")
+            memoriesDao.entities[id] = MemoriesEntity(id = id, category = MemoryCategory.FACTS, content = "Content")
 
             repository.deleteMemory(id)
 
-            verify(exactly = 1) { syncTrigger.trigger() }
+            assertEquals(1, syncTrigger.triggerCalls)
         }
 
     @Test
     fun `getAllMemoriesFlow read-only does not call triggerSync`() =
         runTest {
-            every { memoriesDao.getAllMemoriesFlow() } returns flowOf(emptyList())
+            memoriesDao.flowEntities = emptyList()
 
             repository.getAllMemoriesFlow().first()
 
-            verify(exactly = 0) { syncTrigger.trigger() }
+            assertEquals(0, syncTrigger.triggerCalls)
         }
 
     @Test
     fun `insertMemory inserts entity with pendingSync true`() =
         runTest {
-            coEvery { embeddingEngine.getEmbedding(any()) } returns floatArrayOf(0.1f)
+            embeddingEngine.uniformEmbedding = floatArrayOf(0.1f)
 
             repository.insertMemory(MemoryCategory.FACTS, "New fact")
 
-            coVerify {
-                memoriesDao.insertMemory(match { it.pendingSync == 1 })
-            }
+            assertEquals(1, memoriesDao.insertCalls.single().pendingSync)
         }
 
     @Test
     fun `updateMemory updates entity with pendingSync true`() =
         runTest {
             val id = "mem-1"
-            coEvery { memoriesDao.getMemoryById(id) } returns MemoriesEntity(id = id, category = MemoryCategory.FACTS, content = "Old")
-            coEvery { embeddingEngine.getEmbedding(any()) } returns floatArrayOf(0.1f)
+            memoriesDao.entities[id] = MemoriesEntity(id = id, category = MemoryCategory.FACTS, content = "Old")
+            embeddingEngine.uniformEmbedding = floatArrayOf(0.1f)
 
             repository.updateMemory(id, "New content")
 
-            coVerify {
-                memoriesDao.updateMemory(match { it.pendingSync == 1 })
-            }
+            assertEquals(1, memoriesDao.updateCalls.single().pendingSync)
         }
 
     // S15: Memories persist encrypted content and return plaintext domain content
@@ -410,20 +351,16 @@ class MemoriesRepositoryTest {
         runTest {
             val content = "likes quiet mornings"
             val category = MemoryCategory.PREFERENCES
-            coEvery { embeddingEngine.getEmbedding(content) } returns floatArrayOf(0.1f)
+            embeddingEngine.embeddingsByText[content] = floatArrayOf(0.1f)
 
             val result = repository.insertMemory(category, content)
 
             // Stored entity must have encrypted content
-            coVerify {
-                memoriesDao.insertMemory(
-                    match { it.content.startsWith("PCENC:v1:aes-gcm:") },
-                )
-            }
+            assertTrue(memoriesDao.insertCalls.single().content.startsWith("PCENC:v1:aes-gcm:"))
 
             // getMemoryById should return plaintext domain content
             val encryptedContent = "PCENC:v1:aes-gcm:$content"
-            coEvery { memoriesDao.getMemoryById(result.id) } returns
+            memoriesDao.entities[result.id] =
                 MemoriesEntity(id = result.id, category = category, content = encryptedContent)
 
             val domainMemory = repository.getMemoryById(result.id)
