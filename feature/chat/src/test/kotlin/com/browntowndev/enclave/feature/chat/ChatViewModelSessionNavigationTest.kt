@@ -2,32 +2,25 @@ package com.browntowndev.enclave.feature.chat
 
 import androidx.lifecycle.SavedStateHandle
 import app.cash.turbine.test
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
+import com.browntowndev.enclave.core.testing.FakeChatRepository
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeStudioRepository
+import com.browntowndev.enclave.core.testing.FakeTtsPlaybackController
+import com.browntowndev.enclave.core.testing.FakeViewModelErrorHandler
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
-import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.Content
 import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.MessageState
 import com.browntowndev.enclave.domain.model.chat.Role
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.inference.ToolExecutionEventPort
-import com.browntowndev.enclave.domain.port.repository.SettingsData
-import com.browntowndev.enclave.domain.usecase.byok.GetDefaultModelsUseCase
-import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
-import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
-import com.browntowndev.enclave.domain.usecase.settings.SettingsAssignmentUseCases
-import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.enclave.feature.inference.ActiveChatTurnStore
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
@@ -57,7 +50,7 @@ class ChatViewModelSessionNavigationTest {
         )
 
     private lateinit var savedStateHandle: SavedStateHandle
-    private lateinit var chatUseCases: ChatUseCases
+    private lateinit var chatUseCases: FakeChatUseCases
     private lateinit var viewModel: ChatViewModel
     private lateinit var harness: ChatViewModelTestSupport.Harness
 
@@ -67,43 +60,31 @@ class ChatViewModelSessionNavigationTest {
             SavedStateHandle(
                 mapOf("chatId" to navigationChatId.value),
             )
-        chatUseCases = mockk(relaxed = true)
-        coEvery { chatUseCases.getChat(navigationChatId) } returns flowOf(existingMessages)
-        coEvery { chatUseCases.getChat(staleSessionChatId) } returns flowOf(emptyList())
+        chatUseCases = FakeChatUseCases()
+        chatUseCases.getChatUseCase.flowsByChatId[navigationChatId] = flowOf(existingMessages)
+        chatUseCases.getChatUseCase.flowsByChatId[staleSessionChatId] = flowOf(emptyList())
 
-        val settingsUseCases = mockk<SettingsUseCases>()
-        every { settingsUseCases.getSettings() } returns MutableStateFlow(SettingsData())
-        val assignmentUseCases = mockk<SettingsAssignmentUseCases>()
-        val getDefaultModelsUseCase = mockk<GetDefaultModelsUseCase>()
-        every { settingsUseCases.assignments } returns assignmentUseCases
-        every { assignmentUseCases.getDefaultModels } returns getDefaultModelsUseCase
-        every { getDefaultModelsUseCase() } returns MutableStateFlow(emptyList())
-
-        val inferenceLockManager = mockk<InferenceLockManager>()
-        every { inferenceLockManager.isInferenceBlocked } returns MutableStateFlow(false)
-
-        val toolExecutionEventPort = mockk<ToolExecutionEventPort>()
-        every { toolExecutionEventPort.events } returns MutableSharedFlow()
+        val settingsUseCases = FakeChatSettingsUseCases()
 
         harness =
             ChatViewModelTestSupport.createHarness(
                 settingsUseCases = settingsUseCases,
                 chatUseCases = chatUseCases,
                 savedStateHandle = savedStateHandle,
-                cancelInferenceUseCase = mockk(relaxed = true),
-                inferenceLockManager = inferenceLockManager,
-                modelDisplayNamesUseCase = mockk(relaxed = true),
-                activeModelProvider = mockk(relaxed = true),
-                toolExecutionEventPort = toolExecutionEventPort,
-                errorHandler = mockk<ViewModelErrorHandler>(relaxed = true),
-                loggingPort = mockk<LoggingPort>(relaxed = true),
+                cancelInferenceUseCase = FakeCancelInferenceUseCase(),
+                inferenceLockManager = FakeInferenceLockManager(),
+                modelDisplayNamesUseCase = FakeGetModelDisplayNameUseCase(),
+                activeModelProvider = FakeActiveModelProvider(),
+                toolExecutionEventPort = FakeToolExecutionEventPort(),
+                errorHandler = FakeViewModelErrorHandler(),
+                loggingPort = FakeLoggingPort(),
                 activeChatTurnSnapshotPort = ActiveChatTurnStore(),
-                playbackController = mockk(relaxed = true),
-                studioRepository = mockk(relaxed = true),
-                shareChatUseCase = mockk(relaxed = true),
-                chatRepository = mockk(relaxed = true),
-                exportArtifactDocumentsUseCase = mockk(relaxed = true),
-                stageImageAttachmentUseCase = mockk(relaxed = true),
+                playbackController = FakeTtsPlaybackController(),
+                studioRepository = FakeStudioRepository(),
+                shareChatUseCase = FakeShareChatUseCase(),
+                chatRepository = FakeChatRepository(),
+                exportArtifactDocumentsUseCase = FakeExportArtifactDocumentsUseCase(),
+                stageImageAttachmentUseCase = FakeStageImageAttachmentUseCase(),
             )
         viewModel = harness.viewModel
         seedOrchestratorCurrentChatId(staleSessionChatId)
@@ -126,7 +107,7 @@ class ChatViewModelSessionNavigationTest {
                 cancelAndIgnoreRemainingEvents()
             }
 
-            coVerify(atLeast = 1) { chatUseCases.getChat(navigationChatId) }
+            assertTrue(chatUseCases.getChatUseCase.calls.count { it == navigationChatId } >= 1)
         }
 
     @Test

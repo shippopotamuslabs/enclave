@@ -7,14 +7,14 @@ import com.browntowndev.enclave.domain.port.security.ApiKeyProviderPort
 import com.browntowndev.enclave.domain.usecase.settings.ResolveAssignedModelSelectionUseCase
 import javax.inject.Inject
 
-class LiveVoiceSessionUseCase
+open class LiveVoiceSessionUseCase
     @Inject
     constructor(
         private val resolveAssignedModelSelectionUseCase: ResolveAssignedModelSelectionUseCase,
         private val liveVoicePort: LiveVoicePort,
         private val apiKeyProvider: ApiKeyProviderPort,
     ) {
-        suspend operator fun invoke(): Result<LiveVoiceSessionOpenResult> {
+        open suspend operator fun invoke(): Result<LiveVoiceSessionOpenResult> {
             val selection =
                 resolveAssignedModelSelectionUseCase(ModelType.LIVE_VOICE)
                     ?: return Result.failure(IllegalStateException("No Live Voice provider assigned."))

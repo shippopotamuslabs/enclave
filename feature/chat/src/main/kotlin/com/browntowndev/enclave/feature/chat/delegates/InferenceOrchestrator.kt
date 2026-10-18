@@ -48,7 +48,7 @@ import java.util.UUID
 import javax.inject.Inject
 import kotlin.time.Duration.Companion.milliseconds
 
-class InferenceOrchestrator
+open class InferenceOrchestrator
     @Inject
     constructor(
         private val chatUseCases: ChatUseCases,
@@ -81,7 +81,7 @@ class InferenceOrchestrator
         private val _promptTooLargeFailures = Channel<PromptTooLargeFailure>(Channel.BUFFERED)
         val promptTooLargeFailures: Flow<PromptTooLargeFailure> = _promptTooLargeFailures.receiveAsFlow()
 
-        fun clearOptimisticUser() {
+        open fun clearOptimisticUser() {
             _optimisticUserMessage.value = null
         }
 

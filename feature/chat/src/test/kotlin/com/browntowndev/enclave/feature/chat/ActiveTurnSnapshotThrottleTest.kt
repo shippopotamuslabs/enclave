@@ -1,8 +1,13 @@
 package com.browntowndev.enclave.feature.chat
 
 import androidx.lifecycle.SavedStateHandle
+import com.browntowndev.enclave.core.testing.FakeActiveChatTurnSnapshotPort
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
+import com.browntowndev.enclave.core.testing.FakeChatRepository
+import com.browntowndev.enclave.core.testing.FakeStudioRepository
+import com.browntowndev.enclave.core.testing.FakeTtsPlaybackController
+import com.browntowndev.enclave.core.testing.FakeViewModelErrorHandler
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
-import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.chat.AccumulatedMessages
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.Content
@@ -13,26 +18,10 @@ import com.browntowndev.enclave.domain.model.chat.MessageState
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnKey
-import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnSnapshotPort
-import com.browntowndev.enclave.domain.port.inference.ToolExecutionEventPort
-import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
-import com.browntowndev.enclave.domain.port.repository.SettingsData
-import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
-import com.browntowndev.enclave.domain.usecase.byok.GetDefaultModelsUseCase
-import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
-import com.browntowndev.enclave.domain.usecase.chat.GetModelDisplayNameUseCase
-import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
-import com.browntowndev.enclave.domain.usecase.settings.SettingsAssignmentUseCases
-import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
-import io.mockk.coEvery
-import io.mockk.every
-import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -41,7 +30,6 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
-import kotlin.coroutines.CoroutineContext
 
 /**
  * Verifies snapshot-driven [ChatViewModel.uiState] updates use [kotlinx.coroutines.flow.conflate]
@@ -54,52 +42,35 @@ class ActiveTurnSnapshotThrottleTest {
     private val assistantMsgId = MessageId("assistant-msg-1")
     private val key = ActiveChatTurnKey(chatId, assistantMsgId)
 
-    private val chatUseCases: ChatUseCases = mockk(relaxed = true)
-    private val settingsUseCases: SettingsUseCases = mockk(relaxed = true)
-    private val inferenceLockManager: InferenceLockManager = mockk(relaxed = true)
-    private val activeChatTurnSnapshotPort: ActiveChatTurnSnapshotPort = mockk(relaxed = true)
-    private val toolExecutionEventPort: ToolExecutionEventPort = mockk(relaxed = true)
-    private val errorHandler: ViewModelErrorHandler = mockk(relaxed = true)
-    private val studioRepository: StudioRepositoryPort = mockk(relaxed = true)
-    private val activeModelProvider: ActiveModelProviderPort = mockk(relaxed = true)
+    private val chatUseCases = FakeChatUseCases()
+    private val settingsUseCases = FakeChatSettingsUseCases()
+    private val inferenceLockManager = FakeInferenceLockManager()
+    private val activeChatTurnSnapshotPort = FakeActiveChatTurnSnapshotPort()
+    private val toolExecutionEventPort = FakeToolExecutionEventPort()
+    private val errorHandler = FakeViewModelErrorHandler()
+    private val studioRepository = FakeStudioRepository()
+    private val activeModelProvider = FakeActiveModelProvider()
 
     private fun buildViewModel(savedStateHandle: SavedStateHandle = SavedStateHandle()): ChatViewModel {
-        val assignmentUseCases = mockk<SettingsAssignmentUseCases>()
-        val getDefaultModelsUseCase = mockk<GetDefaultModelsUseCase>()
-        every { settingsUseCases.getSettings() } returns MutableStateFlow(SettingsData())
-        every { settingsUseCases.assignments } returns assignmentUseCases
-        every { assignmentUseCases.getDefaultModels } returns getDefaultModelsUseCase
-        every { getDefaultModelsUseCase() } returns MutableStateFlow(emptyList())
-        every { inferenceLockManager.isInferenceBlocked } returns MutableStateFlow(false)
-        every { toolExecutionEventPort.events } returns MutableSharedFlow()
-        every { studioRepository.observeAllMedia() } returns flowOf(emptyList())
-        every { studioRepository.observeEphemeralMedia() } returns flowOf(emptyList())
-        every {
-            errorHandler.coroutineExceptionHandler(any(), any(), any())
-        } returns kotlinx.coroutines.CoroutineExceptionHandler { _: CoroutineContext, _ -> }
-
-        val modelDisplayNamesUseCase = mockk<GetModelDisplayNameUseCase>(relaxed = true)
-        coEvery { modelDisplayNamesUseCase.invoke(any()) } returns "Test Model"
-        coEvery { activeModelProvider.getActiveConfiguration(any()) } returns null
+        val modelDisplayNamesUseCase = FakeGetModelDisplayNameUseCase()
 
         return ChatViewModelTestSupport.createViewModel(
             settingsUseCases = settingsUseCases,
             chatUseCases = chatUseCases,
             savedStateHandle = savedStateHandle,
-            cancelInferenceUseCase = mockk(relaxed = true),
+            cancelInferenceUseCase = FakeCancelInferenceUseCase(),
             inferenceLockManager = inferenceLockManager,
             modelDisplayNamesUseCase = modelDisplayNamesUseCase,
             activeModelProvider = activeModelProvider,
             toolExecutionEventPort = toolExecutionEventPort,
             errorHandler = errorHandler,
-            loggingPort = mockk(relaxed = true),
             activeChatTurnSnapshotPort = activeChatTurnSnapshotPort,
-            playbackController = mockk(relaxed = true),
+            playbackController = FakeTtsPlaybackController(),
             studioRepository = studioRepository,
-            shareChatUseCase = mockk(relaxed = true),
-            chatRepository = mockk(relaxed = true),
-            exportArtifactDocumentsUseCase = mockk(relaxed = true),
-            stageImageAttachmentUseCase = mockk(relaxed = true),
+            shareChatUseCase = FakeShareChatUseCase(),
+            chatRepository = FakeChatRepository(),
+            exportArtifactDocumentsUseCase = FakeExportArtifactDocumentsUseCase(),
+            stageImageAttachmentUseCase = FakeStageImageAttachmentUseCase(),
         )
     }
 
@@ -121,7 +92,7 @@ class ActiveTurnSnapshotThrottleTest {
     @Test
     fun `uiState reflects the latest snapshot after a rapid burst`() =
         runTest {
-            coEvery { chatUseCases.getChat(chatId) } returns
+            chatUseCases.getChatUseCase.flow =
                 MutableStateFlow(
                     listOf(
                         Message(
@@ -134,7 +105,7 @@ class ActiveTurnSnapshotThrottleTest {
                     ),
                 )
 
-            every { activeChatTurnSnapshotPort.observe(key) } returns
+            activeChatTurnSnapshotPort.observeFlowOverride =
                 flow {
                     repeat(100) { i ->
                         emit(snapshot("Token $i"))

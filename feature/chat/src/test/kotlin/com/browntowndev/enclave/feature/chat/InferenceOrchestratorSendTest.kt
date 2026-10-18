@@ -1,32 +1,30 @@
 package com.browntowndev.enclave.feature.chat
 
 import androidx.lifecycle.SavedStateHandle
+import com.browntowndev.enclave.core.testing.FakeChatRepository
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
+import com.browntowndev.enclave.domain.model.chat.AccumulatedMessages
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.ChatResponseMode
 import com.browntowndev.enclave.domain.model.chat.MessageId
-import com.browntowndev.enclave.domain.model.chat.Mode
-import com.browntowndev.enclave.domain.port.repository.SettingsData
+import com.browntowndev.enclave.domain.model.chat.MessageSnapshot
+import com.browntowndev.enclave.domain.model.chat.MessageState
+import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.usecase.chat.ChatTurnTiming
-import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
 import com.browntowndev.enclave.domain.usecase.chat.UserPromptResult
-import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
+import com.browntowndev.enclave.domain.usecase.inference.PromptModerationResult
 import com.browntowndev.enclave.feature.chat.delegates.InferenceOrchestrator
 import com.browntowndev.enclave.feature.inference.ActiveChatTurnStore
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
@@ -53,8 +51,8 @@ class InferenceOrchestratorSendTest {
     @JvmField
     val mainDispatcherRule = MainDispatcherRule(testDispatcher)
 
-    private lateinit var chatUseCases: ChatUseCases
-    private lateinit var settingsUseCases: SettingsUseCases
+    private lateinit var chatUseCases: FakeChatUseCases
+    private lateinit var settingsUseCases: FakeChatSettingsUseCases
     private lateinit var orchestrator: InferenceOrchestrator
     private lateinit var errorHandler: RecordingErrorHandler
     private lateinit var applicationScope: CoroutineScope
@@ -63,22 +61,21 @@ class InferenceOrchestratorSendTest {
     fun setUp() {
         applicationScope = CoroutineScope(SupervisorJob() + testDispatcher)
         errorHandler = RecordingErrorHandler()
-        chatUseCases = mockk(relaxed = true)
-        settingsUseCases = mockk()
-        every { settingsUseCases.getSettings() } returns MutableStateFlow(SettingsData())
+        chatUseCases = FakeChatUseCases()
+        settingsUseCases = FakeChatSettingsUseCases()
 
         orchestrator =
             InferenceOrchestrator(
                 chatUseCases = chatUseCases,
                 settingsUseCases = settingsUseCases,
-                cancelInferenceUseCase = mockk(relaxed = true),
+                cancelInferenceUseCase = FakeCancelInferenceUseCase(),
                 activeChatTurnSnapshotPort = ActiveChatTurnStore(),
-                chatRepository = mockk(relaxed = true),
+                chatRepository = FakeChatRepository(),
                 errorHandler = errorHandler,
                 savedStateHandle = SavedStateHandle(),
-                pipelineExecutor = mockk(relaxed = true),
-                moderatePromptUseCase = mockk(relaxed = true),
-                loggingPort = mockk(relaxed = true),
+                pipelineExecutor = FakePipelineExecutorPort(),
+                moderatePromptUseCase = FakeModeratePromptUseCase(),
+                loggingPort = FakeLoggingPort(),
                 applicationScope = applicationScope,
             )
     }
@@ -88,7 +85,7 @@ class InferenceOrchestratorSendTest {
     fun dopgO01_optimisticBeforePersist() =
         runTest(testDispatcher) {
             val submitPrompt = CompletableDeferred<Unit>()
-            coEvery { chatUseCases.submitPrompt(any()) } coAnswers {
+            chatUseCases.submitPromptUseCase.behavior = {
                 submitPrompt.await()
                 UserPromptResult(
                     userMessageId = MessageId("user-1"),
@@ -127,16 +124,6 @@ class InferenceOrchestratorSendTest {
     fun dopgO02_generationAfterDelay() =
         runTest(testDispatcher) {
             mockSubmitPrompt(chatUseCases)
-            coEvery {
-                chatUseCases.generateChatResponse(
-                    prompt = any(),
-                    userMessageId = any(),
-                    assistantMessageId = any(),
-                    chatId = any(),
-                    responseMode = any(),
-                    backgroundInferenceEnabled = any(),
-                )
-            } returns flowOf()
 
             launch {
                 orchestrator.sendMessage(
@@ -153,28 +140,10 @@ class InferenceOrchestratorSendTest {
             }
             advanceTimeBy(649)
             runCurrent()
-            coVerify(exactly = 0) {
-                chatUseCases.generateChatResponse(
-                    prompt = any(),
-                    userMessageId = any(),
-                    assistantMessageId = any(),
-                    chatId = any(),
-                    responseMode = any(),
-                    backgroundInferenceEnabled = any(),
-                )
-            }
+            assertEquals(0, chatUseCases.generateChatResponseUseCase.calls.size)
             advanceTimeBy(1)
             advanceUntilIdle()
-            coVerify(exactly = 1) {
-                chatUseCases.generateChatResponse(
-                    prompt = any(),
-                    userMessageId = any(),
-                    assistantMessageId = any(),
-                    chatId = any(),
-                    responseMode = any(),
-                    backgroundInferenceEnabled = any(),
-                )
-            }
+            assertEquals(1, chatUseCases.generateChatResponseUseCase.calls.size)
         }
 
     @Test
@@ -182,16 +151,6 @@ class InferenceOrchestratorSendTest {
     fun dopgO03_placeholderInsideSubmitNotOrchestrator() =
         runTest(testDispatcher) {
             mockSubmitPrompt(chatUseCases)
-            coEvery {
-                chatUseCases.generateChatResponse(
-                    prompt = any(),
-                    userMessageId = any(),
-                    assistantMessageId = any(),
-                    chatId = any(),
-                    responseMode = any(),
-                    backgroundInferenceEnabled = any(),
-                )
-            } returns flowOf()
 
             launch {
                 orchestrator.sendMessage(
@@ -208,14 +167,8 @@ class InferenceOrchestratorSendTest {
             }
             runCurrent()
 
-            coVerify(exactly = 1) { chatUseCases.submitPrompt(any()) }
-            coVerify(exactly = 0) {
-                chatUseCases.createAssistantPlaceholder(
-                    chatId = any(),
-                    userMessageCreatedAtMillis = any(),
-                    assistantMessageId = any(),
-                )
-            }
+            assertEquals(1, chatUseCases.submitPromptUseCase.calls.size)
+            assertEquals(0, chatUseCases.createAssistantPlaceholderUseCase.calls.size)
         }
 
     @Test
@@ -242,23 +195,8 @@ class InferenceOrchestratorSendTest {
 
             assertNull(orchestrator.optimisticUserMessage.value)
             assertSame(exception, errorHandler.handledErrors.single())
-            coVerify(exactly = 0) {
-                chatUseCases.createAssistantPlaceholder(
-                    chatId = any(),
-                    userMessageCreatedAtMillis = any(),
-                    assistantMessageId = any(),
-                )
-            }
-            coVerify(exactly = 0) {
-                chatUseCases.generateChatResponse(
-                    prompt = any(),
-                    userMessageId = any(),
-                    assistantMessageId = any(),
-                    chatId = any(),
-                    responseMode = any(),
-                    backgroundInferenceEnabled = any(),
-                )
-            }
+            assertEquals(0, chatUseCases.createAssistantPlaceholderUseCase.calls.size)
+            assertEquals(0, chatUseCases.generateChatResponseUseCase.calls.size)
         }
 
     private class RecordingErrorHandler : ViewModelErrorHandler {
@@ -294,16 +232,6 @@ class InferenceOrchestratorSendTest {
                 userMessageId = MessageId("user-orch-1"),
                 chatId = ChatId("chat-1"),
             )
-            coEvery {
-                chatUseCases.generateChatResponse(
-                    prompt = any(),
-                    userMessageId = any(),
-                    assistantMessageId = any(),
-                    chatId = any(),
-                    responseMode = any(),
-                    backgroundInferenceEnabled = any(),
-                )
-            } returns flowOf()
 
             launch {
                 orchestrator.sendMessage(
@@ -325,16 +253,12 @@ class InferenceOrchestratorSendTest {
                 checkNotNull(orchestrator.requestedTurnKey.value?.assistantMessageId) {
                     "Orchestrator must assign assistant id before generation"
                 }
-            coVerify {
-                chatUseCases.generateChatResponse(
-                    prompt = "Hi",
-                    userMessageId = MessageId("user-orch-1"),
-                    assistantMessageId = orchestratorAssistantId,
-                    chatId = ChatId("chat-1"),
-                    responseMode = ChatResponseMode.Fast,
-                    backgroundInferenceEnabled = any(),
-                )
-            }
+            val generation = chatUseCases.generateChatResponseUseCase.calls.single()
+            assertEquals("Hi", generation.prompt)
+            assertEquals(MessageId("user-orch-1"), generation.userMessageId)
+            assertEquals(orchestratorAssistantId, generation.assistantMessageId)
+            assertEquals(ChatId("chat-1"), generation.chatId)
+            assertEquals(ChatResponseMode.Fast, generation.responseMode)
         }
 
     @Test
@@ -342,58 +266,50 @@ class InferenceOrchestratorSendTest {
     fun dopgO04_postTurnResponseModerationBlocksNsfw() =
         runTest(testDispatcher) {
             val moderatePromptUseCase =
-                mockk<com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase>(relaxed = true)
-            coEvery { moderatePromptUseCase(any()) } returns
-                com.browntowndev.enclave.domain.usecase.inference.PromptModerationResult(
-                    blocked = true,
-                    scoresByLabel = mapOf("nsfw" to 0.95),
-                    canonicalScores = mapOf("nsfw" to 0.95),
-                    triggeredLabels = listOf("nsfw"),
-                    combinedIllegalScore = 0.95,
-                )
+                FakeModeratePromptUseCase().apply {
+                    result =
+                        PromptModerationResult(
+                            blocked = true,
+                            scoresByLabel = mapOf("nsfw" to 0.95),
+                            canonicalScores = mapOf("nsfw" to 0.95),
+                            triggeredLabels = listOf("nsfw"),
+                            combinedIllegalScore = 0.95,
+                        )
+                }
 
             val orchestratorWithModeration =
                 InferenceOrchestrator(
                     chatUseCases = chatUseCases,
                     settingsUseCases = settingsUseCases,
-                    cancelInferenceUseCase = mockk(relaxed = true),
+                    cancelInferenceUseCase = FakeCancelInferenceUseCase(),
                     activeChatTurnSnapshotPort = ActiveChatTurnStore(),
-                    chatRepository = mockk(relaxed = true),
+                    chatRepository = FakeChatRepository(),
                     errorHandler = errorHandler,
                     savedStateHandle = SavedStateHandle(),
-                    pipelineExecutor = mockk(relaxed = true),
+                    pipelineExecutor = FakePipelineExecutorPort(),
                     moderatePromptUseCase = moderatePromptUseCase,
-                    loggingPort = mockk(relaxed = true),
+                    loggingPort = FakeLoggingPort(),
                     applicationScope = applicationScope,
                 )
 
             mockSubmitPrompt(chatUseCases)
             val responseBlocked = CompletableDeferred<Unit>()
-            coEvery {
-                chatUseCases.generateChatResponse(
-                    prompt = any(),
-                    userMessageId = any(),
-                    assistantMessageId = any(),
-                    chatId = any(),
-                    responseMode = any(),
-                    backgroundInferenceEnabled = any(),
-                )
-            } returns
-                kotlinx.coroutines.flow.flow {
+            chatUseCases.generateChatResponseUseCase.flow =
+                flow {
                     emit(
-                        com.browntowndev.enclave.domain.model.chat.AccumulatedMessages(
+                        AccumulatedMessages(
                             messages =
                                 mapOf(
                                     MessageId("asst-1") to
-                                        com.browntowndev.enclave.domain.model.chat.MessageSnapshot(
+                                        MessageSnapshot(
                                             messageId = MessageId("asst-1"),
-                                            modelType = com.browntowndev.enclave.domain.model.inference.ModelType.FAST,
+                                            modelType = ModelType.FAST,
                                             content = "Explicit NSFW response",
                                             thinkingRaw = "",
                                             thinkingDurationSeconds = 0L,
                                             thinkingStartTime = 0L,
                                             thinkingEndTime = 0L,
-                                            messageState = com.browntowndev.enclave.domain.model.chat.MessageState.COMPLETE,
+                                            messageState = MessageState.COMPLETE,
                                             isComplete = true,
                                             transcriptSegments = emptyList(),
                                         ),
@@ -417,30 +333,19 @@ class InferenceOrchestratorSendTest {
             }
             advanceUntilIdle()
 
-            coVerify { moderatePromptUseCase("Explicit NSFW response") }
+            assertEquals(listOf("Explicit NSFW response"), moderatePromptUseCase.calls)
         }
 
     @Test
     @DisplayName("DOPG-O-05 — orchestrator does not launch title; submit owns title generation")
     fun dopgO05_orchestratorDoesNotLaunchTitle() =
         runTest(testDispatcher) {
-            coEvery { chatUseCases.submitPrompt(any()) } coAnswers {
+            chatUseCases.submitPromptUseCase.result =
                 UserPromptResult(
                     userMessageId = MessageId("user-title-1"),
                     chatId = ChatId("chat-title-1"),
                     userMessageCreatedAtMillis = 100L,
                 )
-            }
-            coEvery {
-                chatUseCases.generateChatResponse(
-                    prompt = any(),
-                    userMessageId = any(),
-                    assistantMessageId = any(),
-                    chatId = any(),
-                    responseMode = any(),
-                    backgroundInferenceEnabled = any(),
-                )
-            } returns flowOf()
 
             launch {
                 orchestrator.sendMessage(
@@ -457,13 +362,12 @@ class InferenceOrchestratorSendTest {
             }
             advanceUntilIdle()
 
-            coEvery { chatUseCases.submitPrompt(any()) } coAnswers {
+            chatUseCases.submitPromptUseCase.result =
                 UserPromptResult(
                     userMessageId = MessageId("user-title-2"),
                     chatId = ChatId("chat-title-2"),
                     userMessageCreatedAtMillis = 100L,
                 )
-            }
 
             launch {
                 orchestrator.sendMessage(
@@ -480,13 +384,12 @@ class InferenceOrchestratorSendTest {
             }
             advanceUntilIdle()
 
-            coEvery { chatUseCases.submitPrompt(any()) } coAnswers {
+            chatUseCases.submitPromptUseCase.result =
                 UserPromptResult(
                     userMessageId = MessageId("user-title-3"),
                     chatId = ChatId("chat-existing-title"),
                     userMessageCreatedAtMillis = 100L,
                 )
-            }
 
             launch {
                 orchestrator.sendMessage(
@@ -503,9 +406,7 @@ class InferenceOrchestratorSendTest {
             }
             advanceUntilIdle()
 
-            coVerify(exactly = 0) {
-                chatUseCases.generateChatTitle(any(), any())
-            }
+            assertEquals(0, chatUseCases.generateChatTitleUseCase.calls.size)
         }
 
     @Test
@@ -520,7 +421,7 @@ class InferenceOrchestratorSendTest {
     fun dopgO07_rapidDoubleSendLaunchesSingleInference() =
         runTest(testDispatcher) {
             val gateStarted = CompletableDeferred<Unit>()
-            coEvery { chatUseCases.submitPrompt(any()) } coAnswers {
+            chatUseCases.submitPromptUseCase.behavior = {
                 gateStarted.await()
                 UserPromptResult(
                     userMessageId = MessageId("user-double"),
@@ -528,16 +429,6 @@ class InferenceOrchestratorSendTest {
                     userMessageCreatedAtMillis = 100L,
                 )
             }
-            coEvery {
-                chatUseCases.generateChatResponse(
-                    prompt = any(),
-                    userMessageId = any(),
-                    assistantMessageId = any(),
-                    chatId = any(),
-                    responseMode = any(),
-                    backgroundInferenceEnabled = any(),
-                )
-            } returns flowOf()
 
             launch {
                 orchestrator.sendMessage(
@@ -571,15 +462,7 @@ class InferenceOrchestratorSendTest {
             advanceTimeBy(ChatTurnTiming.ASSISTANT_PLACEHOLDER_DELAY_MS)
             advanceUntilIdle()
 
-            coVerify(exactly = 1) {
-                chatUseCases.generateChatResponse(
-                    prompt = "second",
-                    userMessageId = any(),
-                    assistantMessageId = any(),
-                    chatId = any(),
-                    responseMode = any(),
-                    backgroundInferenceEnabled = any(),
-                )
-            }
+            val generation = chatUseCases.generateChatResponseUseCase.calls.single()
+            assertEquals("second", generation.prompt)
         }
 }
