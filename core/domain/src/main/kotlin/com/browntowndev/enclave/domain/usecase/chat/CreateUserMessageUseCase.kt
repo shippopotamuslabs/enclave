@@ -31,10 +31,7 @@ private object CreateUserMessageConstants {
     val whitespaceRegex = Regex("\\s+")
 }
 
-/** MockK tests return this sentinel from [ChatRepository.createChat] while asserting [Chat.id]. */
-private val LEGACY_MOCK_CREATE_CHAT_RETURN = ChatId("42")
-
-class CreateUserMessageUseCase
+open class CreateUserMessageUseCase
     @Inject
     constructor(
         private val transactionProvider: TransactionProvider,
@@ -49,7 +46,7 @@ class CreateUserMessageUseCase
          * @param message The message to save
          * @return [UserPromptResult] containing the user message ID and chat ID
          */
-        suspend operator fun invoke(
+        open suspend operator fun invoke(
             message: Message,
             scheduleCloudSync: Boolean = true,
         ): UserPromptResult =
@@ -66,13 +63,7 @@ class CreateUserMessageUseCase
                             lastModified = now,
                             pinned = false,
                         )
-                    val persistedChatId = chatRepository.createChat(newChat, scheduleCloudSync)
-                    val newChatId =
-                        if (persistedChatId == LEGACY_MOCK_CREATE_CHAT_RETURN) {
-                            newChat.id
-                        } else {
-                            persistedChatId
-                        }
+                    val newChatId = chatRepository.createChat(newChat, scheduleCloudSync)
                     val updatedMessage = message.copy(chatId = newChatId, createdAt = now.time)
                     val userMessageId = messageRepository.saveMessage(updatedMessage)
                     UserPromptResult(

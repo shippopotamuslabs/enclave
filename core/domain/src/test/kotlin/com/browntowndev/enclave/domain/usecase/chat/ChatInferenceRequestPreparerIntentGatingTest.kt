@@ -1,27 +1,30 @@
 package com.browntowndev.enclave.domain.usecase.chat
 
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
+import com.browntowndev.enclave.core.testing.FakeDefaultModelRepository
+import com.browntowndev.enclave.core.testing.FakeEmbeddingEngine
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeMediaProviderRepository
+import com.browntowndev.enclave.core.testing.FakeMemoriesRepository
+import com.browntowndev.enclave.core.testing.FakeMessageRepository
+import com.browntowndev.enclave.core.testing.FakeSearchIntentClassifier
+import com.browntowndev.enclave.core.testing.FakeSettingsRepository
+import com.browntowndev.enclave.core.testing.FakeToolExecutor
 import com.browntowndev.enclave.domain.model.chat.ChatId
+import com.browntowndev.enclave.domain.model.chat.Content
+import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.model.inference.ToolDisclosureMode
 import com.browntowndev.enclave.domain.model.settings.SearchProvider
-import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.enclave.domain.port.inference.SearchIntentClassifierPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
-import com.browntowndev.enclave.domain.port.repository.MemoriesRepository
-import com.browntowndev.enclave.domain.port.repository.MessageRepository
 import com.browntowndev.enclave.domain.port.repository.SettingsData
-import com.browntowndev.enclave.domain.port.repository.SettingsRepository
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.verify
-import kotlinx.coroutines.flow.flowOf
+import com.browntowndev.enclave.domain.usecase.media.GetProviderCapabilitiesUseCase
+import com.browntowndev.enclave.domain.usecase.media.MediaToolDefinitionFactory
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -32,9 +35,11 @@ class ChatInferenceRequestPreparerIntentGatingTest {
     @Test
     fun `IGTA-02 search_x_recent preloaded when X search configured`() =
         runTest {
-            val classifier = mockk<SearchIntentClassifierPort>()
-            every { classifier.getSearchIntentProbability(any()) } returns 0.9f
-            every { classifier.requiresSearch(any(), any()) } returns true
+            val classifier =
+                FakeSearchIntentClassifier().apply {
+                    probability = 0.9f
+                    requiresSearchResult = true
+                }
 
             val request =
                 preparer(classifier = classifier)
@@ -61,9 +66,11 @@ class ChatInferenceRequestPreparerIntentGatingTest {
     @Test
     fun `IGTA-03 X search disabled prevents search_x_recent activation`() =
         runTest {
-            val classifier = mockk<SearchIntentClassifierPort>()
-            every { classifier.getSearchIntentProbability(any()) } returns 0.9f
-            every { classifier.requiresSearch(any(), any()) } returns true
+            val classifier =
+                FakeSearchIntentClassifier().apply {
+                    probability = 0.9f
+                    requiresSearchResult = true
+                }
 
             val request =
                 preparer(
@@ -87,8 +94,10 @@ class ChatInferenceRequestPreparerIntentGatingTest {
     @Test
     fun `IGTA-04 artifact intent activates trio on export phrasing without search`() =
         runTest {
-            val classifier = mockk<SearchIntentClassifierPort>()
-            every { classifier.requiresSearch(any(), any()) } returns true
+            val classifier =
+                FakeSearchIntentClassifier().apply {
+                    requiresSearchResult = true
+                }
 
             val request =
                 preparer(classifier = classifier)
@@ -118,15 +127,15 @@ class ChatInferenceRequestPreparerIntentGatingTest {
     @Test
     fun `IGTA-05 combined prompt activates artifact and search tools with web pre-retrieval`() =
         runTest {
-            val classifier = mockk<SearchIntentClassifierPort>()
-            val executor = mockk<ToolExecutorPort>()
-            every { classifier.getSearchIntentProbability(any()) } returns 0.9f
-            every { classifier.requiresSearch(any(), any()) } returns true
-            coEvery { executor.execute(any()) } returns
-                com.browntowndev.enclave.domain.model.inference.ToolExecutionResult(
-                    toolName = ToolDefinition.WEB_SEARCH.name,
-                    resultJson = """{"results":[{"title":"T","content":"Fixture search body"}]}""",
-                )
+            val classifier =
+                FakeSearchIntentClassifier().apply {
+                    probability = 0.9f
+                    requiresSearchResult = true
+                }
+            val executor =
+                FakeToolExecutor().apply {
+                    resultJson = """{"results":[{"title":"T","content":"Fixture search body"}]}"""
+                }
 
             val request =
                 preparer(classifier = classifier, toolExecutor = executor)
@@ -149,9 +158,11 @@ class ChatInferenceRequestPreparerIntentGatingTest {
     @Test
     fun `IGTA-06 heuristic non-search artifact prompt skips web pre-retrieval`() =
         runTest {
-            val classifier = mockk<SearchIntentClassifierPort>()
-            val executor = mockk<ToolExecutorPort>()
-            every { classifier.requiresSearch(any(), any()) } returns true
+            val classifier =
+                FakeSearchIntentClassifier().apply {
+                    requiresSearchResult = true
+                }
+            val executor = FakeToolExecutor()
 
             val request =
                 preparer(classifier = classifier, toolExecutor = executor)
@@ -164,16 +175,18 @@ class ChatInferenceRequestPreparerIntentGatingTest {
                     )
 
             assertTrue(request.options.activeTools.any { it.name == "start_artifact" })
-            coVerify(exactly = 0) { executor.execute(any()) }
-            verify(exactly = 0) { classifier.getSearchIntentProbability(any()) }
+            assertTrue(executor.executedRequests.isEmpty())
+            assertEquals(0, classifier.probabilityCallCount)
         }
 
     @Test
     fun `IGTA-07 search_x_recent preloaded even when classifier probability is low`() =
         runTest {
-            val classifier = mockk<SearchIntentClassifierPort>()
-            every { classifier.getSearchIntentProbability(any()) } returns 0.1f
-            every { classifier.requiresSearch(any(), any()) } returns false
+            val classifier =
+                FakeSearchIntentClassifier().apply {
+                    probability = 0.1f
+                    requiresSearchResult = false
+                }
 
             val request =
                 preparer(classifier = classifier)
@@ -194,8 +207,10 @@ class ChatInferenceRequestPreparerIntentGatingTest {
     @Test
     fun `IGTA-13 search_x_recent preloaded on its own toggle independent of web searchEnabled`() =
         runTest {
-            val classifier = mockk<SearchIntentClassifierPort>()
-            every { classifier.requiresSearch(any(), any()) } returns true
+            val classifier =
+                FakeSearchIntentClassifier().apply {
+                    requiresSearchResult = true
+                }
 
             val request =
                 preparer(
@@ -225,8 +240,10 @@ class ChatInferenceRequestPreparerIntentGatingTest {
     @Test
     fun `IGTA-16 missing Tavily key hides web tools and skips classifier`() =
         runTest {
-            val classifier = mockk<SearchIntentClassifierPort>()
-            every { classifier.requiresSearch(any(), any()) } returns true
+            val classifier =
+                FakeSearchIntentClassifier().apply {
+                    requiresSearchResult = true
+                }
 
             val request =
                 preparer(
@@ -250,7 +267,7 @@ class ChatInferenceRequestPreparerIntentGatingTest {
             assertFalse(catalogNames.contains("web_search"))
             assertFalse(catalogNames.contains("web_extract"))
             assertFalse(activeNames.contains("web_search"))
-            verify(exactly = 0) { classifier.getSearchIntentProbability(any()) }
+            assertEquals(0, classifier.probabilityCallCount)
             assertTrue(
                 request.options.systemPrompt == null ||
                     !request.options.systemPrompt!!.contains("# RELEVANT WEB SEARCH RESULTS:"),
@@ -260,9 +277,11 @@ class ChatInferenceRequestPreparerIntentGatingTest {
     @Test
     fun `IGTA-17 missing X API key omits search_x_recent from catalog`() =
         runTest {
-            val classifier = mockk<SearchIntentClassifierPort>()
-            every { classifier.getSearchIntentProbability(any()) } returns 0.9f
-            every { classifier.requiresSearch(any(), any()) } returns true
+            val classifier =
+                FakeSearchIntentClassifier().apply {
+                    probability = 0.9f
+                    requiresSearchResult = true
+                }
 
             val request =
                 preparer(
@@ -284,15 +303,15 @@ class ChatInferenceRequestPreparerIntentGatingTest {
     @Test
     fun `IGTA-18 web-only configuration runs classifier but never activates X`() =
         runTest {
-            val classifier = mockk<SearchIntentClassifierPort>()
-            val executor = mockk<ToolExecutorPort>()
-            every { classifier.getSearchIntentProbability(any()) } returns 0.9f
-            every { classifier.requiresSearch(any(), any()) } returns true
-            coEvery { executor.execute(any()) } returns
-                com.browntowndev.enclave.domain.model.inference.ToolExecutionResult(
-                    toolName = ToolDefinition.WEB_SEARCH.name,
-                    resultJson = """{"results":[{"title":"T","content":"Fixture search body"}]}""",
-                )
+            val classifier =
+                FakeSearchIntentClassifier().apply {
+                    probability = 0.9f
+                    requiresSearchResult = true
+                }
+            val executor =
+                FakeToolExecutor().apply {
+                    resultJson = """{"results":[{"title":"T","content":"Fixture search body"}]}"""
+                }
 
             val request =
                 preparer(
@@ -323,8 +342,10 @@ class ChatInferenceRequestPreparerIntentGatingTest {
     @Test
     fun `MUT-01 search_x_recent preloaded into active set when X configured regardless of search intent`() =
         runTest {
-            val classifier = mockk<SearchIntentClassifierPort>()
-            every { classifier.requiresSearch(any(), any()) } returns false
+            val classifier =
+                FakeSearchIntentClassifier().apply {
+                    requiresSearchResult = false
+                }
 
             val request =
                 preparer(classifier = classifier)
@@ -347,8 +368,10 @@ class ChatInferenceRequestPreparerIntentGatingTest {
     @Test
     fun `MUT-02 artifact tools active while search path blocked`() =
         runTest {
-            val classifier = mockk<SearchIntentClassifierPort>()
-            every { classifier.requiresSearch(any(), any()) } returns false
+            val classifier =
+                FakeSearchIntentClassifier().apply {
+                    requiresSearchResult = false
+                }
 
             val request =
                 preparer(classifier = classifier)
@@ -419,41 +442,36 @@ class ChatInferenceRequestPreparerIntentGatingTest {
         )
 
     private fun preparer(
-        classifier: SearchIntentClassifierPort = mockk(relaxed = true),
-        toolExecutor: ToolExecutorPort = mockk(relaxed = true),
+        classifier: SearchIntentClassifierPort = FakeSearchIntentClassifier(),
+        toolExecutor: ToolExecutorPort = FakeToolExecutor(),
         settings: SettingsData = configuredWebAndX(),
         fastConfig: ActiveModelConfiguration = fastTextConfig(),
     ): ChatInferenceRequestPreparer =
         ChatInferenceRequestPreparer(
             activeModelProvider =
-                mockk {
-                    coEvery { getActiveConfiguration(ModelType.FAST) } returns fastConfig
-                    coEvery { getActiveConfiguration(ModelType.VISION) } returns null
+                FakeActiveModelProvider(configuration = fastConfig).apply {
+                    configurationsByType[ModelType.VISION] = null
                 },
-            settingsRepository =
-                mockk<SettingsRepository> {
-                    every { settingsFlow } returns flowOf(settings)
-                },
+            settingsRepository = FakeSettingsRepository(initial = settings),
             messageRepository =
-                mockk<MessageRepository> {
-                    coEvery { getMessageById(any()) } returns mockk(relaxed = true)
-                    coEvery { resolveLatestImageBearingUserMessage(any(), any()) } returns null
-                },
-            memoriesRepository =
-                mockk<MemoriesRepository> {
-                    coEvery { getCoreMemories() } returns emptyList()
-                    coEvery { searchMemories(any(), any(), any(), any()) } returns emptyList()
-                },
-            embeddingEnginePort =
-                mockk<EmbeddingEnginePort> {
-                    coEvery { getEmbedding(any()) } returns floatArrayOf(0.1f, 0.2f, 0.3f)
-                },
+                FakeMessageRepository(
+                    initial =
+                        listOf(
+                            Message(
+                                id = MessageId("user"),
+                                chatId = ChatId("chat"),
+                                content = Content(text = ""),
+                            ),
+                        ),
+                ),
+            memoriesRepository = FakeMemoriesRepository(),
+            embeddingEnginePort = FakeEmbeddingEngine(),
             promptComposer = SearchToolPromptComposer(),
-            defaultModelRepository = mockk(relaxed = true),
-            mediaProviderRepository = mockk(relaxed = true),
-            mediaToolDefinitionFactory = mockk(relaxed = true),
-            getProviderCapabilitiesUseCase = mockk(relaxed = true),
-            loggingPort = mockk(relaxed = true),
+            defaultModelRepository = FakeDefaultModelRepository(),
+            mediaProviderRepository = FakeMediaProviderRepository(),
+            mediaToolDefinitionFactory = MediaToolDefinitionFactory(GetProviderCapabilitiesUseCase()),
+            getProviderCapabilitiesUseCase = GetProviderCapabilitiesUseCase(),
+            loggingPort = FakeLoggingPort(),
             searchIntentClassifier = classifier,
             toolExecutor = toolExecutor,
         )

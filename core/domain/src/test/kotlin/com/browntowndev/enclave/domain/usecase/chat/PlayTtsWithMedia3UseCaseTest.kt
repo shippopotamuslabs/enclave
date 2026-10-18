@@ -1,18 +1,26 @@
 package com.browntowndev.enclave.domain.usecase.chat
 
+import com.browntowndev.enclave.core.testing.FakeApiKeyProvider
+import com.browntowndev.enclave.core.testing.FakeApiModelRepository
+import com.browntowndev.enclave.core.testing.FakeDefaultModelRepository
+import com.browntowndev.enclave.core.testing.FakeLiveVoiceProviderRepository
+import com.browntowndev.enclave.core.testing.FakeLocalModelRepository
+import com.browntowndev.enclave.core.testing.FakeTtsPlaybackController
+import com.browntowndev.enclave.core.testing.FakeTtsProviderRepository
+import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
+import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderAsset
+import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId
 import com.browntowndev.enclave.domain.model.config.TtsProviderAsset
 import com.browntowndev.enclave.domain.model.config.TtsProviderId
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.port.media.TtsPlaybackControllerPort
 import com.browntowndev.enclave.domain.port.media.TtsPlaybackStatus
-import com.browntowndev.enclave.domain.port.security.ApiKeyProviderPort
+import com.browntowndev.enclave.domain.usecase.byok.GetApiModelAssetsUseCaseImpl
+import com.browntowndev.enclave.domain.usecase.byok.GetDefaultModelsUseCaseImpl
+import com.browntowndev.enclave.domain.usecase.modelconfig.GetLocalModelAssetsUseCaseImpl
+import com.browntowndev.enclave.domain.usecase.settings.GetLiveVoiceProvidersUseCase
+import com.browntowndev.enclave.domain.usecase.settings.GetTtsProvidersUseCase
 import com.browntowndev.enclave.domain.usecase.settings.ResolveAssignedModelSelectionUseCase
-import com.browntowndev.enclave.domain.usecase.settings.ResolvedAssignedModelSelection
-import io.mockk.coEvery
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
@@ -22,9 +30,11 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class PlayTtsWithMedia3UseCaseTest {
-    private val resolveSelectionUseCase: ResolveAssignedModelSelectionUseCase = mockk()
-    private val playbackController: TtsPlaybackControllerPort = mockk(relaxed = true)
-    private val apiKeyProvider: ApiKeyProviderPort = mockk()
+    private val defaultModelRepository = FakeDefaultModelRepository()
+    private val ttsProviderRepository = FakeTtsProviderRepository()
+    private val liveVoiceProviderRepository = FakeLiveVoiceProviderRepository()
+    private val playbackController = FakeTtsPlaybackController()
+    private val apiKeyProvider = FakeApiKeyProvider()
     private lateinit var useCase: PlayTtsWithMedia3UseCase
 
     private val testTtsAsset =
@@ -40,19 +50,46 @@ class PlayTtsWithMedia3UseCaseTest {
 
     @BeforeEach
     fun setUp() {
+        val resolveSelectionUseCase =
+            ResolveAssignedModelSelectionUseCase(
+                GetDefaultModelsUseCaseImpl(defaultModelRepository),
+                GetLocalModelAssetsUseCaseImpl(FakeLocalModelRepository()),
+                GetApiModelAssetsUseCaseImpl(FakeApiModelRepository()),
+                GetTtsProvidersUseCase(ttsProviderRepository),
+                GetLiveVoiceProvidersUseCase(liveVoiceProviderRepository),
+            )
         useCase = PlayTtsWithMedia3UseCase(resolveSelectionUseCase, playbackController, apiKeyProvider)
+    }
+
+    private fun assignTtsAsset() {
+        defaultModelRepository.seed(
+            DefaultModelAssignment(modelType = ModelType.TTS, ttsProviderId = testTtsAsset.id),
+        )
+        ttsProviderRepository.emit(listOf(testTtsAsset))
+    }
+
+    /** Makes the TTS assignment resolve to a non-TTS selection (a Live Voice asset). */
+    private fun assignNonTtsSelection() {
+        val liveVoiceAsset =
+            LiveVoiceProviderAsset(
+                id = LiveVoiceProviderId("lv-1"),
+                displayName = "OpenAI RT",
+                provider = ApiProvider.OPENAI,
+                voiceName = "alloy",
+                credentialAlias = "alias",
+            )
+        defaultModelRepository.seed(
+            DefaultModelAssignment(modelType = ModelType.TTS, liveVoiceProviderId = liveVoiceAsset.id),
+        )
+        liveVoiceProviderRepository.emit(listOf(liveVoiceAsset))
     }
 
     @Test
     fun `emits Initializing then Playing and Completed on success`() =
         runTest {
-            val selection =
-                ResolvedAssignedModelSelection(
-                    ttsAsset = testTtsAsset,
-                )
-            coEvery { resolveSelectionUseCase(ModelType.TTS) } returns selection
-            coEvery { apiKeyProvider.getApiKey("openai-key") } returns "sk-test"
-            every { playbackController.play("Hello") } returns
+            assignTtsAsset()
+            apiKeyProvider.saveApiKey("openai-key", "sk-test")
+            playbackController.playFlow =
                 flowOf(
                     TtsPlaybackStatus.Playing,
                     TtsPlaybackStatus.Completed,
@@ -64,13 +101,12 @@ class PlayTtsWithMedia3UseCaseTest {
             assertTrue(statuses[0] is TtsPlaybackStatus.Initializing)
             assertTrue(statuses[1] is TtsPlaybackStatus.Playing)
             assertTrue(statuses[2] is TtsPlaybackStatus.Completed)
+            assertEquals(listOf("Hello"), playbackController.playCalls)
         }
 
     @Test
     fun `emits Error when no TTS provider is assigned`() =
         runTest {
-            coEvery { resolveSelectionUseCase(ModelType.TTS) } returns null
-
             val statuses = useCase("Hello").toList()
 
             assertEquals(2, statuses.size)
@@ -82,11 +118,7 @@ class PlayTtsWithMedia3UseCaseTest {
     @Test
     fun `emits Error when TTS asset is missing`() =
         runTest {
-            val selection =
-                ResolvedAssignedModelSelection(
-                    ttsAsset = null,
-                )
-            coEvery { resolveSelectionUseCase(ModelType.TTS) } returns selection
+            assignNonTtsSelection()
 
             val statuses = useCase("Hello").toList()
 
@@ -99,12 +131,7 @@ class PlayTtsWithMedia3UseCaseTest {
     @Test
     fun `emits Error when API key is missing`() =
         runTest {
-            val selection =
-                ResolvedAssignedModelSelection(
-                    ttsAsset = testTtsAsset,
-                )
-            coEvery { resolveSelectionUseCase(ModelType.TTS) } returns selection
-            coEvery { apiKeyProvider.getApiKey("openai-key") } returns null
+            assignTtsAsset()
 
             val statuses = useCase("Hello").toList()
 
@@ -117,13 +144,9 @@ class PlayTtsWithMedia3UseCaseTest {
     @Test
     fun `emits Error from controller`() =
         runTest {
-            val selection =
-                ResolvedAssignedModelSelection(
-                    ttsAsset = testTtsAsset,
-                )
-            coEvery { resolveSelectionUseCase(ModelType.TTS) } returns selection
-            coEvery { apiKeyProvider.getApiKey("openai-key") } returns "sk-test"
-            every { playbackController.play("Hello") } returns
+            assignTtsAsset()
+            apiKeyProvider.saveApiKey("openai-key", "sk-test")
+            playbackController.playFlow =
                 flowOf(
                     TtsPlaybackStatus.Initializing,
                     TtsPlaybackStatus.Error("Network error"),
@@ -137,29 +160,23 @@ class PlayTtsWithMedia3UseCaseTest {
     @Test
     fun `stop delegates to playback controller`() {
         useCase.stop()
-        verify { playbackController.stop() }
+        assertTrue(playbackController.stopCallCount >= 1)
     }
 
     @Test
     fun `never starts Media3 when no TTS provider is assigned`() =
         runTest {
-            coEvery { resolveSelectionUseCase(ModelType.TTS) } returns null
-
             useCase("Hello").toList()
 
-            verify(exactly = 0) { playbackController.play(any()) }
+            assertTrue(playbackController.playCalls.isEmpty())
         }
 
     @Test
     fun `emits Stopped when controller emits Stopped`() =
         runTest {
-            val selection =
-                ResolvedAssignedModelSelection(
-                    ttsAsset = testTtsAsset,
-                )
-            coEvery { resolveSelectionUseCase(ModelType.TTS) } returns selection
-            coEvery { apiKeyProvider.getApiKey("openai-key") } returns "sk-test"
-            every { playbackController.play("Hello") } returns
+            assignTtsAsset()
+            apiKeyProvider.saveApiKey("openai-key", "sk-test")
+            playbackController.playFlow =
                 flowOf(
                     TtsPlaybackStatus.Playing,
                     TtsPlaybackStatus.Stopped,

@@ -1,21 +1,39 @@
 package com.browntowndev.enclave.domain.usecase.media
 
+import com.browntowndev.enclave.core.testing.FakeDefaultModelRepository
+import com.browntowndev.enclave.core.testing.FakeGpuCapability
+import com.browntowndev.enclave.core.testing.FakeImageGenerationPort
+import com.browntowndev.enclave.core.testing.FakeLocalImageGenerationCapability
+import com.browntowndev.enclave.core.testing.FakeLocalModelRepository
+import com.browntowndev.enclave.core.testing.FakeMediaProviderRepository
+import com.browntowndev.enclave.core.testing.FakeMusicGenerationPort
+import com.browntowndev.enclave.core.testing.FakeStudioRepository
+import com.browntowndev.enclave.core.testing.FakeUtilityModelFile
+import com.browntowndev.enclave.core.testing.FakeVideoGenerationPort
+import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
+import com.browntowndev.enclave.domain.model.config.LocalModelAsset
+import com.browntowndev.enclave.domain.model.config.LocalModelConfiguration
+import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.enclave.domain.model.config.LocalModelId
+import com.browntowndev.enclave.domain.model.config.LocalModelMetadata
 import com.browntowndev.enclave.domain.model.config.MediaCapability
+import com.browntowndev.enclave.domain.model.config.MediaProviderAsset
+import com.browntowndev.enclave.domain.model.config.MediaProviderId
+import com.browntowndev.enclave.domain.model.inference.ApiProvider
+import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.media.ImageGenerationProgress
 import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
-import com.browntowndev.enclave.domain.model.media.ImageGenerationTarget
+import com.browntowndev.enclave.domain.model.media.LocalImageGenTriState
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilities
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelRegistry
 import com.browntowndev.enclave.domain.model.media.MediaGenerationOrigin
 import com.browntowndev.enclave.domain.model.media.MediaGenerationRequest
 import com.browntowndev.enclave.domain.model.media.MusicGenerationSettings
 import com.browntowndev.enclave.domain.model.media.VideoGenerationSettings
-import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.domain.util.Clock
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.slot
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -25,12 +43,16 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class GenerateMediaUseCaseTest {
-    private val generateImageUseCase = mockk<GenerateImageUseCase>()
-    private val generateVideoUseCase = mockk<GenerateVideoUseCase>()
-    private val generateMusicUseCase = mockk<GenerateMusicUseCase>()
-    private val resolveMediaModelTypeUseCase = mockk<ResolveMediaModelTypeUseCase>()
-    private val resolveAssignedImageGenerationTargetUseCase = mockk<ResolveAssignedImageGenerationTargetUseCase>()
-    private val studioRepository = mockk<StudioRepositoryPort>(relaxed = true)
+    private val defaultModelRepository = FakeDefaultModelRepository()
+    private val mediaProviderRepository = FakeMediaProviderRepository()
+    private val localModelRepository = FakeLocalModelRepository()
+    private val utilityModelFile = FakeUtilityModelFile()
+    private val gpuCapability = FakeGpuCapability()
+    private val capabilityPort = FakeLocalImageGenerationCapability()
+    private val imageGenerationPort = FakeImageGenerationPort()
+    private val videoGenerationPort = FakeVideoGenerationPort()
+    private val musicGenerationPort = FakeMusicGenerationPort()
+    private val studioRepository = FakeStudioRepository()
     private val clock = FakeClock()
 
     private lateinit var useCase: GenerateMediaUseCase
@@ -38,19 +60,89 @@ class GenerateMediaUseCaseTest {
     @BeforeEach
     fun setUp() {
         clock.now = 0L
-        every { resolveMediaModelTypeUseCase(any(), any()) } returns ModelType.IMAGE_GENERATION
-        coEvery { resolveAssignedImageGenerationTargetUseCase(any()) } returns
-            Result.success(
-                ImageGenerationTarget.Remote(
-                    providerAssetId = com.browntowndev.enclave.domain.model.config.MediaProviderId("remote"),
-                    providerDisplayName = "Remote",
+        // Seed the default slots the REAL delegate use cases resolve through:
+        // IMAGE_GENERATION -> "remote" provider, VIDEO/MUSIC -> their providers.
+        defaultModelRepository.seed(
+            DefaultModelAssignment(
+                modelType = ModelType.IMAGE_GENERATION,
+                mediaProviderId = MediaProviderId("remote"),
+            ),
+        )
+        defaultModelRepository.seed(
+            DefaultModelAssignment(
+                modelType = ModelType.VIDEO_GENERATION,
+                mediaProviderId = MediaProviderId("video-provider"),
+            ),
+        )
+        defaultModelRepository.seed(
+            DefaultModelAssignment(
+                modelType = ModelType.MUSIC_GENERATION,
+                mediaProviderId = MediaProviderId("music-provider"),
+            ),
+        )
+        mediaProviderRepository.emitProviders(
+            listOf(
+                MediaProviderAsset(
+                    id = MediaProviderId("remote"),
+                    displayName = "Remote",
+                    provider = ApiProvider.FAL,
+                    capability = MediaCapability.IMAGE,
+                    credentialAlias = "fal",
                 ),
+                MediaProviderAsset(
+                    id = MediaProviderId("video-provider"),
+                    displayName = "Video Provider",
+                    provider = ApiProvider.FAL,
+                    capability = MediaCapability.VIDEO,
+                    credentialAlias = "fal",
+                ),
+                MediaProviderAsset(
+                    id = MediaProviderId("music-provider"),
+                    displayName = "Music Provider",
+                    provider = ApiProvider.FAL,
+                    capability = MediaCapability.MUSIC,
+                    credentialAlias = "fal",
+                ),
+            ),
+        )
+        val resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase()
+        val resolveAssignedImageGenerationTargetUseCase =
+            ResolveAssignedImageGenerationTargetUseCase(
+                defaultModelRepository = defaultModelRepository,
+                mediaProviderRepository = mediaProviderRepository,
+                localStableDiffusionTargetResolver =
+                    LocalStableDiffusionTargetResolver(
+                        localModelRepository = localModelRepository,
+                        utilityModelFilePort = utilityModelFile,
+                        gpuCapabilityPort = gpuCapability,
+                        capabilityPort = capabilityPort,
+                        selectBackend = SelectLocalImageGenerationBackendUseCase(),
+                    ),
             )
         useCase =
             GenerateMediaUseCase(
-                generateImageUseCase = generateImageUseCase,
-                generateVideoUseCase = generateVideoUseCase,
-                generateMusicUseCase = generateMusicUseCase,
+                generateImageUseCase =
+                    GenerateImageUseCase(
+                        resolveMediaModelTypeUseCase = resolveMediaModelTypeUseCase,
+                        resolveAssignedImageGenerationTargetUseCase = resolveAssignedImageGenerationTargetUseCase,
+                        imageGenerationPort = imageGenerationPort,
+                    ),
+                generateVideoUseCase =
+                    GenerateVideoUseCase(
+                        resolveMediaModelTypeUseCase = resolveMediaModelTypeUseCase,
+                        resolveAssignedMediaProviderUseCase =
+                            ResolveAssignedMediaProviderUseCase(
+                                defaultModelRepository = defaultModelRepository,
+                                mediaProviderRepository = mediaProviderRepository,
+                            ),
+                        videoGenerationPort = videoGenerationPort,
+                    ),
+                generateMusicUseCase =
+                    GenerateMusicUseCase(
+                        defaultModelRepository = defaultModelRepository,
+                        mediaProviderRepository = mediaProviderRepository,
+                        musicGenerationPort = musicGenerationPort,
+                    ),
                 resolveMediaModelTypeUseCase = resolveMediaModelTypeUseCase,
                 resolveAssignedImageGenerationTargetUseCase = resolveAssignedImageGenerationTargetUseCase,
                 studioRepository = studioRepository,
@@ -62,7 +154,7 @@ class GenerateMediaUseCaseTest {
     fun `S-GM-01 IMAGE dispatches to GenerateImageUseCase with same prompt and settings`() =
         runTest {
             val settings = ImageGenerationSettings(generationCount = 1)
-            coEvery { generateImageUseCase("p1", settings, any()) } returns Result.success(listOf(byteArrayOf(1)))
+            imageGenerationPort.result = Result.success(listOf(byteArrayOf(1)))
 
             useCase(
                 MediaGenerationRequest(
@@ -73,14 +165,15 @@ class GenerateMediaUseCaseTest {
                 ),
             )
 
-            coVerify(exactly = 1) { generateImageUseCase("p1", settings, any()) }
+            assertEquals(listOf("p1"), imageGenerationPort.calls)
+            assertEquals(listOf(settings), imageGenerationPort.settingsCalls)
         }
 
     @Test
     fun `S-GM-02 VIDEO dispatches to GenerateVideoUseCase with same prompt and settings`() =
         runTest {
             val settings = VideoGenerationSettings(videoDuration = 6)
-            coEvery { generateVideoUseCase("clip", settings) } returns Result.success(byteArrayOf(2))
+            videoGenerationPort.result = Result.success(byteArrayOf(2))
 
             useCase(
                 MediaGenerationRequest(
@@ -91,14 +184,15 @@ class GenerateMediaUseCaseTest {
                 ),
             )
 
-            coVerify(exactly = 1) { generateVideoUseCase("clip", settings) }
+            assertEquals(listOf("clip"), videoGenerationPort.calls)
+            assertEquals(listOf(settings), videoGenerationPort.settingsCalls)
         }
 
     @Test
     fun `S-GM-03 MUSIC dispatches to GenerateMusicUseCase with same prompt and settings`() =
         runTest {
             val settings = MusicGenerationSettings(duration = 30)
-            coEvery { generateMusicUseCase("beat", settings) } returns Result.success(byteArrayOf(3))
+            musicGenerationPort.result = Result.success(byteArrayOf(3))
 
             useCase(
                 MediaGenerationRequest(
@@ -109,16 +203,16 @@ class GenerateMediaUseCaseTest {
                 ),
             )
 
-            coVerify(exactly = 1) { generateMusicUseCase("beat", settings) }
+            assertEquals(listOf("beat"), musicGenerationPort.calls)
+            assertEquals(listOf(settings), musicGenerationPort.settingsCalls)
         }
 
     @Test
     fun `S-GM-04 Success caches with IMAGE mediaType and addEphemeralMedia once per byte array`() =
         runTest {
             val settings = ImageGenerationSettings(generationCount = 1)
-            coEvery { generateImageUseCase(any(), any(), any()) } returns Result.success(listOf(byteArrayOf(9), byteArrayOf(8)))
-            coEvery { studioRepository.cacheEphemeralMedia(byteArrayOf(9), "IMAGE") } returns "file:///cache/a"
-            coEvery { studioRepository.cacheEphemeralMedia(byteArrayOf(8), "IMAGE") } returns "file:///cache/b"
+            imageGenerationPort.result = Result.success(listOf(byteArrayOf(9), byteArrayOf(8)))
+            studioRepository.cacheEphemeralUris.addAll(listOf("file:///cache/a", "file:///cache/b"))
 
             useCase(
                 MediaGenerationRequest(
@@ -129,18 +223,19 @@ class GenerateMediaUseCaseTest {
                 ),
             )
 
-            coVerify { studioRepository.cacheEphemeralMedia(byteArrayOf(9), "IMAGE") }
-            coVerify { studioRepository.cacheEphemeralMedia(byteArrayOf(8), "IMAGE") }
-            coVerify(exactly = 2) { studioRepository.addEphemeralMedia(any()) }
+            assertEquals(listOf("IMAGE", "IMAGE"), studioRepository.cacheEphemeralMediaCalls)
+            assertEquals(2, studioRepository.cacheEphemeralMediaBytesCalls.size)
+            assertTrue(studioRepository.cacheEphemeralMediaBytesCalls[0].contentEquals(byteArrayOf(9)))
+            assertTrue(studioRepository.cacheEphemeralMediaBytesCalls[1].contentEquals(byteArrayOf(8)))
+            assertEquals(2, studioRepository.addEphemeralMediaCalls.size)
         }
 
     @Test
     fun `S-GM-05 IMAGE multi-byte success returns two GeneratedMediaAsset entries`() =
         runTest {
             val settings = ImageGenerationSettings(generationCount = 1)
-            coEvery { generateImageUseCase(any(), any(), any()) } returns Result.success(listOf(byteArrayOf(9), byteArrayOf(8)))
-            coEvery { studioRepository.cacheEphemeralMedia(byteArrayOf(9), "IMAGE") } returns "file:///cache/a"
-            coEvery { studioRepository.cacheEphemeralMedia(byteArrayOf(8), "IMAGE") } returns "file:///cache/b"
+            imageGenerationPort.result = Result.success(listOf(byteArrayOf(9), byteArrayOf(8)))
+            studioRepository.cacheEphemeralUris.addAll(listOf("file:///cache/a", "file:///cache/b"))
 
             val result =
                 useCase(
@@ -165,7 +260,7 @@ class GenerateMediaUseCaseTest {
     fun `S-GM-06 Delegate failure returns failure without cache or addEphemeralMedia`() =
         runTest {
             val settings = ImageGenerationSettings(generationCount = 1)
-            coEvery { generateImageUseCase(any(), any(), any()) } returns
+            imageGenerationPort.result =
                 Result.failure(IllegalStateException("No image generation provider assigned"))
 
             val result =
@@ -179,8 +274,8 @@ class GenerateMediaUseCaseTest {
                 )
 
             assertTrue(result.isFailure)
-            coVerify(exactly = 0) { studioRepository.cacheEphemeralMedia(any(), any()) }
-            coVerify(exactly = 0) { studioRepository.addEphemeralMedia(any()) }
+            assertTrue(studioRepository.cacheEphemeralMediaCalls.isEmpty())
+            assertTrue(studioRepository.addEphemeralMediaCalls.isEmpty())
             assertEquals("No image generation provider assigned", result.exceptionOrNull()?.message)
         }
 
@@ -188,8 +283,8 @@ class GenerateMediaUseCaseTest {
     fun `S-GM-07 CHAT_TOOL origin uses id prefix chat_media_`() =
         runTest {
             val settings = ImageGenerationSettings(generationCount = 1)
-            coEvery { generateImageUseCase(any(), any(), any()) } returns Result.success(listOf(byteArrayOf(1)))
-            coEvery { studioRepository.cacheEphemeralMedia(any(), any()) } returns "file:///cache/a"
+            imageGenerationPort.result = Result.success(listOf(byteArrayOf(1)))
+            studioRepository.cacheEphemeralUri = "file:///cache/a"
 
             val result =
                 useCase(
@@ -215,9 +310,8 @@ class GenerateMediaUseCaseTest {
         runTest {
             clock.now = 1000L
             val settings = ImageGenerationSettings(generationCount = 1)
-            coEvery { generateImageUseCase(any(), any(), any()) } returns Result.success(listOf(byteArrayOf(1), byteArrayOf(2)))
-            coEvery { studioRepository.cacheEphemeralMedia(any(), any()) } returnsMany
-                listOf("file:///cache/a", "file:///cache/b")
+            imageGenerationPort.result = Result.success(listOf(byteArrayOf(1), byteArrayOf(2)))
+            studioRepository.cacheEphemeralUris.addAll(listOf("file:///cache/a", "file:///cache/b"))
 
             val result =
                 useCase(
@@ -260,8 +354,8 @@ class GenerateMediaUseCaseTest {
     fun `M-GM-01 GenerateMediaUseCase IMAGE path never calls ImageGenerationPort`() =
         runTest {
             val settings = ImageGenerationSettings(generationCount = 1)
-            coEvery { generateImageUseCase("p1", settings, any()) } returns Result.success(listOf(byteArrayOf(1)))
-            coEvery { studioRepository.cacheEphemeralMedia(any(), any()) } returns "file:///cache/a"
+            imageGenerationPort.result = Result.success(listOf(byteArrayOf(1)))
+            studioRepository.cacheEphemeralUri = "file:///cache/a"
 
             useCase(
                 MediaGenerationRequest(
@@ -272,7 +366,10 @@ class GenerateMediaUseCaseTest {
                 ),
             )
 
-            coVerify(exactly = 1) { generateImageUseCase("p1", settings, any()) }
+            // GenerateMediaUseCase holds no ImageGenerationPort reference; the single recorded
+            // port call arrives exclusively through the GenerateImageUseCase delegate.
+            assertEquals(listOf("p1"), imageGenerationPort.calls)
+            assertEquals(listOf(settings), imageGenerationPort.settingsCalls)
         }
 
     @Test
@@ -280,17 +377,17 @@ class GenerateMediaUseCaseTest {
         runTest {
             clock.now = 1000L
             val settings = ImageGenerationSettings(generationCount = 3)
-            val localTarget = mockk<ImageGenerationTarget.LocalStableDiffusion>()
-            coEvery { resolveAssignedImageGenerationTargetUseCase(ModelType.IMAGE_GENERATION) } returns
-                Result.success(localTarget)
-            coEvery { generateImageUseCase(any(), any(), any()) } returnsMany
+            seedLocalImageAssignment()
+            imageGenerationPort.results.addAll(
                 listOf(
                     Result.success(listOf(byteArrayOf(1))),
                     Result.success(listOf(byteArrayOf(2))),
                     Result.success(listOf(byteArrayOf(3))),
-                )
-            coEvery { studioRepository.cacheEphemeralMedia(any(), any()) } returnsMany
-                listOf("file:///cache/a", "file:///cache/b", "file:///cache/c")
+                ),
+            )
+            studioRepository.cacheEphemeralUris.addAll(
+                listOf("file:///cache/a", "file:///cache/b", "file:///cache/c"),
+            )
 
             val result =
                 useCase(
@@ -304,29 +401,27 @@ class GenerateMediaUseCaseTest {
 
             assertTrue(result.isSuccess)
             assertEquals(3, result.getOrThrow().size)
-            coVerify(exactly = 3) {
-                generateImageUseCase(
-                    "p",
-                    match { settings ->
-                        settings is ImageGenerationSettings && settings.generationCount == 1
-                    },
-                    any(),
-                )
-            }
-            coVerify(exactly = 3) { studioRepository.addEphemeralMedia(any()) }
-            coVerify(exactly = 0) { generateImageUseCase("p", settings, any()) }
+            assertEquals(3, imageGenerationPort.calls.size)
+            assertTrue(
+                imageGenerationPort.settingsCalls.all {
+                    it is ImageGenerationSettings && it.generationCount == 1
+                },
+            )
+            assertEquals(3, studioRepository.addEphemeralMediaCalls.size)
+            assertTrue(
+                imageGenerationPort.settingsCalls.none {
+                    it is ImageGenerationSettings && it.generationCount == 3
+                },
+            )
         }
 
     @Test
     fun `IMAGE forwards progress callback to GenerateImageUseCase`() =
         runTest {
             val settings = ImageGenerationSettings()
-            val progressSlot = slot<(ImageGenerationProgress) -> Unit>()
-            coEvery { generateImageUseCase(any(), any(), capture(progressSlot)) } coAnswers {
-                progressSlot.captured(ImageGenerationProgress.LoadingModel)
-                Result.success(listOf(byteArrayOf(1)))
-            }
-            coEvery { studioRepository.cacheEphemeralMedia(any(), any()) } returns "file:///cache/a"
+            imageGenerationPort.progressToEmit = listOf(ImageGenerationProgress.LoadingModel)
+            imageGenerationPort.result = Result.success(listOf(byteArrayOf(1)))
+            studioRepository.cacheEphemeralUri = "file:///cache/a"
             val observed = mutableListOf<ImageGenerationProgress>()
 
             useCase(
@@ -342,6 +437,61 @@ class GenerateMediaUseCaseTest {
 
             assertEquals(listOf(ImageGenerationProgress.LoadingModel), observed)
         }
+
+    /** Re-points the IMAGE_GENERATION default slot at a local SD config (S-GM-09). */
+    private fun seedLocalImageAssignment() {
+        val configId = LocalModelConfigurationId("sd15-local-config")
+        defaultModelRepository.seed(
+            DefaultModelAssignment(
+                modelType = ModelType.IMAGE_GENERATION,
+                localConfigId = configId,
+            ),
+        )
+        localModelRepository.seedAssetForConfig(configId, sd15Asset())
+        utilityModelFile.localModelPath = "/abs/models/stable-diffusion-v1-5-Q4_0.gguf"
+        gpuCapability.localImageGenerationSupported = true
+        capabilityPort.capabilities =
+            LocalImageGenerationCapabilities(
+                npuAvailable = LocalImageGenTriState.YES,
+                sd15NpuSupported = LocalImageGenTriState.YES,
+                sd15CpuSupported = LocalImageGenTriState.NO,
+                sdxlNpuSupported = LocalImageGenTriState.NO,
+                recommendedBackend = LocalImageGenerationBackendKind.QNN_NPU,
+                recommendedModelId = LocalImageGenerationModelId.SD15_QNN,
+                diagnostics = emptyList(),
+            )
+    }
+
+    private fun sd15Asset(): LocalModelAsset =
+        LocalModelAsset(
+            metadata =
+                LocalModelMetadata(
+                    id = LocalModelId("sd15-model"),
+                    displayName = "Stable Diffusion 1.5",
+                    huggingFaceModelName = "gpustack/stable-diffusion-v1-5-GGUF",
+                    remoteFileName = "stable-diffusion-v1-5-Q4_0.gguf",
+                    localFileName = "stable-diffusion-v1-5-Q4_0.gguf",
+                    sha256 = LocalImageGenerationModelRegistry.SD15_QNN_SHA256,
+                    sizeInBytes = 1_747_190_784L,
+                    modelFileFormat = ModelFileFormat.GGUF,
+                ),
+            configurations =
+                listOf(
+                    LocalModelConfiguration(
+                        id = LocalModelConfigurationId("sd15-local-config"),
+                        localModelId = LocalModelId("sd15-model"),
+                        displayName = "Stable Diffusion 1.5",
+                        maxTokens = 0,
+                        contextWindow = 0,
+                        temperature = 0.0,
+                        topP = 1.0,
+                        topK = 1,
+                        repetitionPenalty = 1.0,
+                        systemPrompt = "",
+                        defaultAssignments = listOf(ModelType.IMAGE_GENERATION),
+                    ),
+                ),
+        )
 
     private class FakeClock : Clock {
         var now: Long = 0L

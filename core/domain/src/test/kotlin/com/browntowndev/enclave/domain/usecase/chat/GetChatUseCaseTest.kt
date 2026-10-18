@@ -1,13 +1,11 @@
 package com.browntowndev.enclave.domain.usecase.chat
 
+import com.browntowndev.enclave.core.testing.FakeChatRepository
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.Content
 import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.Role
-import com.browntowndev.enclave.domain.port.repository.ChatRepository
-import io.mockk.every
-import io.mockk.mockk
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
@@ -19,12 +17,12 @@ import org.junit.jupiter.api.Test
  * Tests for GetChatUseCase.
  */
 class GetChatUseCaseTest {
-    private lateinit var chatRepository: ChatRepository
+    private lateinit var chatRepository: FakeChatRepository
     private lateinit var getChatUseCase: GetChatUseCase
 
     @BeforeEach
     fun setUp() {
-        chatRepository = mockk()
+        chatRepository = FakeChatRepository()
         getChatUseCase = GetChatUseCase(chatRepository)
     }
 
@@ -39,8 +37,7 @@ class GetChatUseCaseTest {
                     Message(id = MessageId("2"), chatId = chatId, content = Content(text = "Hi there!"), role = Role.ASSISTANT),
                 )
             val flow: Flow<List<Message>> = flowOf(messages)
-
-            every { chatRepository.getMessagesForChat(chatId) } returns flow
+            chatRepository.messagesForChatOverrides[chatId] = flow
 
             // When
             val result = getChatUseCase(chatId)
@@ -59,8 +56,7 @@ class GetChatUseCaseTest {
             // Given
             val chatId = ChatId("1")
             val flow: Flow<List<Message>> = flowOf(emptyList())
-
-            every { chatRepository.getMessagesForChat(chatId) } returns flow
+            chatRepository.messagesForChatOverrides[chatId] = flow
 
             // When
             val result = getChatUseCase(chatId)

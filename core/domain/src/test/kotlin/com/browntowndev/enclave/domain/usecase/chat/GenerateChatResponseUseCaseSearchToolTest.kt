@@ -1,17 +1,27 @@
 package com.browntowndev.enclave.domain.usecase.chat
 
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
+import com.browntowndev.enclave.core.testing.FakeChatRepository
+import com.browntowndev.enclave.core.testing.FakeDefaultModelRepository
+import com.browntowndev.enclave.core.testing.FakeEmbeddingEngine
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeMediaProviderRepository
+import com.browntowndev.enclave.core.testing.FakeMemoriesRepository
+import com.browntowndev.enclave.core.testing.FakeMessageRepository
+import com.browntowndev.enclave.core.testing.FakePromptComposer
+import com.browntowndev.enclave.core.testing.FakeSearchIntentClassifier
+import com.browntowndev.enclave.core.testing.FakeSettingsRepository
+import com.browntowndev.enclave.core.testing.FakeToolExecutor
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.ChatResponseMode
+import com.browntowndev.enclave.domain.model.chat.Content
 import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.chat.MessageId
-import com.browntowndev.enclave.domain.model.chat.Mode
-import com.browntowndev.enclave.domain.model.chat.ResolvedImageTarget
 import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.port.inference.InferenceEvent
-import com.browntowndev.enclave.domain.port.inference.PipelineExecutorPort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.ExtractedUrlTrackerPort
 import com.browntowndev.enclave.domain.port.repository.MessageRepository
@@ -20,11 +30,9 @@ import com.browntowndev.enclave.domain.port.repository.SettingsRepository
 import com.browntowndev.enclave.domain.usecase.FakeInferenceFactory
 import com.browntowndev.enclave.domain.usecase.FakeInferenceLockManager
 import com.browntowndev.enclave.domain.usecase.FakeInferenceService
-import io.mockk.coEvery
-import io.mockk.every
-import io.mockk.mockk
-import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.coroutines.flow.flowOf
+import com.browntowndev.enclave.domain.usecase.FakePipelineExecutor
+import com.browntowndev.enclave.domain.usecase.media.GetProviderCapabilitiesUseCase
+import com.browntowndev.enclave.domain.usecase.media.MediaToolDefinitionFactory
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -40,22 +48,6 @@ class GenerateChatResponseUseCaseSearchToolTest {
             override fun clear() {}
         }
 
-    private val stubPromptComposer =
-        object : com.browntowndev.enclave.domain.port.inference.PromptComposerPort {
-            override fun compose(
-                baseSystemPrompt: String?,
-                toolCatalog: List<com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry>,
-                activeTools: List<ToolDefinition>,
-                currentChatId: String?,
-                strategy: ToolCallStrategy,
-                coreMemories: List<com.browntowndev.enclave.domain.model.memory.Memory>,
-                retrievedMemories: List<com.browntowndev.enclave.domain.model.memory.Memory>,
-                retrievedSearchResults: String?,
-                retrievedXSearchResults: String?,
-                compactStaticPrompt: Boolean,
-            ): String = baseSystemPrompt ?: ""
-        }
-
     private fun createChatInferenceExecutor(
         inferenceFactory: FakeInferenceFactory,
         activeModelProvider: ActiveModelProviderPort,
@@ -67,25 +59,16 @@ class GenerateChatResponseUseCaseSearchToolTest {
             activeModelProvider = activeModelProvider,
             messageRepository = messageRepository,
             settingsRepository = settingsRepository,
-            memoriesRepository =
-                mockk(relaxed = true) {
-                    coEvery { getCoreMemories() } returns emptyList()
-                    coEvery { searchMemories(any(), any(), any(), any()) } returns emptyList()
-                },
-            embeddingEnginePort =
-                mockk(relaxed = true) {
-                    coEvery { getEmbedding(any()) } returns floatArrayOf()
-                },
-            promptComposer = stubPromptComposer,
-            defaultModelRepository = mockk(relaxed = true),
-            mediaProviderRepository = mockk(relaxed = true),
-            mediaToolDefinitionFactory = mockk(relaxed = true),
-            getProviderCapabilitiesUseCase =
-                com.browntowndev.enclave.domain.usecase.media
-                    .GetProviderCapabilitiesUseCase(),
-            loggingPort = mockk(relaxed = true),
-            searchIntentClassifier = mockk(relaxed = true),
-            toolExecutor = mockk(relaxed = true),
+            memoriesRepository = FakeMemoriesRepository(),
+            embeddingEnginePort = FakeEmbeddingEngine(),
+            promptComposer = FakePromptComposer(),
+            defaultModelRepository = FakeDefaultModelRepository(),
+            mediaProviderRepository = FakeMediaProviderRepository(),
+            mediaToolDefinitionFactory = MediaToolDefinitionFactory(GetProviderCapabilitiesUseCase()),
+            getProviderCapabilitiesUseCase = GetProviderCapabilitiesUseCase(),
+            loggingPort = FakeLoggingPort(),
+            searchIntentClassifier = FakeSearchIntentClassifier(),
+            toolExecutor = FakeToolExecutor(),
         )
 
     @Test
@@ -95,7 +78,7 @@ class GenerateChatResponseUseCaseSearchToolTest {
             val inferenceService = FakeInferenceService(ModelType.FAST)
             inferenceFactory.serviceMap[ModelType.FAST] = inferenceService
             val activeModelProvider =
-                mockActiveModelProvider(
+                fakeActiveModelProvider(
                     ActiveModelConfiguration(
                         modelId = "test-model",
                         id = ApiModelConfigurationId("7"),
@@ -113,14 +96,14 @@ class GenerateChatResponseUseCaseSearchToolTest {
                         thinkingEnabled = false,
                     ),
                 )
-            val settingsRepository = mockSettingsRepository(searchEnabled = true)
-            val messageRepository = mockMessageRepository()
+            val settingsRepository = fakeSettingsRepository(searchEnabled = true)
+            val messageRepository = fakeMessageRepository(currentMessageText = "Find recent Android agent news")
             val useCase =
                 GenerateChatResponseUseCase(
-                    pipelineExecutor = mockPipelineExecutor(),
-                    chatRepository = mockk(relaxed = true),
+                    pipelineExecutor = FakePipelineExecutor(),
+                    chatRepository = FakeChatRepository(),
                     messageRepository = messageRepository,
-                    loggingPort = mockk(relaxed = true),
+                    loggingPort = FakeLoggingPort(),
                     activeModelProvider = activeModelProvider,
                     extractedUrlTracker = noOpTracker,
                     chatInferenceExecutor =
@@ -130,7 +113,7 @@ class GenerateChatResponseUseCaseSearchToolTest {
                             messageRepository = messageRepository,
                             settingsRepository = settingsRepository,
                         ),
-                    embeddingEngine = mockk(relaxed = true),
+                    embeddingEngine = FakeEmbeddingEngine(),
                     inferenceLockManager = FakeInferenceLockManager(),
                 )
 
@@ -170,7 +153,7 @@ class GenerateChatResponseUseCaseSearchToolTest {
                 }
             inferenceFactory.serviceMap[ModelType.FAST] = inferenceService
             val activeModelProvider =
-                mockActiveModelProvider(
+                fakeActiveModelProvider(
                     ActiveModelConfiguration(
                         modelId = "test-model",
                         id = ApiModelConfigurationId("7"),
@@ -188,14 +171,14 @@ class GenerateChatResponseUseCaseSearchToolTest {
                         thinkingEnabled = false,
                     ),
                 )
-            val settingsRepository = mockSettingsRepository(searchEnabled = true)
-            val messageRepository = mockMessageRepository()
+            val settingsRepository = fakeSettingsRepository(searchEnabled = true)
+            val messageRepository = fakeMessageRepository(currentMessageText = "hello")
             val useCase =
                 GenerateChatResponseUseCase(
-                    pipelineExecutor = mockPipelineExecutor(),
-                    chatRepository = mockk(relaxed = true),
+                    pipelineExecutor = FakePipelineExecutor(),
+                    chatRepository = FakeChatRepository(),
                     messageRepository = messageRepository,
-                    loggingPort = mockk(relaxed = true),
+                    loggingPort = FakeLoggingPort(),
                     activeModelProvider = activeModelProvider,
                     extractedUrlTracker = noOpTracker,
                     chatInferenceExecutor =
@@ -205,7 +188,7 @@ class GenerateChatResponseUseCaseSearchToolTest {
                             messageRepository = messageRepository,
                             settingsRepository = settingsRepository,
                         ),
-                    embeddingEngine = mockk(relaxed = true),
+                    embeddingEngine = FakeEmbeddingEngine(),
                     inferenceLockManager = FakeInferenceLockManager(),
                 )
 
@@ -221,33 +204,25 @@ class GenerateChatResponseUseCaseSearchToolTest {
             // TODO: verify repository persistence - but primarily we're fixing compile errors here
         }
 
-    private fun mockMessageRepository(
-        currentMessage: Message = mockk(relaxed = true),
-        resolvedImageTarget: ResolvedImageTarget? = null,
-        chatMessages: List<Message> = emptyList(),
-    ): MessageRepository =
-        mockk {
-            coEvery { getMessageById(any()) } returns currentMessage
-            coEvery { getMessagesForChat(any()) } returns chatMessages
-            coEvery { resolveLatestImageBearingUserMessage(any(), any()) } returns resolvedImageTarget
-            coEvery { getChatSummary(any()) } returns null
-        }
+    private fun fakeMessageRepository(currentMessageText: String): FakeMessageRepository =
+        FakeMessageRepository(
+            initial =
+                listOf(
+                    Message(
+                        id = MessageId("1"),
+                        chatId = ChatId("other-chat"),
+                        content = Content(text = currentMessageText),
+                    ),
+                ),
+        )
 
-    private fun mockSettingsRepository(searchEnabled: Boolean = true): SettingsRepository =
-        mockk {
-            every { settingsFlow } returns flowOf(SettingsData(searchEnabled = searchEnabled, tavilyKeyPresent = searchEnabled))
-        }
+    private fun fakeSettingsRepository(searchEnabled: Boolean = true): FakeSettingsRepository =
+        FakeSettingsRepository(
+            initial = SettingsData(searchEnabled = searchEnabled, tavilyKeyPresent = searchEnabled),
+        )
 
-    private fun mockPipelineExecutor(): PipelineExecutorPort =
-        mockk {
-            every { executePipeline(any(), any(), any(), any(), any()) } returns emptyFlow()
-            coEvery { stopPipeline(any()) } returns Unit
-            coEvery { resumeFromState(any(), any(), any(), any()) } returns emptyFlow()
-        }
-
-    private fun mockActiveModelProvider(fastConfig: ActiveModelConfiguration): ActiveModelProviderPort =
-        mockk {
-            coEvery { getActiveConfiguration(ModelType.FAST) } returns fastConfig
-            coEvery { getActiveConfiguration(ModelType.VISION) } returns null
+    private fun fakeActiveModelProvider(fastConfig: ActiveModelConfiguration): FakeActiveModelProvider =
+        FakeActiveModelProvider(configuration = fastConfig).apply {
+            configurationsByType[ModelType.VISION] = null
         }
 }

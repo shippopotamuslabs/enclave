@@ -112,6 +112,17 @@ class FakeTtsPlaybackController : TtsPlaybackControllerPort {
     override fun resume() {
         resumeCount++
     }
+
+    // Aliases used by core:domain tests (ENC-28): same underlying state.
+    var playFlow: Flow<com.browntowndev.enclave.domain.port.media.TtsPlaybackStatus>
+        get() = playbackFlow
+        set(value) {
+            playbackFlow = value
+        }
+
+    val stopCallCount: Int get() = stopCount
+    val pauseCallCount: Int get() = pauseCount
+    val resumeCallCount: Int get() = resumeCount
 }
 
 /** Recording [LocalImageGenerationCancelPort] fake (ENC-28). */
@@ -128,6 +139,18 @@ class FakeImageGenerationPort : ImageGenerationPort {
     var result: Result<List<ByteArray>> = Result.success(emptyList())
     val calls = mutableListOf<String>()
 
+    /** Targets passed to [generateImage], in call order (ENC-28). */
+    val targets = mutableListOf<com.browntowndev.enclave.domain.model.media.ImageGenerationTarget>()
+
+    /** Settings passed to [generateImage], in call order (ENC-28). */
+    val settingsCalls = mutableListOf<com.browntowndev.enclave.domain.model.media.GenerationSettings>()
+
+    /** Scripted results consumed one per call before falling back to [result] (ENC-28). */
+    val results = ArrayDeque<Result<List<ByteArray>>>()
+
+    /** Progress events emitted to onProgress on each call, in order (ENC-28). */
+    var progressToEmit: List<ImageGenerationProgress> = emptyList()
+
     override suspend fun generateImage(
         prompt: String,
         target: com.browntowndev.enclave.domain.model.media.ImageGenerationTarget,
@@ -135,7 +158,10 @@ class FakeImageGenerationPort : ImageGenerationPort {
         onProgress: (ImageGenerationProgress) -> Unit,
     ): Result<List<ByteArray>> {
         calls += prompt
-        return result
+        targets += target
+        settingsCalls += settings
+        progressToEmit.forEach(onProgress)
+        return if (results.isNotEmpty()) results.removeFirst() else result
     }
 }
 
@@ -144,12 +170,20 @@ class FakeVideoGenerationPort : VideoGenerationPort {
     var result: Result<ByteArray> = Result.success(ByteArray(0))
     val calls = mutableListOf<String>()
 
+    /** Providers passed to [generateVideo], in call order (ENC-28). */
+    val providerCalls = mutableListOf<com.browntowndev.enclave.domain.model.config.MediaProviderAsset>()
+
+    /** Settings passed to [generateVideo], in call order (ENC-28). */
+    val settingsCalls = mutableListOf<com.browntowndev.enclave.domain.model.media.GenerationSettings>()
+
     override suspend fun generateVideo(
         prompt: String,
         provider: com.browntowndev.enclave.domain.model.config.MediaProviderAsset,
         settings: com.browntowndev.enclave.domain.model.media.GenerationSettings,
     ): Result<ByteArray> {
         calls += prompt
+        providerCalls += provider
+        settingsCalls += settings
         return result
     }
 }

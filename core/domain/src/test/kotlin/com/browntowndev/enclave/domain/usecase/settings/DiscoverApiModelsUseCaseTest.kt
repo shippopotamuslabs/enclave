@@ -1,13 +1,11 @@
 package com.browntowndev.enclave.domain.usecase.settings
 
+import com.browntowndev.enclave.core.testing.FakeFetchApiProviderModelDetailUseCase
+import com.browntowndev.enclave.core.testing.FakeFetchApiProviderModelsUseCase
+import com.browntowndev.enclave.domain.model.config.MediaTask
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.enclave.domain.port.repository.ApiModelCatalogResult
-import com.browntowndev.enclave.domain.usecase.byok.FetchApiProviderModelDetailUseCase
-import com.browntowndev.enclave.domain.usecase.byok.FetchApiProviderModelsUseCase
-import com.browntowndev.enclave.domain.model.config.MediaTask
-import io.mockk.coEvery
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -15,8 +13,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class DiscoverApiModelsUseCaseTest {
-    private val fetchApiProviderModelsUseCase: FetchApiProviderModelsUseCase = mockk()
-    private val fetchApiProviderModelDetailUseCase: FetchApiProviderModelDetailUseCase = mockk()
+    private val fetchApiProviderModelsUseCase = FakeFetchApiProviderModelsUseCase()
+    private val fetchApiProviderModelDetailUseCase = FakeFetchApiProviderModelDetailUseCase()
 
     private lateinit var useCase: DiscoverApiModelsUseCase
 
@@ -42,9 +40,7 @@ class DiscoverApiModelsUseCaseTest {
                 )
             val models = listOf(DiscoveredApiModel(id = "model-1"))
 
-            coEvery {
-                fetchApiProviderModelsUseCase(ApiProvider.ANTHROPIC, "key", null, null)
-            } returns ApiModelCatalogResult(models)
+            fetchApiProviderModelsUseCase.result = ApiModelCatalogResult(models)
 
             val result = useCase(request)
 
@@ -69,13 +65,8 @@ class DiscoverApiModelsUseCaseTest {
             val models = listOf(DiscoveredApiModel(id = "grok-beta", contextWindowTokens = null))
             val detailedModel = DiscoveredApiModel(id = "grok-beta", contextWindowTokens = 128000)
 
-            coEvery {
-                fetchApiProviderModelsUseCase(ApiProvider.XAI, "key", null, null)
-            } returns ApiModelCatalogResult(models)
-
-            coEvery {
-                fetchApiProviderModelDetailUseCase(ApiProvider.XAI, "grok-beta", "key", null, null)
-            } returns detailedModel
+            fetchApiProviderModelsUseCase.result = ApiModelCatalogResult(models)
+            fetchApiProviderModelDetailUseCase.detail = detailedModel
 
             val result = useCase(request)
 
@@ -97,13 +88,8 @@ class DiscoverApiModelsUseCaseTest {
             val models = listOf(DiscoveredApiModel(id = "fal-ai/flux/dev", tasks = emptySet()))
             val detailedModel = DiscoveredApiModel(id = "fal-ai/flux/dev", tasks = setOf(MediaTask.TEXT_TO_IMAGE))
 
-            coEvery {
-                fetchApiProviderModelsUseCase(ApiProvider.FAL, "key", null, null)
-            } returns ApiModelCatalogResult(models)
-
-            coEvery {
-                fetchApiProviderModelDetailUseCase(ApiProvider.FAL, "fal-ai/flux/dev", "key", null, null)
-            } returns detailedModel
+            fetchApiProviderModelsUseCase.result = ApiModelCatalogResult(models)
+            fetchApiProviderModelDetailUseCase.detail = detailedModel
 
             val result = useCase(request)
 
@@ -122,9 +108,7 @@ class DiscoverApiModelsUseCaseTest {
                     baseUrl = null,
                     selectedModelId = "custom-model",
                 )
-            coEvery {
-                fetchApiProviderModelsUseCase(ApiProvider.GOOGLE, "key", null, null)
-            } returns ApiModelCatalogResult(emptyList())
+            fetchApiProviderModelsUseCase.result = ApiModelCatalogResult(emptyList())
 
             val result = useCase(request)
 
@@ -143,9 +127,7 @@ class DiscoverApiModelsUseCaseTest {
                     baseUrl = null,
                     selectedModelId = null,
                 )
-            coEvery {
-                fetchApiProviderModelsUseCase(ApiProvider.FAL, "key", null, null)
-            } returns ApiModelCatalogResult(models = emptyList(), isTruncated = true)
+            fetchApiProviderModelsUseCase.result = ApiModelCatalogResult(models = emptyList(), isTruncated = true)
 
             val result = useCase(request)
 

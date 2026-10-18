@@ -1,14 +1,14 @@
 package com.browntowndev.enclave.domain.usecase.chat
 
+import com.browntowndev.enclave.core.testing.FakeChatRepository
+import com.browntowndev.enclave.domain.model.chat.Chat
 import com.browntowndev.enclave.domain.model.chat.ChatId
-import com.browntowndev.enclave.domain.port.repository.ChatRepository
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import java.util.Date
 
 /**
  * Tests for TogglePinChatUseCase.
@@ -16,13 +16,13 @@ import org.junit.jupiter.api.assertThrows
  * These tests verify the use case correctly forwards the pin toggle action to the repository.
  */
 class TogglePinChatUseCaseTest {
-    private lateinit var mockRepository: ChatRepository
+    private lateinit var repository: FakeChatRepository
     private lateinit var useCase: TogglePinChatUseCase
 
     @BeforeEach
     fun setup() {
-        mockRepository = mockk(relaxed = true)
-        useCase = TogglePinChatUseCase(mockRepository)
+        repository = FakeChatRepository()
+        useCase = TogglePinChatUseCase(repository)
     }
 
     /**
@@ -37,13 +37,14 @@ class TogglePinChatUseCaseTest {
         runTest {
             // Given
             val chatId = ChatId("123")
-            coEvery { mockRepository.togglePinStatus(chatId) } returns Unit
+            val now = Date()
+            repository.seedChats(listOf(Chat(id = chatId, name = "Chat", created = now, lastModified = now)))
 
             // When
             useCase(chatId)
 
             // Then
-            coVerify(exactly = 1) { mockRepository.togglePinStatus(chatId) }
+            assertEquals(listOf(chatId), repository.togglePinCalls)
         }
 
     /**
@@ -59,13 +60,13 @@ class TogglePinChatUseCaseTest {
             // Given
             val chatId = ChatId("456")
             val expectedException = RuntimeException("Database error")
-            coEvery { mockRepository.togglePinStatus(chatId) } throws expectedException
+            repository.togglePinFailure = expectedException
 
             // When / Then
             assertThrows<RuntimeException> {
                 useCase(chatId)
             }
 
-            coVerify(exactly = 1) { mockRepository.togglePinStatus(chatId) }
+            assertEquals(listOf(chatId), repository.togglePinCalls)
         }
 }

@@ -1,6 +1,16 @@
 package com.browntowndev.enclave.domain.usecase.chat
 
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
+import com.browntowndev.enclave.core.testing.FakeDefaultModelRepository
+import com.browntowndev.enclave.core.testing.FakeEmbeddingEngine
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeMediaProviderRepository
+import com.browntowndev.enclave.core.testing.FakeMemoriesRepository
+import com.browntowndev.enclave.core.testing.FakeMessageRepository
+import com.browntowndev.enclave.core.testing.FakeSettingsRepository
 import com.browntowndev.enclave.domain.model.chat.ChatId
+import com.browntowndev.enclave.domain.model.chat.Content
+import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.ResolvedImageTarget
 import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
@@ -9,16 +19,9 @@ import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.model.inference.ToolDisclosureMode
-import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
-import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
-import com.browntowndev.enclave.domain.port.repository.MemoriesRepository
-import com.browntowndev.enclave.domain.port.repository.MessageRepository
 import com.browntowndev.enclave.domain.port.repository.SettingsData
-import com.browntowndev.enclave.domain.port.repository.SettingsRepository
-import io.mockk.coEvery
-import io.mockk.every
-import io.mockk.mockk
-import kotlinx.coroutines.flow.flowOf
+import com.browntowndev.enclave.domain.usecase.media.GetProviderCapabilitiesUseCase
+import com.browntowndev.enclave.domain.usecase.media.MediaToolDefinitionFactory
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertAll
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -277,40 +280,41 @@ class ChatInferenceRequestPreparerToolSearchTest {
             )
         return ChatInferenceRequestPreparer(
             activeModelProvider =
-                mockk<ActiveModelProviderPort> {
-                    coEvery { getActiveConfiguration(ModelType.FAST) } returns fastConfig
-                    coEvery { getActiveConfiguration(ModelType.VISION) } returns visionConfig
+                FakeActiveModelProvider(configuration = fastConfig).apply {
+                    configurationsByType[ModelType.VISION] = visionConfig
                 },
             settingsRepository =
-                mockk<SettingsRepository> {
-                    every { settingsFlow } returns
-                        flowOf(
-                            SettingsData(
-                                searchEnabled = searchEnabled,
-                                tavilyKeyPresent = searchEnabled,
-                            ),
-                        )
-                },
+                FakeSettingsRepository(
+                    initial =
+                        SettingsData(
+                            searchEnabled = searchEnabled,
+                            tavilyKeyPresent = searchEnabled,
+                        ),
+                ),
             messageRepository =
-                mockk<MessageRepository> {
-                    coEvery { getMessageById(any()) } returns mockk(relaxed = true)
-                    coEvery { resolveLatestImageBearingUserMessage(any(), any()) } returns imageTarget
+                FakeMessageRepository(
+                    initial =
+                        listOf(
+                            Message(
+                                id = MessageId("user"),
+                                chatId = ChatId("chat"),
+                                content = Content(text = ""),
+                            ),
+                        ),
+                ).apply {
+                    resolvedImageTarget = imageTarget
                 },
-            memoriesRepository =
-                mockk<MemoriesRepository> {
-                    coEvery { getCoreMemories() } returns emptyList()
-                    coEvery { searchMemories(any(), any(), any(), any()) } returns emptyList()
-                },
+            memoriesRepository = FakeMemoriesRepository(),
             embeddingEnginePort =
-                mockk<EmbeddingEnginePort> {
-                    coEvery { getEmbedding(any()) } returns ToolSearchTestFixtures.genericTestEmbedding()
+                FakeEmbeddingEngine().apply {
+                    uniformEmbedding = ToolSearchTestFixtures.genericTestEmbedding()
                 },
             promptComposer = SearchToolPromptComposer(),
-            defaultModelRepository = mockk(relaxed = true),
-            mediaProviderRepository = mockk(relaxed = true),
-            mediaToolDefinitionFactory = mockk(relaxed = true),
-            getProviderCapabilitiesUseCase = mockk(relaxed = true),
-            loggingPort = mockk(relaxed = true),
+            defaultModelRepository = FakeDefaultModelRepository(),
+            mediaProviderRepository = FakeMediaProviderRepository(),
+            mediaToolDefinitionFactory = MediaToolDefinitionFactory(GetProviderCapabilitiesUseCase()),
+            getProviderCapabilitiesUseCase = GetProviderCapabilitiesUseCase(),
+            loggingPort = FakeLoggingPort(),
             monotonicToolActivation = monotonicToolActivation,
         )
     }

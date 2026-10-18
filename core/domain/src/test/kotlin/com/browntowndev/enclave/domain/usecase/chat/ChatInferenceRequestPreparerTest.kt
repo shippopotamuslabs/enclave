@@ -1,6 +1,18 @@
 package com.browntowndev.enclave.domain.usecase.chat
 
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
+import com.browntowndev.enclave.core.testing.FakeDefaultModelRepository
+import com.browntowndev.enclave.core.testing.FakeEmbeddingEngine
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeMediaProviderRepository
+import com.browntowndev.enclave.core.testing.FakeMemoriesRepository
+import com.browntowndev.enclave.core.testing.FakeMessageRepository
+import com.browntowndev.enclave.core.testing.FakeSearchIntentClassifier
+import com.browntowndev.enclave.core.testing.FakeSettingsRepository
+import com.browntowndev.enclave.core.testing.FakeToolExecutor
 import com.browntowndev.enclave.domain.model.chat.ChatId
+import com.browntowndev.enclave.domain.model.chat.Content
+import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.ResolvedImageTarget
 import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
@@ -11,21 +23,9 @@ import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.model.memory.Memory
 import com.browntowndev.enclave.domain.model.memory.MemoryCategory
-import com.browntowndev.enclave.domain.model.memory.MemoryRetrievalPolicy
-import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
-import com.browntowndev.enclave.domain.port.inference.SearchIntentClassifierPort
-import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
-import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
-import com.browntowndev.enclave.domain.port.repository.MemoriesRepository
-import com.browntowndev.enclave.domain.port.repository.MessageRepository
 import com.browntowndev.enclave.domain.port.repository.SettingsData
-import com.browntowndev.enclave.domain.port.repository.SettingsRepository
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.verify
-import kotlinx.coroutines.flow.flowOf
+import com.browntowndev.enclave.domain.usecase.media.GetProviderCapabilitiesUseCase
+import com.browntowndev.enclave.domain.usecase.media.MediaToolDefinitionFactory
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertAll
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -40,23 +40,23 @@ class ChatInferenceRequestPreparerTest {
             val preparer =
                 ChatInferenceRequestPreparer(
                     activeModelProvider =
-                        mockActiveModelProvider(
+                        fakeActiveModelProvider(
                             fastConfig = fastTextConfig(),
                             visionConfig = null,
                         ),
                     settingsRepository =
-                        mockSettingsRepository(
+                        fakeSettingsRepository(
                             SettingsData(searchEnabled = true, tavilyKeyPresent = true),
                         ),
-                    messageRepository = mockMessageRepository(resolvedImageTarget = null),
-                    memoriesRepository = mockMemoriesRepository(),
-                    embeddingEnginePort = mockEmbeddingEngine(),
+                    messageRepository = fakeMessageRepository(resolvedImageTarget = null),
+                    memoriesRepository = fakeMemoriesRepository(),
+                    embeddingEnginePort = fakeEmbeddingEngine(),
                     promptComposer = SearchToolPromptComposer(),
-                    defaultModelRepository = mockk(relaxed = true),
-                    mediaProviderRepository = mockk(relaxed = true),
-                    mediaToolDefinitionFactory = mockk(relaxed = true),
-                    getProviderCapabilitiesUseCase = mockk(relaxed = true),
-                    loggingPort = mockk(relaxed = true),
+                    defaultModelRepository = FakeDefaultModelRepository(),
+                    mediaProviderRepository = FakeMediaProviderRepository(),
+                    mediaToolDefinitionFactory = MediaToolDefinitionFactory(GetProviderCapabilitiesUseCase()),
+                    getProviderCapabilitiesUseCase = GetProviderCapabilitiesUseCase(),
+                    loggingPort = FakeLoggingPort(),
                 )
 
             val request =
@@ -124,27 +124,27 @@ class ChatInferenceRequestPreparerTest {
             val preparer =
                 ChatInferenceRequestPreparer(
                     activeModelProvider =
-                        mockActiveModelProvider(
+                        fakeActiveModelProvider(
                             fastConfig = fastVisionConfig(),
                             visionConfig = null,
                         ),
-                    settingsRepository = mockSettingsRepository(SettingsData()),
+                    settingsRepository = fakeSettingsRepository(SettingsData()),
                     messageRepository =
-                        mockMessageRepository(
+                        fakeMessageRepository(
                             resolvedImageTarget =
                                 ResolvedImageTarget(
                                     userMessageId = MessageId("user"),
                                     imageUris = listOf("file:///tmp/direct.jpg"),
                                 ),
                         ),
-                    memoriesRepository = mockMemoriesRepository(),
-                    embeddingEnginePort = mockEmbeddingEngine(),
+                    memoriesRepository = fakeMemoriesRepository(),
+                    embeddingEnginePort = fakeEmbeddingEngine(),
                     promptComposer = SearchToolPromptComposer(),
-                    defaultModelRepository = mockk(relaxed = true),
-                    mediaProviderRepository = mockk(relaxed = true),
-                    mediaToolDefinitionFactory = mockk(relaxed = true),
-                    getProviderCapabilitiesUseCase = mockk(relaxed = true),
-                    loggingPort = mockk(relaxed = true),
+                    defaultModelRepository = FakeDefaultModelRepository(),
+                    mediaProviderRepository = FakeMediaProviderRepository(),
+                    mediaToolDefinitionFactory = MediaToolDefinitionFactory(GetProviderCapabilitiesUseCase()),
+                    getProviderCapabilitiesUseCase = GetProviderCapabilitiesUseCase(),
+                    loggingPort = FakeLoggingPort(),
                 )
 
             val request =
@@ -173,30 +173,30 @@ class ChatInferenceRequestPreparerTest {
             val preparer =
                 ChatInferenceRequestPreparer(
                     activeModelProvider =
-                        mockActiveModelProvider(
+                        fakeActiveModelProvider(
                             fastConfig = fastTextConfig(),
                             visionConfig = apiVisionConfig(),
                         ),
                     settingsRepository =
-                        mockSettingsRepository(
+                        fakeSettingsRepository(
                             SettingsData(searchEnabled = true, tavilyKeyPresent = true),
                         ),
                     messageRepository =
-                        mockMessageRepository(
+                        fakeMessageRepository(
                             resolvedImageTarget =
                                 ResolvedImageTarget(
                                     userMessageId = MessageId("user"),
                                     imageUris = listOf("file:///tmp/tool.jpg"),
                                 ),
                         ),
-                    memoriesRepository = mockMemoriesRepository(),
-                    embeddingEnginePort = mockEmbeddingEngine(),
+                    memoriesRepository = fakeMemoriesRepository(),
+                    embeddingEnginePort = fakeEmbeddingEngine(),
                     promptComposer = SearchToolPromptComposer(),
-                    defaultModelRepository = mockk(relaxed = true),
-                    mediaProviderRepository = mockk(relaxed = true),
-                    mediaToolDefinitionFactory = mockk(relaxed = true),
-                    getProviderCapabilitiesUseCase = mockk(relaxed = true),
-                    loggingPort = mockk(relaxed = true),
+                    defaultModelRepository = FakeDefaultModelRepository(),
+                    mediaProviderRepository = FakeMediaProviderRepository(),
+                    mediaToolDefinitionFactory = MediaToolDefinitionFactory(GetProviderCapabilitiesUseCase()),
+                    getProviderCapabilitiesUseCase = GetProviderCapabilitiesUseCase(),
+                    loggingPort = FakeLoggingPort(),
                 )
 
             val request =
@@ -223,23 +223,23 @@ class ChatInferenceRequestPreparerTest {
             val preparer =
                 ChatInferenceRequestPreparer(
                     activeModelProvider =
-                        mockActiveModelProvider(
+                        fakeActiveModelProvider(
                             fastConfig = fastTextConfig(),
                             visionConfig = null,
                         ),
                     settingsRepository =
-                        mockSettingsRepository(
+                        fakeSettingsRepository(
                             SettingsData(searchEnabled = true, tavilyKeyPresent = true),
                         ),
-                    messageRepository = mockMessageRepository(resolvedImageTarget = null),
-                    memoriesRepository = mockMemoriesRepository(),
-                    embeddingEnginePort = mockEmbeddingEngine(),
+                    messageRepository = fakeMessageRepository(resolvedImageTarget = null),
+                    memoriesRepository = fakeMemoriesRepository(),
+                    embeddingEnginePort = fakeEmbeddingEngine(),
                     promptComposer = SearchToolPromptComposer(),
-                    defaultModelRepository = mockk(relaxed = true),
-                    mediaProviderRepository = mockk(relaxed = true),
-                    mediaToolDefinitionFactory = mockk(relaxed = true),
-                    getProviderCapabilitiesUseCase = mockk(relaxed = true),
-                    loggingPort = mockk(relaxed = true),
+                    defaultModelRepository = FakeDefaultModelRepository(),
+                    mediaProviderRepository = FakeMediaProviderRepository(),
+                    mediaToolDefinitionFactory = MediaToolDefinitionFactory(GetProviderCapabilitiesUseCase()),
+                    getProviderCapabilitiesUseCase = GetProviderCapabilitiesUseCase(),
+                    loggingPort = FakeLoggingPort(),
                 )
 
             val request =
@@ -261,7 +261,7 @@ class ChatInferenceRequestPreparerTest {
             val preparer =
                 ChatInferenceRequestPreparer(
                     activeModelProvider =
-                        mockActiveModelProvider(
+                        fakeActiveModelProvider(
                             fastConfig =
                                 fastTextConfig().copy(
                                     localModelFormat = com.browntowndev.enclave.domain.model.inference.ModelFileFormat.LITERTLM,
@@ -269,18 +269,18 @@ class ChatInferenceRequestPreparerTest {
                             visionConfig = null,
                         ),
                     settingsRepository =
-                        mockSettingsRepository(
+                        fakeSettingsRepository(
                             SettingsData(searchEnabled = true, tavilyKeyPresent = true),
                         ),
-                    messageRepository = mockMessageRepository(resolvedImageTarget = null),
-                    memoriesRepository = mockMemoriesRepository(),
-                    embeddingEnginePort = mockEmbeddingEngine(),
+                    messageRepository = fakeMessageRepository(resolvedImageTarget = null),
+                    memoriesRepository = fakeMemoriesRepository(),
+                    embeddingEnginePort = fakeEmbeddingEngine(),
                     promptComposer = SearchToolPromptComposer(),
-                    defaultModelRepository = mockk(relaxed = true),
-                    mediaProviderRepository = mockk(relaxed = true),
-                    mediaToolDefinitionFactory = mockk(relaxed = true),
-                    getProviderCapabilitiesUseCase = mockk(relaxed = true),
-                    loggingPort = mockk(relaxed = true),
+                    defaultModelRepository = FakeDefaultModelRepository(),
+                    mediaProviderRepository = FakeMediaProviderRepository(),
+                    mediaToolDefinitionFactory = MediaToolDefinitionFactory(GetProviderCapabilitiesUseCase()),
+                    getProviderCapabilitiesUseCase = GetProviderCapabilitiesUseCase(),
+                    loggingPort = FakeLoggingPort(),
                 )
 
             val request =
@@ -302,23 +302,23 @@ class ChatInferenceRequestPreparerTest {
             val preparer =
                 ChatInferenceRequestPreparer(
                     activeModelProvider =
-                        mockActiveModelProvider(
+                        fakeActiveModelProvider(
                             fastConfig = apiVisionConfig(), // API model
                             visionConfig = null,
                         ),
                     settingsRepository =
-                        mockSettingsRepository(
+                        fakeSettingsRepository(
                             SettingsData(searchEnabled = true, tavilyKeyPresent = true),
                         ),
-                    messageRepository = mockMessageRepository(resolvedImageTarget = null),
-                    memoriesRepository = mockMemoriesRepository(),
-                    embeddingEnginePort = mockEmbeddingEngine(),
+                    messageRepository = fakeMessageRepository(resolvedImageTarget = null),
+                    memoriesRepository = fakeMemoriesRepository(),
+                    embeddingEnginePort = fakeEmbeddingEngine(),
                     promptComposer = SearchToolPromptComposer(),
-                    defaultModelRepository = mockk(relaxed = true),
-                    mediaProviderRepository = mockk(relaxed = true),
-                    mediaToolDefinitionFactory = mockk(relaxed = true),
-                    getProviderCapabilitiesUseCase = mockk(relaxed = true),
-                    loggingPort = mockk(relaxed = true),
+                    defaultModelRepository = FakeDefaultModelRepository(),
+                    mediaProviderRepository = FakeMediaProviderRepository(),
+                    mediaToolDefinitionFactory = MediaToolDefinitionFactory(GetProviderCapabilitiesUseCase()),
+                    getProviderCapabilitiesUseCase = GetProviderCapabilitiesUseCase(),
+                    loggingPort = FakeLoggingPort(),
                 )
 
             val request =
@@ -346,7 +346,7 @@ class ChatInferenceRequestPreparerTest {
             val preparer =
                 ChatInferenceRequestPreparer(
                     activeModelProvider =
-                        mockActiveModelProvider(
+                        fakeActiveModelProvider(
                             fastConfig =
                                 fastTextConfig().copy(
                                     localModelFormat = com.browntowndev.enclave.domain.model.inference.ModelFileFormat.GGUF,
@@ -354,18 +354,18 @@ class ChatInferenceRequestPreparerTest {
                             visionConfig = null,
                         ),
                     settingsRepository =
-                        mockSettingsRepository(
+                        fakeSettingsRepository(
                             SettingsData(searchEnabled = true, tavilyKeyPresent = true),
                         ),
-                    messageRepository = mockMessageRepository(resolvedImageTarget = null),
-                    memoriesRepository = mockMemoriesRepository(),
-                    embeddingEnginePort = mockEmbeddingEngine(),
+                    messageRepository = fakeMessageRepository(resolvedImageTarget = null),
+                    memoriesRepository = fakeMemoriesRepository(),
+                    embeddingEnginePort = fakeEmbeddingEngine(),
                     promptComposer = SearchToolPromptComposer(),
-                    defaultModelRepository = mockk(relaxed = true),
-                    mediaProviderRepository = mockk(relaxed = true),
-                    mediaToolDefinitionFactory = mockk(relaxed = true),
-                    getProviderCapabilitiesUseCase = mockk(relaxed = true),
-                    loggingPort = mockk(relaxed = true),
+                    defaultModelRepository = FakeDefaultModelRepository(),
+                    mediaProviderRepository = FakeMediaProviderRepository(),
+                    mediaToolDefinitionFactory = MediaToolDefinitionFactory(GetProviderCapabilitiesUseCase()),
+                    getProviderCapabilitiesUseCase = GetProviderCapabilitiesUseCase(),
+                    loggingPort = FakeLoggingPort(),
                 )
 
             val request =
@@ -388,20 +388,20 @@ class ChatInferenceRequestPreparerTest {
             val preparer =
                 ChatInferenceRequestPreparer(
                     activeModelProvider =
-                        mockActiveModelProvider(
+                        fakeActiveModelProvider(
                             fastConfig = fastTextConfig(),
                             visionConfig = null,
                         ),
-                    settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = false)),
-                    messageRepository = mockMessageRepository(resolvedImageTarget = null),
-                    memoriesRepository = mockMemoriesRepository(),
-                    embeddingEnginePort = mockEmbeddingEngine(),
+                    settingsRepository = fakeSettingsRepository(SettingsData(searchEnabled = false)),
+                    messageRepository = fakeMessageRepository(resolvedImageTarget = null),
+                    memoriesRepository = fakeMemoriesRepository(),
+                    embeddingEnginePort = fakeEmbeddingEngine(),
                     promptComposer = SearchToolPromptComposer(),
-                    defaultModelRepository = mockk(relaxed = true),
-                    mediaProviderRepository = mockk(relaxed = true),
-                    mediaToolDefinitionFactory = mockk(relaxed = true),
-                    getProviderCapabilitiesUseCase = mockk(relaxed = true),
-                    loggingPort = mockk(relaxed = true),
+                    defaultModelRepository = FakeDefaultModelRepository(),
+                    mediaProviderRepository = FakeMediaProviderRepository(),
+                    mediaToolDefinitionFactory = MediaToolDefinitionFactory(GetProviderCapabilitiesUseCase()),
+                    getProviderCapabilitiesUseCase = GetProviderCapabilitiesUseCase(),
+                    loggingPort = FakeLoggingPort(),
                 )
 
             val request =
@@ -429,20 +429,20 @@ class ChatInferenceRequestPreparerTest {
             val preparer =
                 ChatInferenceRequestPreparer(
                     activeModelProvider =
-                        mockActiveModelProvider(
+                        fakeActiveModelProvider(
                             fastConfig = fastTextConfig(),
                             visionConfig = null,
                         ),
-                    settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = false)),
-                    messageRepository = mockMessageRepository(resolvedImageTarget = null),
-                    memoriesRepository = mockMemoriesRepository(),
-                    embeddingEnginePort = mockEmbeddingEngine(),
+                    settingsRepository = fakeSettingsRepository(SettingsData(searchEnabled = false)),
+                    messageRepository = fakeMessageRepository(resolvedImageTarget = null),
+                    memoriesRepository = fakeMemoriesRepository(),
+                    embeddingEnginePort = fakeEmbeddingEngine(),
                     promptComposer = SearchToolPromptComposer(),
-                    defaultModelRepository = mockk(relaxed = true),
-                    mediaProviderRepository = mockk(relaxed = true),
-                    mediaToolDefinitionFactory = mockk(relaxed = true),
-                    getProviderCapabilitiesUseCase = mockk(relaxed = true),
-                    loggingPort = mockk(relaxed = true),
+                    defaultModelRepository = FakeDefaultModelRepository(),
+                    mediaProviderRepository = FakeMediaProviderRepository(),
+                    mediaToolDefinitionFactory = MediaToolDefinitionFactory(GetProviderCapabilitiesUseCase()),
+                    getProviderCapabilitiesUseCase = GetProviderCapabilitiesUseCase(),
+                    loggingPort = FakeLoggingPort(),
                 )
 
             val request =
@@ -476,31 +476,23 @@ class ChatInferenceRequestPreparerTest {
             val preparer =
                 ChatInferenceRequestPreparer(
                     activeModelProvider =
-                        mockActiveModelProvider(
+                        fakeActiveModelProvider(
                             fastConfig = fastTextConfig(),
                             visionConfig = null,
                         ),
-                    settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = false)),
-                    messageRepository = mockMessageRepository(resolvedImageTarget = null),
+                    settingsRepository = fakeSettingsRepository(SettingsData(searchEnabled = false)),
+                    messageRepository = fakeMessageRepository(resolvedImageTarget = null),
                     memoriesRepository =
-                        mockk {
-                            coEvery { getCoreMemories() } returns coreMemories
-                            coEvery {
-                                searchMemories(
-                                    any(),
-                                    MemoryRetrievalPolicy.CHAT_RETRIEVAL_LIMIT,
-                                    MemoryRetrievalPolicy.MAX_L2_DISTANCE,
-                                    MemoryRetrievalPolicy.CHAT_EXCLUDED_CATEGORIES,
-                                )
-                            } returns retrievedMemories
+                        FakeMemoriesRepository().apply {
+                            seed(coreMemories + retrievedMemories)
                         },
-                    embeddingEnginePort = mockEmbeddingEngine(),
+                    embeddingEnginePort = fakeEmbeddingEngine(),
                     promptComposer = SearchToolPromptComposer(),
-                    defaultModelRepository = mockk(relaxed = true),
-                    mediaProviderRepository = mockk(relaxed = true),
-                    mediaToolDefinitionFactory = mockk(relaxed = true),
-                    getProviderCapabilitiesUseCase = mockk(relaxed = true),
-                    loggingPort = mockk(relaxed = true),
+                    defaultModelRepository = FakeDefaultModelRepository(),
+                    mediaProviderRepository = FakeMediaProviderRepository(),
+                    mediaToolDefinitionFactory = MediaToolDefinitionFactory(GetProviderCapabilitiesUseCase()),
+                    getProviderCapabilitiesUseCase = GetProviderCapabilitiesUseCase(),
+                    loggingPort = FakeLoggingPort(),
                 )
 
             val request =
@@ -533,31 +525,23 @@ class ChatInferenceRequestPreparerTest {
             val preparer =
                 ChatInferenceRequestPreparer(
                     activeModelProvider =
-                        mockActiveModelProvider(
+                        fakeActiveModelProvider(
                             fastConfig = fastTextConfig(),
                             visionConfig = null,
                         ),
-                    settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = true)),
-                    messageRepository = mockMessageRepository(resolvedImageTarget = null),
+                    settingsRepository = fakeSettingsRepository(SettingsData(searchEnabled = true)),
+                    messageRepository = fakeMessageRepository(resolvedImageTarget = null),
                     memoriesRepository =
-                        mockk {
-                            coEvery { getCoreMemories() } returns coreMemories
-                            coEvery {
-                                searchMemories(
-                                    any(),
-                                    MemoryRetrievalPolicy.CHAT_RETRIEVAL_LIMIT,
-                                    MemoryRetrievalPolicy.MAX_L2_DISTANCE,
-                                    MemoryRetrievalPolicy.CHAT_EXCLUDED_CATEGORIES,
-                                )
-                            } returns emptyList()
+                        FakeMemoriesRepository().apply {
+                            seed(coreMemories)
                         },
-                    embeddingEnginePort = mockEmbeddingEngine(),
+                    embeddingEnginePort = fakeEmbeddingEngine(),
                     promptComposer = SearchToolPromptComposer(),
-                    defaultModelRepository = mockk(relaxed = true),
-                    mediaProviderRepository = mockk(relaxed = true),
-                    mediaToolDefinitionFactory = mockk(relaxed = true),
-                    getProviderCapabilitiesUseCase = mockk(relaxed = true),
-                    loggingPort = mockk(relaxed = true),
+                    defaultModelRepository = FakeDefaultModelRepository(),
+                    mediaProviderRepository = FakeMediaProviderRepository(),
+                    mediaToolDefinitionFactory = MediaToolDefinitionFactory(GetProviderCapabilitiesUseCase()),
+                    getProviderCapabilitiesUseCase = GetProviderCapabilitiesUseCase(),
+                    loggingPort = FakeLoggingPort(),
                 )
 
             val request =
@@ -589,35 +573,36 @@ class ChatInferenceRequestPreparerTest {
         assertTrue(prompt.contains("The user attached one or more images."))
     }
 
-    private fun mockActiveModelProvider(
+    private fun fakeActiveModelProvider(
         fastConfig: ActiveModelConfiguration,
         visionConfig: ActiveModelConfiguration?,
-    ): ActiveModelProviderPort =
-        mockk {
-            coEvery { getActiveConfiguration(ModelType.FAST) } returns fastConfig
-            coEvery { getActiveConfiguration(ModelType.VISION) } returns visionConfig
+    ): FakeActiveModelProvider =
+        FakeActiveModelProvider(configuration = fastConfig).apply {
+            configurationsByType[ModelType.VISION] = visionConfig
         }
 
-    private fun mockSettingsRepository(settings: SettingsData): SettingsRepository =
-        mockk {
-            every { settingsFlow } returns flowOf(settings)
+    private fun fakeSettingsRepository(settings: SettingsData): FakeSettingsRepository =
+        FakeSettingsRepository(initial = settings)
+
+    private fun fakeMessageRepository(resolvedImageTarget: ResolvedImageTarget?): FakeMessageRepository =
+        FakeMessageRepository(
+            initial =
+                listOf(
+                    Message(
+                        id = MessageId("user"),
+                        chatId = ChatId("chat"),
+                        content = Content(text = ""),
+                    ),
+                ),
+        ).apply {
+            this.resolvedImageTarget = resolvedImageTarget
         }
 
-    private fun mockMessageRepository(resolvedImageTarget: ResolvedImageTarget?): MessageRepository =
-        mockk {
-            coEvery { getMessageById(any()) } returns mockk(relaxed = true)
-            coEvery { resolveLatestImageBearingUserMessage(any(), any()) } returns resolvedImageTarget
-        }
+    private fun fakeMemoriesRepository(): FakeMemoriesRepository = FakeMemoriesRepository()
 
-    private fun mockMemoriesRepository(): MemoriesRepository =
-        mockk {
-            coEvery { getCoreMemories() } returns emptyList()
-            coEvery { searchMemories(any(), any(), any(), any()) } returns emptyList()
-        }
-
-    private fun mockEmbeddingEngine(): EmbeddingEnginePort =
-        mockk {
-            coEvery { getEmbedding(any()) } returns floatArrayOf(0.1f, 0.2f)
+    private fun fakeEmbeddingEngine(): FakeEmbeddingEngine =
+        FakeEmbeddingEngine().apply {
+            uniformEmbedding = floatArrayOf(0.1f, 0.2f)
         }
 
     private fun fastTextConfig(): ActiveModelConfiguration =
@@ -688,20 +673,20 @@ class ChatInferenceRequestPreparerTest {
             val preparer =
                 ChatInferenceRequestPreparer(
                     activeModelProvider =
-                        mockActiveModelProvider(
+                        fakeActiveModelProvider(
                             fastConfig = litertThinkingConfig(),
                             visionConfig = null,
                         ),
-                    settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = false)),
-                    messageRepository = mockMessageRepository(resolvedImageTarget = null),
-                    memoriesRepository = mockMemoriesRepository(),
-                    embeddingEnginePort = mockEmbeddingEngine(),
+                    settingsRepository = fakeSettingsRepository(SettingsData(searchEnabled = false)),
+                    messageRepository = fakeMessageRepository(resolvedImageTarget = null),
+                    memoriesRepository = fakeMemoriesRepository(),
+                    embeddingEnginePort = fakeEmbeddingEngine(),
                     promptComposer = SearchToolPromptComposer(),
-                    defaultModelRepository = mockk(relaxed = true),
-                    mediaProviderRepository = mockk(relaxed = true),
-                    mediaToolDefinitionFactory = mockk(relaxed = true),
-                    getProviderCapabilitiesUseCase = mockk(relaxed = true),
-                    loggingPort = mockk(relaxed = true),
+                    defaultModelRepository = FakeDefaultModelRepository(),
+                    mediaProviderRepository = FakeMediaProviderRepository(),
+                    mediaToolDefinitionFactory = MediaToolDefinitionFactory(GetProviderCapabilitiesUseCase()),
+                    getProviderCapabilitiesUseCase = GetProviderCapabilitiesUseCase(),
+                    loggingPort = FakeLoggingPort(),
                 )
 
             val request =
@@ -722,20 +707,20 @@ class ChatInferenceRequestPreparerTest {
             val preparer =
                 ChatInferenceRequestPreparer(
                     activeModelProvider =
-                        mockActiveModelProvider(
+                        fakeActiveModelProvider(
                             fastConfig = ggufThinkingConfig(),
                             visionConfig = null,
                         ),
-                    settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = false)),
-                    messageRepository = mockMessageRepository(resolvedImageTarget = null),
-                    memoriesRepository = mockMemoriesRepository(),
-                    embeddingEnginePort = mockEmbeddingEngine(),
+                    settingsRepository = fakeSettingsRepository(SettingsData(searchEnabled = false)),
+                    messageRepository = fakeMessageRepository(resolvedImageTarget = null),
+                    memoriesRepository = fakeMemoriesRepository(),
+                    embeddingEnginePort = fakeEmbeddingEngine(),
                     promptComposer = SearchToolPromptComposer(),
-                    defaultModelRepository = mockk(relaxed = true),
-                    mediaProviderRepository = mockk(relaxed = true),
-                    mediaToolDefinitionFactory = mockk(relaxed = true),
-                    getProviderCapabilitiesUseCase = mockk(relaxed = true),
-                    loggingPort = mockk(relaxed = true),
+                    defaultModelRepository = FakeDefaultModelRepository(),
+                    mediaProviderRepository = FakeMediaProviderRepository(),
+                    mediaToolDefinitionFactory = MediaToolDefinitionFactory(GetProviderCapabilitiesUseCase()),
+                    getProviderCapabilitiesUseCase = GetProviderCapabilitiesUseCase(),
+                    loggingPort = FakeLoggingPort(),
                 )
 
             val request =
@@ -756,20 +741,20 @@ class ChatInferenceRequestPreparerTest {
             val preparer =
                 ChatInferenceRequestPreparer(
                     activeModelProvider =
-                        mockActiveModelProvider(
+                        fakeActiveModelProvider(
                             fastConfig = fastTextConfig(), // thinkingEnabled = false
                             visionConfig = null,
                         ),
-                    settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = false)),
-                    messageRepository = mockMessageRepository(resolvedImageTarget = null),
-                    memoriesRepository = mockMemoriesRepository(),
-                    embeddingEnginePort = mockEmbeddingEngine(),
+                    settingsRepository = fakeSettingsRepository(SettingsData(searchEnabled = false)),
+                    messageRepository = fakeMessageRepository(resolvedImageTarget = null),
+                    memoriesRepository = fakeMemoriesRepository(),
+                    embeddingEnginePort = fakeEmbeddingEngine(),
                     promptComposer = SearchToolPromptComposer(),
-                    defaultModelRepository = mockk(relaxed = true),
-                    mediaProviderRepository = mockk(relaxed = true),
-                    mediaToolDefinitionFactory = mockk(relaxed = true),
-                    getProviderCapabilitiesUseCase = mockk(relaxed = true),
-                    loggingPort = mockk(relaxed = true),
+                    defaultModelRepository = FakeDefaultModelRepository(),
+                    mediaProviderRepository = FakeMediaProviderRepository(),
+                    mediaToolDefinitionFactory = MediaToolDefinitionFactory(GetProviderCapabilitiesUseCase()),
+                    getProviderCapabilitiesUseCase = GetProviderCapabilitiesUseCase(),
+                    loggingPort = FakeLoggingPort(),
                 )
 
             val request =
@@ -787,40 +772,44 @@ class ChatInferenceRequestPreparerTest {
     @Test
     fun `when search classifier returns true then pre-retrieval search is executed and injected`() =
         runTest {
-            val mockClassifier = mockk<SearchIntentClassifierPort>()
-            val mockExecutor = mockk<ToolExecutorPort>()
-
-            every { mockClassifier.getSearchIntentProbability(any()) } returns 0.9f
-            every { mockClassifier.requiresSearch(any(), any()) } returns true
-            coEvery { mockExecutor.execute(any()) } returns
-                com.browntowndev.enclave.domain.model.inference.ToolExecutionResult(
-                    toolName = ToolDefinition.WEB_SEARCH.name,
-                    resultJson =
-                        """{"results":[{"title":"Search Title","content":"${"Search result content ".repeat(2_000)}"}]}""",
-                )
+            val classifier =
+                FakeSearchIntentClassifier().apply {
+                    probability = 0.9f
+                    requiresSearchResult = true
+                }
+            val executor =
+                FakeToolExecutor().apply {
+                    behavior = { request ->
+                        com.browntowndev.enclave.domain.model.inference.ToolExecutionResult(
+                            toolName = ToolDefinition.WEB_SEARCH.name,
+                            resultJson =
+                                """{"results":[{"title":"Search Title","content":"${"Search result content ".repeat(2_000)}"}]}""",
+                        )
+                    }
+                }
 
             val preparer =
                 ChatInferenceRequestPreparer(
                     activeModelProvider =
-                        mockActiveModelProvider(
+                        fakeActiveModelProvider(
                             fastConfig = fastTextConfig(),
                             visionConfig = null,
                         ),
                     settingsRepository =
-                        mockSettingsRepository(
+                        fakeSettingsRepository(
                             SettingsData(searchEnabled = true, tavilyKeyPresent = true),
                         ),
-                    messageRepository = mockMessageRepository(resolvedImageTarget = null),
-                    memoriesRepository = mockMemoriesRepository(),
-                    embeddingEnginePort = mockEmbeddingEngine(),
+                    messageRepository = fakeMessageRepository(resolvedImageTarget = null),
+                    memoriesRepository = fakeMemoriesRepository(),
+                    embeddingEnginePort = fakeEmbeddingEngine(),
                     promptComposer = SearchToolPromptComposer(),
-                    defaultModelRepository = mockk(relaxed = true),
-                    mediaProviderRepository = mockk(relaxed = true),
-                    mediaToolDefinitionFactory = mockk(relaxed = true),
-                    getProviderCapabilitiesUseCase = mockk(relaxed = true),
-                    loggingPort = mockk(relaxed = true),
-                    searchIntentClassifier = mockClassifier,
-                    toolExecutor = mockExecutor,
+                    defaultModelRepository = FakeDefaultModelRepository(),
+                    mediaProviderRepository = FakeMediaProviderRepository(),
+                    mediaToolDefinitionFactory = MediaToolDefinitionFactory(GetProviderCapabilitiesUseCase()),
+                    getProviderCapabilitiesUseCase = GetProviderCapabilitiesUseCase(),
+                    loggingPort = FakeLoggingPort(),
+                    searchIntentClassifier = classifier,
+                    toolExecutor = executor,
                 )
 
             val request =
@@ -844,34 +833,35 @@ class ChatInferenceRequestPreparerTest {
     @Test
     fun `when heuristic marks non-search then pre-retrieval search is skipped even if classifier is positive`() =
         runTest {
-            val mockClassifier = mockk<SearchIntentClassifierPort>()
-            val mockExecutor = mockk<ToolExecutorPort>()
-
-            every { mockClassifier.getSearchIntentProbability(any()) } returns 0.95f
-            every { mockClassifier.requiresSearch(any(), any()) } returns true
+            val classifier =
+                FakeSearchIntentClassifier().apply {
+                    probability = 0.95f
+                    requiresSearchResult = true
+                }
+            val executor = FakeToolExecutor()
 
             val preparer =
                 ChatInferenceRequestPreparer(
                     activeModelProvider =
-                        mockActiveModelProvider(
+                        fakeActiveModelProvider(
                             fastConfig = fastTextConfig(),
                             visionConfig = null,
                         ),
                     settingsRepository =
-                        mockSettingsRepository(
+                        fakeSettingsRepository(
                             SettingsData(searchEnabled = true, tavilyKeyPresent = true),
                         ),
-                    messageRepository = mockMessageRepository(resolvedImageTarget = null),
-                    memoriesRepository = mockMemoriesRepository(),
-                    embeddingEnginePort = mockEmbeddingEngine(),
+                    messageRepository = fakeMessageRepository(resolvedImageTarget = null),
+                    memoriesRepository = fakeMemoriesRepository(),
+                    embeddingEnginePort = fakeEmbeddingEngine(),
                     promptComposer = SearchToolPromptComposer(),
-                    defaultModelRepository = mockk(relaxed = true),
-                    mediaProviderRepository = mockk(relaxed = true),
-                    mediaToolDefinitionFactory = mockk(relaxed = true),
-                    getProviderCapabilitiesUseCase = mockk(relaxed = true),
-                    loggingPort = mockk(relaxed = true),
-                    searchIntentClassifier = mockClassifier,
-                    toolExecutor = mockExecutor,
+                    defaultModelRepository = FakeDefaultModelRepository(),
+                    mediaProviderRepository = FakeMediaProviderRepository(),
+                    mediaToolDefinitionFactory = MediaToolDefinitionFactory(GetProviderCapabilitiesUseCase()),
+                    getProviderCapabilitiesUseCase = GetProviderCapabilitiesUseCase(),
+                    loggingPort = FakeLoggingPort(),
+                    searchIntentClassifier = classifier,
+                    toolExecutor = executor,
                 )
 
             val request =
@@ -885,8 +875,8 @@ class ChatInferenceRequestPreparerTest {
 
             val systemPrompt = request.options.systemPrompt
             assertTrue(systemPrompt == null || !systemPrompt.contains("RELEVANT WEB SEARCH RESULTS"))
-            coVerify(exactly = 0) { mockExecutor.execute(any()) }
-            verify(exactly = 0) { mockClassifier.getSearchIntentProbability(any()) }
+            assertTrue(executor.executedRequests.isEmpty())
+            assertEquals(0, classifier.probabilityCallCount)
         }
 
     @Test
@@ -895,23 +885,23 @@ class ChatInferenceRequestPreparerTest {
             val preparer =
                 ChatInferenceRequestPreparer(
                     activeModelProvider =
-                        mockActiveModelProvider(
+                        fakeActiveModelProvider(
                             fastConfig = fastTextConfig(),
                             visionConfig = null,
                         ),
                     settingsRepository =
-                        mockSettingsRepository(
+                        fakeSettingsRepository(
                             SettingsData(xSearchEnabled = true, xApiKeyPresent = true),
                         ),
-                    messageRepository = mockMessageRepository(resolvedImageTarget = null),
-                    memoriesRepository = mockMemoriesRepository(),
-                    embeddingEnginePort = mockEmbeddingEngine(),
+                    messageRepository = fakeMessageRepository(resolvedImageTarget = null),
+                    memoriesRepository = fakeMemoriesRepository(),
+                    embeddingEnginePort = fakeEmbeddingEngine(),
                     promptComposer = SearchToolPromptComposer(),
-                    defaultModelRepository = mockk(relaxed = true),
-                    mediaProviderRepository = mockk(relaxed = true),
-                    mediaToolDefinitionFactory = mockk(relaxed = true),
-                    getProviderCapabilitiesUseCase = mockk(relaxed = true),
-                    loggingPort = mockk(relaxed = true),
+                    defaultModelRepository = FakeDefaultModelRepository(),
+                    mediaProviderRepository = FakeMediaProviderRepository(),
+                    mediaToolDefinitionFactory = MediaToolDefinitionFactory(GetProviderCapabilitiesUseCase()),
+                    getProviderCapabilitiesUseCase = GetProviderCapabilitiesUseCase(),
+                    loggingPort = FakeLoggingPort(),
                 )
 
             val request =

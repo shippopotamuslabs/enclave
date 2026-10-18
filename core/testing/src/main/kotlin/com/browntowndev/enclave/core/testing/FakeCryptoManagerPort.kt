@@ -16,6 +16,8 @@ class FakeCryptoManagerPort : CryptoManagerPort {
     val cacheDekCalls = mutableListOf<ByteArray>()
     var clearKeyCallCount = 0
     var generatedSalt: ByteArray = ByteArray(16) { 0x21 }
+    var generateSaltCallCount = 0
+    var encodeBase64CallCount = 0
 
     var encryptResult: Result<ByteArray> = Result.success(ByteArray(0))
     var decryptResult: Result<String> = Result.success("")
@@ -80,10 +82,15 @@ class FakeCryptoManagerPort : CryptoManagerPort {
     override fun decryptBytes(ciphertext: ByteArray, aad: ByteArray?): Result<ByteArray> =
         Result.success(ciphertext)
 
-    override fun generateSalt(): ByteArray = generatedSalt
+    override fun generateSalt(): ByteArray {
+        generateSaltCallCount++
+        return generatedSalt
+    }
 
-    override fun encodeBase64(data: ByteArray): String =
-        java.util.Base64.getEncoder().encodeToString(data)
+    override fun encodeBase64(data: ByteArray): String {
+        encodeBase64CallCount++
+        return java.util.Base64.getEncoder().encodeToString(data)
+    }
 
     override fun decodeBase64(base64: String): ByteArray =
         decodeBase64Override?.invoke(base64) ?: java.util.Base64.getDecoder().decode(base64)

@@ -1,39 +1,34 @@
 package com.browntowndev.enclave.domain.search
 
+import com.browntowndev.enclave.core.testing.FakeEmbeddingEngine
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
-import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.enclave.domain.usecase.chat.ToolSearchCatalogBuilder
 import com.browntowndev.enclave.domain.usecase.chat.ToolSearchTestFixtures
-import io.mockk.clearMocks
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.mockk
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class InMemoryToolSearchEmbeddingCacheTest {
     @Test
     fun `ensureStaticToolsWarmed embeds static catalog only once`() =
         runTest {
-            val embeddingEngine = mockk<EmbeddingEnginePort>()
-            coEvery { embeddingEngine.getEmbedding(any()) } returns ToolSearchTestFixtures.genericTestEmbedding()
+            val embeddingEngine = FakeEmbeddingEngine()
             val cache = InMemoryToolSearchEmbeddingCache()
 
             cache.ensureStaticToolsWarmed(embeddingEngine)
             cache.ensureStaticToolsWarmed(embeddingEngine)
 
-            coVerify(exactly = ToolDefinition.ALL_TOOLS.size) { embeddingEngine.getEmbedding(any()) }
+            assertEquals(ToolDefinition.ALL_TOOLS.size, embeddingEngine.queries.size)
         }
 
     @Test
     fun `catalog builder second build reuses cache without additional embeddings`() =
         runTest {
-            val embeddingEngine = mockk<EmbeddingEnginePort>()
-            coEvery { embeddingEngine.getEmbedding(any()) } returns ToolSearchTestFixtures.genericTestEmbedding()
+            val embeddingEngine = FakeEmbeddingEngine()
             val cache = InMemoryToolSearchEmbeddingCache()
 
             ToolSearchCatalogBuilder.build(
@@ -41,8 +36,7 @@ class InMemoryToolSearchEmbeddingCacheTest {
                 embeddingEngine = embeddingEngine,
                 embeddingCache = cache,
             )
-            clearMocks(embeddingEngine, answers = false)
-            coEvery { embeddingEngine.getEmbedding(any()) } returns ToolSearchTestFixtures.genericTestEmbedding()
+            embeddingEngine.queries.clear()
 
             ToolSearchCatalogBuilder.build(
                 catalog = ToolSearchTestFixtures.bm25Catalog,
@@ -50,14 +44,13 @@ class InMemoryToolSearchEmbeddingCacheTest {
                 embeddingCache = cache,
             )
 
-            coVerify(exactly = 0) { embeddingEngine.getEmbedding(any()) }
+            assertTrue(embeddingEngine.queries.isEmpty())
         }
 
     @Test
     fun `ensureStaticToolsWarmed deduplicates concurrent startup calls`() =
         runTest {
-            val embeddingEngine = mockk<EmbeddingEnginePort>()
-            coEvery { embeddingEngine.getEmbedding(any()) } returns ToolSearchTestFixtures.genericTestEmbedding()
+            val embeddingEngine = FakeEmbeddingEngine()
             val cache = InMemoryToolSearchEmbeddingCache()
 
             coroutineScope {
@@ -66,14 +59,16 @@ class InMemoryToolSearchEmbeddingCacheTest {
                 }.awaitAll()
             }
 
-            coVerify(exactly = ToolDefinition.ALL_TOOLS.size) { embeddingEngine.getEmbedding(any()) }
+            assertEquals(ToolDefinition.ALL_TOOLS.size, embeddingEngine.queries.size)
         }
 
     @Test
     fun `normalizedEmbeddingFor returns stable vectors for same tool`() =
         runTest {
-            val embeddingEngine = mockk<EmbeddingEnginePort>()
-            coEvery { embeddingEngine.getEmbedding("alpha tool") } returns floatArrayOf(3f, 4f)
+            val embeddingEngine =
+                FakeEmbeddingEngine().apply {
+                    embeddingsByText["alpha tool"] = floatArrayOf(3f, 4f)
+                }
             val cache = InMemoryToolSearchEmbeddingCache()
 
             val first =
@@ -90,15 +85,17 @@ class InMemoryToolSearchEmbeddingCacheTest {
                 )
 
             assertEquals(first.toList(), second.toList())
-            coVerify(exactly = 1) { embeddingEngine.getEmbedding("alpha tool") }
+            assertEquals(1, embeddingEngine.queries.count { it == "alpha tool" })
         }
 
     @Test
     fun `normalizedEmbeddingFor recomputes when searchable text changes`() =
         runTest {
-            val embeddingEngine = mockk<EmbeddingEnginePort>()
-            coEvery { embeddingEngine.getEmbedding("alpha v1") } returns floatArrayOf(3f, 4f)
-            coEvery { embeddingEngine.getEmbedding("alpha v2") } returns floatArrayOf(0f, 5f)
+            val embeddingEngine =
+                FakeEmbeddingEngine().apply {
+                    embeddingsByText["alpha v1"] = floatArrayOf(3f, 4f)
+                    embeddingsByText["alpha v2"] = floatArrayOf(0f, 5f)
+                }
             val cache = InMemoryToolSearchEmbeddingCache()
 
             cache.normalizedEmbeddingFor(
@@ -112,7 +109,7 @@ class InMemoryToolSearchEmbeddingCacheTest {
                 embeddingEngine = embeddingEngine,
             )
 
-            coVerify(exactly = 1) { embeddingEngine.getEmbedding("alpha v1") }
-            coVerify(exactly = 1) { embeddingEngine.getEmbedding("alpha v2") }
+            assertEquals(1, embeddingEngine.queries.count { it == "alpha v1" })
+            assertEquals(1, embeddingEngine.queries.count { it == "alpha v2" })
         }
 }

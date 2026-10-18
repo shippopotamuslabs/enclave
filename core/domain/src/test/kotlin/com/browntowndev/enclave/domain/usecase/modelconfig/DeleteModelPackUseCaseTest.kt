@@ -1,42 +1,51 @@
 package com.browntowndev.enclave.domain.usecase.modelconfig
 
+import com.browntowndev.enclave.core.testing.FakeApiModelRepository
+import com.browntowndev.enclave.core.testing.FakeDefaultModelRepository
+import com.browntowndev.enclave.core.testing.FakeLocalModelRepository
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeModelConfigFetcher
+import com.browntowndev.enclave.core.testing.FakeModelFileScanner
+import com.browntowndev.enclave.core.testing.FakeUtilityModelRepository
+import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.enclave.domain.model.config.LocalModelId
+import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.config.UtilityModelId
 import com.browntowndev.enclave.domain.model.config.UtilityModelMetadata
 import com.browntowndev.enclave.domain.model.config.UtilityType
 import com.browntowndev.enclave.domain.model.download.DownloadSource
 import com.browntowndev.enclave.domain.model.download.ModelPackTestFixtures
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
-import com.browntowndev.enclave.domain.port.download.ModelFileScannerPort
-import com.browntowndev.enclave.domain.port.repository.UtilityModelRepositoryPort
 import com.browntowndev.enclave.domain.usecase.download.ResolveModelCatalogUseCase
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 
 class DeleteModelPackUseCaseTest {
-    private lateinit var deleteLocalModel: DeleteLocalModelUseCase
-    private lateinit var utilityModelRepository: UtilityModelRepositoryPort
-    private lateinit var modelFileScanner: ModelFileScannerPort
-    private lateinit var resolveModelCatalog: ResolveModelCatalogUseCase
+    private lateinit var deleteLocalModel: RecordingDeleteLocalModelUseCase
+    private lateinit var utilityModelRepository: FakeUtilityModelRepository
+    private lateinit var modelFileScanner: FakeModelFileScanner
     private lateinit var useCase: DeleteModelPackUseCase
 
     @BeforeEach
     fun setup() {
-        deleteLocalModel = mockk(relaxed = true)
-        utilityModelRepository = mockk(relaxed = true)
-        modelFileScanner = mockk(relaxed = true)
-        resolveModelCatalog = mockk(relaxed = true)
-        coEvery { resolveModelCatalog() } returns Result.success(ModelPackTestFixtures.parsedCatalog())
+        deleteLocalModel = RecordingDeleteLocalModelUseCase()
+        utilityModelRepository = FakeUtilityModelRepository()
+        modelFileScanner = FakeModelFileScanner()
+        val modelConfigFetcher =
+            FakeModelConfigFetcher().apply {
+                persistedCatalogResult = Result.success(ModelPackTestFixtures.parsedCatalog())
+            }
         useCase =
             DeleteModelPackUseCase(
                 deleteLocalModel,
                 utilityModelRepository,
                 modelFileScanner,
-                resolveModelCatalog,
+                ResolveModelCatalogUseCase(modelConfigFetcher),
             )
     }
 
@@ -46,16 +55,19 @@ class DeleteModelPackUseCaseTest {
         runTest {
             useCase(ModelPackTestFixtures.PACK_ID).getOrThrow()
 
-            coVerify {
-                deleteLocalModel(
-                    ModelPackTestFixtures.diffusionAsset().metadata.id,
-                    any(),
-                    any(),
-                    any(),
-                )
-            }
-            coVerify(exactly = 0) { utilityModelRepository.softDelete(any()) }
-            coVerify { modelFileScanner.deleteModelFileByLocalFileName(ModelPackTestFixtures.DIFFUSION_FILE) }
+            assertEquals(
+                listOf(
+                    RecordingDeleteLocalModelUseCase.Call(
+                        modelId = ModelPackTestFixtures.diffusionAsset().metadata.id,
+                        replacementLocalConfigId = null,
+                        replacementApiConfigId = null,
+                        replacementMediaProviderId = null,
+                    ),
+                ),
+                deleteLocalModel.calls,
+            )
+            assertTrue(utilityModelRepository.softDeletedIds.isEmpty())
+            assertTrue(modelFileScanner.deletedFileNames.contains(ModelPackTestFixtures.DIFFUSION_FILE))
         }
 
     private fun utilityMetadata(
@@ -72,4 +84,33 @@ class DeleteModelPackUseCaseTest {
         modelFileFormat = ModelFileFormat.GGUF,
         source = DownloadSource.HUGGING_FACE,
     )
+
+    /** Records [DeleteLocalModelUseCase] invocations instead of executing the delete. */
+    private class RecordingDeleteLocalModelUseCase :
+        DeleteLocalModelUseCase(
+            FakeLocalModelRepository(),
+            FakeDefaultModelRepository(),
+            FakeModelFileScanner(),
+            FakeApiModelRepository(),
+            FakeLoggingPort(),
+        ) {
+        data class Call(
+            val modelId: LocalModelId,
+            val replacementLocalConfigId: LocalModelConfigurationId?,
+            val replacementApiConfigId: ApiModelConfigurationId?,
+            val replacementMediaProviderId: MediaProviderId?,
+        )
+
+        val calls = mutableListOf<Call>()
+
+        override suspend fun invoke(
+            modelId: LocalModelId,
+            replacementLocalConfigId: LocalModelConfigurationId?,
+            replacementApiConfigId: ApiModelConfigurationId?,
+            replacementMediaProviderId: MediaProviderId?,
+        ): Result<Unit> {
+            calls += Call(modelId, replacementLocalConfigId, replacementApiConfigId, replacementMediaProviderId)
+            return Result.success(Unit)
+        }
+    }
 }

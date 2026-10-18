@@ -1,12 +1,9 @@
 package com.browntowndev.enclave.domain.usecase.settings
 
+import com.browntowndev.enclave.core.testing.FakeFetchApiProviderModelsUseCase
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.enclave.domain.port.repository.ApiModelCatalogResult
-import com.browntowndev.enclave.domain.usecase.byok.FetchApiProviderModelsUseCase
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -15,20 +12,14 @@ import org.junit.jupiter.api.Test
 import kotlin.reflect.full.declaredFunctions
 
 class TestApiProviderConnectionUseCaseTest {
-    private val fetchApiProviderModelsUseCase = mockk<FetchApiProviderModelsUseCase>()
+    private val fetchApiProviderModelsUseCase = FakeFetchApiProviderModelsUseCase()
     private val useCase = TestApiProviderConnectionUseCase(fetchApiProviderModelsUseCase)
 
     @Test
     fun `SCN-USECASE-TEST-001 Test Connection Success`() =
         runTest {
-            coEvery {
-                fetchApiProviderModelsUseCase(
-                    provider = ApiProvider.OPENAI,
-                    currentApiKey = "sk-valid",
-                    credentialAlias = null,
-                    baseUrl = null,
-                )
-            } returns ApiModelCatalogResult(listOf(DiscoveredApiModel(id = "gpt-4o", name = "GPT-4o")))
+            fetchApiProviderModelsUseCase.result =
+                ApiModelCatalogResult(listOf(DiscoveredApiModel(id = "gpt-4o", name = "GPT-4o")))
 
             val result =
                 useCase(
@@ -44,9 +35,7 @@ class TestApiProviderConnectionUseCaseTest {
     @Test
     fun `SCN-USECASE-TEST-002 Test Connection Failure`() =
         runTest {
-            coEvery {
-                fetchApiProviderModelsUseCase(any(), any(), any(), any())
-            } throws RuntimeException("HTTP 401")
+            fetchApiProviderModelsUseCase.failure = RuntimeException("HTTP 401")
 
             val result =
                 useCase(
@@ -63,14 +52,7 @@ class TestApiProviderConnectionUseCaseTest {
     @Test
     fun `SCN-USECASE-TEST-003 Test Connection Without Model`() =
         runTest {
-            coEvery {
-                fetchApiProviderModelsUseCase(
-                    provider = ApiProvider.OPENAI,
-                    currentApiKey = "sk-valid",
-                    credentialAlias = null,
-                    baseUrl = null,
-                )
-            } returns ApiModelCatalogResult(emptyList())
+            fetchApiProviderModelsUseCase.result = ApiModelCatalogResult(emptyList())
 
             val result =
                 useCase(
@@ -81,14 +63,17 @@ class TestApiProviderConnectionUseCaseTest {
                 )
 
             assertTrue(result.isSuccess)
-            coVerify(exactly = 1) {
-                fetchApiProviderModelsUseCase(
-                    provider = ApiProvider.OPENAI,
-                    currentApiKey = "sk-valid",
-                    credentialAlias = null,
-                    baseUrl = null,
-                )
-            }
+            assertEquals(
+                listOf(
+                    FakeFetchApiProviderModelsUseCase.Call(
+                        provider = ApiProvider.OPENAI,
+                        currentApiKey = "sk-valid",
+                        credentialAlias = null,
+                        baseUrl = null,
+                    ),
+                ),
+                fetchApiProviderModelsUseCase.calls,
+            )
             val invokeFunction =
                 TestApiProviderConnectionUseCase::class.declaredFunctions.first { it.name == "invoke" }
             val paramNames =

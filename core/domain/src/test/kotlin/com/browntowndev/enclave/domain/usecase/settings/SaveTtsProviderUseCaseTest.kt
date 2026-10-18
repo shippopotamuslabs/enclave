@@ -1,11 +1,7 @@
 package com.browntowndev.enclave.domain.usecase.settings
 
-import com.browntowndev.enclave.domain.model.config.TtsProviderAsset
-import com.browntowndev.enclave.domain.model.config.TtsProviderId
+import com.browntowndev.enclave.core.testing.FakeTtsProviderRepository
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
-import com.browntowndev.enclave.domain.port.repository.TtsProviderRepositoryPort
-import io.mockk.coEvery
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
@@ -13,27 +9,11 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class SaveTtsProviderUseCaseTest {
-    private val repository = mockk<TtsProviderRepositoryPort>()
-
-    private data class Captured(
-        val asset: TtsProviderAsset,
-        val apiKey: String?,
-    )
-
-    private fun stub(): () -> Captured {
-        val box = arrayOf<Captured?>(null)
-        coEvery { repository.saveTtsProvider(any(), any()) } coAnswers {
-            box[0] = Captured(firstArg(), secondArg())
-            TtsProviderId("saved-id")
-        }
-        return { requireNotNull(box[0]) { "saveTtsProvider was not called" } }
-    }
+    private val repository = FakeTtsProviderRepository()
 
     @Test
     fun `reuses sourceCredentialAlias when set`() =
         runTest {
-            val capturedFn = stub()
-
             SaveTtsProviderUseCase(repository)
                 .invoke(
                     TtsProviderDraft(
@@ -46,16 +26,14 @@ class SaveTtsProviderUseCaseTest {
                     ),
                 ).getOrThrow()
 
-            val captured = capturedFn()
-            assertEquals("openai", captured.asset.credentialAlias)
-            assertNull(captured.apiKey)
+            val captured = repository.savedCalls.single()
+            assertEquals("openai", captured.first.credentialAlias)
+            assertNull(captured.second)
         }
 
     @Test
     fun `falls back to draft credentialAlias when sourceCredentialAlias is null`() =
         runTest {
-            val capturedFn = stub()
-
             SaveTtsProviderUseCase(repository)
                 .invoke(
                     TtsProviderDraft(
@@ -68,16 +46,14 @@ class SaveTtsProviderUseCaseTest {
                     ),
                 ).getOrThrow()
 
-            val captured = capturedFn()
-            assertEquals("google-2", captured.asset.credentialAlias)
-            assertEquals("sk-test", captured.apiKey)
+            val captured = repository.savedCalls.single()
+            assertEquals("google-2", captured.first.credentialAlias)
+            assertEquals("sk-test", captured.second)
         }
 
     @Test
     fun `propagates modelName to saved asset`() =
         runTest {
-            val capturedFn = stub()
-
             SaveTtsProviderUseCase(repository)
                 .invoke(
                     TtsProviderDraft(
@@ -90,7 +66,7 @@ class SaveTtsProviderUseCaseTest {
                     ),
                 ).getOrThrow()
 
-            assertEquals("gemini-3.1-flash-tts-preview", capturedFn().asset.modelName)
+            assertEquals("gemini-3.1-flash-tts-preview", repository.savedCalls.single().first.modelName)
         }
 
     @Test
@@ -105,7 +81,7 @@ class SaveTtsProviderUseCaseTest {
                             voiceName = "Wise_Woman",
                             modelName = "fal-ai/elevenlabs/tts/turbo-v2.5",
                             credentialAlias = "fal",
-                            apiKey = "key",
+                            apiKey = "fal-key",
                         ),
                     )
 
@@ -118,8 +94,6 @@ class SaveTtsProviderUseCaseTest {
     @Test
     fun `accepts supported fal tts model id`() =
         runTest {
-            val capturedFn = stub()
-
             SaveTtsProviderUseCase(repository)
                 .invoke(
                     TtsProviderDraft(
@@ -128,10 +102,10 @@ class SaveTtsProviderUseCaseTest {
                         voiceName = "Wise_Woman",
                         modelName = "fal-ai/minimax/speech-02-hd",
                         credentialAlias = "fal",
-                        apiKey = "key",
+                        apiKey = "fal-key",
                     ),
                 ).getOrThrow()
 
-            assertEquals("fal-ai/minimax/speech-02-hd", capturedFn().asset.modelName)
+            assertEquals("fal-ai/minimax/speech-02-hd", repository.savedCalls.single().first.modelName)
         }
 }

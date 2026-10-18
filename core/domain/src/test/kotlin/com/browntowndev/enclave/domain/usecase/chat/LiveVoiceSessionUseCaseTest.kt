@@ -1,18 +1,28 @@
 package com.browntowndev.enclave.domain.usecase.chat
 
+import com.browntowndev.enclave.core.testing.FakeApiKeyProvider
+import com.browntowndev.enclave.core.testing.FakeApiModelRepository
+import com.browntowndev.enclave.core.testing.FakeDefaultModelRepository
+import com.browntowndev.enclave.core.testing.FakeLiveVoiceProviderRepository
+import com.browntowndev.enclave.core.testing.FakeLocalModelRepository
+import com.browntowndev.enclave.core.testing.FakeTtsProviderRepository
+import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
 import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderAsset
 import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId
+import com.browntowndev.enclave.domain.model.config.TtsProviderAsset
+import com.browntowndev.enclave.domain.model.config.TtsProviderId
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.LiveVoiceToolset
 import com.browntowndev.enclave.domain.model.inference.ModelType
+import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.port.media.LiveVoicePort
 import com.browntowndev.enclave.domain.port.media.LiveVoiceSession
-import com.browntowndev.enclave.domain.port.security.ApiKeyProviderPort
+import com.browntowndev.enclave.domain.usecase.byok.GetApiModelAssetsUseCaseImpl
+import com.browntowndev.enclave.domain.usecase.byok.GetDefaultModelsUseCaseImpl
+import com.browntowndev.enclave.domain.usecase.modelconfig.GetLocalModelAssetsUseCaseImpl
+import com.browntowndev.enclave.domain.usecase.settings.GetLiveVoiceProvidersUseCase
+import com.browntowndev.enclave.domain.usecase.settings.GetTtsProvidersUseCase
 import com.browntowndev.enclave.domain.usecase.settings.ResolveAssignedModelSelectionUseCase
-import com.browntowndev.enclave.domain.usecase.settings.ResolvedAssignedModelSelection
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.mockk
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -20,10 +30,43 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 
+/** Recording [LiveVoicePort] fake: returns the canned [openSessionResult] and records every call. */
+private class FakeLiveVoicePort : LiveVoicePort {
+    data class OpenSessionCall(
+        val asset: LiveVoiceProviderAsset,
+        val apiKey: String,
+        val tools: List<ToolDefinition>,
+    )
+
+    val openSessionCalls = mutableListOf<OpenSessionCall>()
+    var openSessionResult: Result<LiveVoiceSession> =
+        Result.failure(IllegalStateException("FakeLiveVoicePort.openSessionResult not set"))
+
+    override suspend fun openSession(
+        asset: LiveVoiceProviderAsset,
+        apiKey: String,
+        tools: List<ToolDefinition>,
+    ): Result<LiveVoiceSession> {
+        openSessionCalls += OpenSessionCall(asset, apiKey, tools)
+        return openSessionResult
+    }
+}
+
 class LiveVoiceSessionUseCaseTest {
-    private val resolveAssignedModelSelectionUseCase = mockk<ResolveAssignedModelSelectionUseCase>()
-    private val liveVoicePort = mockk<LiveVoicePort>()
-    private val apiKeyProvider = mockk<ApiKeyProviderPort>()
+    private val defaultModelRepository = FakeDefaultModelRepository()
+    private val ttsProviderRepository = FakeTtsProviderRepository()
+    private val liveVoiceProviderRepository = FakeLiveVoiceProviderRepository()
+    private val liveVoicePort = FakeLiveVoicePort()
+    private val apiKeyProvider = FakeApiKeyProvider()
+
+    private val resolveAssignedModelSelectionUseCase =
+        ResolveAssignedModelSelectionUseCase(
+            GetDefaultModelsUseCaseImpl(defaultModelRepository),
+            GetLocalModelAssetsUseCaseImpl(FakeLocalModelRepository()),
+            GetApiModelAssetsUseCaseImpl(FakeApiModelRepository()),
+            GetTtsProvidersUseCase(ttsProviderRepository),
+            GetLiveVoiceProvidersUseCase(liveVoiceProviderRepository),
+        )
 
     private val fakeSession =
         object : LiveVoiceSession {
@@ -62,16 +105,23 @@ class LiveVoiceSessionUseCaseTest {
             apiKeyProvider,
         )
 
+    private fun assignLiveVoiceProvider() {
+        defaultModelRepository.seed(
+            DefaultModelAssignment(
+                modelType = ModelType.LIVE_VOICE,
+                liveVoiceProviderId = liveVoiceAsset.id,
+            ),
+        )
+        liveVoiceProviderRepository.emit(listOf(liveVoiceAsset))
+    }
+
     @Test
     @DisplayName("LV-SESSION-001")
     fun lvSession001_openSessionHappyPath() =
         runTest {
-            coEvery { resolveAssignedModelSelectionUseCase(ModelType.LIVE_VOICE) } returns
-                ResolvedAssignedModelSelection(liveVoiceAsset = liveVoiceAsset)
-            coEvery { apiKeyProvider.getApiKey("alias") } returns "sk-live"
-            coEvery {
-                liveVoicePort.openSession(liveVoiceAsset, "sk-live", tools = LiveVoiceToolset.tools)
-            } returns Result.success(fakeSession)
+            assignLiveVoiceProvider()
+            apiKeyProvider.saveApiKey("alias", "sk-live")
+            liveVoicePort.openSessionResult = Result.success(fakeSession)
 
             val result = useCase()
 
@@ -84,8 +134,6 @@ class LiveVoiceSessionUseCaseTest {
     @DisplayName("LV-SESSION-002")
     fun lvSession002_noProviderAssigned() =
         runTest {
-            coEvery { resolveAssignedModelSelectionUseCase(ModelType.LIVE_VOICE) } returns null
-
             val result = useCase()
 
             assertTrue(result.isFailure)
@@ -98,9 +146,7 @@ class LiveVoiceSessionUseCaseTest {
     @DisplayName("LV-SESSION-003")
     fun lvSession003_keyMissing() =
         runTest {
-            coEvery { resolveAssignedModelSelectionUseCase(ModelType.LIVE_VOICE) } returns
-                ResolvedAssignedModelSelection(liveVoiceAsset = liveVoiceAsset)
-            coEvery { apiKeyProvider.getApiKey("alias") } returns null
+            assignLiveVoiceProvider()
 
             val result = useCase()
 
@@ -114,8 +160,23 @@ class LiveVoiceSessionUseCaseTest {
     @DisplayName("LV-SESSION-004")
     fun lvSession004_selectionWithoutLiveVoiceAsset() =
         runTest {
-            coEvery { resolveAssignedModelSelectionUseCase(ModelType.LIVE_VOICE) } returns
-                ResolvedAssignedModelSelection(liveVoiceAsset = null)
+            // The LIVE_VOICE assignment resolves to a TTS provider, so the
+            // selection is non-null but carries no Live Voice asset.
+            val ttsAsset =
+                TtsProviderAsset(
+                    id = TtsProviderId("tts-1"),
+                    displayName = "TTS",
+                    provider = ApiProvider.OPENAI,
+                    voiceName = "alloy",
+                    credentialAlias = "alias",
+                )
+            defaultModelRepository.seed(
+                DefaultModelAssignment(
+                    modelType = ModelType.LIVE_VOICE,
+                    ttsProviderId = ttsAsset.id,
+                ),
+            )
+            ttsProviderRepository.emit(listOf(ttsAsset))
 
             val result = useCase()
 
@@ -129,39 +190,39 @@ class LiveVoiceSessionUseCaseTest {
     @DisplayName("LV-TOOL-002")
     fun lvTool002_useCaseForwardsLiveVoiceToolsetTools() =
         runTest {
-            coEvery { resolveAssignedModelSelectionUseCase(ModelType.LIVE_VOICE) } returns
-                ResolvedAssignedModelSelection(liveVoiceAsset = liveVoiceAsset)
-            coEvery { apiKeyProvider.getApiKey("alias") } returns "sk-live"
-            coEvery {
-                liveVoicePort.openSession(liveVoiceAsset, "sk-live", tools = LiveVoiceToolset.tools)
-            } returns Result.success(fakeSession)
+            assignLiveVoiceProvider()
+            apiKeyProvider.saveApiKey("alias", "sk-live")
+            liveVoicePort.openSessionResult = Result.success(fakeSession)
 
             val result = useCase()
 
             assertTrue(result.isSuccess)
             assertEquals(fakeSession, result.getOrNull()?.session)
             assertEquals(liveVoiceAsset, result.getOrNull()?.asset)
-            coVerify(exactly = 1) {
-                liveVoicePort.openSession(liveVoiceAsset, "sk-live", tools = LiveVoiceToolset.tools)
-            }
+            assertEquals(
+                listOf(
+                    FakeLiveVoicePort.OpenSessionCall(liveVoiceAsset, "sk-live", LiveVoiceToolset.tools),
+                ),
+                liveVoicePort.openSessionCalls,
+            )
         }
 
     @Test
     @DisplayName("LV-TOOL-MUT-002")
     fun lvToolMut002_useCaseMustPassWhitelistNotEmptyList() =
         runTest {
-            coEvery { resolveAssignedModelSelectionUseCase(ModelType.LIVE_VOICE) } returns
-                ResolvedAssignedModelSelection(liveVoiceAsset = liveVoiceAsset)
-            coEvery { apiKeyProvider.getApiKey("alias") } returns "sk-live"
-            coEvery { liveVoicePort.openSession(any(), any(), any()) } returns Result.success(fakeSession)
+            assignLiveVoiceProvider()
+            apiKeyProvider.saveApiKey("alias", "sk-live")
+            liveVoicePort.openSessionResult = Result.success(fakeSession)
 
             useCase()
 
-            coVerify(exactly = 1) {
-                liveVoicePort.openSession(liveVoiceAsset, "sk-live", tools = LiveVoiceToolset.tools)
-            }
-            coVerify(exactly = 0) {
-                liveVoicePort.openSession(any(), any(), tools = emptyList())
-            }
+            assertEquals(
+                listOf(
+                    FakeLiveVoicePort.OpenSessionCall(liveVoiceAsset, "sk-live", LiveVoiceToolset.tools),
+                ),
+                liveVoicePort.openSessionCalls,
+            )
+            assertTrue(liveVoicePort.openSessionCalls.none { it.tools == emptyList<ToolDefinition>() })
         }
 }

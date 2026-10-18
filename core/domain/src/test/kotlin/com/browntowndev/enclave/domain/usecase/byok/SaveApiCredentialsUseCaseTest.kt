@@ -1,19 +1,16 @@
 package com.browntowndev.enclave.domain.usecase.byok
 
+import com.browntowndev.enclave.core.testing.FakeApiModelRepository
 import com.browntowndev.enclave.domain.model.config.ApiCredentials
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
-import com.browntowndev.enclave.domain.port.repository.ApiModelRepositoryPort
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class SaveApiCredentialsUseCaseTest {
-    private val repository = mockk<ApiModelRepositoryPort>()
+    private val repository = FakeApiModelRepository()
     private lateinit var useCase: SaveApiCredentialsUseCase
 
     @BeforeEach
@@ -33,12 +30,15 @@ class SaveApiCredentialsUseCaseTest {
                 )
             val apiKey = "test_key"
             val expectedId = ApiCredentialsId("1")
-            coEvery { repository.saveCredentials(credentials, apiKey, null) } returns expectedId
+            repository.saveCredentialsResultId = expectedId
 
             val result = useCase(credentials, apiKey)
 
             assertEquals(expectedId, result)
-            coVerify(exactly = 1) { repository.saveCredentials(credentials, apiKey, null) }
+            assertEquals(
+                listOf(FakeApiModelRepository.SaveCredentialsCall(credentials, apiKey, null)),
+                repository.saveCredentialsCalls,
+            )
         }
 
     @Test
@@ -52,13 +52,14 @@ class SaveApiCredentialsUseCaseTest {
                     credentialAlias = "new_alias",
                 )
             val expectedId = ApiCredentialsId("7")
-            coEvery { repository.saveCredentials(credentials, "", "existing_alias") } returns expectedId
+            repository.saveCredentialsResultId = expectedId
 
             val result = useCase(credentials, apiKey = "", sourceCredentialAlias = "existing_alias")
 
             assertEquals(expectedId, result)
-            coVerify(exactly = 1) {
-                repository.saveCredentials(credentials, "", "existing_alias")
-            }
+            assertEquals(
+                listOf(FakeApiModelRepository.SaveCredentialsCall(credentials, "", "existing_alias")),
+                repository.saveCredentialsCalls,
+            )
         }
 }

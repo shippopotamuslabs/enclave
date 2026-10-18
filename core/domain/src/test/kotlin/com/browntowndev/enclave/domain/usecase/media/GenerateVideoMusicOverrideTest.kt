@@ -1,5 +1,8 @@
 package com.browntowndev.enclave.domain.usecase.media
 
+import com.browntowndev.enclave.core.testing.FakeMediaProviderRepository
+import com.browntowndev.enclave.core.testing.FakeMusicGenerationPort
+import com.browntowndev.enclave.core.testing.FakeVideoGenerationPort
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.config.MediaProviderAsset
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
@@ -8,12 +11,7 @@ import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.media.MusicGenerationSettings
 import com.browntowndev.enclave.domain.model.media.StudioModelOverride
 import com.browntowndev.enclave.domain.model.media.VideoGenerationSettings
-import com.browntowndev.enclave.domain.port.media.MusicGenerationPort
-import com.browntowndev.enclave.domain.port.media.VideoGenerationPort
-import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
 import com.browntowndev.enclave.domain.usecase.media.test.FakeDefaultModelRepositoryWithCalls
-import io.mockk.coEvery
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -25,9 +23,9 @@ import org.junit.jupiter.api.Test
 class GenerateVideoMusicOverrideTest {
     private val defaultModelRepository = FakeDefaultModelRepositoryWithCalls()
     private val resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase()
-    private val mediaProviderRepository = mockk<MediaProviderRepositoryPort>(relaxed = true)
-    private val videoGenerationPort = mockk<VideoGenerationPort>(relaxed = true)
-    private val musicGenerationPort = mockk<MusicGenerationPort>(relaxed = true)
+    private val mediaProviderRepository = FakeMediaProviderRepository()
+    private val videoGenerationPort = FakeVideoGenerationPort()
+    private val musicGenerationPort = FakeMusicGenerationPort()
 
     private lateinit var videoUseCase: GenerateVideoUseCase
     private lateinit var musicUseCase: GenerateMusicUseCase
@@ -51,10 +49,9 @@ class GenerateVideoMusicOverrideTest {
                 capability = MediaCapability.MUSIC,
                 credentialAlias = "fal-m1-alias",
             )
-        coEvery { mediaProviderRepository.getMediaProvider(MediaProviderId("fal-v1")) } returns videoProvider
-        coEvery { mediaProviderRepository.getMediaProvider(MediaProviderId("fal-m1")) } returns musicProvider
-        coEvery { videoGenerationPort.generateVideo(any(), any(), any()) } returns Result.success(byteArrayOf(1))
-        coEvery { musicGenerationPort.generateMusic(any(), any(), any()) } returns Result.success(byteArrayOf(1))
+        mediaProviderRepository.emitProviders(listOf(videoProvider, musicProvider))
+        videoGenerationPort.result = Result.success(byteArrayOf(1))
+        musicGenerationPort.result = Result.success(byteArrayOf(1))
 
         // Wire the REAL video resolver so a lazy Green impl that drops the override
         // falls through to getDefault(VIDEO_GENERATION), tripping the MD01 assertion.

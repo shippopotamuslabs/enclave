@@ -1,40 +1,62 @@
 package com.browntowndev.enclave.domain.usecase.chat
 
 import app.cash.turbine.test
+import com.browntowndev.enclave.core.testing.FakeApiKeyProvider
+import com.browntowndev.enclave.core.testing.FakeApiModelRepository
+import com.browntowndev.enclave.core.testing.FakeAudioPlayer
+import com.browntowndev.enclave.core.testing.FakeDefaultModelRepository
+import com.browntowndev.enclave.core.testing.FakeLiveVoiceProviderRepository
+import com.browntowndev.enclave.core.testing.FakeLocalModelRepository
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeStreamingAudioPlayer
+import com.browntowndev.enclave.core.testing.FakeStreamingTtsService
+import com.browntowndev.enclave.core.testing.FakeTtsProviderRepository
+import com.browntowndev.enclave.core.testing.FakeTtsService
+import com.browntowndev.enclave.core.testing.FakeTtsServiceFactory
+import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
+import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderAsset
+import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId
 import com.browntowndev.enclave.domain.model.config.TtsProviderAsset
 import com.browntowndev.enclave.domain.model.config.TtsProviderId
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
+import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.TtsAudioChunk
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.inference.StreamingTtsServicePort
-import com.browntowndev.enclave.domain.port.inference.TtsServiceFactoryPort
-import com.browntowndev.enclave.domain.port.inference.TtsServicePort
-import com.browntowndev.enclave.domain.port.media.AudioPlayerPort
-import com.browntowndev.enclave.domain.port.media.StreamingAudioPlayerPort
-import com.browntowndev.enclave.domain.port.security.ApiKeyProviderPort
+import com.browntowndev.enclave.domain.usecase.byok.GetApiModelAssetsUseCaseImpl
+import com.browntowndev.enclave.domain.usecase.byok.GetDefaultModelsUseCaseImpl
+import com.browntowndev.enclave.domain.usecase.modelconfig.GetLocalModelAssetsUseCaseImpl
+import com.browntowndev.enclave.domain.usecase.settings.GetLiveVoiceProvidersUseCase
+import com.browntowndev.enclave.domain.usecase.settings.GetTtsProvidersUseCase
 import com.browntowndev.enclave.domain.usecase.settings.ResolveAssignedModelSelectionUseCase
-import com.browntowndev.enclave.domain.usecase.settings.ResolvedAssignedModelSelection
-import io.mockk.*
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
-import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class PlayStreamingTtsAudioUseCaseTest {
-    private val resolveSelectionUseCase: ResolveAssignedModelSelectionUseCase = mockk()
-    private val ttsFactory: TtsServiceFactoryPort = mockk()
-    private val streamingAudioPlayer: StreamingAudioPlayerPort = mockk(relaxed = true)
-    private val audioPlayer: AudioPlayerPort = mockk(relaxed = true)
-    private val apiKeyProvider: ApiKeyProviderPort = mockk()
-    private val loggingPort: LoggingPort = mockk(relaxed = true)
+    private val defaultModelRepository = FakeDefaultModelRepository()
+    private val ttsProviderRepository = FakeTtsProviderRepository()
+    private val liveVoiceProviderRepository = FakeLiveVoiceProviderRepository()
+    private val ttsFactory = FakeTtsServiceFactory()
+    private val streamingAudioPlayer = FakeStreamingAudioPlayer()
+    private val audioPlayer = FakeAudioPlayer()
+    private val apiKeyProvider = FakeApiKeyProvider()
     private lateinit var useCase: PlayStreamingTtsAudioUseCase
 
     @BeforeEach
     fun setUp() {
+        val resolveSelectionUseCase =
+            ResolveAssignedModelSelectionUseCase(
+                GetDefaultModelsUseCaseImpl(defaultModelRepository),
+                GetLocalModelAssetsUseCaseImpl(FakeLocalModelRepository()),
+                GetApiModelAssetsUseCaseImpl(FakeApiModelRepository()),
+                GetTtsProvidersUseCase(ttsProviderRepository),
+                GetLiveVoiceProvidersUseCase(liveVoiceProviderRepository),
+            )
         useCase =
             PlayStreamingTtsAudioUseCase(
                 resolveSelectionUseCase,
@@ -42,34 +64,41 @@ class PlayStreamingTtsAudioUseCaseTest {
                 streamingAudioPlayer,
                 audioPlayer,
                 apiKeyProvider,
-                loggingPort,
+                FakeLoggingPort(),
             )
     }
+
+    private fun assignTtsAsset(asset: TtsProviderAsset) {
+        defaultModelRepository.seed(
+            DefaultModelAssignment(modelType = ModelType.TTS, ttsProviderId = asset.id),
+        )
+        ttsProviderRepository.emit(listOf(asset))
+    }
+
+    private fun openAiAsset() =
+        TtsProviderAsset(
+            TtsProviderId("1"),
+            "OpenAI",
+            ApiProvider.OPENAI,
+            "alloy",
+            null,
+            null,
+            "alias-1",
+        )
 
     @Test
     fun `invoke returns initializing status first`() =
         runTest {
-            val ttsAsset =
-                TtsProviderAsset(
-                    TtsProviderId("1"),
-                    "OpenAI",
-                    ApiProvider.OPENAI,
-                    "alloy",
-                    null,
-                    null,
-                    "alias-1",
-                )
-            val selection = ResolvedAssignedModelSelection(ttsAsset = ttsAsset)
-            val streamingService: StreamingTtsServicePort = mockk()
-
-            coEvery { resolveSelectionUseCase(any()) } returns selection
-            coEvery { apiKeyProvider.getApiKey("alias-1") } returns "test-api-key"
-            every { ttsFactory.createStreaming(ApiProvider.OPENAI, "test-api-key", null) } returns streamingService
-            every { streamingService.synthesizeSpeechStreaming("Hello", "alloy", null) } returns
+            val ttsAsset = openAiAsset()
+            assignTtsAsset(ttsAsset)
+            apiKeyProvider.saveApiKey("alias-1", "test-api-key")
+            val streamingService = FakeStreamingTtsService()
+            streamingService.chunks =
                 flowOf(
                     TtsAudioChunk.Data(byteArrayOf(1, 2, 3)),
                     TtsAudioChunk.Done,
                 )
+            ttsFactory.streamingService = streamingService
 
             useCase("Hello").test {
                 assertTrue(awaitItem() is StreamingPlaybackStatus.Initializing)
@@ -92,18 +121,16 @@ class PlayStreamingTtsAudioUseCaseTest {
                     null,
                     "alias-1",
                 )
-            val selection = ResolvedAssignedModelSelection(ttsAsset = ttsAsset)
-            val streamingService: StreamingTtsServicePort = mockk()
-
-            coEvery { resolveSelectionUseCase(any()) } returns selection
-            coEvery { apiKeyProvider.getApiKey("alias-1") } returns "test-api-key"
-            every { ttsFactory.createStreaming(ApiProvider.XAI, "test-api-key", null) } returns streamingService
-            every { streamingService.synthesizeSpeechStreaming("Hello", "echo", null) } returns
+            assignTtsAsset(ttsAsset)
+            apiKeyProvider.saveApiKey("alias-1", "test-api-key")
+            val streamingService = FakeStreamingTtsService()
+            streamingService.chunks =
                 flowOf(
                     TtsAudioChunk.Data(byteArrayOf(1, 2, 3)),
                     TtsAudioChunk.Data(byteArrayOf(4, 5, 6)),
                     TtsAudioChunk.Done,
                 )
+            ttsFactory.streamingService = streamingService
 
             useCase("Hello").test {
                 awaitItem() // Initializing
@@ -117,7 +144,19 @@ class PlayStreamingTtsAudioUseCaseTest {
     @Test
     fun `invoke emits error when no TTS provider assigned`() =
         runTest {
-            coEvery { resolveSelectionUseCase(any()) } returns ResolvedAssignedModelSelection(ttsAsset = null)
+            // The TTS assignment resolves to a non-TTS selection (a Live Voice asset).
+            val liveVoiceAsset =
+                LiveVoiceProviderAsset(
+                    id = LiveVoiceProviderId("lv-1"),
+                    displayName = "OpenAI RT",
+                    provider = ApiProvider.OPENAI,
+                    voiceName = "alloy",
+                    credentialAlias = "alias",
+                )
+            defaultModelRepository.seed(
+                DefaultModelAssignment(modelType = ModelType.TTS, liveVoiceProviderId = liveVoiceAsset.id),
+            )
+            liveVoiceProviderRepository.emit(listOf(liveVoiceAsset))
 
             useCase("Hello").test {
                 awaitItem() // Initializing
@@ -141,15 +180,12 @@ class PlayStreamingTtsAudioUseCaseTest {
                     null,
                     "alias-1",
                 )
-            val selection = ResolvedAssignedModelSelection(ttsAsset = ttsAsset)
-            val batchService: TtsServicePort = mockk()
-
-            coEvery { resolveSelectionUseCase(any()) } returns selection
-            coEvery { apiKeyProvider.getApiKey("alias-1") } returns "test-api-key"
-            every { ttsFactory.createStreaming(ApiProvider.GOOGLE, "test-api-key", null) } returns null
-            every { ttsFactory.create(ApiProvider.GOOGLE, "test-api-key", null) } returns batchService
-            coEvery { batchService.synthesizeSpeech("Hello", "voice", null) } returns Result.success(byteArrayOf(1, 2, 3))
-            coEvery { audioPlayer.playAudio(any()) } returns Unit
+            assignTtsAsset(ttsAsset)
+            apiKeyProvider.saveApiKey("alias-1", "test-api-key")
+            ttsFactory.streamingService = null
+            val batchService = FakeTtsService()
+            batchService.synthesizeResult = Result.success(byteArrayOf(1, 2, 3))
+            ttsFactory.batchService = batchService
 
             useCase("Hello").test {
                 awaitItem() // Initializing
@@ -160,32 +196,21 @@ class PlayStreamingTtsAudioUseCaseTest {
                 awaitComplete()
             }
 
-            coVerify { audioPlayer.playAudio(any()) }
+            assertEquals(1, audioPlayer.playAudioCalls.size)
         }
 
     @Test
     fun `invoke emits error when streaming service throws exception`() =
         runTest {
-            val ttsAsset =
-                TtsProviderAsset(
-                    TtsProviderId("1"),
-                    "OpenAI",
-                    ApiProvider.OPENAI,
-                    "alloy",
-                    null,
-                    null,
-                    "alias-1",
-                )
-            val selection = ResolvedAssignedModelSelection(ttsAsset = ttsAsset)
-            val streamingService: StreamingTtsServicePort = mockk()
-
-            coEvery { resolveSelectionUseCase(any()) } returns selection
-            coEvery { apiKeyProvider.getApiKey("alias-1") } returns "test-api-key"
-            every { ttsFactory.createStreaming(ApiProvider.OPENAI, "test-api-key", null) } returns streamingService
-            every { streamingService.synthesizeSpeechStreaming(any(), any(), any()) } returns
+            val ttsAsset = openAiAsset()
+            assignTtsAsset(ttsAsset)
+            apiKeyProvider.saveApiKey("alias-1", "test-api-key")
+            val streamingService = FakeStreamingTtsService()
+            streamingService.chunks =
                 flow {
                     throw RuntimeException("Network error")
                 }
+            ttsFactory.streamingService = streamingService
 
             useCase("Hello").test {
                 awaitItem() // Initializing
@@ -210,15 +235,11 @@ class PlayStreamingTtsAudioUseCaseTest {
                     null,
                     "alias-1",
                 )
-            val selection = ResolvedAssignedModelSelection(ttsAsset = ttsAsset)
-            val streamingService: StreamingTtsServicePort = mockk()
-
-            coEvery { resolveSelectionUseCase(any()) } returns selection
-            coEvery { apiKeyProvider.getApiKey("alias-1") } returns "test-api-key"
-            every { ttsFactory.createStreaming(ApiProvider.XAI, "test-api-key", null) } returns streamingService
-            every {
-                streamingService.synthesizeSpeechStreaming("Hello", "echo", "grok-3-audio")
-            } returns flowOf(TtsAudioChunk.Done)
+            assignTtsAsset(ttsAsset)
+            apiKeyProvider.saveApiKey("alias-1", "test-api-key")
+            val streamingService = FakeStreamingTtsService()
+            streamingService.chunks = flowOf(TtsAudioChunk.Done)
+            ttsFactory.streamingService = streamingService
 
             useCase("Hello").test {
                 awaitItem() // Initializing
@@ -227,97 +248,67 @@ class PlayStreamingTtsAudioUseCaseTest {
                 awaitComplete()
             }
 
-            verify { streamingService.synthesizeSpeechStreaming("Hello", "echo", "grok-3-audio") }
+            assertEquals(
+                listOf(FakeStreamingTtsService.SynthesizeStreamingCall("Hello", "echo", "grok-3-audio")),
+                streamingService.synthesizeStreamingCalls,
+            )
         }
 
     @Test
     fun `stop calls both player stops`() {
         useCase.stop()
-        verify { streamingAudioPlayer.stop() }
-        verify { audioPlayer.stop() }
+        assertTrue(streamingAudioPlayer.stopCallCount >= 1)
+        assertTrue(audioPlayer.stopCallCount >= 1)
     }
 
     @Test
     fun `invoke enqueues audio chunks to player`() =
         runTest {
-            val ttsAsset =
-                TtsProviderAsset(
-                    TtsProviderId("1"),
-                    "OpenAI",
-                    ApiProvider.OPENAI,
-                    "alloy",
-                    null,
-                    null,
-                    "alias-1",
-                )
-            val selection = ResolvedAssignedModelSelection(ttsAsset = ttsAsset)
-            val streamingService: StreamingTtsServicePort = mockk()
+            val ttsAsset = openAiAsset()
+            assignTtsAsset(ttsAsset)
+            apiKeyProvider.saveApiKey("alias-1", "test-api-key")
+            val streamingService = FakeStreamingTtsService()
             val chunk1 = byteArrayOf(1, 2, 3)
             val chunk2 = byteArrayOf(4, 5, 6)
-
-            coEvery { resolveSelectionUseCase(any()) } returns selection
-            coEvery { apiKeyProvider.getApiKey("alias-1") } returns "test-api-key"
-            every { ttsFactory.createStreaming(ApiProvider.OPENAI, "test-api-key", null) } returns streamingService
-            every { streamingService.synthesizeSpeechStreaming(any(), any(), any()) } returns
+            streamingService.chunks =
                 flowOf(
                     TtsAudioChunk.Data(chunk1),
                     TtsAudioChunk.Data(chunk2),
                     TtsAudioChunk.Done,
                 )
+            ttsFactory.streamingService = streamingService
 
             useCase("Hello").collect {}
 
-            coVerify { streamingAudioPlayer.enqueueChunk(chunk1) }
-            coVerify { streamingAudioPlayer.enqueueChunk(chunk2) }
+            assertEquals(2, streamingAudioPlayer.enqueuedChunks.size)
+            assertTrue(streamingAudioPlayer.enqueuedChunks[0].contentEquals(chunk1))
+            assertTrue(streamingAudioPlayer.enqueuedChunks[1].contentEquals(chunk2))
         }
 
     @Test
     fun `invoke starts player`() =
         runTest {
-            val ttsAsset =
-                TtsProviderAsset(
-                    TtsProviderId("1"),
-                    "OpenAI",
-                    ApiProvider.OPENAI,
-                    "alloy",
-                    null,
-                    null,
-                    "alias-1",
-                )
-            val selection = ResolvedAssignedModelSelection(ttsAsset = ttsAsset)
-            val streamingService: StreamingTtsServicePort = mockk()
-
-            coEvery { resolveSelectionUseCase(any()) } returns selection
-            coEvery { apiKeyProvider.getApiKey("alias-1") } returns "test-api-key"
-            every { ttsFactory.createStreaming(ApiProvider.OPENAI, "test-api-key", null) } returns streamingService
-            every { streamingService.synthesizeSpeechStreaming(any(), any(), any()) } returns
+            val ttsAsset = openAiAsset()
+            assignTtsAsset(ttsAsset)
+            apiKeyProvider.saveApiKey("alias-1", "test-api-key")
+            val streamingService = FakeStreamingTtsService()
+            streamingService.chunks =
                 flowOf(
                     TtsAudioChunk.Data(byteArrayOf(1, 2, 3)),
                     TtsAudioChunk.Done,
                 )
+            ttsFactory.streamingService = streamingService
 
             useCase("Hello").collect {}
 
-            verify { streamingAudioPlayer.startPlayback() }
+            assertTrue(streamingAudioPlayer.startPlaybackCallCount >= 1)
         }
 
     @Test
     fun `invoke emits error when API key not found`() =
         runTest {
-            val ttsAsset =
-                TtsProviderAsset(
-                    TtsProviderId("1"),
-                    "OpenAI",
-                    ApiProvider.OPENAI,
-                    "alloy",
-                    null,
-                    null,
-                    "alias-1",
-                )
-            val selection = ResolvedAssignedModelSelection(ttsAsset = ttsAsset)
-
-            coEvery { resolveSelectionUseCase(any()) } returns selection
-            coEvery { apiKeyProvider.getApiKey("alias-1") } returns null
+            val ttsAsset = openAiAsset()
+            assignTtsAsset(ttsAsset)
 
             useCase("Hello").test {
                 awaitItem() // Initializing
@@ -327,8 +318,8 @@ class PlayStreamingTtsAudioUseCaseTest {
                 awaitComplete()
             }
 
-            // Verify streaming player was stopped on error
-            verify { streamingAudioPlayer.stop() }
+            // Streaming player was stopped on error
+            assertTrue(streamingAudioPlayer.stopCallCount >= 1)
         }
 
     @Test
@@ -344,16 +335,14 @@ class PlayStreamingTtsAudioUseCaseTest {
                     null,
                     "alias-1",
                 )
-            val selection = ResolvedAssignedModelSelection(ttsAsset = ttsAsset)
-            val streamingService: StreamingTtsServicePort = mockk()
-
-            coEvery { resolveSelectionUseCase(any()) } returns selection
-            coEvery { apiKeyProvider.getApiKey("alias-1") } returns "test-api-key"
-            every { ttsFactory.createStreaming(ApiProvider.XAI, "test-api-key", null) } returns streamingService
-            every { streamingService.synthesizeSpeechStreaming(any(), any(), any()) } returns
+            assignTtsAsset(ttsAsset)
+            apiKeyProvider.saveApiKey("alias-1", "test-api-key")
+            val streamingService = FakeStreamingTtsService()
+            streamingService.chunks =
                 flowOf(
                     TtsAudioChunk.Error("WebSocket connection failed"),
                 )
+            ttsFactory.streamingService = streamingService
 
             useCase("Hello").test {
                 awaitItem() // Initializing
@@ -364,8 +353,8 @@ class PlayStreamingTtsAudioUseCaseTest {
                 awaitComplete()
             }
 
-            // Verify streaming player was stopped on error
-            verify { streamingAudioPlayer.stop() }
+            // Streaming player was stopped on error
+            assertTrue(streamingAudioPlayer.stopCallCount >= 1)
         }
 
     @Test
@@ -381,18 +370,16 @@ class PlayStreamingTtsAudioUseCaseTest {
                     null,
                     "alias-1",
                 )
-            val selection = ResolvedAssignedModelSelection(ttsAsset = ttsAsset)
-            val streamingService: StreamingTtsServicePort = mockk()
-
-            coEvery { resolveSelectionUseCase(any()) } returns selection
-            coEvery { apiKeyProvider.getApiKey("alias-1") } returns "test-api-key"
-            every { ttsFactory.createStreaming(ApiProvider.XAI, "test-api-key", null) } returns streamingService
-            every { streamingService.synthesizeSpeechStreaming(any(), any(), any()) } returns
+            assignTtsAsset(ttsAsset)
+            apiKeyProvider.saveApiKey("alias-1", "test-api-key")
+            val streamingService = FakeStreamingTtsService()
+            streamingService.chunks =
                 flow {
                     emit(TtsAudioChunk.Data(byteArrayOf(1, 2, 3)))
                     emit(TtsAudioChunk.Data(byteArrayOf(4, 5, 6)))
                     emit(TtsAudioChunk.Error("Connection dropped mid-stream"))
                 }
+            ttsFactory.streamingService = streamingService
 
             useCase("Hello").test {
                 awaitItem() // Initializing
@@ -403,8 +390,8 @@ class PlayStreamingTtsAudioUseCaseTest {
                 awaitComplete()
             }
 
-            // Verify streaming player was stopped on error
-            verify { streamingAudioPlayer.stop() }
+            // Streaming player was stopped on error
+            assertTrue(streamingAudioPlayer.stopCallCount >= 1)
         }
 
     @Test
@@ -420,51 +407,48 @@ class PlayStreamingTtsAudioUseCaseTest {
                     "https://custom.api.com",
                     "alias-1",
                 )
-            val selection = ResolvedAssignedModelSelection(ttsAsset = ttsAsset)
-            val batchService: TtsServicePort = mockk()
-
-            coEvery { resolveSelectionUseCase(any()) } returns selection
-            coEvery { apiKeyProvider.getApiKey("alias-1") } returns "test-api-key"
-            every { ttsFactory.createStreaming(ApiProvider.GOOGLE, "test-api-key", "https://custom.api.com") } returns null
-            every { ttsFactory.create(ApiProvider.GOOGLE, "test-api-key", "https://custom.api.com") } returns batchService
-            coEvery { batchService.synthesizeSpeech("Hello", "google-voice", "model-name") } returns Result.success(byteArrayOf(1))
-            coEvery { audioPlayer.playAudio(any()) } returns Unit
+            assignTtsAsset(ttsAsset)
+            apiKeyProvider.saveApiKey("alias-1", "test-api-key")
+            ttsFactory.streamingService = null
+            val batchService = FakeTtsService()
+            batchService.synthesizeResult = Result.success(byteArrayOf(1))
+            ttsFactory.batchService = batchService
 
             useCase("Hello").collect {}
 
-            coVerify { batchService.synthesizeSpeech("Hello", "google-voice", "model-name") }
+            assertEquals(
+                listOf(FakeTtsServiceFactory.CreateCall(ApiProvider.GOOGLE, "test-api-key", "https://custom.api.com")),
+                ttsFactory.createStreamingCalls,
+            )
+            assertEquals(
+                listOf(FakeTtsServiceFactory.CreateCall(ApiProvider.GOOGLE, "test-api-key", "https://custom.api.com")),
+                ttsFactory.createCalls,
+            )
+            assertEquals(
+                listOf(FakeTtsService.SynthesizeCall("Hello", "google-voice", "model-name")),
+                batchService.synthesizeCalls,
+            )
         }
 
     @Test
     fun `invoke does not fall back to batch when streaming succeeds`() =
         runTest {
-            val ttsAsset =
-                TtsProviderAsset(
-                    TtsProviderId("1"),
-                    "OpenAI",
-                    ApiProvider.OPENAI,
-                    "alloy",
-                    null,
-                    null,
-                    "alias-1",
-                )
-            val selection = ResolvedAssignedModelSelection(ttsAsset = ttsAsset)
-            val streamingService: StreamingTtsServicePort = mockk()
-
-            coEvery { resolveSelectionUseCase(any()) } returns selection
-            coEvery { apiKeyProvider.getApiKey("alias-1") } returns "test-api-key"
-            every { ttsFactory.createStreaming(ApiProvider.OPENAI, "test-api-key", null) } returns streamingService
-            every { streamingService.synthesizeSpeechStreaming(any(), any(), any()) } returns
+            val ttsAsset = openAiAsset()
+            assignTtsAsset(ttsAsset)
+            apiKeyProvider.saveApiKey("alias-1", "test-api-key")
+            val streamingService = FakeStreamingTtsService()
+            streamingService.chunks =
                 flowOf(
                     TtsAudioChunk.Data(byteArrayOf(1, 2, 3)),
                     TtsAudioChunk.Done,
                 )
+            ttsFactory.streamingService = streamingService
 
             useCase("Hello").collect {}
 
-            // Verify batch service was NEVER called
-            verify(exactly = 0) { ttsFactory.create(any(), any(), any()) }
-            coVerify(exactly = 0) { audioPlayer.playAudio(any()) }
+            // Batch service was NEVER called
+            assertTrue(ttsFactory.createCalls.isEmpty())
+            assertTrue(audioPlayer.playAudioCalls.isEmpty())
         }
 
     @Test
@@ -473,7 +457,7 @@ class PlayStreamingTtsAudioUseCaseTest {
         useCase.stop()
         useCase.stop() // Call twice to verify idempotent
 
-        verify(exactly = 2) { streamingAudioPlayer.stop() }
-        verify(exactly = 2) { audioPlayer.stop() }
+        assertEquals(2, streamingAudioPlayer.stopCallCount)
+        assertEquals(2, audioPlayer.stopCallCount)
     }
 }

@@ -1,5 +1,17 @@
 package com.browntowndev.enclave.domain.usecase.chat
 
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
+import com.browntowndev.enclave.core.testing.FakeChatRepository
+import com.browntowndev.enclave.core.testing.FakeDefaultModelRepository
+import com.browntowndev.enclave.core.testing.FakeEmbeddingEngine
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeMediaProviderRepository
+import com.browntowndev.enclave.core.testing.FakeMemoriesRepository
+import com.browntowndev.enclave.core.testing.FakeMessageRepository
+import com.browntowndev.enclave.core.testing.FakePromptComposer
+import com.browntowndev.enclave.core.testing.FakeSearchIntentClassifier
+import com.browntowndev.enclave.core.testing.FakeSettingsRepository
+import com.browntowndev.enclave.core.testing.FakeToolExecutor
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.ChatResponseMode
 import com.browntowndev.enclave.domain.model.chat.Content
@@ -7,7 +19,6 @@ import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.MessageState
 import com.browntowndev.enclave.domain.model.chat.MessageVisionAnalysis
-import com.browntowndev.enclave.domain.model.chat.Mode
 import com.browntowndev.enclave.domain.model.chat.ResolvedImageTarget
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
@@ -16,22 +27,18 @@ import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.port.inference.InferenceEvent
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.inference.PipelineExecutorPort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.ChatRepository
+import com.browntowndev.enclave.domain.port.repository.ExtractedUrlTrackerPort
 import com.browntowndev.enclave.domain.port.repository.MessageRepository
 import com.browntowndev.enclave.domain.port.repository.SettingsData
 import com.browntowndev.enclave.domain.port.repository.SettingsRepository
 import com.browntowndev.enclave.domain.usecase.FakeInferenceFactory
 import com.browntowndev.enclave.domain.usecase.FakeInferenceLockManager
 import com.browntowndev.enclave.domain.usecase.FakeInferenceService
-import io.mockk.coEvery
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.slot
-import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.coroutines.flow.flowOf
+import com.browntowndev.enclave.domain.usecase.FakePipelineExecutor
+import com.browntowndev.enclave.domain.usecase.media.GetProviderCapabilitiesUseCase
+import com.browntowndev.enclave.domain.usecase.media.MediaToolDefinitionFactory
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -53,7 +60,7 @@ class GenerateChatResponseUseCaseImageToolTest {
             inferenceFactory.serviceMap[ModelType.VISION] = visionService
 
             val messageRepository =
-                mockMessageRepository(
+                fakeMessageRepository(
                     currentMessage =
                         Message(
                             id = MessageId("1"),
@@ -73,11 +80,11 @@ class GenerateChatResponseUseCaseImageToolTest {
                     inferenceFactory = inferenceFactory,
                     messageRepository = messageRepository,
                     activeModelProvider =
-                        mockActiveModelProvider(
+                        fakeActiveModelProvider(
                             fastConfig = fastVisionConfig(),
                             visionConfig = null,
                         ),
-                    settingsRepository = mockSettingsRepository(),
+                    settingsRepository = fakeSettingsRepository(),
                 )
 
             useCase(
@@ -115,7 +122,7 @@ class GenerateChatResponseUseCaseImageToolTest {
                 )
 
             val messageRepository =
-                mockMessageRepository(
+                fakeMessageRepository(
                     currentMessage = currentMessage,
                     resolvedImageTarget =
                         ResolvedImageTarget(
@@ -129,11 +136,11 @@ class GenerateChatResponseUseCaseImageToolTest {
                     inferenceFactory = inferenceFactory,
                     messageRepository = messageRepository,
                     activeModelProvider =
-                        mockActiveModelProvider(
+                        fakeActiveModelProvider(
                             fastConfig = fastVisionConfig(),
                             visionConfig = null,
                         ),
-                    settingsRepository = mockSettingsRepository(),
+                    settingsRepository = fakeSettingsRepository(),
                 )
 
             useCase(
@@ -153,12 +160,10 @@ class GenerateChatResponseUseCaseImageToolTest {
     fun `COUNCIL image attachments enable attached image inspect contract when API vision is configured`() =
         runTest {
             val inferenceFactory = FakeInferenceFactory()
-            val pipelineExecutor = mockk<PipelineExecutorPort>()
-            val promptSlot = slot<String>()
-            every { pipelineExecutor.executePipeline(any(), capture(promptSlot), any(), any(), any()) } returns emptyFlow()
+            val pipelineExecutor = FakePipelineExecutor()
 
             val messageRepository =
-                mockMessageRepository(
+                fakeMessageRepository(
                     currentMessage =
                         Message(
                             id = MessageId("1"),
@@ -178,11 +183,11 @@ class GenerateChatResponseUseCaseImageToolTest {
                     inferenceFactory = inferenceFactory,
                     messageRepository = messageRepository,
                     activeModelProvider =
-                        mockActiveModelProvider(
+                        fakeActiveModelProvider(
                             fastConfig = fastTextConfig(),
                             visionConfig = apiVisionConfig(),
                         ),
-                    settingsRepository = mockSettingsRepository(),
+                    settingsRepository = fakeSettingsRepository(),
                     pipelineExecutor = pipelineExecutor,
                 )
 
@@ -195,8 +200,9 @@ class GenerateChatResponseUseCaseImageToolTest {
                 backgroundInferenceEnabled = false,
             ).toList()
 
-            assertTrue(promptSlot.captured.contains("attached_image_inspect"))
-            assertTrue(promptSlot.captured.contains("Inspect this"))
+            val capturedPrompt = pipelineExecutor.lastUserMessage.orEmpty()
+            assertTrue(capturedPrompt.contains("attached_image_inspect"))
+            assertTrue(capturedPrompt.contains("Inspect this"))
         }
 
     @Test
@@ -210,7 +216,7 @@ class GenerateChatResponseUseCaseImageToolTest {
             inferenceFactory.serviceMap[ModelType.FAST] = fastService
 
             val messageRepository =
-                mockMessageRepository(
+                fakeMessageRepository(
                     currentMessage =
                         Message(
                             id = MessageId("1"),
@@ -230,11 +236,11 @@ class GenerateChatResponseUseCaseImageToolTest {
                     inferenceFactory = inferenceFactory,
                     messageRepository = messageRepository,
                     activeModelProvider =
-                        mockActiveModelProvider(
+                        fakeActiveModelProvider(
                             fastConfig = fastTextConfig(),
                             visionConfig = apiVisionConfig(),
                         ),
-                    settingsRepository = mockSettingsRepository(),
+                    settingsRepository = fakeSettingsRepository(),
                 )
 
             useCase(
@@ -274,31 +280,10 @@ class GenerateChatResponseUseCaseImageToolTest {
                     )
                 }
             inferenceFactory.serviceMap[ModelType.FAST] = inferenceService
-            val chatRepository = mockk<ChatRepository>(relaxed = true)
-            val contentSlot = slot<String>()
-            coEvery {
-                chatRepository.persistAllMessageData(
-                    messageId = any(),
-                    modelType = any(),
-                    thinkingStartTime = any(),
-                    thinkingEndTime = any(),
-                    thinkingDuration = any(),
-                    thinkingRaw = any(),
-                    content = capture(contentSlot),
-                    messageState = any(),
-                    pipelineStep = any(),
-                    webSearchSources = any(),
-                    artifacts = any(),
-                    generatedMediaUris = any(),
-                    generatedMediaAssetIds = any(),
-                    generatedMediaTypes = any(),
-                    generatedMediaPrompts = any(),
-                    transcriptSegments = any(),
-                )
-            } returns Unit
+            val chatRepository = FakeChatRepository()
 
             val messageRepository =
-                mockMessageRepository(
+                fakeMessageRepository(
                     currentMessage =
                         Message(
                             id = MessageId("1"),
@@ -319,11 +304,11 @@ class GenerateChatResponseUseCaseImageToolTest {
                     messageRepository = messageRepository,
                     chatRepository = chatRepository,
                     activeModelProvider =
-                        mockActiveModelProvider(
+                        fakeActiveModelProvider(
                             fastConfig = fastTextConfig(),
                             visionConfig = apiVisionConfig(),
                         ),
-                    settingsRepository = mockSettingsRepository(),
+                    settingsRepository = fakeSettingsRepository(),
                 )
 
             useCase(
@@ -335,7 +320,10 @@ class GenerateChatResponseUseCaseImageToolTest {
                 backgroundInferenceEnabled = false,
             ).toList()
 
-            val persisted = contentSlot.captured
+            val persisted =
+                chatRepository.persistAllMessageDataCalls
+                    .single { it.messageId == MessageId("2") }
+                    .content
             assertFalse(persisted.contains("attached_image_inspect"))
             assertFalse(persisted.contains("<tool_result>"))
             assertTrue(persisted.contains("Based on the image, the bicycle is red."))
@@ -379,7 +367,7 @@ class GenerateChatResponseUseCaseImageToolTest {
                 )
 
             val messageRepository =
-                mockMessageRepository(
+                fakeMessageRepository(
                     currentMessage = currentUser,
                     chatMessages = listOf(priorUser, currentUser),
                     visionAnalyses = mapOf(MessageId("prior-user") to listOf(analysis)),
@@ -390,11 +378,11 @@ class GenerateChatResponseUseCaseImageToolTest {
                     inferenceFactory = inferenceFactory,
                     messageRepository = messageRepository,
                     activeModelProvider =
-                        mockActiveModelProvider(
+                        fakeActiveModelProvider(
                             fastConfig = fastTextConfig(),
                             visionConfig = apiVisionConfig(),
                         ),
-                    settingsRepository = mockSettingsRepository(),
+                    settingsRepository = fakeSettingsRepository(),
                 )
 
             useCase(
@@ -422,29 +410,13 @@ class GenerateChatResponseUseCaseImageToolTest {
             )
         }
 
-    private val stubPromptComposer =
-        object : com.browntowndev.enclave.domain.port.inference.PromptComposerPort {
-            override fun compose(
-                baseSystemPrompt: String?,
-                toolCatalog: List<com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry>,
-                activeTools: List<ToolDefinition>,
-                currentChatId: String?,
-                strategy: ToolCallStrategy,
-                coreMemories: List<com.browntowndev.enclave.domain.model.memory.Memory>,
-                retrievedMemories: List<com.browntowndev.enclave.domain.model.memory.Memory>,
-                retrievedSearchResults: String?,
-                retrievedXSearchResults: String?,
-                compactStaticPrompt: Boolean,
-            ): String = baseSystemPrompt ?: ""
-        }
-
     private fun createUseCase(
         inferenceFactory: FakeInferenceFactory,
         messageRepository: MessageRepository,
         activeModelProvider: ActiveModelProviderPort,
         settingsRepository: SettingsRepository,
-        pipelineExecutor: PipelineExecutorPort = mockPipelineExecutor(),
-        chatRepository: ChatRepository = mockk(relaxed = true),
+        pipelineExecutor: FakePipelineExecutor = FakePipelineExecutor(),
+        chatRepository: ChatRepository = FakeChatRepository(),
     ): GenerateChatResponseUseCase {
         val directExecutor =
             DirectChatInferenceExecutor(
@@ -452,34 +424,25 @@ class GenerateChatResponseUseCaseImageToolTest {
                 activeModelProvider = activeModelProvider,
                 messageRepository = messageRepository,
                 settingsRepository = settingsRepository,
-                memoriesRepository =
-                    mockk(relaxed = true) {
-                        coEvery { getCoreMemories() } returns emptyList()
-                        coEvery { searchMemories(any(), any(), any(), any()) } returns emptyList()
-                    },
-                embeddingEnginePort =
-                    mockk(relaxed = true) {
-                        coEvery { getEmbedding(any()) } returns floatArrayOf()
-                    },
-                promptComposer = stubPromptComposer,
-                defaultModelRepository = mockk(relaxed = true),
-                mediaProviderRepository = mockk(relaxed = true),
-                mediaToolDefinitionFactory = mockk(relaxed = true),
-                getProviderCapabilitiesUseCase =
-                    com.browntowndev.enclave.domain.usecase.media
-                        .GetProviderCapabilitiesUseCase(),
-                loggingPort = mockk<LoggingPort>(relaxed = true),
-                searchIntentClassifier = mockk(relaxed = true),
-                toolExecutor = mockk(relaxed = true),
+                memoriesRepository = FakeMemoriesRepository(),
+                embeddingEnginePort = FakeEmbeddingEngine(),
+                promptComposer = FakePromptComposer(),
+                defaultModelRepository = FakeDefaultModelRepository(),
+                mediaProviderRepository = FakeMediaProviderRepository(),
+                mediaToolDefinitionFactory = MediaToolDefinitionFactory(GetProviderCapabilitiesUseCase()),
+                getProviderCapabilitiesUseCase = GetProviderCapabilitiesUseCase(),
+                loggingPort = FakeLoggingPort(),
+                searchIntentClassifier = FakeSearchIntentClassifier(),
+                toolExecutor = FakeToolExecutor(),
             )
         return GenerateChatResponseUseCase(
             pipelineExecutor = pipelineExecutor,
             chatRepository = chatRepository,
             messageRepository = messageRepository,
-            loggingPort = mockk<LoggingPort>(relaxed = true),
+            loggingPort = FakeLoggingPort(),
             activeModelProvider = activeModelProvider,
             extractedUrlTracker =
-                object : com.browntowndev.enclave.domain.port.repository.ExtractedUrlTrackerPort {
+                object : ExtractedUrlTrackerPort {
                     override val urls: Set<String> get() = emptySet()
 
                     override fun add(url: String) {}
@@ -487,18 +450,17 @@ class GenerateChatResponseUseCaseImageToolTest {
                     override fun clear() {}
                 },
             chatInferenceExecutor = directExecutor,
-            embeddingEngine = mockk(relaxed = true),
+            embeddingEngine = FakeEmbeddingEngine(),
             inferenceLockManager = FakeInferenceLockManager(),
         )
     }
 
-    private fun mockActiveModelProvider(
+    private fun fakeActiveModelProvider(
         fastConfig: ActiveModelConfiguration,
         visionConfig: ActiveModelConfiguration?,
-    ): ActiveModelProviderPort =
-        mockk {
-            coEvery { getActiveConfiguration(ModelType.FAST) } returns fastConfig
-            coEvery { getActiveConfiguration(ModelType.VISION) } returns visionConfig
+    ): FakeActiveModelProvider =
+        FakeActiveModelProvider(configuration = fastConfig).apply {
+            configurationsByType[ModelType.VISION] = visionConfig
         }
 
     private fun fastTextConfig(): ActiveModelConfiguration =
@@ -546,33 +508,27 @@ class GenerateChatResponseUseCaseImageToolTest {
             isMultimodal = true,
         )
 
-    private fun mockMessageRepository(
+    private suspend fun fakeMessageRepository(
         currentMessage: Message,
         resolvedImageTarget: ResolvedImageTarget? = null,
         chatMessages: List<Message> = emptyList(),
         visionAnalyses: Map<MessageId, List<MessageVisionAnalysis>> = emptyMap(),
-    ): MessageRepository =
-        mockk {
-            coEvery { getMessageById(any()) } returns currentMessage
-            coEvery { getMessagesForChat(any()) } returns chatMessages
-            coEvery { getVisionAnalysesForMessages(any()) } answers {
-                val ids = args[0] as List<MessageId>
-                ids.associateWith { visionAnalyses[it].orEmpty() }.filterValues { it.isNotEmpty() }
-            }
-            coEvery { resolveLatestImageBearingUserMessage(any(), any()) } returns resolvedImageTarget
-            coEvery { saveVisionAnalysis(any(), any(), any(), any(), any()) } returns Unit
-            coEvery { getChatSummary(any()) } returns null
+    ): FakeMessageRepository {
+        val seed = (chatMessages + currentMessage).distinctBy { it.id }
+        val repository = FakeMessageRepository(initial = seed)
+        repository.resolvedImageTarget = resolvedImageTarget
+        visionAnalyses.values.flatten().forEach { analysis ->
+            repository.saveVisionAnalysis(
+                userMessageId = analysis.userMessageId,
+                imageUri = analysis.imageUri,
+                promptText = analysis.promptText,
+                analysisText = analysis.analysisText,
+                modelType = analysis.modelType,
+            )
         }
+        return repository
+    }
 
-    private fun mockSettingsRepository(settings: SettingsData = SettingsData()): SettingsRepository =
-        mockk {
-            every { settingsFlow } returns flowOf(settings)
-        }
-
-    private fun mockPipelineExecutor(): PipelineExecutorPort =
-        mockk {
-            every { executePipeline(any(), any(), any(), any(), any()) } returns emptyFlow()
-            coEvery { stopPipeline(any()) } returns Unit
-            coEvery { resumeFromState(any(), any(), any(), any()) } returns emptyFlow()
-        }
+    private fun fakeSettingsRepository(settings: SettingsData = SettingsData()): FakeSettingsRepository =
+        FakeSettingsRepository(initial = settings)
 }

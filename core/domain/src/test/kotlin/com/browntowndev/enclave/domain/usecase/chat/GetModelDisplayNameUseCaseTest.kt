@@ -1,24 +1,22 @@
 package com.browntowndev.enclave.domain.usecase.chat
 
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
 import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.error.ActiveModelConfigurationDecryptException
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
-import io.mockk.coEvery
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
 class GetModelDisplayNameUseCaseTest {
-    private val activeModelProvider = mockk<ActiveModelProviderPort>()
+    private val activeModelProvider = FakeActiveModelProvider()
     private val useCase = GetModelDisplayNameUseCase(activeModelProvider)
 
     @Test
     fun `SCN-USECASE-001 get model display name returns asset label`() =
         runTest {
-            coEvery { activeModelProvider.getActiveConfiguration(ModelType.FAST) } returns
+            activeModelProvider.configuration =
                 ActiveModelConfiguration(
                     id = LocalModelConfigurationId("cfg-fast"),
                     isLocal = true,
@@ -41,7 +39,7 @@ class GetModelDisplayNameUseCaseTest {
     @Test
     fun `returns empty string when no active configuration`() =
         runTest {
-            coEvery { activeModelProvider.getActiveConfiguration(ModelType.FAST) } returns null
+            activeModelProvider.configuration = null
 
             assertEquals("", useCase(ModelType.FAST))
         }
@@ -49,7 +47,7 @@ class GetModelDisplayNameUseCaseTest {
     @Test
     fun `returns decrypt user message instead of propagating exception`() =
         runTest {
-            coEvery { activeModelProvider.getActiveConfiguration(ModelType.FAST) } throws
+            activeModelProvider.failure =
                 ActiveModelConfigurationDecryptException(ModelType.FAST)
 
             assertEquals(ActiveModelConfigurationDecryptException.USER_MESSAGE, useCase(ModelType.FAST))

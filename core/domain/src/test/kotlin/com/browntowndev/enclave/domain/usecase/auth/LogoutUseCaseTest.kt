@@ -1,21 +1,75 @@
 package com.browntowndev.enclave.domain.usecase.auth
 
-import com.browntowndev.enclave.domain.port.auth.AuthManager
-import com.browntowndev.enclave.domain.port.repository.CleanupRepository
-import com.browntowndev.enclave.domain.port.repository.CloudSyncPort
+import com.browntowndev.enclave.core.testing.FakeApiModelRepository
+import com.browntowndev.enclave.core.testing.FakeAuthManager
+import com.browntowndev.enclave.core.testing.FakeCleanupRepository
+import com.browntowndev.enclave.core.testing.FakeCloudSyncPort
+import com.browntowndev.enclave.core.testing.FakeDefaultModelRepository
+import com.browntowndev.enclave.core.testing.FakeGpuCapability
+import com.browntowndev.enclave.core.testing.FakeLocalImageGenerationCapability
+import com.browntowndev.enclave.core.testing.FakeLocalModelRepository
+import com.browntowndev.enclave.core.testing.FakeMediaProviderRepository
+import com.browntowndev.enclave.core.testing.FakeModelConfigFetcher
+import com.browntowndev.enclave.core.testing.FakeModelPackVerifierPort
+import com.browntowndev.enclave.core.testing.FakeTtsProviderRepository
+import com.browntowndev.enclave.core.testing.FakeUtilityModelFile
+import com.browntowndev.enclave.domain.usecase.byok.GetApiModelAssetsUseCaseImpl
+import com.browntowndev.enclave.domain.usecase.byok.GetDefaultModelsUseCaseImpl
+import com.browntowndev.enclave.domain.usecase.byok.SetDefaultModelUseCaseImpl
+import com.browntowndev.enclave.domain.usecase.download.ResolveModelCatalogUseCase
+import com.browntowndev.enclave.domain.usecase.download.VerifyModelPackCompletenessUseCase
+import com.browntowndev.enclave.domain.usecase.media.GetMediaProvidersUseCase
+import com.browntowndev.enclave.domain.usecase.media.LocalStableDiffusionTargetResolver
+import com.browntowndev.enclave.domain.usecase.media.SelectLocalImageGenerationBackendUseCase
+import com.browntowndev.enclave.domain.usecase.modelconfig.GetLocalModelAssetsUseCaseImpl
 import com.browntowndev.enclave.domain.usecase.settings.AutoAssignLocalModelsUseCase
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
+import com.browntowndev.enclave.domain.usecase.settings.GetTtsProvidersUseCase
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
+/** Recording [AutoAssignLocalModelsUseCase] fake (ENC-28): counts invocations, does no assignment work. */
+private class FakeAutoAssignLocalModelsUseCase : AutoAssignLocalModelsUseCase(
+    getLocalModelAssetsUseCase = GetLocalModelAssetsUseCaseImpl(FakeLocalModelRepository()),
+    getDefaultModelsUseCase = GetDefaultModelsUseCaseImpl(FakeDefaultModelRepository()),
+    setDefaultModelUseCase =
+        SetDefaultModelUseCaseImpl(
+            FakeDefaultModelRepository(),
+            FakeApiModelRepository(),
+            FakeLocalModelRepository(),
+            VerifyModelPackCompletenessUseCase(
+                FakeModelPackVerifierPort(),
+                ResolveModelCatalogUseCase(FakeModelConfigFetcher()),
+            ),
+            ResolveModelCatalogUseCase(FakeModelConfigFetcher()),
+            FakeGpuCapability(),
+            FakeLocalImageGenerationCapability(),
+            LocalStableDiffusionTargetResolver(
+                FakeLocalModelRepository(),
+                FakeUtilityModelFile(),
+                FakeGpuCapability(),
+                FakeLocalImageGenerationCapability(),
+                SelectLocalImageGenerationBackendUseCase(),
+            ),
+        ),
+    getApiModelAssetsUseCase = GetApiModelAssetsUseCaseImpl(FakeApiModelRepository()),
+    getTtsProvidersUseCase = GetTtsProvidersUseCase(FakeTtsProviderRepository()),
+    getMediaProvidersUseCase = GetMediaProvidersUseCase(FakeMediaProviderRepository()),
+    capabilityPort = FakeLocalImageGenerationCapability(),
+) {
+    var invokeCallCount = 0
+
+    override suspend fun invoke() {
+        invokeCallCount++
+    }
+}
+
 class LogoutUseCaseTest {
-    private val authManager = mockk<AuthManager>()
-    private val cleanupRepository = mockk<CleanupRepository>(relaxed = true)
-    private val cloudSyncPort = mockk<CloudSyncPort>(relaxed = true)
-    private val autoAssignLocalModelsUseCase = mockk<AutoAssignLocalModelsUseCase>(relaxed = true)
+    private val authManager = FakeAuthManager()
+    private val cleanupRepository = FakeCleanupRepository()
+    private val cloudSyncPort = FakeCloudSyncPort()
+    private val autoAssignLocalModelsUseCase = FakeAutoAssignLocalModelsUseCase()
     private val logoutUseCase =
         LogoutUseCase(
             authManager,
@@ -27,42 +81,40 @@ class LogoutUseCaseTest {
     @Test
     fun `invoke signs out and clears user content while preserving models`() =
         runTest {
-            coEvery { authManager.signOut() } returns Result.success(Unit)
-            every { cloudSyncPort.stopListening() } returns Unit
+            authManager.signOutResult = Result.success(Unit)
 
             logoutUseCase()
 
-            coVerify { authManager.signOut() }
-            coVerify { cloudSyncPort.stopListening() }
-            coVerify { cleanupRepository.clearUserContent() }
-            coVerify(exactly = 0) { cleanupRepository.clearAllData() }
-            coVerify { autoAssignLocalModelsUseCase() }
+            assertEquals(1, authManager.signOutCallCount)
+            assertEquals(1, cloudSyncPort.count("stopListening"))
+            assertEquals(1, cleanupRepository.clearUserContentCallCount)
+            assertEquals(0, cleanupRepository.clearAllDataCallCount)
+            assertEquals(1, autoAssignLocalModelsUseCase.invokeCallCount)
         }
 
     @Test
     fun `invoke does not clear data on sign out failure`() =
         runTest {
-            coEvery { authManager.signOut() } returns Result.failure(Exception("Sign out failed"))
+            authManager.signOutResult = Result.failure(Exception("Sign out failed"))
 
             logoutUseCase()
 
-            coVerify { authManager.signOut() }
-            coVerify(exactly = 0) { cleanupRepository.clearUserContent() }
-            coVerify(exactly = 0) { cleanupRepository.clearAllData() }
-            coVerify(exactly = 0) { autoAssignLocalModelsUseCase() }
+            assertEquals(1, authManager.signOutCallCount)
+            assertEquals(0, cleanupRepository.clearUserContentCallCount)
+            assertEquals(0, cleanupRepository.clearAllDataCallCount)
+            assertEquals(0, autoAssignLocalModelsUseCase.invokeCallCount)
         }
 
     @Test
     fun `invoke returns success even if cleanup fails`() =
         runTest {
-            coEvery { authManager.signOut() } returns Result.success(Unit)
-            coEvery { cleanupRepository.clearUserContent() } throws Exception("Database error")
-            every { cloudSyncPort.stopListening() } returns Unit
+            authManager.signOutResult = Result.success(Unit)
+            cleanupRepository.clearUserContentFailure = Exception("Database error")
 
             val result = logoutUseCase()
 
-            assert(result.isSuccess)
-            coVerify { authManager.signOut() }
-            coVerify { cleanupRepository.clearUserContent() }
+            assertTrue(result.isSuccess)
+            assertEquals(1, authManager.signOutCallCount)
+            assertEquals(1, cleanupRepository.clearUserContentCallCount)
         }
 }
