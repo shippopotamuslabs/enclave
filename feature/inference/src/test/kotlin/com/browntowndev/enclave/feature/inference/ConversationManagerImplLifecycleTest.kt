@@ -1,31 +1,44 @@
+// MockK is used only for LiteRT-LM SDK types (com.google.ai.edge.litertlm.*), a third-party SDK boundary.
+@file:Suppress("ForbiddenMockKInTests")
+
 package com.browntowndev.enclave.feature.inference
 
 import android.content.Context
-import android.util.Log
+import androidx.test.core.app.ApplicationProvider
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
+import com.browntowndev.enclave.core.testing.FakeEmbeddingEngine
+import com.browntowndev.enclave.core.testing.FakeLocalModelRepository
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeToolExecutor
 import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
+import com.browntowndev.enclave.domain.model.config.LocalModelAsset
+import com.browntowndev.enclave.domain.model.config.LocalModelConfiguration
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.enclave.domain.model.config.LocalModelId
+import com.browntowndev.enclave.domain.model.config.LocalModelMetadata
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
+import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
-import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
-import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.google.ai.edge.litertlm.Conversation
 import com.google.ai.edge.litertlm.Engine
+import io.mockk.every
 import io.mockk.mockk
-import io.mockk.*
+import io.mockk.verify
 import kotlinx.coroutines.test.runTest
-import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class ConversationManagerImplLifecycleTest {
-    private val context = mockk<Context>(relaxed = true)
-    private val localModelRepository = mockk<LocalModelRepositoryPort>(relaxed = true)
-    private val activeModelProvider = mockk<ActiveModelProviderPort>(relaxed = true)
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
-    private val toolExecutor = mockk<ToolExecutorPort>(relaxed = true)
+    private val localModelRepository = FakeLocalModelRepository()
+    private val activeModelProvider = FakeActiveModelProvider()
+    private val loggingPort = FakeLoggingPort()
+    private val toolExecutor = FakeToolExecutor()
 
     private lateinit var manager: ConversationManagerImpl
     private val mockEngine = mockk<Engine>(relaxed = true)
@@ -33,36 +46,21 @@ class ConversationManagerImplLifecycleTest {
 
     @BeforeEach
     fun setUp() {
-        MockKAnnotations.init(this)
-        mockkStatic(Log::class)
-        every { Log.d(any<String>(), any<String>()) } returns 0
-        every { Log.i(any<String>(), any<String>()) } returns 0
-        every { Log.w(any<String>(), any<String>()) } returns 0
-
+        val context = ApplicationProvider.getApplicationContext<Context>()
         manager =
-            spyk(
-                ConversationManagerImpl(
-                    context = context,
-                    localModelRepository = localModelRepository,
-                    activeModelProvider = activeModelProvider,
-                    loggingPort = loggingPort,
-                    toolExecutor = toolExecutor,
-                embeddingEnginePort = mockk(relaxed = true),
-                ),
+            ConversationManagerImpl(
+                context = context,
+                localModelRepository = localModelRepository,
+                activeModelProvider = activeModelProvider,
+                loggingPort = loggingPort,
+                toolExecutor = toolExecutor,
+                embeddingEnginePort = FakeEmbeddingEngine(),
             )
 
         manager.engineCreatorHolder.override = { _, _, _, _, _ -> mockEngine }
 
-        // Default mock behaviors
-        every { manager.getModelPath(any()) } returns "/mock/path"
         every { mockEngine.createConversation(any()) } returns mockConversation
-        every { mockEngine.initialize() } just Runs
         every { mockConversation.isAlive } returns true
-    }
-
-    @AfterEach
-    fun tearDown() {
-        unmockkStatic(Log::class)
     }
 
     @Test
@@ -70,17 +68,8 @@ class ConversationManagerImplLifecycleTest {
         runTest {
             // Given
             val configId = LocalModelConfigurationId("config-1")
-            val activeConfig = mockk<ActiveModelConfiguration>(relaxed = true)
-            every { activeConfig.id } returns configId
-            every { activeConfig.isLocal } returns true
-            every { activeConfig.topK } returns null
-            every { activeConfig.topP } returns null
-            every { activeConfig.temperature } returns null
-            coEvery { activeModelProvider.getActiveConfiguration(ModelType.FAST) } returns activeConfig
-
-            val asset = mockk<com.browntowndev.enclave.domain.model.config.LocalModelAsset>(relaxed = true)
-            coEvery { localModelRepository.getAssetByConfigId(configId) } returns asset
-            every { asset.metadata.localFileName } returns "model.bin"
+            activeModelProvider.configuration = activeConfiguration(configId)
+            registerAsset(configId, "model.bin")
 
             // When
             val conv1 = manager.getConversation(ModelType.FAST, null, onLoadingStarted = {})
@@ -97,17 +86,8 @@ class ConversationManagerImplLifecycleTest {
         runTest {
             // Given
             val configId = LocalModelConfigurationId("config-1")
-            val activeConfig = mockk<ActiveModelConfiguration>(relaxed = true)
-            every { activeConfig.id } returns configId
-            every { activeConfig.isLocal } returns true
-            every { activeConfig.topK } returns null
-            every { activeConfig.topP } returns null
-            every { activeConfig.temperature } returns null
-            coEvery { activeModelProvider.getActiveConfiguration(ModelType.FAST) } returns activeConfig
-
-            val asset = mockk<com.browntowndev.enclave.domain.model.config.LocalModelAsset>(relaxed = true)
-            coEvery { localModelRepository.getAssetByConfigId(configId) } returns asset
-            every { asset.metadata.localFileName } returns "model.bin"
+            activeModelProvider.configuration = activeConfiguration(configId)
+            registerAsset(configId, "model.bin")
 
             // When
             manager.getConversation(ModelType.FAST, null, onLoadingStarted = {})
@@ -128,36 +108,16 @@ class ConversationManagerImplLifecycleTest {
         runTest {
             // Given
             val configId1 = LocalModelConfigurationId("config-1")
-            val activeConfig1 = mockk<ActiveModelConfiguration>(relaxed = true)
-            every { activeConfig1.id } returns configId1
-            every { activeConfig1.isLocal } returns true
-            every { activeConfig1.topK } returns null
-            every { activeConfig1.topP } returns null
-            every { activeConfig1.temperature } returns null
-            coEvery { activeModelProvider.getActiveConfiguration(ModelType.FAST) } returns activeConfig1
-
-            val asset1 = mockk<com.browntowndev.enclave.domain.model.config.LocalModelAsset>(relaxed = true)
-            coEvery { localModelRepository.getAssetByConfigId(configId1) } returns asset1
-            every { asset1.metadata.localFileName } returns "model1.bin"
-            every { manager.getModelPath("model1.bin") } returns "/path/1"
+            activeModelProvider.configuration = activeConfiguration(configId1)
+            registerAsset(configId1, "model1.bin")
 
             // First call
             manager.getConversation(ModelType.FAST, null, onLoadingStarted = {})
 
             // Change model path
             val configId2 = LocalModelConfigurationId("config-2")
-            val activeConfig2 = mockk<ActiveModelConfiguration>(relaxed = true)
-            every { activeConfig2.id } returns configId2
-            every { activeConfig2.isLocal } returns true
-            every { activeConfig2.topK } returns null
-            every { activeConfig2.topP } returns null
-            every { activeConfig2.temperature } returns null
-            coEvery { activeModelProvider.getActiveConfiguration(ModelType.FAST) } returns activeConfig2
-
-            val asset2 = mockk<com.browntowndev.enclave.domain.model.config.LocalModelAsset>(relaxed = true)
-            coEvery { localModelRepository.getAssetByConfigId(configId2) } returns asset2
-            every { asset2.metadata.localFileName } returns "model2.bin"
-            every { manager.getModelPath("model2.bin") } returns "/path/2"
+            activeModelProvider.configuration = activeConfiguration(configId2)
+            registerAsset(configId2, "model2.bin")
 
             // When
             manager.getConversation(ModelType.FAST, null, onLoadingStarted = {})
@@ -166,4 +126,57 @@ class ConversationManagerImplLifecycleTest {
             verify(exactly = 2) { mockEngine.initialize() }
             verify(exactly = 1) { mockEngine.close() }
         }
+
+    private fun activeConfiguration(configId: LocalModelConfigurationId): ActiveModelConfiguration =
+        ActiveModelConfiguration(
+            id = configId,
+            isLocal = true,
+            name = "Test Model",
+            modelId = configId.value,
+            systemPrompt = "System",
+            temperature = null,
+            topK = null,
+            topP = null,
+            maxTokens = 512,
+            minP = 0.0,
+            repetitionPenalty = 1.1,
+            contextWindow = 4096,
+            thinkingEnabled = false,
+        )
+
+    private suspend fun registerAsset(
+        configId: LocalModelConfigurationId,
+        localFileName: String,
+    ) {
+        val assetId = LocalModelId("asset-${configId.value}")
+        localModelRepository.upsertLocalAsset(
+            LocalModelAsset(
+                metadata =
+                    LocalModelMetadata(
+                        id = assetId,
+                        huggingFaceModelName = "test/model",
+                        remoteFileName = localFileName,
+                        localFileName = localFileName,
+                        sha256 = "abc123",
+                        sizeInBytes = 1024L,
+                        modelFileFormat = ModelFileFormat.GGUF,
+                    ),
+                configurations = emptyList(),
+            ),
+        )
+        localModelRepository.upsertLocalConfiguration(
+            LocalModelConfiguration(
+                id = configId,
+                localModelId = assetId,
+                displayName = "Test",
+                maxTokens = 512,
+                contextWindow = 4096,
+                temperature = 0.7,
+                topP = 0.9,
+                topK = 40,
+                repetitionPenalty = 1.1,
+                systemPrompt = "System",
+            ),
+        )
+    }
 }

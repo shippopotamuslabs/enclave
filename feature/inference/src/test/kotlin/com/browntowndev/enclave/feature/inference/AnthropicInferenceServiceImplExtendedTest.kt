@@ -1,10 +1,13 @@
+// MockK is used only for the Anthropic Java SDK client (com.anthropic.*), a third-party SDK boundary.
+@file:Suppress("ForbiddenMockKInTests")
+
 package com.browntowndev.enclave.feature.inference
 
 import com.anthropic.client.AnthropicClient
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.model.chat.ChatMessage
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.util.FakeToolEnvelopeParserPort
 import com.browntowndev.enclave.domain.util.FakeToolStreamGatePort
 import io.mockk.mockk
@@ -15,7 +18,7 @@ import org.junit.jupiter.api.assertThrows
 
 class AnthropicInferenceServiceImplExtendedTest {
     private val client = mockk<AnthropicClient>()
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
+    private val loggingPort = FakeLoggingPort()
 
     private lateinit var service: AnthropicInferenceServiceImpl
 

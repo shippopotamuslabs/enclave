@@ -2,10 +2,8 @@ package com.browntowndev.enclave.feature.inference.moderation
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
-import com.browntowndev.enclave.domain.model.config.UtilityType
 import com.browntowndev.enclave.domain.port.repository.UtilityModelFilePort
-import io.mockk.coEvery
-import io.mockk.mockk
+import com.browntowndev.enclave.feature.inference.FakeUtilityModelFilePort
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -25,8 +23,8 @@ class ResponseModerationClassifierTest {
     @BeforeEach
     fun setup() {
         context = ApplicationProvider.getApplicationContext()
-        utilityModelFilePort = mockk()
-        coEvery { utilityModelFilePort.resolveUtilityModelPath(UtilityType.PROMPT_SAFETY_CLASSIFIER) } returns null
+        // No path seeded: the fake resolves null, so the classifier degrades silently.
+        utilityModelFilePort = FakeUtilityModelFilePort()
         classifier = ResponseModerationClassifier(context, utilityModelFilePort)
     }
 

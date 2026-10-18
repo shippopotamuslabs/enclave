@@ -7,20 +7,20 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class LocalImageGenerationEngine
+open class LocalImageGenerationEngine
     @Inject
     constructor(
         private val qnnBackend: QnnStableDiffusionBackend,
         private val mnnBackend: MnnCpuStableDiffusionBackend,
         private val nativeRuntime: NativeLocalImageGenRuntime,
     ) {
-        fun cancel() {
+        open fun cancel() {
             nativeRuntime.cancel()
             qnnBackend.cancel()
             mnnBackend.cancel()
         }
 
-        suspend fun generate(request: LocalImageGenerationNativeRequest): Result<LocalImageGenerationNativeResult> {
+        open suspend fun generate(request: LocalImageGenerationNativeRequest): Result<LocalImageGenerationNativeResult> {
             val backend =
                 when (request.backend) {
                     LocalImageGenerationBackendKind.QNN_NPU -> qnnBackend

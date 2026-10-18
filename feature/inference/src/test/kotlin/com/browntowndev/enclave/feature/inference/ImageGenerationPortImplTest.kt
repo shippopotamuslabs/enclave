@@ -1,5 +1,10 @@
 package com.browntowndev.enclave.feature.inference
 
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import com.browntowndev.enclave.core.testing.FakeApiKeyProvider
+import com.browntowndev.enclave.core.testing.FakeMediaProviderRepository
+import com.browntowndev.enclave.core.testing.FakeStudioRepository
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.config.MediaProviderAsset
@@ -11,65 +16,63 @@ import com.browntowndev.enclave.domain.model.media.GenerationQuality
 import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
 import com.browntowndev.enclave.domain.model.media.ImageGenerationTarget
 import com.browntowndev.enclave.domain.model.media.ProviderCapabilities
-import com.browntowndev.enclave.domain.port.media.GpuCapabilityPort
 import com.browntowndev.enclave.domain.port.media.LOCAL_IMAGE_GENERATION_UNSUPPORTED_MESSAGE
-import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
-import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.domain.port.security.ApiKeyProviderPort
-import com.browntowndev.enclave.feature.inference.media.FalImageGenerationAdapter
-import com.browntowndev.enclave.feature.inference.media.GoogleImageGenerationAdapter
 import com.browntowndev.enclave.feature.inference.media.ImageGenerationPortImpl
-import com.browntowndev.enclave.feature.inference.media.OpenAiImageGenerationAdapter
-import com.browntowndev.enclave.feature.inference.media.XaiImageGenerationAdapter
 import com.browntowndev.enclave.feature.inference.media.local.LocalStableDiffusionGenerationResult
-import com.browntowndev.enclave.feature.inference.media.local.LocalStableDiffusionImageGenerator
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
+import com.browntowndev.enclave.localimagegen.NativeLocalImageGenRuntime
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34], shadows = [ShadowFakeNativeLocalImageGenRuntime::class])
 class ImageGenerationPortImplTest {
-    private val apiKeyProvider = mockk<ApiKeyProviderPort>()
-    private val studioRepository = mockk<StudioRepositoryPort>()
-    private val mediaProviderRepository = mockk<MediaProviderRepositoryPort>()
-    private val gpuCapabilityPort = mockk<GpuCapabilityPort>()
-    private val localStableDiffusionImageGenerator = mockk<LocalStableDiffusionImageGenerator>()
-    private val openAiAdapter = mockk<OpenAiImageGenerationAdapter>()
-    private val googleAdapter = mockk<GoogleImageGenerationAdapter>()
-    private val xaiAdapter = mockk<XaiImageGenerationAdapter>()
-    private val falAdapter = mockk<FalImageGenerationAdapter>()
+    private val apiKeyProvider = FakeApiKeyProvider()
+    private val studioRepository = FakeStudioRepository()
+    private val mediaProviderRepository = FakeMediaProviderRepository()
+    private val gpuCapabilityPort = KnobbedGpuCapabilityPort(supported = true)
+    private lateinit var localStableDiffusionImageGenerator: FakeLocalStableDiffusionImageGenerator
+    private val openAiAdapter = FakeOpenAiImageGenerationAdapter()
+    private val googleAdapter = FakeGoogleImageGenerationAdapter()
+    private val xaiAdapter = FakeXaiImageGenerationAdapter()
+    private val falAdapter = FakeFalImageGenerationAdapter()
     private lateinit var port: ImageGenerationPortImpl
 
     @BeforeEach
     fun setup() {
-        port =
-            ImageGenerationPortImpl(
-                apiKeyProvider = apiKeyProvider,
-                studioRepository = studioRepository,
-                mediaProviderRepository = mediaProviderRepository,
-                gpuCapabilityPort = gpuCapabilityPort,
-                localStableDiffusionImageGenerator = localStableDiffusionImageGenerator,
-                openAiAdapter = openAiAdapter,
-                googleAdapter = googleAdapter,
-                xaiAdapter = xaiAdapter,
-                falAdapter = falAdapter,
-            )
-        coEvery { apiKeyProvider.getApiKey("alias") } returns "key"
-        coEvery { studioRepository.readMediaBytes("cache://reference.png") } returns "png".toByteArray()
-        every { gpuCapabilityPort.isLocalImageGenerationSupported() } returns true
+        val context: Context = ApplicationProvider.getApplicationContext()
+        val runtime = NativeLocalImageGenRuntime(context)
+        localStableDiffusionImageGenerator = FakeLocalStableDiffusionImageGenerator(context, runtime)
+        port = buildPort(apiKeyProvider)
+        apiKeyProvider.saveApiKey("alias", "key")
+        studioRepository.mediaBytes["cache://reference.png"] = "png".toByteArray()
     }
+
+    private fun buildPort(apiKeyProvider: ApiKeyProviderPort): ImageGenerationPortImpl =
+        ImageGenerationPortImpl(
+            apiKeyProvider = apiKeyProvider,
+            studioRepository = studioRepository,
+            mediaProviderRepository = mediaProviderRepository,
+            gpuCapabilityPort = gpuCapabilityPort,
+            localStableDiffusionImageGenerator = localStableDiffusionImageGenerator,
+            openAiAdapter = openAiAdapter,
+            googleAdapter = googleAdapter,
+            xaiAdapter = xaiAdapter,
+            falAdapter = falAdapter,
+        )
 
     @Test
     fun generateImage_missingApiKey_returnsFailure() =
         runTest {
-            coEvery { apiKeyProvider.getApiKey("alias") } returns null
-            coEvery { mediaProviderRepository.getMediaProvider(any()) } returns provider(ApiProvider.OPENAI)
+            port = buildPort(FakeApiKeyProvider())
+            mediaProviderRepository.emitProviders(listOf(provider(ApiProvider.OPENAI)))
 
             val result = port.generateImage("prompt", remoteTarget(), ImageGenerationSettings())
 
@@ -81,10 +84,8 @@ class ImageGenerationPortImplTest {
     fun generateImage_falProvider_loadsReferenceAndUsesDefaultModel() =
         runTest {
             val falProvider = provider(ApiProvider.FAL, modelName = null).copy(tasks = setOf(MediaTask.EDIT_IMAGE))
-            coEvery { mediaProviderRepository.getMediaProvider(any()) } returns falProvider
-            coEvery {
-                falAdapter.generateImage(any(), any(), any(), any(), any(), any(), any())
-            } returns Result.success(listOf("fal".toByteArray()))
+            mediaProviderRepository.emitProviders(listOf(falProvider))
+            falAdapter.result = Result.success(listOf("fal".toByteArray()))
 
             val settings = ImageGenerationSettings(referenceImageUri = "cache://reference.png")
 
@@ -92,23 +93,20 @@ class ImageGenerationPortImplTest {
 
             assertTrue(result.isSuccess)
             assertArrayEquals("fal".toByteArray(), result.getOrThrow().single())
-            coVerify {
-                falAdapter.generateImage(
-                    prompt = "draw",
-                    apiKey = "key",
-                    modelId = "fal-ai/flux-pro/kontext",
-                    baseUrl = null,
-                    settings = settings,
-                    referenceImage = match { it.contentEquals("png".toByteArray()) },
-                    supportsEdit = true,
-                )
-            }
+            val call = falAdapter.calls.single()
+            assertEquals("draw", call.prompt)
+            assertEquals("key", call.apiKey)
+            assertEquals("fal-ai/flux-pro/kontext", call.modelId)
+            assertEquals(null, call.baseUrl)
+            assertEquals(settings, call.settings)
+            assertTrue(call.referenceImage?.contentEquals("png".toByteArray()) == true)
+            assertEquals(true, call.supportsEdit)
         }
 
     @Test
     fun generateImage_unsupportedProvider_returnsFailure() =
         runTest {
-            coEvery { mediaProviderRepository.getMediaProvider(any()) } returns provider(ApiProvider.ANTHROPIC)
+            mediaProviderRepository.emitProviders(listOf(provider(ApiProvider.ANTHROPIC)))
 
             val result = port.generateImage("prompt", remoteTarget(), ImageGenerationSettings())
 
@@ -119,7 +117,7 @@ class ImageGenerationPortImplTest {
     @Test
     fun generateImage_remoteTarget_providerNotFound_returnsFailure() =
         runTest {
-            coEvery { mediaProviderRepository.getMediaProvider(any()) } returns null
+            mediaProviderRepository.emitProviders(emptyList())
 
             val result = port.generateImage("prompt", remoteTarget(), ImageGenerationSettings())
 
@@ -131,7 +129,7 @@ class ImageGenerationPortImplTest {
     fun generateImage_localTarget_readsEveryGeneratedOutput() =
         runTest {
             val target = localTarget()
-            coEvery { localStableDiffusionImageGenerator.generate(any(), eq(target), any(), any()) } returns
+            localStableDiffusionImageGenerator.result =
                 Result.success(
                     LocalStableDiffusionGenerationResult(
                         outputFileReferences = listOf("/cache/bonsai-0.png", "/cache/bonsai-1.png"),
@@ -140,8 +138,8 @@ class ImageGenerationPortImplTest {
                         backend = com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind.QNN_NPU,
                     ),
                 )
-            coEvery { studioRepository.readMediaBytes("/cache/bonsai-0.png") } returns "img-0".toByteArray()
-            coEvery { studioRepository.readMediaBytes("/cache/bonsai-1.png") } returns "img-1".toByteArray()
+            studioRepository.mediaBytes["/cache/bonsai-0.png"] = "img-0".toByteArray()
+            studioRepository.mediaBytes["/cache/bonsai-1.png"] = "img-1".toByteArray()
 
             val result = port.generateImage("bonsai", target, ImageGenerationSettings(imageResolution = "512x512"))
 
@@ -155,7 +153,7 @@ class ImageGenerationPortImplTest {
     fun generateImage_localTarget_propagatesGeneratorFailure() =
         runTest {
             val target = localTarget()
-            coEvery { localStableDiffusionImageGenerator.generate(any(), eq(target), any(), any()) } returns
+            localStableDiffusionImageGenerator.result =
                 Result.failure(IllegalStateException("Local image generation failed."))
 
             val result = port.generateImage("bonsai", target, ImageGenerationSettings())
@@ -167,13 +165,13 @@ class ImageGenerationPortImplTest {
     @Test
     fun generateImage_unsupportedDevice_rejectsLocalTargetBeforeNativeGeneration() =
         runTest {
-            every { gpuCapabilityPort.isLocalImageGenerationSupported() } returns false
+            gpuCapabilityPort.supported = false
 
             val result = port.generateImage("bonsai", localTarget(), ImageGenerationSettings())
 
             assertTrue(result.isFailure)
             assertEquals(LOCAL_IMAGE_GENERATION_UNSUPPORTED_MESSAGE, result.exceptionOrNull()?.message)
-            coVerify(exactly = 0) { localStableDiffusionImageGenerator.generate(any(), any(), any(), any()) }
+            assertTrue(localStableDiffusionImageGenerator.calls.isEmpty())
         }
 
     private fun remoteTarget(): ImageGenerationTarget.Remote =
@@ -232,9 +230,7 @@ class ImageGenerationPortImplTest {
         runTest {
             val target = localTarget()
             val settings = ImageGenerationSettings(generationCount = 3)
-            coEvery {
-                localStableDiffusionImageGenerator.generate(any(), eq(target), any(), any())
-            } returnsMany
+            localStableDiffusionImageGenerator.resultQueue.addAll(
                 listOf(
                     Result.success(
                         LocalStableDiffusionGenerationResult(
@@ -260,23 +256,22 @@ class ImageGenerationPortImplTest {
                             backend = com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind.QNN_NPU,
                         ),
                     ),
-                )
-            coEvery { studioRepository.readMediaBytes("/cache/bonsai-0.png") } returns "img-0".toByteArray()
-            coEvery { studioRepository.readMediaBytes("/cache/bonsai-1.png") } returns "img-1".toByteArray()
-            coEvery { studioRepository.readMediaBytes("/cache/bonsai-2.png") } returns "img-2".toByteArray()
+                ),
+            )
+            studioRepository.mediaBytes["/cache/bonsai-0.png"] = "img-0".toByteArray()
+            studioRepository.mediaBytes["/cache/bonsai-1.png"] = "img-1".toByteArray()
+            studioRepository.mediaBytes["/cache/bonsai-2.png"] = "img-2".toByteArray()
 
             val result = port.generateImage("bonsai", target, settings)
 
             assertTrue(result.isSuccess)
             assertEquals(3, result.getOrThrow().size)
-            coVerify(exactly = 3) {
-                localStableDiffusionImageGenerator.generate(
-                    prompt = "bonsai",
-                    target = target,
-                    settings = match { it.generationCount == 1 },
-                    onProgress = any(),
-                )
-            }
+            assertEquals(3, localStableDiffusionImageGenerator.calls.size)
+            assertTrue(
+                localStableDiffusionImageGenerator.calls.all {
+                    it.prompt == "bonsai" && it.target == target && it.settings.generationCount == 1
+                },
+            )
         }
 
     @Test
@@ -284,10 +279,7 @@ class ImageGenerationPortImplTest {
         runTest {
             val target = localTarget()
             val settings = ImageGenerationSettings(imageResolution = "512x512")
-            val settingsSlot = io.mockk.slot<ImageGenerationSettings>()
-            coEvery {
-                localStableDiffusionImageGenerator.generate(any(), eq(target), capture(settingsSlot), any())
-            } returns
+            localStableDiffusionImageGenerator.result =
                 Result.success(
                     LocalStableDiffusionGenerationResult(
                         outputFileReferences = listOf("/cache/bonsai-0.png"),
@@ -296,20 +288,16 @@ class ImageGenerationPortImplTest {
                         backend = com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind.QNN_NPU,
                     ),
                 )
-            coEvery { studioRepository.readMediaBytes(any()) } returns "img".toByteArray()
+            studioRepository.mediaBytes["/cache/bonsai-0.png"] = "img".toByteArray()
 
             val result = port.generateImage("bonsai", target, settings)
 
             assertTrue(result.isSuccess)
-            assertEquals("512x512", settingsSlot.captured.imageResolution)
-            coVerify {
-                localStableDiffusionImageGenerator.generate(
-                    prompt = "bonsai",
-                    target = target,
-                    settings = settings,
-                    onProgress = any(),
-                )
-            }
+            val call = localStableDiffusionImageGenerator.calls.single()
+            assertEquals("512x512", call.settings.imageResolution)
+            assertEquals("bonsai", call.prompt)
+            assertEquals(target, call.target)
+            assertEquals(settings, call.settings)
         }
 
     @Test
@@ -332,10 +320,7 @@ class ImageGenerationPortImplTest {
                         ),
                 )
             val settings = ImageGenerationSettings(imageResolution = "1024x1024", diffusionSteps = 8)
-            val settingsSlot = io.mockk.slot<ImageGenerationSettings>()
-            coEvery {
-                localStableDiffusionImageGenerator.generate(any(), eq(target), capture(settingsSlot), any())
-            } returns
+            localStableDiffusionImageGenerator.result =
                 Result.success(
                     LocalStableDiffusionGenerationResult(
                         outputFileReferences = listOf("/cache/sdxl-0.png"),
@@ -344,21 +329,17 @@ class ImageGenerationPortImplTest {
                         backend = com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind.QNN_NPU,
                     ),
                 )
-            coEvery { studioRepository.readMediaBytes(any()) } returns "img".toByteArray()
+            studioRepository.mediaBytes["/cache/sdxl-0.png"] = "img".toByteArray()
 
             val result = port.generateImage("bonsai", target, settings)
 
             assertTrue(result.isSuccess)
-            assertEquals("1024x1024", settingsSlot.captured.imageResolution)
-            assertEquals(8, settingsSlot.captured.diffusionSteps)
-            coVerify {
-                localStableDiffusionImageGenerator.generate(
-                    prompt = "bonsai",
-                    target = target,
-                    settings = settings,
-                    onProgress = any(),
-                )
-            }
+            val call = localStableDiffusionImageGenerator.calls.single()
+            assertEquals("1024x1024", call.settings.imageResolution)
+            assertEquals(8, call.settings.diffusionSteps)
+            assertEquals("bonsai", call.prompt)
+            assertEquals(target, call.target)
+            assertEquals(settings, call.settings)
         }
 
     @Test
@@ -366,9 +347,7 @@ class ImageGenerationPortImplTest {
         runTest {
             val target = localTarget()
             val settings = ImageGenerationSettings(generationCount = 3)
-            coEvery {
-                localStableDiffusionImageGenerator.generate(any(), eq(target), any(), any())
-            } returnsMany
+            localStableDiffusionImageGenerator.resultQueue.addAll(
                 listOf(
                     Result.success(
                         LocalStableDiffusionGenerationResult(
@@ -379,22 +358,21 @@ class ImageGenerationPortImplTest {
                         ),
                     ),
                     Result.failure(IllegalStateException("Local image generation failed on image 2")),
-                )
-            coEvery { studioRepository.readMediaBytes("/cache/bonsai-0.png") } returns "img-0".toByteArray()
+                ),
+            )
+            studioRepository.mediaBytes["/cache/bonsai-0.png"] = "img-0".toByteArray()
 
             val result = port.generateImage("bonsai", target, settings)
 
             assertTrue(result.isSuccess)
             assertEquals(1, result.getOrThrow().size)
             assertArrayEquals("img-0".toByteArray(), result.getOrThrow().single())
-            coVerify(exactly = 2) {
-                localStableDiffusionImageGenerator.generate(
-                    prompt = "bonsai",
-                    target = target,
-                    settings = match { it.generationCount == 1 },
-                    onProgress = any(),
-                )
-            }
+            assertEquals(2, localStableDiffusionImageGenerator.calls.size)
+            assertTrue(
+                localStableDiffusionImageGenerator.calls.all {
+                    it.prompt == "bonsai" && it.target == target && it.settings.generationCount == 1
+                },
+            )
         }
 
     @Test
@@ -418,10 +396,7 @@ class ImageGenerationPortImplTest {
                         ),
                 )
             val settings = ImageGenerationSettings(imageResolution = "1024x1024", diffusionSteps = 24)
-            val settingsSlot = io.mockk.slot<ImageGenerationSettings>()
-            coEvery {
-                localStableDiffusionImageGenerator.generate(any(), eq(target), capture(settingsSlot), any())
-            } returns
+            localStableDiffusionImageGenerator.result =
                 Result.success(
                     LocalStableDiffusionGenerationResult(
                         outputFileReferences = listOf("/cache/juggernaut-0.png"),
@@ -430,12 +405,13 @@ class ImageGenerationPortImplTest {
                         backend = com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind.QNN_NPU,
                     ),
                 )
-            coEvery { studioRepository.readMediaBytes(any()) } returns "img".toByteArray()
+            studioRepository.mediaBytes["/cache/juggernaut-0.png"] = "img".toByteArray()
 
             val result = port.generateImage("bonsai", target, settings)
 
             assertTrue(result.isSuccess)
-            assertEquals("1024x1024", settingsSlot.captured.imageResolution)
-            assertEquals(24, settingsSlot.captured.diffusionSteps)
+            val call = localStableDiffusionImageGenerator.calls.single()
+            assertEquals("1024x1024", call.settings.imageResolution)
+            assertEquals(24, call.settings.diffusionSteps)
         }
 }

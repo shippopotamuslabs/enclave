@@ -11,7 +11,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class QnnStableDiffusionBackend
+open class QnnStableDiffusionBackend
     @Inject
     constructor(
         private val nativeRuntime: NativeLocalImageGenRuntime,

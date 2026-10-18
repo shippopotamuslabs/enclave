@@ -1,10 +1,13 @@
+@file:Suppress("ForbiddenMockKInTests")
+
+// MockK retained only for the Anthropic Java SDK surface (third-party SDK boundary).
 package com.browntowndev.enclave.feature.inference
 
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.AgentLoopMessage
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.util.FakeToolEnvelopeParserPort
 import com.browntowndev.enclave.domain.util.FakeToolStreamGatePort
 import com.anthropic.client.AnthropicClient
@@ -19,7 +22,7 @@ import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Test
 
 class AppendOnlyProviderWiringTest {
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
+    private val loggingPort = FakeLoggingPort()
 
     @Test
     fun `anthropic appendOnlyContext clears on rust compaction boundary`() =
@@ -66,8 +69,14 @@ class AppendOnlyProviderWiringTest {
     @Test
     fun `google appendOnlyContext is assigned during completeSingleTurn`() =
         runTest {
-            val sdkClient = mockk<GoogleGenAiSdkClient>()
-            coEveryGoogleStream(sdkClient)
+            val sdkClient = FakeGoogleGenAiSdkClient()
+            sdkClient.streamResult =
+                GoogleSdkResult(
+                    emittedAny = true,
+                    functionCall = null,
+                    assistantContent = null,
+                    finishReason = "STOP",
+                )
 
             val service =
                 GoogleInferenceServiceImpl(
@@ -95,16 +104,4 @@ class AppendOnlyProviderWiringTest {
 
             assertNotNull(service.appendOnlyContextForTests())
         }
-
-    private fun coEveryGoogleStream(sdkClient: GoogleGenAiSdkClient) {
-        io.mockk.coEvery {
-            sdkClient.generateContentStream(any(), any(), any(), any(), any())
-        } returns
-            GoogleSdkResult(
-                emittedAny = true,
-                functionCall = null,
-                assistantContent = null,
-                finishReason = "STOP",
-            )
-    }
 }

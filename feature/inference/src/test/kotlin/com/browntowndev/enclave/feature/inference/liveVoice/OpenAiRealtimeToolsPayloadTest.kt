@@ -5,19 +5,16 @@ import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.LiveVoiceToolset
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
-import io.mockk.every
-import io.mockk.mockk
+import com.browntowndev.enclave.feature.inference.RecordingWebSocket
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import okhttp3.WebSocket
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
-import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
@@ -94,14 +91,8 @@ class OpenAiRealtimeToolsPayloadTest {
     @DisplayName("LV-TOOL-030")
     fun lvTool030_sendToolResultWireFormat() =
         runTest {
-            val sentMessages = mutableListOf<String>()
-            val webSocket =
-                mockk<WebSocket> {
-                    every { send(any<String>()) } answers {
-                        sentMessages.add(firstArg())
-                        true
-                    }
-                }
+            val webSocket = RecordingWebSocket()
+            val sentMessages = webSocket.sentTexts
             val session =
                 OpenAiRealtimeSession(
                     asset = openAiAsset(),
@@ -131,14 +122,8 @@ class OpenAiRealtimeToolsPayloadTest {
     @DisplayName("LV-TOOL-031")
     fun lvTool031_sendToolResultAfterCloseIsNoOp() =
         runTest {
-            val sentMessages = mutableListOf<String>()
-            val webSocket =
-                mockk<WebSocket>(relaxed = true) {
-                    every { send(any<String>()) } answers {
-                        sentMessages.add(firstArg())
-                        false
-                    }
-                }
+            val webSocket = RecordingWebSocket().apply { sendResult = false }
+            val sentMessages = webSocket.sentTexts
             val session =
                 OpenAiRealtimeSession(
                     asset = openAiAsset(),

@@ -42,7 +42,7 @@ data class LocalStableDiffusionGenerationResult(
  * Runs on-device diffusion via [LocalImageGenerationEngine] (QNN NPU, MNN CPU).
  * Vulkan / stable-diffusion.cpp is not used.
  */
-class LocalStableDiffusionImageGenerator
+open class LocalStableDiffusionImageGenerator
     @Inject
     constructor(
         @param:ApplicationContext private val context: Context,
@@ -52,7 +52,7 @@ class LocalStableDiffusionImageGenerator
         private val studioRepository: StudioRepositoryPort,
         private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
     ) {
-        suspend fun generate(
+        open suspend fun generate(
             prompt: String,
             target: ImageGenerationTarget.LocalStableDiffusion,
             settings: ImageGenerationSettings,

@@ -1,7 +1,10 @@
+// MockK is used only for LiteRT-LM SDK types (com.google.ai.edge.litertlm.*), a third-party SDK boundary.
+@file:Suppress("ForbiddenMockKInTests")
+
 package com.browntowndev.enclave.feature.inference
 
 import android.content.Context
-import android.util.Log
+import androidx.test.core.app.ApplicationProvider
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.google.ai.edge.litertlm.BenchmarkInfo
 import com.google.ai.edge.litertlm.Content
@@ -9,10 +12,8 @@ import com.google.ai.edge.litertlm.Contents
 import com.google.ai.edge.litertlm.Conversation
 import com.google.ai.edge.litertlm.ExperimentalApi
 import com.google.ai.edge.litertlm.Message
-import io.mockk.MockKAnnotations
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.mockkStatic
 import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.flow.flowOf
@@ -22,25 +23,21 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class ConversationImplTest {
-    private lateinit var mockContext: Context
     private lateinit var mockLiteRtConversation: Conversation
     private lateinit var conversationImpl: ConversationImpl
 
     @BeforeEach
     fun setup() {
-        MockKAnnotations.init(this)
-        mockkStatic(Log::class)
-        every { Log.d(any<String>(), any<String>()) } returns 0
-        mockContext = mockk(relaxed = true)
+        val context = ApplicationProvider.getApplicationContext<Context>()
         mockLiteRtConversation = mockk(relaxed = true)
-        conversationImpl = ConversationImpl(mockContext, mockLiteRtConversation)
-    }
-
-    @org.junit.jupiter.api.AfterEach
-    fun tearDown() {
-        io.mockk.unmockkStatic(Log::class)
+        conversationImpl = ConversationImpl(context, mockLiteRtConversation)
     }
 
     @Test

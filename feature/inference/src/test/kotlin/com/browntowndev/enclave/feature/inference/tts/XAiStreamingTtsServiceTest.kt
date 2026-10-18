@@ -2,7 +2,7 @@ package com.browntowndev.enclave.feature.inference.tts
 
 import com.browntowndev.enclave.domain.model.inference.TtsAudioChunk
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import io.mockk.mockk
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
@@ -29,7 +29,7 @@ import java.util.Base64
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class XAiStreamingTtsServiceTest {
-    private val mockLogger: LoggingPort = mockk(relaxed = true)
+    private val mockLogger: LoggingPort = FakeLoggingPort()
     private val realHttpClient = OkHttpClient.Builder().build()
     private val json =
         Json {

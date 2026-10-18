@@ -1,18 +1,13 @@
 package com.browntowndev.enclave.feature.inference
 
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.AgentLoopMessage
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.util.FakeToolEnvelopeParserPort
 import com.browntowndev.enclave.domain.util.FakeToolStreamGatePort
 import com.google.genai.types.Content
-import com.google.genai.types.GenerateContentConfig
-import io.mockk.CapturingSlot
-import io.mockk.coEvery
-import io.mockk.mockk
-import io.mockk.slot
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -22,7 +17,7 @@ import org.junit.jupiter.api.Test
 import java.io.File
 
 class GoogleInferenceServiceImplSidecarWireTest {
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
+    private val loggingPort = FakeLoggingPort()
 
     @Test
     @DisplayName("S-GOOG-01 live tail suffix wire shape in tail Content text part")
@@ -31,7 +26,7 @@ class GoogleInferenceServiceImplSidecarWireTest {
             val harness = createHarness()
             runTurn1SingleUser(harness.service)
 
-            val tailText = tailFirstTextPart(harness.contentsSlot.captured)
+            val tailText = tailFirstTextPart(harness.contents)
             val uuid1 = extractSidecarUuid(tailText)
 
             assertTrue(UUID_REGEX.matches(uuid1))
@@ -46,12 +41,12 @@ class GoogleInferenceServiceImplSidecarWireTest {
         runTest {
             val harness = createHarness()
             runTurn1SingleUser(harness.service)
-            val turn1Contents = harness.contentsSlot.captured.toList()
+            val turn1Contents = harness.contents.toList()
             val turn1TailText = tailFirstTextPart(turn1Contents)
             val uuid1 = extractSidecarUuid(turn1TailText)
 
             runTurn2DistinctSidecars(harness.service)
-            val turn2Contents = harness.contentsSlot.captured.toList()
+            val turn2Contents = harness.contents.toList()
             val u1Text = firstTextPart(findContentStartingWith(turn2Contents, "Hello Turn 1"))
 
             assertEquals(turn1TailText, u1Text)
@@ -64,10 +59,10 @@ class GoogleInferenceServiceImplSidecarWireTest {
         runTest {
             val harness = createHarness()
             runTurn1SingleUser(harness.service)
-            val uuid1 = extractSidecarUuid(tailFirstTextPart(harness.contentsSlot.captured))
+            val uuid1 = extractSidecarUuid(tailFirstTextPart(harness.contents))
 
             runTurn2DedupedSidecars(harness.service)
-            val turn2Contents = harness.contentsSlot.captured.toList()
+            val turn2Contents = harness.contents.toList()
             val u1Text = firstTextPart(findContentStartingWith(turn2Contents, "Hello Turn 1"))
             val tailText = tailFirstTextPart(turn2Contents)
 
@@ -99,7 +94,7 @@ class GoogleInferenceServiceImplSidecarWireTest {
                     ),
             )
 
-            val parts = harness.contentsSlot.captured.last().parts().get()
+            val parts = harness.contents.last().parts().get()
             assertEquals(2, parts.size)
 
             val text = parts[0].text().get()
@@ -115,14 +110,14 @@ class GoogleInferenceServiceImplSidecarWireTest {
         runTest {
             val harness = createHarness()
             runTurn1SingleUser(harness.service)
-            val uuid1 = extractSidecarUuid(tailFirstTextPart(harness.contentsSlot.captured))
+            val uuid1 = extractSidecarUuid(tailFirstTextPart(harness.contents))
 
             val frozenAfterTurn1 = harness.service.appendOnlyContextForTests()!!.frozenSidecarsForWireReplay()
             assertEquals(1, frozenAfterTurn1.size)
             assertEquals(uuid1, frozenAfterTurn1.single().markerId)
 
             runTurn2DistinctSidecars(harness.service)
-            val turn2Contents = harness.contentsSlot.captured.toList()
+            val turn2Contents = harness.contents.toList()
             val frozenUuidTurn2 =
                 extractSidecarUuid(
                     firstTextPart(findContentStartingWith(turn2Contents, "Hello Turn 1")),
@@ -137,7 +132,7 @@ class GoogleInferenceServiceImplSidecarWireTest {
         runTest {
             val harness = createHarness()
             runTurn1SingleUser(harness.service)
-            val turn1TailText = tailFirstTextPart(harness.contentsSlot.captured)
+            val turn1TailText = tailFirstTextPart(harness.contents)
             val uuid1 = extractSidecarUuid(turn1TailText)
 
             assertFalse(turn1TailText.startsWith("Volatile Sidecar 1"))
@@ -145,7 +140,7 @@ class GoogleInferenceServiceImplSidecarWireTest {
             assertTrue(turn1TailText.indexOf("[Sidecar-") > 0)
 
             runTurn2DistinctSidecars(harness.service)
-            val turn2Contents = harness.contentsSlot.captured.toList()
+            val turn2Contents = harness.contents.toList()
             val frozenUuidTurn2 =
                 extractSidecarUuid(
                     firstTextPart(findContentStartingWith(turn2Contents, "Hello Turn 1")),
@@ -155,19 +150,8 @@ class GoogleInferenceServiceImplSidecarWireTest {
         }
 
     private fun createHarness(): GoogleSidecarHarness {
-        val sdkClient = mockk<GoogleGenAiSdkClient>()
-        val contentsSlot = slot<List<Content>>()
-        val configSlot = slot<GenerateContentConfig>()
-
-        coEvery {
-            sdkClient.generateContentStream(
-                modelId = any(),
-                contents = capture(contentsSlot),
-                config = capture(configSlot),
-                allowToolCall = any(),
-                emitEvent = any(),
-            )
-        } returns
+        val sdkClient = FakeGoogleGenAiSdkClient()
+        sdkClient.streamResult =
             GoogleSdkResult(
                 emittedAny = true,
                 functionCall = null,
@@ -184,7 +168,7 @@ class GoogleInferenceServiceImplSidecarWireTest {
                 toolEnvelopeParserPort = FakeToolEnvelopeParserPort(),
                 toolStreamGatePort = FakeToolStreamGatePort(),
             )
-        return GoogleSidecarHarness(service, contentsSlot)
+        return GoogleSidecarHarness(service, sdkClient)
     }
 
     private suspend fun runTurn1SingleUser(service: GoogleInferenceServiceImpl) {
@@ -268,8 +252,10 @@ class GoogleInferenceServiceImplSidecarWireTest {
 
     private data class GoogleSidecarHarness(
         val service: GoogleInferenceServiceImpl,
-        val contentsSlot: CapturingSlot<List<Content>>,
-    )
+        val sdkClient: FakeGoogleGenAiSdkClient,
+    ) {
+        val contents: List<Content> get() = sdkClient.lastGenerateContents!!
+    }
 
     private companion object {
         private val SIDEcar_UUID_EXTRACT = Regex("\\[Sidecar-([0-9a-f-]{36}): ")

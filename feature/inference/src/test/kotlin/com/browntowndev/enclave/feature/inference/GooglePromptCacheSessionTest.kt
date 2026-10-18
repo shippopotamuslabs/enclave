@@ -1,19 +1,17 @@
 package com.browntowndev.enclave.feature.inference
 
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.AgentLoopMessage
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.google.genai.types.Content
 import com.google.genai.types.Part
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
 class GooglePromptCacheSessionTest {
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
+    private val loggingPort = FakeLoggingPort()
 
     @Test
     fun ensureCacheForStablePrefix_recreatesCacheWhenSystemPromptChanges(): Unit =
@@ -35,16 +33,12 @@ class GooglePromptCacheSessionTest {
                 mapToContent = ::toContent,
             )
 
-            coVerify(exactly = 2) {
-                sdkClient.createCachedContent(
-                    modelId = "gemini-2.5-flash",
-                    contents = any(),
-                    systemInstruction = any(),
-                    tools = any(),
-                    ttlSeconds = 300L,
-                )
-            }
-            coVerify(exactly = 1) { sdkClient.deleteCachedContent("cachedContents/cache-a") }
+            assertEquals(
+                listOf("gemini-2.5-flash", "gemini-2.5-flash"),
+                sdkClient.createCachedContentCalls,
+            )
+            assertEquals(listOf(300L, 300L), sdkClient.createCachedContentTtls)
+            assertEquals(listOf("cachedContents/cache-a"), sdkClient.deleteCachedContentCalls)
         }
 
     @Test
@@ -66,16 +60,12 @@ class GooglePromptCacheSessionTest {
                 mapToContent = ::toContent,
             )
 
-            coVerify(exactly = 2) {
-                sdkClient.createCachedContent(
-                    modelId = "gemini-2.5-flash",
-                    contents = any(),
-                    systemInstruction = any(),
-                    tools = any(),
-                    ttlSeconds = 300L,
-                )
-            }
-            coVerify(exactly = 1) { sdkClient.deleteCachedContent("cachedContents/cache-a") }
+            assertEquals(
+                listOf("gemini-2.5-flash", "gemini-2.5-flash"),
+                sdkClient.createCachedContentCalls,
+            )
+            assertEquals(listOf(300L, 300L), sdkClient.createCachedContentTtls)
+            assertEquals(listOf("cachedContents/cache-a"), sdkClient.deleteCachedContentCalls)
         }
 
     @Test
@@ -98,27 +88,23 @@ class GooglePromptCacheSessionTest {
                 mapToContent = ::toContent,
             )
 
-            coVerify(exactly = 2) {
-                sdkClient.createCachedContent(
-                    modelId = "gemini-2.5-flash",
-                    contents = any(),
-                    systemInstruction = any(),
-                    tools = any(),
-                    ttlSeconds = 300L,
-                )
-            }
-            coVerify(exactly = 1) { sdkClient.deleteCachedContent("cachedContents/cache-a") }
+            assertEquals(
+                listOf("gemini-2.5-flash", "gemini-2.5-flash"),
+                sdkClient.createCachedContentCalls,
+            )
+            assertEquals(listOf(300L, 300L), sdkClient.createCachedContentTtls)
+            assertEquals(listOf("cachedContents/cache-a"), sdkClient.deleteCachedContentCalls)
         }
 
-    private fun cachedContentClient(): GoogleGenAiSdkClient {
-        val sdkClient = mockk<GoogleGenAiSdkClient>()
-        coEvery { sdkClient.createCachedContent(any(), any(), any(), any(), any()) } returnsMany
-            listOf("cachedContents/cache-a", "cachedContents/cache-b")
-        coEvery { sdkClient.deleteCachedContent(any()) } returns Unit
+    private fun cachedContentClient(): FakeGoogleGenAiSdkClient {
+        val sdkClient = FakeGoogleGenAiSdkClient()
+        sdkClient.createCachedContentResultQueue.addAll(
+            listOf("cachedContents/cache-a", "cachedContents/cache-b"),
+        )
         return sdkClient
     }
 
-    private fun promptCacheSession(sdkClient: GoogleGenAiSdkClient): GooglePromptCacheSession =
+    private fun promptCacheSession(sdkClient: FakeGoogleGenAiSdkClient): GooglePromptCacheSession =
         GooglePromptCacheSession(
             modelId = "gemini-2.5-flash",
             sdkClient = sdkClient,

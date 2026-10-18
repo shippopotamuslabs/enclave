@@ -1,46 +1,53 @@
+// MockK is used only for LiteRT-LM SDK types (com.google.ai.edge.litertlm.*), a third-party SDK boundary.
+@file:Suppress("ForbiddenMockKInTests")
+
 package com.browntowndev.enclave.feature.inference
 
 import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
+import com.browntowndev.enclave.core.testing.FakeEmbeddingEngine
+import com.browntowndev.enclave.core.testing.FakeLocalModelRepository
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeToolExecutor
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
-import com.browntowndev.enclave.domain.model.inference.ToolExecutionResult
 import com.browntowndev.enclave.domain.port.inference.AgentPolicyPort
 import com.browntowndev.enclave.domain.port.inference.AgentPolicyRepairResult
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
-import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
-import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.google.ai.edge.litertlm.Conversation
-import io.mockk.coEvery
-import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class ConversationManagerImplRegressionTest {
-    private val context = mockk<Context>(relaxed = true)
-    private val localModelRepository = mockk<LocalModelRepositoryPort>(relaxed = true)
-    private val activeModelProvider = mockk<ActiveModelProviderPort>(relaxed = true)
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
-    private val toolExecutor = mockk<ToolExecutorPort>(relaxed = true)
+    private val localModelRepository = FakeLocalModelRepository()
+    private val activeModelProvider = FakeActiveModelProvider()
+    private val loggingPort = FakeLoggingPort()
+    private val toolExecutor = FakeToolExecutor()
+
+    private fun createManager(policy: AgentPolicyPort? = null): ConversationManagerImpl =
+        ConversationManagerImpl(
+            context = ApplicationProvider.getApplicationContext<Context>(),
+            localModelRepository = localModelRepository,
+            activeModelProvider = activeModelProvider,
+            loggingPort = loggingPort,
+            toolExecutor = toolExecutor,
+            embeddingEnginePort = FakeEmbeddingEngine(),
+            agentPolicyPort = policy ?: com.browntowndev.enclave.feature.inference.conversation.NoopAgentPolicyPort,
+        )
 
     @Test
     fun `executeToolSafely returns synthetic error when policy disallows tool dispatch`() =
         runTest {
-            val policy = FakeAgentPolicyPort(allowTools = false)
-            val manager =
-                ConversationManagerImpl(
-                    context = context,
-                    localModelRepository = localModelRepository,
-                    activeModelProvider = activeModelProvider,
-                    loggingPort = loggingPort,
-                    toolExecutor = toolExecutor,
-                    embeddingEnginePort = mockk(relaxed = true),
-                    agentPolicyPort = policy,
-                )
+            val manager = createManager(policy = FakeAgentPolicyPort(allowTools = false))
 
             manager.beginGenerationRequest()
             val result =
@@ -55,28 +62,14 @@ class ConversationManagerImplRegressionTest {
                 )
 
             assertTrue(result.contains("Context window exceeded"))
-            coVerify(exactly = 0) { toolExecutor.execute(any()) }
+            assertTrue(toolExecutor.executedRequests.isEmpty())
         }
 
     @Test
     fun `executeToolSafely feeds policy soft failure detection into later dispatch gate`() =
         runTest {
-            val policy = FakeAgentPolicyPort(maxAllowedStreak = 1u)
-            val manager =
-                ConversationManagerImpl(
-                    context = context,
-                    localModelRepository = localModelRepository,
-                    activeModelProvider = activeModelProvider,
-                    loggingPort = loggingPort,
-                    toolExecutor = toolExecutor,
-                    embeddingEnginePort = mockk(relaxed = true),
-                    agentPolicyPort = policy,
-                )
-            coEvery { toolExecutor.execute(any()) } returns
-                ToolExecutionResult(
-                    toolName = "web_search",
-                    resultJson = """{"status":"error","message":"provider failed"}""",
-                )
+            val manager = createManager(policy = FakeAgentPolicyPort(maxAllowedStreak = 1u))
+            toolExecutor.resultJson = """{"status":"error","message":"provider failed"}"""
 
             val request =
                 ToolCallRequest(
@@ -93,27 +86,15 @@ class ConversationManagerImplRegressionTest {
 
             assertEquals("""{"status":"error","message":"provider failed"}""", firstResult)
             assertTrue(secondResult.contains("Context window exceeded"))
-            coVerify(exactly = 1) { toolExecutor.execute(any()) }
+            assertEquals(1, toolExecutor.executedRequests.size)
         }
 
     @Test
     fun `executeToolSafely does not log error when successful search query is error`() =
         runTest {
             val resultJson = """{"chat_id":"chat-1","query":"error","total_results":0,"returned_results":0,"messages":[]}"""
-            coEvery { toolExecutor.execute(any()) } returns
-                ToolExecutionResult(
-                    toolName = "search_chat",
-                    resultJson = resultJson,
-                )
-            val manager =
-                ConversationManagerImpl(
-                    context = context,
-                    localModelRepository = localModelRepository,
-                    activeModelProvider = activeModelProvider,
-                    loggingPort = loggingPort,
-                    toolExecutor = toolExecutor,
-                embeddingEnginePort = mockk(relaxed = true),
-                )
+            toolExecutor.resultJson = resultJson
+            val manager = createManager()
 
             val result =
                 manager.executeToolSafelyForTest(
@@ -126,33 +107,23 @@ class ConversationManagerImplRegressionTest {
                 )
 
             assertEquals(resultJson, result)
-            verify(exactly = 0) {
-                loggingPort.error(
-                    any(),
-                    match { it.contains("Native tool call returned error payload") },
-                    any(),
-                )
-            }
+            assertTrue(
+                loggingPort.errorCalls.none {
+                    it.message.contains("Native tool call returned error payload")
+                },
+            )
         }
 
     @Test
     fun `cancelProcess keeps cancellation latched and delegates to active port`() {
-        val activeConversationPort = mockk<LiteRtConversation>(relaxed = true)
-        val manager =
-            ConversationManagerImpl(
-                context = context,
-                localModelRepository = localModelRepository,
-                activeModelProvider = activeModelProvider,
-                loggingPort = loggingPort,
-                toolExecutor = toolExecutor,
-            embeddingEnginePort = mockk(relaxed = true),
-            )
+        val activeConversationPort = FakeLiteRtConversation()
+        val manager = createManager()
 
         manager.conversationPort = activeConversationPort
 
         manager.cancelProcess()
 
-        verify(exactly = 1) { activeConversationPort.cancelProcess() }
+        assertEquals(1, activeConversationPort.cancelProcessCount)
         assertTrue(manager.isCurrentGenerationCancelled)
         assertEquals(1, manager.cancellationEpoch.get())
     }
@@ -161,18 +132,10 @@ class ConversationManagerImplRegressionTest {
     fun `closeConversation calls native close on active conversation and resets state`() =
         runTest {
             val liteRtConversation = mockk<Conversation>(relaxed = true)
-            val manager =
-                ConversationManagerImpl(
-                    context = context,
-                    localModelRepository = localModelRepository,
-                    activeModelProvider = activeModelProvider,
-                    loggingPort = loggingPort,
-                    toolExecutor = toolExecutor,
-                embeddingEnginePort = mockk(relaxed = true),
-                )
+            val manager = createManager()
 
             manager.conversation = liteRtConversation
-            manager.conversationPort = mockk<LiteRtConversation>(relaxed = true)
+            manager.conversationPort = FakeLiteRtConversation()
 
             manager.closeConversation()
 

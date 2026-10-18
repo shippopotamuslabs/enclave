@@ -19,7 +19,7 @@ import kotlin.math.max
  * THINKING("reasoning")
  * VISIBLE(" world")
  */
-class ProcessThinkingTokensUseCase
+open class ProcessThinkingTokensUseCase
     @Inject
     constructor() {
         companion object {
@@ -39,7 +39,7 @@ class ProcessThinkingTokensUseCase
          *
          * @return updated parser state plus typed emitted segments with cumulative text
          */
-        operator fun invoke(
+        open operator fun invoke(
             currentBuffer: String,
             newChunk: String,
             isThinking: Boolean,

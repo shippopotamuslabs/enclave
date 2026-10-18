@@ -1,8 +1,9 @@
+@file:Suppress("ForbiddenMockKInTests") // MockK only for the raw google-genai SDK surface (Client/Models/Operations) that this adapter wraps.
+
 package com.browntowndev.enclave.feature.inference
 
 import com.browntowndev.enclave.domain.model.media.AspectRatio
 import com.browntowndev.enclave.domain.model.media.VideoGenerationSettings
-import com.browntowndev.enclave.feature.inference.GoogleGenAiClientProviderPort
 import com.browntowndev.enclave.feature.inference.media.GoogleVideoGenerationAdapter
 import com.google.genai.Client
 import com.google.genai.types.*
@@ -18,8 +19,8 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class GoogleVideoGenerationAdapterTest {
-    private val clientProvider = mockk<GoogleGenAiClientProviderPort>(relaxed = true)
-    private val okHttpClient = mockk<OkHttpClient>(relaxed = true)
+    private val clientProvider = FakeGoogleGenAiClientProviderPort()
+    private val okHttpClient = OkHttpClient()
 
     @Test
     fun testAdapterCreation() {
@@ -30,9 +31,13 @@ class GoogleVideoGenerationAdapterTest {
     @Test
     fun generateVideo_success_callsSdkGenerateVideos() =
         runTest {
-            val configSlot = slot<GenerateVideosConfig>()
+            var capturedConfig: GenerateVideosConfig? = null
             val mockClient = spyk(Client.builder().apiKey("key").build())
 
+            // The adapter introspects the operation graph reflectively; the SDK's
+            // real AutoValue implementations are package-private and reflective
+            // invoke on them throws IllegalAccessException, so the operation
+            // graph stays MockK (raw SDK surface) as in the original test.
             val video = mockk<Video>()
             every { video.uri() } returns java.util.Optional.of("https://video-uri")
 
@@ -47,7 +52,7 @@ class GoogleVideoGenerationAdapterTest {
                         source: GenerateVideosSource,
                         config: GenerateVideosConfig,
                     ): GenerateVideosOperation {
-                        configSlot.captured = config
+                        capturedConfig = config
 
                         val finishedOp = mockk<GenerateVideosOperation>()
                         every { finishedOp.name() } returns java.util.Optional.of("operation-name")
@@ -69,7 +74,7 @@ class GoogleVideoGenerationAdapterTest {
                         apiKey: String,
                     ): ByteArray = "video-data".toByteArray()
                 }
-            every { clientProvider.getClient(any(), any(), any(), any()) } returns mockClient
+            clientProvider.client = mockClient
 
             val mockModels = mockk<com.google.genai.Models>(relaxed = true)
             val modelsField = mockClient.javaClass.getDeclaredField("models")
@@ -100,7 +105,7 @@ class GoogleVideoGenerationAdapterTest {
 
             assertTrue(result.isSuccess)
             assertArrayEquals("video-data".toByteArray(), result.getOrThrow())
-            assertEquals("16:9", configSlot.captured.aspectRatio().get())
-            assertEquals(10, configSlot.captured.durationSeconds().get())
+            assertEquals("16:9", capturedConfig!!.aspectRatio().get())
+            assertEquals(10, capturedConfig!!.durationSeconds().get())
         }
 }

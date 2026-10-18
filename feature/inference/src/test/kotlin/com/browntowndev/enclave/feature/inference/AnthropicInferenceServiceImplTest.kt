@@ -1,3 +1,6 @@
+// MockK is used only for Anthropic Java SDK types (com.anthropic.*), a third-party SDK boundary.
+@file:Suppress("ForbiddenMockKInTests")
+
 package com.browntowndev.enclave.feature.inference
 
 import com.anthropic.client.AnthropicClient
@@ -14,8 +17,8 @@ import com.browntowndev.enclave.domain.model.inference.AgentLoopMessage
 import com.browntowndev.enclave.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.InferenceNetworkException
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.util.FakeToolEnvelopeParserPort
 import com.browntowndev.enclave.domain.util.FakeToolStreamGatePort
 import io.mockk.every
@@ -33,7 +36,7 @@ class AnthropicInferenceServiceImplTest {
     private val client = mockk<AnthropicClient>()
     private val messageService = mockk<MessageService>()
     private val streamResponse = mockk<StreamResponse<RawMessageStreamEvent>>()
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
+    private val loggingPort = FakeLoggingPort()
 
     @Test
     fun `sendPrompt is not supported on direct Anthropic service`() {

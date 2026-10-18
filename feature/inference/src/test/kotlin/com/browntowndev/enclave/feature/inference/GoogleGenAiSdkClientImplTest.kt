@@ -1,5 +1,8 @@
+@file:Suppress("ForbiddenMockKInTests") // MockK only for the raw google-genai SDK surface (Models/ResponseStream) that this Impl wraps.
+
 package com.browntowndev.enclave.feature.inference
 
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.InferenceEvent
 import com.google.genai.Models
@@ -37,7 +40,7 @@ class GoogleGenAiSdkClientImplTest {
                 GoogleGenAiSdkClientImpl(
                     modelsApiProvider = { models },
                     modelType = ModelType.FAST,
-                    loggingPort = mockk(relaxed = true),
+                    loggingPort = FakeLoggingPort(),
                 )
 
             val events = mutableListOf<InferenceEvent>()

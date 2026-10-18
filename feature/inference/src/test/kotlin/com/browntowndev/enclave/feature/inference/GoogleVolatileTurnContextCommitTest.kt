@@ -1,15 +1,13 @@
 package com.browntowndev.enclave.feature.inference
 
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.AgentLoopMessage
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.util.FakeToolEnvelopeParserPort
 import com.browntowndev.enclave.domain.util.FakeToolStreamGatePort
 import com.google.genai.types.Content
-import io.mockk.coEvery
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -19,7 +17,7 @@ import org.junit.jupiter.api.Test
  * Google-specific provider coverage for volatile turn context commit correctness.
  */
 class GoogleVolatileTurnContextCommitTest {
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
+    private val loggingPort = FakeLoggingPort()
 
     // ---------------------------------------------------------------------------
     // CSPC-GOOGLE-03a — Google completeSingleTurn; RAG prefix not double-prepended
@@ -28,8 +26,8 @@ class GoogleVolatileTurnContextCommitTest {
     @Test
     fun CSPC_GOOGLE_03a_google_completeSingleTurn_rag_prefix_not_double_prepended() =
         runTest {
-            val capturedContentsList = mutableListOf<List<Content>>()
-            val service = createGoogleService(capturedContentsList)
+            val (service, sdkClient) = createGoogleService()
+            val capturedContentsList = sdkClient.generateContentsHistory
 
             // Turn 1: sessionMessages already contain the merged content (as Rust stored it)
             // volatileTurnContext = "web-prefix" but the message content already has it
@@ -115,8 +113,8 @@ class GoogleVolatileTurnContextCommitTest {
     @Test
     fun CSPC_GOOGLE_05_google_knn_memory_prefix_not_double_applied() =
         runTest {
-            val capturedContentsList = mutableListOf<List<Content>>()
-            val service = createGoogleService(capturedContentsList)
+            val (service, sdkClient) = createGoogleService()
+            val capturedContentsList = sdkClient.generateContentsHistory
 
             val memoryPrefix = "# RELEVANT FACTS & CONTEXT:\n- fact-a"
             val expectedContent = "# RELEVANT FACTS & CONTEXT:\n- fact-a\n\nhelp"
@@ -186,38 +184,27 @@ class GoogleVolatileTurnContextCommitTest {
     // Helpers
     // ---------------------------------------------------------------------------
 
-    private fun createGoogleService(capturedContentsList: MutableList<List<Content>>): GoogleInferenceServiceImpl {
-        val sdkClient = mockk<GoogleGenAiSdkClient>()
-
-        coEvery {
-            sdkClient.generateContentStream(
-                modelId = any(),
-                contents = any(),
-                config = any(),
-                allowToolCall = any(),
-                emitEvent = any(),
-            )
-        } answers {
-            capturedContentsList.add(secondArg())
+    private fun createGoogleService(): Pair<GoogleInferenceServiceImpl, FakeGoogleGenAiSdkClient> {
+        val sdkClient = FakeGoogleGenAiSdkClient()
+        sdkClient.streamResult =
             GoogleSdkResult(
                 emittedAny = true,
                 functionCall = null,
                 assistantContent = null,
                 finishReason = "STOP",
             )
-        }
+        sdkClient.createCachedContentResult = "cachedContents/test-cache"
 
-        coEvery { sdkClient.createCachedContent(any(), any(), any(), any(), any()) } returns "cachedContents/test-cache"
-        coEvery { sdkClient.deleteCachedContent(any()) } returns Unit
-
-        return GoogleInferenceServiceImpl(
-            sdkClient = sdkClient,
-            modelId = "gemini-2.5-flash",
-            modelType = ModelType.MAIN,
-            loggingPort = loggingPort,
-            toolEnvelopeParserPort = FakeToolEnvelopeParserPort(),
-            toolStreamGatePort = FakeToolStreamGatePort(),
-        )
+        val service =
+            GoogleInferenceServiceImpl(
+                sdkClient = sdkClient,
+                modelId = "gemini-2.5-flash",
+                modelType = ModelType.MAIN,
+                loggingPort = loggingPort,
+                toolEnvelopeParserPort = FakeToolEnvelopeParserPort(),
+                toolStreamGatePort = FakeToolStreamGatePort(),
+            )
+        return service to sdkClient
     }
 
     private fun Content.extractFirstTextPart(): String =
