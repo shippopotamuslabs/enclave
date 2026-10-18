@@ -1,16 +1,14 @@
 package com.browntowndev.enclave.feature.chat
 
 import androidx.lifecycle.SavedStateHandle
-import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
+import com.browntowndev.enclave.core.testing.FakeChatRepository
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnKey
-import com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase
-import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.enclave.feature.chat.delegates.InferenceOrchestrator
 import com.browntowndev.enclave.feature.inference.ActiveChatTurnStore
-import io.mockk.every
-import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -29,24 +27,19 @@ class InferenceOrchestratorSessionTest {
     @BeforeEach
     fun setUp() {
         savedStateHandle = SavedStateHandle()
-        val settingsUseCases = mockk<SettingsUseCases>()
-        every { settingsUseCases.getSettings() } returns
-            MutableStateFlow(
-                com.browntowndev.enclave.domain.port.repository
-                    .SettingsData(),
-            )
+        val settingsUseCases = FakeChatSettingsUseCases()
         orchestrator =
             InferenceOrchestrator(
-                chatUseCases = mockk(relaxed = true),
+                chatUseCases = FakeChatUseCases(),
                 settingsUseCases = settingsUseCases,
-                cancelInferenceUseCase = mockk(relaxed = true),
+                cancelInferenceUseCase = FakeCancelInferenceUseCase(),
                 activeChatTurnSnapshotPort = ActiveChatTurnStore(),
-                chatRepository = mockk(relaxed = true),
-                errorHandler = mockk<ViewModelErrorHandler>(relaxed = true),
+                chatRepository = FakeChatRepository(),
+                errorHandler = FakeViewModelErrorHandler(),
                 savedStateHandle = savedStateHandle,
-                pipelineExecutor = mockk(relaxed = true),
-                moderatePromptUseCase = mockk<ModeratePromptUseCase>(relaxed = true),
-                loggingPort = mockk(relaxed = true),
+                pipelineExecutor = FakePipelineExecutorPort(),
+                moderatePromptUseCase = FakeModeratePromptUseCase(),
+                loggingPort = FakeLoggingPort(),
                 applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
             )
     }

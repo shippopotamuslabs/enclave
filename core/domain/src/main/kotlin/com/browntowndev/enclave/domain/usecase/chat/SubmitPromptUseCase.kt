@@ -8,7 +8,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 import kotlin.coroutines.coroutineContext
 
-class SubmitPromptUseCase
+open class SubmitPromptUseCase
     @Inject
     constructor(
         private val createUserMessageUseCase: CreateUserMessageUseCase,
@@ -17,7 +17,7 @@ class SubmitPromptUseCase
         private val cloudSyncPort: CloudSyncPort,
         private val generateChatTitleUseCase: GenerateChatTitleUseCase,
     ) {
-        suspend operator fun invoke(request: SubmitPromptRequest): UserPromptResult {
+        open suspend operator fun invoke(request: SubmitPromptRequest): UserPromptResult {
             val wasNewChat = request.message.chatId == null
             var userResult: UserPromptResult? = null
             var titleJob: Job? = null

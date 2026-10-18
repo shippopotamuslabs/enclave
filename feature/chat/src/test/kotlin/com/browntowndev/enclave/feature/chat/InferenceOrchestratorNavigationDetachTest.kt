@@ -1,25 +1,17 @@
 package com.browntowndev.enclave.feature.chat
 
 import androidx.lifecycle.SavedStateHandle
+import com.browntowndev.enclave.core.testing.FakeChatRepository
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeViewModelErrorHandler
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
-import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.ChatResponseMode
 import com.browntowndev.enclave.domain.model.chat.MessageId
-import com.browntowndev.enclave.domain.port.repository.SettingsData
 import com.browntowndev.enclave.domain.usecase.chat.ChatTurnTiming
-import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
-import com.browntowndev.enclave.domain.usecase.inference.CancelInferenceUseCase
-import com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase
-import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.enclave.feature.chat.delegates.InferenceOrchestrator
 import com.browntowndev.enclave.feature.inference.ActiveChatTurnStore
-import io.mockk.coEvery
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
@@ -30,12 +22,12 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.RegisterExtension
-import kotlin.coroutines.CoroutineContext
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @DisplayName("InferenceOrchestrator navigation detach")
@@ -46,23 +38,20 @@ class InferenceOrchestratorNavigationDetachTest {
     @JvmField
     val mainDispatcherRule = MainDispatcherRule(testDispatcher)
 
-    private lateinit var chatUseCases: ChatUseCases
-    private lateinit var cancelInferenceUseCase: CancelInferenceUseCase
+    private lateinit var chatUseCases: FakeChatUseCases
+    private lateinit var cancelInferenceUseCase: FakeCancelInferenceUseCase
     private lateinit var orchestrator: InferenceOrchestrator
     private lateinit var applicationScope: CoroutineScope
 
     @BeforeEach
     fun setUp() {
-        chatUseCases = mockk(relaxed = true)
-        cancelInferenceUseCase = mockk(relaxed = true)
+        chatUseCases = FakeChatUseCases()
+        cancelInferenceUseCase = FakeCancelInferenceUseCase()
         applicationScope = CoroutineScope(SupervisorJob() + testDispatcher)
 
-        val settingsUseCases = mockk<SettingsUseCases>()
-        every { settingsUseCases.getSettings() } returns kotlinx.coroutines.flow.MutableStateFlow(SettingsData())
+        val settingsUseCases = FakeChatSettingsUseCases()
 
-        val errorHandler = mockk<ViewModelErrorHandler>()
-        every { errorHandler.coroutineExceptionHandler(any(), any(), any()) } returns
-            CoroutineExceptionHandler { _: CoroutineContext, _ -> }
+        val errorHandler = FakeViewModelErrorHandler()
 
         orchestrator =
             InferenceOrchestrator(
@@ -70,12 +59,12 @@ class InferenceOrchestratorNavigationDetachTest {
                 settingsUseCases = settingsUseCases,
                 cancelInferenceUseCase = cancelInferenceUseCase,
                 activeChatTurnSnapshotPort = ActiveChatTurnStore(),
-                chatRepository = mockk(relaxed = true),
+                chatRepository = FakeChatRepository(),
                 errorHandler = errorHandler,
                 savedStateHandle = SavedStateHandle(),
-                pipelineExecutor = mockk(relaxed = true),
-                moderatePromptUseCase = mockk<ModeratePromptUseCase>(relaxed = true),
-                loggingPort = mockk(relaxed = true),
+                pipelineExecutor = FakePipelineExecutorPort(),
+                moderatePromptUseCase = FakeModeratePromptUseCase(),
+                loggingPort = FakeLoggingPort(),
                 applicationScope = applicationScope,
             )
 
@@ -93,16 +82,7 @@ class InferenceOrchestratorNavigationDetachTest {
             val generationStarted = CompletableDeferred<Unit>()
             val generationCancelled = CompletableDeferred<Unit>()
 
-            coEvery {
-                chatUseCases.generateChatResponse(
-                    prompt = any(),
-                    userMessageId = any(),
-                    assistantMessageId = any(),
-                    chatId = any(),
-                    responseMode = any(),
-                    backgroundInferenceEnabled = any(),
-                )
-            } returns
+            chatUseCases.generateChatResponseUseCase.flow =
                 flow {
                     generationStarted.complete(Unit)
                     try {
@@ -130,12 +110,12 @@ class InferenceOrchestratorNavigationDetachTest {
             advanceUntilIdle()
             generationStarted.await()
 
-            verify(exactly = 1) { cancelInferenceUseCase() }
+            assertEquals(1, cancelInferenceUseCase.callCount)
 
             orchestrator.detachOnViewModelCleared()
             advanceUntilIdle()
 
-            verify(exactly = 1) { cancelInferenceUseCase() }
+            assertEquals(1, cancelInferenceUseCase.callCount)
             assertFalse(
                 generationCancelled.isCompleted,
                 "Inference must survive ChatViewModel clear / navigation detach",

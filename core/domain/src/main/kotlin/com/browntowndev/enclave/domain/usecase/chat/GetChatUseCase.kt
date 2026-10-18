@@ -10,7 +10,7 @@ import javax.inject.Inject
  * Use case for getting all messages for a chat as a Flow.
  * Listens to database changes via Room Flow.
  */
-class GetChatUseCase
+open class GetChatUseCase
     @Inject
     constructor(
         private val chatRepository: ChatRepository,
@@ -21,5 +21,5 @@ class GetChatUseCase
          * @param chatId The ID of the chat
          * @return Flow of messages for the chat
          */
-        operator fun invoke(chatId: ChatId): Flow<List<Message>> = chatRepository.getMessagesForChat(chatId)
+        open operator fun invoke(chatId: ChatId): Flow<List<Message>> = chatRepository.getMessagesForChat(chatId)
     }

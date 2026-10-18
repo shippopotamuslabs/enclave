@@ -2,8 +2,14 @@ package com.browntowndev.enclave.feature.chat
 
 import androidx.lifecycle.SavedStateHandle
 import app.cash.turbine.test
+import com.browntowndev.enclave.core.testing.FakeActiveChatTurnSnapshotPort
+import com.browntowndev.enclave.core.testing.FakeChatRepository
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeModerationReportRepository
+import com.browntowndev.enclave.core.testing.FakeStudioRepository
+import com.browntowndev.enclave.core.testing.FakeTtsPlaybackController
+import com.browntowndev.enclave.core.testing.FakeViewModelErrorHandler
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
-import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
@@ -15,37 +21,11 @@ import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.MessageState
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnSnapshotPort
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.inference.ToolExecutionEventPort
-import com.browntowndev.enclave.domain.port.media.TtsPlaybackControllerPort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
-import com.browntowndev.enclave.domain.port.repository.SettingsData
-import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
-import com.browntowndev.enclave.domain.usecase.byok.GetDefaultModelsUseCase
-import com.browntowndev.enclave.domain.usecase.byok.SetDefaultModelUseCase
-import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
-import com.browntowndev.enclave.domain.usecase.chat.GetModelDisplayNameUseCase
-import com.browntowndev.enclave.domain.usecase.chat.ListenToSpeechUseCase
-import com.browntowndev.enclave.domain.usecase.chat.MergeMessagesUseCase
-import com.browntowndev.enclave.domain.usecase.chat.ProcessFileAttachmentUseCase
-import com.browntowndev.enclave.domain.usecase.chat.StageImageAttachmentUseCase
-import com.browntowndev.enclave.domain.usecase.inference.CancelInferenceUseCase
-import com.browntowndev.enclave.feature.chat.R
-import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.enclave.domain.usecase.inference.SubmitModerationReportUseCase
-import com.browntowndev.enclave.domain.usecase.settings.SettingsAssignmentUseCases
-import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
-import com.browntowndev.enclave.domain.usecase.share.ShareChatUseCase
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.verify
-import kotlinx.coroutines.CoroutineExceptionHandler
+import com.browntowndev.enclave.feature.chat.R
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
@@ -64,21 +44,45 @@ import org.junit.jupiter.api.extension.ExtendWith
 @ExtendWith(MainDispatcherRule::class)
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 class ChatViewModelActionsTest {
-    private val settingsUseCases: SettingsUseCases = mockk()
-    private val chatUseCases: ChatUseCases = mockk()
-    private val processFileAttachmentUseCase: ProcessFileAttachmentUseCase = mockk()
-    private val stageImageAttachmentUseCase: StageImageAttachmentUseCase = mockk(relaxed = true)
-    private val cancelInferenceUseCase: CancelInferenceUseCase = mockk(relaxed = true)
-    private val inferenceLockManager: InferenceLockManager = mockk()
-    private val toolExecutionEventPort: ToolExecutionEventPort = mockk()
-    private val modelDisplayNamesUseCase: GetModelDisplayNameUseCase = mockk()
-    private val errorHandler: ViewModelErrorHandler = mockk()
-    private val loggingPort: LoggingPort = mockk(relaxed = true)
-    private val activeChatTurnStore: ActiveChatTurnSnapshotPort = mockk(relaxed = true)
-    private val playbackController: TtsPlaybackControllerPort = mockk(relaxed = true)
-    private val studioRepository: StudioRepositoryPort = mockk(relaxed = true)
-    private val activeModelProvider: ActiveModelProviderPort = mockk()
-    private val shareChatUseCase: ShareChatUseCase = mockk(relaxed = true)
+    /**
+     * Per-model-type [ActiveModelProviderPort] fake: [configurationsByType] wins over the
+     * fallback [configuration], mirroring the per-type MockK stubs this replaces (ENC-28).
+     */
+    private class PerTypeActiveModelProvider : ActiveModelProviderPort {
+        var configuration: ActiveModelConfiguration? = null
+        val configurationsByType = mutableMapOf<ModelType, ActiveModelConfiguration?>()
+        var overrideConfiguration: ActiveModelConfiguration? = null
+        val requestedModelTypes = mutableListOf<ModelType>()
+
+        override suspend fun getActiveConfiguration(modelType: ModelType): ActiveModelConfiguration? {
+            requestedModelTypes += modelType
+            return if (configurationsByType.containsKey(modelType)) {
+                configurationsByType[modelType]
+            } else {
+                configuration
+            }
+        }
+
+        override suspend fun getActiveConfigurationByOverride(override: ChatModelOverride): ActiveModelConfiguration? =
+            overrideConfiguration
+    }
+
+    private val settingsUseCases = FakeChatSettingsUseCases()
+    private val chatUseCases = FakeChatUseCases()
+    private val stageImageAttachmentUseCase = FakeStageImageAttachmentUseCase()
+    private val cancelInferenceUseCase = FakeCancelInferenceUseCase()
+    private val inferenceLockManager = FakeInferenceLockManager()
+    private val toolExecutionEventPort = FakeToolExecutionEventPort()
+    private val modelDisplayNamesUseCase = FakeGetModelDisplayNameUseCase()
+    private val errorHandler = FakeViewModelErrorHandler()
+    private val loggingPort = FakeLoggingPort()
+    private val activeChatTurnStore = FakeActiveChatTurnSnapshotPort()
+    private val playbackController = FakeTtsPlaybackController()
+    private val studioRepository = FakeStudioRepository()
+    private val activeModelProvider = PerTypeActiveModelProvider()
+    private val shareChatUseCase = FakeShareChatUseCase()
+    private val chatRepository = FakeChatRepository()
+    private val exportArtifactDocumentsUseCase = FakeExportArtifactDocumentsUseCase()
 
     private lateinit var chatViewModel: ChatViewModel
     private lateinit var defaultModelsFlow: MutableStateFlow<List<DefaultModelAssignment>>
@@ -103,41 +107,11 @@ class ChatViewModelActionsTest {
                 thinkingEnabled = false,
                 isMultimodal = true,
             )
-        coEvery { activeModelProvider.getActiveConfiguration(any()) } returns visionConfig
-        coEvery { activeModelProvider.getActiveConfigurationByOverride(any()) } returns null
+        activeModelProvider.configuration = visionConfig
+        activeModelProvider.overrideConfiguration = null
 
-        every { errorHandler.coroutineExceptionHandler(any(), any(), any()) } returns CoroutineExceptionHandler { _, _ -> }
-
-        val listenToSpeechUseCase = mockk<ListenToSpeechUseCase>(relaxed = true)
-        every { listenToSpeechUseCase.invoke(any(), any()) } returns MutableSharedFlow()
-        every { chatUseCases.listenToSpeechUseCase } returns listenToSpeechUseCase
-        every { chatUseCases.processFileAttachmentUseCase } returns processFileAttachmentUseCase
-
-        coEvery { chatUseCases.getChat(any()) } returns MutableStateFlow(emptyList())
-        every { chatUseCases.mergeMessagesUseCase } returns MergeMessagesUseCase()
-        every { settingsUseCases.getSettings() } returns MutableStateFlow(SettingsData())
         defaultModelsFlow = MutableStateFlow(emptyList())
-        val assignmentUseCases = mockk<SettingsAssignmentUseCases>()
-        val getDefaultModelsUseCase = mockk<GetDefaultModelsUseCase>()
-        every { settingsUseCases.assignments } returns assignmentUseCases
-        every { assignmentUseCases.getDefaultModels } returns getDefaultModelsUseCase
-        every { getDefaultModelsUseCase() } returns defaultModelsFlow
-        val setDefaultModelUseCase = mockk<SetDefaultModelUseCase>(relaxed = true)
-        every { assignmentUseCases.setDefaultModel } returns setDefaultModelUseCase
-        every { inferenceLockManager.isInferenceBlocked } returns MutableStateFlow(false)
-        coEvery { modelDisplayNamesUseCase.invoke(any()) } returns "Test Model"
-        every { toolExecutionEventPort.events } returns MutableSharedFlow()
-        every { studioRepository.observeAllMedia() } returns flowOf(emptyList())
-        every { studioRepository.observeEphemeralMedia() } returns flowOf(emptyList())
-        val getChatCapablePresetsUseCase = mockk<com.browntowndev.enclave.domain.usecase.chat.GetChatCapablePresetsUseCase>()
-        every { getChatCapablePresetsUseCase.invoke() } returns
-            flowOf(
-                com.browntowndev.enclave.domain.usecase.chat.ChatCapablePresets(
-                    localAssets = emptyList(),
-                    apiAssets = emptyList(),
-                ),
-            )
-        every { chatUseCases.getChatCapablePresetsUseCase } returns getChatCapablePresetsUseCase
+        settingsUseCases.assignments.getDefaultModels.flow = defaultModelsFlow
 
         chatViewModel =
             ChatViewModelTestSupport.createViewModel(
@@ -155,8 +129,8 @@ class ChatViewModelActionsTest {
                 playbackController = playbackController,
                 studioRepository = studioRepository,
                 shareChatUseCase = shareChatUseCase,
-                chatRepository = mockk(relaxed = true),
-                exportArtifactDocumentsUseCase = mockk(relaxed = true),
+                chatRepository = chatRepository,
+                exportArtifactDocumentsUseCase = exportArtifactDocumentsUseCase,
                 stageImageAttachmentUseCase = stageImageAttachmentUseCase,
             )
     }
@@ -209,12 +183,11 @@ class ChatViewModelActionsTest {
             runCurrent()
 
             // First, set an image
-            coEvery { stageImageAttachmentUseCase("test-uri") } returns "test-uri"
             chatViewModel.onImagesSelected(listOf("test-uri"))
             runCurrent()
 
             // Switch to COUNCIL mode - photo attachment should be disabled for crew without API vision
-            coEvery { activeModelProvider.getActiveConfiguration(ModelType.VISION) } returns null
+            activeModelProvider.configurationsByType[ModelType.VISION] = null
             chatViewModel.onModeChange(ChatModeUi.COUNCIL)
             advanceUntilIdle()
 
@@ -232,8 +205,6 @@ class ChatViewModelActionsTest {
             val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
             runCurrent()
 
-            coEvery { stageImageAttachmentUseCase("content://image") } returns "content://image"
-
             chatViewModel.onImagesSelected(listOf("content://image"))
             advanceUntilIdle()
 
@@ -247,7 +218,6 @@ class ChatViewModelActionsTest {
             val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
             runCurrent()
 
-            coEvery { stageImageAttachmentUseCase("content://image") } returns "content://image"
             chatViewModel.onImagesSelected(listOf("content://image"))
             advanceUntilIdle()
 
@@ -268,7 +238,6 @@ class ChatViewModelActionsTest {
             val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
             runCurrent()
 
-            coEvery { stageImageAttachmentUseCase("content://image") } returns "content://image"
             chatViewModel.onImagesSelected(listOf("content://image"))
             advanceUntilIdle()
             assertEquals(listOf("content://image"), chatViewModel.uiState.value.selectedImageUris)
@@ -291,7 +260,7 @@ class ChatViewModelActionsTest {
             val metadata =
                 com.browntowndev.enclave.domain.port.media
                     .FileAttachmentMetadata("test.txt", "text/plain", "content")
-            coEvery { processFileAttachmentUseCase("content://file") } returns metadata
+            chatUseCases.processFileAttachmentUseCase.result = metadata
             chatViewModel.onFileSelected("content://file")
             advanceUntilIdle()
             assertEquals("test.txt", chatViewModel.uiState.value.selectedFileName)
@@ -314,7 +283,7 @@ class ChatViewModelActionsTest {
             runCurrent()
 
             // cancelInferenceUseCase should NOT be called since we're not generating
-            verify(exactly = 0) { cancelInferenceUseCase() }
+            assertEquals(0, cancelInferenceUseCase.callCount)
             collectJob.cancel()
         }
 
@@ -353,7 +322,7 @@ class ChatViewModelActionsTest {
     @Test
     fun `uiState isGlobalInferenceBlocked true when inference blocked`() =
         runTest {
-            every { inferenceLockManager.isInferenceBlocked } returns MutableStateFlow(true)
+            inferenceLockManager.isInferenceBlocked.value = true
 
             chatViewModel =
                 ChatViewModelTestSupport.createViewModel(
@@ -371,8 +340,8 @@ class ChatViewModelActionsTest {
                     playbackController = playbackController,
                     studioRepository = studioRepository,
                     shareChatUseCase = shareChatUseCase,
-                    chatRepository = mockk(relaxed = true),
-                    exportArtifactDocumentsUseCase = mockk(relaxed = true),
+                    chatRepository = chatRepository,
+                    exportArtifactDocumentsUseCase = exportArtifactDocumentsUseCase,
                     stageImageAttachmentUseCase = stageImageAttachmentUseCase,
                 )
 
@@ -441,7 +410,7 @@ class ChatViewModelActionsTest {
     fun `onModeChange to COUNCIL disables photo when no API vision model`() =
         runTest {
             // No vision API model configured
-            coEvery { activeModelProvider.getActiveConfiguration(ModelType.VISION) } returns null
+            activeModelProvider.configurationsByType[ModelType.VISION] = null
 
             val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
             runCurrent()
@@ -457,7 +426,7 @@ class ChatViewModelActionsTest {
     fun `onImagesSelected clears images when photo attachment is disabled`() =
         runTest {
             // No vision model configured
-            coEvery { activeModelProvider.getActiveConfiguration(any()) } returns null
+            activeModelProvider.configuration = null
 
             val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
             runCurrent()
@@ -479,9 +448,10 @@ class ChatViewModelActionsTest {
             val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
             runCurrent()
 
-            coEvery { stageImageAttachmentUseCase("content://keep") } returns "staged://keep"
-            coEvery { stageImageAttachmentUseCase("content://drop") } returns "staged://drop"
+            stageImageAttachmentUseCase.result = "staged://keep"
             chatViewModel.onImagesSelected(listOf("content://keep"))
+            advanceUntilIdle()
+            stageImageAttachmentUseCase.result = "staged://drop"
             chatViewModel.onImagesSelected(listOf("content://drop"))
             advanceUntilIdle()
             assertEquals(
@@ -527,21 +497,18 @@ class ChatViewModelActionsTest {
                     isLocal = true,
                     modelId = "local-thinking",
                 )
-            coEvery { activeModelProvider.getActiveConfiguration(any()) } answers {
-                when (firstArg<com.browntowndev.enclave.domain.model.inference.ModelType>()) {
-                    com.browntowndev.enclave.domain.model.inference.ModelType.FAST -> null
-                    com.browntowndev.enclave.domain.model.inference.ModelType.THINKING -> localThinking
-                    com.browntowndev.enclave.domain.model.inference.ModelType.VISION -> apiVision
-                    else -> null
-                }
-            }
+            activeModelProvider.configuration = null
+            activeModelProvider.configurationsByType[ModelType.FAST] = null
+            activeModelProvider.configurationsByType[ModelType.THINKING] = localThinking
+            activeModelProvider.configurationsByType[ModelType.VISION] = apiVision
 
             val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
             runCurrent()
 
-            coEvery { stageImageAttachmentUseCase("content://one") } returns "staged://one"
-            coEvery { stageImageAttachmentUseCase("content://two") } returns "staged://two"
+            stageImageAttachmentUseCase.result = "staged://one"
             chatViewModel.onImagesSelected(listOf("content://one"))
+            advanceUntilIdle()
+            stageImageAttachmentUseCase.result = "staged://two"
             chatViewModel.onImagesSelected(listOf("content://two"))
             advanceUntilIdle()
             assertEquals(2, chatViewModel.uiState.value.selectedImageUris.size)
@@ -561,7 +528,8 @@ class ChatViewModelActionsTest {
     @Test
     fun `reportBlockedPrompt submits blocked outcome report and emits feedback message`() =
         runTest {
-            val submitModerationReportUseCase = mockk<SubmitModerationReportUseCase>(relaxed = true)
+            val moderationReportRepository = FakeModerationReportRepository()
+            val submitModerationReportUseCase = SubmitModerationReportUseCase(moderationReportRepository)
             val customViewModel =
                 ChatViewModelTestSupport.createViewModel(
                     settingsUseCases = settingsUseCases,
@@ -578,8 +546,8 @@ class ChatViewModelActionsTest {
                     playbackController = playbackController,
                     studioRepository = studioRepository,
                     shareChatUseCase = shareChatUseCase,
-                    chatRepository = mockk(relaxed = true),
-                    exportArtifactDocumentsUseCase = mockk(relaxed = true),
+                    chatRepository = chatRepository,
+                    exportArtifactDocumentsUseCase = exportArtifactDocumentsUseCase,
                     stageImageAttachmentUseCase = stageImageAttachmentUseCase,
                     submitModerationReportUseCase = submitModerationReportUseCase,
                 )
@@ -589,13 +557,17 @@ class ChatViewModelActionsTest {
                 assertEquals(R.string.chat_moderation_feedback_submitted, awaitItem())
             }
 
-            coVerify { submitModerationReportUseCase("Test blocked prompt", "blocked") }
+            assertEquals(
+                listOf("Test blocked prompt" to "blocked"),
+                moderationReportRepository.submittedReports,
+            )
         }
 
     @Test
     fun `reportResponse submits response text when message exists in uiState`() =
         runTest {
-            val submitModerationReportUseCase = mockk<SubmitModerationReportUseCase>(relaxed = true)
+            val moderationReportRepository = FakeModerationReportRepository()
+            val submitModerationReportUseCase = SubmitModerationReportUseCase(moderationReportRepository)
             val testChatId = ChatId("test-chat")
             val testMessageId = MessageId("msg-assistant-1")
             val assistantMessage =
@@ -607,13 +579,8 @@ class ChatViewModelActionsTest {
                     messageState = MessageState.COMPLETE,
                     createdAt = 1L,
                 )
-            val chatUseCasesWithMessage = mockk<ChatUseCases>(relaxed = true)
-            val listenToSpeechUseCase = mockk<ListenToSpeechUseCase>(relaxed = true)
-            every { listenToSpeechUseCase.invoke(any(), any()) } returns MutableSharedFlow()
-            every { chatUseCasesWithMessage.listenToSpeechUseCase } returns listenToSpeechUseCase
-            every { chatUseCasesWithMessage.processFileAttachmentUseCase } returns processFileAttachmentUseCase
-            every { chatUseCasesWithMessage.mergeMessagesUseCase } returns MergeMessagesUseCase()
-            coEvery { chatUseCasesWithMessage.getChat(any()) } returns flowOf(listOf(assistantMessage))
+            val chatUseCasesWithMessage = FakeChatUseCases()
+            chatUseCasesWithMessage.getChatUseCase.flow = flowOf(listOf(assistantMessage))
             val customViewModel =
                 ChatViewModelTestSupport.createViewModel(
                     settingsUseCases = settingsUseCases,
@@ -630,8 +597,8 @@ class ChatViewModelActionsTest {
                     playbackController = playbackController,
                     studioRepository = studioRepository,
                     shareChatUseCase = shareChatUseCase,
-                    chatRepository = mockk(relaxed = true),
-                    exportArtifactDocumentsUseCase = mockk(relaxed = true),
+                    chatRepository = chatRepository,
+                    exportArtifactDocumentsUseCase = exportArtifactDocumentsUseCase,
                     stageImageAttachmentUseCase = stageImageAttachmentUseCase,
                     submitModerationReportUseCase = submitModerationReportUseCase,
                 )
@@ -645,14 +612,18 @@ class ChatViewModelActionsTest {
                 assertEquals(R.string.chat_moderation_feedback_submitted, awaitItem())
             }
 
-            coVerify { submitModerationReportUseCase("Harmful response that should be blocked", "allowed") }
+            assertEquals(
+                listOf("Harmful response that should be blocked" to "allowed"),
+                moderationReportRepository.submittedReports,
+            )
             collectJob.cancel()
         }
 
     @Test
     fun `reportResponse does nothing when message not found`() =
         runTest {
-            val submitModerationReportUseCase = mockk<SubmitModerationReportUseCase>(relaxed = true)
+            val moderationReportRepository = FakeModerationReportRepository()
+            val submitModerationReportUseCase = SubmitModerationReportUseCase(moderationReportRepository)
             val customViewModel =
                 ChatViewModelTestSupport.createViewModel(
                     settingsUseCases = settingsUseCases,
@@ -669,15 +640,15 @@ class ChatViewModelActionsTest {
                     playbackController = playbackController,
                     studioRepository = studioRepository,
                     shareChatUseCase = shareChatUseCase,
-                    chatRepository = mockk(relaxed = true),
-                    exportArtifactDocumentsUseCase = mockk(relaxed = true),
+                    chatRepository = chatRepository,
+                    exportArtifactDocumentsUseCase = exportArtifactDocumentsUseCase,
                     stageImageAttachmentUseCase = stageImageAttachmentUseCase,
                     submitModerationReportUseCase = submitModerationReportUseCase,
                 )
 
             customViewModel.reportResponse(MessageId("nonexistent"))
 
-            coVerify(exactly = 0) { submitModerationReportUseCase(any(), any()) }
+            assertTrue(moderationReportRepository.submittedReports.isEmpty())
         }
 
     @Test
@@ -699,8 +670,8 @@ class ChatViewModelActionsTest {
                     playbackController = playbackController,
                     studioRepository = studioRepository,
                     shareChatUseCase = shareChatUseCase,
-                    chatRepository = mockk(relaxed = true),
-                    exportArtifactDocumentsUseCase = mockk(relaxed = true),
+                    chatRepository = chatRepository,
+                    exportArtifactDocumentsUseCase = exportArtifactDocumentsUseCase,
                     stageImageAttachmentUseCase = stageImageAttachmentUseCase,
                 )
             val coordinator = harness.chatInputCoordinator
@@ -742,8 +713,8 @@ class ChatViewModelActionsTest {
                     playbackController = playbackController,
                     studioRepository = studioRepository,
                     shareChatUseCase = shareChatUseCase,
-                    chatRepository = mockk(relaxed = true),
-                    exportArtifactDocumentsUseCase = mockk(relaxed = true),
+                    chatRepository = chatRepository,
+                    exportArtifactDocumentsUseCase = exportArtifactDocumentsUseCase,
                     stageImageAttachmentUseCase = stageImageAttachmentUseCase,
                 )
             val coordinator = harness.chatInputCoordinator
@@ -785,8 +756,8 @@ class ChatViewModelActionsTest {
                     playbackController = playbackController,
                     studioRepository = studioRepository,
                     shareChatUseCase = shareChatUseCase,
-                    chatRepository = mockk(relaxed = true),
-                    exportArtifactDocumentsUseCase = mockk(relaxed = true),
+                    chatRepository = chatRepository,
+                    exportArtifactDocumentsUseCase = exportArtifactDocumentsUseCase,
                     stageImageAttachmentUseCase = stageImageAttachmentUseCase,
                 )
 
@@ -805,14 +776,6 @@ class ChatViewModelActionsTest {
     @Test
     fun `S07 — setDefaultModel is never called when override is selected`() =
         runTest {
-            val setDefaultModelUseCase = mockk<SetDefaultModelUseCase>(relaxed = true)
-            val customAssignmentUseCases = mockk<SettingsAssignmentUseCases>()
-            val customGetDefaultModelsUseCase = mockk<GetDefaultModelsUseCase>()
-            every { settingsUseCases.assignments } returns customAssignmentUseCases
-            every { customAssignmentUseCases.getDefaultModels } returns customGetDefaultModelsUseCase
-            every { customGetDefaultModelsUseCase() } returns defaultModelsFlow
-            every { customAssignmentUseCases.setDefaultModel } returns setDefaultModelUseCase
-
             val harness =
                 ChatViewModelTestSupport.createHarness(
                     settingsUseCases = settingsUseCases,
@@ -829,8 +792,8 @@ class ChatViewModelActionsTest {
                     playbackController = playbackController,
                     studioRepository = studioRepository,
                     shareChatUseCase = shareChatUseCase,
-                    chatRepository = mockk(relaxed = true),
-                    exportArtifactDocumentsUseCase = mockk(relaxed = true),
+                    chatRepository = chatRepository,
+                    exportArtifactDocumentsUseCase = exportArtifactDocumentsUseCase,
                     stageImageAttachmentUseCase = stageImageAttachmentUseCase,
                 )
 
@@ -846,9 +809,7 @@ class ChatViewModelActionsTest {
             )
             runCurrent()
 
-            coVerify(exactly = 0) {
-                setDefaultModelUseCase(any(), any(), any(), any(), any(), any())
-            }
+            assertTrue(settingsUseCases.assignments.setDefaultModel.calls.isEmpty())
             collectJob.cancel()
         }
 }

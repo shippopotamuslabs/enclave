@@ -1,6 +1,11 @@
 package com.browntowndev.enclave.feature.chat
 
 import androidx.lifecycle.SavedStateHandle
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
+import com.browntowndev.enclave.core.testing.FakeChatRepository
+import com.browntowndev.enclave.core.testing.FakeStudioRepository
+import com.browntowndev.enclave.core.testing.FakeTtsPlaybackController
+import com.browntowndev.enclave.core.testing.FakeViewModelErrorHandler
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.Content
@@ -11,24 +16,11 @@ import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.model.inference.ToolExecutionEvent
-import com.browntowndev.enclave.domain.port.inference.ToolExecutionEventPort
-import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.SettingsData
-import com.browntowndev.enclave.domain.usecase.byok.GetDefaultModelsUseCase
-import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
-import com.browntowndev.enclave.domain.usecase.chat.GetModelDisplayNameUseCase
-import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
-import com.browntowndev.enclave.domain.usecase.settings.SettingsAssignmentUseCases
-import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.enclave.feature.inference.ActiveChatTurnStore
-import io.mockk.coEvery
-import io.mockk.every
-import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -45,58 +37,41 @@ import org.junit.jupiter.api.extension.ExtendWith
 class ChatViewModelHapticsStateTest {
     private lateinit var messagesFlow: MutableStateFlow<List<Message>>
     private lateinit var settingsFlow: MutableStateFlow<SettingsData>
-    private lateinit var toolEvents: MutableSharedFlow<ToolExecutionEvent>
+    private lateinit var toolExecutionEventPort: FakeToolExecutionEventPort
     private lateinit var viewModel: ChatViewModel
 
     @BeforeEach
     fun setup() {
         messagesFlow = MutableStateFlow(emptyList())
         settingsFlow = MutableStateFlow(SettingsData(hapticResponse = false))
-        toolEvents = MutableSharedFlow(extraBufferCapacity = 1)
+        toolExecutionEventPort = FakeToolExecutionEventPort()
 
-        val settingsUseCases = mockk<SettingsUseCases>(relaxed = true)
-        val assignmentUseCases = mockk<SettingsAssignmentUseCases>()
-        val getDefaultModelsUseCase = mockk<GetDefaultModelsUseCase>()
-        val chatUseCases = mockk<ChatUseCases>(relaxed = true)
-        val inferenceLockManager = mockk<InferenceLockManager>(relaxed = true)
-        val modelDisplayNamesUseCase = mockk<GetModelDisplayNameUseCase>(relaxed = true)
-        val activeModelProvider = mockk<ActiveModelProviderPort>(relaxed = true)
+        val settingsUseCases = FakeChatSettingsUseCases()
+        settingsUseCases.preferences.getSettings.flow = settingsFlow
+        val chatUseCases = FakeChatUseCases()
+        chatUseCases.getChatUseCase.flow = messagesFlow
+        val inferenceLockManager = FakeInferenceLockManager()
+        val modelDisplayNamesUseCase = FakeGetModelDisplayNameUseCase()
+        val activeModelProvider = FakeActiveModelProvider()
 
-        every { settingsUseCases.getSettings() } returns settingsFlow
-        every { settingsUseCases.assignments } returns assignmentUseCases
-        every { assignmentUseCases.getDefaultModels } returns getDefaultModelsUseCase
-        every { getDefaultModelsUseCase() } returns MutableStateFlow(emptyList())
-        coEvery { chatUseCases.getChat(any()) } returns messagesFlow
-        every { inferenceLockManager.isInferenceBlocked } returns MutableStateFlow(false)
-        coEvery { modelDisplayNamesUseCase.invoke(any()) } returns "Test Model"
-        coEvery { activeModelProvider.getActiveConfiguration(any()) } returns null
-
-        val studioRepository =
-            mockk<com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort>(relaxed = true) {
-                every { observeEphemeralMedia() } returns flowOf(emptyList())
-                every { observeAllMedia() } returns flowOf(emptyList())
-            }
         viewModel =
             ChatViewModelTestSupport.createViewModel(
                 settingsUseCases = settingsUseCases,
                 chatUseCases = chatUseCases,
                 savedStateHandle = SavedStateHandle(mapOf("chatId" to "chat-1")),
-                cancelInferenceUseCase = mockk(relaxed = true),
+                cancelInferenceUseCase = FakeCancelInferenceUseCase(),
                 inferenceLockManager = inferenceLockManager,
                 modelDisplayNamesUseCase = modelDisplayNamesUseCase,
                 activeModelProvider = activeModelProvider,
-                toolExecutionEventPort =
-                    mockk<ToolExecutionEventPort> {
-                        every { events } returns toolEvents
-                    },
-                errorHandler = mockk(relaxed = true),
+                toolExecutionEventPort = toolExecutionEventPort,
+                errorHandler = FakeViewModelErrorHandler(),
                 activeChatTurnSnapshotPort = ActiveChatTurnStore(),
-                playbackController = mockk(relaxed = true),
-                studioRepository = studioRepository,
-                shareChatUseCase = mockk(relaxed = true),
-                chatRepository = mockk(relaxed = true),
-                exportArtifactDocumentsUseCase = mockk(relaxed = true),
-                stageImageAttachmentUseCase = mockk(relaxed = true),
+                playbackController = FakeTtsPlaybackController(),
+                studioRepository = FakeStudioRepository(),
+                shareChatUseCase = FakeShareChatUseCase(),
+                chatRepository = FakeChatRepository(),
+                exportArtifactDocumentsUseCase = FakeExportArtifactDocumentsUseCase(),
+                stageImageAttachmentUseCase = FakeStageImageAttachmentUseCase(),
             )
     }
 
@@ -229,7 +204,7 @@ class ChatViewModelHapticsStateTest {
             messagesFlow.value = listOf(assistant)
             advanceUntilIdle()
 
-            toolEvents.emit(
+            toolExecutionEventPort.events.emit(
                 ToolExecutionEvent.Started(
                     eventId = "tool-1",
                     toolName = ToolDefinition.WEB_SEARCH.name,
@@ -260,7 +235,7 @@ class ChatViewModelHapticsStateTest {
             messagesFlow.value = listOf(assistant)
             advanceUntilIdle()
 
-            toolEvents.emit(
+            toolExecutionEventPort.events.emit(
                 ToolExecutionEvent.Started(
                     eventId = "tool-1",
                     toolName = ToolDefinition.WEB_SEARCH.name,

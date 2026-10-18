@@ -11,9 +11,16 @@ class FakeActiveModelProvider(
 ) : ActiveModelProviderPort {
     val requestedModelTypes = mutableListOf<ModelType>()
 
+    /** Optional per-type overrides (ENC-28): a type present here wins over [configuration]. */
+    val configurationsByType = mutableMapOf<ModelType, ActiveModelConfiguration?>()
+
     override suspend fun getActiveConfiguration(modelType: ModelType): ActiveModelConfiguration? {
         requestedModelTypes += modelType
-        return configuration
+        return if (configurationsByType.containsKey(modelType)) {
+            configurationsByType[modelType]
+        } else {
+            configuration
+        }
     }
 
     override suspend fun getActiveConfigurationByOverride(override: ChatModelOverride): ActiveModelConfiguration? =

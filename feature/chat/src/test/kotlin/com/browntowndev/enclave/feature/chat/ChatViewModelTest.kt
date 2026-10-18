@@ -1,63 +1,44 @@
 package com.browntowndev.enclave.feature.chat
+
 import androidx.lifecycle.SavedStateHandle
 import app.cash.turbine.test
+import com.browntowndev.enclave.core.testing.FakeActiveChatTurnSnapshotPort
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
+import com.browntowndev.enclave.core.testing.FakeChatRepository
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeStudioRepository
+import com.browntowndev.enclave.core.testing.FakeTtsPlaybackController
+import com.browntowndev.enclave.core.testing.FakeUiSelectionRepository
+import com.browntowndev.enclave.core.testing.FakeViewModelErrorHandler
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
-import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.artifact.ArtifactExportDestination
 import com.browntowndev.enclave.domain.model.artifact.ArtifactExportFormat
 import com.browntowndev.enclave.domain.model.artifact.ArtifactExportOutcome
 import com.browntowndev.enclave.domain.model.artifact.ArtifactGenerationRequest
-import com.browntowndev.enclave.domain.model.artifact.ExportArtifactDocumentsCommand
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.Content
 import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.MessageState
-import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.chat.Mode
+import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
 import com.browntowndev.enclave.domain.model.config.TtsProviderId
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnSnapshotPort
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.inference.ToolExecutionEventPort
 import com.browntowndev.enclave.domain.port.media.FileAttachmentMetadata
 import com.browntowndev.enclave.domain.port.media.SpeechState
-import com.browntowndev.enclave.domain.port.media.TtsPlaybackControllerPort
 import com.browntowndev.enclave.domain.port.media.TtsPlaybackStatus
-import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
-import com.browntowndev.enclave.domain.port.repository.SettingsData
 import com.browntowndev.enclave.domain.port.repository.StudioMediaAsset
-import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.UiSelectionRepository
-import com.browntowndev.enclave.domain.usecase.artifact.ExportArtifactDocumentsUseCase
-import com.browntowndev.enclave.domain.usecase.byok.GetDefaultModelsUseCase
-import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
-import com.browntowndev.enclave.domain.usecase.chat.GetModelDisplayNameUseCase
-import com.browntowndev.enclave.domain.usecase.chat.ListenToSpeechUseCase
-import com.browntowndev.enclave.domain.usecase.chat.MergeMessagesUseCase
-import com.browntowndev.enclave.domain.usecase.chat.ProcessFileAttachmentUseCase
-import com.browntowndev.enclave.domain.usecase.chat.StageImageAttachmentUseCase
-import com.browntowndev.enclave.domain.usecase.chat.SubmitPromptRequest
 import com.browntowndev.enclave.domain.usecase.chat.UserPromptResult
-import com.browntowndev.enclave.domain.usecase.inference.CancelInferenceUseCase
-import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
-import com.browntowndev.enclave.domain.usecase.settings.SettingsAssignmentUseCases
-import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
-import com.browntowndev.enclave.domain.usecase.share.ShareChatUseCase
-import io.mockk.*
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
@@ -81,47 +62,25 @@ class ChatViewModelTest {
         const val OSDA_V01_REQUIRED_MESSAGE_COUNT = 1
     }
 
-    private val settingsUseCases: SettingsUseCases = mockk()
-    private val chatUseCases: ChatUseCases = mockk()
-    private val processFileAttachmentUseCase: ProcessFileAttachmentUseCase = mockk()
-    private val stageImageAttachmentUseCase: StageImageAttachmentUseCase = mockk(relaxed = true)
-    private val cancelInferenceUseCase: CancelInferenceUseCase = mockk(relaxed = true)
-    private val inferenceLockManager: InferenceLockManager = mockk()
-    private val toolExecutionEventPort: ToolExecutionEventPort = mockk()
-    private var modelDisplayNamesUseCase: GetModelDisplayNameUseCase = mockk()
-    private val errorHandler: ViewModelErrorHandler = mockk()
-    private val loggingPort: LoggingPort = mockk(relaxed = true)
-    private val activeChatTurnStore: ActiveChatTurnSnapshotPort = mockk(relaxed = true)
-    private val playbackController: TtsPlaybackControllerPort = mockk(relaxed = true)
-    private val studioRepository: StudioRepositoryPort = mockk(relaxed = true)
-    private val shareChatUseCase: ShareChatUseCase = mockk(relaxed = true)
-    private val chatRepository: com.browntowndev.enclave.domain.port.repository.ChatRepository = mockk(relaxed = true)
-    private val exportArtifactDocumentsUseCase: ExportArtifactDocumentsUseCase = mockk(relaxed = true)
-    private val activeModelProvider: ActiveModelProviderPort = mockk()
+    private val settingsUseCases = FakeChatSettingsUseCases()
+    private val chatUseCases = FakeChatUseCases()
+    private val stageImageAttachmentUseCase = FakeStageImageAttachmentUseCase()
+    private val cancelInferenceUseCase = FakeCancelInferenceUseCase()
+    private val inferenceLockManager = FakeInferenceLockManager()
+    private val toolExecutionEventPort = FakeToolExecutionEventPort()
+    private val modelDisplayNamesUseCase = FakeGetModelDisplayNameUseCase()
+    private val errorHandler = FakeViewModelErrorHandler()
+    private val loggingPort = FakeLoggingPort()
+    private val activeChatTurnStore = FakeActiveChatTurnSnapshotPort()
+    private val playbackController = FakeTtsPlaybackController()
+    private val studioRepository = FakeStudioRepository()
+    private val shareChatUseCase = FakeShareChatUseCase()
+    private val chatRepository = FakeChatRepository()
+    private val exportArtifactDocumentsUseCase = FakeExportArtifactDocumentsUseCase()
+    private val activeModelProvider = FakeActiveModelProvider()
     private lateinit var chatViewModel: ChatViewModel
     private lateinit var savedStateHandle: SavedStateHandle
     private lateinit var defaultModelsFlow: MutableStateFlow<List<DefaultModelAssignment>>
-
-    private lateinit var speechEvents: MutableSharedFlow<SpeechState>
-    private lateinit var listenToSpeechUseCase: ListenToSpeechUseCase
-
-    // ENC-27: recorded invocations replace MockK verify/coVerify.
-    private data class HandleErrorArgs(
-        val tag: String,
-        val message: String,
-        val throwable: Throwable,
-        val userMessage: String,
-    )
-
-    private val handleErrorCalls = mutableListOf<HandleErrorArgs>()
-    private val exportCommands = mutableListOf<ExportArtifactDocumentsCommand>()
-    private val getMessagesCalls = mutableListOf<ChatId>()
-    private val listenStopSignals = mutableListOf<StateFlow<Boolean>>()
-    private val playCalls = mutableListOf<String>()
-    private var stopCallCount = 0
-    private var pauseCallCount = 0
-    private val submitPromptRequests = mutableListOf<SubmitPromptRequest>()
-    private val setChatModeCalls = mutableListOf<Mode>()
 
     @BeforeEach
     fun setUp() {
@@ -143,54 +102,10 @@ class ChatViewModelTest {
                 thinkingEnabled = false,
                 isMultimodal = true,
             )
-        coEvery { activeModelProvider.getActiveConfiguration(any()) } returns visionConfig
+        activeModelProvider.configuration = visionConfig
 
-        // Stub coroutineExceptionHandler to return a real one to avoid ClassCastException with MockK
-        every { errorHandler.coroutineExceptionHandler(any(), any(), any()) } returns CoroutineExceptionHandler { _, _ -> }
-        every { errorHandler.handleError(any(), any(), any(), any()) } answers {
-            handleErrorCalls +=
-                HandleErrorArgs(
-                    tag = arg(0),
-                    message = arg(1),
-                    throwable = arg(2),
-                    userMessage = arg(3),
-                )
-            Unit
-        }
-
-        speechEvents = MutableSharedFlow(extraBufferCapacity = 8)
-        listenToSpeechUseCase = mockk()
-        every { listenToSpeechUseCase.invoke(any(), any()) } answers {
-            listenStopSignals += secondArg<StateFlow<Boolean>>()
-            speechEvents
-        }
-        every { playbackController.stop() } answers {
-            stopCallCount++
-            Unit
-        }
-        every { playbackController.pause() } answers {
-            pauseCallCount++
-            Unit
-        }
-        every { chatUseCases.listenToSpeechUseCase } returns listenToSpeechUseCase
-        every { chatUseCases.processFileAttachmentUseCase } returns processFileAttachmentUseCase
-
-        coEvery { chatUseCases.getChat(any()) } returns MutableStateFlow(emptyList())
-        every { chatUseCases.mergeMessagesUseCase } returns MergeMessagesUseCase()
-        every { settingsUseCases.getSettings() } returns MutableStateFlow(SettingsData())
         defaultModelsFlow = MutableStateFlow(emptyList())
-        val assignmentUseCases = mockk<SettingsAssignmentUseCases>()
-        val getDefaultModelsUseCase = mockk<GetDefaultModelsUseCase>()
-        every { settingsUseCases.assignments } returns assignmentUseCases
-        every { assignmentUseCases.getDefaultModels } returns getDefaultModelsUseCase
-        every { getDefaultModelsUseCase() } returns defaultModelsFlow
-        every { inferenceLockManager.isInferenceBlocked } returns MutableStateFlow(false)
-        // Create a simple fake for GetModelDisplayNameUseCase
-        modelDisplayNamesUseCase = mockk(relaxed = true)
-        coEvery { modelDisplayNamesUseCase.invoke(any()) } returns "Test Model"
-        every { toolExecutionEventPort.events } returns MutableSharedFlow()
-        every { studioRepository.observeAllMedia() } returns flowOf(emptyList())
-        every { studioRepository.observeEphemeralMedia() } returns flowOf(emptyList())
+        settingsUseCases.assignments.getDefaultModels.flow = defaultModelsFlow
 
         savedStateHandle = SavedStateHandle()
 
@@ -246,23 +161,19 @@ class ChatViewModelTest {
             chatViewModel.onInputChange(input)
 
             val exception = IOException("Network error")
-            coEvery { chatUseCases.submitPrompt(any()) } throws exception
+            chatUseCases.submitPromptUseCase.failure = exception
 
             // When
             chatViewModel.onSendMessage()
 
             // Then
-            // Verify coroutineExceptionHandler was called with correct parameters
+            // Verify errorHandler was called with correct parameters
+            assertEquals(listOf("InferenceOrchestrator"), errorHandler.handledTags)
+            assertEquals(listOf("Failed to send message"), errorHandler.handledMessages)
+            assertEquals(listOf(exception), errorHandler.handledThrowables)
             assertEquals(
-                listOf(
-                    HandleErrorArgs(
-                        tag = "InferenceOrchestrator",
-                        message = "Failed to send message",
-                        throwable = exception,
-                        userMessage = "Could not send message. Please try again.",
-                    ),
-                ),
-                handleErrorCalls,
+                listOf("Could not send message. Please try again."),
+                errorHandler.handledUserMessages,
             )
         }
 
@@ -277,14 +188,8 @@ class ChatViewModelTest {
         runTest {
             val collectJob = backgroundScope.launch { chatViewModel.uiState.collect() }
             val documentJson = """{"id":"artifact-1","metadata":{"title":"Doc"},"blocks":[]}"""
-            every { chatRepository.getMessagesForChat(any()) } answers {
-                getMessagesCalls += ChatId(firstArg<String>())
-                flowOf(emptyList())
-            }
-            coEvery { exportArtifactDocumentsUseCase(any()) } coAnswers {
-                exportCommands += firstArg<ExportArtifactDocumentsCommand>()
+            exportArtifactDocumentsUseCase.result =
                 Result.success(ArtifactExportOutcome.Downloaded(listOf("Doc.pdf")))
-            }
 
             chatViewModel.onArtifactCardClick(
                 messageId = MessageId("message-1"),
@@ -310,12 +215,13 @@ class ChatViewModelTest {
                 cancelAndIgnoreRemainingEvents()
             }
 
+            val exportCommands = exportArtifactDocumentsUseCase.calls
             assertEquals(1, exportCommands.size)
             assertEquals(documentJson, exportCommands.single().documentJson)
             assertEquals("Doc", exportCommands.single().baseTitle)
             assertEquals(ArtifactExportFormat.PDF, exportCommands.single().format)
             assertEquals(ArtifactExportDestination.DOWNLOAD, exportCommands.single().destination)
-            assertTrue(getMessagesCalls.isEmpty())
+            assertTrue(chatRepository.getMessagesForChatCalls.isEmpty())
             assertEquals(ArtifactExportSheetState.Hidden, chatViewModel.uiState.value.artifactExportSheet)
             collectJob.cancel()
         }
@@ -326,11 +232,8 @@ class ChatViewModelTest {
             val collectJob = backgroundScope.launch { chatViewModel.uiState.collect() }
             val chatId = ChatId("chat-blank-export")
             savedStateHandle["chatId"] = chatId.value
-            every { chatRepository.getMessagesForChat(chatId) } returns flowOf(emptyList())
-            coEvery { exportArtifactDocumentsUseCase(any()) } coAnswers {
-                exportCommands += firstArg<ExportArtifactDocumentsCommand>()
+            exportArtifactDocumentsUseCase.result =
                 Result.success(ArtifactExportOutcome.Downloaded(emptyList()))
-            }
             chatViewModel.onArtifactCardClick(
                 messageId = MessageId("message-1"),
                 card =
@@ -358,7 +261,7 @@ class ChatViewModelTest {
                 cancelAndIgnoreRemainingEvents()
             }
 
-            assertTrue(exportCommands.isEmpty())
+            assertTrue(exportArtifactDocumentsUseCase.calls.isEmpty())
             val sheet = chatViewModel.uiState.value.artifactExportSheet as ArtifactExportSheetState.Visible
             assertFalse(sheet.isExporting)
             assertEquals("Document is still generating. Try again in a moment.", sheet.errorMessage)
@@ -373,38 +276,29 @@ class ChatViewModelTest {
             savedStateHandle["chatId"] = chatId.value
             val hydratedJson =
                 """{"version":"1.0","metadata":{"title":"Doc"},"blocks":[{"type":"paragraph","text":"Body"}]}"""
-            coEvery { exportArtifactDocumentsUseCase(any()) } coAnswers {
-                exportCommands += firstArg<ExportArtifactDocumentsCommand>()
+            exportArtifactDocumentsUseCase.result =
                 Result.success(ArtifactExportOutcome.Downloaded(listOf("Doc.pdf")))
-            }
-            every { chatRepository.getMessagesForChat(chatId) } answers {
-                getMessagesCalls += ChatId(firstArg<String>())
-                flowOf(
-                    listOf(
-                        Message(
-                            id = MessageId("message-1"),
-                            chatId = chatId,
-                            role = Role.ASSISTANT,
-                            content =
-                                Content(
-                                    text = "artifact",
-                                    artifacts =
-                                        listOf(
-                                            ArtifactGenerationRequest(
-                                                artifactId = "doc-export-1",
-                                                title = "Doc",
-                                                content = hydratedJson,
-                                            ),
+            chatRepository.seedMessages(
+                listOf(
+                    Message(
+                        id = MessageId("message-1"),
+                        chatId = chatId,
+                        role = Role.ASSISTANT,
+                        content =
+                            Content(
+                                text = "artifact",
+                                artifacts =
+                                    listOf(
+                                        ArtifactGenerationRequest(
+                                            artifactId = "doc-export-1",
+                                            title = "Doc",
+                                            content = hydratedJson,
                                         ),
-                                ),
-                        ),
+                                    ),
+                            ),
                     ),
-                )
-            }
-            every { chatRepository.getMessagesForChat(not(chatId)) } answers {
-                getMessagesCalls += ChatId(firstArg<String>())
-                flowOf(emptyList())
-            }
+                ),
+            )
 
             chatViewModel.onArtifactCardClick(
                 messageId = MessageId("message-1"),
@@ -430,12 +324,13 @@ class ChatViewModelTest {
                 cancelAndIgnoreRemainingEvents()
             }
 
+            val exportCommands = exportArtifactDocumentsUseCase.calls
             assertEquals(1, exportCommands.size)
             assertTrue(exportCommands.single().documentJson.contains("Body"))
             assertEquals("Doc", exportCommands.single().baseTitle)
             assertEquals(ArtifactExportFormat.PDF, exportCommands.single().format)
             assertEquals(ArtifactExportDestination.DOWNLOAD, exportCommands.single().destination)
-            assertEquals(1, getMessagesCalls.count { it == chatId })
+            assertEquals(1, chatRepository.getMessagesForChatCalls.count { it == chatId })
             collectJob.cancel()
         }
 
@@ -444,14 +339,8 @@ class ChatViewModelTest {
         runTest {
             val collectJob = backgroundScope.launch { chatViewModel.uiState.collect() }
             savedStateHandle["chatId"] = null
-            every { chatRepository.getMessagesForChat(any()) } answers {
-                getMessagesCalls += ChatId(firstArg<String>())
-                flowOf(emptyList())
-            }
-            coEvery { exportArtifactDocumentsUseCase(any()) } coAnswers {
-                exportCommands += firstArg<ExportArtifactDocumentsCommand>()
+            exportArtifactDocumentsUseCase.result =
                 Result.success(ArtifactExportOutcome.Downloaded(emptyList()))
-            }
 
             chatViewModel.onArtifactCardClick(
                 messageId = MessageId("message-1"),
@@ -477,8 +366,8 @@ class ChatViewModelTest {
                 cancelAndIgnoreRemainingEvents()
             }
 
-            assertTrue(getMessagesCalls.isEmpty())
-            assertTrue(exportCommands.isEmpty())
+            assertTrue(chatRepository.getMessagesForChatCalls.isEmpty())
+            assertTrue(exportArtifactDocumentsUseCase.calls.isEmpty())
             collectJob.cancel()
         }
 
@@ -487,7 +376,7 @@ class ChatViewModelTest {
         runTest {
             val collectJob = backgroundScope.launch { chatViewModel.uiState.collect() }
             chatViewModel.onMicClick()
-            assertEquals(1, listenStopSignals.size)
+            assertEquals(1, chatUseCases.listenToSpeechUseCase.stopSignals.size)
             collectJob.cancel()
         }
 
@@ -496,13 +385,13 @@ class ChatViewModelTest {
         runTest {
             val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
             chatViewModel.onMicClick()
-            speechEvents.emit(SpeechState.Listening(0f))
+            chatUseCases.listenToSpeechUseCase.events.emit(SpeechState.Listening(0f))
             runCurrent()
             chatViewModel.onMicClick()
             runCurrent()
             // Verify that the stop signal was sent. The actual state change to Idle will happen
             // when the use case processes the signal and completes.
-            assertTrue(listenStopSignals.any { it.value })
+            assertTrue(chatUseCases.listenToSpeechUseCase.stopSignals.any { it.value })
             collectJob.cancel()
         }
 
@@ -519,18 +408,16 @@ class ChatViewModelTest {
                     ),
                 )
             runCurrent()
-            every { playbackController.play(text) } answers {
-                playCalls += firstArg<String>()
+            playbackController.playbackFlow =
                 flowOf(
                     TtsPlaybackStatus.Playing,
                     TtsPlaybackStatus.Completed,
                 )
-            }
 
             chatViewModel.onPlayTts(text)
             runCurrent()
 
-            assertTrue(playCalls.contains(text))
+            assertTrue(playbackController.playCalls.contains(text))
             collectJob.cancel()
         }
 
@@ -558,7 +445,7 @@ class ChatViewModelTest {
                     ),
                 )
             runCurrent()
-            every { playbackController.play(text) } returns
+            playbackController.playbackFlow =
                 flow {
                     emit(TtsPlaybackStatus.Playing)
                     delay(10_000) // Keep flow alive so isPlayingTts stays true
@@ -584,13 +471,11 @@ class ChatViewModelTest {
                     ),
                 )
             runCurrent()
-            every { playbackController.play(text) } answers {
-                playCalls += firstArg<String>()
+            playbackController.playbackFlow =
                 flowOf(
                     TtsPlaybackStatus.Playing,
                     TtsPlaybackStatus.Completed,
                 )
-            }
 
             chatViewModel.onPlayTts(text)
             runCurrent()
@@ -613,13 +498,11 @@ class ChatViewModelTest {
                     ),
                 )
             runCurrent()
-            every { playbackController.play(text) } answers {
-                playCalls += firstArg<String>()
+            playbackController.playbackFlow =
                 flowOf(
                     TtsPlaybackStatus.Playing,
                     TtsPlaybackStatus.Error("Connection failed"),
                 )
-            }
 
             chatViewModel.onPlayTts(text)
             runCurrent()
@@ -632,7 +515,6 @@ class ChatViewModelTest {
     @Test
     fun `onStopTts cancels streaming job and stops use case`() =
         runTest {
-            val text = "Hello"
             val collectJob = backgroundScope.launch { chatViewModel.uiState.collect() }
             defaultModelsFlow.value =
                 listOf(
@@ -645,7 +527,7 @@ class ChatViewModelTest {
 
             chatViewModel.onStopTts()
 
-            assertTrue(stopCallCount >= 1)
+            assertTrue(playbackController.stopCount >= 1)
             collectJob.cancel()
         }
 
@@ -664,7 +546,7 @@ class ChatViewModelTest {
 
             chatViewModel.onPauseTts()
 
-            assertTrue(pauseCallCount >= 1)
+            assertTrue(playbackController.pauseCount >= 1)
             collectJob.cancel()
         }
 
@@ -682,12 +564,7 @@ class ChatViewModelTest {
                     ),
                 )
             runCurrent()
-            every { playbackController.play(text1) } returns
-                flowOf(
-                    TtsPlaybackStatus.Playing,
-                    TtsPlaybackStatus.Completed,
-                )
-            every { playbackController.play(text2) } returns
+            playbackController.playbackFlow =
                 flowOf(
                     TtsPlaybackStatus.Playing,
                     TtsPlaybackStatus.Completed,
@@ -699,7 +576,7 @@ class ChatViewModelTest {
             runCurrent()
 
             // stop() should be called at least once (from the cancel-before-start)
-            assertTrue(stopCallCount >= 1)
+            assertTrue(playbackController.stopCount >= 1)
             collectJob.cancel()
         }
 
@@ -716,19 +593,17 @@ class ChatViewModelTest {
                     ),
                 )
             runCurrent()
-            every { playbackController.play(text) } answers {
-                playCalls += firstArg<String>()
+            playbackController.playbackFlow =
                 flowOf(
                     TtsPlaybackStatus.Playing,
                     TtsPlaybackStatus.Completed,
                 )
-            }
 
             chatViewModel.onPlayTts(text)
             runCurrent()
 
             // Verify the playback controller was called
-            assertTrue(playCalls.contains(text))
+            assertTrue(playbackController.playCalls.contains(text))
             collectJob.cancel()
         }
 
@@ -745,7 +620,7 @@ class ChatViewModelTest {
                     ),
                 )
             runCurrent()
-            every { playbackController.play(text) } returns
+            playbackController.playbackFlow =
                 flow {
                     emit(TtsPlaybackStatus.Playing)
                     delay(10_000) // Keep alive
@@ -758,7 +633,7 @@ class ChatViewModelTest {
             chatViewModel.onStopTts()
             runCurrent()
 
-            assertTrue(stopCallCount >= 1)
+            assertTrue(playbackController.stopCount >= 1)
             collectJob.cancel()
         }
 
@@ -773,7 +648,7 @@ class ChatViewModelTest {
             runCurrent()
 
             // playbackController.play should NOT be called
-            assertTrue(playCalls.isEmpty())
+            assertTrue(playbackController.playCalls.isEmpty())
             assertFalse(chatViewModel.uiState.value.isPlayingTts)
             collectJob.cancel()
         }
@@ -791,12 +666,10 @@ class ChatViewModelTest {
                     ),
                 )
             runCurrent()
-            every { playbackController.play(text) } answers {
-                playCalls += firstArg<String>()
+            playbackController.playbackFlow =
                 flowOf(
                     TtsPlaybackStatus.Initializing,
                 )
-            }
 
             chatViewModel.onPlayTts(text)
             runCurrent()
@@ -811,7 +684,7 @@ class ChatViewModelTest {
         runTest {
             val uri = "content://test.txt"
             val metadata = FileAttachmentMetadata("test.txt", "text/plain", "File content")
-            coEvery { processFileAttachmentUseCase(uri) } returns metadata
+            chatUseCases.processFileAttachmentUseCase.result = metadata
 
             val collectJob = backgroundScope.launch { chatViewModel.uiState.collect() }
 
@@ -827,35 +700,15 @@ class ChatViewModelTest {
         runTest {
             val uri = "content://test.txt"
             val metadata = FileAttachmentMetadata("test.txt", "text/plain", "Extracted content")
-            coEvery { processFileAttachmentUseCase(uri) } returns metadata
+            chatUseCases.processFileAttachmentUseCase.result = metadata
 
             // Mock prompt result
             val chatId = ChatId("chat")
-            val assistantId = MessageId("assistant")
             mockSubmitPrompt(
                 chatUseCases = chatUseCases,
                 chatId = chatId,
                 userMessageId = MessageId("user"),
             )
-            coEvery { chatUseCases.submitPrompt(any()) } coAnswers {
-                submitPromptRequests += firstArg<SubmitPromptRequest>()
-                UserPromptResult(
-                    userMessageId = MessageId("user"),
-                    chatId = chatId,
-                    userMessageCreatedAtMillis = 100L,
-                )
-            }
-            coEvery {
-                chatUseCases.createAssistantPlaceholder(
-                    chatId = any(),
-                    userMessageCreatedAtMillis = any(),
-                    assistantMessageId = any(),
-                )
-            } returns
-                com.browntowndev.enclave.domain.usecase.chat.AssistantPlaceholderResult(
-                    assistantMessageId = assistantId,
-                )
-            coEvery { chatUseCases.generateChatResponse(any(), any(), any(), any(), any(), any()) } returns flowOf()
 
             chatViewModel.onFileSelected(uri)
             advanceUntilIdle()
@@ -864,6 +717,7 @@ class ChatViewModelTest {
             chatViewModel.onSendMessage()
             advanceUntilIdle()
 
+            val submitPromptRequests = chatUseCases.submitPromptUseCase.calls
             assertEquals(1, submitPromptRequests.size)
             assertEquals("Hello", submitPromptRequests.single().message.content.text)
             assertEquals(1, submitPromptRequests.single().message.content.fileAttachments.size)
@@ -879,10 +733,6 @@ class ChatViewModelTest {
             val assetId = "asset-1"
             val cacheUri = "file:///cache/test.jpg"
             val persistentUri = "file:///files/test.jpg"
-
-            val studioMediaFlow = MutableStateFlow<List<StudioMediaAsset>>(emptyList())
-            every { studioRepository.observeAllMedia() } returns studioMediaFlow
-            every { studioRepository.observeEphemeralMedia() } returns flowOf(emptyList())
 
             val messagesFlow =
                 MutableStateFlow(
@@ -904,7 +754,7 @@ class ChatViewModelTest {
                         ),
                     ),
                 )
-            coEvery { chatUseCases.getChat(chatId) } returns messagesFlow
+            chatUseCases.getChatUseCase.flowsByChatId[chatId] = messagesFlow
 
             val savedStateHandle = SavedStateHandle(mapOf("chatId" to chatId.value))
             chatViewModel =
@@ -915,7 +765,7 @@ class ChatViewModelTest {
                     cancelInferenceUseCase = cancelInferenceUseCase,
                     inferenceLockManager = inferenceLockManager,
                     modelDisplayNamesUseCase = modelDisplayNamesUseCase,
-                    activeModelProvider = mockk(relaxed = true),
+                    activeModelProvider = FakeActiveModelProvider(),
                     toolExecutionEventPort = toolExecutionEventPort,
                     errorHandler = errorHandler,
                     loggingPort = loggingPort,
@@ -924,7 +774,7 @@ class ChatViewModelTest {
                     studioRepository = studioRepository,
                     shareChatUseCase = shareChatUseCase,
                     chatRepository = chatRepository,
-                    exportArtifactDocumentsUseCase = mockk(relaxed = true),
+                    exportArtifactDocumentsUseCase = exportArtifactDocumentsUseCase,
                     stageImageAttachmentUseCase = stageImageAttachmentUseCase,
                 )
 
@@ -938,7 +788,7 @@ class ChatViewModelTest {
             assertEquals(cacheUri, initialMessage.content.generatedMediaUris.first())
 
             // Simulate asset being saved to Gallery (URI change)
-            studioMediaFlow.value =
+            studioRepository.mediaState.value =
                 listOf(
                     StudioMediaAsset(
                         id = assetId,
@@ -964,10 +814,10 @@ class ChatViewModelTest {
     fun osdaV01_optimisticUserVisibleBeforeDb() =
         runTest {
             val dbFlow = MutableStateFlow<List<Message>>(emptyList())
-            coEvery { chatUseCases.getChat(any()) } returns dbFlow
+            chatUseCases.getChatUseCase.flow = dbFlow
 
             val safetyGate = CompletableDeferred<Unit>()
-            coEvery { chatUseCases.submitPrompt(any()) } coAnswers {
+            chatUseCases.submitPromptUseCase.behavior = {
                 safetyGate.await()
                 UserPromptResult(
                     userMessageId = MessageId("opt-1"),
@@ -984,7 +834,7 @@ class ChatViewModelTest {
                     cancelInferenceUseCase = cancelInferenceUseCase,
                     inferenceLockManager = inferenceLockManager,
                     modelDisplayNamesUseCase = modelDisplayNamesUseCase,
-                    activeModelProvider = mockk(relaxed = true),
+                    activeModelProvider = FakeActiveModelProvider(),
                     toolExecutionEventPort = toolExecutionEventPort,
                     errorHandler = errorHandler,
                     activeChatTurnSnapshotPort = activeChatTurnStore,
@@ -1025,22 +875,12 @@ class ChatViewModelTest {
                         ),
                     ),
                 )
-            coEvery { chatUseCases.getChat(chatId) } returns dbFlow
+            chatUseCases.getChatUseCase.flowsByChatId[chatId] = dbFlow
             mockSubmitPrompt(
                 chatUseCases = chatUseCases,
                 userMessageId = MessageId("opt-1"),
                 chatId = chatId,
             )
-            coEvery {
-                chatUseCases.generateChatResponse(
-                    prompt = any(),
-                    userMessageId = any(),
-                    assistantMessageId = any(),
-                    chatId = any(),
-                    responseMode = any(),
-                    backgroundInferenceEnabled = any(),
-                )
-            } returns flowOf()
 
             val harness =
                 ChatViewModelTestSupport.createHarness(
@@ -1050,7 +890,7 @@ class ChatViewModelTest {
                     cancelInferenceUseCase = cancelInferenceUseCase,
                     inferenceLockManager = inferenceLockManager,
                     modelDisplayNamesUseCase = modelDisplayNamesUseCase,
-                    activeModelProvider = mockk(relaxed = true),
+                    activeModelProvider = FakeActiveModelProvider(),
                     toolExecutionEventPort = toolExecutionEventPort,
                     errorHandler = errorHandler,
                     activeChatTurnSnapshotPort = activeChatTurnStore,
@@ -1063,18 +903,16 @@ class ChatViewModelTest {
                 )
 
             val collectJob = backgroundScope.launch { harness.viewModel.uiState.collect() }
-            var clearOptimisticCalls = 0
-            every { harness.inferenceOrchestrator.clearOptimisticUser() } answers {
-                clearOptimisticCalls++
-                callOriginal()
-            }
             harness.viewModel.onInputChange("Pending")
             harness.viewModel.onSendMessage()
             advanceUntilIdle()
 
             assertEquals(1, harness.viewModel.uiState.value.messages.size)
             assertNull(harness.inferenceOrchestrator.optimisticUserMessage.value)
-            assertTrue(clearOptimisticCalls >= 1)
+            assertTrue(
+                (harness.inferenceOrchestrator as RecordingInferenceOrchestrator)
+                    .clearOptimisticUserCalls >= 1,
+            )
 
             collectJob.cancel()
         }
@@ -1091,7 +929,7 @@ class ChatViewModelTest {
                     cancelInferenceUseCase = cancelInferenceUseCase,
                     inferenceLockManager = inferenceLockManager,
                     modelDisplayNamesUseCase = modelDisplayNamesUseCase,
-                    activeModelProvider = mockk(relaxed = true),
+                    activeModelProvider = FakeActiveModelProvider(),
                     toolExecutionEventPort = toolExecutionEventPort,
                     errorHandler = errorHandler,
                     activeChatTurnSnapshotPort = activeChatTurnStore,
@@ -1104,15 +942,15 @@ class ChatViewModelTest {
                 )
 
             harness.viewModel.onInputChange("Hello")
-            coEvery { chatUseCases.submitPrompt(any()) } throws IOException("Network error")
+            chatUseCases.submitPromptUseCase.failure = IOException("Network error")
             harness.viewModel.onSendMessage()
             advanceUntilIdle()
 
-            assertEquals(1, handleErrorCalls.size)
-            assertEquals("InferenceOrchestrator", handleErrorCalls.single().tag)
-            assertEquals("Failed to send message", handleErrorCalls.single().message)
-            assertTrue(handleErrorCalls.single().throwable is IOException)
-            assertEquals("Could not send message. Please try again.", handleErrorCalls.single().userMessage)
+            assertEquals(1, errorHandler.handledTags.size)
+            assertEquals("InferenceOrchestrator", errorHandler.handledTags.single())
+            assertEquals("Failed to send message", errorHandler.handledMessages.single())
+            assertTrue(errorHandler.handledThrowables.single() is IOException)
+            assertEquals("Could not send message. Please try again.", errorHandler.handledUserMessages.single())
             assertNull(harness.inferenceOrchestrator.optimisticUserMessage.value)
         }
 
@@ -1121,10 +959,10 @@ class ChatViewModelTest {
     fun osdaM02_bypassMergeGuard() =
         runTest {
             val dbFlow = MutableStateFlow<List<Message>>(emptyList())
-            coEvery { chatUseCases.getChat(any()) } returns dbFlow
+            chatUseCases.getChatUseCase.flow = dbFlow
 
             val safetyGate = CompletableDeferred<Unit>()
-            coEvery { chatUseCases.submitPrompt(any()) } coAnswers {
+            chatUseCases.submitPromptUseCase.behavior = {
                 safetyGate.await()
                 UserPromptResult(
                     userMessageId = MessageId("opt-1"),
@@ -1141,7 +979,7 @@ class ChatViewModelTest {
                     cancelInferenceUseCase = cancelInferenceUseCase,
                     inferenceLockManager = inferenceLockManager,
                     modelDisplayNamesUseCase = modelDisplayNamesUseCase,
-                    activeModelProvider = mockk(relaxed = true),
+                    activeModelProvider = FakeActiveModelProvider(),
                     toolExecutionEventPort = toolExecutionEventPort,
                     errorHandler = errorHandler,
                     activeChatTurnSnapshotPort = activeChatTurnStore,
@@ -1172,8 +1010,8 @@ class ChatViewModelTest {
     @Test
     fun `init seeds coordinator with persisted non-default chat mode`() =
         runTest {
-            val uiSelectionRepository = mockk<UiSelectionRepository>(relaxed = true)
-            every { uiSelectionRepository.selectedChatMode } returns flowOf(Mode.THINKING)
+            val uiSelectionRepository = FakeUiSelectionRepository()
+            uiSelectionRepository.emitSelectedChatMode(Mode.THINKING)
             val vm = createChatViewModel(uiSelectionRepository = uiSelectionRepository)
             val collectJob = backgroundScope.launch { vm.uiState.collect() }
             advanceUntilIdle()
@@ -1185,16 +1023,11 @@ class ChatViewModelTest {
     @Test
     fun `onModeChange persists the selected mode`() =
         runTest {
-            val uiSelectionRepository = mockk<UiSelectionRepository>(relaxed = true)
-            every { uiSelectionRepository.selectedChatMode } returns flowOf(Mode.FAST)
-            coEvery { uiSelectionRepository.setChatMode(any()) } coAnswers {
-                setChatModeCalls += firstArg<Mode>()
-                Unit
-            }
+            val uiSelectionRepository = FakeUiSelectionRepository()
             val vm = createChatViewModel(uiSelectionRepository = uiSelectionRepository)
             vm.onModeChange(ChatModeUi.THINKING)
             advanceUntilIdle()
 
-            assertEquals(listOf(Mode.THINKING), setChatModeCalls)
+            assertEquals(listOf(Mode.THINKING), uiSelectionRepository.setChatModeCalls)
         }
 }

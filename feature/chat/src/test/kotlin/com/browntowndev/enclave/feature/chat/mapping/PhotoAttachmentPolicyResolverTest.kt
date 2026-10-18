@@ -1,14 +1,12 @@
 package com.browntowndev.enclave.feature.chat.mapping
 
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
 import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.feature.chat.ChatModeUi
-import io.mockk.coEvery
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -21,12 +19,12 @@ import org.junit.jupiter.api.extension.ExtendWith
 @ExtendWith(MainDispatcherRule::class)
 @DisplayName("PhotoAttachmentPolicyResolver")
 class PhotoAttachmentPolicyResolverTest {
-    private lateinit var activeModelProvider: ActiveModelProviderPort
+    private lateinit var activeModelProvider: FakeActiveModelProvider
     private lateinit var resolver: PhotoAttachmentPolicyResolver
 
     @BeforeEach
     fun setUp() {
-        activeModelProvider = mockk()
+        activeModelProvider = FakeActiveModelProvider()
         resolver = PhotoAttachmentPolicyResolver(activeModelProvider = activeModelProvider)
     }
 
@@ -34,7 +32,7 @@ class PhotoAttachmentPolicyResolverTest {
     @DisplayName("COUNCIL without API vision disables attachments")
     fun councilWithoutApiVisionClearsPolicy() =
         runTest {
-            coEvery { activeModelProvider.getActiveConfiguration(ModelType.VISION) } returns null
+            activeModelProvider.configurationsByType[ModelType.VISION] = null
 
             val policy = resolver.resolve(ChatModeUi.COUNCIL)
 
@@ -48,9 +46,9 @@ class PhotoAttachmentPolicyResolverTest {
     fun fastToThinkingKeepsAttachments() =
         runTest {
             val multimodalFast = visionCapableConfig(isLocal = true)
-            coEvery { activeModelProvider.getActiveConfiguration(ModelType.FAST) } returns multimodalFast
-            coEvery { activeModelProvider.getActiveConfiguration(ModelType.THINKING) } returns multimodalFast
-            coEvery { activeModelProvider.getActiveConfiguration(ModelType.VISION) } returns null
+            activeModelProvider.configurationsByType[ModelType.FAST] = multimodalFast
+            activeModelProvider.configurationsByType[ModelType.THINKING] = multimodalFast
+            activeModelProvider.configurationsByType[ModelType.VISION] = null
 
             val fastPolicy = resolver.resolve(ChatModeUi.FAST)
             val thinkingPolicy = resolver.resolve(ChatModeUi.THINKING)
@@ -70,9 +68,9 @@ class PhotoAttachmentPolicyResolverTest {
                     isLocal = false,
                     apiProvider = ApiProvider.GOOGLE,
                 )
-            coEvery { activeModelProvider.getActiveConfiguration(ModelType.FAST) } returns null
-            coEvery { activeModelProvider.getActiveConfiguration(ModelType.THINKING) } returns null
-            coEvery { activeModelProvider.getActiveConfiguration(ModelType.VISION) } returns googleVision
+            activeModelProvider.configurationsByType[ModelType.FAST] = null
+            activeModelProvider.configurationsByType[ModelType.THINKING] = null
+            activeModelProvider.configurationsByType[ModelType.VISION] = googleVision
 
             val policy = resolver.resolve(ChatModeUi.FAST)
 

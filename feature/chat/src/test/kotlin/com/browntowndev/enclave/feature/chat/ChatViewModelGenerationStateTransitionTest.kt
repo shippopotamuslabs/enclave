@@ -2,8 +2,12 @@ package com.browntowndev.enclave.feature.chat
 
 import androidx.lifecycle.SavedStateHandle
 import app.cash.turbine.test
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
+import com.browntowndev.enclave.core.testing.FakeChatRepository
+import com.browntowndev.enclave.core.testing.FakeStudioRepository
+import com.browntowndev.enclave.core.testing.FakeTtsPlaybackController
+import com.browntowndev.enclave.core.testing.FakeViewModelErrorHandler
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
-import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.chat.AccumulatedMessages
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.Content
@@ -15,34 +19,12 @@ import com.browntowndev.enclave.domain.model.chat.MessageTranscriptSegment
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnKey
-import com.browntowndev.enclave.domain.port.inference.ToolExecutionEventPort
-import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
-import com.browntowndev.enclave.domain.port.repository.ChatRepository
-import com.browntowndev.enclave.domain.port.repository.SettingsData
-import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
-import com.browntowndev.enclave.domain.usecase.byok.GetDefaultModelsUseCase
 import com.browntowndev.enclave.domain.usecase.chat.ChatTurnTiming
-import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
-import com.browntowndev.enclave.domain.usecase.chat.GetModelDisplayNameUseCase
-import com.browntowndev.enclave.domain.usecase.chat.StageImageAttachmentUseCase
-import com.browntowndev.enclave.domain.usecase.inference.CancelInferenceUseCase
-import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
-import com.browntowndev.enclave.domain.usecase.settings.SettingsAssignmentUseCases
-import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
-import com.browntowndev.enclave.domain.usecase.share.ShareChatUseCase
 import com.browntowndev.enclave.feature.inference.ActiveChatTurnStore
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
-import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
@@ -56,7 +38,6 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
-import kotlin.coroutines.CoroutineContext
 
 /**
  * ViewModel-level regression tests for PROCESSING -> THINKING -> RESPONDING indicator transitions.
@@ -73,77 +54,37 @@ class ChatViewModelGenerationStateTransitionTest {
     private val assistantMessageId = MessageId("assistant-new")
     private val turnKey = ActiveChatTurnKey(chatId, assistantMessageId)
 
-    private lateinit var messagesFlow: MutableStateFlow<List<Message>>
     private lateinit var turnStore: ActiveChatTurnStore
     private lateinit var viewModel: ChatViewModel
     private lateinit var inferenceOrchestrator: com.browntowndev.enclave.feature.chat.delegates.InferenceOrchestrator
-    private lateinit var cancelInferenceUseCase: CancelInferenceUseCase
-    private lateinit var chatRepository: ChatRepository
+    private lateinit var cancelInferenceUseCase: FakeCancelInferenceUseCase
+    private lateinit var chatRepository: FakeChatRepository
 
     @BeforeEach
     fun setup() {
-        messagesFlow = MutableStateFlow(emptyList())
         turnStore = ActiveChatTurnStore()
+        chatRepository = FakeChatRepository()
+        cancelInferenceUseCase = FakeCancelInferenceUseCase()
 
-        val settingsUseCases = mockk<SettingsUseCases>(relaxed = true)
-        val assignmentUseCases = mockk<SettingsAssignmentUseCases>()
-        val getDefaultModelsUseCase = mockk<GetDefaultModelsUseCase>()
-        val chatUseCases = mockk<ChatUseCases>(relaxed = true)
-        val inferenceLockManager = mockk<InferenceLockManager>(relaxed = true)
-        val modelDisplayNamesUseCase = mockk<GetModelDisplayNameUseCase>(relaxed = true)
-        val activeModelProvider = mockk<ActiveModelProviderPort>(relaxed = true)
-        val toolExecutionEventPort = mockk<ToolExecutionEventPort>(relaxed = true)
-        val errorHandler = mockk<ViewModelErrorHandler>(relaxed = true)
-        val studioRepository = mockk<StudioRepositoryPort>(relaxed = true)
-        cancelInferenceUseCase = mockk(relaxed = true)
-        chatRepository = mockk(relaxed = true)
+        val settingsUseCases = FakeChatSettingsUseCases()
+        val chatUseCases = FakeChatUseCases()
+        // The VM reads messages through the same repository the stop path mutates, so
+        // updateMessageState/updateMessageContent are visible in the getChat flow.
+        chatUseCases.getChatUseCase.flowsByChatId[chatId] = chatRepository.getMessagesForChat(chatId)
+        val inferenceLockManager = FakeInferenceLockManager()
+        val modelDisplayNamesUseCase = FakeGetModelDisplayNameUseCase()
+        modelDisplayNamesUseCase.result = "LiteRT Model"
+        val activeModelProvider = FakeActiveModelProvider()
+        val toolExecutionEventPort = FakeToolExecutionEventPort()
+        val errorHandler = FakeViewModelErrorHandler()
+        val studioRepository = FakeStudioRepository()
 
-        every { settingsUseCases.getSettings() } returns MutableStateFlow(SettingsData())
-        every { settingsUseCases.assignments } returns assignmentUseCases
-        every { assignmentUseCases.getDefaultModels } returns getDefaultModelsUseCase
-        every { getDefaultModelsUseCase() } returns MutableStateFlow(emptyList())
-        coEvery { chatUseCases.getChat(chatId) } returns messagesFlow
-        every { inferenceLockManager.isInferenceBlocked } returns MutableStateFlow(false)
-        every { toolExecutionEventPort.events } returns MutableSharedFlow()
-        every { studioRepository.observeAllMedia() } returns flowOf(emptyList())
-        every { studioRepository.observeEphemeralMedia() } returns flowOf(emptyList())
-        every {
-            errorHandler.coroutineExceptionHandler(any(), any(), any())
-        } returns CoroutineExceptionHandler { _: CoroutineContext, _ -> }
-        coEvery { chatRepository.updateMessageState(any(), any()) } answers {
-            val messageId = invocation.args[0] as MessageId
-            val messageState = invocation.args[1] as MessageState
-            messagesFlow.value =
-                messagesFlow.value.map { message ->
-                    if (message.id == messageId) message.copy(messageState = messageState) else message
-                }
-        }
-        coEvery { chatRepository.updateMessageContent(any(), any()) } answers {
-            val messageId = invocation.args[0] as MessageId
-            val content = invocation.args[1] as String
-            messagesFlow.value =
-                messagesFlow.value.map { message ->
-                    if (message.id == messageId) message.copy(content = message.content.copy(text = content)) else message
-                }
-        }
-        coEvery { modelDisplayNamesUseCase.invoke(any()) } returns "LiteRT Model"
-        coEvery { activeModelProvider.getActiveConfiguration(any()) } returns null
         mockSubmitPrompt(
             chatUseCases = chatUseCases,
             userMessageId = userMessageId,
             chatId = chatId,
             userMessageCreatedAtMillis = 2L,
         )
-        coEvery {
-            chatUseCases.generateChatResponse(
-                prompt = any(),
-                userMessageId = any(),
-                assistantMessageId = any(),
-                chatId = any(),
-                responseMode = any(),
-                backgroundInferenceEnabled = any(),
-            )
-        } returns flowOf()
 
         val harness =
             ChatViewModelTestSupport.createHarness(
@@ -156,14 +97,13 @@ class ChatViewModelGenerationStateTransitionTest {
                 activeModelProvider = activeModelProvider,
                 toolExecutionEventPort = toolExecutionEventPort,
                 errorHandler = errorHandler,
-                loggingPort = mockk(relaxed = true),
                 activeChatTurnSnapshotPort = turnStore,
-                playbackController = mockk(relaxed = true),
+                playbackController = FakeTtsPlaybackController(),
                 studioRepository = studioRepository,
-                shareChatUseCase = mockk<ShareChatUseCase>(relaxed = true),
+                shareChatUseCase = FakeShareChatUseCase(),
                 chatRepository = chatRepository,
-                exportArtifactDocumentsUseCase = mockk(relaxed = true),
-                stageImageAttachmentUseCase = mockk<StageImageAttachmentUseCase>(relaxed = true),
+                exportArtifactDocumentsUseCase = FakeExportArtifactDocumentsUseCase(),
+                stageImageAttachmentUseCase = FakeStageImageAttachmentUseCase(),
             )
         viewModel = harness.viewModel
         inferenceOrchestrator = harness.inferenceOrchestrator
@@ -174,11 +114,12 @@ class ChatViewModelGenerationStateTransitionTest {
         runTest {
             val indicators = collectAssistantIndicators()
 
-            messagesFlow.value =
+            chatRepository.seedMessages(
                 listOf(
                     userMessage(),
                     assistantMessage(id = assistantMessageId, state = MessageState.PROCESSING),
-                )
+                ),
+            )
             advanceUntilIdle()
 
             publishSnapshot(
@@ -198,13 +139,14 @@ class ChatViewModelGenerationStateTransitionTest {
         runTest {
             val indicators = collectAssistantIndicators()
 
-            messagesFlow.value =
+            chatRepository.seedMessages(
                 listOf(
                     assistantMessage(
                         id = assistantMessageId,
                         state = MessageState.PROCESSING,
                     ),
-                )
+                ),
+            )
             advanceUntilIdle()
 
             assertTrue(indicators.last() is IndicatorState.Processing)
@@ -222,7 +164,7 @@ class ChatViewModelGenerationStateTransitionTest {
         runTest {
             val indicators = collectAssistantIndicators()
 
-            messagesFlow.value =
+            chatRepository.seedMessages(
                 listOf(
                     assistantMessage(
                         id = previousAssistantId,
@@ -230,7 +172,8 @@ class ChatViewModelGenerationStateTransitionTest {
                         content = "previous answer",
                         createdAt = 1L,
                     ),
-                )
+                ),
+            )
             advanceUntilIdle()
 
             viewModel.onInputChange("follow up")
@@ -261,7 +204,7 @@ class ChatViewModelGenerationStateTransitionTest {
                 "history=${indicators.history()}",
             )
 
-            messagesFlow.value =
+            chatRepository.seedMessages(
                 listOf(
                     assistantMessage(
                         id = previousAssistantId,
@@ -275,7 +218,8 @@ class ChatViewModelGenerationStateTransitionTest {
                         state = MessageState.PROCESSING,
                         createdAt = 3L,
                     ),
-                )
+                ),
+            )
             advanceUntilIdle()
 
             assertTrue(indicators.last() is IndicatorState.Thinking)
@@ -287,11 +231,12 @@ class ChatViewModelGenerationStateTransitionTest {
         runTest {
             val indicators = collectAssistantIndicators()
 
-            messagesFlow.value =
+            chatRepository.seedMessages(
                 listOf(
                     userMessage(),
                     assistantMessage(id = assistantMessageId, state = MessageState.PROCESSING),
-                )
+                ),
+            )
             advanceUntilIdle()
             assertTrue(indicators.last() is IndicatorState.Processing)
 
@@ -311,7 +256,7 @@ class ChatViewModelGenerationStateTransitionTest {
             advanceUntilIdle()
             assertTrue(indicators.last() is IndicatorState.Generating)
 
-            messagesFlow.value =
+            chatRepository.seedMessages(
                 listOf(
                     userMessage(),
                     assistantMessage(
@@ -322,7 +267,8 @@ class ChatViewModelGenerationStateTransitionTest {
                         thinkingDurationSeconds = 2L,
                         thinkingStartTime = 1L,
                     ),
-                )
+                ),
+            )
             publishSnapshot(
                 snapshot(
                     state = MessageState.COMPLETE,
@@ -353,17 +299,18 @@ class ChatViewModelGenerationStateTransitionTest {
                     state = MessageState.PROCESSING,
                     updatedAt = 100L,
                 )
-            messagesFlow.value = listOf(assistant)
+            chatRepository.seedMessages(listOf(assistant))
             advanceUntilIdle()
             assertTrue(viewModel.uiState.value.latestAssistantIndicator() is IndicatorState.Processing)
 
-            messagesFlow.value =
+            chatRepository.seedMessages(
                 listOf(
                     assistant.copy(
                         messageState = MessageState.COMPLETE,
                         content = Content(text = "done"),
                     ),
-                )
+                ),
+            )
             advanceUntilIdle()
 
             assertTrue(viewModel.uiState.value.latestAssistantIndicator() is IndicatorState.Complete)
@@ -380,11 +327,12 @@ class ChatViewModelGenerationStateTransitionTest {
             advanceTimeBy(ChatTurnTiming.ASSISTANT_PLACEHOLDER_DELAY_MS)
             advanceUntilIdle()
 
-            messagesFlow.value =
+            chatRepository.seedMessages(
                 listOf(
                     userMessage(),
                     assistantMessage(id = assistantMessageId, state = MessageState.PROCESSING),
-                )
+                ),
+            )
             advanceUntilIdle()
 
             assertTrue(indicators.any { indicator -> indicator is IndicatorState.Processing })
@@ -397,10 +345,11 @@ class ChatViewModelGenerationStateTransitionTest {
         runTest {
             val indicators = collectAssistantIndicators()
 
-            messagesFlow.value =
+            chatRepository.seedMessages(
                 listOf(
                     assistantMessage(id = assistantMessageId, state = MessageState.PROCESSING),
-                )
+                ),
+            )
             advanceUntilIdle()
 
             publishSnapshot(snapshot(state = MessageState.ENGINE_LOADING))
@@ -420,24 +369,30 @@ class ChatViewModelGenerationStateTransitionTest {
         runTest {
             val indicators = collectAssistantIndicators()
 
-            messagesFlow.value =
+            chatRepository.seedMessages(
                 listOf(
                     userMessage(),
                     assistantMessage(id = assistantMessageId, state = MessageState.PROCESSING),
-                )
+                ),
+            )
             advanceUntilIdle()
             assertTrue(viewModel.uiState.value.isGenerating)
 
             viewModel.stopGeneration()
             advanceUntilIdle()
 
-            coVerify { cancelInferenceUseCase() }
-            coVerify { chatRepository.updateMessageState(assistantMessageId, MessageState.COMPLETE) }
-            messagesFlow.value =
+            assertTrue(cancelInferenceUseCase.callCount >= 1)
+            assertTrue(
+                chatRepository.updateMessageStateCalls.contains(
+                    assistantMessageId to MessageState.COMPLETE,
+                ),
+            )
+            chatRepository.seedMessages(
                 listOf(
                     userMessage(),
                     assistantMessage(id = assistantMessageId, state = MessageState.COMPLETE),
-                )
+                ),
+            )
             advanceUntilIdle()
             assertFalse(
                 viewModel.uiState.value.isGenerating,
@@ -460,10 +415,11 @@ class ChatViewModelGenerationStateTransitionTest {
                 .test {
                     skipItems(1)
 
-                    messagesFlow.value =
+                    chatRepository.seedMessages(
                         listOf(
                             assistantMessage(id = assistantMessageId, state = MessageState.PROCESSING),
-                        )
+                        ),
+                    )
                     advanceUntilIdle()
                     assertTrue(awaitItem() is IndicatorState.Processing)
 
@@ -475,7 +431,7 @@ class ChatViewModelGenerationStateTransitionTest {
                 }
         }
 
-    private fun kotlinx.coroutines.test.TestScope.collectAssistantIndicators(): IndicatorCollector {
+    private fun TestScope.collectAssistantIndicators(): IndicatorCollector {
         val indicators = mutableListOf<IndicatorState?>()
         val job =
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
@@ -505,7 +461,7 @@ class ChatViewModelGenerationStateTransitionTest {
         }
     }
 
-    private suspend fun kotlinx.coroutines.test.TestScope.publishSnapshot(
+    private suspend fun TestScope.publishSnapshot(
         snapshot: AccumulatedMessages,
         activeTurnKey: ActiveChatTurnKey = turnKey,
     ) {

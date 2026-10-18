@@ -1,8 +1,12 @@
 package com.browntowndev.enclave.feature.chat
 
 import androidx.lifecycle.SavedStateHandle
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
+import com.browntowndev.enclave.core.testing.FakeChatRepository
+import com.browntowndev.enclave.core.testing.FakeStudioRepository
+import com.browntowndev.enclave.core.testing.FakeTtsPlaybackController
+import com.browntowndev.enclave.core.testing.FakeViewModelErrorHandler
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
-import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.chat.AccumulatedMessages
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.Content
@@ -15,31 +19,11 @@ import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.model.inference.ToolExecutionEvent
 import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnKey
-import com.browntowndev.enclave.domain.port.inference.ToolExecutionEventPort
-import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
-import com.browntowndev.enclave.domain.port.repository.ChatRepository
-import com.browntowndev.enclave.domain.port.repository.SettingsData
-import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
-import com.browntowndev.enclave.domain.usecase.byok.GetDefaultModelsUseCase
-import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
-import com.browntowndev.enclave.domain.usecase.chat.StageImageAttachmentUseCase
-import com.browntowndev.enclave.domain.usecase.inference.CancelInferenceUseCase
-import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
-import com.browntowndev.enclave.domain.usecase.settings.SettingsAssignmentUseCases
-import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.enclave.feature.inference.ActiveChatTurnStore
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.just
-import io.mockk.mockk
-import io.mockk.runs
-import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -50,7 +34,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
-import kotlin.coroutines.CoroutineContext
 
 @ExtendWith(MainDispatcherRule::class)
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -63,44 +46,26 @@ class ChatViewModelStopHappyPathTest {
     private lateinit var messagesFlow: MutableStateFlow<List<Message>>
     private lateinit var toolEvents: MutableSharedFlow<ToolExecutionEvent>
     private lateinit var turnStore: ActiveChatTurnStore
-    private lateinit var cancelInferenceUseCase: CancelInferenceUseCase
-    private lateinit var chatRepository: ChatRepository
+    private lateinit var cancelInferenceUseCase: FakeCancelInferenceUseCase
+    private lateinit var chatRepository: FakeChatRepository
     private lateinit var viewModel: ChatViewModel
     private lateinit var harness: ChatViewModelTestSupport.Harness
 
     @BeforeEach
     fun setUp() {
         messagesFlow = MutableStateFlow(emptyList())
-        toolEvents = MutableSharedFlow(extraBufferCapacity = 4)
         turnStore = ActiveChatTurnStore()
-        cancelInferenceUseCase = mockk(relaxed = true)
-        chatRepository = mockk(relaxed = true)
+        cancelInferenceUseCase = FakeCancelInferenceUseCase()
+        chatRepository = FakeChatRepository()
 
-        val settingsUseCases = mockk<SettingsUseCases>(relaxed = true)
-        val assignmentUseCases = mockk<SettingsAssignmentUseCases>()
-        val getDefaultModelsUseCase = mockk<GetDefaultModelsUseCase>()
-        val chatUseCases = mockk<ChatUseCases>(relaxed = true)
-        val inferenceLockManager = mockk<InferenceLockManager>(relaxed = true)
-        val toolExecutionEventPort = mockk<ToolExecutionEventPort>()
-
-        every { settingsUseCases.getSettings() } returns MutableStateFlow(SettingsData())
-        every { settingsUseCases.assignments } returns assignmentUseCases
-        every { assignmentUseCases.getDefaultModels } returns getDefaultModelsUseCase
-        every { getDefaultModelsUseCase() } returns MutableStateFlow(emptyList())
-        coEvery { chatUseCases.getChat(chatId) } returns messagesFlow
-        every { inferenceLockManager.isInferenceBlocked } returns MutableStateFlow(false)
-        every { toolExecutionEventPort.events } returns toolEvents
-
-        val errorHandler = mockk<ViewModelErrorHandler>()
-        every { errorHandler.coroutineExceptionHandler(any(), any(), any()) } returns
-            CoroutineExceptionHandler { _: CoroutineContext, _ -> }
-
-        val studioRepository = mockk<StudioRepositoryPort>(relaxed = true)
-        every { studioRepository.observeAllMedia() } returns flowOf(emptyList())
-        every { studioRepository.observeEphemeralMedia() } returns flowOf(emptyList())
-
-        coEvery { chatRepository.updateMessageState(any(), any()) } just runs
-        coEvery { chatRepository.updateMessageContent(any(), any()) } just runs
+        val settingsUseCases = FakeChatSettingsUseCases()
+        val chatUseCases = FakeChatUseCases()
+        chatUseCases.getChatUseCase.flowsByChatId[chatId] = messagesFlow
+        val inferenceLockManager = FakeInferenceLockManager()
+        val toolExecutionEventPort = FakeToolExecutionEventPort()
+        toolEvents = toolExecutionEventPort.events
+        val errorHandler = FakeViewModelErrorHandler()
+        val studioRepository = FakeStudioRepository()
 
         harness =
             ChatViewModelTestSupport.createHarness(
@@ -109,18 +74,17 @@ class ChatViewModelStopHappyPathTest {
                 savedStateHandle = SavedStateHandle(mapOf("chatId" to chatId.value)),
                 cancelInferenceUseCase = cancelInferenceUseCase,
                 inferenceLockManager = inferenceLockManager,
-                modelDisplayNamesUseCase = mockk(relaxed = true),
-                activeModelProvider = mockk<ActiveModelProviderPort>(relaxed = true),
+                modelDisplayNamesUseCase = FakeGetModelDisplayNameUseCase(),
+                activeModelProvider = FakeActiveModelProvider(),
                 toolExecutionEventPort = toolExecutionEventPort,
                 errorHandler = errorHandler,
-                loggingPort = mockk(relaxed = true),
                 activeChatTurnSnapshotPort = turnStore,
-                playbackController = mockk(relaxed = true),
+                playbackController = FakeTtsPlaybackController(),
                 studioRepository = studioRepository,
-                shareChatUseCase = mockk(relaxed = true),
+                shareChatUseCase = FakeShareChatUseCase(),
                 chatRepository = chatRepository,
-                exportArtifactDocumentsUseCase = mockk(relaxed = true),
-                stageImageAttachmentUseCase = mockk<StageImageAttachmentUseCase>(relaxed = true),
+                exportArtifactDocumentsUseCase = FakeExportArtifactDocumentsUseCase(),
+                stageImageAttachmentUseCase = FakeStageImageAttachmentUseCase(),
             )
         viewModel = harness.viewModel
         harness.inferenceOrchestrator.seedRequestedTurnKey(turnKey)
@@ -196,14 +160,17 @@ class ChatViewModelStopHappyPathTest {
             viewModel.stopGeneration()
             advanceUntilIdle()
 
-            coVerify { cancelInferenceUseCase() }
-            coVerify {
-                chatRepository.updateMessageContent(
-                    assistantMessageId,
-                    "Stopped mid-stream",
-                )
-            }
-            coVerify { chatRepository.updateMessageState(assistantMessageId, MessageState.COMPLETE) }
+            assertTrue(cancelInferenceUseCase.callCount >= 1)
+            assertTrue(
+                chatRepository.updateMessageContentCalls.contains(
+                    assistantMessageId to "Stopped mid-stream",
+                ),
+            )
+            assertTrue(
+                chatRepository.updateMessageStateCalls.contains(
+                    assistantMessageId to MessageState.COMPLETE,
+                ),
+            )
             assertNull(viewModel.uiState.value.activeToolCallBanner)
         }
 

@@ -13,14 +13,14 @@ data class ChatCapablePresets(
     val apiAssets: List<ApiModelAsset>,
 )
 
-class GetChatCapablePresetsUseCase
+open class GetChatCapablePresetsUseCase
     @Inject
     constructor(
         private val localModelRepository: LocalModelRepositoryPort,
         private val apiModelRepository: ApiModelRepositoryPort,
     ) {
         /** Emits whenever local or API model catalogs change. */
-        operator fun invoke(): Flow<ChatCapablePresets> =
+        open operator fun invoke(): Flow<ChatCapablePresets> =
             combine(
                 localModelRepository.observeAllLocalAssets(),
                 apiModelRepository.observeAllCredentials(),

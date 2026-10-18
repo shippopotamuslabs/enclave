@@ -1,8 +1,14 @@
 package com.browntowndev.enclave.feature.chat
 
 import androidx.lifecycle.SavedStateHandle
+import com.browntowndev.enclave.core.testing.FakeActiveChatTurnSnapshotPort
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
+import com.browntowndev.enclave.core.testing.FakeChatRepository
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeStudioRepository
+import com.browntowndev.enclave.core.testing.FakeTtsPlaybackController
+import com.browntowndev.enclave.core.testing.FakeViewModelErrorHandler
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
-import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.chat.AccumulatedMessages
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.ChatResponseMode
@@ -11,43 +17,16 @@ import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.MessageSnapshot
 import com.browntowndev.enclave.domain.model.chat.MessageState
-import com.browntowndev.enclave.domain.model.chat.Mode
 import com.browntowndev.enclave.domain.model.chat.Role
-import com.browntowndev.enclave.feature.chat.R
 import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnSnapshotPort
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.inference.ToolExecutionEventPort
-import com.browntowndev.enclave.domain.port.media.TtsPlaybackControllerPort
-import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
-import com.browntowndev.enclave.domain.port.repository.SettingsData
-import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
-import com.browntowndev.enclave.domain.usecase.byok.GetDefaultModelsUseCase
 import com.browntowndev.enclave.domain.usecase.chat.ChatTurnTiming
-import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
-import com.browntowndev.enclave.domain.usecase.chat.GetModelDisplayNameUseCase
-import com.browntowndev.enclave.domain.usecase.chat.ListenToSpeechUseCase
-import com.browntowndev.enclave.domain.usecase.chat.MergeMessagesUseCase
-import com.browntowndev.enclave.domain.usecase.chat.ProcessFileAttachmentUseCase
-import com.browntowndev.enclave.domain.usecase.chat.StageImageAttachmentUseCase
-import com.browntowndev.enclave.domain.usecase.inference.CancelInferenceUseCase
-import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
-import com.browntowndev.enclave.domain.usecase.inference.ShouldModeratePromptUseCase
-import com.browntowndev.enclave.domain.usecase.settings.SettingsAssignmentUseCases
-import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
-import com.browntowndev.enclave.domain.usecase.share.ShareChatUseCase
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
-import kotlinx.coroutines.CoroutineExceptionHandler
+import com.browntowndev.enclave.feature.chat.R
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
@@ -67,31 +46,29 @@ import org.junit.jupiter.api.extension.ExtendWith
 @ExtendWith(MainDispatcherRule::class)
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 class ChatViewModelSendHappyPathTest {
-    private val settingsUseCases: SettingsUseCases = mockk()
-    private val chatUseCases: ChatUseCases = mockk()
-    private val processFileAttachmentUseCase: ProcessFileAttachmentUseCase = mockk()
-    private val stageImageAttachmentUseCase: StageImageAttachmentUseCase = mockk(relaxed = true)
-    private val cancelInferenceUseCase: CancelInferenceUseCase = mockk(relaxed = true)
-    private val inferenceLockManager: InferenceLockManager = mockk()
-    private val toolExecutionEventPort: ToolExecutionEventPort = mockk()
-    private val modelDisplayNamesUseCase: GetModelDisplayNameUseCase = mockk()
-    private val errorHandler: ViewModelErrorHandler = mockk()
-    private val loggingPort: LoggingPort = mockk(relaxed = true)
-    private val activeChatTurnStore: ActiveChatTurnSnapshotPort = mockk(relaxed = true)
-    private val playbackController: TtsPlaybackControllerPort = mockk(relaxed = true)
-    private val studioRepository: StudioRepositoryPort = mockk(relaxed = true)
-    private val shareChatUseCase: ShareChatUseCase = mockk(relaxed = true)
-    private val chatRepository: com.browntowndev.enclave.domain.port.repository.ChatRepository =
-        mockk(relaxed = true)
+    private val settingsUseCases = FakeChatSettingsUseCases()
+    private val chatUseCases = FakeChatUseCases()
+    private val stageImageAttachmentUseCase = FakeStageImageAttachmentUseCase()
+    private val cancelInferenceUseCase = FakeCancelInferenceUseCase()
+    private val inferenceLockManager = FakeInferenceLockManager()
+    private val toolExecutionEventPort = FakeToolExecutionEventPort()
+    private val modelDisplayNamesUseCase = FakeGetModelDisplayNameUseCase()
+    private val errorHandler = FakeViewModelErrorHandler()
+    private val loggingPort = FakeLoggingPort()
+    private val activeChatTurnStore = FakeActiveChatTurnSnapshotPort()
+    private val playbackController = FakeTtsPlaybackController()
+    private val studioRepository = FakeStudioRepository()
+    private val shareChatUseCase = FakeShareChatUseCase()
+    private val chatRepository = FakeChatRepository()
 
-    private lateinit var activeModelProvider: ActiveModelProviderPort
+    private lateinit var activeModelProvider: FakeActiveModelProvider
     private lateinit var messagesFlow: MutableStateFlow<List<Message>>
     private lateinit var viewModel: ChatViewModel
     private lateinit var harness: ChatViewModelTestSupport.Harness
 
     @BeforeEach
     fun setUp() {
-        activeModelProvider = mockk()
+        activeModelProvider = FakeActiveModelProvider()
         val visionConfig =
             ActiveModelConfiguration(
                 modelId = "vision-model",
@@ -109,46 +86,17 @@ class ChatViewModelSendHappyPathTest {
                 thinkingEnabled = false,
                 isMultimodal = true,
             )
-        coEvery { activeModelProvider.getActiveConfiguration(any()) } returns visionConfig
-
-        every { errorHandler.coroutineExceptionHandler(any(), any(), any()) } returns
-            CoroutineExceptionHandler { _, _ -> }
-
-        val listenToSpeechUseCase = mockk<ListenToSpeechUseCase>(relaxed = true)
-        every { listenToSpeechUseCase.invoke(any(), any()) } returns MutableSharedFlow()
-        every { chatUseCases.listenToSpeechUseCase } returns listenToSpeechUseCase
-        every { chatUseCases.processFileAttachmentUseCase } returns processFileAttachmentUseCase
+        activeModelProvider.configuration = visionConfig
 
         messagesFlow = MutableStateFlow(emptyList())
-        coEvery { chatUseCases.getChat(any()) } returns messagesFlow
-        every { chatUseCases.mergeMessagesUseCase } returns MergeMessagesUseCase()
-        every { settingsUseCases.getSettings() } returns MutableStateFlow(SettingsData())
-        val assignmentUseCases = mockk<SettingsAssignmentUseCases>()
-        val getDefaultModelsUseCase = mockk<GetDefaultModelsUseCase>()
-        every { settingsUseCases.assignments } returns assignmentUseCases
-        every { assignmentUseCases.getDefaultModels } returns getDefaultModelsUseCase
-        every { getDefaultModelsUseCase() } returns MutableStateFlow(emptyList())
-        every { inferenceLockManager.isInferenceBlocked } returns MutableStateFlow(false)
-        coEvery { modelDisplayNamesUseCase.invoke(any()) } returns "Test Model"
-        every { toolExecutionEventPort.events } returns MutableSharedFlow()
-        every { studioRepository.observeAllMedia() } returns flowOf(emptyList())
-        every { studioRepository.observeEphemeralMedia() } returns flowOf(emptyList())
+        chatUseCases.getChatUseCase.flow = messagesFlow
 
         mockSubmitPrompt(
             chatUseCases = chatUseCases,
             userMessageId = MessageId("user-send-1"),
             chatId = ChatId("chat-send-1"),
         )
-        coEvery {
-            chatUseCases.generateChatResponse(
-                prompt = any(),
-                userMessageId = any(),
-                assistantMessageId = any(),
-                chatId = any(),
-                responseMode = any(),
-                backgroundInferenceEnabled = any(),
-            )
-        } returns
+        chatUseCases.generateChatResponseUseCase.flow =
             flow {
                 awaitCancellation()
             }
@@ -170,7 +118,7 @@ class ChatViewModelSendHappyPathTest {
                 studioRepository = studioRepository,
                 shareChatUseCase = shareChatUseCase,
                 chatRepository = chatRepository,
-                exportArtifactDocumentsUseCase = mockk(relaxed = true),
+                exportArtifactDocumentsUseCase = FakeExportArtifactDocumentsUseCase(),
                 stageImageAttachmentUseCase = stageImageAttachmentUseCase,
             )
         viewModel = harness.viewModel
@@ -185,27 +133,12 @@ class ChatViewModelSendHappyPathTest {
             advanceTimeBy(ChatTurnTiming.ASSISTANT_PLACEHOLDER_DELAY_MS)
             advanceUntilIdle()
 
-            coVerify(exactly = 1) {
-                chatUseCases.submitPrompt(
-                    match { request ->
-                        request.message.content.text == "Hello crew" &&
-                            request.assistantMessageId.value.isNotEmpty()
-                    },
-                )
-            }
-            coVerify {
-                harness.inferenceOrchestrator.sendMessage(
-                    scope = any(),
-                    input = "Hello crew",
-                    responseMode = any(),
-                    selectedImageUris = any(),
-                    fileAttachments = any(),
-                    initialChatId = any(),
-                    shouldModerateResponse = any(),
-                    onInputCleared = any(),
-                    onResponseBlocked = any(),
-                )
-            }
+            // The orchestrator's sendMessage is the only path to submitPrompt, so exactly
+            // one submit with the typed text proves the VM routed through it.
+            assertEquals(1, chatUseCases.submitPromptUseCase.calls.size)
+            val request = chatUseCases.submitPromptUseCase.calls.single()
+            assertEquals("Hello crew", request.message.content.text)
+            assertTrue(request.assistantMessageId.value.isNotEmpty())
         }
 
     @Test
@@ -245,16 +178,14 @@ class ChatViewModelSendHappyPathTest {
             advanceUntilIdle()
             assertTrue(viewModel.uiState.value.isGenerating)
 
-            coVerify {
-                chatUseCases.generateChatResponse(
-                    prompt = "Hello crew",
-                    userMessageId = MessageId("user-send-1"),
-                    assistantMessageId = any(),
-                    chatId = ChatId("chat-send-1"),
-                    responseMode = ChatResponseMode.Thinking,
-                    backgroundInferenceEnabled = any(),
-                )
-            }
+            assertTrue(
+                chatUseCases.generateChatResponseUseCase.calls.any { call ->
+                    call.prompt == "Hello crew" &&
+                        call.userMessageId == MessageId("user-send-1") &&
+                        call.chatId == ChatId("chat-send-1") &&
+                        call.responseMode == ChatResponseMode.Thinking
+                },
+            )
             collectJob.cancel()
         }
 
@@ -265,8 +196,8 @@ class ChatViewModelSendHappyPathTest {
             val collectJob = backgroundScope.launch { viewModel.uiState.collect { } }
             runCurrent()
 
-            coEvery { stageImageAttachmentUseCase("content://img-1") } returns "staged://img-1"
-            coEvery { stageImageAttachmentUseCase("content://img-2") } returns "staged://img-2"
+            stageImageAttachmentUseCase.resultsByUri["content://img-1"] = "staged://img-1"
+            stageImageAttachmentUseCase.resultsByUri["content://img-2"] = "staged://img-2"
             viewModel.onImagesSelected(listOf("content://img-1"))
             viewModel.onImagesSelected(listOf("content://img-2"))
             advanceUntilIdle()
@@ -276,14 +207,12 @@ class ChatViewModelSendHappyPathTest {
             advanceTimeBy(ChatTurnTiming.ASSISTANT_PLACEHOLDER_DELAY_MS)
             advanceUntilIdle()
 
-            coVerify {
-                chatUseCases.submitPrompt(
-                    match { request ->
-                        request.message.content.text == "Describe these" &&
-                            request.message.content.imageUris == listOf("staged://img-1", "staged://img-2")
-                    },
-                )
-            }
+            assertTrue(
+                chatUseCases.submitPromptUseCase.calls.any { request ->
+                    request.message.content.text == "Describe these" &&
+                        request.message.content.imageUris == listOf("staged://img-1", "staged://img-2")
+                },
+            )
             collectJob.cancel()
         }
 
@@ -291,16 +220,7 @@ class ChatViewModelSendHappyPathTest {
     fun `compaction failure restores prompt and emits prompt too large snackbar`() =
         runTest {
             val collectJob = backgroundScope.launch { viewModel.uiState.collect { } }
-            coEvery {
-                chatUseCases.generateChatResponse(
-                    prompt = any(),
-                    userMessageId = any(),
-                    assistantMessageId = any(),
-                    chatId = any(),
-                    responseMode = any(),
-                    backgroundInferenceEnabled = any(),
-                )
-            } returns
+            chatUseCases.generateChatResponseUseCase.flow =
                 flowOf(
                     AccumulatedMessages(
                         messages =
@@ -335,10 +255,28 @@ class ChatViewModelSendHappyPathTest {
     @DisplayName("DOPG-V-04 — trusted model bypass passes shouldModerateResponse false to orchestrator")
     fun dopgV04_trustedBypassPassesShouldModerateFalse() =
         runTest {
-            val shouldModerateMock =
-                mockk<ShouldModeratePromptUseCase> {
-                    coEvery { this@mockk.invoke(any<ModelType>()) } returns false
+            val shouldModerateFake =
+                FakeShouldModeratePromptUseCase().apply {
+                    result = false
                 }
+            // Complete the generation so the orchestrator reaches its post-turn
+            // moderation gate, whose debug log records the flag it received.
+            chatUseCases.generateChatResponseUseCase.flow =
+                flowOf(
+                    AccumulatedMessages(
+                        messages =
+                            mapOf(
+                                MessageId("assistant-trusted") to
+                                    MessageSnapshot(
+                                        messageId = MessageId("assistant-trusted"),
+                                        modelType = ModelType.FAST,
+                                        content = "A perfectly ordinary answer",
+                                        thinkingRaw = "",
+                                        isComplete = true,
+                                    ),
+                            ),
+                    ),
+                )
             harness =
                 ChatViewModelTestSupport.createHarness(
                     settingsUseCases = settingsUseCases,
@@ -356,9 +294,9 @@ class ChatViewModelSendHappyPathTest {
                     studioRepository = studioRepository,
                     shareChatUseCase = shareChatUseCase,
                     chatRepository = chatRepository,
-                    exportArtifactDocumentsUseCase = mockk(relaxed = true),
+                    exportArtifactDocumentsUseCase = FakeExportArtifactDocumentsUseCase(),
                     stageImageAttachmentUseCase = stageImageAttachmentUseCase,
-                    shouldModeratePromptUseCase = shouldModerateMock,
+                    shouldModeratePromptUseCase = shouldModerateFake,
                 )
             viewModel = harness.viewModel
 
@@ -367,21 +305,11 @@ class ChatViewModelSendHappyPathTest {
             advanceTimeBy(ChatTurnTiming.ASSISTANT_PLACEHOLDER_DELAY_MS)
             advanceUntilIdle()
 
-            coVerify {
-                harness.inferenceOrchestrator.sendMessage(
-                    scope = any(),
-                    input = "blocked input but trusted",
-                    responseMode = any(),
-                    selectedImageUris = any(),
-                    fileAttachments = any(),
-                    initialChatId = any(),
-                    shouldModerateResponse = false,
-                    onInputCleared = any(),
-                    onResponseBlocked = any(),
-                )
-            }
-            coVerify(exactly = 1) {
-                chatUseCases.submitPrompt(any())
-            }
+            assertTrue(
+                loggingPort.debugCalls.any { (_, message) ->
+                    message.contains("Post-turn moderation gate: shouldModerateResponse=false")
+                },
+            )
+            assertEquals(1, chatUseCases.submitPromptUseCase.calls.size)
         }
 }
