@@ -3,30 +3,28 @@ package com.browntowndev.enclave.core.data.remote.firestore.handlers
 import com.browntowndev.enclave.core.data.local.MemoriesDao
 import com.browntowndev.enclave.core.data.local.MemoriesEntity
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncContext
+import com.browntowndev.enclave.core.data.remote.firestore.recordingDao
+import com.browntowndev.enclave.core.data.remote.firestore.testSyncContext
 import com.browntowndev.enclave.core.data.remote.testFirestoreSyncDaos
-import com.browntowndev.enclave.core.data.repository.FakeLocalDataEncryptionService
-import com.browntowndev.enclave.core.data.security.SensitivePersistenceSelfHealer
 import com.browntowndev.enclave.domain.model.memory.MemoryCategory
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
-import com.google.firebase.firestore.FirebaseFirestore
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
-import java.util.concurrent.atomic.AtomicBoolean
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class MemoriesSyncHandlerTest {
-    private val memoriesDao = mockk<MemoriesDao>(relaxed = true)
+    private val memoriesDao = recordingDao<MemoriesDao>()
     private lateinit var handler: MemoriesSyncHandler
 
     @BeforeEach
     fun setup() {
-        handler = MemoriesSyncHandler(createContext(memoriesDao))
+        handler = MemoriesSyncHandler(createContext(memoriesDao.dao))
     }
 
     @Test
@@ -55,28 +53,11 @@ class MemoriesSyncHandlerTest {
     @DisplayName("claimPending delegates to memories dao")
     fun claimPending_delegatesToDao() =
         runTest {
-            coEvery { memoriesDao.claimPending() } returns Unit
-
             handler.claimPending()
 
-            coVerify { memoriesDao.claimPending() }
+            assertEquals(1, memoriesDao.countCalls("claimPending"))
         }
 
-    private fun createContext(memoriesDao: MemoriesDao): FirestoreSyncContext {
-        val localEncryption = FakeLocalDataEncryptionService()
-        val loggingPort = mockk<LoggingPort>(relaxed = true)
-        return FirestoreSyncContext(
-            firestore = mockk<FirebaseFirestore>(relaxed = true),
-            daos = testFirestoreSyncDaos(memoriesDao = memoriesDao),
-            localEncryption = localEncryption,
-            sensitiveSelfHealer = SensitivePersistenceSelfHealer(localEncryption, loggingPort),
-            firestoreSensitiveFieldRepairer = mockk(relaxed = true),
-            cryptoManager = mockk<CryptoManagerPort>(relaxed = true),
-            loggingPort = loggingPort,
-            apiKeyManager = mockk(relaxed = true),
-            embeddingCoordinator = mockk(relaxed = true),
-            userIdProvider = { "user-1" },
-            purgeInProgress = AtomicBoolean(false),
-        )
-    }
+    private fun createContext(memoriesDao: MemoriesDao): FirestoreSyncContext =
+        testSyncContext(daos = testFirestoreSyncDaos(memoriesDao = memoriesDao))
 }

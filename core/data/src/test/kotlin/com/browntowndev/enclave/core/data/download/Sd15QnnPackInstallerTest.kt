@@ -1,6 +1,9 @@
 package com.browntowndev.enclave.core.data.download
 
 import android.content.Context
+import android.content.ContextWrapper
+import androidx.test.core.app.ApplicationProvider
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.config.LocalModelMetadata
 import com.browntowndev.enclave.domain.model.config.UtilityType
@@ -9,23 +12,39 @@ import com.browntowndev.enclave.domain.model.download.Sd15QnnPackCatalog
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationPaths
 import com.browntowndev.enclave.domain.port.download.QnnPackInstallProgressListener
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import io.mockk.every
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.io.TempDir
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 import java.io.File
 import java.security.MessageDigest
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class Sd15QnnPackInstallerTest {
     @TempDir
     lateinit var tempDir: File
+
+    /** Robolectric context whose external files dir is the given @TempDir folder (ENC-28). */
+    private fun fakeContext(filesDir: File): Context {
+        val appContext = ApplicationProvider.getApplicationContext<Context>()
+        return object : ContextWrapper(appContext) {
+            override fun getExternalFilesDir(type: String?): File = filesDir
+        }
+    }
+
+    private fun installer(filesDir: File): Sd15QnnPackInstaller =
+        Sd15QnnPackInstaller(
+            context = fakeContext(filesDir),
+            logger = FakeLoggingPort(),
+        )
 
     @Test
     fun installIfNeeded_extractsZipIntoSd15QnnDir() =
@@ -36,14 +55,7 @@ class Sd15QnnPackInstallerTest {
             val zipFile = File(modelsDir, variant.localZipFileName)
             writeMinimalPackZip(zipFile)
 
-            val context = mockk<Context>(relaxed = true)
-            every { context.getExternalFilesDir(null) } returns filesDir
-
-            val installer =
-                Sd15QnnPackInstaller(
-                    context = context,
-                    logger = mockk<LoggingPort>(relaxed = true),
-                )
+            val installer = installer(filesDir)
             val metadata =
                 LocalModelMetadata(
                     id = LocalModelId("sd15-qnn-pack"),
@@ -81,14 +93,7 @@ class Sd15QnnPackInstallerTest {
                 ),
             )
 
-            val context = mockk<Context>(relaxed = true)
-            every { context.getExternalFilesDir(null) } returns filesDir
-
-            val installer =
-                Sd15QnnPackInstaller(
-                    context = context,
-                    logger = mockk<LoggingPort>(relaxed = true),
-                )
+            val installer = installer(filesDir)
             val metadata =
                 LocalModelMetadata(
                     id = LocalModelId("sd15-qnn-pack"),
@@ -117,14 +122,7 @@ class Sd15QnnPackInstallerTest {
             val zipFile = File(modelsDir, variant.localZipFileName)
             writeEscapingPackZip(zipFile)
 
-            val context = mockk<Context>(relaxed = true)
-            every { context.getExternalFilesDir(null) } returns filesDir
-
-            val installer =
-                Sd15QnnPackInstaller(
-                    context = context,
-                    logger = mockk<LoggingPort>(relaxed = true),
-                )
+            val installer = installer(filesDir)
             val metadata =
                 LocalModelMetadata(
                     id = LocalModelId("sd15-qnn-pack"),
@@ -149,14 +147,7 @@ class Sd15QnnPackInstallerTest {
             val zipFile = File(modelsDir, "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip")
             writeMinimalSdxlPackZip(zipFile)
 
-            val context = mockk<Context>(relaxed = true)
-            every { context.getExternalFilesDir(null) } returns filesDir
-
-            val installer =
-                Sd15QnnPackInstaller(
-                    context = context,
-                    logger = mockk<LoggingPort>(relaxed = true),
-                )
+            val installer = installer(filesDir)
             val metadata =
                 LocalModelMetadata(
                     id = LocalModelId("sdxl-qnn-pack"),
@@ -182,14 +173,7 @@ class Sd15QnnPackInstallerTest {
             val zipFile = File(modelsDir, "realvis_xl_v5_dmd2_qnn2.28_8gen3.zip")
             writeMinimalSdxlPackZip(zipFile)
 
-            val context = mockk<Context>(relaxed = true)
-            every { context.getExternalFilesDir(null) } returns filesDir
-
-            val installer =
-                Sd15QnnPackInstaller(
-                    context = context,
-                    logger = mockk<LoggingPort>(relaxed = true),
-                )
+            val installer = installer(filesDir)
             val metadata =
                 LocalModelMetadata(
                     id = LocalModelId("sdxl-qnn-pack"),
@@ -215,14 +199,7 @@ class Sd15QnnPackInstallerTest {
             writeMinimalSdxlPackZip(zipFile)
             val sdxlDirBefore = File(modelsDir, LocalImageGenerationPaths.SDXL_QNN_SUBDIR)
 
-            val context = mockk<Context>(relaxed = true)
-            every { context.getExternalFilesDir(null) } returns filesDir
-
-            val installer =
-                Sd15QnnPackInstaller(
-                    context = context,
-                    logger = mockk<LoggingPort>(relaxed = true),
-                )
+            val installer = installer(filesDir)
             val metadata =
                 LocalModelMetadata(
                     id = LocalModelId("juggernaut-qnn-pack"),
@@ -249,14 +226,7 @@ class Sd15QnnPackInstallerTest {
             val zipFile = File(modelsDir, "juggernaut_qnn2.28_8gen3.zip")
             writeMinimalSdxlPackZip(zipFile)
 
-            val context = mockk<Context>(relaxed = true)
-            every { context.getExternalFilesDir(null) } returns filesDir
-
-            val installer =
-                Sd15QnnPackInstaller(
-                    context = context,
-                    logger = mockk<LoggingPort>(relaxed = true),
-                )
+            val installer = installer(filesDir)
             val metadata =
                 LocalModelMetadata(
                     id = LocalModelId("juggernaut-qnn-pack"),
@@ -285,14 +255,7 @@ class Sd15QnnPackInstallerTest {
                 LocalImageGenerationPaths.REQUIRED_SDXL_QNN_FILES.filter { it != "tokenizer.json" }
             writePackZip(zipFile, incompleteFiles)
 
-            val context = mockk<Context>(relaxed = true)
-            every { context.getExternalFilesDir(null) } returns filesDir
-
-            val installer =
-                Sd15QnnPackInstaller(
-                    context = context,
-                    logger = mockk<LoggingPort>(relaxed = true),
-                )
+            val installer = installer(filesDir)
             val metadata =
                 LocalModelMetadata(
                     id = LocalModelId("juggernaut-qnn-pack"),
@@ -318,14 +281,7 @@ class Sd15QnnPackInstallerTest {
             val zipFile = File(modelsDir, "juggernaut_qnn2.28_8gen3.zip")
             writeMinimalSdxlPackZip(zipFile)
 
-            val context = mockk<Context>(relaxed = true)
-            every { context.getExternalFilesDir(null) } returns filesDir
-
-            val installer =
-                Sd15QnnPackInstaller(
-                    context = context,
-                    logger = mockk<LoggingPort>(relaxed = true),
-                )
+            val installer = installer(filesDir)
             val metadata =
                 LocalModelMetadata(
                     id = LocalModelId("juggernaut-qnn-pack"),
@@ -358,14 +314,7 @@ class Sd15QnnPackInstallerTest {
             val largeEntryBytes = 20 * 1024 * 1024
             writePackZipWithLargeUnet(zipFile, largeEntryBytes)
 
-            val context = mockk<Context>(relaxed = true)
-            every { context.getExternalFilesDir(null) } returns filesDir
-
-            val installer =
-                Sd15QnnPackInstaller(
-                    context = context,
-                    logger = mockk<LoggingPort>(relaxed = true),
-                )
+            val installer = installer(filesDir)
             val metadata =
                 LocalModelMetadata(
                     id = LocalModelId("sd15-qnn-pack"),

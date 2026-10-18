@@ -1,41 +1,49 @@
 package com.browntowndev.enclave.core.data.repository
 
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
 import com.browntowndev.enclave.core.data.security.ApiKeyManager
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeSettingsRepository
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.repository.SettingsData
-import com.browntowndev.enclave.domain.port.repository.SettingsRepository
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.slot
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import okhttp3.Call
-import okhttp3.OkHttpClient
-import okhttp3.Protocol
-import okhttp3.Request
-import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
+import org.robolectric.annotation.Config as RoboConfig
 
+/**
+ * Translated from MockK to a real OkHttpClient over a routing stub
+ * interceptor (ENC-28): each test registers the same URL predicates the
+ * MockK stubs matched on, the interceptor records every request (replacing
+ * the MockK capture slots), and the executors/repository under test are
+ * the real classes over a real ApiKeyManager and settings fake.
+ */
+@ExtendWith(RobolectricExtension::class)
+@RoboConfig(sdk = [34])
 class XPlatformToolsTest {
     private val threadTestJson = Json { ignoreUnknownKeys = true }
 
-    private val okHttpClient = mockk<OkHttpClient>()
-    private val apiKeyManager = mockk<ApiKeyManager>()
-    private val settingsRepository = mockk<SettingsRepository>()
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
+    private val interceptor = StubHttpInterceptor()
+    private val okHttpClient = stubHttpClient(interceptor)
+    private lateinit var apiKeyManager: ApiKeyManager
+    private val settingsRepository = FakeSettingsRepository(SettingsData(xSearchEnabled = true, xApiKeyPresent = true))
+    private val loggingPort = FakeLoggingPort()
 
     private lateinit var xSearchRepository: XSearchRepository
     private lateinit var getThreadExecutor: XGetThreadToolExecutor
@@ -45,6 +53,9 @@ class XPlatformToolsTest {
 
     @BeforeEach
     fun setup() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        apiKeyManager =
+            testApiKeyManager(context, CoroutineScope(SupervisorJob() + Dispatchers.Default), "x_platform_tools_prefs")
         xSearchRepository =
             XSearchRepository(
                 okHttpClient,
@@ -56,23 +67,8 @@ class XPlatformToolsTest {
         userTweetsExecutor = XUserTweetsToolExecutor(loggingPort, settingsRepository, xSearchRepository)
         mentionSearchExecutor = XMentionSearchToolExecutor(loggingPort, settingsRepository, xSearchRepository)
 
-        every { apiKeyManager.get(ApiKeyManager.X_SEARCH_ALIAS) } returns "mock-bearer-token"
-        every { settingsRepository.settingsFlow } returns flowOf(SettingsData(xSearchEnabled = true, xApiKeyPresent = true))
+        apiKeyManager.save(ApiKeyManager.X_SEARCH_ALIAS, "mock-bearer-token")
     }
-
-    private fun httpResponse(
-        url: String,
-        code: Int,
-        body: String,
-    ): Response =
-        Response
-            .Builder()
-            .request(Request.Builder().url(url).build())
-            .protocol(Protocol.HTTP_1_1)
-            .code(code)
-            .message(if (code in 200..299) "OK" else "Error")
-            .body(body.toResponseBody())
-            .build()
 
     @Test
     fun `SCENARIO_GET_THREAD_SUCCESS`() =
@@ -125,19 +121,12 @@ class XPlatformToolsTest {
                 }
                 """.trimIndent()
 
-            val callTarget = mockk<Call>()
-            val callReplies = mockk<Call>()
-
-            every {
-                okHttpClient.newCall(
-                    match { it.url.toString().contains("/2/tweets") && !it.url.toString().contains("search/recent") },
-                )
-            } returns
-                callTarget
-            every { callTarget.execute() } returns httpResponse("https://api.x.com/2/tweets", 200, targetTweetJson)
-
-            every { okHttpClient.newCall(match { it.url.toString().contains("search/recent") }) } returns callReplies
-            every { callReplies.execute() } returns httpResponse("https://api.x.com/2/tweets/search/recent", 200, repliesJson)
+            interceptor.respondWhen(
+                { it.url.toString().contains("/2/tweets") && !it.url.toString().contains("search/recent") },
+                200,
+                targetTweetJson,
+            )
+            interceptor.respondWhen({ it.url.toString().contains("search/recent") }, 200, repliesJson)
 
             val request =
                 ToolCallRequest(
@@ -241,28 +230,17 @@ class XPlatformToolsTest {
                 }
                 """.trimIndent()
 
-            val callTarget = mockk<Call>()
-            val callRoot = mockk<Call>()
-            val callReplies = mockk<Call>()
-
-            every {
-                okHttpClient.newCall(
-                    match { it.url.toString().contains("/2/tweets") && it.url.queryParameter("ids") == "25" },
-                )
-            } returns
-                callTarget
-            every { callTarget.execute() } returns httpResponse("https://api.x.com/2/tweets?ids=25", 200, targetTweetJson)
-
-            every {
-                okHttpClient.newCall(
-                    match { it.url.toString().contains("/2/tweets") && it.url.queryParameter("ids") == "20" },
-                )
-            } returns
-                callRoot
-            every { callRoot.execute() } returns httpResponse("https://api.x.com/2/tweets?ids=20", 200, rootTweetJson)
-
-            every { okHttpClient.newCall(match { it.url.toString().contains("search/recent") }) } returns callReplies
-            every { callReplies.execute() } returns httpResponse("https://api.x.com/2/tweets/search/recent", 200, repliesJson)
+            interceptor.respondWhen(
+                { it.url.toString().contains("/2/tweets") && it.url.queryParameter("ids") == "25" },
+                200,
+                targetTweetJson,
+            )
+            interceptor.respondWhen(
+                { it.url.toString().contains("/2/tweets") && it.url.queryParameter("ids") == "20" },
+                200,
+                rootTweetJson,
+            )
+            interceptor.respondWhen({ it.url.toString().contains("search/recent") }, 200, repliesJson)
 
             val request =
                 ToolCallRequest(
@@ -355,24 +333,14 @@ class XPlatformToolsTest {
                 }
                 """.trimIndent()
 
-            val callTarget = mockk<Call>()
-            val callParent = mockk<Call>()
-            val callParentUser = mockk<Call>()
-            val callReplies = mockk<Call>()
-
-            every { okHttpClient.newCall(match { it.url.queryParameter("ids") == "25" }) } returns callTarget
-            every { callTarget.execute() } returns httpResponse("https://api.x.com/2/tweets?ids=25", 200, targetTweetJson)
-
-            every { okHttpClient.newCall(match { it.url.queryParameter("ids") == "20" }) } returns callParent
-            every { callParent.execute() } returns httpResponse("https://api.x.com/2/tweets?ids=20", 200, parentTweetJson)
-
-            every {
-                okHttpClient.newCall(match { it.url.toString().contains("/2/users") && it.url.queryParameter("ids") == "99" })
-            } returns callParentUser
-            every { callParentUser.execute() } returns httpResponse("https://api.x.com/2/users?ids=99", 200, parentUserJson)
-
-            every { okHttpClient.newCall(match { it.url.toString().contains("search/recent") }) } returns callReplies
-            every { callReplies.execute() } returns httpResponse("https://api.x.com/2/tweets/search/recent", 200, repliesJson)
+            interceptor.respondWhen({ it.url.queryParameter("ids") == "25" }, 200, targetTweetJson)
+            interceptor.respondWhen({ it.url.queryParameter("ids") == "20" }, 200, parentTweetJson)
+            interceptor.respondWhen(
+                { it.url.toString().contains("/2/users") && it.url.queryParameter("ids") == "99" },
+                200,
+                parentUserJson,
+            )
+            interceptor.respondWhen({ it.url.toString().contains("search/recent") }, 200, repliesJson)
 
             val request =
                 ToolCallRequest(
@@ -456,18 +424,9 @@ class XPlatformToolsTest {
                 }
                 """.trimIndent()
 
-            val callTarget = mockk<Call>()
-            val callParent = mockk<Call>()
-            val callReplies = mockk<Call>()
-
-            every { okHttpClient.newCall(match { it.url.queryParameter("ids") == "25" }) } returns callTarget
-            every { callTarget.execute() } returns httpResponse("https://api.x.com/2/tweets?ids=25", 200, targetTweetJson)
-
-            every { okHttpClient.newCall(match { it.url.queryParameter("ids") == "20" }) } returns callParent
-            every { callParent.execute() } returns httpResponse("https://api.x.com/2/tweets?ids=20", 200, parentTweetJson)
-
-            every { okHttpClient.newCall(match { it.url.toString().contains("search/recent") }) } returns callReplies
-            every { callReplies.execute() } returns httpResponse("https://api.x.com/2/tweets/search/recent", 200, repliesJson)
+            interceptor.respondWhen({ it.url.queryParameter("ids") == "25" }, 200, targetTweetJson)
+            interceptor.respondWhen({ it.url.queryParameter("ids") == "20" }, 200, parentTweetJson)
+            interceptor.respondWhen({ it.url.toString().contains("search/recent") }, 200, repliesJson)
 
             val request =
                 ToolCallRequest(
@@ -520,19 +479,12 @@ class XPlatformToolsTest {
                 }
                 """.trimIndent()
 
-            val callTarget = mockk<Call>()
-            val callReplies = mockk<Call>()
-
-            every {
-                okHttpClient.newCall(
-                    match { it.url.toString().contains("/2/tweets") && !it.url.toString().contains("search/recent") },
-                )
-            } returns
-                callTarget
-            every { callTarget.execute() } returns httpResponse("https://api.x.com/2/tweets", 200, targetTweetJson)
-
-            every { okHttpClient.newCall(match { it.url.toString().contains("search/recent") }) } returns callReplies
-            every { callReplies.execute() } returns httpResponse("https://api.x.com/2/tweets/search/recent", 200, repliesJson)
+            interceptor.respondWhen(
+                { it.url.toString().contains("/2/tweets") && !it.url.toString().contains("search/recent") },
+                200,
+                targetTweetJson,
+            )
+            interceptor.respondWhen({ it.url.toString().contains("search/recent") }, 200, repliesJson)
 
             val request =
                 ToolCallRequest(
@@ -566,9 +518,7 @@ class XPlatformToolsTest {
                 }
                 """.trimIndent()
 
-            val call = mockk<Call>()
-            every { okHttpClient.newCall(match { it.url.toString().contains("/2/trends/by/woeid/1") }) } returns call
-            every { call.execute() } returns httpResponse("https://api.x.com/2/trends/by/woeid/1", 200, rawTrendsJson)
+            interceptor.respondWhen({ it.url.toString().contains("/2/trends/by/woeid/1") }, 200, rawTrendsJson)
 
             val request =
                 ToolCallRequest(
@@ -646,12 +596,8 @@ class XPlatformToolsTest {
                 }
                 """.trimIndent()
 
-            val lookupCall = mockk<Call>()
-            val timelineCall = mockk<Call>()
-            val requestSlots = mutableListOf<Request>()
-            every { okHttpClient.newCall(capture(requestSlots)) } returnsMany listOf(lookupCall, timelineCall)
-            every { lookupCall.execute() } returns httpResponse("https://api.x.com/2/users/by/username/elonmusk", 200, userLookupJson)
-            every { timelineCall.execute() } returns httpResponse("https://api.x.com/2/users/elon/tweets", 200, timelineJson)
+            interceptor.respondWhen({ it.url.toString().contains("/users/by/username") }, 200, userLookupJson)
+            interceptor.respondWhen({ it.url.toString().contains("/users/elon/tweets") }, 200, timelineJson)
 
             val request =
                 ToolCallRequest(
@@ -665,7 +611,7 @@ class XPlatformToolsTest {
 
             val result = userTweetsExecutor.execute(request)
 
-            val timelineRequest = requestSlots.last()
+            val timelineRequest = interceptor.requests.last()
             assertTrue(timelineRequest.url.toString().contains("/users/elon/tweets"))
             assertTrue(timelineRequest.url.toString().contains("max_results=10"))
             assertTrue(!timelineRequest.url.toString().contains("exclude=retweets"))
@@ -756,12 +702,8 @@ class XPlatformToolsTest {
                 }
                 """.trimIndent()
 
-            val lookupCall = mockk<Call>()
-            val timelineCall = mockk<Call>()
-            every { okHttpClient.newCall(match { it.url.toString().contains("/users/by/username") }) } returns lookupCall
-            every { okHttpClient.newCall(match { it.url.toString().contains("/users/u1/tweets") }) } returns timelineCall
-            every { lookupCall.execute() } returns httpResponse("https://api.x.com/2/users/by/username/testuser", 200, userLookupJson)
-            every { timelineCall.execute() } returns httpResponse("https://api.x.com/2/users/u1/tweets", 200, timelineJson)
+            interceptor.respondWhen({ it.url.toString().contains("/users/by/username") }, 200, userLookupJson)
+            interceptor.respondWhen({ it.url.toString().contains("/users/u1/tweets") }, 200, timelineJson)
 
             val request =
                 ToolCallRequest(
@@ -823,20 +765,13 @@ class XPlatformToolsTest {
                 }
                 """.trimIndent()
 
-            val lookupCall = mockk<Call>()
-            val timelineCall = mockk<Call>()
-            val searchCall = mockk<Call>()
-            every { okHttpClient.newCall(match { it.url.toString().contains("/users/by/username") }) } returns lookupCall
-            every { okHttpClient.newCall(match { it.url.toString().contains("/users/elon/tweets") }) } returns timelineCall
-            every { okHttpClient.newCall(match { it.url.toString().contains("search/recent") }) } returns searchCall
-            every { lookupCall.execute() } returns httpResponse("https://api.x.com/2/users/by/username/elonmusk", 200, userLookupJson)
-            every { timelineCall.execute() } returns
-                httpResponse(
-                    "https://api.x.com/2/users/elon/tweets",
-                    403,
-                    """{"errors":[{"message":"Forbidden"}]}""",
-                )
-            every { searchCall.execute() } returns httpResponse("https://api.x.com/2/tweets/search/recent", 200, searchJson)
+            interceptor.respondWhen({ it.url.toString().contains("/users/by/username") }, 200, userLookupJson)
+            interceptor.respondWhen(
+                { it.url.toString().contains("/users/elon/tweets") },
+                403,
+                """{"errors":[{"message":"Forbidden"}]}""",
+            )
+            interceptor.respondWhen({ it.url.toString().contains("search/recent") }, 200, searchJson)
 
             val result =
                 userTweetsExecutor.execute(
@@ -892,25 +827,13 @@ class XPlatformToolsTest {
                 }
                 """.trimIndent()
 
-            val lookupCall = mockk<Call>()
-            val timelineCall = mockk<Call>()
-            val searchCall = mockk<Call>()
-            val requestSlots = mutableListOf<Request>()
-            every { okHttpClient.newCall(capture(requestSlots)) } answers {
-                when {
-                    firstArg<Request>().url.toString().contains("search/recent") -> searchCall
-                    firstArg<Request>().url.toString().contains("/tweets") -> timelineCall
-                    else -> lookupCall
-                }
-            }
-            every { lookupCall.execute() } returns httpResponse("https://api.x.com/2/users/by/username/elonmusk", 200, userLookupJson)
-            every { timelineCall.execute() } returns
-                httpResponse(
-                    "https://api.x.com/2/users/elon/tweets",
-                    400,
-                    """{"errors":[{"message":"Invalid pagination_token"}]}""",
-                )
-            every { searchCall.execute() } returns httpResponse("https://api.x.com/2/tweets/search/recent", 200, searchPageJson)
+            interceptor.respondWhen({ it.url.toString().contains("search/recent") }, 200, searchPageJson)
+            interceptor.respondWhen(
+                { it.url.toString().contains("/tweets") },
+                400,
+                """{"errors":[{"message":"Invalid pagination_token"}]}""",
+            )
+            interceptor.respondWhen({ true }, 200, userLookupJson)
 
             val result =
                 userTweetsExecutor.execute(
@@ -924,7 +847,7 @@ class XPlatformToolsTest {
                     ),
                 )
 
-            val searchUrl = requestSlots.last().url.toString()
+            val searchUrl = interceptor.requests.last().url.toString()
             assertTrue(searchUrl.contains("search/recent"))
             assertTrue(searchUrl.contains("next_token=searchtok123"))
 
@@ -962,12 +885,8 @@ class XPlatformToolsTest {
                 }
                 """.trimIndent()
 
-            val lookupCall = mockk<Call>()
-            val timelineCall = mockk<Call>()
-            val requestSlots = mutableListOf<Request>()
-            every { okHttpClient.newCall(capture(requestSlots)) } returnsMany listOf(lookupCall, timelineCall)
-            every { lookupCall.execute() } returns httpResponse("https://api.x.com/2/users/by/username/elonmusk", 200, userLookupJson)
-            every { timelineCall.execute() } returns httpResponse("https://api.x.com/2/users/elon/tweets", 200, timelineJson)
+            interceptor.respondWhen({ it.url.toString().contains("/users/by/username") }, 200, userLookupJson)
+            interceptor.respondWhen({ it.url.toString().contains("/users/elon/tweets") }, 200, timelineJson)
 
             val request =
                 ToolCallRequest(
@@ -982,7 +901,7 @@ class XPlatformToolsTest {
             userTweetsExecutor.execute(request)
 
             assertTrue(
-                requestSlots
+                interceptor.requests
                     .last()
                     .url
                     .toString()
@@ -1012,12 +931,8 @@ class XPlatformToolsTest {
                 }
                 """.trimIndent()
 
-            val lookupCall = mockk<Call>()
-            val timelineCall = mockk<Call>()
-            val requestSlots = mutableListOf<Request>()
-            every { okHttpClient.newCall(capture(requestSlots)) } returnsMany listOf(lookupCall, timelineCall)
-            every { lookupCall.execute() } returns httpResponse("https://api.x.com/2/users/by/username/elonmusk", 200, userLookupJson)
-            every { timelineCall.execute() } returns httpResponse("https://api.x.com/2/users/elon/tweets", 200, timelineJson)
+            interceptor.respondWhen({ it.url.toString().contains("/users/by/username") }, 200, userLookupJson)
+            interceptor.respondWhen({ it.url.toString().contains("/users/elon/tweets") }, 200, timelineJson)
 
             val request =
                 ToolCallRequest(
@@ -1032,7 +947,7 @@ class XPlatformToolsTest {
             userTweetsExecutor.execute(request)
 
             assertTrue(
-                requestSlots
+                interceptor.requests
                     .last()
                     .url
                     .toString()
@@ -1064,12 +979,8 @@ class XPlatformToolsTest {
                 }
                 """.trimIndent()
 
-            val lookupCall = mockk<Call>()
-            val timelineCall = mockk<Call>()
-            val requestSlots = mutableListOf<Request>()
-            every { okHttpClient.newCall(capture(requestSlots)) } returnsMany listOf(lookupCall, timelineCall)
-            every { lookupCall.execute() } returns httpResponse("https://api.x.com/2/users/by/username/elonmusk", 200, userLookupJson)
-            every { timelineCall.execute() } returns httpResponse("https://api.x.com/2/users/elon/tweets", 200, timelineJson)
+            interceptor.respondWhen({ it.url.toString().contains("/users/by/username") }, 200, userLookupJson)
+            interceptor.respondWhen({ it.url.toString().contains("/users/elon/tweets") }, 200, timelineJson)
 
             val request =
                 ToolCallRequest(
@@ -1083,7 +994,7 @@ class XPlatformToolsTest {
 
             userTweetsExecutor.execute(request)
 
-            val url = requestSlots.last().url.toString()
+            val url = interceptor.requests.last().url.toString()
             assertTrue(url.contains("/users/elon/tweets"))
             assertTrue(url.contains("pagination_token=tok123"))
         }
@@ -1112,12 +1023,8 @@ class XPlatformToolsTest {
                 }
                 """.trimIndent()
 
-            val lookupCall = mockk<Call>()
-            val timelineCall = mockk<Call>()
-            val requestSlots = mutableListOf<Request>()
-            every { okHttpClient.newCall(capture(requestSlots)) } returnsMany listOf(lookupCall, timelineCall)
-            every { lookupCall.execute() } returns httpResponse("https://api.x.com/2/users/by/username/elonmusk", 200, userLookupJson)
-            every { timelineCall.execute() } returns httpResponse("https://api.x.com/2/users/elon/tweets", 200, timelineJson)
+            interceptor.respondWhen({ it.url.toString().contains("/users/by/username") }, 200, userLookupJson)
+            interceptor.respondWhen({ it.url.toString().contains("/users/elon/tweets") }, 200, timelineJson)
 
             val request =
                 ToolCallRequest(
@@ -1131,7 +1038,7 @@ class XPlatformToolsTest {
 
             userTweetsExecutor.execute(request)
 
-            val timelineUrl = requestSlots.last().url.toString()
+            val timelineUrl = interceptor.requests.last().url.toString()
             assertTrue(timelineUrl.contains("/users/elon/tweets"))
             assertTrue(!timelineUrl.contains("pagination_token"))
         }
@@ -1149,10 +1056,7 @@ class XPlatformToolsTest {
                 }
                 """.trimIndent()
 
-            val call = mockk<Call>()
-            val requestSlot = slot<Request>()
-            every { okHttpClient.newCall(capture(requestSlot)) } returns call
-            every { call.execute() } returns httpResponse("https://api.x.com/2/tweets/search/recent", 200, searchJson)
+            interceptor.respondToAll(200, searchJson)
 
             val request =
                 ToolCallRequest(
@@ -1166,7 +1070,7 @@ class XPlatformToolsTest {
 
             userTweetsExecutor.execute(request)
 
-            val url = requestSlot.captured.url.toString()
+            val url = interceptor.requests.single().url.toString()
             assertTrue(url.contains("query=from%3Aelonmusk%20tesla"))
             assertTrue(url.contains("sort_order=recency"))
             assertTrue(url.contains("next_token=tok123"))
@@ -1185,10 +1089,7 @@ class XPlatformToolsTest {
                 }
                 """.trimIndent()
 
-            val call = mockk<Call>()
-            val requestSlot = slot<Request>()
-            every { okHttpClient.newCall(capture(requestSlot)) } returns call
-            every { call.execute() } returns httpResponse("https://api.x.com/2/tweets/search/recent", 200, searchJson)
+            interceptor.respondToAll(200, searchJson)
 
             val request =
                 ToolCallRequest(
@@ -1202,7 +1103,7 @@ class XPlatformToolsTest {
 
             mentionSearchExecutor.execute(request)
 
-            val url = requestSlot.captured.url.toString()
+            val url = interceptor.requests.single().url.toString()
             assertTrue(url.contains("query=%40elonmusk%20spacex"))
         }
 
@@ -1236,10 +1137,7 @@ class XPlatformToolsTest {
                 }
                 """.trimIndent()
 
-            val call = mockk<Call>()
-            val requestSlot = slot<Request>()
-            every { okHttpClient.newCall(capture(requestSlot)) } returns call
-            every { call.execute() } returns httpResponse("https://api.x.com/2/tweets/search/recent", 200, searchJson)
+            interceptor.respondToAll(200, searchJson)
 
             val request =
                 ToolCallRequest(
@@ -1253,7 +1151,7 @@ class XPlatformToolsTest {
 
             val result = userTweetsExecutor.execute(request)
 
-            val url = requestSlot.captured.url.toString()
+            val url = interceptor.requests.single().url.toString()
             assertTrue(url.contains("query=from%3Anasa%20mars"))
             assertTrue(url.contains("next_token=nasa_token"))
             assertTrue(result.resultJson.contains("NASA"))

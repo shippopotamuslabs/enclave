@@ -1,51 +1,46 @@
+@file:Suppress("ForbiddenMockKInTests")
+
+// MockK retained only for the Firebase Firestore / Functions / Storage SDK surface, which has no JVM fake.
 package com.browntowndev.enclave.core.data.repository
 
-import android.util.Log
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeStudioRepository
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.Content
 import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.Role
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.functions.FirebaseFunctions
 import com.google.firebase.functions.HttpsCallableReference
 import com.google.firebase.functions.HttpsCallableResult
 import com.google.firebase.storage.FirebaseStorage
-import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.mockkStatic
 import io.mockk.slot
-import io.mockk.unmockkStatic
 import kotlinx.coroutines.test.runTest
-import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import java.util.UUID
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class FirestoreShareRepositoryTest {
     private val firestore = mockk<FirebaseFirestore>(relaxed = true)
     private val functions = mockk<FirebaseFunctions>(relaxed = true)
     private val storage = mockk<FirebaseStorage>(relaxed = true)
-    private val studioRepository = mockk<StudioRepositoryPort>(relaxed = true)
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
+    private val studioRepository = FakeStudioRepository()
+    private val loggingPort = FakeLoggingPort()
     private lateinit var repository: FirestoreShareRepository
 
     @BeforeEach
     fun setup() {
-        mockkStatic(Log::class)
-        every { Log.e(any<String>(), any<String>()) } returns 0
-        every { Log.e(any<String>(), any<String>(), any<Throwable>()) } returns 0
-
-        mockkStatic(UUID::class)
-        every { UUID.randomUUID().toString() } returns "mock-uuid"
-
         val storageRef = mockk<com.google.firebase.storage.StorageReference>(relaxed = true)
         val uploadTask = mockk<com.google.firebase.storage.UploadTask>(relaxed = true)
         every { storage.getReference(any<String>()) } returns storageRef
@@ -56,12 +51,6 @@ class FirestoreShareRepositoryTest {
         every { uploadTask.result } returns mockk(relaxed = true)
 
         repository = FirestoreShareRepository(firestore, functions, storage, studioRepository, loggingPort)
-    }
-
-    @AfterEach
-    fun tearDown() {
-        unmockkStatic(Log::class)
-        unmockkStatic(UUID::class)
     }
 
     @Test
@@ -78,7 +67,7 @@ class FirestoreShareRepositoryTest {
                     ),
                 )
             val imageBytes = ByteArray(100)
-            coEvery { studioRepository.readMediaBytes("file://image.jpg") } returns imageBytes
+            studioRepository.mediaBytes["file://image.jpg"] = imageBytes
 
             val callable = mockk<HttpsCallableReference>(relaxed = true)
             val result = mockk<HttpsCallableResult>(relaxed = true)
@@ -209,7 +198,7 @@ class FirestoreShareRepositoryTest {
                         createdAt = 1000L,
                     ),
                 )
-            coEvery { studioRepository.readMediaBytes("file://gen.jpg") } returns ByteArray(100)
+            studioRepository.mediaBytes["file://gen.jpg"] = ByteArray(100)
 
             val callable = mockk<HttpsCallableReference>(relaxed = true)
             val result = mockk<HttpsCallableResult>(relaxed = true)

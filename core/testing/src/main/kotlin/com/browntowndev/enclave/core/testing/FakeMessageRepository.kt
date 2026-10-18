@@ -48,8 +48,13 @@ class FakeMessageRepository(
         return similarMessageIds.take(limit)
     }
 
-    override suspend fun getMessageById(id: MessageId): Message? =
-        messagesState.value.firstOrNull { it.id == id }
+    /** When set, [getMessageById] throws this (ENC-28 failure injection). */
+    var getMessageByIdFailure: Throwable? = null
+
+    override suspend fun getMessageById(id: MessageId): Message? {
+        getMessageByIdFailure?.let { throw it }
+        return messagesState.value.firstOrNull { it.id == id }
+    }
 
     /** When set, [getMessagesForChat] throws this (ENC-28 failure injection). */
     var getMessagesForChatFailure: Throwable? = null
@@ -111,10 +116,27 @@ class FakeMessageRepository(
         return messagesState.value.filter { it.chatId == chatId }.take(limit)
     }
 
+    /** When non-null, returned verbatim by [searchMessagesAcrossChats] instead of the seeded state (ENC-28). */
+    var searchAcrossChatsResults: List<Message>? = null
+
+    /** When non-null, returned verbatim by [getMessagesAround] instead of the state-derived window (ENC-28). */
+    var messagesAroundResults: List<Message>? = null
+
     override suspend fun searchMessagesAcrossChats(
         queryVector: FloatArray,
         limit: Int,
-    ): List<Message> = messagesState.value.take(limit)
+    ): List<Message> = searchAcrossChatsResults ?: messagesState.value.take(limit)
+
+    /** Recorded [getMessagesAround] invocation (ENC-28, data batch). */
+    data class MessagesAroundCall(
+        val chatId: ChatId,
+        val timestamp: Long,
+        val before: Int,
+        val after: Int,
+    )
+
+    /** Every [getMessagesAround] invocation, in call order (ENC-28, data batch). */
+    val getMessagesAroundCalls = mutableListOf<MessagesAroundCall>()
 
     override suspend fun getMessagesAround(
         chatId: ChatId,
@@ -122,6 +144,8 @@ class FakeMessageRepository(
         before: Int,
         after: Int,
     ): List<Message> {
+        getMessagesAroundCalls += MessagesAroundCall(chatId, timestamp, before, after)
+        messagesAroundResults?.let { return it }
         val inChat = messagesState.value
             .filter { it.chatId == chatId }
             .sortedBy { it.createdAt ?: 0L }

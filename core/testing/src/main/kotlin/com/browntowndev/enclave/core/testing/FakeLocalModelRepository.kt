@@ -28,6 +28,9 @@ class FakeLocalModelRepository : LocalModelRepositoryPort {
     private val assignments = mutableMapOf<ModelType, LocalModelAsset>()
     private val assets = mutableListOf<LocalModelAsset>()
 
+    /** Every (id, configurations) passed to [restoreSoftDeletedModel], in call order (ENC-28). */
+    val restoreCalls = mutableListOf<Pair<LocalModelId, List<LocalModelConfiguration>>>()
+
     /** Recorded save/delete calls for assertions (ENC-28). */
     val savedConfigurations = mutableListOf<LocalModelConfiguration>()
     val savedMetadata = mutableListOf<LocalModelMetadata>()
@@ -181,6 +184,7 @@ class FakeLocalModelRepository : LocalModelRepositoryPort {
         id: LocalModelId,
         configurations: List<LocalModelConfiguration>,
     ): LocalModelAsset {
+        restoreCalls += id to configurations
         val model = softDeletedModels.remove(id) ?: throw IllegalStateException("Model $id not found in soft-deleted models")
         val restoredAsset = model.copy(configurations = configurations)
         assets.add(restoredAsset)

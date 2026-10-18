@@ -9,8 +9,8 @@ import com.browntowndev.enclave.core.data.local.MessageEntity
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.Role
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.joinAll
@@ -31,7 +31,7 @@ import java.util.Date
 @Config(sdk = [34])
 class RoomCommittedInferencePromptStoreTest {
     private lateinit var database: EnclaveDatabase
-    private val logger = mockk<LoggingPort>(relaxed = true)
+    private val logger = FakeLoggingPort()
 
     @BeforeEach
     fun setup() {

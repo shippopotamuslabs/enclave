@@ -1,6 +1,7 @@
 package com.browntowndev.enclave.core.data.download
 
 import androidx.test.core.app.ApplicationProvider
+import com.browntowndev.enclave.core.testing.FakeLocalImageGenerationCapability
 import com.browntowndev.enclave.domain.model.config.LocalModelAsset
 import com.browntowndev.enclave.domain.model.config.LocalModelConfiguration
 import com.browntowndev.enclave.domain.model.config.LocalModelId
@@ -21,11 +22,6 @@ import com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilit
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationPaths
 import com.browntowndev.enclave.domain.port.download.HashingPort
-import com.browntowndev.enclave.domain.port.media.LocalImageGenerationCapabilityPort
-import io.mockk.coEvery
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -41,17 +37,30 @@ import java.io.File
 @ExtendWith(RobolectricExtension::class)
 @Config(sdk = [34])
 class ModelPackVerifierImplTest {
-    private lateinit var hashingPort: HashingPort
+    /** Hand-written [HashingPort] fake (ENC-28) with a scripted SHA-256 result and call recording. */
+    private class FakeHashingPort : HashingPort {
+        var sha256Result: String = ""
+        val sha256Calls = mutableListOf<String>()
+
+        override fun calculateMd5(filePath: String): String = ""
+
+        override fun calculateSha256(filePath: String): String {
+            sha256Calls += filePath
+            return sha256Result
+        }
+    }
+
+    private lateinit var hashingPort: FakeHashingPort
     private lateinit var verifier: ModelPackVerifierImpl
     private lateinit var appContext: android.content.Context
-    private lateinit var capabilityPort: LocalImageGenerationCapabilityPort
+    private lateinit var capabilityPort: FakeLocalImageGenerationCapability
 
     @BeforeEach
     fun setup() {
         appContext = ApplicationProvider.getApplicationContext()
-        hashingPort = mockk(relaxed = true)
-        capabilityPort = mockk(relaxed = true)
-        coEvery { capabilityPort.getCapabilities() } returns
+        hashingPort = FakeHashingPort()
+        capabilityPort = FakeLocalImageGenerationCapability()
+        capabilityPort.capabilities =
             LocalImageGenerationCapabilities(
                 npuAvailable = LocalImageGenTriState.YES,
                 sd15NpuSupported = LocalImageGenTriState.YES,
@@ -75,13 +84,13 @@ class ModelPackVerifierImplTest {
             val modelFile = File(modelsDir, fileName)
             modelFile.writeBytes(ByteArray(expectedSize.toInt()) { 0xAB.toByte() })
 
-            every { hashingPort.calculateSha256(any()) } returns "definitely-not-matching"
+            hashingPort.sha256Result = "definitely-not-matching"
 
             val pack = testPack(fileName, expectedSize)
             val result = verifier.verifyPack(pack, ModelPackVerificationDepth.SIZE_ON_DISK)
 
             assertTrue(result.isComplete)
-            verify(exactly = 0) { hashingPort.calculateSha256(any()) }
+            assertEquals(0, hashingPort.sha256Calls.size)
         }
 
     @Test
@@ -94,13 +103,13 @@ class ModelPackVerifierImplTest {
             modelsDir.mkdirs()
             File(modelsDir, fileName).writeBytes(ByteArray(expectedSize.toInt()))
 
-            every { hashingPort.calculateSha256(any()) } returns "wrong-hash"
+            hashingPort.sha256Result = "wrong-hash"
 
             val pack = testPack(fileName, expectedSize, sha256 = "expected-hash")
             val result = verifier.verifyPack(pack, ModelPackVerificationDepth.SHA256_INTEGRITY)
 
             assertFalse(result.isComplete)
-            verify(exactly = 1) { hashingPort.calculateSha256(any()) }
+            assertEquals(1, hashingPort.sha256Calls.size)
         }
 
     @Test
@@ -116,7 +125,7 @@ class ModelPackVerifierImplTest {
             val result = verifier.verifyPack(sd15QnnPack(), ModelPackVerificationDepth.SHA256_INTEGRITY)
 
             assertTrue(result.isComplete)
-            verify(exactly = 0) { hashingPort.calculateSha256(any()) }
+            assertEquals(0, hashingPort.sha256Calls.size)
         }
 
     @Test
@@ -141,7 +150,7 @@ class ModelPackVerifierImplTest {
             val result = verifier.verifyPack(sdxlQnnPack(), ModelPackVerificationDepth.SHA256_INTEGRITY)
 
             assertTrue(result.isComplete)
-            verify(exactly = 0) { hashingPort.calculateSha256(any()) }
+            assertEquals(0, hashingPort.sha256Calls.size)
         }
 
     @Test
@@ -383,7 +392,7 @@ class ModelPackVerifierImplTest {
     @DisplayName("Verify SD1.5 pack completeness for CPU fallback maps to hasMnnArtifacts")
     fun verifySd15PackCpuFallback() =
         runTest {
-            coEvery { capabilityPort.getCapabilities() } returns
+            capabilityPort.capabilities =
                 LocalImageGenerationCapabilities(
                     npuAvailable = LocalImageGenTriState.NO,
                     sd15NpuSupported = LocalImageGenTriState.NO,

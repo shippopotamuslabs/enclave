@@ -12,7 +12,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class XGetThreadToolExecutor
+open class XGetThreadToolExecutor
     @Inject
     constructor(
         private val loggingPort: LoggingPort,
@@ -23,7 +23,7 @@ class XGetThreadToolExecutor
             private const val TAG = "XGetThreadToolExecutor"
         }
 
-        override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
+        open override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
             requireSupportedTool(request.toolName)
             val settings = settingsRepository.settingsFlow.first()
             if (!settings.xSearchEnabled) {

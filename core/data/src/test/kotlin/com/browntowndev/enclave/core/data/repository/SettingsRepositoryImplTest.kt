@@ -1,12 +1,11 @@
 package com.browntowndev.enclave.core.data.repository
 
+import android.content.Context
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
-import com.browntowndev.enclave.core.data.security.ApiKeyManager
+import androidx.test.core.app.ApplicationProvider
 import com.browntowndev.enclave.core.data.security.LocalDataEncryptionService
-import io.mockk.every
-import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
@@ -15,11 +14,16 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.io.TempDir
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 import java.nio.charset.StandardCharsets
 import java.nio.file.Path
+import org.robolectric.annotation.Config as RoboConfig
 
 @OptIn(ExperimentalCoroutinesApi::class)
+@ExtendWith(RobolectricExtension::class)
+@RoboConfig(sdk = [34])
 class SettingsRepositoryImplTest {
     @TempDir
     lateinit var tempDir: Path
@@ -49,7 +53,7 @@ class SettingsRepositoryImplTest {
         runTest {
             val dataStore = createDataStore(backgroundScope)
             val fakeEnc = FakeLocalDataEncryptionService()
-            val repository = createRepository(dataStore = dataStore, localEncryption = fakeEnc)
+            val repository = createRepository(dataStore = dataStore, localEncryption = fakeEnc, scope = backgroundScope)
 
             repository.updateCustomPromptText("answer like me")
 
@@ -68,7 +72,12 @@ class SettingsRepositoryImplTest {
             dataStore.edit { preferences ->
                 preferences[customPromptTextKey] = "plaintext prompt"
             }
-            val repository = createRepository(dataStore = dataStore, localEncryption = FakeLocalDataEncryptionService())
+            val repository =
+                createRepository(
+                    dataStore = dataStore,
+                    localEncryption = FakeLocalDataEncryptionService(),
+                    scope = backgroundScope,
+                )
 
             assertEquals("plaintext prompt", repository.settingsFlow.first().customPromptText)
 
@@ -77,7 +86,7 @@ class SettingsRepositoryImplTest {
 
     private fun createRepository(scope: CoroutineScope): SettingsRepositoryImpl {
         val dataStore = createDataStore(scope)
-        return createRepository(dataStore = dataStore)
+        return createRepository(dataStore = dataStore, scope = scope)
     }
 
     private fun createDataStore(scope: CoroutineScope) =
@@ -89,13 +98,11 @@ class SettingsRepositoryImplTest {
     private fun createRepository(
         dataStore: androidx.datastore.core.DataStore<androidx.datastore.preferences.core.Preferences>,
         localEncryption: LocalDataEncryptionService = LocalDataEncryptionService.NoOp,
+        scope: CoroutineScope,
     ): SettingsRepositoryImpl {
-        val apiKeyManager =
-            mockk<ApiKeyManager> {
-                every { has(ApiKeyManager.TAVILY_SEARCH_ALIAS) } returns false
-                every { has(ApiKeyManager.EXA_SEARCH_ALIAS) } returns false
-                every { has(ApiKeyManager.X_SEARCH_ALIAS) } returns false
-            }
+        // Real ApiKeyManager over cleared Robolectric prefs: has() is false for every alias.
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val apiKeyManager = testApiKeyManager(context, scope, "settings_impl_test_prefs")
         return SettingsRepositoryImpl(
             dataStore = dataStore,
             apiKeyManager = apiKeyManager,

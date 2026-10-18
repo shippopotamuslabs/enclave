@@ -5,11 +5,8 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.work.ListenableWorker
 import androidx.work.WorkerParameters
 import androidx.work.testing.TestListenableWorkerBuilder
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.repository.CloudSyncPort
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.mockk
+import com.browntowndev.enclave.core.testing.FakeCloudSyncPort
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
@@ -22,8 +19,8 @@ import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 @Config(sdk = [34])
 class SyncWorkerTest {
     private lateinit var context: Context
-    private val cloudSyncPort = mockk<CloudSyncPort>(relaxed = true)
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
+    private val cloudSyncPort = FakeCloudSyncPort()
+    private val loggingPort = FakeLoggingPort()
 
     @BeforeEach
     fun setup() {
@@ -33,7 +30,7 @@ class SyncWorkerTest {
     @Test
     fun `doWork delegates to syncPendingChanges`() =
         runTest {
-            coEvery { cloudSyncPort.syncPendingChanges() } returns Result.success(Unit)
+            cloudSyncPort.syncPendingResult = Result.success(Unit)
 
             val worker =
                 TestListenableWorkerBuilder<SyncWorker>(context)
@@ -43,13 +40,13 @@ class SyncWorkerTest {
             val result = worker.doWork()
 
             assertEquals(ListenableWorker.Result.success(), result)
-            coVerify(exactly = 1) { cloudSyncPort.syncPendingChanges() }
+            assertEquals(1, cloudSyncPort.count("syncPending"))
         }
 
     @Test
     fun `doWork returns retry when syncPendingChanges returns failure`() =
         runTest {
-            coEvery { cloudSyncPort.syncPendingChanges() } returns Result.failure(RuntimeException("Vault locked"))
+            cloudSyncPort.syncPendingResult = Result.failure(RuntimeException("Vault locked"))
 
             val worker =
                 TestListenableWorkerBuilder<SyncWorker>(context)
@@ -64,7 +61,7 @@ class SyncWorkerTest {
     @Test
     fun `doWork returns retry when syncPendingChanges throws`() =
         runTest {
-            coEvery { cloudSyncPort.syncPendingChanges() } throws RuntimeException("Unexpected")
+            cloudSyncPort.syncPendingThrowable = RuntimeException("Unexpected")
 
             val worker =
                 TestListenableWorkerBuilder<SyncWorker>(context)

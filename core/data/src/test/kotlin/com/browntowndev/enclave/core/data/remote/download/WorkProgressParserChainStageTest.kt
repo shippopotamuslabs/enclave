@@ -1,26 +1,28 @@
 package com.browntowndev.enclave.core.data.remote.download
 
-import android.util.Log
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import androidx.work.Data
 import androidx.work.WorkInfo
 import com.browntowndev.enclave.core.data.download.DownloadSessionManager
 import com.browntowndev.enclave.core.data.download.DownloadWorkKeys
 import com.browntowndev.enclave.core.data.download.WorkProgressParser
 import com.browntowndev.enclave.core.testing.TestClock
+import com.browntowndev.enclave.domain.model.download.DownloadKey
 import com.browntowndev.enclave.domain.model.download.DownloadStatus
 import com.browntowndev.enclave.domain.model.download.FileProgress
 import com.browntowndev.enclave.domain.model.download.FileStatus
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import io.mockk.MockKAnnotations
-import io.mockk.every
-import io.mockk.impl.annotations.MockK
-import io.mockk.mockk
-import io.mockk.mockkStatic
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
+import java.util.UUID
 
 /**
  * TDD Red Phase Tests for WorkProgressParser Chain-Aware Stage Semantics.
@@ -37,12 +39,19 @@ import org.junit.jupiter.api.Test
  *
  * EXPECTED: These tests FAIL against current code.
  * EXPECTED: These tests PASS after refactor.
+ *
+ * ENC-28: WorkInfo/Data are real instances; the session manager is the real
+ * [DownloadSessionManager] over a Robolectric context — [SESSION_ID] is the id of
+ * the session created in setup (the non-stale one), any other id is stale.
  */
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class WorkProgressParserChainStageTest {
-    @MockK
-    private lateinit var mockSessionManager: DownloadSessionManager
-
+    private lateinit var sessionManager: DownloadSessionManager
     private lateinit var parser: WorkProgressParser
+
+    /** The current (non-stale) session id, created fresh per test in setup. */
+    private lateinit var sessionId: String
 
     companion object {
         const val KEY_WORKER_STAGE = "worker_stage"
@@ -53,21 +62,37 @@ class WorkProgressParserChainStageTest {
 
         const val STAGE_DOWNLOAD = "DOWNLOAD"
         const val STAGE_FINALIZE = "FINALIZE"
-
-        const val SESSION_ID = "test-session-123"
     }
 
     @BeforeEach
     fun setup() {
-        MockKAnnotations.init(this)
-        mockkStatic(Log::class)
-        every { Log.d(any<String>(), any<String>()) } returns 0
-        every { Log.w(any<String>(), any<String>()) } returns 0
-        every { Log.e(any<String>(), any<String>()) } returns 0
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        sessionManager = DownloadSessionManager(context)
+        sessionId = sessionManager.createNewSession()
 
-        every { mockSessionManager.isSessionStale(any()) } returns false
+        parser = WorkProgressParser(sessionManager, TestClock())
+    }
 
-        parser = WorkProgressParser(mockSessionManager, TestClock())
+    private fun workInfo(
+        state: WorkInfo.State,
+        outputData: Data = Data.EMPTY,
+        progress: Data = Data.EMPTY,
+    ): WorkInfo = WorkInfo(UUID.randomUUID(), state, emptySet(), outputData, progress, 0, 0)
+
+    private fun outputData(
+        session: String,
+        stage: String,
+        downloadedShas: Array<String?>? = null,
+        errorMessage: String? = null,
+    ): Data {
+        val builder =
+            Data
+                .Builder()
+                .putString(DownloadWorkKeys.KEY_SESSION_ID, session)
+                .putString(KEY_WORKER_STAGE, stage)
+        if (downloadedShas != null) builder.putStringArray(KEY_DOWNLOADED_SHAS, downloadedShas)
+        if (errorMessage != null) builder.putString(KEY_ERROR_MESSAGE, errorMessage)
+        return builder.build()
     }
 
     // ===== PARSER_01: SUCCEEDED download worker is intermediate, not terminal =====
@@ -88,16 +113,10 @@ class WorkProgressParserChainStageTest {
     fun `PARSER_01 - SUCCEEDED download worker is intermediate, not terminal READY`() {
         // Given: WorkInfo with SUCCEEDED state and DOWNLOAD stage
         val workInfo =
-            mockk<WorkInfo> {
-                every { state } returns WorkInfo.State.SUCCEEDED
-                every { progress } returns androidx.work.Data.EMPTY
-                every { outputData } returns
-                    mockk {
-                        every { getString(DownloadWorkKeys.KEY_SESSION_ID) } returns SESSION_ID
-                        every { getString(KEY_WORKER_STAGE) } returns STAGE_DOWNLOAD
-                        every { getStringArray(KEY_DOWNLOADED_SHAS) } returns arrayOf("sha1", "sha2")
-                    }
-            }
+            workInfo(
+                state = WorkInfo.State.SUCCEEDED,
+                outputData = outputData(sessionId, STAGE_DOWNLOAD, downloadedShas = arrayOf("sha1", "sha2")),
+            )
 
         val currentDownloads =
             listOf(
@@ -145,15 +164,10 @@ class WorkProgressParserChainStageTest {
     fun `PARSER_02 - SUCCEEDED finalizer is terminal and emits READY`() {
         // Given: WorkInfo with SUCCEEDED state and FINALIZE stage
         val workInfo =
-            mockk<WorkInfo> {
-                every { state } returns WorkInfo.State.SUCCEEDED
-                every { outputData } returns
-                    mockk {
-                        every { getString(DownloadWorkKeys.KEY_SESSION_ID) } returns SESSION_ID
-                        every { getString(KEY_WORKER_STAGE) } returns STAGE_FINALIZE
-                        every { getStringArray(KEY_DOWNLOADED_SHAS) } returns arrayOf("sha1", "sha2")
-                    }
-            }
+            workInfo(
+                state = WorkInfo.State.SUCCEEDED,
+                outputData = outputData(sessionId, STAGE_FINALIZE, downloadedShas = arrayOf("sha1", "sha2")),
+            )
         val currentDownloads =
             listOf(
                 FileProgress(
@@ -191,15 +205,10 @@ class WorkProgressParserChainStageTest {
     fun `PARSER_03 - FAILED download worker emits ERROR and clears session`() {
         // Given: WorkInfo with FAILED state and DOWNLOAD stage
         val workInfo =
-            mockk<WorkInfo> {
-                every { state } returns WorkInfo.State.FAILED
-                every { outputData } returns
-                    mockk {
-                        every { getString(DownloadWorkKeys.KEY_SESSION_ID) } returns SESSION_ID
-                        every { getString(KEY_WORKER_STAGE) } returns STAGE_DOWNLOAD
-                        every { getString(KEY_ERROR_MESSAGE) } returns "Network error during download"
-                    }
-            }
+            workInfo(
+                state = WorkInfo.State.FAILED,
+                outputData = outputData(sessionId, STAGE_DOWNLOAD, errorMessage = "Network error during download"),
+            )
 
         // When: Parse
         val result = parser.parse(workInfo, emptyList())
@@ -225,15 +234,10 @@ class WorkProgressParserChainStageTest {
     fun `PARSER_04 - FAILED finalizer emits ERROR and clears session`() {
         // Given: WorkInfo with FAILED state and FINALIZE stage
         val workInfo =
-            mockk<WorkInfo> {
-                every { state } returns WorkInfo.State.FAILED
-                every { outputData } returns
-                    mockk {
-                        every { getString(DownloadWorkKeys.KEY_SESSION_ID) } returns SESSION_ID
-                        every { getString(KEY_WORKER_STAGE) } returns STAGE_FINALIZE
-                        every { getString(KEY_ERROR_MESSAGE) } returns "Failed to restore soft-deleted model"
-                    }
-            }
+            workInfo(
+                state = WorkInfo.State.FAILED,
+                outputData = outputData(sessionId, STAGE_FINALIZE, errorMessage = "Failed to restore soft-deleted model"),
+            )
 
         // When: Parse
         val result = parser.parse(workInfo, emptyList())
@@ -256,16 +260,10 @@ class WorkProgressParserChainStageTest {
     fun `PARSER_05 - stale session success is ignored`() {
         // Given: WorkInfo with SUCCEEDED state and STALE session
         val workInfo =
-            mockk<WorkInfo> {
-                every { state } returns WorkInfo.State.SUCCEEDED
-                every { outputData } returns
-                    mockk {
-                        every { getString(DownloadWorkKeys.KEY_SESSION_ID) } returns "stale-session"
-                        every { getString(KEY_WORKER_STAGE) } returns STAGE_FINALIZE
-                    }
-            }
-
-        every { mockSessionManager.isSessionStale("stale-session") } returns true
+            workInfo(
+                state = WorkInfo.State.SUCCEEDED,
+                outputData = outputData("stale-session", STAGE_FINALIZE),
+            )
 
         // When: Parse
         val result = parser.parse(workInfo, emptyList())
@@ -286,16 +284,10 @@ class WorkProgressParserChainStageTest {
     fun `PARSER_06 - stale session failure is ignored`() {
         // Given: WorkInfo with FAILED state and STALE session
         val workInfo =
-            mockk<WorkInfo> {
-                every { state } returns WorkInfo.State.FAILED
-                every { outputData } returns
-                    mockk {
-                        every { getString(DownloadWorkKeys.KEY_SESSION_ID) } returns "stale-session"
-                        every { getString(KEY_WORKER_STAGE) } returns STAGE_FINALIZE
-                    }
-            }
-
-        every { mockSessionManager.isSessionStale("stale-session") } returns true
+            workInfo(
+                state = WorkInfo.State.FAILED,
+                outputData = outputData("stale-session", STAGE_FINALIZE),
+            )
 
         // When: Parse
         val result = parser.parse(workInfo, emptyList())
@@ -319,22 +311,20 @@ class WorkProgressParserChainStageTest {
     fun `PARSER_07 - running finalizer preserves progress and does not emit terminal`() {
         // Given: WorkInfo with RUNNING state and FINALIZE stage
         val workInfo =
-            mockk<WorkInfo> {
-                every { state } returns WorkInfo.State.RUNNING
-                every { progress } returns
-                    mockk {
-                        every { getFloat(any(), any()) } returns 0.5f
-                        every { getInt(any(), any()) } returns 0
-                        every { getDouble(any(), any()) } returns 0.0
-                        every { getLong(any(), any()) } returns -1L
-                        every { getStringArray(any()) } returns emptyArray()
-                    }
-                every { outputData } returns
-                    mockk {
-                        every { getString(DownloadWorkKeys.KEY_SESSION_ID) } returns SESSION_ID
-                        every { getString(KEY_WORKER_STAGE) } returns STAGE_FINALIZE
-                    }
-            }
+            workInfo(
+                state = WorkInfo.State.RUNNING,
+                outputData = outputData(sessionId, STAGE_FINALIZE),
+                progress =
+                    Data
+                        .Builder()
+                        .putFloat(DownloadKey.OVERALL_PROGRESS.key, 0.5f)
+                        .putInt(DownloadKey.MODELS_COMPLETE.key, 0)
+                        .putInt(DownloadKey.MODELS_TOTAL.key, 0)
+                        .putDouble(DownloadKey.SPEED_MBPS.key, 0.0)
+                        .putLong(DownloadKey.ETA_SECONDS.key, -1L)
+                        .putStringArray(DownloadKey.FILES_PROGRESS.key, emptyArray())
+                        .build(),
+            )
 
         val currentDownloads =
             listOf(
@@ -376,17 +366,12 @@ class WorkProgressParserChainStageTest {
     @Test
     fun `PARSER_08 - finalizer success extracts downloaded_shas`() {
         // Given: Finalizer output with downloaded_shas
-        val downloadedShas: Array<String> = arrayOf("sha1", "sha2", "sha3")
+        val downloadedShas: Array<String?> = arrayOf("sha1", "sha2", "sha3")
         val workInfo =
-            mockk<WorkInfo> {
-                every { state } returns WorkInfo.State.SUCCEEDED
-                every { outputData } returns
-                    mockk {
-                        every { getString(DownloadWorkKeys.KEY_SESSION_ID) } returns SESSION_ID
-                        every { getString(KEY_WORKER_STAGE) } returns STAGE_FINALIZE
-                        every { getStringArray(KEY_DOWNLOADED_SHAS) } returns downloadedShas
-                    }
-            }
+            workInfo(
+                state = WorkInfo.State.SUCCEEDED,
+                outputData = outputData(sessionId, STAGE_FINALIZE, downloadedShas = downloadedShas),
+            )
 
         // When: Parse
         val result = parser.parse(workInfo, emptyList())

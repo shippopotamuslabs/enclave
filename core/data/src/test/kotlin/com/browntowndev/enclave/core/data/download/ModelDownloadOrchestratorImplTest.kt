@@ -1,5 +1,12 @@
 package com.browntowndev.enclave.core.data.download
 
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import androidx.work.Configuration
+import androidx.work.WorkManager
+import androidx.work.testing.WorkManagerTestInitHelper
+import com.browntowndev.enclave.core.testing.FakeDeviceEnvironmentRepository
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.model.config.LocalModelAsset
 import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.config.LocalModelMetadata
@@ -12,29 +19,80 @@ import com.browntowndev.enclave.domain.model.download.ModelScanResult
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.download.DownloadSpeedTrackerPort
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.repository.DeviceEnvironmentRepositoryPort
 import com.browntowndev.enclave.domain.usecase.download.InitializeFileProgressUseCase
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.slot
-import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
+import java.util.concurrent.Executor
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class ModelDownloadOrchestratorImplTest {
-    private val sessionManager = mockk<DownloadSessionManager>()
-    private val deviceEnvironment = mockk<DeviceEnvironmentRepositoryPort>()
-    private val workScheduler = mockk<DownloadWorkScheduler>(relaxed = true)
-    private val logger = mockk<LoggingPort>(relaxed = true)
-    private val speedTracker = mockk<DownloadSpeedTrackerPort>(relaxed = true)
+    /** Recording [DownloadWorkScheduler] subclass fake (ENC-28 open seam). */
+    private class FakeDownloadWorkScheduler(
+        context: Context,
+        workManager: WorkManager,
+    ) : DownloadWorkScheduler(context, workManager) {
+        val enqueuedRequests = mutableListOf<DownloadWorkRequest>()
+        var enqueueFailure: Throwable? = null
+        var cancelCalls = 0
+            private set
+        var cleanupCalls = 0
+            private set
+
+        override fun enqueue(request: DownloadWorkRequest) {
+            enqueueFailure?.let { throw it }
+            enqueuedRequests += request
+        }
+
+        override fun cancel() {
+            cancelCalls++
+        }
+
+        override suspend fun cleanupTempFiles() {
+            cleanupCalls++
+        }
+    }
+
+    /** Minimal [DownloadSpeedTrackerPort] fake (ENC-28) recording clearAll. */
+    private class FakeDownloadSpeedTracker : DownloadSpeedTrackerPort {
+        var clearAllCalls = 0
+            private set
+
+        override fun calculateSpeedAndEta(
+            filename: String,
+            bytesDownloaded: Long,
+            totalSize: Long,
+        ): Pair<Double, Long> = Pair(0.0, 0L)
+
+        override fun calculateAggregateSpeedAndEta(
+            totalBytesDownloaded: Long,
+            totalSize: Long,
+        ): Pair<Double, Long> = Pair(0.0, 0L)
+
+        override fun formatEta(seconds: Long): String = ""
+
+        override fun clear(filename: String) = Unit
+
+        override fun clearAll() {
+            clearAllCalls++
+        }
+    }
+
+    private lateinit var sessionManager: DownloadSessionManager
+    private val deviceEnvironment = FakeDeviceEnvironmentRepository()
+    private lateinit var workScheduler: FakeDownloadWorkScheduler
+    private val logger = FakeLoggingPort()
+    private val speedTracker = FakeDownloadSpeedTracker()
     private val initializeFileProgress = InitializeFileProgressUseCase()
 
     private lateinit var orchestrator: ModelDownloadOrchestratorImpl
@@ -68,6 +126,16 @@ class ModelDownloadOrchestratorImplTest {
 
     @BeforeEach
     fun setUp() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val config =
+            Configuration
+                .Builder()
+                .setTaskExecutor(androidx.work.impl.utils.SynchronousExecutor())
+                .setExecutor(Executor { })
+                .build()
+        WorkManagerTestInitHelper.initializeTestWorkManager(context, config)
+        sessionManager = DownloadSessionManager(context)
+        workScheduler = FakeDownloadWorkScheduler(context, WorkManager.getInstance(context))
         orchestrator =
             ModelDownloadOrchestratorImpl(
                 sessionManager = sessionManager,
@@ -77,20 +145,20 @@ class ModelDownloadOrchestratorImplTest {
                 logger = logger,
                 speedTracker = speedTracker,
             )
-        every { sessionManager.createNewSession() } returnsMany listOf("session-1", "session-2")
-        every { sessionManager.clearSession() } returns Unit
-        coEvery { deviceEnvironment.hasRequiredStorage(any()) } returns true
     }
 
     @Test
     @DisplayName("initializeWithStartupResult leaves IDLE until startDownloads when models are missing")
     fun initializeWithStartupResult_idleUntilStart() {
+        sessionManager.createNewSession() // an active session exists before init
+
         orchestrator.initializeWithStartupResult(modelsResult)
 
         assertEquals(DownloadStatus.IDLE, orchestrator.downloadState.value.status)
-        verify(exactly = 1) { workScheduler.cancel() }
-        verify(exactly = 1) { sessionManager.clearSession() }
-        verify(exactly = 0) { workScheduler.enqueue(any()) }
+        assertEquals(1, workScheduler.cancelCalls)
+        // clearSession ran: the previously active session is gone
+        assertNull(sessionManager.currentSessionId)
+        assertEquals(0, workScheduler.enqueuedRequests.size)
     }
 
     @Test
@@ -98,7 +166,7 @@ class ModelDownloadOrchestratorImplTest {
     fun startDownloads_payloadTooLarge_setsError() =
         runTest {
             orchestrator.initializeWithStartupResult(modelsResult)
-            every { workScheduler.enqueue(any()) } throws DownloadWorkPayloadTooLargeException(fileSpecCount = 30)
+            workScheduler.enqueueFailure = DownloadWorkPayloadTooLargeException(fileSpecCount = 30)
 
             val started = orchestrator.startDownloads(wifiOnly = true)
 
@@ -117,17 +185,15 @@ class ModelDownloadOrchestratorImplTest {
         runTest {
             orchestrator.initializeWithStartupResult(modelsResult)
 
-            val enqueued = slot<DownloadWorkRequest>()
-            every { workScheduler.enqueue(capture(enqueued)) } returns Unit
-
             val started = orchestrator.startDownloads(wifiOnly = true)
 
             assertTrue(started)
             assertEquals(DownloadStatus.DOWNLOADING, orchestrator.downloadState.value.status)
-            verify(exactly = 1) { workScheduler.enqueue(any()) }
-            assertEquals("session-1", enqueued.captured.sessionId)
-            assertEquals(DownloadRequestKind.INITIALIZE_MODELS, enqueued.captured.requestKind)
-            assertTrue(enqueued.captured.wifiOnly)
+            assertEquals(1, workScheduler.enqueuedRequests.size)
+            val enqueued = workScheduler.enqueuedRequests.single()
+            assertEquals(sessionManager.currentSessionId, enqueued.sessionId)
+            assertEquals(DownloadRequestKind.INITIALIZE_MODELS, enqueued.requestKind)
+            assertTrue(enqueued.wifiOnly)
         }
 
     @Test
@@ -140,8 +206,12 @@ class ModelDownloadOrchestratorImplTest {
             val startedAgain = orchestrator.startDownloads(wifiOnly = true)
 
             assertTrue(startedAgain)
-            verify(exactly = 2) { workScheduler.enqueue(any()) }
-            verify(exactly = 2) { sessionManager.createNewSession() }
+            assertEquals(2, workScheduler.enqueuedRequests.size)
+            // Each start created a fresh session (createNewSession called twice)
+            assertNotEquals(
+                workScheduler.enqueuedRequests[0].sessionId,
+                workScheduler.enqueuedRequests[1].sessionId,
+            )
         }
 
     @Test
@@ -190,7 +260,7 @@ class ModelDownloadOrchestratorImplTest {
             orchestrator.pauseDownloads()
 
             assertEquals(DownloadStatus.PAUSED, orchestrator.downloadState.value.status)
-            verify(exactly = 2) { workScheduler.cancel() }
+            assertEquals(2, workScheduler.cancelCalls)
         }
 
     @Test
@@ -209,9 +279,9 @@ class ModelDownloadOrchestratorImplTest {
             )
             assertEquals(0f, orchestrator.downloadState.value.overallProgress)
             assertEquals(0, orchestrator.downloadState.value.modelsComplete)
-            verify(exactly = 2) { workScheduler.cancel() }
-            coVerify(exactly = 1) { workScheduler.cleanupTempFiles() }
-            verify(atLeast = 1) { speedTracker.clearAll() }
+            assertEquals(2, workScheduler.cancelCalls)
+            assertEquals(1, workScheduler.cleanupCalls)
+            assertTrue(speedTracker.clearAllCalls >= 1)
         }
 
     @Test
@@ -225,8 +295,12 @@ class ModelDownloadOrchestratorImplTest {
             orchestrator.resumeDownloads()
 
             assertEquals(DownloadStatus.DOWNLOADING, orchestrator.downloadState.value.status)
-            verify(exactly = 2) { workScheduler.enqueue(any()) }
-            verify(exactly = 2) { sessionManager.createNewSession() }
+            assertEquals(2, workScheduler.enqueuedRequests.size)
+            // Resume created a second session (createNewSession called twice)
+            assertNotEquals(
+                workScheduler.enqueuedRequests[0].sessionId,
+                workScheduler.enqueuedRequests[1].sessionId,
+            )
         }
 
     @Test
@@ -234,21 +308,19 @@ class ModelDownloadOrchestratorImplTest {
     fun retryFailed_preservesWifiOnlyPreference() =
         runTest {
             orchestrator.initializeWithStartupResult(modelsResult)
-            val enqueued = slot<DownloadWorkRequest>()
-            every { workScheduler.enqueue(capture(enqueued)) } returns Unit
 
             orchestrator.startDownloads(wifiOnly = true)
             orchestrator.retryFailed()
 
-            verify(exactly = 2) { workScheduler.enqueue(any()) }
-            assertTrue(enqueued.captured.wifiOnly)
+            assertEquals(2, workScheduler.enqueuedRequests.size)
+            assertTrue(workScheduler.enqueuedRequests.last().wifiOnly)
         }
 
     @Test
     @DisplayName("D4: hasRequiredStorage false sets ERROR and does not enqueue")
     fun startDownloads_insufficientStorage_setsErrorWithoutEnqueue() =
         runTest {
-            coEvery { deviceEnvironment.hasRequiredStorage(any()) } returns false
+            deviceEnvironment.hasStorage = false
             orchestrator.initializeWithStartupResult(modelsResult)
 
             val started = orchestrator.startDownloads(wifiOnly = true)
@@ -259,7 +331,7 @@ class ModelDownloadOrchestratorImplTest {
                 "Insufficient storage space. Need at least 15 GB free.",
                 orchestrator.downloadState.value.errorMessage,
             )
-            verify(exactly = 0) { workScheduler.enqueue(any()) }
+            assertEquals(0, workScheduler.enqueuedRequests.size)
         }
 
     @Test
@@ -306,8 +378,7 @@ class ModelDownloadOrchestratorImplTest {
                             allValid = true,
                         ),
                 )
-            val enqueued = mutableListOf<DownloadWorkRequest>()
-            every { workScheduler.enqueue(capture(enqueued)) } returns Unit
+            val enqueued = workScheduler.enqueuedRequests
 
             orchestrator.startDownloads(modelsResult = filteredResult, wifiOnly = true)
             // Pause, then resume — resume falls back to the cached startupModelsResult.

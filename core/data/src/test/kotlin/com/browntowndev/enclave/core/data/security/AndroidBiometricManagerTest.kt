@@ -2,26 +2,25 @@ package com.browntowndev.enclave.core.data.security
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.verify
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.robolectric.annotation.Config
 import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 import javax.crypto.Cipher
+import javax.crypto.spec.SecretKeySpec
 
 @ExtendWith(RobolectricExtension::class)
 @Config(sdk = [34])
 class AndroidBiometricManagerTest {
     private lateinit var context: Context
-    private lateinit var loggingPort: LoggingPort
+    private lateinit var loggingPort: FakeLoggingPort
     private lateinit var subject: AndroidBiometricManager
 
     @BeforeEach
@@ -32,7 +31,7 @@ class AndroidBiometricManagerTest {
             .edit()
             .clear()
             .commit()
-        loggingPort = mockk(relaxed = true)
+        loggingPort = FakeLoggingPort()
         subject = AndroidBiometricManager(context, loggingPort)
     }
 
@@ -71,13 +70,22 @@ class AndroidBiometricManagerTest {
     fun storeSecureBytesWithCipher_logsDoNotContainPlaintextSecret(): Unit =
         runTest {
             val secret = "super-secret-payload-987654"
-            val cipher = mockk<Cipher>(relaxed = true)
-            every { cipher.doFinal(any()) } returns byteArrayOf(1, 2, 3)
-            every { cipher.iv } returns ByteArray(12) { 7 }
+            // Real AES-GCM cipher (Robolectric runs the JVM JCE providers):
+            // doFinal encrypts for real and iv is a real generated 12-byte IV.
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            cipher.init(Cipher.ENCRYPT_MODE, SecretKeySpec(ByteArray(16) { 3 }, "AES"))
 
-            subject.storeSecureBytesWithCipher("test_store_key", secret.toByteArray(Charsets.UTF_8), cipher)
+            val result = subject.storeSecureBytesWithCipher("test_store_key", secret.toByteArray(Charsets.UTF_8), cipher)
 
-            verify { loggingPort.debug(any(), match { !it.contains(secret) }) }
-            verify { loggingPort.info(any(), match { !it.contains(secret) }) }
+            assertTrue(result.isSuccess)
+            // The encrypted payload and IV were persisted under the key.
+            val prefs = context.getSharedPreferences("biometric_prefs", Context.MODE_PRIVATE)
+            assertNotNull(prefs.getString("test_store_key_data", null))
+            assertNotNull(prefs.getString("test_store_key_iv", null))
+            // No recorded log message at any level contains the plaintext secret.
+            assertTrue(loggingPort.debugCalls.isNotEmpty())
+            assertTrue(loggingPort.debugCalls.all { (_, message) -> !message.contains(secret) })
+            assertTrue(loggingPort.infoCalls.isNotEmpty())
+            assertTrue(loggingPort.infoCalls.all { (_, message) -> !message.contains(secret) })
         }
 }

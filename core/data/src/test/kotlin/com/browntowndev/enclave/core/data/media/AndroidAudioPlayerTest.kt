@@ -1,8 +1,9 @@
 package com.browntowndev.enclave.core.data.media
 
 import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -21,12 +22,13 @@ import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 @Config(sdk = [34])
 class AndroidAudioPlayerTest {
     private lateinit var player: AndroidAudioPlayer
-    private val mockLogger: LoggingPort = mockk(relaxed = true)
-    private val mockContext: Context = mockk(relaxed = true)
+    private val fakeLogger: LoggingPort = FakeLoggingPort()
+    private lateinit var context: Context
 
     @BeforeEach
     fun setUp() {
-        player = AndroidAudioPlayer(mockContext, mockLogger)
+        context = ApplicationProvider.getApplicationContext()
+        player = AndroidAudioPlayer(context, fakeLogger)
     }
 
     @Test

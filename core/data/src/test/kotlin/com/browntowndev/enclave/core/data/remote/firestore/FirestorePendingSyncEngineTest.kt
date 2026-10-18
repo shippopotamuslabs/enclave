@@ -1,8 +1,10 @@
+@file:Suppress("ForbiddenMockKInTests")
+
+// MockK retained only for the Firebase Firestore SDK surface (FirebaseFirestore), which has no JVM fake.
+
 package com.browntowndev.enclave.core.data.remote.firestore
 
 import com.browntowndev.enclave.core.data.remote.EntitySyncAdapter
-import com.browntowndev.enclave.core.data.remote.FirestoreSensitiveFieldRepairer
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
@@ -12,7 +14,12 @@ import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class FirestorePendingSyncEngineTest {
     @Test
     fun `empty adapter payload stays pending because no cloud write occurred`() =
@@ -20,12 +27,9 @@ class FirestorePendingSyncEngineTest {
             val adapter = EmptyPayloadAdapter()
             val firestore = mockk<FirebaseFirestore>(relaxed = true)
             every { firestore.runBatch(any()) } returns Tasks.forResult(null)
-            val repairer = mockk<FirestoreSensitiveFieldRepairer>()
-            every { repairer.repairOutbound(any(), any(), any()) } answers { thirdArg() }
-            val ctx = mockk<FirestoreSyncContext>(relaxed = true)
-            every { ctx.firestore } returns firestore
-            every { ctx.firestoreSensitiveFieldRepairer } returns repairer
-            every { ctx.loggingPort } returns mockk<LoggingPort>(relaxed = true)
+            // Identity outbound repair, matching the previous `answers { thirdArg() }` stub.
+            val repairer = FakeFirestoreSensitiveFieldRepairer()
+            val ctx = testSyncContext(firestore = firestore, repairer = repairer)
             val engine =
                 FirestorePendingSyncEngine(
                     ctx = ctx,

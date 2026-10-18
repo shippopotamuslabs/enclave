@@ -10,17 +10,17 @@ internal data class BackfillSyncFeedResult(
     val nextSequence: Long,
 )
 
-internal class FirestoreSyncFeedCallableClient(
+internal open class FirestoreSyncFeedCallableClient(
     private val functions: FirebaseFunctions,
     private val loggingPort: LoggingPort,
 ) {
-    suspend fun backfillIfNeeded(userId: String): BackfillSyncFeedResult? = invokeBackfillCallable(userId)
+    open suspend fun backfillIfNeeded(userId: String): BackfillSyncFeedResult? = invokeBackfillCallable(userId)
 
     /**
      * Marks an account whose feed already has trigger-written events as initialized without
      * re-scanning every entity collection (migration path for pre-backfill accounts).
      */
-    suspend fun markFeedInitializedIfNeeded(userId: String): BackfillSyncFeedResult? =
+    open suspend fun markFeedInitializedIfNeeded(userId: String): BackfillSyncFeedResult? =
         invokeBackfillCallable(userId, mapOf("migrationOnly" to true))
 
     private suspend fun invokeBackfillCallable(

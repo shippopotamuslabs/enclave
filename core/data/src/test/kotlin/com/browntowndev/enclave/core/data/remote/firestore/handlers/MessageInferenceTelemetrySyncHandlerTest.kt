@@ -1,31 +1,32 @@
+@file:Suppress("ForbiddenMockKInTests")
+
+// MockK retained only for the Firebase Firestore SDK surface (DocumentSnapshot), which has no JVM fake.
+
 package com.browntowndev.enclave.core.data.remote.firestore.handlers
 
 import com.browntowndev.enclave.core.data.local.MessageInferenceTelemetryDao
-import com.browntowndev.enclave.core.data.local.MessageInferenceTelemetryEntity
 import com.browntowndev.enclave.core.data.mapper.telemetry.toEntity
+import com.browntowndev.enclave.core.data.remote.firestore.FakeMessageInferenceTelemetryDao
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncContext
+import com.browntowndev.enclave.core.data.remote.firestore.testSyncContext
 import com.browntowndev.enclave.core.data.remote.testFirestoreSyncDaos
-import com.browntowndev.enclave.core.data.repository.FakeLocalDataEncryptionService
-import com.browntowndev.enclave.core.data.security.SensitivePersistenceSelfHealer
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
 import com.browntowndev.enclave.domain.telemetry.TelemetryTestFixtures
 import com.google.firebase.firestore.DocumentSnapshot
-import com.google.firebase.firestore.FirebaseFirestore
-import io.mockk.coEvery
-import io.mockk.coVerify
 import io.mockk.mockk
-import io.mockk.slot
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import java.util.concurrent.atomic.AtomicBoolean
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class MessageInferenceTelemetrySyncHandlerTest {
-    private val telemetryDao = mockk<MessageInferenceTelemetryDao>(relaxed = true)
+    private val telemetryDao = FakeMessageInferenceTelemetryDao()
     private lateinit var handler: MessageInferenceTelemetrySyncHandler
-    private val upsertedSlot = slot<MessageInferenceTelemetryEntity>()
 
     companion object {
         private const val UPDATED_AT = 5_000L
@@ -34,7 +35,6 @@ class MessageInferenceTelemetrySyncHandlerTest {
     @BeforeEach
     fun setup() {
         handler = MessageInferenceTelemetrySyncHandler(createContext(telemetryDao))
-        coEvery { telemetryDao.upsert(capture(upsertedSlot)) } returns Unit
     }
 
     @Test
@@ -58,7 +58,7 @@ class MessageInferenceTelemetrySyncHandlerTest {
                     costUsdDecimal = null,
                     pendingSync = 0,
                 )
-            coEvery { telemetryDao.getById(existing.id) } returns existing
+            telemetryDao.entities[existing.id] = existing
 
             handler.upsertLocal(
                 entity = remote,
@@ -68,7 +68,7 @@ class MessageInferenceTelemetrySyncHandlerTest {
 
             // Coalesced merge matches the local row (except pendingSync), so the handler must not
             // upsert a remote doc that would have clobbered token columns with nulls.
-            coVerify(exactly = 0) { telemetryDao.upsert(any()) }
+            assertTrue(telemetryDao.upsertCalls.isEmpty())
         }
 
     @Test
@@ -91,7 +91,7 @@ class MessageInferenceTelemetrySyncHandlerTest {
                     completedAtMs = 9_999L,
                     pendingSync = 0,
                 )
-            coEvery { telemetryDao.getById(existing.id) } returns existing
+            telemetryDao.entities[existing.id] = existing
 
             handler.upsertLocal(
                 entity = remote,
@@ -99,29 +99,14 @@ class MessageInferenceTelemetrySyncHandlerTest {
                 overwrite = false,
             )
 
-            coVerify(exactly = 1) { telemetryDao.upsert(any()) }
-            val merged = upsertedSlot.captured
+            assertEquals(1, telemetryDao.upsertCalls.size)
+            val merged = telemetryDao.upsertCalls.single()
             assertEquals(1_000, merged.inputTokens)
             assertEquals(200, merged.outputTokens)
             assertEquals(9_999L, merged.completedAtMs)
             assertEquals(0, merged.pendingSync)
         }
 
-    private fun createContext(telemetryDao: MessageInferenceTelemetryDao): FirestoreSyncContext {
-        val localEncryption = FakeLocalDataEncryptionService()
-        val loggingPort = mockk<LoggingPort>(relaxed = true)
-        return FirestoreSyncContext(
-            firestore = mockk<FirebaseFirestore>(relaxed = true),
-            daos = testFirestoreSyncDaos(messageInferenceTelemetryDao = telemetryDao),
-            localEncryption = localEncryption,
-            sensitiveSelfHealer = SensitivePersistenceSelfHealer(localEncryption, loggingPort),
-            firestoreSensitiveFieldRepairer = mockk(relaxed = true),
-            cryptoManager = mockk<CryptoManagerPort>(relaxed = true),
-            loggingPort = loggingPort,
-            apiKeyManager = mockk(relaxed = true),
-            embeddingCoordinator = mockk(relaxed = true),
-            userIdProvider = { "user-1" },
-            purgeInProgress = AtomicBoolean(false),
-        )
-    }
+    private fun createContext(telemetryDao: MessageInferenceTelemetryDao): FirestoreSyncContext =
+        testSyncContext(daos = testFirestoreSyncDaos(messageInferenceTelemetryDao = telemetryDao))
 }

@@ -36,13 +36,13 @@ private data class ManageMemoriesSearchResult(
 )
 
 @Singleton
-class ManageMemoriesToolExecutor
+open class ManageMemoriesToolExecutor
     @Inject
     constructor(
         private val memoriesRepository: MemoriesRepository,
         private val embeddingEnginePort: EmbeddingEnginePort,
     ) : ToolExecutorPort {
-        override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
+        open override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
             require(request.toolName == ToolDefinition.MANAGE_MEMORIES.name) { "Unsupported tool" }
 
             val params = request.parameters as ManageMemoriesParams

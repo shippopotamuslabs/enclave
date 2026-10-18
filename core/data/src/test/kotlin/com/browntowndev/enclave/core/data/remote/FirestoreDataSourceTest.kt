@@ -1,7 +1,17 @@
+@file:Suppress("ForbiddenMockKInTests")
+// MockK is used only for Firebase SDK classes (FirebaseFirestore, DocumentReference/Snapshot, QuerySnapshot, CollectionReference, WriteBatch), third-party SDK types with no hand-writable fakes (ENC-28).
+
 package com.browntowndev.enclave.core.data.remote
 
-import android.util.Log
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import com.browntowndev.enclave.core.data.FakeApiCredentialsDao
+import com.browntowndev.enclave.core.data.FakeApiKeyManager
+import com.browntowndev.enclave.core.data.FakeChatDao
+import com.browntowndev.enclave.core.data.FakeChatSummaryDao
+import com.browntowndev.enclave.core.data.FakeDocumentDao
+import com.browntowndev.enclave.core.data.FakeEmbeddingDao
+import com.browntowndev.enclave.core.data.FakeFirestoreSyncPlaceholderDao
+import com.browntowndev.enclave.core.data.FakeMessageDaos
 import com.browntowndev.enclave.core.data.local.ChatDao
 import com.browntowndev.enclave.core.data.local.ChatEntity
 import com.browntowndev.enclave.core.data.local.ChatSummaryDao
@@ -17,7 +27,8 @@ import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
+import com.browntowndev.enclave.core.testing.FakeCryptoManagerPort
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.firestore.CollectionReference
 import com.google.firebase.firestore.DocumentChange
@@ -27,13 +38,9 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.QueryDocumentSnapshot
 import com.google.firebase.firestore.QuerySnapshot
 import com.google.firebase.firestore.SetOptions
-import io.mockk.coEvery
-import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.mockkStatic
 import io.mockk.slot
-import io.mockk.unmockkStatic
 import io.mockk.verify
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -43,44 +50,43 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
-import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import java.util.Date
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
 @OptIn(ExperimentalCoroutinesApi::class)
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class FirestoreDataSourceTest {
     private val firestore = mockk<FirebaseFirestore>()
-    private val chatDao = mockk<ChatDao>(relaxed = true)
-    private val messageDao = mockk<MessageDao>(relaxed = true)
-    private val apiCredentialsDao = mockk<com.browntowndev.enclave.core.data.local.ApiCredentialsDao>(relaxed = true)
-    private val apiKeyManager = mockk<com.browntowndev.enclave.core.data.security.ApiKeyManager>(relaxed = true)
-    private val cryptoManager = mockk<CryptoManagerPort>(relaxed = true)
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
+    private val chatDao = FakeChatDao()
+    private val messageDaos = FakeMessageDaos()
+    private val messageDao: MessageDao = messageDaos.dao
+    private val apiCredentialsDao = FakeApiCredentialsDao()
+    private val apiKeyManager = FakeApiKeyManager()
+    private val cryptoManager = FakeCryptoManagerPort()
+    private val loggingPort = FakeLoggingPort()
     private val testDispatcher = UnconfinedTestDispatcher()
     private val testScope = TestScope(testDispatcher)
-    private val embeddingCoordinator = mockk<com.browntowndev.enclave.core.data.sync.EmbeddingRegenerationCoordinator>(relaxed = true)
-    private val embeddingDao = mockk<com.browntowndev.enclave.core.data.local.EmbeddingDao>(relaxed = true)
-    private val chatSummaryDao = mockk<ChatSummaryDao>(relaxed = true)
-    private val documentDao = mockk<DocumentDao>(relaxed = true)
-    private val firestoreSyncPlaceholderDao = mockk<FirestoreSyncPlaceholderDao>(relaxed = true)
+    private val embeddingDao = FakeEmbeddingDao()
+    private val chatSummaryDao = FakeChatSummaryDao()
+    private val documentDao = FakeDocumentDao()
+    private val firestoreSyncPlaceholderDao = FakeFirestoreSyncPlaceholderDao()
     private lateinit var dataSource: FirestoreDataSource
 
     @BeforeEach
     fun setup() {
-        mockkStatic(Log::class)
-        every { Log.d(any<String>(), any<String>()) } returns 0
-        every { Log.e(any<String>(), any<String>()) } returns 0
-        every { Log.e(any<String>(), any<String>(), any<Throwable>()) } returns 0
-        every { Log.w(any<String>(), any<String>()) } returns 0
 
-        every { cryptoManager.hasCachedKey() } returns true
-        every { cryptoManager.encrypt(any()) } returns Result.success("encrypted".toByteArray())
-        every { cryptoManager.decrypt(any()) } answers { Result.success(String(it.invocation.args[0] as ByteArray)) }
+        cryptoManager.hasCachedKeyValue = true
+        cryptoManager.encryptResult = Result.success("encrypted".toByteArray())
 
         every { firestore.collection(any()) } returns mockk(relaxed = true)
         every { firestore.document(any()) } returns mockk(relaxed = true)
@@ -91,20 +97,7 @@ class FirestoreDataSourceTest {
                 firestore = firestore,
                 chatDao = chatDao,
                 messageDao = messageDao,
-                messageTranscriptSegmentDao = mockk(relaxed = true),
-                memoriesDao = mockk(relaxed = true),
-                webSearchSourceDao = mockk(relaxed = true),
-                ttsProviderDao = mockk(relaxed = true),
-                mediaProviderDao = mockk(relaxed = true),
-                apiModelConfigurationsDao = mockk(relaxed = true),
-                localModelsDao = mockk(relaxed = true),
                 apiCredentialsDao = apiCredentialsDao,
-                localModelConfigurationsDao = mockk(relaxed = true),
-                defaultModelsDao = mockk(relaxed = true),
-                studioMediaDao = mockk(relaxed = true),
-                studioAlbumDao = mockk(relaxed = true),
-                messageFileDao = mockk(relaxed = true),
-                messageVisionAnalysisDao = mockk(relaxed = true),
                 chatSummaryDao = chatSummaryDao,
                 embeddingDao = embeddingDao,
                 firestoreSyncPlaceholderDao = firestoreSyncPlaceholderDao,
@@ -114,13 +107,7 @@ class FirestoreDataSourceTest {
                 loggingPort = loggingPort,
                 externalScope = testScope,
                 userIdProvider = { "test-user-id" },
-                embeddingCoordinator = embeddingCoordinator,
             )
-    }
-
-    @AfterEach
-    fun tearDown() {
-        unmockkStatic(Log::class)
     }
 
     // NOTE: Pre-existing nested classes verifying the per-collection snapshot-listener
@@ -143,31 +130,16 @@ class FirestoreDataSourceTest {
             testScope.runTest {
                 val nullUserIdSource =
                     createTestFirestoreDataSource(
-                        documentDao = mockk(relaxed = true),
                         firestore = firestore,
                         chatDao = chatDao,
                         messageDao = messageDao,
-                        messageTranscriptSegmentDao = mockk(relaxed = true),
                         cryptoManager = cryptoManager,
                         loggingPort = loggingPort,
                         externalScope = testScope,
                         userIdProvider = { null },
                         apiCredentialsDao = apiCredentialsDao,
-                        apiModelConfigurationsDao = mockk(relaxed = true),
-                        localModelsDao = mockk(relaxed = true),
-                        localModelConfigurationsDao = mockk(relaxed = true),
-                        defaultModelsDao = mockk(relaxed = true),
-                        studioMediaDao = mockk(relaxed = true),
-                        studioAlbumDao = mockk(relaxed = true),
-                        memoriesDao = mockk(relaxed = true),
-                        ttsProviderDao = mockk(relaxed = true),
-                        mediaProviderDao = mockk(relaxed = true),
                         apiKeyManager = apiKeyManager,
-                        messageVisionAnalysisDao = mockk(relaxed = true),
-                        messageFileDao = mockk(relaxed = true),
-                        webSearchSourceDao = mockk(relaxed = true),
                         chatSummaryDao = chatSummaryDao,
-                        embeddingCoordinator = embeddingCoordinator,
                         embeddingDao = embeddingDao,
                         localEncryption = FakeLocalDataEncryptionService(),
                     )
@@ -211,16 +183,16 @@ class FirestoreDataSourceTest {
                     )
                 val msgWithFiles = MessageWithFiles(msgEntity, emptyList())
 
-                coEvery { chatDao.getClaimedForSync() } returns listOf(chatEntity)
-                coEvery { messageDao.getClaimedForSync() } returns listOf(msgWithFiles)
+                chatDao.claimedForSyncResult = listOf(chatEntity)
+                messageDaos.query.claimedForSyncResult = listOf(msgWithFiles)
                 every { firestore.runBatch(any<com.google.firebase.firestore.WriteBatch.Function>()) } returns Tasks.forResult(null)
 
                 val result = dataSource.syncAllLocalDataToCloud()
 
                 assertTrue(result.isSuccess)
                 verify { firestore.runBatch(any<com.google.firebase.firestore.WriteBatch.Function>()) }
-                coVerify { chatDao.markSynced(listOf(chatId)) }
-                coVerify { messageDao.markSynced(listOf(messageId)) }
+                assertEquals(listOf(listOf(chatId)), chatDao.markSyncedCalls)
+                assertEquals(listOf(listOf(messageId)), messageDaos.sync.markSyncedCalls)
             }
 
         @Test
@@ -229,8 +201,8 @@ class FirestoreDataSourceTest {
             testScope.runTest {
                 val chatEntity =
                     ChatEntity(ChatId("chat-1"), "Test Chat", java.util.Date(1000L), java.util.Date(2000L), false, pendingSync = 1)
-                coEvery { chatDao.getClaimedForSync() } returns listOf(chatEntity)
-                coEvery { messageDao.getClaimedForSync() } returns emptyList()
+                chatDao.claimedForSyncResult = listOf(chatEntity)
+                messageDaos.query.claimedForSyncResult = emptyList()
                 every { firestore.runBatch(any<com.google.firebase.firestore.WriteBatch.Function>()) } returns
                     Tasks.forException(RuntimeException("Firestore write failed"))
 
@@ -249,31 +221,16 @@ class FirestoreDataSourceTest {
             testScope.runTest {
                 val nullUserSource =
                     createTestFirestoreDataSource(
-                        documentDao = mockk(relaxed = true),
                         firestore = firestore,
                         chatDao = chatDao,
                         messageDao = messageDao,
-                        messageTranscriptSegmentDao = mockk(relaxed = true),
                         cryptoManager = cryptoManager,
                         loggingPort = loggingPort,
                         externalScope = testScope,
                         userIdProvider = { null },
                         apiCredentialsDao = apiCredentialsDao,
-                        apiModelConfigurationsDao = mockk(relaxed = true),
-                        localModelsDao = mockk(relaxed = true),
-                        localModelConfigurationsDao = mockk(relaxed = true),
-                        defaultModelsDao = mockk(relaxed = true),
-                        studioMediaDao = mockk(relaxed = true),
-                        studioAlbumDao = mockk(relaxed = true),
-                        memoriesDao = mockk(relaxed = true),
-                        ttsProviderDao = mockk(relaxed = true),
-                        mediaProviderDao = mockk(relaxed = true),
                         apiKeyManager = apiKeyManager,
-                        messageVisionAnalysisDao = mockk(relaxed = true),
-                        messageFileDao = mockk(relaxed = true),
-                        webSearchSourceDao = mockk(relaxed = true),
                         chatSummaryDao = chatSummaryDao,
-                        embeddingCoordinator = embeddingCoordinator,
                         embeddingDao = embeddingDao,
                         localEncryption = FakeLocalDataEncryptionService(),
                     )
@@ -288,7 +245,7 @@ class FirestoreDataSourceTest {
         @DisplayName("returns failure when vault is locked")
         fun returnsFailureWhenVaultLocked() =
             testScope.runTest {
-                every { cryptoManager.hasCachedKey() } returns false
+                cryptoManager.hasCachedKeyValue = false
 
                 val result = dataSource.syncPendingChanges()
 
@@ -299,14 +256,14 @@ class FirestoreDataSourceTest {
         @DisplayName("returns success and marks synced when no pending data")
         fun returnsSuccessWithNoPendingData() =
             testScope.runTest {
-                coEvery { chatDao.getClaimedForSync() } returns emptyList()
-                coEvery { messageDao.getClaimedForSync() } returns emptyList()
+                chatDao.claimedForSyncResult = emptyList()
+                messageDaos.query.claimedForSyncResult = emptyList()
 
                 val result = dataSource.syncPendingChanges()
 
                 assertTrue(result.isSuccess)
-                coVerify(exactly = 0) { chatDao.markSynced(any()) }
-                coVerify(exactly = 0) { messageDao.markSynced(any()) }
+                assertTrue(chatDao.markSyncedCalls.isEmpty())
+                assertTrue(messageDaos.sync.markSyncedCalls.isEmpty())
             }
 
         @Test
@@ -336,8 +293,8 @@ class FirestoreDataSourceTest {
                     com.browntowndev.enclave.core.data.local
                         .MessageWithFiles(msgEntity, emptyList())
 
-                coEvery { chatDao.getClaimedForSync() } returns listOf(chatEntity)
-                coEvery { messageDao.getClaimedForSync() } returns listOf(msgWithFiles)
+                chatDao.claimedForSyncResult = listOf(chatEntity)
+                messageDaos.query.claimedForSyncResult = listOf(msgWithFiles)
                 every { firestore.runBatch(any<com.google.firebase.firestore.WriteBatch.Function>()) } returns
                     com.google.android.gms.tasks.Tasks
                         .forResult(null)
@@ -346,8 +303,8 @@ class FirestoreDataSourceTest {
 
                 assertTrue(result.isSuccess)
                 verify { firestore.runBatch(any<com.google.firebase.firestore.WriteBatch.Function>()) }
-                coVerify { chatDao.markSynced(listOf(chatId)) }
-                coVerify { messageDao.markSynced(listOf(messageId)) }
+                assertEquals(listOf(listOf(chatId)), chatDao.markSyncedCalls)
+                assertEquals(listOf(listOf(messageId)), messageDaos.sync.markSyncedCalls)
             }
 
         @Test
@@ -360,20 +317,7 @@ class FirestoreDataSourceTest {
                         firestore = firestore,
                         chatDao = chatDao,
                         messageDao = messageDao,
-                        messageTranscriptSegmentDao = mockk(relaxed = true),
-                        memoriesDao = mockk(relaxed = true),
-                        webSearchSourceDao = mockk(relaxed = true),
-                        ttsProviderDao = mockk(relaxed = true),
-                        mediaProviderDao = mockk(relaxed = true),
-                        apiModelConfigurationsDao = mockk(relaxed = true),
-                        localModelsDao = mockk(relaxed = true),
                         apiCredentialsDao = apiCredentialsDao,
-                        localModelConfigurationsDao = mockk(relaxed = true),
-                        defaultModelsDao = mockk(relaxed = true),
-                        studioMediaDao = mockk(relaxed = true),
-                        studioAlbumDao = mockk(relaxed = true),
-                        messageFileDao = mockk(relaxed = true),
-                        messageVisionAnalysisDao = mockk(relaxed = true),
                         chatSummaryDao = chatSummaryDao,
                         embeddingDao = embeddingDao,
                         localEncryption = FakeLocalDataEncryptionService(),
@@ -382,7 +326,6 @@ class FirestoreDataSourceTest {
                         loggingPort = loggingPort,
                         externalScope = testScope,
                         userIdProvider = { "test-user-id" },
-                        embeddingCoordinator = embeddingCoordinator,
                     )
                 val chatId = ChatId("chat-local")
                 val chatEntity =
@@ -395,8 +338,8 @@ class FirestoreDataSourceTest {
                         pendingSync = 1,
                     )
 
-                coEvery { chatDao.getClaimedForSync() } returns listOf(chatEntity)
-                coEvery { messageDao.getClaimedForSync() } returns emptyList()
+                chatDao.claimedForSyncResult = listOf(chatEntity)
+                messageDaos.query.claimedForSyncResult = emptyList()
                 every { firestore.runBatch(any<com.google.firebase.firestore.WriteBatch.Function>()) } returns
                     com.google.android.gms.tasks.Tasks
                         .forResult(null)
@@ -404,8 +347,8 @@ class FirestoreDataSourceTest {
                 val result = source.syncPendingChanges()
 
                 assertTrue(result.isSuccess)
-                verify(exactly = 0) { cryptoManager.encrypt(any()) }
-                coVerify { chatDao.markSynced(listOf(chatId)) }
+                assertTrue(cryptoManager.encryptCalls.isEmpty())
+                assertEquals(listOf(listOf(chatId)), chatDao.markSyncedCalls)
             }
 
         @Test
@@ -418,20 +361,7 @@ class FirestoreDataSourceTest {
                         firestore = firestore,
                         chatDao = chatDao,
                         messageDao = messageDao,
-                        messageTranscriptSegmentDao = mockk(relaxed = true),
-                        memoriesDao = mockk(relaxed = true),
-                        webSearchSourceDao = mockk(relaxed = true),
-                        ttsProviderDao = mockk(relaxed = true),
-                        mediaProviderDao = mockk(relaxed = true),
-                        apiModelConfigurationsDao = mockk(relaxed = true),
-                        localModelsDao = mockk(relaxed = true),
                         apiCredentialsDao = apiCredentialsDao,
-                        localModelConfigurationsDao = mockk(relaxed = true),
-                        defaultModelsDao = mockk(relaxed = true),
-                        studioMediaDao = mockk(relaxed = true),
-                        studioAlbumDao = mockk(relaxed = true),
-                        messageFileDao = mockk(relaxed = true),
-                        messageVisionAnalysisDao = mockk(relaxed = true),
                         chatSummaryDao = chatSummaryDao,
                         embeddingDao = embeddingDao,
                         localEncryption = FakeLocalDataEncryptionService(),
@@ -440,7 +370,6 @@ class FirestoreDataSourceTest {
                         loggingPort = loggingPort,
                         externalScope = testScope,
                         userIdProvider = { "test-user-id" },
-                        embeddingCoordinator = embeddingCoordinator,
                     )
                 val chatId = ChatId("chat-plain")
                 val chatEntity =
@@ -453,8 +382,8 @@ class FirestoreDataSourceTest {
                         pendingSync = 1,
                     )
 
-                coEvery { chatDao.getClaimedForSync() } returns listOf(chatEntity)
-                coEvery { messageDao.getClaimedForSync() } returns emptyList()
+                chatDao.claimedForSyncResult = listOf(chatEntity)
+                messageDaos.query.claimedForSyncResult = emptyList()
                 every { firestore.runBatch(any<com.google.firebase.firestore.WriteBatch.Function>()) } returns
                     com.google.android.gms.tasks.Tasks
                         .forResult(null)
@@ -462,9 +391,9 @@ class FirestoreDataSourceTest {
                 val result = source.syncPendingChanges()
 
                 assertTrue(result.isSuccess)
-                coVerify { chatDao.upsert(match { it.id == chatId && it.name == "PCENC:v1:aes-gcm:Plain Chat" }) }
+                assertTrue(chatDao.upsertCalls.any { it.id == chatId && it.name == "PCENC:v1:aes-gcm:Plain Chat" })
                 verify { firestore.runBatch(any<com.google.firebase.firestore.WriteBatch.Function>()) }
-                coVerify { chatDao.markSynced(listOf(chatId)) }
+                assertEquals(listOf(listOf(chatId)), chatDao.markSyncedCalls)
             }
 
         @Test
@@ -483,8 +412,8 @@ class FirestoreDataSourceTest {
                             pendingSync = 1,
                         )
                     }
-                coEvery { chatDao.getClaimedForSync() } returns chats
-                coEvery { messageDao.getClaimedForSync() } returns emptyList()
+                chatDao.claimedForSyncResult = chats
+                messageDaos.query.claimedForSyncResult = emptyList()
                 every { firestore.runBatch(any<com.google.firebase.firestore.WriteBatch.Function>()) } returns
                     com.google.android.gms.tasks.Tasks
                         .forResult(null)
@@ -501,8 +430,8 @@ class FirestoreDataSourceTest {
             testScope.runTest {
                 val chatEntity =
                     ChatEntity(ChatId("c1"), "PCENC:v1:aes-gcm:Chat", java.util.Date(), java.util.Date(), false, pendingSync = 1)
-                coEvery { chatDao.getClaimedForSync() } returns listOf(chatEntity)
-                coEvery { messageDao.getClaimedForSync() } returns emptyList()
+                chatDao.claimedForSyncResult = listOf(chatEntity)
+                messageDaos.query.claimedForSyncResult = emptyList()
                 every { firestore.runBatch(any<com.google.firebase.firestore.WriteBatch.Function>()) } returns
                     com.google.android.gms.tasks.Tasks
                         .forException(RuntimeException("Batch failed"))
@@ -510,7 +439,7 @@ class FirestoreDataSourceTest {
                 val result = dataSource.syncPendingChanges()
 
                 assertTrue(result.isFailure)
-                coVerify(exactly = 0) { chatDao.markSynced(any()) }
+                assertTrue(chatDao.markSyncedCalls.isEmpty())
             }
 
         @Test
@@ -557,16 +486,16 @@ class FirestoreDataSourceTest {
                         pendingSync = 1,
                     )
 
-                coEvery { apiCredentialsDao.getClaimedForSync() } returns listOf(entity)
-                coEvery { chatDao.getClaimedForSync() } returns emptyList()
-                coEvery { messageDao.getClaimedForSync() } returns emptyList()
+                apiCredentialsDao.claimedForSyncResult = listOf(entity)
+                chatDao.claimedForSyncResult = emptyList()
+                messageDaos.query.claimedForSyncResult = emptyList()
 
                 every { firestore.runBatch(any<com.google.firebase.firestore.WriteBatch.Function>()) } returns Tasks.forResult(null)
 
                 val result = dataSource.syncPendingChanges()
 
                 assertTrue(result.isSuccess)
-                coVerify { apiCredentialsDao.markSynced(listOf(id)) }
+                assertEquals(listOf(listOf(id)), apiCredentialsDao.markSyncedCalls)
             }
 
         // Removed: pullsApiCredentialsFromFirestore — verified the obsolete per-collection
@@ -829,12 +758,10 @@ class FirestoreDataSourceTest {
                 val localEncryption =
                     com.browntowndev.enclave.core.data.repository
                         .FakeLocalDataEncryptionService()
-                val chatDao = mockk<com.browntowndev.enclave.core.data.local.ChatDao>(relaxed = true)
-                val captured =
-                    com.browntowndev.enclave.core.data.remote.firestore
-                        .captureChatUpserts(chatDao)
-                val cryptoManager = mockk<CryptoManagerPort>(relaxed = true)
-                every { cryptoManager.hasCachedKey() } returns true
+                val chatDao = FakeChatDao()
+                val captured = chatDao.upsertCalls
+                val cryptoManager = FakeCryptoManagerPort()
+                cryptoManager.hasCachedKeyValue = true
                 val stateStore = FakeFirestoreSyncStateStore(sequence = 0)
                 val hydration =
                     com.browntowndev.enclave.core.data.remote.firestore.buildChatHydrationApplier(
@@ -856,6 +783,7 @@ class FirestoreDataSourceTest {
                         eventDispatcher = integration,
                         syncStateStore = stateStore,
                         externalScope = this,
+                        chatDao = FakeChatDao().also { it.countActiveChatsResult = 1 },
                     )
                 hydration.sourceDocuments.put(
                     "users/alice/chats/chat-1",
@@ -891,7 +819,12 @@ class FirestoreDataSourceTest {
         @Test
         fun `SCN-LIVE-001 listener attaches to sync events only`() =
             runTest {
-                val harness = EventFeedHarness(userId = "alice", vaultUnlocked = true, lastAppliedSequence = 7)
+                val harness = EventFeedHarness(userId = "alice", vaultUnlocked = true, lastAppliedSequence = 7,
+                            chatDao = FakeChatDao().also { it.countActiveChatsResult = 1 },
+                            eventDispatcher = RecordOnlyDispatcher(),
+                            syncStateStore = FakeFirestoreSyncStateStore(sequence = 7),
+                            externalScope = testScope,
+                        )
 
                 harness.dataSource.startListening()
                 advanceUntilIdle()
@@ -912,12 +845,10 @@ class FirestoreDataSourceTest {
                 val localEncryption =
                     com.browntowndev.enclave.core.data.repository
                         .FakeLocalDataEncryptionService()
-                val chatDao = mockk<com.browntowndev.enclave.core.data.local.ChatDao>(relaxed = true)
-                val captured =
-                    com.browntowndev.enclave.core.data.remote.firestore
-                        .captureChatUpserts(chatDao)
-                val cryptoManager = mockk<CryptoManagerPort>(relaxed = true)
-                every { cryptoManager.hasCachedKey() } returns true
+                val chatDao = FakeChatDao()
+                val captured = chatDao.upsertCalls
+                val cryptoManager = FakeCryptoManagerPort()
+                cryptoManager.hasCachedKeyValue = true
                 val stateStore = FakeFirestoreSyncStateStore(sequence = 20)
                 val hydration =
                     com.browntowndev.enclave.core.data.remote.firestore.buildChatHydrationApplier(
@@ -938,6 +869,8 @@ class FirestoreDataSourceTest {
                         lastAppliedSequence = 20,
                         eventDispatcher = integration,
                         syncStateStore = stateStore,
+                        chatDao = FakeChatDao().also { it.countActiveChatsResult = 1 },
+                        externalScope = testScope,
                     )
                 hydration.sourceDocuments.put(
                     "users/alice/chats/chat-21",
@@ -969,6 +902,9 @@ class FirestoreDataSourceTest {
                         vaultUnlocked = true,
                         lastAppliedSequence = 20,
                         eventDispatcher = dispatcher,
+                        chatDao = FakeChatDao().also { it.countActiveChatsResult = 1 },
+                        syncStateStore = FakeFirestoreSyncStateStore(sequence = 20),
+                        externalScope = testScope,
                     )
 
                 harness.dataSource.startListening()
@@ -1006,6 +942,9 @@ class FirestoreDataSourceTest {
                         vaultUnlocked = true,
                         lastAppliedSequence = 761,
                         eventDispatcher = dispatcher,
+                        chatDao = FakeChatDao().also { it.countActiveChatsResult = 1 },
+                        syncStateStore = FakeFirestoreSyncStateStore(sequence = 761),
+                        externalScope = testScope,
                     )
 
                 harness.dataSource.startListening()
@@ -1031,6 +970,9 @@ class FirestoreDataSourceTest {
                         vaultUnlocked = true,
                         lastAppliedSequence = 761,
                         eventDispatcher = dispatcher,
+                        chatDao = FakeChatDao().also { it.countActiveChatsResult = 1 },
+                        syncStateStore = FakeFirestoreSyncStateStore(sequence = 761),
+                        externalScope = testScope,
                     )
 
                 harness.dataSource.startListening()
@@ -1083,6 +1025,9 @@ class FirestoreDataSourceTest {
                         vaultUnlocked = true,
                         lastAppliedSequence = 0,
                         externalScope = this,
+                        chatDao = FakeChatDao().also { it.countActiveChatsResult = 1 },
+                        eventDispatcher = RecordOnlyDispatcher(),
+                        syncStateStore = FakeFirestoreSyncStateStore(sequence = 0),
                     )
                 harness.feedGateway.pages.add(
                     (1L..200L).map { sequence -> syncEvent(sequence, "chats", "chat-$sequence") },
@@ -1109,8 +1054,8 @@ class FirestoreDataSourceTest {
         @Test
         fun `SCN-HYDRATION-001 replay resets stale cursor when Room is empty`() =
             runTest(testDispatcher) {
-                val chatDao = mockk<com.browntowndev.enclave.core.data.local.ChatDao>(relaxed = true)
-                coEvery { chatDao.countActiveChats() } returns 0
+                val chatDao = FakeChatDao()
+                chatDao.countActiveChatsResult = 0
                 val harness =
                     EventFeedHarness(
                         userId = "alice",
@@ -1118,6 +1063,8 @@ class FirestoreDataSourceTest {
                         lastAppliedSequence = 500,
                         chatDao = chatDao,
                         externalScope = this,
+                        eventDispatcher = RecordOnlyDispatcher(),
+                        syncStateStore = FakeFirestoreSyncStateStore(sequence = 500),
                     )
                 harness.feedGateway.pages.add(
                     listOf(syncEvent(1L, "chats", "chat-1")),
@@ -1139,7 +1086,12 @@ class FirestoreDataSourceTest {
         @Test
         fun `SCN-PURGE-001 purge detaches event listener`() =
             runTest {
-                val harness = EventFeedHarness(userId = "alice", vaultUnlocked = true, lastAppliedSequence = 0)
+                val harness = EventFeedHarness(userId = "alice", vaultUnlocked = true, lastAppliedSequence = 0,
+                            chatDao = FakeChatDao().also { it.countActiveChatsResult = 1 },
+                            eventDispatcher = RecordOnlyDispatcher(),
+                            syncStateStore = FakeFirestoreSyncStateStore(sequence = 0),
+                            externalScope = testScope,
+                        )
                 harness.stubSuccessfulUserDelete()
 
                 harness.dataSource.startListening()
@@ -1155,8 +1107,8 @@ class FirestoreDataSourceTest {
             userId: String?,
             vaultUnlocked: Boolean,
         ): FirestoreDataSource {
-            val cm = mockk<CryptoManagerPort>(relaxed = true)
-            every { cm.hasCachedKey() } returns vaultUnlocked
+            val cm = FakeCryptoManagerPort()
+            cm.hasCachedKeyValue = vaultUnlocked
             return createTestFirestoreDataSource(
                 firestore = mockk(relaxed = true),
                 cryptoManager = cm,
@@ -1187,19 +1139,21 @@ class FirestoreDataSourceTest {
                 emittedAtMillis = 1700000001001,
             )
 
+        // No default arguments anywhere in this constructor: Kotlin emits a
+        // synthetic second constructor for defaulted parameters, and the
+        // JUnit 4 TestClass the Apter Robolectric extension builds for every
+        // nested class rejects classes with more than one constructor
+        // ("Test class can only have one constructor"), which silently
+        // killed this whole test class at discovery. Call sites pass the
+        // former defaults explicitly.
         private inner class EventFeedHarness(
             userId: String,
             vaultUnlocked: Boolean,
             lastAppliedSequence: Long,
-            chatDao: com.browntowndev.enclave.core.data.local.ChatDao =
-                mockk<com.browntowndev.enclave.core.data.local.ChatDao>(relaxed = true).also {
-                    coEvery { it.countActiveChats() } returns 1
-                },
-            eventDispatcher: com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncEventDispatcher =
-                RecordOnlyDispatcher(),
-            syncStateStore: com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncStateStore =
-                FakeFirestoreSyncStateStore(sequence = lastAppliedSequence),
-            externalScope: CoroutineScope = testScope,
+            chatDao: com.browntowndev.enclave.core.data.local.ChatDao,
+            eventDispatcher: com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncEventDispatcher,
+            syncStateStore: com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncStateStore,
+            externalScope: CoroutineScope,
         ) {
             private val applierDelegate = eventDispatcher
             val feedGateway = RecordingFeedGateway()
@@ -1209,8 +1163,8 @@ class FirestoreDataSourceTest {
             val dataSource: FirestoreDataSource
 
             init {
-                val cm = mockk<CryptoManagerPort>(relaxed = true)
-                every { cm.hasCachedKey() } returns vaultUnlocked
+                val cm = FakeCryptoManagerPort()
+                cm.hasCachedKeyValue = vaultUnlocked
                 dataSource =
                     createTestFirestoreDataSource(
                         firestore = firestore,
@@ -1416,12 +1370,11 @@ class FirestoreDataSourceTest {
             }
 
         private fun pendingChatDataSource(capture: PendingChatUploadCapture): FirestoreDataSource {
-            val chatDaoLocal = mockk<ChatDao>(relaxed = true)
+            val chatDaoLocal = FakeChatDao()
             val firestoreLocal = capture.firestore
-            val cm = mockk<CryptoManagerPort>(relaxed = true)
-            every { cm.hasCachedKey() } returns true
-            coEvery { chatDaoLocal.claimPending() } returns Unit
-            coEvery { chatDaoLocal.getClaimedForSync() } returns
+            val cm = FakeCryptoManagerPort()
+            cm.hasCachedKeyValue = true
+            chatDaoLocal.claimedForSyncResult =
                 listOf(
                     ChatEntity(
                         id = ChatId("chat-1"),
@@ -1434,7 +1387,6 @@ class FirestoreDataSourceTest {
                         deleted = false,
                     ),
                 )
-            coEvery { chatDaoLocal.markSynced(listOf(ChatId("chat-1"))) } returns Unit
             capture.stub()
             return createTestFirestoreDataSource(
                 firestore = firestoreLocal,

@@ -1,3 +1,6 @@
+@file:Suppress("ForbiddenMockKInTests")
+// MockK is used only for com.google.firebase.firestore.DocumentSnapshot, a Firebase SDK class with no public constructor (ENC-28).
+
 package com.browntowndev.enclave.core.data.remote
 
 import com.browntowndev.enclave.core.data.mapper.telemetry.toEntity

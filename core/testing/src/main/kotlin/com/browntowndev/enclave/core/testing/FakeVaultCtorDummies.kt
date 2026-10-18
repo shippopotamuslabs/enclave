@@ -56,13 +56,19 @@ class FakeModelConfigFetcher : ModelConfigFetcherPort {
     var parsedCatalogResult: Result<ParsedModelCatalog> =
         Result.failure(UnsupportedOperationException("not used in tests"))
 
-    override suspend fun fetchRemoteConfig(): Result<List<LocalModelAsset>> = Result.success(emptyList())
+    /** Result returned by [fetchRemoteConfig]; defaults to the historical empty success. */
+    var fetchRemoteConfigResult: Result<List<LocalModelAsset>> = Result.success(emptyList())
+
+    /** Value returned by [toLocalModelAssets]; defaults to the historical empty list. */
+    var localModelAssetsResult: List<LocalModelAsset> = emptyList()
+
+    override suspend fun fetchRemoteConfig(): Result<List<LocalModelAsset>> = fetchRemoteConfigResult
 
     override suspend fun fetchParsedCatalog(): Result<ParsedModelCatalog> = parsedCatalogResult
 
     override suspend fun getPersistedParsedCatalog(): Result<ParsedModelCatalog> = persistedCatalogResult
 
-    override fun toLocalModelAssets(assets: List<RemoteModelAsset>): List<LocalModelAsset> = emptyList()
+    override fun toLocalModelAssets(assets: List<RemoteModelAsset>): List<LocalModelAsset> = localModelAssetsResult
 }
 
 class FakeTransactionProvider : TransactionProvider {

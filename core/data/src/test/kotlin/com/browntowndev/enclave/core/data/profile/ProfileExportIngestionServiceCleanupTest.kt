@@ -1,31 +1,34 @@
 package com.browntowndev.enclave.core.data.profile
 
-import com.browntowndev.enclave.core.data.local.ProfileAnalysisRunDao
-import com.browntowndev.enclave.core.data.local.ProfileCorpusDao
-import com.browntowndev.enclave.core.data.local.ProfileFindingsDao
+import androidx.test.core.app.ApplicationProvider
+import com.browntowndev.enclave.core.data.FakeProfileAnalysisRunDao
+import com.browntowndev.enclave.core.data.FakeProfileCorpusDao
+import com.browntowndev.enclave.core.data.FakeProfileFindingsDao
 import com.browntowndev.enclave.core.data.profile.parse.AnthropicExportParser
 import com.browntowndev.enclave.core.data.profile.parse.GenericFallbackParser
 import com.browntowndev.enclave.core.data.profile.parse.GoogleExportParser
 import com.browntowndev.enclave.core.data.profile.parse.OpenAiExportParser
 import com.browntowndev.enclave.core.data.profile.parse.XaiExportParser
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import java.io.File
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class ProfileExportIngestionServiceCleanupTest {
-    private val corpusDao = mockk<ProfileCorpusDao>(relaxed = true)
-    private val findingsDao = mockk<ProfileFindingsDao>(relaxed = true)
-    private val runDao = mockk<ProfileAnalysisRunDao>(relaxed = true)
-    private val context = mockk<android.content.Context>(relaxed = true)
+    private val corpusDao = FakeProfileCorpusDao()
+    private val findingsDao = FakeProfileFindingsDao()
+    private val runDao = FakeProfileAnalysisRunDao()
     private lateinit var service: ProfileExportIngestionService
 
     @BeforeEach
     fun setup() {
-        every { context.cacheDir } returns File(System.getProperty("java.io.tmpdir") ?: "/tmp")
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         service =
             ProfileExportIngestionService(
                 context = context,
@@ -45,8 +48,8 @@ class ProfileExportIngestionServiceCleanupTest {
         runTest {
             service.clearCorpus("run-1")
 
-            coVerify { corpusDao.deleteMessagesForRun("run-1") }
-            coVerify { corpusDao.deleteConversationsForRun("run-1") }
+            assertEquals(listOf("run-1"), corpusDao.deleteMessagesForRunCalls)
+            assertEquals(listOf("run-1"), corpusDao.deleteConversationsForRunCalls)
         }
 
     @Test
@@ -54,10 +57,10 @@ class ProfileExportIngestionServiceCleanupTest {
         runTest {
             service.clearAll("run-2")
 
-            coVerify { corpusDao.deleteMessagesForRun("run-2") }
-            coVerify { corpusDao.deleteConversationsForRun("run-2") }
-            coVerify { findingsDao.deleteAll("run-2") }
-            coVerify { runDao.delete("run-2") }
+            assertEquals(listOf("run-2"), corpusDao.deleteMessagesForRunCalls)
+            assertEquals(listOf("run-2"), corpusDao.deleteConversationsForRunCalls)
+            assertEquals(listOf("run-2"), findingsDao.deleteAllCalls)
+            assertEquals(listOf("run-2"), runDao.deleteCalls)
         }
 
     @Test
@@ -65,10 +68,10 @@ class ProfileExportIngestionServiceCleanupTest {
         runTest {
             // clearCorpus should NOT delete findings
             service.clearCorpus("run-3")
-            coVerify(exactly = 0) { findingsDao.deleteAll("run-3") }
+            assertTrue(findingsDao.deleteAllCalls.isEmpty())
 
             // clearAll SHOULD delete findings
             service.clearAll("run-3")
-            coVerify(exactly = 1) { findingsDao.deleteAll("run-3") }
+            assertEquals(listOf("run-3"), findingsDao.deleteAllCalls)
         }
 }

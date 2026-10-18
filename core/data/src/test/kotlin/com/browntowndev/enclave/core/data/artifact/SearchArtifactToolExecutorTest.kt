@@ -1,6 +1,5 @@
 package com.browntowndev.enclave.core.data.artifact
 
-import androidx.sqlite.db.SupportSQLiteQuery
 import com.browntowndev.enclave.core.data.local.DocumentDao
 import com.browntowndev.enclave.core.data.local.DocumentEntity
 import com.browntowndev.enclave.core.data.repository.FakeLocalDataEncryptionService
@@ -10,11 +9,8 @@ import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.SearchArtifactParams
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
-import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.mockk
-import io.mockk.slot
+import com.browntowndev.enclave.core.data.FakeDocumentDao
+import com.browntowndev.enclave.core.testing.FakeEmbeddingEngine
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -25,8 +21,8 @@ import java.nio.charset.StandardCharsets
 class SearchArtifactToolExecutorTest {
     private val enc = CryptoAtRestEncryptionService.ENVELOPE_PREFIX
 
-    private val documentDao = mockk<DocumentDao>()
-    private val embeddingEngine = mockk<EmbeddingEnginePort>()
+    private val documentDao = FakeDocumentDao()
+    private val embeddingEngine = FakeEmbeddingEngine()
     private val encFake = FakeLocalDataEncryptionService()
     private val executor =
         SearchArtifactToolExecutor(
@@ -38,9 +34,9 @@ class SearchArtifactToolExecutorTest {
     @Test
     fun `execute decrypts stored document JSON before searching blocks`() =
         runTest {
-            coEvery { embeddingEngine.getEmbedding("find greeting") } returns floatArrayOf(0.1f, 0.2f)
-            coEvery { documentDao.searchSimilarBlocks(any()) } returns listOf("artifact-1_0")
-            coEvery { documentDao.getDocumentById("artifact-1") } returns
+            embeddingEngine.embeddingsByText["find greeting"] = floatArrayOf(0.1f, 0.2f)
+            documentDao.searchSimilarBlocksResult = listOf("artifact-1_0")
+            documentDao.documentsById["artifact-1"] =
                 DocumentEntity(
                     id = "artifact-1",
                     messageId = MessageId("assistant-1"),
@@ -93,15 +89,15 @@ class SearchArtifactToolExecutorTest {
 
             assertTrue(result.resultJson.contains("\"status\":\"error\""))
             assertTrue(result.resultJson.contains("Invalid artifactId"))
-            coVerify(exactly = 0) { documentDao.searchSimilarBlocks(any()) }
-            coVerify(exactly = 0) { embeddingEngine.getEmbedding(any()) }
+            assertTrue(documentDao.searchSimilarBlocksQueries.isEmpty())
+            assertTrue(embeddingEngine.queries.isEmpty())
         }
 
     @Test
     fun `execute uses parameterized sql for vector search`() =
         runTest {
-            coEvery { embeddingEngine.getEmbedding("find greeting") } returns floatArrayOf(0.1f, 0.2f)
-            coEvery { documentDao.searchSimilarBlocks(any()) } returns emptyList()
+            embeddingEngine.embeddingsByText["find greeting"] = floatArrayOf(0.1f, 0.2f)
+            documentDao.searchSimilarBlocksResult = emptyList()
 
             executor.execute(
                 ToolCallRequest(
@@ -118,9 +114,7 @@ class SearchArtifactToolExecutorTest {
                 ),
             )
 
-            val querySlot = slot<SupportSQLiteQuery>()
-            coVerify { documentDao.searchSimilarBlocks(capture(querySlot)) }
-            val sql = querySlot.captured.sql
+            val sql = documentDao.searchSimilarBlocksQueries.single().sql
             assertTrue(sql.contains("id LIKE ?"))
             assertTrue(sql.contains("vector MATCH ?"))
             assertFalse(sql.contains("artifact-1"))

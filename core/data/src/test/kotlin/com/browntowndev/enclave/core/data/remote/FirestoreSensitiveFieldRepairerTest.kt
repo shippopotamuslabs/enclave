@@ -4,8 +4,7 @@ import com.browntowndev.enclave.core.data.security.LocalDataEncryptionService
 import com.browntowndev.enclave.core.data.security.SensitivePersistenceSelfHealer
 import com.browntowndev.enclave.core.data.security.SensitiveRepairAction
 import com.browntowndev.enclave.core.data.security.StaticSensitiveFieldCatalog
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import io.mockk.mockk
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -18,7 +17,7 @@ class FirestoreSensitiveFieldRepairerTest {
             healer =
                 SensitivePersistenceSelfHealer(
                     localEncryption = FakeLocalDataEncryptionService(),
-                    loggingPort = mockk<LoggingPort>(relaxed = true),
+                    loggingPort = FakeLoggingPort(),
                 ),
         )
 
@@ -30,7 +29,7 @@ class FirestoreSensitiveFieldRepairerTest {
                 healer =
                     SensitivePersistenceSelfHealer(
                         localEncryption = FakeLocalDataEncryptionService(),
-                        loggingPort = mockk<LoggingPort>(relaxed = true),
+                        loggingPort = FakeLoggingPort(),
                     ),
             )
         fresh.repairOutbound(
@@ -97,7 +96,7 @@ class FirestoreSensitiveFieldRepairerTest {
                 healer =
                     SensitivePersistenceSelfHealer(
                         localEncryption = aadRecordingFake,
-                        loggingPort = mockk<LoggingPort>(relaxed = true),
+                        loggingPort = FakeLoggingPort(),
                     ),
             )
 
