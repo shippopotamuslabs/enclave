@@ -19,6 +19,9 @@ class FakeFetchApiProviderModelsUseCase(
 
     val calls = mutableListOf<Call>()
 
+    /** When set, [invoke] records the call then throws this instead of returning [result] (ENC-28). */
+    var failure: Throwable? = null
+
     override suspend fun invoke(
         provider: ApiProvider,
         currentApiKey: String,
@@ -26,6 +29,7 @@ class FakeFetchApiProviderModelsUseCase(
         baseUrl: String?,
     ): ApiModelCatalogResult {
         calls += Call(provider, currentApiKey, credentialAlias, baseUrl)
+        failure?.let { throw it }
         return result
     }
 }

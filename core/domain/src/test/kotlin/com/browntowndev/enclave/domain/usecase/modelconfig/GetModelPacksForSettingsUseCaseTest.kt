@@ -1,21 +1,23 @@
 package com.browntowndev.enclave.domain.usecase.modelconfig
 
+import com.browntowndev.enclave.core.testing.FakeLocalImageGenerationCapability
+import com.browntowndev.enclave.core.testing.FakeLocalModelRepository
+import com.browntowndev.enclave.core.testing.FakeModelConfigFetcher
+import com.browntowndev.enclave.core.testing.FakeModelPackVerifierPort
+import com.browntowndev.enclave.core.testing.FakeUtilityModelRepository
+import com.browntowndev.enclave.domain.model.config.UtilityModelId
+import com.browntowndev.enclave.domain.model.config.UtilityModelMetadata
 import com.browntowndev.enclave.domain.model.config.UtilityType
+import com.browntowndev.enclave.domain.model.download.DownloadSource
 import com.browntowndev.enclave.domain.model.download.ModelPackCompleteness
 import com.browntowndev.enclave.domain.model.download.ModelPackTestFixtures
+import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.media.LocalImageGenTriState
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilities
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId
-import com.browntowndev.enclave.domain.port.media.LocalImageGenerationCapabilityPort
-import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
-import com.browntowndev.enclave.domain.port.repository.UtilityModelRepositoryPort
-import com.browntowndev.enclave.domain.port.download.ModelPackVerifierPort
 import com.browntowndev.enclave.domain.usecase.download.ResolveModelCatalogUseCase
 import com.browntowndev.enclave.domain.usecase.download.VerifyModelPackCompletenessUseCase
-import io.mockk.coEvery
-import io.mockk.every
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -26,27 +28,28 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 
 class GetModelPacksForSettingsUseCaseTest {
-    private lateinit var resolveModelCatalog: ResolveModelCatalogUseCase
-    private lateinit var verifyModelPackCompleteness: VerifyModelPackCompletenessUseCase
-    private lateinit var localModelRepository: LocalModelRepositoryPort
-    private lateinit var utilityModelRepository: UtilityModelRepositoryPort
-    private lateinit var modelPackVerifier: ModelPackVerifierPort
-    private lateinit var capabilityPort: LocalImageGenerationCapabilityPort
+    private lateinit var modelConfigFetcher: FakeModelConfigFetcher
+    private lateinit var modelPackVerifier: FakeModelPackVerifierPort
+    private lateinit var localModelRepository: FakeLocalModelRepository
+    private lateinit var utilityModelRepository: FakeUtilityModelRepository
+    private lateinit var capabilityPort: FakeLocalImageGenerationCapability
     private lateinit var useCase: GetModelPacksForSettingsUseCase
 
     @BeforeEach
     fun setup() {
-        resolveModelCatalog = mockk()
-        verifyModelPackCompleteness = mockk()
-        modelPackVerifier = mockk()
-        localModelRepository = mockk(relaxed = true)
-        utilityModelRepository = mockk(relaxed = true)
-        capabilityPort = mockk(relaxed = true)
-        coEvery { resolveModelCatalog() } returns Result.success(ModelPackTestFixtures.parsedCatalog())
+        modelConfigFetcher =
+            FakeModelConfigFetcher().apply {
+                persistedCatalogResult = Result.success(ModelPackTestFixtures.parsedCatalog())
+            }
+        modelPackVerifier = FakeModelPackVerifierPort()
+        localModelRepository = FakeLocalModelRepository()
+        utilityModelRepository = FakeUtilityModelRepository()
+        capabilityPort = FakeLocalImageGenerationCapability()
+        val resolveModelCatalog = ResolveModelCatalogUseCase(modelConfigFetcher)
         useCase =
             GetModelPacksForSettingsUseCase(
                 resolveModelCatalog,
-                verifyModelPackCompleteness,
+                VerifyModelPackCompletenessUseCase(modelPackVerifier, resolveModelCatalog),
                 modelPackVerifier,
                 localModelRepository,
                 utilityModelRepository,
@@ -57,17 +60,13 @@ class GetModelPacksForSettingsUseCaseTest {
     @Test
     fun returnsPackRowsFromCatalogWhenOnDeviceImageGenerationEnabled() =
         runTest {
-            coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
-            coEvery { utilityModelRepository.getByUtilityType(any()) } returns null
-            coEvery { verifyModelPackCompleteness(ModelPackTestFixtures.PACK_ID) } returns
-                Result.success(
-                    ModelPackCompleteness(
-                        packId = ModelPackTestFixtures.PACK_ID,
-                        installedCount = 1,
-                        totalCount = 1,
-                        isComplete = true,
-                        members = emptyList(),
-                    ),
+            modelPackVerifier.completenessByPackId[ModelPackTestFixtures.PACK_ID] =
+                ModelPackCompleteness(
+                    packId = ModelPackTestFixtures.PACK_ID,
+                    installedCount = 1,
+                    totalCount = 1,
+                    isComplete = true,
+                    members = emptyList(),
                 )
 
             val rows = useCase()
@@ -78,7 +77,7 @@ class GetModelPacksForSettingsUseCaseTest {
     @Test
     fun `SD15 pack remains eligible when only CPU MNN fallback is available`() =
         runTest {
-            every { capabilityPort.getCapabilities() } returns
+            capabilityPort.capabilities =
                 LocalImageGenerationCapabilities(
                     npuAvailable = LocalImageGenTriState.NO,
                     sd15NpuSupported = LocalImageGenTriState.NO,
@@ -88,18 +87,13 @@ class GetModelPacksForSettingsUseCaseTest {
                     recommendedModelId = LocalImageGenerationModelId.SD15_CPU,
                     diagnostics = emptyList(),
                 )
-            coEvery { resolveModelCatalog() } returns Result.success(ModelPackTestFixtures.parsedCatalog())
-            coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
-            coEvery { utilityModelRepository.getByUtilityType(any()) } returns null
-            coEvery { verifyModelPackCompleteness(ModelPackTestFixtures.PACK_ID) } returns
-                Result.success(
-                    ModelPackCompleteness(
-                        packId = ModelPackTestFixtures.PACK_ID,
-                        installedCount = 0,
-                        totalCount = 1,
-                        isComplete = false,
-                        members = emptyList(),
-                    ),
+            modelPackVerifier.completenessByPackId[ModelPackTestFixtures.PACK_ID] =
+                ModelPackCompleteness(
+                    packId = ModelPackTestFixtures.PACK_ID,
+                    installedCount = 0,
+                    totalCount = 1,
+                    isComplete = false,
+                    members = emptyList(),
                 )
 
             val rows = useCase()
@@ -114,7 +108,7 @@ class GetModelPacksForSettingsUseCaseTest {
     @Test
     fun `SD15 pack keeps NPU label when the NPU pathway is available`() =
         runTest {
-            every { capabilityPort.getCapabilities() } returns
+            capabilityPort.capabilities =
                 LocalImageGenerationCapabilities(
                     npuAvailable = LocalImageGenTriState.YES,
                     sd15NpuSupported = LocalImageGenTriState.YES,
@@ -124,18 +118,13 @@ class GetModelPacksForSettingsUseCaseTest {
                     recommendedModelId = LocalImageGenerationModelId.SD15_QNN,
                     diagnostics = emptyList(),
                 )
-            coEvery { resolveModelCatalog() } returns Result.success(ModelPackTestFixtures.parsedCatalog())
-            coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
-            coEvery { utilityModelRepository.getByUtilityType(any()) } returns null
-            coEvery { verifyModelPackCompleteness(ModelPackTestFixtures.PACK_ID) } returns
-                Result.success(
-                    ModelPackCompleteness(
-                        packId = ModelPackTestFixtures.PACK_ID,
-                        installedCount = 1,
-                        totalCount = 1,
-                        isComplete = true,
-                        members = emptyList(),
-                    ),
+            modelPackVerifier.completenessByPackId[ModelPackTestFixtures.PACK_ID] =
+                ModelPackCompleteness(
+                    packId = ModelPackTestFixtures.PACK_ID,
+                    installedCount = 1,
+                    totalCount = 1,
+                    isComplete = true,
+                    members = emptyList(),
                 )
 
             val rows = useCase()
@@ -148,7 +137,7 @@ class GetModelPacksForSettingsUseCaseTest {
     @Test
     fun surfacesGen2DisabledReasonForBlockedSdxlPackRow() =
         runTest {
-            every { capabilityPort.getCapabilities() } returns
+            capabilityPort.capabilities =
                 LocalImageGenerationCapabilities(
                     npuAvailable = LocalImageGenTriState.YES,
                     sd15NpuSupported = LocalImageGenTriState.YES,
@@ -163,29 +152,27 @@ class GetModelPacksForSettingsUseCaseTest {
                                 "Requires Snapdragon 8 Gen 3+ with QNN.",
                         ),
                 )
-            coEvery { resolveModelCatalog() } returns Result.success(ModelPackTestFixtures.parsedCatalogWithSdxl())
-            coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
-            coEvery { utilityModelRepository.getByUtilityType(UtilityType.SD15_QNN_PACK) } returns mockk(relaxed = true)
-            coEvery { utilityModelRepository.getByUtilityType(UtilityType.SDXL_QNN_PACK) } returns mockk(relaxed = true)
-            coEvery { verifyModelPackCompleteness(ModelPackTestFixtures.PACK_ID) } returns
-                Result.success(
-                    ModelPackCompleteness(
-                        packId = ModelPackTestFixtures.PACK_ID,
-                        installedCount = 2,
-                        totalCount = 2,
-                        isComplete = true,
-                        members = emptyList(),
-                    ),
+            modelConfigFetcher.persistedCatalogResult =
+                Result.success(ModelPackTestFixtures.parsedCatalogWithSdxl())
+            utilityModelRepository.metadataByType[UtilityType.SD15_QNN_PACK] =
+                utilityMetadata(UtilityType.SD15_QNN_PACK, "sd15-pack")
+            utilityModelRepository.metadataByType[UtilityType.SDXL_QNN_PACK] =
+                utilityMetadata(UtilityType.SDXL_QNN_PACK, "sdxl-pack")
+            modelPackVerifier.completenessByPackId[ModelPackTestFixtures.PACK_ID] =
+                ModelPackCompleteness(
+                    packId = ModelPackTestFixtures.PACK_ID,
+                    installedCount = 2,
+                    totalCount = 2,
+                    isComplete = true,
+                    members = emptyList(),
                 )
-            coEvery { verifyModelPackCompleteness(ModelPackTestFixtures.SDXL_PACK_ID) } returns
-                Result.success(
-                    ModelPackCompleteness(
-                        packId = ModelPackTestFixtures.SDXL_PACK_ID,
-                        installedCount = 2,
-                        totalCount = 2,
-                        isComplete = true,
-                        members = emptyList(),
-                    ),
+            modelPackVerifier.completenessByPackId[ModelPackTestFixtures.SDXL_PACK_ID] =
+                ModelPackCompleteness(
+                    packId = ModelPackTestFixtures.SDXL_PACK_ID,
+                    installedCount = 2,
+                    totalCount = 2,
+                    isComplete = true,
+                    members = emptyList(),
                 )
 
             val rows = useCase()
@@ -199,7 +186,7 @@ class GetModelPacksForSettingsUseCaseTest {
     @DisplayName("SET-002 Gen2 blocked incomplete SDXL pack hides download action")
     fun set002_gen2BlockedIncompleteSdxlPackHidesDownloadAction() =
         runTest {
-            every { capabilityPort.getCapabilities() } returns
+            capabilityPort.capabilities =
                 LocalImageGenerationCapabilities(
                     npuAvailable = LocalImageGenTriState.YES,
                     sd15NpuSupported = LocalImageGenTriState.YES,
@@ -214,29 +201,25 @@ class GetModelPacksForSettingsUseCaseTest {
                                 "Requires Snapdragon 8 Gen 3+ with QNN.",
                         ),
                 )
-            coEvery { resolveModelCatalog() } returns Result.success(ModelPackTestFixtures.parsedCatalogWithSdxl())
-            coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
-            coEvery { utilityModelRepository.getByUtilityType(UtilityType.SD15_QNN_PACK) } returns mockk(relaxed = true)
-            coEvery { utilityModelRepository.getByUtilityType(UtilityType.SDXL_QNN_PACK) } returns null
-            coEvery { verifyModelPackCompleteness(ModelPackTestFixtures.PACK_ID) } returns
-                Result.success(
-                    ModelPackCompleteness(
-                        packId = ModelPackTestFixtures.PACK_ID,
-                        installedCount = 2,
-                        totalCount = 2,
-                        isComplete = true,
-                        members = emptyList(),
-                    ),
+            modelConfigFetcher.persistedCatalogResult =
+                Result.success(ModelPackTestFixtures.parsedCatalogWithSdxl())
+            utilityModelRepository.metadataByType[UtilityType.SD15_QNN_PACK] =
+                utilityMetadata(UtilityType.SD15_QNN_PACK, "sd15-pack")
+            modelPackVerifier.completenessByPackId[ModelPackTestFixtures.PACK_ID] =
+                ModelPackCompleteness(
+                    packId = ModelPackTestFixtures.PACK_ID,
+                    installedCount = 2,
+                    totalCount = 2,
+                    isComplete = true,
+                    members = emptyList(),
                 )
-            coEvery { verifyModelPackCompleteness(ModelPackTestFixtures.SDXL_PACK_ID) } returns
-                Result.success(
-                    ModelPackCompleteness(
-                        packId = ModelPackTestFixtures.SDXL_PACK_ID,
-                        installedCount = 0,
-                        totalCount = 2,
-                        isComplete = false,
-                        members = emptyList(),
-                    ),
+            modelPackVerifier.completenessByPackId[ModelPackTestFixtures.SDXL_PACK_ID] =
+                ModelPackCompleteness(
+                    packId = ModelPackTestFixtures.SDXL_PACK_ID,
+                    installedCount = 0,
+                    totalCount = 2,
+                    isComplete = false,
+                    members = emptyList(),
                 )
 
             val rows = useCase()
@@ -251,7 +234,7 @@ class GetModelPacksForSettingsUseCaseTest {
     @DisplayName("SET-007 Gen2 hides Juggernaut from assignment and shows disabled pack reason")
     fun set007_gen2BlockedJuggernautPackShowsDisabledReason() =
         runTest {
-            every { capabilityPort.getCapabilities() } returns
+            capabilityPort.capabilities =
                 LocalImageGenerationCapabilities(
                     npuAvailable = LocalImageGenTriState.YES,
                     sd15NpuSupported = LocalImageGenTriState.YES,
@@ -267,40 +250,33 @@ class GetModelPacksForSettingsUseCaseTest {
                                 "Requires Snapdragon 8 Gen 3+ with QNN.",
                         ),
                 )
-            coEvery { resolveModelCatalog() } returns Result.success(ModelPackTestFixtures.parsedCatalogWithAllThreeImagePacks())
-            coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
-            coEvery { utilityModelRepository.getByUtilityType(UtilityType.SD15_QNN_PACK) } returns mockk(relaxed = true)
-            coEvery { utilityModelRepository.getByUtilityType(UtilityType.SDXL_QNN_PACK) } returns null
-            coEvery { utilityModelRepository.getByUtilityType(UtilityType.JUGGERNAUT_XL_QNN_PACK) } returns null
-            coEvery { verifyModelPackCompleteness(ModelPackTestFixtures.PACK_ID) } returns
-                Result.success(
-                    ModelPackCompleteness(
-                        packId = ModelPackTestFixtures.PACK_ID,
-                        installedCount = 2,
-                        totalCount = 2,
-                        isComplete = true,
-                        members = emptyList(),
-                    ),
+            modelConfigFetcher.persistedCatalogResult =
+                Result.success(ModelPackTestFixtures.parsedCatalogWithAllThreeImagePacks())
+            utilityModelRepository.metadataByType[UtilityType.SD15_QNN_PACK] =
+                utilityMetadata(UtilityType.SD15_QNN_PACK, "sd15-pack")
+            modelPackVerifier.completenessByPackId[ModelPackTestFixtures.PACK_ID] =
+                ModelPackCompleteness(
+                    packId = ModelPackTestFixtures.PACK_ID,
+                    installedCount = 2,
+                    totalCount = 2,
+                    isComplete = true,
+                    members = emptyList(),
                 )
-            coEvery { verifyModelPackCompleteness(ModelPackTestFixtures.SDXL_PACK_ID) } returns
-                Result.success(
-                    ModelPackCompleteness(
-                        packId = ModelPackTestFixtures.SDXL_PACK_ID,
-                        installedCount = 0,
-                        totalCount = 2,
-                        isComplete = false,
-                        members = emptyList(),
-                    ),
+            modelPackVerifier.completenessByPackId[ModelPackTestFixtures.SDXL_PACK_ID] =
+                ModelPackCompleteness(
+                    packId = ModelPackTestFixtures.SDXL_PACK_ID,
+                    installedCount = 0,
+                    totalCount = 2,
+                    isComplete = false,
+                    members = emptyList(),
                 )
-            coEvery { verifyModelPackCompleteness(ModelPackTestFixtures.JUGGERNAUT_PACK_ID) } returns
-                Result.success(
-                    ModelPackCompleteness(
-                        packId = ModelPackTestFixtures.JUGGERNAUT_PACK_ID,
-                        installedCount = 0,
-                        totalCount = 2,
-                        isComplete = false,
-                        members = emptyList(),
-                    ),
+            modelPackVerifier.completenessByPackId[ModelPackTestFixtures.JUGGERNAUT_PACK_ID] =
+                ModelPackCompleteness(
+                    packId = ModelPackTestFixtures.JUGGERNAUT_PACK_ID,
+                    installedCount = 0,
+                    totalCount = 2,
+                    isComplete = false,
+                    members = emptyList(),
                 )
 
             val rows = useCase()
@@ -313,7 +289,7 @@ class GetModelPacksForSettingsUseCaseTest {
     @Test
     fun surfacesRamBlockedReasonForIneligibleSdxlPackRow() =
         runTest {
-            every { capabilityPort.getCapabilities() } returns
+            capabilityPort.capabilities =
                 LocalImageGenerationCapabilities(
                     npuAvailable = LocalImageGenTriState.YES,
                     sd15NpuSupported = LocalImageGenTriState.NO,
@@ -323,29 +299,23 @@ class GetModelPacksForSettingsUseCaseTest {
                     recommendedModelId = null,
                     diagnostics = listOf("Insufficient RAM for local diffusion (need >= 8 GiB)."),
                 )
-            coEvery { resolveModelCatalog() } returns Result.success(ModelPackTestFixtures.parsedCatalogWithSdxl())
-            coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
-            coEvery { utilityModelRepository.getByUtilityType(UtilityType.SD15_QNN_PACK) } returns null
-            coEvery { utilityModelRepository.getByUtilityType(UtilityType.SDXL_QNN_PACK) } returns null
-            coEvery { verifyModelPackCompleteness(ModelPackTestFixtures.PACK_ID) } returns
-                Result.success(
-                    ModelPackCompleteness(
-                        packId = ModelPackTestFixtures.PACK_ID,
-                        installedCount = 0,
-                        totalCount = 2,
-                        isComplete = false,
-                        members = emptyList(),
-                    ),
+            modelConfigFetcher.persistedCatalogResult =
+                Result.success(ModelPackTestFixtures.parsedCatalogWithSdxl())
+            modelPackVerifier.completenessByPackId[ModelPackTestFixtures.PACK_ID] =
+                ModelPackCompleteness(
+                    packId = ModelPackTestFixtures.PACK_ID,
+                    installedCount = 0,
+                    totalCount = 2,
+                    isComplete = false,
+                    members = emptyList(),
                 )
-            coEvery { verifyModelPackCompleteness(ModelPackTestFixtures.SDXL_PACK_ID) } returns
-                Result.success(
-                    ModelPackCompleteness(
-                        packId = ModelPackTestFixtures.SDXL_PACK_ID,
-                        installedCount = 0,
-                        totalCount = 2,
-                        isComplete = false,
-                        members = emptyList(),
-                    ),
+            modelPackVerifier.completenessByPackId[ModelPackTestFixtures.SDXL_PACK_ID] =
+                ModelPackCompleteness(
+                    packId = ModelPackTestFixtures.SDXL_PACK_ID,
+                    installedCount = 0,
+                    totalCount = 2,
+                    isComplete = false,
+                    members = emptyList(),
                 )
 
             val rows = useCase()
@@ -359,11 +329,26 @@ class GetModelPacksForSettingsUseCaseTest {
     @Test
     fun returnsEmptyWhenCatalogHasNoModelPacks() =
         runTest {
-            coEvery { resolveModelCatalog() } returns
+            modelConfigFetcher.persistedCatalogResult =
                 Result.success(ModelPackTestFixtures.parsedCatalog(includePack = false))
 
             val rows = useCase()
 
             assertTrue(rows.isEmpty())
         }
+
+    private fun utilityMetadata(
+        type: UtilityType,
+        id: String,
+    ) = UtilityModelMetadata(
+        id = UtilityModelId(id),
+        utilityType = type,
+        sha256 = "sha",
+        sizeInBytes = 1L,
+        localFileName = "file",
+        remoteFileName = "file",
+        huggingFaceModelName = "hf/model",
+        modelFileFormat = ModelFileFormat.GGUF,
+        source = DownloadSource.HUGGING_FACE,
+    )
 }

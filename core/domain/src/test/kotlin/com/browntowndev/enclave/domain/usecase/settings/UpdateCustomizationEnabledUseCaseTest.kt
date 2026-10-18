@@ -1,20 +1,18 @@
 package com.browntowndev.enclave.domain.usecase.settings
 
-import com.browntowndev.enclave.domain.port.repository.SettingsRepository
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.mockk
+import com.browntowndev.enclave.core.testing.FakeSettingsRepository
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class UpdateCustomizationEnabledUseCaseTest {
-    private lateinit var settingsRepository: SettingsRepository
+    private lateinit var settingsRepository: FakeSettingsRepository
     private lateinit var updateCustomizationEnabledUseCase: UpdateCustomizationEnabledUseCase
 
     @BeforeEach
     fun setUp() {
-        settingsRepository = mockk()
+        settingsRepository = FakeSettingsRepository()
         updateCustomizationEnabledUseCase = UpdateCustomizationEnabledUseCase(settingsRepository)
     }
 
@@ -23,13 +21,12 @@ class UpdateCustomizationEnabledUseCaseTest {
         runTest {
             // Given
             val enabled = true
-            coEvery { settingsRepository.updateCustomizationEnabled(any()) } returns Unit
 
             // When
             updateCustomizationEnabledUseCase(enabled)
 
             // Then
-            coVerify(exactly = 1) { settingsRepository.updateCustomizationEnabled(enabled) }
+            assertEquals(listOf(true), settingsRepository.customizationEnabledUpdates)
         }
 
     @Test
@@ -37,12 +34,11 @@ class UpdateCustomizationEnabledUseCaseTest {
         runTest {
             // Given
             val enabled = false
-            coEvery { settingsRepository.updateCustomizationEnabled(any()) } returns Unit
 
             // When
             updateCustomizationEnabledUseCase(enabled)
 
             // Then
-            coVerify(exactly = 1) { settingsRepository.updateCustomizationEnabled(enabled) }
+            assertEquals(listOf(false), settingsRepository.customizationEnabledUpdates)
         }
 }

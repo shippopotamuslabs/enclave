@@ -19,7 +19,7 @@ import javax.inject.Inject
  * - Returns the result without modifying any state
  * - Logs all results for debugging/auditing
  */
-class CheckModelsUseCase
+open class CheckModelsUseCase
     @Inject
     constructor(
         private val fileScanner: ModelFileScannerPort,
@@ -36,7 +36,7 @@ class CheckModelsUseCase
          * @param expectedModels The map of model types to assets expected from remote config (from cache)
          * @return DownloadModelsResult containing models that need downloading and scan result
          */
-        suspend operator fun invoke(
+        open suspend operator fun invoke(
             expectedModels: Map<ModelType, LocalModelAsset>,
             utilityAssets: List<LocalModelAsset> = emptyList(),
         ): DownloadModelsResult {

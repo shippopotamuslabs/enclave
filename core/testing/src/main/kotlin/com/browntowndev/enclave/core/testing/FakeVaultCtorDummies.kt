@@ -48,37 +48,73 @@ import kotlinx.coroutines.flow.flowOf
  * defaults; recording variants live in their own fakes where tests need them.
  */
 class FakeModelConfigFetcher : ModelConfigFetcherPort {
+    /** Result returned by [getPersistedParsedCatalog]; defaults to the historical failure. */
+    var persistedCatalogResult: Result<ParsedModelCatalog> =
+        Result.failure(UnsupportedOperationException("not used in tests"))
+
+    /** Result returned by [fetchParsedCatalog]; defaults to the historical failure. */
+    var parsedCatalogResult: Result<ParsedModelCatalog> =
+        Result.failure(UnsupportedOperationException("not used in tests"))
+
     override suspend fun fetchRemoteConfig(): Result<List<LocalModelAsset>> = Result.success(emptyList())
 
-    override suspend fun fetchParsedCatalog(): Result<ParsedModelCatalog> =
-        Result.failure(UnsupportedOperationException("not used in tests"))
+    override suspend fun fetchParsedCatalog(): Result<ParsedModelCatalog> = parsedCatalogResult
 
-    override suspend fun getPersistedParsedCatalog(): Result<ParsedModelCatalog> =
-        Result.failure(UnsupportedOperationException("not used in tests"))
+    override suspend fun getPersistedParsedCatalog(): Result<ParsedModelCatalog> = persistedCatalogResult
 
     override fun toLocalModelAssets(assets: List<RemoteModelAsset>): List<LocalModelAsset> = emptyList()
 }
 
 class FakeTransactionProvider : TransactionProvider {
-    override suspend fun <T> runInTransaction(block: suspend () -> T): T = block()
+    /** Number of [runInTransaction] invocations (ENC-28). */
+    var runInTransactionCallCount = 0
+        private set
+
+    override suspend fun <T> runInTransaction(block: suspend () -> T): T {
+        runInTransactionCallCount++
+        return block()
+    }
 }
 
 class FakeModelFileScanner : ModelFileScannerPort {
+    /** Recorded delete calls for assertions (ENC-28). */
+    val deletedModelIds = mutableListOf<LocalModelId>()
+    val deletedFileNames = mutableListOf<String>()
+
+    /** Result returned by [scanAndCreateDirIfNotExist]; defaults to the historical all-valid scan. */
+    var scanResult: ModelScanResult =
+        ModelScanResult(missingModels = emptyList(), partialDownloads = emptyMap(), allValid = true)
+
+    /** Every (expectedModels, utilityAssets) pair passed to [scanAndCreateDirIfNotExist], in call order. */
+    val scanCalls = mutableListOf<Pair<Map<ModelType, LocalModelAsset>, List<LocalModelAsset>>>()
+
     override suspend fun scanAndCreateDirIfNotExist(
         expectedModels: Map<ModelType, LocalModelAsset>,
         utilityAssets: List<LocalModelAsset>,
-    ): ModelScanResult =
-        ModelScanResult(missingModels = emptyList(), partialDownloads = emptyMap(), allValid = true)
+    ): ModelScanResult {
+        scanCalls += expectedModels to utilityAssets
+        return scanResult
+    }
 
-    override suspend fun deleteModelFile(localModelId: LocalModelId) = Unit
+    override suspend fun deleteModelFile(localModelId: LocalModelId) {
+        deletedModelIds += localModelId
+    }
 
-    override suspend fun deleteModelFileByLocalFileName(localFileName: String) = Unit
+    override suspend fun deleteModelFileByLocalFileName(localFileName: String) {
+        deletedFileNames += localFileName
+    }
 }
 
 class FakeApiKeyProvider : ApiKeyProviderPort {
     private val keys = mutableMapOf<String, String>()
 
-    override suspend fun getApiKey(credentialAlias: String): String? = keys[credentialAlias]
+    /** Aliases passed to [getApiKey], in call order (ENC-28). */
+    val getApiKeyCalls = mutableListOf<String>()
+
+    override suspend fun getApiKey(credentialAlias: String): String? {
+        getApiKeyCalls += credentialAlias
+        return keys[credentialAlias]
+    }
 
     override fun saveApiKey(credentialAlias: String, apiKey: String) {
         keys[credentialAlias] = apiKey
@@ -87,30 +123,57 @@ class FakeApiKeyProvider : ApiKeyProviderPort {
 
 class FakeCleanupRepository : CleanupRepository {
     var clearAllDataCallCount = 0
+    var clearUserContentCallCount = 0
+
+    /** When set, [clearUserContent] throws this after recording the call. */
+    var clearUserContentFailure: Throwable? = null
 
     override suspend fun clearAllData() {
         clearAllDataCallCount++
     }
 
-    override suspend fun clearUserContent() = Unit
+    override suspend fun clearUserContent() {
+        clearUserContentCallCount++
+        clearUserContentFailure?.let { throw it }
+    }
 
-    override suspend fun deleteAllArtifacts() = Unit
+    /** Number of [deleteAllArtifacts] calls so far (ENC-28). */
+    var deleteAllArtifactsCallCount = 0
+
+    /** When set, [deleteAllArtifacts] throws this after recording the call (ENC-28). */
+    var deleteAllArtifactsFailure: Throwable? = null
+
+    override suspend fun deleteAllArtifacts() {
+        deleteAllArtifactsCallCount++
+        deleteAllArtifactsFailure?.let { throw it }
+    }
 }
 
 class FakeTrustedDomainRepository : TrustedDomainRepositoryPort {
-    override suspend fun getTrustedDomains(): Set<String> = emptySet()
+    /** Domains returned by [getTrustedDomains]; empty by default. */
+    var domains: Set<String> = emptySet()
 
-    override suspend fun getTrustedWildcards(): Set<String> = emptySet()
+    /** Wildcards returned by [getTrustedWildcards]; empty by default. */
+    var wildcards: Set<String> = emptySet()
+
+    override suspend fun getTrustedDomains(): Set<String> = domains
+
+    override suspend fun getTrustedWildcards(): Set<String> = wildcards
 
     override suspend fun syncTrustedDomains(): Result<Unit> = Result.success(Unit)
 }
 
 class FakeGpuCapability : GpuCapabilityPort {
-    override fun isLocalImageGenerationSupported(): Boolean = false
+    /** Returned by [isLocalImageGenerationSupported]; defaults to the historical false. */
+    var localImageGenerationSupported: Boolean = false
+
+    override fun isLocalImageGenerationSupported(): Boolean = localImageGenerationSupported
 }
 
 class FakeLocalImageGenerationCapability : LocalImageGenerationCapabilityPort {
-    override fun getCapabilities(): LocalImageGenerationCapabilities =
+    /** Capabilities returned by [getCapabilities]; defaults to the historical all-NO set. */
+    @get:JvmName("capabilitiesBacking")
+    var capabilities: LocalImageGenerationCapabilities =
         LocalImageGenerationCapabilities(
             npuAvailable = LocalImageGenTriState.NO,
             sd15NpuSupported = LocalImageGenTriState.NO,
@@ -120,13 +183,31 @@ class FakeLocalImageGenerationCapability : LocalImageGenerationCapabilityPort {
             recommendedModelId = null,
             diagnostics = emptyList(),
         )
+
+    /** Number of [getCapabilities] calls so far (ENC-28). */
+    var getCapabilitiesCallCount: Int = 0
+        private set
+
+    override fun getCapabilities(): LocalImageGenerationCapabilities {
+        getCapabilitiesCallCount++
+        return capabilities
+    }
 }
 
 class FakeQnnPackInstaller : QnnPackInstallerPort {
+    /** Value returned by [installIfNeeded]; defaults to the historical false. */
+    var installResult: Boolean = false
+
+    /** Every metadata passed to [installIfNeeded], in call order. */
+    val installCalls = mutableListOf<LocalModelMetadata>()
+
     override suspend fun installIfNeeded(
         metadata: LocalModelMetadata,
         progressListener: QnnPackInstallProgressListener?,
-    ): Boolean = false
+    ): Boolean {
+        installCalls += metadata
+        return installResult
+    }
 }
 
 class FakeSnapdragonTier : SnapdragonTierPort {
@@ -134,7 +215,13 @@ class FakeSnapdragonTier : SnapdragonTierPort {
 }
 
 class FakeUtilityModelRepository : UtilityModelRepositoryPort {
-    override suspend fun getByUtilityType(utilityType: UtilityType): UtilityModelMetadata? = null
+    /** Per-type metadata returned by [getByUtilityType]; empty (null) by default (ENC-28). */
+    val metadataByType = mutableMapOf<UtilityType, UtilityModelMetadata>()
+
+    /** Ids passed to [softDelete], in call order (ENC-28). */
+    val softDeletedIds = mutableListOf<UtilityModelId>()
+
+    override suspend fun getByUtilityType(utilityType: UtilityType): UtilityModelMetadata? = metadataByType[utilityType]
 
     override suspend fun getAllActive(): List<UtilityModelMetadata> = emptyList()
 
@@ -146,11 +233,13 @@ class FakeUtilityModelRepository : UtilityModelRepositoryPort {
 
     override suspend fun upsert(metadata: UtilityModelMetadata): UtilityModelId = metadata.id
 
-    override suspend fun softDelete(id: UtilityModelId) = Unit
+    override suspend fun softDelete(id: UtilityModelId) {
+        softDeletedIds += id
+    }
 }
 
 class FakeDistributionConfiguration(
-    override val isPlayStoreFlavor: Boolean = false,
+    override var isPlayStoreFlavor: Boolean = false,
 ) : DistributionConfigurationPort
 
 class FakeAudioCapture : AudioCapturePort {
@@ -166,38 +255,103 @@ class FakeWhisperInference : WhisperInferencePort {
 }
 
 class FakeUtilityModelFile : UtilityModelFilePort {
+    /** Path returned by [resolveLocalModelPath]; null (not downloaded) by default (ENC-28). */
+    var localModelPath: String? = null
+
+    /** Metadata passed to [resolveLocalModelPath], in call order (ENC-28). */
+    val resolveLocalModelPathCalls = mutableListOf<LocalModelMetadata>()
+
     override suspend fun resolveUtilityModelPath(utilityType: UtilityType): String? = null
 
-    override suspend fun resolveLocalModelPath(metadata: LocalModelMetadata): String? = null
+    override suspend fun resolveLocalModelPath(metadata: LocalModelMetadata): String? {
+        resolveLocalModelPathCalls += metadata
+        return localModelPath
+    }
 }
 
 class FakeMusicGenerationPort : MusicGenerationPort {
     var result: Result<ByteArray> = Result.success(ByteArray(0))
 
+    /** Prompts passed to [generateMusic], in call order (ENC-28). */
+    val calls = mutableListOf<String>()
+
+    /** Providers passed to [generateMusic], in call order (ENC-28). */
+    val providerCalls = mutableListOf<MediaProviderAsset>()
+
+    /** Settings passed to [generateMusic], in call order (ENC-28). */
+    val settingsCalls = mutableListOf<GenerationSettings>()
+
     override suspend fun generateMusic(
         prompt: String,
         provider: MediaProviderAsset,
         settings: GenerationSettings,
-    ): Result<ByteArray> = result
+    ): Result<ByteArray> {
+        calls += prompt
+        providerCalls += provider
+        settingsCalls += settings
+        return result
+    }
 }
 
 class FakeApiModelCatalogPort : ApiModelCatalogPort {
+    /** Recorded calls for assertions (ENC-28). */
+    data class FetchModelsCall(
+        val provider: ApiProvider,
+        val apiKey: String,
+        val baseUrl: String?,
+    )
+
+    data class FetchModelCall(
+        val provider: ApiProvider,
+        val apiKey: String,
+        val modelId: String,
+        val baseUrl: String?,
+    )
+
+    data class FetchModelEndpointsCall(
+        val modelId: String,
+        val apiKey: String,
+        val baseUrl: String?,
+    )
+
+    val fetchModelsCalls = mutableListOf<FetchModelsCall>()
+    val fetchModelCalls = mutableListOf<FetchModelCall>()
+    val fetchModelEndpointsCalls = mutableListOf<FetchModelEndpointsCall>()
+
+    /** Result returned by [fetchModels]; defaults to the historical empty catalog. */
+    var modelsResult: ApiModelCatalogResult = ApiModelCatalogResult(models = emptyList())
+
+    /** Model returned by [fetchModel]; defaults to the historical null. */
+    var modelResult: DiscoveredApiModel? = null
+
+    /** Endpoints returned by [fetchModelEndpoints]; defaults to the historical empty list. */
+    var endpointsResult: List<OpenRouterModelEndpoint> = emptyList()
+
     override suspend fun fetchModels(
         provider: ApiProvider,
         apiKey: String,
         baseUrl: String?,
-    ): ApiModelCatalogResult = ApiModelCatalogResult(models = emptyList())
+    ): ApiModelCatalogResult {
+        fetchModelsCalls += FetchModelsCall(provider, apiKey, baseUrl)
+        return modelsResult
+    }
 
     override suspend fun fetchModel(
         provider: ApiProvider,
         apiKey: String,
         modelId: String,
         baseUrl: String?,
-    ): DiscoveredApiModel? = null
+    ): DiscoveredApiModel? {
+        fetchModelCalls += FetchModelCall(provider, apiKey, modelId, baseUrl)
+        return modelResult
+    }
 
     override suspend fun fetchModelEndpoints(
         modelId: String,
-apiKey: String,
+        apiKey: String,
         baseUrl: String?,
-    ): List<OpenRouterModelEndpoint> = emptyList()
+    ): List<OpenRouterModelEndpoint> {
+        fetchModelEndpointsCalls += FetchModelEndpointsCall(modelId, apiKey, baseUrl)
+        return endpointsResult
+    }
 }

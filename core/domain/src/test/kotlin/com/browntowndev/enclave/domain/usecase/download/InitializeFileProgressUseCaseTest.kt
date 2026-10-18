@@ -1,6 +1,5 @@
 package com.browntowndev.enclave.domain.usecase.download
 
-import android.util.Log
 import com.browntowndev.enclave.domain.model.config.LocalModelAsset
 import com.browntowndev.enclave.domain.model.config.LocalModelConfiguration
 import com.browntowndev.enclave.domain.model.config.LocalModelId
@@ -11,32 +10,22 @@ import com.browntowndev.enclave.domain.model.download.FileStatus
 import com.browntowndev.enclave.domain.model.download.ModelScanResult
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import io.mockk.MockKAnnotations
-import io.mockk.every
-import io.mockk.mockkStatic
-import io.mockk.unmockkStatic
-import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class InitializeFileProgressUseCaseTest {
     private lateinit var useCase: InitializeFileProgressUseCase
 
     @BeforeEach
     fun setup() {
-        MockKAnnotations.init(this)
-        mockkStatic(Log::class)
-        every { Log.d(any<String>(), any<String>()) } returns 0
-        every { Log.e(any<String>(), any<String>()) } returns 0
-
         useCase = InitializeFileProgressUseCase()
-    }
-
-    @AfterEach
-    fun tearDown() {
-        unmockkStatic(Log::class)
     }
 
     @Test

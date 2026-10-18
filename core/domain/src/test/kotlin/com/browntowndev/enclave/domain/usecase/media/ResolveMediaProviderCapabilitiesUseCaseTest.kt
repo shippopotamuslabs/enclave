@@ -1,5 +1,7 @@
 package com.browntowndev.enclave.domain.usecase.media
 
+import com.browntowndev.enclave.core.testing.FakeApiKeyProvider
+import com.browntowndev.enclave.core.testing.FakeApiModelCatalogPort
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.config.MediaProviderAsset
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
@@ -7,18 +9,14 @@ import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.enclave.domain.model.media.AspectRatio
 import com.browntowndev.enclave.domain.model.media.ModelGenerationInputSchema
-import com.browntowndev.enclave.domain.port.repository.ApiModelCatalogPort
-import com.browntowndev.enclave.domain.port.security.ApiKeyProviderPort
-import io.mockk.coEvery
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
 class ResolveMediaProviderCapabilitiesUseCaseTest {
     private val getProviderCapabilitiesUseCase = GetProviderCapabilitiesUseCase()
-    private val apiModelCatalog = mockk<ApiModelCatalogPort>()
-    private val apiKeyProvider = mockk<ApiKeyProviderPort>()
+    private val apiModelCatalog = FakeApiModelCatalogPort()
+    private val apiKeyProvider = FakeApiKeyProvider()
     private val useCase =
         ResolveMediaProviderCapabilitiesUseCase(
             getProviderCapabilitiesUseCase = getProviderCapabilitiesUseCase,
@@ -38,15 +36,8 @@ class ResolveMediaProviderCapabilitiesUseCaseTest {
                     credentialAlias = "fal-key",
                     modelName = "fal-ai/happy-horse-1.0",
                 )
-            coEvery { apiKeyProvider.getApiKey("fal-key") } returns "test-key"
-            coEvery {
-                apiModelCatalog.fetchModel(
-                    provider = ApiProvider.FAL,
-                    apiKey = "test-key",
-                    modelId = "fal-ai/happy-horse-1.0",
-                    baseUrl = null,
-                )
-            } returns
+            apiKeyProvider.saveApiKey("fal-key", "test-key")
+            apiModelCatalog.modelResult =
                 DiscoveredApiModel(
                     id = "fal-ai/happy-horse-1.0",
                     name = "Happy Horse",
@@ -83,15 +74,8 @@ class ResolveMediaProviderCapabilitiesUseCaseTest {
                     credentialAlias = "fal-key",
                     modelName = "fal-ai/flux/dev",
                 )
-            coEvery { apiKeyProvider.getApiKey("fal-key") } returns "test-key"
-            coEvery {
-                apiModelCatalog.fetchModel(
-                    provider = ApiProvider.FAL,
-                    apiKey = "test-key",
-                    modelId = "fal-ai/flux/dev",
-                    baseUrl = null,
-                )
-            } returns
+            apiKeyProvider.saveApiKey("fal-key", "test-key")
+            apiModelCatalog.modelResult =
                 DiscoveredApiModel(
                     id = "fal-ai/flux/dev",
                     name = "Flux",

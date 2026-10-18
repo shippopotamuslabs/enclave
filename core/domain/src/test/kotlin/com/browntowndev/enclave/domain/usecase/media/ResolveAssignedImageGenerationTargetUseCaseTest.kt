@@ -1,5 +1,10 @@
 package com.browntowndev.enclave.domain.usecase.media
 
+import com.browntowndev.enclave.core.testing.FakeGpuCapability
+import com.browntowndev.enclave.core.testing.FakeLocalImageGenerationCapability
+import com.browntowndev.enclave.core.testing.FakeLocalModelRepository
+import com.browntowndev.enclave.core.testing.FakeMediaProviderRepository
+import com.browntowndev.enclave.core.testing.FakeUtilityModelFile
 import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
 import com.browntowndev.enclave.domain.model.config.LocalModelAsset
 import com.browntowndev.enclave.domain.model.config.LocalModelConfiguration
@@ -15,14 +20,9 @@ import com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKi
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilities
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelRegistry
-import com.browntowndev.enclave.domain.port.media.GpuCapabilityPort
 import com.browntowndev.enclave.domain.port.media.LOCAL_IMAGE_GENERATION_UNSUPPORTED_MESSAGE
-import com.browntowndev.enclave.domain.port.media.LocalImageGenerationCapabilityPort
+import com.browntowndev.enclave.domain.port.repository.UtilityModelFilePort
 import com.browntowndev.enclave.domain.usecase.FakeDefaultModelRepository
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -33,10 +33,7 @@ class ResolveAssignedImageGenerationTargetUseCaseTest {
     fun `SD15 assignment resolves model directory and QNN backend`() =
         runTest {
             val modelFile = "/abs/models/stable-diffusion-v1-5-Q4_0.gguf"
-            val filePort =
-                mockk<com.browntowndev.enclave.domain.port.repository.UtilityModelFilePort> {
-                    coEvery { resolveLocalModelPath(any()) } returns modelFile
-                }
+            val filePort = FakeUtilityModelFile().apply { localModelPath = modelFile }
             val useCase = useCaseWith(filePort)
 
             val target = useCase().getOrThrow() as ImageGenerationTarget.LocalStableDiffusion
@@ -50,10 +47,7 @@ class ResolveAssignedImageGenerationTargetUseCaseTest {
     fun `SDXL assignment resolves sdxl-qnn model directory and QNN backend`() =
         runTest {
             val modelFile = "/abs/models/${ModelPackTestFixtures.SDXL_DIFFUSION_FILE}"
-            val filePort =
-                mockk<com.browntowndev.enclave.domain.port.repository.UtilityModelFilePort> {
-                    coEvery { resolveLocalModelPath(any()) } returns modelFile
-                }
+            val filePort = FakeUtilityModelFile().apply { localModelPath = modelFile }
             val sdxlConfigId = LocalModelConfigurationId(ModelPackTestFixtures.SDXL_CONFIG_ID)
             val useCase =
                 useCaseWith(
@@ -75,10 +69,7 @@ class ResolveAssignedImageGenerationTargetUseCaseTest {
     fun `Juggernaut IMAGE_EDIT assignment resolves juggernaut-qnn model directory`() =
         runTest {
             val modelFile = "/abs/models/${ModelPackTestFixtures.JUGGERNAUT_DIFFUSION_FILE}"
-            val filePort =
-                mockk<com.browntowndev.enclave.domain.port.repository.UtilityModelFilePort> {
-                    coEvery { resolveLocalModelPath(any()) } returns modelFile
-                }
+            val filePort = FakeUtilityModelFile().apply { localModelPath = modelFile }
             val juggernautConfigId = LocalModelConfigurationId(ModelPackTestFixtures.JUGGERNAUT_CONFIG_ID)
             val useCase =
                 useCaseWith(
@@ -100,10 +91,7 @@ class ResolveAssignedImageGenerationTargetUseCaseTest {
     @Test
     fun `missing diffusion file on disk surfaces not-downloaded even when repo row exists`() =
         runTest {
-            val filePort =
-                mockk<com.browntowndev.enclave.domain.port.repository.UtilityModelFilePort> {
-                    coEvery { resolveLocalModelPath(any()) } returns null
-                }
+            val filePort = FakeUtilityModelFile().apply { localModelPath = null }
             val useCase = useCaseWith(filePort)
 
             val result = useCase()
@@ -118,8 +106,15 @@ class ResolveAssignedImageGenerationTargetUseCaseTest {
             val useCase =
                 ResolveAssignedImageGenerationTargetUseCase(
                     defaultModelRepository = FakeDefaultModelRepository(),
-                    mediaProviderRepository = mockk(relaxed = true),
-                    localStableDiffusionTargetResolver = mockk(relaxed = true),
+                    mediaProviderRepository = FakeMediaProviderRepository(),
+                    localStableDiffusionTargetResolver =
+                        LocalStableDiffusionTargetResolver(
+                            localModelRepository = FakeLocalModelRepository(),
+                            utilityModelFilePort = FakeUtilityModelFile(),
+                            gpuCapabilityPort = FakeGpuCapability(),
+                            capabilityPort = FakeLocalImageGenerationCapability(),
+                            selectBackend = SelectLocalImageGenerationBackendUseCase(),
+                        ),
                 )
 
             val result = useCase(ModelType.IMAGE_EDIT)
@@ -133,7 +128,7 @@ class ResolveAssignedImageGenerationTargetUseCaseTest {
         runTest {
             val useCase =
                 useCaseWith(
-                    filePort = mockk(relaxed = true),
+                    filePort = FakeUtilityModelFile(),
                     asset = sd15Asset(sha256 = "ordinary-chat-gguf-sha"),
                 )
 
@@ -150,10 +145,7 @@ class ResolveAssignedImageGenerationTargetUseCaseTest {
     fun `SD15 assignment falls back to CPU MNN when NPU unavailable`() =
         runTest {
             val modelFile = "/abs/models/stable-diffusion-v1-5-Q4_0.gguf"
-            val filePort =
-                mockk<com.browntowndev.enclave.domain.port.repository.UtilityModelFilePort> {
-                    coEvery { resolveLocalModelPath(any()) } returns modelFile
-                }
+            val filePort = FakeUtilityModelFile().apply { localModelPath = modelFile }
             val useCase =
                 useCaseWith(
                     filePort = filePort,
@@ -179,18 +171,18 @@ class ResolveAssignedImageGenerationTargetUseCaseTest {
     @Test
     fun `unsupported device rejects local target before artifact resolution`() =
         runTest {
-            val filePort = mockk<com.browntowndev.enclave.domain.port.repository.UtilityModelFilePort>(relaxed = true)
+            val filePort = FakeUtilityModelFile()
             val useCase = useCaseWith(filePort, localImageGenerationSupported = false)
 
             val result = useCase()
 
             assertTrue(result.isFailure)
             assertEquals(LOCAL_IMAGE_GENERATION_UNSUPPORTED_MESSAGE, result.exceptionOrNull()?.message)
-            coVerify(exactly = 0) { filePort.resolveLocalModelPath(any()) }
+            assertTrue(filePort.resolveLocalModelPathCalls.isEmpty())
         }
 
     private fun useCaseWith(
-        filePort: com.browntowndev.enclave.domain.port.repository.UtilityModelFilePort,
+        filePort: UtilityModelFilePort,
         asset: LocalModelAsset = sd15Asset(),
         localConfigId: LocalModelConfigurationId = LocalModelConfigurationId("sd15-local-config"),
         slot: ModelType = ModelType.IMAGE_GENERATION,
@@ -212,20 +204,20 @@ class ResolveAssignedImageGenerationTargetUseCaseTest {
                 )
             }
         val localModelRepository =
-            mockk<com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort> {
-                coEvery { getAssetByConfigId(localConfigId) } returns asset
+            FakeLocalModelRepository().apply {
+                seedAssetForConfig(localConfigId, asset)
             }
         val resolver =
             LocalStableDiffusionTargetResolver(
                 localModelRepository = localModelRepository,
                 utilityModelFilePort = filePort,
                 gpuCapabilityPort =
-                    mockk {
-                        every { isLocalImageGenerationSupported() } returns localImageGenerationSupported
+                    FakeGpuCapability().apply {
+                        this.localImageGenerationSupported = localImageGenerationSupported
                     },
                 capabilityPort =
-                    mockk {
-                        every { getCapabilities() } returns effectiveCapabilities
+                    FakeLocalImageGenerationCapability().apply {
+                        this.capabilities = effectiveCapabilities
                     },
                 selectBackend = SelectLocalImageGenerationBackendUseCase(),
             )
@@ -241,7 +233,7 @@ class ResolveAssignedImageGenerationTargetUseCaseTest {
                         ),
                     )
                 },
-            mediaProviderRepository = mockk(relaxed = true),
+            mediaProviderRepository = FakeMediaProviderRepository(),
             localStableDiffusionTargetResolver = resolver,
         )
     }

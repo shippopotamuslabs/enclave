@@ -10,7 +10,7 @@ import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.TransactionProvider
 import javax.inject.Inject
 
-class SyncLocalModelRegistryUseCase
+open class SyncLocalModelRegistryUseCase
     @Inject
     constructor(
         private val localModelRepository: LocalModelRepositoryPort,
@@ -29,7 +29,7 @@ class SyncLocalModelRegistryUseCase
          * @return SlotResolvedLocalModel containing the synced asset and configuration
          */
         @Suppress("ThrowsCount")
-        suspend operator fun invoke(
+        open suspend operator fun invoke(
             modelType: ModelType,
             asset: LocalModelAsset,
             assignAsDefault: Boolean = true,

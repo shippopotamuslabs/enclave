@@ -1,76 +1,44 @@
 package com.browntowndev.enclave.domain.usecase.settings
 
+import com.browntowndev.enclave.core.testing.FakeApiModelRepository
 import com.browntowndev.enclave.domain.model.config.ApiCredentials
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
-import com.browntowndev.enclave.domain.model.config.ApiModelAsset
 import com.browntowndev.enclave.domain.model.config.ApiModelConfiguration
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
-import com.browntowndev.enclave.domain.port.repository.ApiModelRepositoryPort
-import com.browntowndev.enclave.domain.usecase.byok.GetApiModelAssetsUseCase
-import com.browntowndev.enclave.domain.usecase.byok.SaveApiCredentialsUseCase
-import com.browntowndev.enclave.domain.usecase.byok.SaveApiModelConfigurationUseCase
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
-import kotlinx.coroutines.flow.MutableStateFlow
+import com.browntowndev.enclave.domain.usecase.byok.GetApiModelAssetsUseCaseImpl
+import com.browntowndev.enclave.domain.usecase.byok.SaveApiCredentialsUseCaseImpl
+import com.browntowndev.enclave.domain.usecase.byok.SaveApiModelConfigurationUseCaseImpl
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class SaveApiProviderDraftUseCaseTest {
-    private val saveApiCredentialsUseCase = mockk<SaveApiCredentialsUseCase>()
-    private val saveApiModelConfigurationUseCase = mockk<SaveApiModelConfigurationUseCase>()
-    private val getApiModelAssetsUseCase = mockk<GetApiModelAssetsUseCase>()
-    private val apiModelRepository = mockk<ApiModelRepositoryPort>()
+    private lateinit var apiModelRepository: FakeApiModelRepository
+    private lateinit var useCase: SaveApiProviderDraftUseCase
+
+    @BeforeEach
+    fun setUp() {
+        apiModelRepository = FakeApiModelRepository()
+        useCase =
+            SaveApiProviderDraftUseCase(
+                saveApiCredentialsUseCase = SaveApiCredentialsUseCaseImpl(apiModelRepository),
+                saveApiModelConfigurationUseCase = SaveApiModelConfigurationUseCaseImpl(apiModelRepository),
+                getApiModelAssetsUseCase = GetApiModelAssetsUseCaseImpl(apiModelRepository),
+                apiModelRepository = apiModelRepository,
+            )
+    }
 
     @Test
     fun `SCN-USECASE-SAVE-ASSET-003 Initial Preset Empty Model`() =
         runTest {
             val credId99 = ApiCredentialsId("99")
-            val persistedAssets = MutableStateFlow<List<ApiModelAsset>>(emptyList())
-            every { getApiModelAssetsUseCase() } returns persistedAssets
-            coEvery { saveApiCredentialsUseCase(any(), any(), any()) } coAnswers {
-                val credentials = invocation.args[0] as ApiCredentials
-                persistedAssets.value =
-                    listOf(
-                        ApiModelAsset(
-                            credentials = credentials.copy(id = credId99),
-                            configurations = emptyList(),
-                        ),
-                    )
-                credId99
-            }
-            coEvery { saveApiModelConfigurationUseCase(any()) } coAnswers {
-                val configuration = invocation.args[0] as ApiModelConfiguration
-                val expectedId = ApiModelConfigurationId("123")
-                persistedAssets.value =
-                    listOf(
-                        ApiModelAsset(
-                            credentials = persistedAssets.value.single().credentials,
-                            configurations = listOf(configuration.copy(id = expectedId)),
-                        ),
-                    )
-                Result.success(expectedId)
-            }
-            coEvery {
-                apiModelRepository.findMatchingCredentials(
-                    provider = any(),
-                    baseUrl = any(),
-                    apiKey = any(),
-                    sourceCredentialAlias = any(),
-                )
-            } returns null
-            coEvery { apiModelRepository.getAllCredentialAliases() } returns emptySet()
+            apiModelRepository.saveCredentialsResultId = credId99
 
             val result =
-                SaveApiProviderDraftUseCase(
-                    saveApiCredentialsUseCase = saveApiCredentialsUseCase,
-                    saveApiModelConfigurationUseCase = saveApiModelConfigurationUseCase,
-                    getApiModelAssetsUseCase = getApiModelAssetsUseCase,
-                    apiModelRepository = apiModelRepository,
-                ).invoke(
+                useCase(
                     ApiProviderDraft(
                         displayName = "Work OpenAI",
                         provider = ApiProvider.OPENAI,
@@ -89,63 +57,24 @@ class SaveApiProviderDraftUseCaseTest {
         runTest {
             val credId1 = ApiCredentialsId("1")
             val credId99 = ApiCredentialsId("99")
-            val persistedAssets =
-                MutableStateFlow(
-                    listOf(
-                        ApiModelAsset(
-                            credentials =
-                                ApiCredentials(
-                                    id = credId1,
-                                    displayName = "Existing xAI",
-                                    provider = ApiProvider.XAI,
-                                    baseUrl = ApiProvider.XAI.defaultBaseUrl(),
-                                    credentialAlias = "xai-grok-4-fast-reasoning",
-                                ),
-                            configurations = emptyList(),
-                        ),
+            // An existing xAI asset whose stored key differs from the draft's key, so
+            // findMatchingCredentials must not link the draft to it.
+            apiModelRepository.seedCredentials(
+                listOf(
+                    ApiCredentials(
+                        id = credId1,
+                        displayName = "Existing xAI",
+                        provider = ApiProvider.XAI,
+                        baseUrl = ApiProvider.XAI.defaultBaseUrl(),
+                        credentialAlias = "xai-grok-4-fast-reasoning",
                     ),
-                )
-            every { getApiModelAssetsUseCase() } returns persistedAssets
-            coEvery { saveApiCredentialsUseCase(any(), any(), any()) } coAnswers {
-                val credentials = invocation.args[0] as ApiCredentials
-                persistedAssets.value =
-                    listOf(
-                        ApiModelAsset(
-                            credentials = credentials.copy(id = credId99),
-                            configurations = emptyList(),
-                        ),
-                    )
-                credId99
-            }
-            coEvery { saveApiModelConfigurationUseCase(any()) } coAnswers {
-                val configuration = invocation.args[0] as ApiModelConfiguration
-                val expectedId = ApiModelConfigurationId("123")
-                persistedAssets.value =
-                    listOf(
-                        ApiModelAsset(
-                            credentials = persistedAssets.value.single().credentials,
-                            configurations = listOf(configuration.copy(id = expectedId)),
-                        ),
-                    )
-                Result.success(expectedId)
-            }
-            coEvery {
-                apiModelRepository.findMatchingCredentials(
-                    provider = any(),
-                    baseUrl = any(),
-                    apiKey = any(),
-                    sourceCredentialAlias = any(),
-                )
-            } returns null
-            coEvery { apiModelRepository.getAllCredentialAliases() } returns setOf("xai-grok-4-fast-reasoning")
+                ),
+                apiKeys = mapOf(credId1 to "a-different-key"),
+            )
+            apiModelRepository.saveCredentialsResultId = credId99
 
             val result =
-                SaveApiProviderDraftUseCase(
-                    saveApiCredentialsUseCase = saveApiCredentialsUseCase,
-                    saveApiModelConfigurationUseCase = saveApiModelConfigurationUseCase,
-                    getApiModelAssetsUseCase = getApiModelAssetsUseCase,
-                    apiModelRepository = apiModelRepository,
-                ).invoke(
+                useCase(
                     ApiProviderDraft(
                         displayName = "New xAI",
                         provider = ApiProvider.XAI,
@@ -164,59 +93,33 @@ class SaveApiProviderDraftUseCaseTest {
     fun `SCN-USECASE-SAVE-ASSET-002 Link Existing Credential Without Model Match`() =
         runTest {
             val credId42 = ApiCredentialsId("42")
-            val existingAsset =
-                ApiModelAsset(
-                    credentials =
-                        ApiCredentials(
-                            id = credId42,
-                            displayName = "Existing xAI",
-                            provider = ApiProvider.XAI,
-                            baseUrl = ApiProvider.XAI.defaultBaseUrl(),
-                            credentialAlias = "existing-xai",
-                        ),
-                    configurations =
-                        listOf(
-                            ApiModelConfiguration(
-                                id = ApiModelConfigurationId("8"),
-                                apiCredentialsId = credId42,
-                                modelId = "",
-                                displayName = "Default Preset",
-                            ),
-                        ),
-                )
-            val persistedAssets = MutableStateFlow(listOf(existingAsset))
-            every { getApiModelAssetsUseCase() } returns persistedAssets
-            coEvery {
-                apiModelRepository.findMatchingCredentials(
-                    provider = ApiProvider.XAI,
-                    baseUrl = ApiProvider.XAI.defaultBaseUrl(),
-                    apiKey = "xai-key",
-                    sourceCredentialAlias = null,
-                )
-            } returns existingAsset.credentials
-            coEvery { saveApiCredentialsUseCase(any(), any(), any()) } returns ApiCredentialsId("0")
-            coEvery { saveApiModelConfigurationUseCase(any()) } coAnswers {
-                val configuration = invocation.args[0] as ApiModelConfiguration
-                val expectedId = ApiModelConfigurationId("99")
-                persistedAssets.value =
-                    listOf(
-                        existingAsset.copy(
-                            configurations =
-                                listOf(
-                                    configuration.copy(id = expectedId, apiCredentialsId = existingAsset.credentials.id),
-                                ),
-                        ),
-                    )
-                Result.success(expectedId)
-            }
+            // The existing credential's stored key matches the draft's key, so the draft
+            // links to it instead of saving new credentials.
+            apiModelRepository.seedCredentials(
+                listOf(
+                    ApiCredentials(
+                        id = credId42,
+                        displayName = "Existing xAI",
+                        provider = ApiProvider.XAI,
+                        baseUrl = ApiProvider.XAI.defaultBaseUrl(),
+                        credentialAlias = "existing-xai",
+                    ),
+                ),
+                apiKeys = mapOf(credId42 to "xai-key"),
+            )
+            apiModelRepository.seedConfigurations(
+                listOf(
+                    ApiModelConfiguration(
+                        id = ApiModelConfigurationId("8"),
+                        apiCredentialsId = credId42,
+                        modelId = "",
+                        displayName = "Default Preset",
+                    ),
+                ),
+            )
 
             val result =
-                SaveApiProviderDraftUseCase(
-                    saveApiCredentialsUseCase = saveApiCredentialsUseCase,
-                    saveApiModelConfigurationUseCase = saveApiModelConfigurationUseCase,
-                    getApiModelAssetsUseCase = getApiModelAssetsUseCase,
-                    apiModelRepository = apiModelRepository,
-                ).invoke(
+                useCase(
                     ApiProviderDraft(
                         displayName = "New xAI",
                         provider = ApiProvider.XAI,
@@ -230,55 +133,19 @@ class SaveApiProviderDraftUseCaseTest {
             assertEquals("Existing xAI", result.linkedExistingAssetDisplayName)
             assertEquals("Default Preset 2", result.createdPreset?.displayName)
             assertEquals(credId42, result.createdPreset?.apiCredentialsId)
-            coVerify(exactly = 0) { saveApiCredentialsUseCase(any(), any(), any()) }
+            assertTrue(apiModelRepository.saveCredentialsCalls.isEmpty())
         }
 
     @Test
     fun `SCN-USECASE-SAVE-ASSET-004 OpenAI alias avoids soft-deleted alias collision`() =
         runTest {
             val credId99 = ApiCredentialsId("99")
-            val persistedAssets = MutableStateFlow<List<ApiModelAsset>>(emptyList())
-            every { getApiModelAssetsUseCase() } returns persistedAssets
-            coEvery { apiModelRepository.getAllCredentialAliases() } returns setOf("openai")
-            coEvery { saveApiCredentialsUseCase(any(), any(), any()) } coAnswers {
-                val credentials = invocation.args[0] as ApiCredentials
-                persistedAssets.value =
-                    listOf(
-                        ApiModelAsset(
-                            credentials = credentials.copy(id = credId99),
-                            configurations = emptyList(),
-                        ),
-                    )
-                credId99
-            }
-            coEvery { saveApiModelConfigurationUseCase(any()) } coAnswers {
-                val configuration = invocation.args[0] as ApiModelConfiguration
-                val expectedId = ApiModelConfigurationId("123")
-                persistedAssets.value =
-                    listOf(
-                        ApiModelAsset(
-                            credentials = persistedAssets.value.single().credentials,
-                            configurations = listOf(configuration.copy(id = expectedId)),
-                        ),
-                    )
-                Result.success(expectedId)
-            }
-            coEvery {
-                apiModelRepository.findMatchingCredentials(
-                    provider = any(),
-                    baseUrl = any(),
-                    apiKey = any(),
-                    sourceCredentialAlias = any(),
-                )
-            } returns null
+            // The "openai" alias is already taken (e.g. by a soft-deleted credential).
+            apiModelRepository.additionalCredentialAliases = setOf("openai")
+            apiModelRepository.saveCredentialsResultId = credId99
 
             val result =
-                SaveApiProviderDraftUseCase(
-                    saveApiCredentialsUseCase = saveApiCredentialsUseCase,
-                    saveApiModelConfigurationUseCase = saveApiModelConfigurationUseCase,
-                    getApiModelAssetsUseCase = getApiModelAssetsUseCase,
-                    apiModelRepository = apiModelRepository,
-                ).invoke(
+                useCase(
                     ApiProviderDraft(
                         displayName = "My OpenAI",
                         provider = ApiProvider.OPENAI,

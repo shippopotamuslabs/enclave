@@ -1,23 +1,18 @@
 package com.browntowndev.enclave.domain.usecase.chat
 
+import com.browntowndev.enclave.core.testing.FakeChatRepository
+import com.browntowndev.enclave.core.testing.FakeMessageRepository
 import com.browntowndev.enclave.domain.model.chat.ChatId
-import com.browntowndev.enclave.domain.model.chat.Content
 import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.chat.MessageId
-import com.browntowndev.enclave.domain.model.chat.MessageState
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.chat.WebSearchSource
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.port.repository.ChatRepository
-import com.browntowndev.enclave.domain.port.repository.MessageRepository
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.mockk
-import io.mockk.slot
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 
@@ -25,9 +20,9 @@ import org.junit.jupiter.api.Test
 class PersistVoiceTurnUseCaseTest {
     private fun useCase(
         createUserMessageUseCase: CreateUserMessageUseCase,
-        messageRepository: MessageRepository,
-        chatRepository: ChatRepository = mockk(relaxed = true),
-        generateChatTitleUseCase: GenerateChatTitleUseCase = mockk(relaxed = true),
+        messageRepository: FakeMessageRepository,
+        chatRepository: FakeChatRepository = FakeChatRepository(),
+        generateChatTitleUseCase: GenerateChatTitleUseCase = FakeGenerateChatTitleUseCase(),
     ): PersistVoiceTurnUseCase =
         PersistVoiceTurnUseCase(
             createUserMessageUseCase = createUserMessageUseCase,
@@ -35,36 +30,37 @@ class PersistVoiceTurnUseCaseTest {
             chatRepository = chatRepository,
             generateChatTitleUseCase = generateChatTitleUseCase,
         )
+
+    private fun FakeMessageRepository.savedAssistant(): Message =
+        messages().single { it.role == Role.ASSISTANT }
+
     @Test
     @DisplayName("LV-PERSIST-001")
     fun lvPersist001_bothTurnsExistingChat() =
         runTest {
-            val createUserMessageUseCase = mockk<CreateUserMessageUseCase>()
-            val messageRepository = mockk<MessageRepository>()
-            val userMessageSlot = slot<Message>()
-            val assistantMessageSlot = slot<Message>()
+            val createUserMessageUseCase = FakeCreateUserMessageUseCase()
+            val messageRepository = FakeMessageRepository()
 
-            coEvery {
-                createUserMessageUseCase(capture(userMessageSlot))
-            } returns
+            createUserMessageUseCase.result =
                 UserPromptResult(
                     userMessageId = MessageId("u1"),
                     chatId = ChatId("c1"),
                     userMessageCreatedAtMillis = 1_700_000_000_000L,
                 )
-            coEvery { messageRepository.saveMessage(capture(assistantMessageSlot)) } returns MessageId("a1")
 
             val result =
                 useCase(createUserMessageUseCase, messageRepository)
                     .invoke(ChatId("c1"), "hello there", "hi back")
 
-            assertEquals(Role.USER, userMessageSlot.captured.role)
-            assertEquals("hello there", userMessageSlot.captured.content.text)
-            assertEquals(Role.ASSISTANT, assistantMessageSlot.captured.role)
-            assertEquals("hi back", assistantMessageSlot.captured.content.text)
-            assertEquals(ModelType.LIVE_VOICE, assistantMessageSlot.captured.modelType)
-            assertEquals(ChatId("c1"), assistantMessageSlot.captured.chatId)
-            assertEquals(1_700_000_000_001L, assistantMessageSlot.captured.createdAt)
+            val userMessage = createUserMessageUseCase.calls.single()
+            assertEquals(Role.USER, userMessage.role)
+            assertEquals("hello there", userMessage.content.text)
+            val assistantMessage = messageRepository.savedAssistant()
+            assertEquals(Role.ASSISTANT, assistantMessage.role)
+            assertEquals("hi back", assistantMessage.content.text)
+            assertEquals(ModelType.LIVE_VOICE, assistantMessage.modelType)
+            assertEquals(ChatId("c1"), assistantMessage.chatId)
+            assertEquals(1_700_000_000_001L, assistantMessage.createdAt)
             assertEquals(ChatId("c1"), result)
         }
 
@@ -72,23 +68,22 @@ class PersistVoiceTurnUseCaseTest {
     @DisplayName("LV-PERSIST-002")
     fun lvPersist002_chatCreatedOnDemand() =
         runTest {
-            val createUserMessageUseCase = mockk<CreateUserMessageUseCase>()
-            val messageRepository = mockk<MessageRepository>()
-            val assistantMessageSlot = slot<Message>()
+            val createUserMessageUseCase = FakeCreateUserMessageUseCase()
+            val messageRepository = FakeMessageRepository()
 
-            coEvery { createUserMessageUseCase(any()) } returns
+            createUserMessageUseCase.result =
                 UserPromptResult(
                     userMessageId = MessageId("u9"),
                     chatId = ChatId("new-chat"),
                     userMessageCreatedAtMillis = 0L,
                 )
-            coEvery { messageRepository.saveMessage(capture(assistantMessageSlot)) } returns MessageId("a1")
 
             val result =
                 useCase(createUserMessageUseCase, messageRepository)
                     .invoke(null, "start a session", "ready")
 
-            assertEquals(ChatId("new-chat"), assistantMessageSlot.captured.chatId)
+            val assistantMessage = messageRepository.savedAssistant()
+            assertEquals(ChatId("new-chat"), assistantMessage.chatId)
             assertEquals(ChatId("new-chat"), result)
         }
 
@@ -96,26 +91,25 @@ class PersistVoiceTurnUseCaseTest {
     @DisplayName("LV-PERSIST-003")
     fun lvPersist003_blankUserSeedsFromAssistant() =
         runTest {
-            val createUserMessageUseCase = mockk<CreateUserMessageUseCase>()
-            val messageRepository = mockk<MessageRepository>()
-            val userMessageSlot = slot<Message>()
-            val assistantMessageSlot = slot<Message>()
+            val createUserMessageUseCase = FakeCreateUserMessageUseCase()
+            val messageRepository = FakeMessageRepository()
 
-            coEvery { createUserMessageUseCase(capture(userMessageSlot)) } returns
+            createUserMessageUseCase.result =
                 UserPromptResult(
                     userMessageId = MessageId("u2"),
                     chatId = ChatId("seed-chat"),
                     userMessageCreatedAtMillis = 0L,
                 )
-            coEvery { messageRepository.saveMessage(capture(assistantMessageSlot)) } returns MessageId("a1")
 
             val result =
                 useCase(createUserMessageUseCase, messageRepository)
                     .invoke(null, "   ", "the answer is 42")
 
-            assertEquals("the answer is 42", userMessageSlot.captured.content.text)
-            assertEquals("the answer is 42", assistantMessageSlot.captured.content.text)
-            assertEquals(ChatId("seed-chat"), assistantMessageSlot.captured.chatId)
+            val userMessage = createUserMessageUseCase.calls.single()
+            assertEquals("the answer is 42", userMessage.content.text)
+            val assistantMessage = messageRepository.savedAssistant()
+            assertEquals("the answer is 42", assistantMessage.content.text)
+            assertEquals(ChatId("seed-chat"), assistantMessage.chatId)
             assertEquals(ChatId("seed-chat"), result)
         }
 
@@ -123,20 +117,18 @@ class PersistVoiceTurnUseCaseTest {
     @DisplayName("LV-PERSIST-005")
     fun lvPersist005_assistantOnlyExistingChatDoesNotCreateUserRow() =
         runTest {
-            val createUserMessageUseCase = mockk<CreateUserMessageUseCase>(relaxed = true)
-            val messageRepository = mockk<MessageRepository>()
-            val assistantMessageSlot = slot<Message>()
-
-            coEvery { messageRepository.saveMessage(capture(assistantMessageSlot)) } returns MessageId("a1")
+            val createUserMessageUseCase = FakeCreateUserMessageUseCase()
+            val messageRepository = FakeMessageRepository()
 
             val result =
                 useCase(createUserMessageUseCase, messageRepository)
                     .invoke(ChatId("c1"), "", "assistant reply only")
 
-            coVerify(exactly = 0) { createUserMessageUseCase(any()) }
-            assertEquals(Role.ASSISTANT, assistantMessageSlot.captured.role)
-            assertEquals("assistant reply only", assistantMessageSlot.captured.content.text)
-            assertEquals(ChatId("c1"), assistantMessageSlot.captured.chatId)
+            assertTrue(createUserMessageUseCase.calls.isEmpty())
+            val assistantMessage = messageRepository.savedAssistant()
+            assertEquals(Role.ASSISTANT, assistantMessage.role)
+            assertEquals("assistant reply only", assistantMessage.content.text)
+            assertEquals(ChatId("c1"), assistantMessage.chatId)
             assertEquals(ChatId("c1"), result)
         }
 
@@ -144,15 +136,15 @@ class PersistVoiceTurnUseCaseTest {
     @DisplayName("LV-PERSIST-004")
     fun lvPersist004_bothBlankPersistsNothing() =
         runTest {
-            val createUserMessageUseCase = mockk<CreateUserMessageUseCase>(relaxed = true)
-            val messageRepository = mockk<MessageRepository>(relaxed = true)
+            val createUserMessageUseCase = FakeCreateUserMessageUseCase()
+            val messageRepository = FakeMessageRepository()
 
             val result =
                 useCase(createUserMessageUseCase, messageRepository)
                     .invoke(ChatId("c1"), "", "   ")
 
-            coVerify(exactly = 0) { createUserMessageUseCase(any()) }
-            coVerify(exactly = 0) { messageRepository.saveMessage(any()) }
+            assertTrue(createUserMessageUseCase.calls.isEmpty())
+            assertTrue(messageRepository.messages().isEmpty())
             assertEquals(ChatId("c1"), result)
         }
 
@@ -160,11 +152,11 @@ class PersistVoiceTurnUseCaseTest {
     @DisplayName("LV-PERSIST-006")
     fun lvPersist006_newChatWithUserTextTriggersTitleGen() =
         runTest {
-            val createUserMessageUseCase = mockk<CreateUserMessageUseCase>()
-            val messageRepository = mockk<MessageRepository>(relaxed = true)
-            val generateChatTitleUseCase = mockk<GenerateChatTitleUseCase>(relaxed = true)
+            val createUserMessageUseCase = FakeCreateUserMessageUseCase()
+            val messageRepository = FakeMessageRepository()
+            val generateChatTitleUseCase = FakeGenerateChatTitleUseCase()
 
-            coEvery { createUserMessageUseCase(any()) } returns
+            createUserMessageUseCase.result =
                 UserPromptResult(
                     userMessageId = MessageId("u9"),
                     chatId = ChatId("new-chat"),
@@ -178,20 +170,21 @@ class PersistVoiceTurnUseCaseTest {
             ).invoke(null, "start a session", "ready")
             advanceUntilIdle()
 
-            coVerify(exactly = 1) {
-                generateChatTitleUseCase(ChatId("new-chat"), "start a session")
-            }
+            assertEquals(
+                listOf(ChatId("new-chat") to "start a session"),
+                generateChatTitleUseCase.calls,
+            )
         }
 
     @Test
     @DisplayName("LV-PERSIST-007")
     fun lvPersist007_existingChatDoesNotTriggerTitleGen() =
         runTest {
-            val createUserMessageUseCase = mockk<CreateUserMessageUseCase>()
-            val messageRepository = mockk<MessageRepository>(relaxed = true)
-            val generateChatTitleUseCase = mockk<GenerateChatTitleUseCase>(relaxed = true)
+            val createUserMessageUseCase = FakeCreateUserMessageUseCase()
+            val messageRepository = FakeMessageRepository()
+            val generateChatTitleUseCase = FakeGenerateChatTitleUseCase()
 
-            coEvery { createUserMessageUseCase(any()) } returns
+            createUserMessageUseCase.result =
                 UserPromptResult(
                     userMessageId = MessageId("u1"),
                     chatId = ChatId("c1"),
@@ -205,17 +198,16 @@ class PersistVoiceTurnUseCaseTest {
             ).invoke(ChatId("c1"), "hello there", "hi back")
             advanceUntilIdle()
 
-            coVerify(exactly = 0) { generateChatTitleUseCase(any(), any()) }
+            assertTrue(generateChatTitleUseCase.calls.isEmpty())
         }
 
     @Test
     @DisplayName("LV-PERSIST-009")
     fun lvPersist009_webSearchSourcesPersistedWithAssistantMessage() =
         runTest {
-            val createUserMessageUseCase = mockk<CreateUserMessageUseCase>()
-            val messageRepository = mockk<MessageRepository>()
-            val chatRepository = mockk<ChatRepository>(relaxed = true)
-            val assistantMessageSlot = slot<Message>()
+            val createUserMessageUseCase = FakeCreateUserMessageUseCase()
+            val messageRepository = FakeMessageRepository()
+            val chatRepository = FakeChatRepository()
             val assistantMessageId = MessageId("assistant-1")
             val sources =
                 listOf(
@@ -228,13 +220,12 @@ class PersistVoiceTurnUseCaseTest {
                     ),
                 )
 
-            coEvery { createUserMessageUseCase(any()) } returns
+            createUserMessageUseCase.result =
                 UserPromptResult(
                     userMessageId = MessageId("u1"),
                     chatId = ChatId("c1"),
                     userMessageCreatedAtMillis = 1_700_000_000_000L,
                 )
-            coEvery { messageRepository.saveMessage(capture(assistantMessageSlot)) } returns assistantMessageId
 
             useCase(createUserMessageUseCase, messageRepository, chatRepository)
                 .invoke(
@@ -245,30 +236,28 @@ class PersistVoiceTurnUseCaseTest {
                     assistantMessageId = assistantMessageId,
                 )
 
-            assertEquals(sources, assistantMessageSlot.captured.webSearchSources)
-            coVerify(exactly = 1) {
-                chatRepository.persistWebSearchSources(
-                    messageId = assistantMessageId,
-                    sources = sources,
-                )
-            }
+            val assistantMessage = messageRepository.savedAssistant()
+            assertEquals(sources, assistantMessage.webSearchSources)
+            assertEquals(
+                listOf(assistantMessageId to sources),
+                chatRepository.persistWebSearchSourcesCalls,
+            )
         }
 
     @Test
     @DisplayName("LV-PERSIST-008")
     fun lvPersist008_assistantOnlyNewChatDoesNotTriggerTitleGen() =
         runTest {
-            val createUserMessageUseCase = mockk<CreateUserMessageUseCase>()
-            val messageRepository = mockk<MessageRepository>()
-            val generateChatTitleUseCase = mockk<GenerateChatTitleUseCase>(relaxed = true)
+            val createUserMessageUseCase = FakeCreateUserMessageUseCase()
+            val messageRepository = FakeMessageRepository()
+            val generateChatTitleUseCase = FakeGenerateChatTitleUseCase()
 
-            coEvery { createUserMessageUseCase(any()) } returns
+            createUserMessageUseCase.result =
                 UserPromptResult(
                     userMessageId = MessageId("u2"),
                     chatId = ChatId("seed-chat"),
                     userMessageCreatedAtMillis = 0L,
                 )
-            coEvery { messageRepository.saveMessage(any()) } returns MessageId("a1")
 
             useCase(
                 createUserMessageUseCase = createUserMessageUseCase,
@@ -277,6 +266,6 @@ class PersistVoiceTurnUseCaseTest {
             ).invoke(null, "   ", "the answer is 42")
             advanceUntilIdle()
 
-            coVerify(exactly = 0) { generateChatTitleUseCase(any(), any()) }
+            assertTrue(generateChatTitleUseCase.calls.isEmpty())
         }
 }

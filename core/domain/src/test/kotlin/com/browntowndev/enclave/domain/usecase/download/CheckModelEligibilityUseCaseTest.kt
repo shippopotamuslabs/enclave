@@ -1,6 +1,6 @@
 package com.browntowndev.enclave.domain.usecase.download
 
-import android.util.Log
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.model.config.LocalModelAsset
 import com.browntowndev.enclave.domain.model.config.LocalModelConfiguration
 import com.browntowndev.enclave.domain.model.config.LocalModelId
@@ -9,39 +9,24 @@ import com.browntowndev.enclave.domain.model.config.UtilityType
 import com.browntowndev.enclave.domain.model.download.ModelScanResult
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import io.mockk.MockKAnnotations
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.mockkStatic
-import io.mockk.unmockkStatic
-import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class CheckModelEligibilityUseCaseTest {
     private lateinit var useCase: CheckModelEligibilityUseCase
-    private lateinit var mockLogger: LoggingPort
+    private lateinit var mockLogger: FakeLoggingPort
 
     @BeforeEach
     fun setup() {
-        MockKAnnotations.init(this)
-        mockkStatic(Log::class)
-        every { Log.d(any<String>(), any<String>()) } returns 0
-        every { Log.e(any<String>(), any<String>()) } returns 0
-        every { Log.i(any<String>(), any<String>()) } returns 0
-        every { Log.w(any<String>(), any<String>()) } returns 0
-        every { Log.v(any<String>(), any<String>()) } returns 0
-
-        mockLogger = mockk(relaxed = true)
+        mockLogger = FakeLoggingPort()
         useCase = CheckModelEligibilityUseCase(mockLogger)
-    }
-
-    @AfterEach
-    fun tearDown() {
-        unmockkStatic(Log::class)
     }
 
     private fun createModelAsset(

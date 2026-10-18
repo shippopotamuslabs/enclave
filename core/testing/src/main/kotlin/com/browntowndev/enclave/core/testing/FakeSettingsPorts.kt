@@ -32,11 +32,21 @@ class FakeLiveVoiceProviderRepository(
     val savedCalls = mutableListOf<Pair<LiveVoiceProviderAsset, String?>>()
     val deletedIds = mutableListOf<LiveVoiceProviderId>()
 
+    /** When set, [saveLiveVoiceProvider] returns this id instead of the asset's own id (ENC-28). */
+    var saveResultId: LiveVoiceProviderId? = null
+
+    /** Number of [getLiveVoiceProviders] calls so far (ENC-28). */
+    var getLiveVoiceProvidersCallCount = 0
+        private set
+
     fun emit(providers: List<LiveVoiceProviderAsset>) {
         state.value = providers
     }
 
-    override fun getLiveVoiceProviders(): Flow<List<LiveVoiceProviderAsset>> = state.asStateFlow()
+    override fun getLiveVoiceProviders(): Flow<List<LiveVoiceProviderAsset>> {
+        getLiveVoiceProvidersCallCount++
+        return state.asStateFlow()
+    }
 
     override suspend fun getLiveVoiceProvidersSync(): List<LiveVoiceProviderAsset> = state.value
 
@@ -46,7 +56,7 @@ class FakeLiveVoiceProviderRepository(
     override suspend fun saveLiveVoiceProvider(asset: LiveVoiceProviderAsset, apiKey: String?): LiveVoiceProviderId {
         savedCalls += asset to apiKey
         state.value = state.value.filterNot { it.id == asset.id } + asset
-        return asset.id
+        return saveResultId ?: asset.id
     }
 
     override suspend fun deleteLiveVoiceProvider(id: LiveVoiceProviderId) {
@@ -79,16 +89,19 @@ class FakeModelPackVerifierPort : ModelPackVerifierPort {
     var completeness: ModelPackCompleteness =
         ModelPackCompleteness(packId = "", installedCount = 0, totalCount = 0, isComplete = true, members = emptyList())
 
+    /** Per-pack completeness overrides, keyed by packId; falls back to [completeness] (ENC-28). */
+    val completenessByPackId = mutableMapOf<String, ModelPackCompleteness>()
+
     override suspend fun verifyPack(
         pack: ModelPack,
         depth: com.browntowndev.enclave.domain.model.download.ModelPackVerificationDepth,
-    ): ModelPackCompleteness = completeness
+    ): ModelPackCompleteness = completenessByPackId[pack.packId] ?: completeness
 
     override suspend fun verifyPackById(
         catalog: com.browntowndev.enclave.domain.model.download.ParsedModelCatalog,
         packId: String,
         depth: com.browntowndev.enclave.domain.model.download.ModelPackVerificationDepth,
-    ): ModelPackCompleteness? = completeness
+    ): ModelPackCompleteness? = completenessByPackId[packId] ?: completeness
 }
 
 /** Flow-backed [InferenceTelemetryRepositoryPort] fake (ENC-28). */

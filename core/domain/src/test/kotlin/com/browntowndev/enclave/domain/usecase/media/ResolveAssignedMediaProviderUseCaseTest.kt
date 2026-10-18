@@ -1,15 +1,13 @@
 package com.browntowndev.enclave.domain.usecase.media
 
+import com.browntowndev.enclave.core.testing.FakeDefaultModelRepository
+import com.browntowndev.enclave.core.testing.FakeMediaProviderRepository
 import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.config.MediaProviderAsset
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
-import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
-import io.mockk.coEvery
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -17,8 +15,8 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class ResolveAssignedMediaProviderUseCaseTest {
-    private val defaultModelRepository = mockk<DefaultModelRepositoryPort>()
-    private val mediaProviderRepository = mockk<MediaProviderRepositoryPort>()
+    private val defaultModelRepository = FakeDefaultModelRepository()
+    private val mediaProviderRepository = FakeMediaProviderRepository()
     private lateinit var useCase: ResolveAssignedMediaProviderUseCase
 
     @BeforeEach
@@ -42,12 +40,13 @@ class ResolveAssignedMediaProviderUseCaseTest {
                     capability = MediaCapability.IMAGE,
                     credentialAlias = "fal",
                 )
-            coEvery { defaultModelRepository.getDefault(ModelType.IMAGE_EDIT) } returns
+            defaultModelRepository.seed(
                 DefaultModelAssignment(
                     modelType = ModelType.IMAGE_EDIT,
                     mediaProviderId = providerId,
-                )
-            coEvery { mediaProviderRepository.getMediaProvider(providerId) } returns provider
+                ),
+            )
+            mediaProviderRepository.emitProviders(listOf(provider))
 
             val result = useCase(ModelType.IMAGE_EDIT)
 
@@ -58,8 +57,6 @@ class ResolveAssignedMediaProviderUseCaseTest {
     @Test
     fun invoke_failsWhenNoAssignmentForModelType() =
         runTest {
-            coEvery { defaultModelRepository.getDefault(ModelType.IMAGE_EDIT) } returns null
-
             val result = useCase(ModelType.IMAGE_EDIT)
 
             assertTrue(result.isFailure)
@@ -70,12 +67,12 @@ class ResolveAssignedMediaProviderUseCaseTest {
     fun invoke_failsWhenAssignedProviderMissing() =
         runTest {
             val providerId = MediaProviderId("missing-provider")
-            coEvery { defaultModelRepository.getDefault(ModelType.IMAGE_GENERATION) } returns
+            defaultModelRepository.seed(
                 DefaultModelAssignment(
                     modelType = ModelType.IMAGE_GENERATION,
                     mediaProviderId = providerId,
-                )
-            coEvery { mediaProviderRepository.getMediaProvider(providerId) } returns null
+                ),
+            )
 
             val result = useCase(ModelType.IMAGE_GENERATION)
 

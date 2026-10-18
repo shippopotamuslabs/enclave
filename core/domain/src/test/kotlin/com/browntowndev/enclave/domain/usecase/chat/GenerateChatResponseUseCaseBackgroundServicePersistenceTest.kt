@@ -1,5 +1,11 @@
 package com.browntowndev.enclave.domain.usecase.chat
 
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
+import com.browntowndev.enclave.core.testing.FakeChatInferenceExecutorPort
+import com.browntowndev.enclave.core.testing.FakeChatRepository
+import com.browntowndev.enclave.core.testing.FakeEmbeddingEngine
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeMessageRepository
 import com.browntowndev.enclave.domain.model.chat.AccumulatedMessages
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.ChatModelOverride
@@ -9,7 +15,6 @@ import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.chat.MessageGenerationState
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.MessageState
-import com.browntowndev.enclave.domain.model.chat.Mode
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
@@ -17,17 +22,11 @@ import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnKey
 import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnSnapshotPort
 import com.browntowndev.enclave.domain.port.inference.ChatInferenceExecutorPort
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.inference.PipelineExecutorPort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.ChatRepository
 import com.browntowndev.enclave.domain.port.repository.ExtractedUrlTrackerPort
-import com.browntowndev.enclave.domain.port.repository.MessageRepository
 import com.browntowndev.enclave.domain.usecase.FakeInferenceLockManager
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
+import com.browntowndev.enclave.domain.usecase.FakePipelineExecutor
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
@@ -37,6 +36,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -107,25 +107,11 @@ class GenerateChatResponseUseCaseBackgroundServicePersistenceTest {
                     displayName = "Claude Sonnet",
                 )
             val activeModelProvider =
-                mockk<ActiveModelProviderPort> {
-                    coEvery { getActiveConfigurationByOverride(override) } returns overrideConfig
+                FakeActiveModelProvider().apply {
+                    overrideConfiguration = overrideConfig
+                    hasOverrideConfiguration = true
                 }
-            val chatInferenceExecutor =
-                mockk<ChatInferenceExecutorPort> {
-                    every { stop() } returns Unit
-                    every {
-                        executeWithOverride(
-                            prompt = any(),
-                            userMessageId = any(),
-                            assistantMessageId = any(),
-                            chatId = any(),
-                            userHasImage = any(),
-                            modelOverride = any(),
-                            resolvedConfiguration = any(),
-                            backgroundInferenceEnabled = any(),
-                        )
-                    } returns emptyFlow()
-                }
+            val chatInferenceExecutor = FakeChatInferenceExecutorPort()
             val useCase =
                 createUseCase(
                     userMessageId = userMessageId,
@@ -154,7 +140,7 @@ class GenerateChatResponseUseCaseBackgroundServicePersistenceTest {
             val assistantMessageId = MessageId("assistant")
             val chatId = ChatId("chat")
             val activeChatTurnSnapshotPort = RecordingActiveChatTurnSnapshotPort()
-            val chatRepository = mockk<ChatRepository>(relaxed = true)
+            val chatRepository = FakeChatRepository()
             val chatInferenceExecutor = emptyBackgroundExecutor()
             val useCase =
                 createUseCase(
@@ -175,26 +161,11 @@ class GenerateChatResponseUseCaseBackgroundServicePersistenceTest {
             ).toList()
 
             assertTrue(activeChatTurnSnapshotPort.published.isEmpty())
-            coVerify(exactly = 0) {
-                chatRepository.persistAllMessageData(
-                    messageId = assistantMessageId,
-                    modelType = any(),
-                    thinkingStartTime = any(),
-                    thinkingEndTime = any(),
-                    thinkingDuration = any(),
-                    thinkingRaw = any(),
-                    content = any(),
-                    messageState = any(),
-                    pipelineStep = any(),
-                    webSearchSources = any(),
-                    artifacts = any(),
-                    generatedMediaUris = any(),
-                    generatedMediaAssetIds = any(),
-                    generatedMediaTypes = any(),
-                    generatedMediaPrompts = any(),
-                    transcriptSegments = any(),
-                )
-            }
+            assertTrue(
+                chatRepository.persistAllMessageDataCalls.none {
+                    it.messageId == assistantMessageId
+                },
+            )
         }
 
     @Test
@@ -203,21 +174,10 @@ class GenerateChatResponseUseCaseBackgroundServicePersistenceTest {
             val userMessageId = MessageId("user")
             val assistantMessageId = MessageId("assistant")
             val chatId = ChatId("chat")
-            val chatRepository = mockk<ChatRepository>(relaxed = true)
+            val chatRepository = FakeChatRepository()
             val chatInferenceExecutor =
-                mockk<ChatInferenceExecutorPort> {
-                    every { stop() } returns Unit
-                    every {
-                        execute(
-                            prompt = any(),
-                            userMessageId = any(),
-                            assistantMessageId = any(),
-                            chatId = any(),
-                            userHasImage = any(),
-                            modelType = any(),
-                            backgroundInferenceEnabled = any(),
-                        )
-                    } returns
+                FakeChatInferenceExecutorPort().apply {
+                    flow =
                         flowOf(
                             MessageGenerationState.Failed(
                                 IllegalStateException("service start failed"),
@@ -243,26 +203,18 @@ class GenerateChatResponseUseCaseBackgroundServicePersistenceTest {
                 backgroundInferenceEnabled = true,
             ).toList()
 
-            coVerify(exactly = 1) {
-                chatRepository.persistAllMessageData(
-                    messageId = assistantMessageId,
-                    modelType = ModelType.FAST,
-                    thinkingStartTime = any(),
-                    thinkingEndTime = any(),
-                    thinkingDuration = any(),
-                    thinkingRaw = null,
-                    content = match { it.contains("service start failed") },
-                    messageState = MessageState.COMPLETE,
-                    pipelineStep = any(),
-                    webSearchSources = any(),
-                    artifacts = any(),
-                    generatedMediaUris = any(),
-                    generatedMediaAssetIds = any(),
-                    generatedMediaTypes = any(),
-                    generatedMediaPrompts = any(),
-                    transcriptSegments = any(),
-                )
-            }
+            val matchingIndexes =
+                chatRepository.persistAllMessageDataCalls.withIndex()
+                    .filter { (_, call) ->
+                        call.messageId == assistantMessageId &&
+                            call.messageState == MessageState.COMPLETE &&
+                            call.content.contains("service start failed")
+                    }
+                    .map { it.index }
+            assertEquals(1, matchingIndexes.size)
+            val persistedIndex = matchingIndexes.single()
+            assertEquals(ModelType.FAST, chatRepository.persistAllMessageDataModelTypes[persistedIndex])
+            assertNull(chatRepository.persistAllMessageDataThinkingRaw[persistedIndex])
         }
 
     @Test
@@ -271,31 +223,22 @@ class GenerateChatResponseUseCaseBackgroundServicePersistenceTest {
             val userMessageId = MessageId("user")
             val assistantMessageId = MessageId("assistant")
             val chatId = ChatId("chat")
-            val chatRepository = mockk<ChatRepository>(relaxed = true)
+            val chatRepository = FakeChatRepository()
             val messageRepository =
-                mockk<MessageRepository> {
-                    coEvery { getMessageById(userMessageId) } returns
-                        Message(
-                            id = userMessageId,
-                            chatId = chatId,
-                            content = Content(text = "hello"),
-                            role = Role.USER,
-                        )
-                }
+                FakeMessageRepository(
+                    initial =
+                        listOf(
+                            Message(
+                                id = userMessageId,
+                                chatId = chatId,
+                                content = Content(text = "hello"),
+                                role = Role.USER,
+                            ),
+                        ),
+                )
             val chatInferenceExecutor =
-                mockk<ChatInferenceExecutorPort> {
-                    every { stop() } returns Unit
-                    every {
-                        execute(
-                            prompt = any(),
-                            userMessageId = any(),
-                            assistantMessageId = any(),
-                            chatId = any(),
-                            userHasImage = any(),
-                            modelType = any(),
-                            backgroundInferenceEnabled = any(),
-                        )
-                    } returns
+                FakeChatInferenceExecutorPort().apply {
+                    flow =
                         flow {
                             emit(MessageGenerationState.GeneratingText("partial", ModelType.FAST))
                             awaitCancellation()
@@ -303,14 +246,14 @@ class GenerateChatResponseUseCaseBackgroundServicePersistenceTest {
                 }
             val useCase =
                 GenerateChatResponseUseCase(
-                    pipelineExecutor = mockPipelineExecutor(),
+                    pipelineExecutor = FakePipelineExecutor(),
                     chatRepository = chatRepository,
                     messageRepository = messageRepository,
-                    loggingPort = mockk<LoggingPort>(relaxed = true),
-                    activeModelProvider = mockk<ActiveModelProviderPort>(),
+                    loggingPort = FakeLoggingPort(),
+                    activeModelProvider = FakeActiveModelProvider(),
                     extractedUrlTracker = noOpExtractedUrlTracker(),
                     chatInferenceExecutor = chatInferenceExecutor,
-                    embeddingEngine = mockk(relaxed = true),
+                    embeddingEngine = FakeEmbeddingEngine(),
                     inferenceLockManager = FakeInferenceLockManager(),
                 )
 
@@ -323,26 +266,11 @@ class GenerateChatResponseUseCaseBackgroundServicePersistenceTest {
                 backgroundInferenceEnabled = true,
             ).first()
 
-            coVerify(exactly = 0) {
-                chatRepository.persistAllMessageData(
-                    messageId = assistantMessageId,
-                    modelType = any(),
-                    thinkingStartTime = any(),
-                    thinkingEndTime = any(),
-                    thinkingDuration = any(),
-                    thinkingRaw = any(),
-                    content = any(),
-                    messageState = MessageState.COMPLETE,
-                    pipelineStep = any(),
-                    webSearchSources = any(),
-                    artifacts = any(),
-                    generatedMediaUris = any(),
-                    generatedMediaAssetIds = any(),
-                    generatedMediaTypes = any(),
-                    generatedMediaPrompts = any(),
-                    transcriptSegments = any(),
-                )
-            }
+            assertTrue(
+                chatRepository.persistAllMessageDataCalls.none {
+                    it.messageId == assistantMessageId && it.messageState == MessageState.COMPLETE
+                },
+            )
         }
 
     private fun createUseCase(
@@ -350,74 +278,47 @@ class GenerateChatResponseUseCaseBackgroundServicePersistenceTest {
         chatId: ChatId,
         chatInferenceExecutor: ChatInferenceExecutorPort,
         activeChatTurnSnapshotPort: ActiveChatTurnSnapshotPort,
-        chatRepository: ChatRepository = mockk(relaxed = true),
-        activeModelProvider: ActiveModelProviderPort = mockk(relaxed = true),
+        chatRepository: ChatRepository = FakeChatRepository(),
+        activeModelProvider: ActiveModelProviderPort = FakeActiveModelProvider(),
     ): GenerateChatResponseUseCase {
         val messageRepository =
-            mockk<MessageRepository> {
-                coEvery { getMessageById(userMessageId) } returns
-                    Message(
-                        id = userMessageId,
-                        chatId = chatId,
-                        content = Content(text = "hello"),
-                        role = Role.USER,
-                    )
-            }
+            FakeMessageRepository(
+                initial =
+                    listOf(
+                        Message(
+                            id = userMessageId,
+                            chatId = chatId,
+                            content = Content(text = "hello"),
+                            role = Role.USER,
+                        ),
+                    ),
+            )
         return GenerateChatResponseUseCase(
-            pipelineExecutor = mockPipelineExecutor(),
+            pipelineExecutor = FakePipelineExecutor(),
             chatRepository = chatRepository,
             messageRepository = messageRepository,
-            loggingPort = mockk<LoggingPort>(relaxed = true),
+            loggingPort = FakeLoggingPort(),
             activeModelProvider = activeModelProvider,
             extractedUrlTracker = noOpExtractedUrlTracker(),
             chatInferenceExecutor = chatInferenceExecutor,
-            embeddingEngine = mockk(relaxed = true),
+            embeddingEngine = FakeEmbeddingEngine(),
             activeChatTurnSnapshotPort = activeChatTurnSnapshotPort,
             inferenceLockManager = FakeInferenceLockManager(),
         )
     }
 
-    private fun completedFastExecutor(text: String): ChatInferenceExecutorPort =
-        mockk {
-            every { stop() } returns Unit
-            every {
-                execute(
-                    prompt = any(),
-                    userMessageId = any(),
-                    assistantMessageId = any(),
-                    chatId = any(),
-                    userHasImage = any(),
-                    modelType = any(),
-                    backgroundInferenceEnabled = any(),
-                )
-            } returns
+    private fun completedFastExecutor(text: String): FakeChatInferenceExecutorPort =
+        FakeChatInferenceExecutorPort().apply {
+            flow =
                 flow {
                     emit(MessageGenerationState.GeneratingText(text, ModelType.FAST))
                     emit(MessageGenerationState.Finished(ModelType.FAST))
                 }
         }
 
-    private fun emptyBackgroundExecutor(): ChatInferenceExecutorPort =
-        mockk {
-            every { stop() } returns Unit
-            every {
-                execute(
-                    prompt = any(),
-                    userMessageId = any(),
-                    assistantMessageId = any(),
-                    chatId = any(),
-                    userHasImage = any(),
-                    modelType = any(),
-                    backgroundInferenceEnabled = any(),
-                )
-            } returns emptyFlow()
-        }
-
-    private fun mockPipelineExecutor(): PipelineExecutorPort =
-        mockk {
-            every { executePipeline(any(), any(), any(), any(), any()) } returns emptyFlow()
-            coEvery { stopPipeline(any()) } returns Unit
-            coEvery { resumeFromState(any(), any(), any(), any()) } returns emptyFlow()
+    private fun emptyBackgroundExecutor(): FakeChatInferenceExecutorPort =
+        FakeChatInferenceExecutorPort().apply {
+            flow = emptyFlow()
         }
 
     private fun activeApiConfig(

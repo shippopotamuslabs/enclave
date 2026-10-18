@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.domain.usecase.chat
 
+import com.browntowndev.enclave.core.testing.FakeChatRepository
 import com.browntowndev.enclave.domain.model.artifact.ArtifactGenerationRequest
 import com.browntowndev.enclave.domain.model.artifact.MimeType
 import com.browntowndev.enclave.domain.model.chat.AccumulatedMessages
@@ -15,11 +16,7 @@ import com.browntowndev.enclave.domain.model.chat.WebSearchSource
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.PipelineStep
 import com.browntowndev.enclave.domain.port.inference.InferenceBusyException
-import com.browntowndev.enclave.domain.port.repository.ChatRepository
 import com.browntowndev.enclave.domain.telemetry.TelemetryTestFixtures
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -38,7 +35,7 @@ class ChatGenerationAccumulatorManagerTest {
                     chatId = ChatId("chat"),
                     userMessageId = MessageId("user"),
                     defaultAssistantMessageId = MessageId("assistant"),
-                    chatRepository = mockk(relaxed = true),
+                    chatRepository = FakeChatRepository(),
                 )
 
             manager.reduce(MessageGenerationState.Processing(ModelType.FAST))
@@ -63,7 +60,7 @@ class ChatGenerationAccumulatorManagerTest {
                     chatId = ChatId("chat"),
                     userMessageId = MessageId("user"),
                     defaultAssistantMessageId = MessageId("assistant"),
-                    chatRepository = mockk(relaxed = true),
+                    chatRepository = FakeChatRepository(),
                 )
 
             manager.reduce(MessageGenerationState.GeneratingText("partial doc", ModelType.FAST))
@@ -94,7 +91,7 @@ class ChatGenerationAccumulatorManagerTest {
                     chatId = ChatId("chat"),
                     userMessageId = MessageId("user"),
                     defaultAssistantMessageId = MessageId("assistant"),
-                    chatRepository = mockk(relaxed = true),
+                    chatRepository = FakeChatRepository(),
                 )
 
             manager.reduce(MessageGenerationState.GeneratingText("partial", ModelType.FAST))
@@ -126,7 +123,7 @@ class ChatGenerationAccumulatorManagerTest {
                     chatId = ChatId("chat"),
                     userMessageId = MessageId("user"),
                     defaultAssistantMessageId = MessageId("assistant"),
-                    chatRepository = mockk(relaxed = true),
+                    chatRepository = FakeChatRepository(),
                 )
 
             manager.reduce(MessageGenerationState.GeneratingText("answer", ModelType.FAST))
@@ -174,7 +171,7 @@ class ChatGenerationAccumulatorManagerTest {
                     chatId = ChatId("chat"),
                     userMessageId = MessageId("user"),
                     defaultAssistantMessageId = MessageId("assistant"),
-                    chatRepository = mockk(relaxed = true),
+                    chatRepository = FakeChatRepository(),
                 )
 
             manager.reduce(MessageGenerationState.Processing(ModelType.FAST))
@@ -202,7 +199,7 @@ class ChatGenerationAccumulatorManagerTest {
                     chatId = ChatId("chat"),
                     userMessageId = MessageId("user"),
                     defaultAssistantMessageId = MessageId("assistant"),
-                    chatRepository = mockk(relaxed = true),
+                    chatRepository = FakeChatRepository(),
                 )
 
             manager.reduce(MessageGenerationState.GeneratingText("Before tools.", ModelType.FAST))
@@ -228,7 +225,7 @@ class ChatGenerationAccumulatorManagerTest {
                     chatId = ChatId("chat"),
                     userMessageId = MessageId("user"),
                     defaultAssistantMessageId = MessageId("assistant"),
-                    chatRepository = mockk(relaxed = true),
+                    chatRepository = FakeChatRepository(),
                 )
 
             manager.reduce(MessageGenerationState.AnswerStreamBoundary(ModelType.FAST))
@@ -248,7 +245,7 @@ class ChatGenerationAccumulatorManagerTest {
                     chatId = ChatId("chat"),
                     userMessageId = MessageId("user"),
                     defaultAssistantMessageId = MessageId("assistant"),
-                    chatRepository = mockk(relaxed = true),
+                    chatRepository = FakeChatRepository(),
                 )
 
             manager.reduce(MessageGenerationState.GeneratingText("First", ModelType.FAST))
@@ -270,7 +267,7 @@ class ChatGenerationAccumulatorManagerTest {
                     chatId = ChatId("chat"),
                     userMessageId = MessageId("user"),
                     defaultAssistantMessageId = MessageId("assistant"),
-                    chatRepository = mockk(relaxed = true),
+                    chatRepository = FakeChatRepository(),
                 )
 
             manager.reduce(MessageGenerationState.Processing(ModelType.FAST))
@@ -302,7 +299,7 @@ class ChatGenerationAccumulatorManagerTest {
                     chatId = ChatId("chat"),
                     userMessageId = MessageId("user"),
                     defaultAssistantMessageId = MessageId("assistant"),
-                    chatRepository = mockk(relaxed = true),
+                    chatRepository = FakeChatRepository(),
                 )
 
             val snapshot =
@@ -328,7 +325,7 @@ class ChatGenerationAccumulatorManagerTest {
                     chatId = ChatId("chat"),
                     userMessageId = MessageId("user"),
                     defaultAssistantMessageId = MessageId("assistant"),
-                    chatRepository = mockk(relaxed = true),
+                    chatRepository = FakeChatRepository(),
                 )
 
             val snapshot =
@@ -349,7 +346,7 @@ class ChatGenerationAccumulatorManagerTest {
                     chatId = ChatId("chat"),
                     userMessageId = MessageId("user"),
                     defaultAssistantMessageId = MessageId("assistant"),
-                    chatRepository = mockk(relaxed = true),
+                    chatRepository = FakeChatRepository(),
                 )
 
             manager.reduce(MessageGenerationState.Processing(ModelType.FAST))
@@ -374,7 +371,7 @@ class ChatGenerationAccumulatorManagerTest {
                     chatId = ChatId("chat"),
                     userMessageId = MessageId("user"),
                     defaultAssistantMessageId = MessageId("assistant"),
-                    chatRepository = mockk(relaxed = true),
+                    chatRepository = FakeChatRepository(),
                 )
 
             manager.reduce(MessageGenerationState.ThinkingLive("hmm", ModelType.FAST))
@@ -392,23 +389,11 @@ class ChatGenerationAccumulatorManagerTest {
     @Test
     fun `crew mode creates distinct assistant messages per model step`() =
         runTest {
-            val chatRepository = mockk<ChatRepository>()
-            coEvery {
-                chatRepository.createAssistantMessage(
-                    chatId = ChatId("chat"),
-                    userMessageId = MessageId("user"),
-                    modelType = ModelType.MAIN,
-                    pipelineStep = PipelineStep.SYNTHESIS,
-                )
-            } returns MessageId("main-assistant")
-            coEvery {
-                chatRepository.createAssistantMessage(
-                    chatId = ChatId("chat"),
-                    userMessageId = MessageId("user"),
-                    modelType = ModelType.FINAL_SYNTHESIS,
-                    pipelineStep = PipelineStep.FINAL,
-                )
-            } returns MessageId("final-assistant")
+            val chatRepository =
+                FakeChatRepository().apply {
+                    assistantMessageIdsByModelType[ModelType.MAIN] = MessageId("main-assistant")
+                    assistantMessageIdsByModelType[ModelType.FINAL_SYNTHESIS] = MessageId("final-assistant")
+                }
 
             val manager =
                 ChatGenerationAccumulatorManager(
@@ -424,36 +409,39 @@ class ChatGenerationAccumulatorManagerTest {
 
             assertTrue(first.messages.containsKey(MessageId("main-assistant")))
             assertTrue(second.messages.containsKey(MessageId("final-assistant")))
-            coVerify(exactly = 1) {
-                chatRepository.createAssistantMessage(
-                    chatId = ChatId("chat"),
-                    userMessageId = MessageId("user"),
-                    modelType = ModelType.MAIN,
-                    pipelineStep = PipelineStep.SYNTHESIS,
-                )
-            }
-            coVerify(exactly = 1) {
-                chatRepository.createAssistantMessage(
-                    chatId = ChatId("chat"),
-                    userMessageId = MessageId("user"),
-                    modelType = ModelType.FINAL_SYNTHESIS,
-                    pipelineStep = PipelineStep.FINAL,
-                )
-            }
+            assertEquals(
+                1,
+                chatRepository.createAssistantMessageCalls.count {
+                    it ==
+                        FakeChatRepository.CreateAssistantMessageCall(
+                            chatId = ChatId("chat"),
+                            userMessageId = MessageId("user"),
+                            modelType = ModelType.MAIN,
+                            pipelineStep = PipelineStep.SYNTHESIS,
+                        )
+                },
+            )
+            assertEquals(
+                1,
+                chatRepository.createAssistantMessageCalls.count {
+                    it ==
+                        FakeChatRepository.CreateAssistantMessageCall(
+                            chatId = ChatId("chat"),
+                            userMessageId = MessageId("user"),
+                            modelType = ModelType.FINAL_SYNTHESIS,
+                            pipelineStep = PipelineStep.FINAL,
+                        )
+                },
+            )
         }
 
     @Test
     fun `toMessagesState reuses unchanged message snapshot when another crew message updates`() =
         runTest {
-            val chatRepository = mockk<ChatRepository>()
-            coEvery {
-                chatRepository.createAssistantMessage(
-                    chatId = ChatId("chat"),
-                    userMessageId = MessageId("user"),
-                    modelType = ModelType.MAIN,
-                    pipelineStep = PipelineStep.SYNTHESIS,
-                )
-            } returns MessageId("main-assistant")
+            val chatRepository =
+                FakeChatRepository().apply {
+                    assistantMessageIdsByModelType[ModelType.MAIN] = MessageId("main-assistant")
+                }
             val manager =
                 ChatGenerationAccumulatorManager(
                     mode = Mode.COUNCIL,
@@ -495,7 +483,7 @@ class ChatGenerationAccumulatorManagerTest {
                     chatId = ChatId("chat"),
                     userMessageId = MessageId("user"),
                     defaultAssistantMessageId = MessageId("assistant"),
-                    chatRepository = mockk(relaxed = true),
+                    chatRepository = FakeChatRepository(),
                 )
 
             val beforeTelemetry =
@@ -540,7 +528,7 @@ class ChatGenerationAccumulatorManagerTest {
                     chatId = ChatId("chat"),
                     userMessageId = MessageId("user"),
                     defaultAssistantMessageId = MessageId("assistant"),
-                    chatRepository = mockk(relaxed = true),
+                    chatRepository = FakeChatRepository(),
                 )
 
             val result =
@@ -565,7 +553,7 @@ class ChatGenerationAccumulatorManagerTest {
                     chatId = ChatId("chat"),
                     userMessageId = MessageId("user"),
                     defaultAssistantMessageId = MessageId("assistant"),
-                    chatRepository = mockk(relaxed = true),
+                    chatRepository = FakeChatRepository(),
                 )
 
             val result =
@@ -595,7 +583,7 @@ class ChatGenerationAccumulatorManagerTest {
                     chatId = ChatId("chat"),
                     userMessageId = MessageId("user"),
                     defaultAssistantMessageId = MessageId("assistant"),
-                    chatRepository = mockk(relaxed = true),
+                    chatRepository = FakeChatRepository(),
                 )
 
             val result =
@@ -628,7 +616,7 @@ class ChatGenerationAccumulatorManagerTest {
                     chatId = ChatId("chat"),
                     userMessageId = MessageId("user"),
                     defaultAssistantMessageId = MessageId("assistant"),
-                    chatRepository = mockk(relaxed = true),
+                    chatRepository = FakeChatRepository(),
                 )
 
             val result =
@@ -657,7 +645,7 @@ class ChatGenerationAccumulatorManagerTest {
                     chatId = ChatId("chat"),
                     userMessageId = MessageId("user"),
                     defaultAssistantMessageId = MessageId("assistant"),
-                    chatRepository = mockk(relaxed = true),
+                    chatRepository = FakeChatRepository(),
                 )
 
             val result =
@@ -681,7 +669,7 @@ class ChatGenerationAccumulatorManagerTest {
                     chatId = ChatId("chat"),
                     userMessageId = MessageId("user"),
                     defaultAssistantMessageId = MessageId("assistant"),
-                    chatRepository = mockk(relaxed = true),
+                    chatRepository = FakeChatRepository(),
                 )
 
             val source1 =
@@ -734,7 +722,7 @@ class ChatGenerationAccumulatorManagerTest {
                     chatId = ChatId("chat"),
                     userMessageId = MessageId("user"),
                     defaultAssistantMessageId = MessageId("assistant"),
-                    chatRepository = mockk(relaxed = true),
+                    chatRepository = FakeChatRepository(),
                 )
 
             val placeholder =

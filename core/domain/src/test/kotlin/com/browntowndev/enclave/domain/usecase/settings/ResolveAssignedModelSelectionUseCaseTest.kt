@@ -1,60 +1,57 @@
 package com.browntowndev.enclave.domain.usecase.settings
 
+import com.browntowndev.enclave.core.testing.FakeApiModelRepository
+import com.browntowndev.enclave.core.testing.FakeDefaultModelRepository
+import com.browntowndev.enclave.core.testing.FakeLiveVoiceProviderRepository
+import com.browntowndev.enclave.core.testing.FakeLocalModelRepository
+import com.browntowndev.enclave.core.testing.FakeTtsProviderRepository
+import com.browntowndev.enclave.domain.model.config.ApiCredentials
+import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.config.ApiModelAsset
 import com.browntowndev.enclave.domain.model.config.ApiModelConfiguration
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
+import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderAsset
+import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId
 import com.browntowndev.enclave.domain.model.config.LocalModelAsset
 import com.browntowndev.enclave.domain.model.config.LocalModelConfiguration
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
-import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderAsset
-import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId
+import com.browntowndev.enclave.domain.model.config.LocalModelId
+import com.browntowndev.enclave.domain.model.config.LocalModelMetadata
 import com.browntowndev.enclave.domain.model.config.TtsProviderAsset
 import com.browntowndev.enclave.domain.model.config.TtsProviderId
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
+import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.usecase.byok.GetApiModelAssetsUseCase
-import com.browntowndev.enclave.domain.usecase.byok.GetDefaultModelsUseCase
-import com.browntowndev.enclave.domain.usecase.modelconfig.GetLocalModelAssetsUseCase
-import io.mockk.every
-import io.mockk.mockk
-import kotlinx.coroutines.flow.flowOf
+import com.browntowndev.enclave.domain.usecase.byok.GetApiModelAssetsUseCaseImpl
+import com.browntowndev.enclave.domain.usecase.byok.GetDefaultModelsUseCaseImpl
+import com.browntowndev.enclave.domain.usecase.modelconfig.GetLocalModelAssetsUseCaseImpl
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
-import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 
 class ResolveAssignedModelSelectionUseCaseTest {
-    private lateinit var getDefaultModelsUseCase: GetDefaultModelsUseCase
-    private lateinit var getLocalModelAssetsUseCase: GetLocalModelAssetsUseCase
-    private lateinit var getApiModelAssetsUseCase: GetApiModelAssetsUseCase
-    private lateinit var getTtsProvidersUseCase: GetTtsProvidersUseCase
-    private lateinit var getLiveVoiceProvidersUseCase: GetLiveVoiceProvidersUseCase
-    private lateinit var useCase: ResolveAssignedModelSelectionUseCase
-
-    @BeforeEach
-    fun setup() {
-        getDefaultModelsUseCase = mockk()
-        getLocalModelAssetsUseCase = mockk()
-        getApiModelAssetsUseCase = mockk()
-        getTtsProvidersUseCase = mockk()
-        getLiveVoiceProvidersUseCase = mockk()
-        useCase =
-            ResolveAssignedModelSelectionUseCase(
-                getDefaultModelsUseCase,
-                getLocalModelAssetsUseCase,
-                getApiModelAssetsUseCase,
-                getTtsProvidersUseCase,
-                getLiveVoiceProvidersUseCase,
-            )
-    }
+    private fun buildUseCase(
+        defaultModelRepository: FakeDefaultModelRepository = FakeDefaultModelRepository(),
+        localModelRepository: FakeLocalModelRepository = FakeLocalModelRepository(),
+        apiModelRepository: FakeApiModelRepository = FakeApiModelRepository(),
+        ttsProviderRepository: FakeTtsProviderRepository = FakeTtsProviderRepository(),
+        liveVoiceProviderRepository: FakeLiveVoiceProviderRepository = FakeLiveVoiceProviderRepository(),
+    ): ResolveAssignedModelSelectionUseCase =
+        ResolveAssignedModelSelectionUseCase(
+            GetDefaultModelsUseCaseImpl(defaultModelRepository),
+            GetLocalModelAssetsUseCaseImpl(localModelRepository),
+            GetApiModelAssetsUseCaseImpl(apiModelRepository),
+            GetTtsProvidersUseCase(ttsProviderRepository),
+            GetLiveVoiceProvidersUseCase(liveVoiceProviderRepository),
+        )
 
     @Test
     fun `returns null if assignment not found for model type`() =
         runTest {
-            every { getDefaultModelsUseCase() } returns flowOf(emptyList())
+            val useCase = buildUseCase()
 
             val result = useCase(ModelType.MAIN)
 
@@ -71,7 +68,9 @@ class ResolveAssignedModelSelectionUseCaseTest {
                     apiConfigId = null,
                     ttsProviderId = null,
                 )
-            every { getDefaultModelsUseCase() } returns flowOf(listOf(assignment))
+            val defaultModelRepository = FakeDefaultModelRepository()
+            defaultModelRepository.seed(assignment)
+            val useCase = buildUseCase(defaultModelRepository = defaultModelRepository)
 
             val result = useCase(ModelType.MAIN)
 
@@ -89,16 +88,42 @@ class ResolveAssignedModelSelectionUseCaseTest {
                     apiConfigId = null,
                 )
             val localConfig =
-                mockk<LocalModelConfiguration> {
-                    every { id } returns localConfigId
-                }
+                LocalModelConfiguration(
+                    id = localConfigId,
+                    localModelId = LocalModelId("local-1"),
+                    displayName = "Local",
+                    maxTokens = 100,
+                    contextWindow = 100,
+                    temperature = 0.7,
+                    topP = 0.9,
+                    topK = 40,
+                    repetitionPenalty = 1.1,
+                    systemPrompt = "",
+                )
             val localAsset =
-                mockk<LocalModelAsset> {
-                    every { configurations } returns listOf(localConfig)
-                }
+                LocalModelAsset(
+                    metadata =
+                        LocalModelMetadata(
+                            id = LocalModelId("local-1"),
+                            huggingFaceModelName = "local",
+                            remoteFileName = "remote",
+                            localFileName = "local",
+                            sha256 = "sha",
+                            sizeInBytes = 100,
+                            modelFileFormat = ModelFileFormat.GGUF,
+                        ),
+                    configurations = listOf(localConfig),
+                )
 
-            every { getDefaultModelsUseCase() } returns flowOf(listOf(assignment))
-            every { getLocalModelAssetsUseCase() } returns flowOf(listOf(localAsset))
+            val defaultModelRepository = FakeDefaultModelRepository()
+            defaultModelRepository.seed(assignment)
+            val localModelRepository = FakeLocalModelRepository()
+            localModelRepository.setAssets(listOf(localAsset))
+            val useCase =
+                buildUseCase(
+                    defaultModelRepository = defaultModelRepository,
+                    localModelRepository = localModelRepository,
+                )
 
             val result = useCase(ModelType.MAIN)
 
@@ -109,6 +134,7 @@ class ResolveAssignedModelSelectionUseCaseTest {
     fun `returns api asset and config if apiConfigId matches an existing asset`() =
         runTest {
             val apiConfigId = ApiModelConfigurationId("api-config-1")
+            val credentialsId = ApiCredentialsId("api-creds-1")
             val assignment =
                 DefaultModelAssignment(
                     modelType = ModelType.MAIN,
@@ -116,16 +142,34 @@ class ResolveAssignedModelSelectionUseCaseTest {
                     apiConfigId = apiConfigId,
                 )
             val apiConfig =
-                mockk<ApiModelConfiguration> {
-                    every { id } returns apiConfigId
-                }
+                ApiModelConfiguration(
+                    id = apiConfigId,
+                    apiCredentialsId = credentialsId,
+                    modelId = "gpt-4o",
+                    displayName = "API cfg",
+                )
             val apiAsset =
-                mockk<ApiModelAsset> {
-                    every { configurations } returns listOf(apiConfig)
-                }
+                ApiModelAsset(
+                    credentials =
+                        ApiCredentials(
+                            id = credentialsId,
+                            displayName = "API",
+                            provider = ApiProvider.OPENAI,
+                            credentialAlias = "alias",
+                        ),
+                    configurations = listOf(apiConfig),
+                )
 
-            every { getDefaultModelsUseCase() } returns flowOf(listOf(assignment))
-            every { getApiModelAssetsUseCase() } returns flowOf(listOf(apiAsset))
+            val defaultModelRepository = FakeDefaultModelRepository()
+            defaultModelRepository.seed(assignment)
+            val apiModelRepository = FakeApiModelRepository()
+            apiModelRepository.seedCredentials(listOf(apiAsset.credentials))
+            apiModelRepository.seedConfigurations(listOf(apiConfig))
+            val useCase =
+                buildUseCase(
+                    defaultModelRepository = defaultModelRepository,
+                    apiModelRepository = apiModelRepository,
+                )
 
             val result = useCase(ModelType.MAIN)
 
@@ -145,8 +189,13 @@ class ResolveAssignedModelSelectionUseCaseTest {
                 )
             val ttsAsset = TtsProviderAsset(ttsId, "OpenAI", ApiProvider.OPENAI, "alloy", null, null, "alias")
 
-            every { getDefaultModelsUseCase() } returns flowOf(listOf(assignment))
-            every { getTtsProvidersUseCase() } returns flowOf(listOf(ttsAsset))
+            val defaultModelRepository = FakeDefaultModelRepository()
+            defaultModelRepository.seed(assignment)
+            val useCase =
+                buildUseCase(
+                    defaultModelRepository = defaultModelRepository,
+                    ttsProviderRepository = FakeTtsProviderRepository(listOf(ttsAsset)),
+                )
 
             val result = useCase(ModelType.TTS)
 
@@ -176,8 +225,13 @@ class ResolveAssignedModelSelectionUseCaseTest {
                     credentialAlias = "alias",
                 )
 
-            every { getDefaultModelsUseCase() } returns flowOf(listOf(assignment))
-            every { getLiveVoiceProvidersUseCase() } returns flowOf(listOf(liveVoiceAsset))
+            val defaultModelRepository = FakeDefaultModelRepository()
+            defaultModelRepository.seed(assignment)
+            val useCase =
+                buildUseCase(
+                    defaultModelRepository = defaultModelRepository,
+                    liveVoiceProviderRepository = FakeLiveVoiceProviderRepository(listOf(liveVoiceAsset)),
+                )
 
             val result = useCase(ModelType.LIVE_VOICE)
 
@@ -196,12 +250,18 @@ class ResolveAssignedModelSelectionUseCaseTest {
                     liveVoiceProviderId = LiveVoiceProviderId("lv-missing"),
                 )
 
-            every { getDefaultModelsUseCase() } returns flowOf(listOf(assignment))
-            every { getLiveVoiceProvidersUseCase() } returns flowOf(emptyList())
+            val defaultModelRepository = FakeDefaultModelRepository()
+            defaultModelRepository.seed(assignment)
+            val liveVoiceProviderRepository = FakeLiveVoiceProviderRepository()
+            val useCase =
+                buildUseCase(
+                    defaultModelRepository = defaultModelRepository,
+                    liveVoiceProviderRepository = liveVoiceProviderRepository,
+                )
 
             val result = useCase(ModelType.LIVE_VOICE)
 
             assertNull(result)
-            io.mockk.verify(exactly = 1) { getLiveVoiceProvidersUseCase() }
+            assertEquals(1, liveVoiceProviderRepository.getLiveVoiceProvidersCallCount)
         }
 }

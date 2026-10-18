@@ -1,5 +1,7 @@
 package com.browntowndev.enclave.domain.usecase.download
 
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeModelFileScanner
 import com.browntowndev.enclave.domain.exception.ModelsDirectoryException
 import com.browntowndev.enclave.domain.model.config.LocalModelAsset
 import com.browntowndev.enclave.domain.model.config.LocalModelConfiguration
@@ -9,11 +11,6 @@ import com.browntowndev.enclave.domain.model.config.UtilityType
 import com.browntowndev.enclave.domain.model.download.ModelScanResult
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.port.download.ModelFileScannerPort
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import io.mockk.coEvery
-import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -21,10 +18,23 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
+/** Recording [CheckModelEligibilityUseCase] fake (ENC-28): returns [checkResult] for every call. */
+private class FakeCheckModelEligibilityUseCase(
+    logger: FakeLoggingPort,
+) : CheckModelEligibilityUseCase(logger) {
+    var checkResult: List<LocalModelAsset> = emptyList()
+
+    override fun check(
+        newModels: Map<ModelType, LocalModelAsset>,
+        utilityAssets: List<LocalModelAsset>,
+        scanResult: ModelScanResult,
+    ): List<LocalModelAsset> = checkResult
+}
+
 class CheckModelsUseCaseTest {
-    private lateinit var fileScanner: ModelFileScannerPort
-    private lateinit var checkModelEligibilityUseCase: CheckModelEligibilityUseCase
-    private lateinit var logger: LoggingPort
+    private lateinit var fileScanner: FakeModelFileScanner
+    private lateinit var checkModelEligibilityUseCase: FakeCheckModelEligibilityUseCase
+    private lateinit var logger: FakeLoggingPort
     private lateinit var checkModelsUseCase: CheckModelsUseCase
 
     private val testAsset =
@@ -65,9 +75,9 @@ class CheckModelsUseCaseTest {
 
     @BeforeEach
     fun setUp() {
-        fileScanner = mockk()
-        checkModelEligibilityUseCase = mockk()
-        logger = mockk(relaxed = true)
+        fileScanner = FakeModelFileScanner()
+        logger = FakeLoggingPort()
+        checkModelEligibilityUseCase = FakeCheckModelEligibilityUseCase(logger)
         checkModelsUseCase = CheckModelsUseCase(fileScanner, checkModelEligibilityUseCase, logger)
     }
 
@@ -77,16 +87,8 @@ class CheckModelsUseCaseTest {
             // Given
             val scanResult = emptyScanResult.copy(allValid = true)
 
-            coEvery {
-                fileScanner.scanAndCreateDirIfNotExist(
-                    expectedModels = any(),
-                    utilityAssets = any(),
-                )
-            } returns scanResult
-
-            coEvery {
-                checkModelEligibilityUseCase.check(any(), any(), any())
-            } returns emptyList()
+            fileScanner.scanResult = scanResult
+            checkModelEligibilityUseCase.checkResult = emptyList()
 
             // When
             val result =
@@ -96,7 +98,7 @@ class CheckModelsUseCaseTest {
 
             // Then
             assertTrue(result.modelsToDownload.isEmpty())
-            verify { logger.info(any(), "All 1 models are ready") }
+            assertTrue(logger.infoCalls.any { it.second == "All 1 models are ready" })
         }
 
     @Test
@@ -111,16 +113,8 @@ class CheckModelsUseCaseTest {
                     allValid = false,
                 )
 
-            coEvery {
-                fileScanner.scanAndCreateDirIfNotExist(
-                    expectedModels = any(),
-                    utilityAssets = any(),
-                )
-            } returns scanResult
-
-            coEvery {
-                checkModelEligibilityUseCase.check(any(), any(), any())
-            } returns listOf(testAsset)
+            fileScanner.scanResult = scanResult
+            checkModelEligibilityUseCase.checkResult = listOf(testAsset)
 
             // When
             val result = checkModelsUseCase(mapOf(ModelType.FAST to testAsset))
@@ -133,7 +127,9 @@ class CheckModelsUseCaseTest {
                     .first()
                     .metadata.huggingFaceModelName,
             )
-            verify { logger.info(any(), match { it.contains("1 assets need download: [TheBloke/Mistral-7B-v0.1-GGUF]") }) }
+            assertTrue(
+                logger.infoCalls.any { it.second.contains("1 assets need download: [TheBloke/Mistral-7B-v0.1-GGUF]") },
+            )
         }
 
     @Test
@@ -149,12 +145,7 @@ class CheckModelsUseCaseTest {
                     directoryError = true,
                 )
 
-            coEvery {
-                fileScanner.scanAndCreateDirIfNotExist(
-                    expectedModels = any(),
-                    utilityAssets = any(),
-                )
-            } returns scanResultWithError
+            fileScanner.scanResult = scanResultWithError
 
             // When/Then - Should throw ModelsDirectoryException
             var exception: ModelsDirectoryException? = null
@@ -172,49 +163,37 @@ class CheckModelsUseCaseTest {
     fun `logs results for debugging`() =
         runTest {
             // Given
-            coEvery {
-                fileScanner.scanAndCreateDirIfNotExist(
-                    expectedModels = any(),
-                    utilityAssets = any(),
-                )
-            } returns emptyScanResult
-
-            coEvery {
-                checkModelEligibilityUseCase.check(any(), any(), any())
-            } returns listOf(testAsset)
+            fileScanner.scanResult = emptyScanResult
+            checkModelEligibilityUseCase.checkResult = listOf(testAsset)
 
             // When
             checkModelsUseCase(mapOf(ModelType.FAST to testAsset))
 
             // Then
-            verify {
-                logger.info(
-                    eq("CheckModelsUseCase"),
-                    match { it.contains("1 assets need download: [TheBloke/Mistral-7B-v0.1-GGUF]") },
-                )
-            }
+            assertTrue(
+                logger.infoCalls.any {
+                    it.first == "CheckModelsUseCase" &&
+                        it.second.contains("1 assets need download: [TheBloke/Mistral-7B-v0.1-GGUF]")
+                },
+            )
         }
 
     @Test
     fun `logs when all ready`() =
         runTest {
             // Given
-            coEvery {
-                fileScanner.scanAndCreateDirIfNotExist(
-                    expectedModels = any(),
-                    utilityAssets = any(),
-                )
-            } returns emptyScanResult
-
-            coEvery {
-                checkModelEligibilityUseCase.check(any(), any(), any())
-            } returns emptyList()
+            fileScanner.scanResult = emptyScanResult
+            checkModelEligibilityUseCase.checkResult = emptyList()
 
             // When
             checkModelsUseCase(mapOf(ModelType.FAST to testAsset))
 
             // Then
-            verify { logger.info(eq("CheckModelsUseCase"), eq("All 1 models are ready")) }
+            assertTrue(
+                logger.infoCalls.any {
+                    it.first == "CheckModelsUseCase" && it.second == "All 1 models are ready"
+                },
+            )
         }
 
     @Test
@@ -239,15 +218,8 @@ class CheckModelsUseCaseTest {
                     allValid = false,
                 )
 
-            coEvery {
-                fileScanner.scanAndCreateDirIfNotExist(
-                    expectedModels = any(),
-                    utilityAssets = any(),
-                )
-            } returns scanResult
-            coEvery {
-                checkModelEligibilityUseCase.check(any(), any(), any())
-            } returns listOf(utilityAsset)
+            fileScanner.scanResult = scanResult
+            checkModelEligibilityUseCase.checkResult = listOf(utilityAsset)
 
             val result =
                 checkModelsUseCase(

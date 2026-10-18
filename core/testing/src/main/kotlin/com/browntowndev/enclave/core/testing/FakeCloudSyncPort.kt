@@ -18,6 +18,15 @@ class FakeCloudSyncPort : CloudSyncPort {
     var syncAllResult: Result<Unit> = Result.success(Unit)
     var syncRemoteResult: Result<CloudSyncEventReplayResult> =
         Result.success(CloudSyncEventReplayResult(eventsApplied = 0, lastAppliedSequence = 0, hasMore = false))
+
+    /** Queued [syncRemoteChangesFromCloud] results (returnsMany-style); drained before [syncRemoteResult]. */
+    val syncRemoteResults = ArrayDeque<Result<CloudSyncEventReplayResult>>()
+
+    /** Result returned by [bootstrapFeatureSettings]. */
+    var bootstrapResult: Result<Unit> = Result.success(Unit)
+
+    /** Result returned by [fetchVaultMetadata]. */
+    var fetchVaultMetadataResult: Result<VaultMetadata?> = Result.success(null)
     var vaultSaltResult: Result<String?> = Result.success(null)
     var wrappedDekResult: Result<String?> = Result.success(null)
     var verificationResult: Result<String?> = Result.success(null)
@@ -69,7 +78,7 @@ class FakeCloudSyncPort : CloudSyncPort {
 
     override suspend fun syncRemoteChangesFromCloud(): Result<CloudSyncEventReplayResult> {
         record("syncRemote")
-        return syncRemoteResult
+        return if (syncRemoteResults.isNotEmpty()) syncRemoteResults.removeFirst() else syncRemoteResult
     }
 
     override suspend fun updateVaultSalt(salt: String): Result<Unit> {
@@ -111,14 +120,20 @@ class FakeCloudSyncPort : CloudSyncPort {
 
     override suspend fun fetchVaultMetadata(): Result<VaultMetadata?> {
         record("fetchVaultMetadata")
-        return Result.success(null)
+        return fetchVaultMetadataResult
     }
 
     override fun enqueueEmbeddingRegeneration() {
         record("enqueueEmbeddingRegeneration")
     }
 
-    override suspend fun deleteUserAccount(): Result<Unit> = Result.success(Unit)
+    /** Result returned by [deleteUserAccount] (ENC-28). */
+    var deleteUserAccountResult: Result<Unit> = Result.success(Unit)
+
+    override suspend fun deleteUserAccount(): Result<Unit> {
+        record("deleteUserAccount")
+        return deleteUserAccountResult
+    }
 
     override suspend fun deleteAllChatsFromCloud(): Result<Unit> = Result.success(Unit)
 
@@ -130,7 +145,7 @@ class FakeCloudSyncPort : CloudSyncPort {
 
     override suspend fun bootstrapFeatureSettings(): Result<Unit> {
         record("bootstrapFeatureSettings")
-        return Result.success(Unit)
+        return bootstrapResult
     }
 
     override fun triggerSync() {

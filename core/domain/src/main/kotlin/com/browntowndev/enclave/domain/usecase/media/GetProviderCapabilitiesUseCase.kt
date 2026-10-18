@@ -5,10 +5,10 @@ import com.browntowndev.enclave.domain.model.media.GenerationQuality
 import com.browntowndev.enclave.domain.model.media.ProviderCapabilities
 import javax.inject.Inject
 
-class GetProviderCapabilitiesUseCase
+open class GetProviderCapabilitiesUseCase
     @Inject
     constructor() {
-        operator fun invoke(providerId: String?): ProviderCapabilities {
+        open operator fun invoke(providerId: String?): ProviderCapabilities {
             if (providerId.isNullOrBlank()) {
                 return ProviderCapabilities(
                     supportedAspectRatios = emptyList(),

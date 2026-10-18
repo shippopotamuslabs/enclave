@@ -1,10 +1,10 @@
 package com.browntowndev.enclave.domain.usecase.chat
 
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.InferenceEvent
 import com.browntowndev.enclave.domain.usecase.FakeInferenceFactory
 import com.browntowndev.enclave.domain.usecase.FakeInferenceService
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -27,7 +27,7 @@ class AnalyzeImageUseCaseTest {
             factory.serviceMap[ModelType.VISION] = visionService
 
             val result =
-                AnalyzeImageUseCase(javax.inject.Provider { factory }, mockk(relaxed = true))(
+                AnalyzeImageUseCase(javax.inject.Provider { factory }, FakeLoggingPort())(
                     imageUris = listOf("file:///tmp/test-image.jpg"),
                     prompt = "What is happening here?",
                 )
