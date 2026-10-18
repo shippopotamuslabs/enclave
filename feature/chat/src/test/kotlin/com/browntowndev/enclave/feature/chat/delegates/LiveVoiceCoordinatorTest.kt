@@ -1,8 +1,10 @@
 package com.browntowndev.enclave.feature.chat.delegates
 
 import app.cash.turbine.test
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeToolExecutor
+import com.browntowndev.enclave.core.testing.FakeViewModelErrorHandler
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
-import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderAsset
 import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId
@@ -11,8 +13,6 @@ import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.model.inference.ToolExecutionResult
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
 import com.browntowndev.enclave.domain.port.media.LiveVoiceEvent
 import com.browntowndev.enclave.domain.port.media.LiveVoiceSession
 import com.browntowndev.enclave.domain.port.media.RealtimeAudioCapturePort
@@ -20,19 +20,12 @@ import com.browntowndev.enclave.domain.port.media.RealtimeCaptureEvent
 import com.browntowndev.enclave.domain.port.media.RealtimeCaptureSessionInfo
 import com.browntowndev.enclave.domain.port.media.StreamingAudioConfig
 import com.browntowndev.enclave.domain.port.media.StreamingAudioPlayerPort
-import com.browntowndev.enclave.domain.port.media.VoiceChatAudioRoutePort
 import com.browntowndev.enclave.domain.usecase.chat.LiveVoiceSessionOpenResult
-import com.browntowndev.enclave.domain.usecase.chat.LiveVoiceSessionUseCase
-import com.browntowndev.enclave.domain.usecase.chat.PersistVoiceTurnUseCase
+import com.browntowndev.enclave.feature.chat.FakeLiveVoiceSessionUseCase
+import com.browntowndev.enclave.feature.chat.FakePersistVoiceTurnUseCase
+import com.browntowndev.enclave.feature.chat.FakeVoiceChatAudioRoutePort
 import com.browntowndev.enclave.feature.chat.LiveVoiceUiState
 import com.browntowndev.enclave.feature.chat.ToolCallBannerKind
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.slot
-import io.mockk.verify
-import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CompletableDeferred
@@ -57,12 +50,12 @@ import org.junit.jupiter.api.extension.ExtendWith
 @OptIn(ExperimentalCoroutinesApi::class)
 @ExtendWith(MainDispatcherRule::class)
 class LiveVoiceCoordinatorTest {
-    private val liveVoiceSessionUseCase = mockk<LiveVoiceSessionUseCase>()
-    private val persistVoiceTurnUseCase = mockk<PersistVoiceTurnUseCase>(relaxed = true)
-    private val errorHandler = mockk<ViewModelErrorHandler>()
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
-    private val toolExecutorPort = mockk<ToolExecutorPort>()
-    private val voiceChatAudioRoute = mockk<VoiceChatAudioRoutePort>(relaxed = true)
+    private val liveVoiceSessionUseCase = FakeLiveVoiceSessionUseCase()
+    private val persistVoiceTurnUseCase = FakePersistVoiceTurnUseCase()
+    private val errorHandler = FakeViewModelErrorHandler()
+    private val loggingPort = FakeLoggingPort()
+    private val toolExecutorPort = FakeToolExecutor()
+    private val voiceChatAudioRoute = FakeVoiceChatAudioRoutePort()
 
     private val liveVoiceAsset =
         LiveVoiceProviderAsset(
@@ -85,10 +78,6 @@ class LiveVoiceCoordinatorTest {
         LiveVoiceCoordinator.sessionTeardownScopeOverride =
             CoroutineScope(UnconfinedTestDispatcher())
         LiveVoiceCoordinator.toolExecutionDispatcherOverride = UnconfinedTestDispatcher()
-
-        every {
-            errorHandler.coroutineExceptionHandler(any(), any(), any())
-        } returns CoroutineExceptionHandler { _, _ -> }
 
         fakeSession = FakeLiveVoiceSession()
         fakeCapture = FakeRealtimeAudioCapture()
@@ -114,7 +103,7 @@ class LiveVoiceCoordinatorTest {
     }
 
     private fun stubOpenSession() {
-        coEvery { liveVoiceSessionUseCase() } returns
+        liveVoiceSessionUseCase.result =
             Result.success(
                 LiveVoiceSessionOpenResult(
                     session = fakeSession,
@@ -129,15 +118,8 @@ class LiveVoiceCoordinatorTest {
         assistantText: String,
         resolvedChatId: ChatId = chatId ?: ChatId("c1"),
     ) {
-        coEvery {
-            persistVoiceTurnUseCase(
-                chatId = chatId,
-                userText = userText,
-                assistantText = assistantText,
-                webSearchSources = any(),
-                assistantMessageId = any(),
-            )
-        } returns resolvedChatId
+        // The fake accepts every invocation; only the resolved chat id needs configuring.
+        persistVoiceTurnUseCase.resultChatId = resolvedChatId
     }
 
     private fun verifyPersistVoiceTurn(
@@ -146,27 +128,16 @@ class LiveVoiceCoordinatorTest {
         assistantText: String,
         exactly: Int = 1,
     ) {
-        coVerify(exactly = exactly) {
-            persistVoiceTurnUseCase(
-                chatId = chatId,
-                userText = userText,
-                assistantText = assistantText,
-                webSearchSources = any(),
-                assistantMessageId = any(),
-            )
-        }
+        assertEquals(
+            exactly,
+            persistVoiceTurnUseCase.calls.count {
+                it.chatId == chatId && it.userText == userText && it.assistantText == assistantText
+            },
+        )
     }
 
     private fun verifyNoPersistVoiceTurn() {
-        coVerify(exactly = 0) {
-            persistVoiceTurnUseCase(
-                chatId = any(),
-                userText = any(),
-                assistantText = any(),
-                webSearchSources = any(),
-                assistantMessageId = any(),
-            )
-        }
+        assertTrue(persistVoiceTurnUseCase.calls.isEmpty())
     }
 
     @Test
@@ -189,7 +160,7 @@ class LiveVoiceCoordinatorTest {
                 assertFalse(listening.isMuted)
             }
 
-            verify(exactly = 1) { voiceChatAudioRoute.activateSpeakerphone() }
+            assertEquals(1, voiceChatAudioRoute.activateCount)
         }
 
     @Test
@@ -326,7 +297,7 @@ class LiveVoiceCoordinatorTest {
     @DisplayName("LV-COORD-006: session-open failure surfaces as Error state")
     fun lvCoord006_sessionOpenFailure() =
         runTest {
-            coEvery { liveVoiceSessionUseCase() } returns
+            liveVoiceSessionUseCase.result =
                 Result.failure(IllegalStateException("No Live Voice provider assigned."))
             val scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
 
@@ -949,7 +920,7 @@ class LiveVoiceCoordinatorTest {
     ): Pair<CompletableDeferred<Unit>, CompletableDeferred<Unit>> {
         val started = CompletableDeferred<Unit>()
         val gate = CompletableDeferred<Unit>()
-        coEvery { toolExecutorPort.execute(any()) } coAnswers {
+        toolExecutorPort.behavior = {
             started.complete(Unit)
             gate.await()
             result
@@ -961,8 +932,7 @@ class LiveVoiceCoordinatorTest {
     @DisplayName("LV-TOOL-067")
     fun lvTool067_duplicateToolCallIdExecutesOnce() =
         runTest {
-            coEvery { toolExecutorPort.execute(any()) } returns
-                ToolExecutionResult(toolName = "web_search", resultJson = """{"results":[]}""")
+            toolExecutorPort.resultJson = """{"results":[]}"""
             startActiveCoordinator()
 
             val duplicateEvent =
@@ -975,7 +945,7 @@ class LiveVoiceCoordinatorTest {
             fakeSession.emit(duplicateEvent)
             advanceUntilIdle()
 
-            coVerify(exactly = 1) { toolExecutorPort.execute(any()) }
+            assertEquals(1, toolExecutorPort.executedRequests.size)
             assertEquals(1, fakeSession.sendToolResultInvocations.size)
             val listening = coordinator.state.value as LiveVoiceUiState.Listening
             assertNull(listening.activeToolCallBanner)
@@ -985,17 +955,7 @@ class LiveVoiceCoordinatorTest {
     @DisplayName("LV-TOOL-060")
     fun lvTool060_happyPathToolExecution() =
         runTest {
-            coEvery {
-                toolExecutorPort.execute(
-                    ToolCallRequest(
-                        toolName = "web_search",
-                        argumentsJson = """{"query":"test"}""",
-                        provider = "OPENAI",
-                        modelType = ModelType.LIVE_VOICE,
-                        chatId = ChatId("c1"),
-                    ),
-                )
-            } returns ToolExecutionResult(toolName = "web_search", resultJson = """{"results":[]}""")
+            toolExecutorPort.resultJson = """{"results":[]}"""
             startActiveCoordinator()
 
             fakeSession.emit(
@@ -1007,8 +967,8 @@ class LiveVoiceCoordinatorTest {
             )
             advanceUntilIdle()
 
-            coVerify(exactly = 1) {
-                toolExecutorPort.execute(
+            assertEquals(
+                listOf(
                     ToolCallRequest(
                         toolName = "web_search",
                         argumentsJson = """{"query":"test"}""",
@@ -1016,8 +976,9 @@ class LiveVoiceCoordinatorTest {
                         modelType = ModelType.LIVE_VOICE,
                         chatId = ChatId("c1"),
                     ),
-                )
-            }
+                ),
+                toolExecutorPort.executedRequests,
+            )
             assertEquals(1, fakeSession.sendToolResultInvocations.size)
             assertEquals(
                 Triple("call_1", "web_search", """{"results":[]}"""),
@@ -1029,7 +990,7 @@ class LiveVoiceCoordinatorTest {
     @DisplayName("LV-TOOL-061")
     fun lvTool061_failureSendsErrorJsonStaysInSession() =
         runTest {
-            coEvery { toolExecutorPort.execute(any()) } throws RuntimeException("network down")
+            toolExecutorPort.failure = RuntimeException("network down")
             startActiveCoordinator()
 
             fakeSession.emit(
@@ -1244,18 +1205,7 @@ class LiveVoiceCoordinatorTest {
                   ]
                 }
                 """.trimIndent()
-            val sourcesSlot = slot<List<com.browntowndev.enclave.domain.model.chat.WebSearchSource>>()
-            coEvery { toolExecutorPort.execute(any()) } returns
-                ToolExecutionResult(toolName = "web_search", resultJson = searchResultJson)
-            coEvery {
-                persistVoiceTurnUseCase(
-                    chatId = any(),
-                    userText = any(),
-                    assistantText = any(),
-                    webSearchSources = capture(sourcesSlot),
-                    assistantMessageId = any(),
-                )
-            } returns ChatId("c1")
+            toolExecutorPort.resultJson = searchResultJson
             val scope = startActiveCoordinator()
 
             fakeSession.emit(
@@ -1275,9 +1225,13 @@ class LiveVoiceCoordinatorTest {
                 userText = "latest news",
                 assistantText = "here is what I found",
             )
-            assertEquals(1, sourcesSlot.captured.size)
-            assertEquals("https://example.com", sourcesSlot.captured.single().url)
-            assertEquals("Example", sourcesSlot.captured.single().title)
+            val persistedSources =
+                persistVoiceTurnUseCase.calls
+                    .single { it.userText == "latest news" && it.assistantText == "here is what I found" }
+                    .webSearchSources
+            assertEquals(1, persistedSources.size)
+            assertEquals("https://example.com", persistedSources.single().url)
+            assertEquals("Example", persistedSources.single().title)
             coordinator.end(scope)
             advanceUntilIdle()
         }
@@ -1286,7 +1240,7 @@ class LiveVoiceCoordinatorTest {
     @DisplayName("LV-TOOL-MUT-007")
     fun lvToolMut007_toolFailureMustNotSetSessionError() =
         runTest {
-            coEvery { toolExecutorPort.execute(any()) } throws IllegalStateException("executor broken")
+            toolExecutorPort.failure = IllegalStateException("executor broken")
             startActiveCoordinator()
 
             fakeSession.emit(

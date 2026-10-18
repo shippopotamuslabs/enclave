@@ -81,8 +81,13 @@ class FakeChatRepository(
         }
     }
 
-    override fun getMessagesForChat(chatId: ChatId): Flow<List<Message>> =
-        messagesState.map { all -> all.filter { it.chatId == chatId } }
+    /** Recorded getMessagesForChat chat ids (ENC-28). */
+    val getMessagesForChatCalls = mutableListOf<ChatId>()
+
+    override fun getMessagesForChat(chatId: ChatId): Flow<List<Message>> {
+        getMessagesForChatCalls += chatId
+        return messagesState.map { all -> all.filter { it.chatId == chatId } }
+    }
 
     private fun updateMessage(messageId: MessageId, transform: (Message) -> Message) {
         messagesState.value = messagesState.value.map {
@@ -90,11 +95,19 @@ class FakeChatRepository(
         }
     }
 
+    /** Recorded updateMessageState calls (ENC-28). */
+    val updateMessageStateCalls = mutableListOf<Pair<MessageId, MessageState>>()
+
     override suspend fun updateMessageState(messageId: MessageId, messageState: MessageState) {
+        updateMessageStateCalls += messageId to messageState
         updateMessage(messageId) { it.copy(messageState = messageState) }
     }
 
+    /** Recorded updateMessageContent calls (ENC-28). */
+    val updateMessageContentCalls = mutableListOf<Pair<MessageId, String>>()
+
     override suspend fun updateMessageContent(messageId: MessageId, content: String) {
+        updateMessageContentCalls += messageId to content
         updateMessage(messageId) { it.copy(content = it.content.copy(text = content)) }
     }
 

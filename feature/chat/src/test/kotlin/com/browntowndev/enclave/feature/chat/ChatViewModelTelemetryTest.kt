@@ -2,45 +2,30 @@ package com.browntowndev.enclave.feature.chat
 
 import androidx.lifecycle.SavedStateHandle
 import app.cash.turbine.test
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
+import com.browntowndev.enclave.core.testing.FakeChatRepository
+import com.browntowndev.enclave.core.testing.FakeStudioRepository
+import com.browntowndev.enclave.core.testing.FakeTtsPlaybackController
+import com.browntowndev.enclave.core.testing.FakeViewModelErrorHandler
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
-import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.chat.AccumulatedMessages
-import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.Content
 import com.browntowndev.enclave.domain.model.chat.Message
-import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.MessageSnapshot
 import com.browntowndev.enclave.domain.model.chat.MessageState
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnKey
-import com.browntowndev.enclave.domain.port.inference.ToolExecutionEventPort
-import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
-import com.browntowndev.enclave.domain.port.repository.ChatRepository
-import com.browntowndev.enclave.domain.port.repository.SettingsData
-import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.domain.telemetry.FakeInferenceTelemetryRepositoryPort
 import com.browntowndev.enclave.domain.telemetry.TelemetryTestFixtures
-import com.browntowndev.enclave.domain.usecase.byok.GetDefaultModelsUseCase
-import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
-import com.browntowndev.enclave.domain.usecase.chat.StageImageAttachmentUseCase
-import com.browntowndev.enclave.domain.usecase.inference.CancelInferenceUseCase
-import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
-import com.browntowndev.enclave.domain.usecase.settings.SettingsAssignmentUseCases
-import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.enclave.domain.usecase.telemetry.ObserveMessageTelemetryUseCase
 import com.browntowndev.enclave.feature.chat.delegates.InferenceOrchestrator
 import com.browntowndev.enclave.feature.chat.stats.ChatTelemetryUiMapper
 import com.browntowndev.enclave.feature.chat.stats.ResponseStatsSheetUiState
 import com.browntowndev.enclave.feature.inference.ActiveChatTurnStore
-import io.mockk.coEvery
-import io.mockk.every
-import io.mockk.mockk
-import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -48,7 +33,6 @@ import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
-import kotlin.coroutines.CoroutineContext
 
 @ExtendWith(MainDispatcherRule::class)
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -85,45 +69,32 @@ class ChatViewModelTelemetryTest {
             val messagesFlow = MutableStateFlow<List<Message>>(emptyList())
             val turnStore = ActiveChatTurnStore()
 
-            val settingsUseCases = mockk<SettingsUseCases>(relaxed = true)
-            val assignmentUseCases = mockk<SettingsAssignmentUseCases>()
-            val getDefaultModelsUseCase = mockk<GetDefaultModelsUseCase>()
-            val chatUseCases = mockk<ChatUseCases>(relaxed = true)
-            val inferenceLockManager = mockk<InferenceLockManager>(relaxed = true)
-            val toolExecutionEventPort = mockk<ToolExecutionEventPort>(relaxed = true)
-            val errorHandler = mockk<ViewModelErrorHandler>()
-            every { errorHandler.coroutineExceptionHandler(any(), any(), any()) } returns
-                CoroutineExceptionHandler { _: CoroutineContext, _ -> }
-
-            every { settingsUseCases.getSettings() } returns MutableStateFlow(SettingsData())
-            every { settingsUseCases.assignments } returns assignmentUseCases
-            every { assignmentUseCases.getDefaultModels } returns getDefaultModelsUseCase
-            every { getDefaultModelsUseCase() } returns MutableStateFlow(emptyList())
-            coEvery { chatUseCases.getChat(chatId) } returns messagesFlow
-            every { inferenceLockManager.isInferenceBlocked } returns MutableStateFlow(false)
-
-            val studioRepository = mockk<StudioRepositoryPort>(relaxed = true)
-            every { studioRepository.observeAllMedia() } returns flowOf(emptyList())
-            every { studioRepository.observeEphemeralMedia() } returns flowOf(emptyList())
+            val settingsUseCases = FakeChatSettingsUseCases()
+            val chatUseCases = FakeChatUseCases()
+            chatUseCases.getChatUseCase.flowsByChatId[chatId] = messagesFlow
+            val inferenceLockManager = FakeInferenceLockManager()
+            val toolExecutionEventPort = FakeToolExecutionEventPort()
+            val errorHandler = FakeViewModelErrorHandler()
+            val studioRepository = FakeStudioRepository()
 
             val harness =
                 ChatViewModelTestSupport.createHarness(
                     settingsUseCases = settingsUseCases,
                     chatUseCases = chatUseCases,
                     savedStateHandle = SavedStateHandle(mapOf("chatId" to chatId.value)),
-                    cancelInferenceUseCase = mockk(relaxed = true),
+                    cancelInferenceUseCase = FakeCancelInferenceUseCase(),
                     inferenceLockManager = inferenceLockManager,
-                    modelDisplayNamesUseCase = mockk(relaxed = true),
-                    activeModelProvider = mockk<ActiveModelProviderPort>(relaxed = true),
+                    modelDisplayNamesUseCase = FakeGetModelDisplayNameUseCase(),
+                    activeModelProvider = FakeActiveModelProvider(),
                     toolExecutionEventPort = toolExecutionEventPort,
                     errorHandler = errorHandler,
                     activeChatTurnSnapshotPort = turnStore,
-                    playbackController = mockk(relaxed = true),
+                    playbackController = FakeTtsPlaybackController(),
                     studioRepository = studioRepository,
-                    shareChatUseCase = mockk(relaxed = true),
-                    chatRepository = mockk(relaxed = true),
-                    exportArtifactDocumentsUseCase = mockk(relaxed = true),
-                    stageImageAttachmentUseCase = mockk<StageImageAttachmentUseCase>(relaxed = true),
+                    shareChatUseCase = FakeShareChatUseCase(),
+                    chatRepository = FakeChatRepository(),
+                    exportArtifactDocumentsUseCase = FakeExportArtifactDocumentsUseCase(),
+                    stageImageAttachmentUseCase = FakeStageImageAttachmentUseCase(),
                     inferenceTelemetryRepositoryPort = FakeInferenceTelemetryRepositoryPort(messageRows = emptyMap()),
                 )
             val viewModel = harness.viewModel

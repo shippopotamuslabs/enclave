@@ -14,13 +14,13 @@ import java.util.Date
 import java.util.UUID
 import javax.inject.Inject
 
-class ImportSharedChatUseCase
+open class ImportSharedChatUseCase
     @Inject
     constructor(
         private val chatRepository: ChatRepository,
         private val messageRepository: MessageRepository,
     ) {
-        suspend operator fun invoke(sharedChat: SharedChat): ChatId {
+        open suspend operator fun invoke(sharedChat: SharedChat): ChatId {
             val sourceChatId = sharedChat.sourceChatId?.let { ChatId(it) }
             if (sourceChatId != null) {
                 val existingMessages = messageRepository.getMessagesForChat(sourceChatId)

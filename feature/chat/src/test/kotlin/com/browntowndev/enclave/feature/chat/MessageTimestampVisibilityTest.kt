@@ -1,22 +1,18 @@
 package com.browntowndev.enclave.feature.chat
 
 import androidx.lifecycle.SavedStateHandle
+import com.browntowndev.enclave.core.testing.FakeActiveChatTurnSnapshotPort
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
+import com.browntowndev.enclave.core.testing.FakeChatRepository
+import com.browntowndev.enclave.core.testing.FakeStudioRepository
+import com.browntowndev.enclave.core.testing.FakeTtsPlaybackController
+import com.browntowndev.enclave.core.testing.FakeViewModelErrorHandler
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.Content
 import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.Role
-import com.browntowndev.enclave.domain.port.repository.SettingsData
-import com.browntowndev.enclave.domain.usecase.byok.GetDefaultModelsUseCase
-import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
-import com.browntowndev.enclave.domain.usecase.settings.SettingsAssignmentUseCases
-import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
-import com.browntowndev.enclave.domain.usecase.share.ShareChatUseCase
-import io.mockk.every
-import io.mockk.mockk
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.flowOf
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -25,37 +21,30 @@ import org.junit.jupiter.api.extension.ExtendWith
 @ExtendWith(MainDispatcherRule::class)
 class MessageTimestampVisibilityTest {
     private lateinit var viewModel: ChatViewModel
-    private val settingsUseCases: SettingsUseCases = mockk(relaxed = true)
-    private val chatUseCases: ChatUseCases = mockk(relaxed = true)
-    private val shareChatUseCase: ShareChatUseCase = mockk(relaxed = true)
+    private val settingsUseCases = FakeChatSettingsUseCases()
+    private val chatUseCases = FakeChatUseCases()
+    private val shareChatUseCase = FakeShareChatUseCase()
 
     @BeforeEach
     fun setup() {
-        every { settingsUseCases.getSettings() } returns flowOf(SettingsData())
-        val assignmentUseCases = mockk<SettingsAssignmentUseCases>()
-        val getDefaultModelsUseCase = mockk<GetDefaultModelsUseCase>()
-        every { settingsUseCases.assignments } returns assignmentUseCases
-        every { assignmentUseCases.getDefaultModels } returns getDefaultModelsUseCase
-        every { getDefaultModelsUseCase() } returns MutableStateFlow(emptyList())
-
         viewModel =
             ChatViewModelTestSupport.createViewModel(
                 settingsUseCases = settingsUseCases,
                 chatUseCases = chatUseCases,
                 savedStateHandle = SavedStateHandle(),
-                cancelInferenceUseCase = mockk(relaxed = true),
-                inferenceLockManager = mockk(relaxed = true),
-                modelDisplayNamesUseCase = mockk(relaxed = true),
-                activeModelProvider = mockk(relaxed = true),
-                toolExecutionEventPort = mockk(relaxed = true),
-                errorHandler = mockk(relaxed = true),
-                activeChatTurnSnapshotPort = mockk(relaxed = true),
-                playbackController = mockk(relaxed = true),
-                studioRepository = mockk(relaxed = true),
+                cancelInferenceUseCase = FakeCancelInferenceUseCase(),
+                inferenceLockManager = FakeInferenceLockManager(),
+                modelDisplayNamesUseCase = FakeGetModelDisplayNameUseCase(),
+                activeModelProvider = FakeActiveModelProvider(),
+                toolExecutionEventPort = FakeToolExecutionEventPort(),
+                errorHandler = FakeViewModelErrorHandler(),
+                activeChatTurnSnapshotPort = FakeActiveChatTurnSnapshotPort(),
+                playbackController = FakeTtsPlaybackController(),
+                studioRepository = FakeStudioRepository(),
                 shareChatUseCase = shareChatUseCase,
-                chatRepository = mockk(relaxed = true),
-                exportArtifactDocumentsUseCase = mockk(relaxed = true),
-                stageImageAttachmentUseCase = mockk(relaxed = true),
+                chatRepository = FakeChatRepository(),
+                exportArtifactDocumentsUseCase = fakeExportArtifactDocumentsUseCase(),
+                stageImageAttachmentUseCase = FakeStageImageAttachmentUseCase(),
             )
     }
 

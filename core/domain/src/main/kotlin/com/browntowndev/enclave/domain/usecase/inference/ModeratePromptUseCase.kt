@@ -12,13 +12,13 @@ data class PromptModerationResult(
     val combinedIllegalScore: Double,
 )
 
-class ModeratePromptUseCase
+open class ModeratePromptUseCase
     @Inject
     constructor(
         private val moderationPort: PromptModerationPort,
         private val loggingPort: LoggingPort,
     ) {
-        suspend operator fun invoke(text: String): PromptModerationResult {
+        open suspend operator fun invoke(text: String): PromptModerationResult {
             if (text.isBlank()) {
                 return PromptModerationResult(
                     blocked = false,

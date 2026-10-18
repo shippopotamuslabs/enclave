@@ -49,7 +49,7 @@ import javax.inject.Inject
  * 3. Persists all accumulated state to DB in a single transaction on completion.
  * 4. Uses buffer(64) for backpressure handling.
  */
-class GenerateChatResponseUseCase
+open class GenerateChatResponseUseCase
     @Inject
     constructor(
         private val pipelineExecutor: PipelineExecutorPort,
@@ -71,7 +71,7 @@ class GenerateChatResponseUseCase
                 extractedUrls = extractedUrlTracker.urls,
             )
 
-        operator fun invoke(
+        open operator fun invoke(
             prompt: String,
             userMessageId: MessageId,
             assistantMessageId: MessageId,
