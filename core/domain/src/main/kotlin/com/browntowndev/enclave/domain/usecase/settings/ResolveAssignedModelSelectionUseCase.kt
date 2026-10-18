@@ -7,7 +7,7 @@ import com.browntowndev.enclave.domain.usecase.modelconfig.GetLocalModelAssetsUs
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 
-class ResolveAssignedModelSelectionUseCase
+open class ResolveAssignedModelSelectionUseCase
     @Inject
     constructor(
         private val getDefaultModelsUseCase: GetDefaultModelsUseCase,
@@ -17,7 +17,7 @@ class ResolveAssignedModelSelectionUseCase
         private val getLiveVoiceProvidersUseCase: GetLiveVoiceProvidersUseCase,
     ) {
         @Suppress("ReturnCount")
-        suspend operator fun invoke(modelType: ModelType): ResolvedAssignedModelSelection? {
+        open suspend operator fun invoke(modelType: ModelType): ResolvedAssignedModelSelection? {
             val assignment =
                 getDefaultModelsUseCase()
                     .first()

@@ -21,9 +21,6 @@ import com.browntowndev.enclave.domain.usecase.security.CreateVaultUseCase
 import com.browntowndev.enclave.domain.usecase.settings.*
 import com.browntowndev.enclave.domain.usecase.auth.GetAuthStateUseCase
 import com.browntowndev.enclave.feature.settings.usage.UsageSpendUiMapper
-import io.mockk.coEvery
-import io.mockk.every
-import io.mockk.mockk
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runCurrent
@@ -38,119 +35,67 @@ import org.junit.jupiter.api.extension.ExtendWith
 @ExtendWith(MainDispatcherRule::class)
 class SettingsViewModelEventTest {
     private lateinit var viewModel: SettingsViewModel
-    private val memoriesRepository = mockk<MemoriesRepository>(relaxed = true)
-    private val errorHandler = mockk<ViewModelErrorHandler>(relaxed = true)
+    private val memoriesRepository = com.browntowndev.enclave.core.testing.FakeMemoriesRepository()
+    private val errorHandler = FakeViewModelErrorHandler()
 
     private val localModelAssetUiMapper = LocalModelAssetUiMapper()
     private val apiModelAssetUiMapper = ApiModelAssetUiMapper()
     private val ttsProviderAssetUiMapper = TtsProviderAssetUiMapper()
     private val mediaProviderAssetUiMapper = MediaProviderAssetUiMapper()
     private val reassignmentOptionUiMapper = ReassignmentOptionUiMapper()
-    private val applyApiModelMetadataDefaultsUseCase = mockk<ApplyApiModelMetadataDefaultsUseCase>(relaxed = true)
+    private val applyApiModelMetadataDefaultsUseCase = ApplyApiModelMetadataDefaultsUseCase()
 
     @BeforeEach
     fun setup() {
-        every { errorHandler.coroutineExceptionHandler(any(), any(), any()) } returns CoroutineExceptionHandler { _, _ -> }
-
-        val getSettingsUseCase = mockk<GetSettingsUseCase>()
-        every { getSettingsUseCase() } returns MutableStateFlow(SettingsData())
-        every { memoriesRepository.getAllMemoriesFlow() } returns MutableStateFlow<List<Memory>>(emptyList())
-
-        val getLocalModelAssetsUseCase = mockk<GetLocalModelAssetsUseCase>()
-        every { getLocalModelAssetsUseCase() } returns MutableStateFlow<List<LocalModelAsset>>(emptyList())
-
-        val observeActiveUtilityModelsUseCase = mockk<ObserveActiveUtilityModelsUseCase>()
-        every { observeActiveUtilityModelsUseCase() } returns kotlinx.coroutines.flow.flowOf(emptyList())
-
-        val getModelPacksForSettingsUseCase = mockk<GetModelPacksForSettingsUseCase>()
-        coEvery { getModelPacksForSettingsUseCase() } returns emptyList()
-
-        val getApiModelAssetsUseCase = mockk<GetApiModelAssetsUseCase>()
-        every { getApiModelAssetsUseCase() } returns MutableStateFlow<List<ApiModelAsset>>(emptyList())
-
-        val getDefaultModelsUseCase = mockk<GetDefaultModelsUseCase>()
-        every { getDefaultModelsUseCase() } returns MutableStateFlow<List<DefaultModelAssignment>>(emptyList())
-
-        val getTtsProvidersUseCase = mockk<GetTtsProvidersUseCase>()
-        every { getTtsProvidersUseCase() } returns MutableStateFlow<List<TtsProviderAsset>>(emptyList())
-
-        val getLiveVoiceProvidersUseCase = mockk<GetLiveVoiceProvidersUseCase>()
-        every { getLiveVoiceProvidersUseCase() } returns MutableStateFlow<List<LiveVoiceProviderAsset>>(emptyList())
-
-        val getMediaProvidersUseCase = mockk<GetMediaProvidersUseCase>()
-        every { getMediaProvidersUseCase() } returns MutableStateFlow<List<MediaProviderAsset>>(emptyList())
-
-        val getAuthStateUseCase = mockk<GetAuthStateUseCase>()
-        every { getAuthStateUseCase() } returns MutableStateFlow(com.browntowndev.enclave.domain.port.auth.AuthState.Loading)
-
         val settingsUseCases =
-            mockk<SettingsUseCases>(relaxed = true) {
-                val mockPreferences = mockk<SettingsPreferencesUseCases>(relaxed = true)
-                every { preferences } returns mockPreferences
-                every { mockPreferences.getSettings } returns getSettingsUseCase
-                every { mockPreferences.updateTheme } returns mockk(relaxed = true)
-                every { mockPreferences.updateBackgroundInferenceEnabled } returns mockk(relaxed = true)
-                every { mockPreferences.updateAutomaticErrorTrackingEnabled } returns mockk(relaxed = true)
-                every { mockPreferences.updateSearchEnabled } returns mockk(relaxed = true)
-                every { mockPreferences.updateSearchProvider } returns mockk(relaxed = true)
-                every { mockPreferences.saveTavilyApiKey } returns mockk(relaxed = true)
+            FakeSettingsUseCases(
+                preferences =
+                    FakeSettingsPreferencesUseCases(
+                        getSettings = FakeGetSettingsUseCase(),
+                    ),
+                localModels =
+                    FakeSettingsLocalModelUseCases(
+                        getLocalModelAssets = FakeGetLocalModelAssetsUseCase(),
+                        getModelPacksForSettings = FakeGetModelPacksForSettingsUseCase(),
+                        observeActiveUtilityModels = FakeObserveActiveUtilityModelsUseCase(),
+                    ),
+                apiProviders =
+                    FakeSettingsApiProviderUseCases(
+                        getApiModelAssets = FakeGetApiModelAssetsUseCase(),
+                    ),
+                assignments =
+                    FakeSettingsAssignmentUseCases(
+                        getDefaultModels = FakeGetDefaultModelsUseCase(),
+                    ),
+                tts =
+                    FakeSettingsTtsUseCases(
+                        getTtsProviders = FakeGetTtsProvidersUseCase(),
+                    ),
+                liveVoice =
+                    FakeSettingsLiveVoiceUseCases(
+                        getLiveVoiceProviders = FakeGetLiveVoiceProvidersUseCase(),
+                    ),
+                media =
+                    FakeSettingsMediaUseCases(
+                        getMediaProviders = FakeGetMediaProvidersUseCase(),
+                    ),
+                auth =
+                    FakeSettingsAuthUseCases(
+                        getAuthState = FakeGetAuthStateUseCase(),
+                    ),
+                memories = FakeSettingsMemoriesUseCases(memoriesRepository),
+            )
 
-                every { localModels } returns
-                    mockk(relaxed = true) {
-                        every { getLocalModelAssets } returns getLocalModelAssetsUseCase
-                        every { getModelPacksForSettings } returns getModelPacksForSettingsUseCase
-                        every { observeActiveUtilityModels } returns observeActiveUtilityModelsUseCase
-                    }
-                every { apiProviders } returns
-                    mockk(relaxed = true) {
-                        every { getApiModelAssets } returns getApiModelAssetsUseCase
-                    }
-                every { assignments } returns
-                    mockk(relaxed = true) {
-                        every { getDefaultModels } returns getDefaultModelsUseCase
-                    }
-                every { tts } returns
-                    mockk(relaxed = true) {
-                        every { getTtsProviders } returns getTtsProvidersUseCase
-                    }
-                every { liveVoice } returns
-                    mockk(relaxed = true) {
-                        every { getLiveVoiceProviders } returns getLiveVoiceProvidersUseCase
-                    }
-                every { media } returns
-                    mockk(relaxed = true) {
-                        every { getMediaProviders } returns getMediaProvidersUseCase
-                    }
-                every { auth } returns
-                    mockk(relaxed = true) {
-                        every { getAuthState } returns getAuthStateUseCase
-                    }
-                every { memories } returns
-                    mockk(relaxed = true) {
-                        every { getAllMemoriesFlow() } returns
-                            MutableStateFlow<List<com.browntowndev.enclave.domain.model.memory.Memory>>(emptyList())
-                    }
-                every { deletion } returns mockk(relaxed = true)
-                every { getSettings } returns getSettingsUseCase
-            }
-
-        val embeddingProgressPort = mockk<com.browntowndev.enclave.domain.port.repository.EmbeddingProgressPort>()
-        every { embeddingProgressPort.isReindexing } returns MutableStateFlow(false)
-        every { embeddingProgressPort.progress } returns MutableStateFlow(0f)
-
+        val embeddingProgressPort = com.browntowndev.enclave.core.testing.FakeEmbeddingProgressPort()
 
         val deletionHelper = SettingsDeletionHelper(settingsUseCases.deletion, reassignmentOptionUiMapper, errorHandler)
-        val detectVaultReconciliationStateUseCase =
-            mockk<com.browntowndev.enclave.domain.usecase.security.DetectVaultReconciliationStateUseCase>(relaxed = true)
-        val adoptCloudVaultUseCase =
-            mockk<com.browntowndev.enclave.domain.usecase.security.AdoptCloudVaultUseCase>(relaxed = true)
-        val bootstrapCloudVaultFromLocalUseCase =
-            mockk<com.browntowndev.enclave.domain.usecase.security.BootstrapCloudVaultFromLocalUseCase>(relaxed = true)
-        val createVaultUseCase = mockk<CreateVaultUseCase>(relaxed = true)
-        val cryptoManager = mockk<CryptoManagerPort>(relaxed = true)
-        val vaultMetadataPort = mockk<VaultMetadataPort>(relaxed = true)
-        val cloudSyncPort =
-            mockk<com.browntowndev.enclave.domain.port.repository.CloudSyncPort>(relaxed = true)
+        val detectVaultReconciliationStateUseCase = FakeDetectVaultReconciliationStateUseCase()
+        val adoptCloudVaultUseCase = FakeAdoptCloudVaultUseCase()
+        val bootstrapCloudVaultFromLocalUseCase = FakeBootstrapCloudVaultFromLocalUseCase()
+        val createVaultUseCase = FakeCreateVaultUseCase()
+        val cryptoManager = com.browntowndev.enclave.core.testing.FakeCryptoManagerPort()
+        val vaultMetadataPort = com.browntowndev.enclave.core.testing.FakeVaultMetadataPort()
+        val cloudSyncPort = com.browntowndev.enclave.core.testing.FakeCloudSyncPort()
         val generalDelegate =
             SettingsGeneralDelegate(
                 settingsUseCases.preferences,
@@ -160,8 +105,8 @@ class SettingsViewModelEventTest {
                 adoptCloudVaultUseCase,
                 bootstrapCloudVaultFromLocalUseCase,
                 createVaultUseCase,
-                mockk<com.browntowndev.enclave.domain.usecase.security.UnlockVaultFromStoredMetadataUseCase>(relaxed = true),
-                mockk<com.browntowndev.enclave.domain.usecase.security.StartCloudSyncListeningUseCase>(relaxed = true),
+                FakeUnlockVaultFromStoredMetadataUseCase(),
+                FakeStartCloudSyncListeningUseCase(),
                 cryptoManager,
                 vaultMetadataPort,
                 cloudSyncPort,
@@ -182,7 +127,7 @@ class SettingsViewModelEventTest {
         val searchDelegate =
             SettingsSearchDelegate(
                 settingsUseCases.preferences,
-                mockk<com.browntowndev.enclave.domain.port.repository.CloudSyncPort>(relaxed = true),
+                com.browntowndev.enclave.core.testing.FakeCloudSyncPort(),
                 errorHandler,
             )
         val assignmentsDelegate = SettingsAssignmentsDelegate(settingsUseCases.assignments, errorHandler)

@@ -18,18 +18,24 @@ class FakeMemoriesRepository(
         state.value = memories
     }
 
+    val insertCalls = mutableListOf<Pair<MemoryCategory, String>>()
+    val updateCalls = mutableListOf<Triple<String, String, MemoryCategory?>>()
+    val deleteCalls = mutableListOf<String>()
+
     override fun getAllMemoriesFlow(): Flow<List<Memory>> = state.asStateFlow()
 
     override suspend fun getCoreMemories(): List<Memory> =
         state.value.filter { it.category in setOf(MemoryCategory.CORE_IDENTITY, MemoryCategory.PREFERENCES, MemoryCategory.PSYCH_PROFILE) }
 
     override suspend fun insertMemory(category: MemoryCategory, content: String): Memory {
+        insertCalls += category to content
         val memory = Memory(id = UUID.randomUUID().toString(), category = category, content = content)
         state.value = state.value + memory
         return memory
     }
 
     override suspend fun updateMemory(id: String, content: String, category: MemoryCategory?) {
+        updateCalls += Triple(id, content, category)
         state.value =
             state.value.map { memory ->
                 if (memory.id == id) memory.copy(content = content, category = category ?: memory.category) else memory
@@ -39,6 +45,7 @@ class FakeMemoriesRepository(
     override suspend fun getMemoryById(id: String): Memory? = state.value.firstOrNull { it.id == id }
 
     override suspend fun deleteMemory(id: String) {
+        deleteCalls += id
         state.value = state.value.filterNot { it.id == id }
     }
 

@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 
 interface GetDefaultModelsUseCase {
-    operator fun invoke(): Flow<List<DefaultModelAssignment>>
+    open operator fun invoke(): Flow<List<DefaultModelAssignment>>
 }
 
 class GetDefaultModelsUseCaseImpl

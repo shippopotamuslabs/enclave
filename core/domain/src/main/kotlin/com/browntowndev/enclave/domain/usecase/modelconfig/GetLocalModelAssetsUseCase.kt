@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 
 interface GetLocalModelAssetsUseCase {
-    operator fun invoke(): Flow<List<LocalModelAsset>>
+    open operator fun invoke(): Flow<List<LocalModelAsset>>
 
     suspend fun getSoftDeletedModels(): List<LocalModelAsset>
 }

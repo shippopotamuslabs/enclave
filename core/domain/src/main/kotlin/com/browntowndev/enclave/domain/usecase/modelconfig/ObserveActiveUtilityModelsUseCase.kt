@@ -5,10 +5,10 @@ import com.browntowndev.enclave.domain.port.repository.UtilityModelRepositoryPor
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 
-class ObserveActiveUtilityModelsUseCase
+open class ObserveActiveUtilityModelsUseCase
     @Inject
     constructor(
         private val utilityModelRepository: UtilityModelRepositoryPort,
     ) {
-        operator fun invoke(): Flow<List<UtilityModelMetadata>> = utilityModelRepository.observeAllActive()
+        open operator fun invoke(): Flow<List<UtilityModelMetadata>> = utilityModelRepository.observeAllActive()
     }

@@ -6,7 +6,6 @@ import com.browntowndev.enclave.domain.port.auth.AuthState
 import com.browntowndev.enclave.domain.port.repository.SettingsData
 import com.browntowndev.enclave.domain.usecase.settings.ApplyApiModelMetadataDefaultsUseCase
 import com.browntowndev.enclave.feature.settings.usage.UsageSpendUiMapper
-import io.mockk.mockk
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
@@ -18,7 +17,7 @@ class SettingsUsageSpendUiStateFactoryTest {
             localModelAssetUiMapper = LocalModelAssetUiMapper(),
             apiModelAssetUiMapper = ApiModelAssetUiMapper(),
             ttsProviderAssetUiMapper = TtsProviderAssetUiMapper(),
-            mediaProviderAssetUiMapper = mockk(relaxed = true),
+            mediaProviderAssetUiMapper = MediaProviderAssetUiMapper(),
             apiDiscoveryUiFilter = ApiDiscoveryUiFilter(),
             applyApiModelMetadataDefaultsUseCase = ApplyApiModelMetadataDefaultsUseCase(),
             usageSpendUiMapper = UsageSpendUiMapper(),

@@ -5,12 +5,12 @@ import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId
 import com.browntowndev.enclave.domain.port.repository.LiveVoiceProviderRepositoryPort
 import javax.inject.Inject
 
-class SaveLiveVoiceProviderUseCase
+open class SaveLiveVoiceProviderUseCase
     @Inject
     constructor(
         private val repository: LiveVoiceProviderRepositoryPort,
     ) {
-        suspend operator fun invoke(draft: LiveVoiceProviderDraft): Result<LiveVoiceProviderId> =
+        open suspend operator fun invoke(draft: LiveVoiceProviderDraft): Result<LiveVoiceProviderId> =
             Result.runCatching {
                 val finalCredentialAlias =
                     draft.sourceCredentialAlias?.takeIf { it.isNotBlank() } ?: draft.credentialAlias

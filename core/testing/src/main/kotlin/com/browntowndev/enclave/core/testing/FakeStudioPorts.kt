@@ -138,3 +138,9 @@ class FakeVideoGenerationPort : VideoGenerationPort {
         return result
     }
 }
+
+/** StateFlow-backed [com.browntowndev.enclave.domain.port.repository.EmbeddingProgressPort] fake (ENC-28). */
+class FakeEmbeddingProgressPort : com.browntowndev.enclave.domain.port.repository.EmbeddingProgressPort {
+    override val isReindexing = MutableStateFlow(false)
+    override val progress = MutableStateFlow(0f)
+}

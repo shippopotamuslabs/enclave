@@ -9,7 +9,7 @@ import com.browntowndev.enclave.domain.usecase.byok.SaveApiModelConfigurationUse
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 
-class SaveApiProviderDraftUseCase
+open class SaveApiProviderDraftUseCase
     @Inject
     constructor(
         private val saveApiCredentialsUseCase: SaveApiCredentialsUseCase,
@@ -17,7 +17,7 @@ class SaveApiProviderDraftUseCase
         private val getApiModelAssetsUseCase: GetApiModelAssetsUseCase,
         private val apiModelRepository: ApiModelRepositoryPort,
     ) {
-        suspend operator fun invoke(draft: ApiProviderDraft): Result<ApiProviderDraftSaveResult> =
+        open suspend operator fun invoke(draft: ApiProviderDraft): Result<ApiProviderDraftSaveResult> =
             Result.runCatching {
                 val existingAssets = getApiModelAssetsUseCase().first()
                 val isNewAsset = draft.id.value.isEmpty()

@@ -39,7 +39,7 @@ import javax.inject.Inject
  * a destructive clobber when local and cloud DEKs differ. Auto-syncing here would race the
  * user-facing reconciliation prompt and risk uploading data encrypted with the wrong DEK.
  */
-class LoginWithGoogleUseCase
+open class LoginWithGoogleUseCase
     @Inject
     constructor(
         private val authManager: AuthManager,
@@ -50,7 +50,7 @@ class LoginWithGoogleUseCase
             const val VAULT_VERIFICATION_MAGIC_STRING = "VERIFY_ZK_VAULT_v1"
         }
 
-        suspend operator fun invoke(): Result<UserProfile> {
+        open suspend operator fun invoke(): Result<UserProfile> {
             loggingPort.debug(TAG, "LoginWithGoogleUseCase: Started")
             val authResult = authManager.signInWithGoogle()
             loggingPort.debug(TAG, "LoginWithGoogleUseCase: authResult.isSuccess = ${authResult.isSuccess}")
@@ -58,7 +58,7 @@ class LoginWithGoogleUseCase
         }
     }
 
-class LogoutUseCase
+open class LogoutUseCase
     @Inject
     constructor(
         private val authManager: AuthManager,
@@ -66,7 +66,7 @@ class LogoutUseCase
         private val cloudSyncPort: CloudSyncPort,
         private val autoAssignLocalModelsUseCase: AutoAssignLocalModelsUseCase,
     ) {
-        suspend operator fun invoke(): Result<Unit> {
+        open suspend operator fun invoke(): Result<Unit> {
             val result = authManager.signOut()
             if (result.isSuccess) {
                 cloudSyncPort.stopListening()
@@ -82,10 +82,10 @@ class LogoutUseCase
         }
     }
 
-class GetAuthStateUseCase
+open class GetAuthStateUseCase
     @Inject
     constructor(
         private val authManager: AuthManager,
     ) {
-        operator fun invoke(): StateFlow<AuthState> = authManager.authState
+        open operator fun invoke(): StateFlow<AuthState> = authManager.authState
     }

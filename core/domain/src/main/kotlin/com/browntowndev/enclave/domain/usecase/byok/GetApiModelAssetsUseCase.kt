@@ -8,7 +8,7 @@ import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 
 interface GetApiModelAssetsUseCase {
-    operator fun invoke(): Flow<List<ApiModelAsset>>
+    open operator fun invoke(): Flow<List<ApiModelAsset>>
 }
 
 class GetApiModelAssetsUseCaseImpl
