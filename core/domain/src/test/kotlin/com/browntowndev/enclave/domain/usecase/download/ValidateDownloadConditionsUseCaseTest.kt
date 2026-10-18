@@ -1,54 +1,37 @@
 package com.browntowndev.enclave.domain.usecase.download
 
-import android.util.Log
+import com.browntowndev.enclave.core.testing.FakeDeviceEnvironmentRepository
 import com.browntowndev.enclave.domain.model.config.LocalModelAsset
 import com.browntowndev.enclave.domain.model.config.LocalModelConfiguration
 import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.config.LocalModelMetadata
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.port.repository.DeviceEnvironmentRepositoryPort
-import io.mockk.MockKAnnotations
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.mockkStatic
-import io.mockk.unmockkStatic
 import kotlinx.coroutines.test.runTest
-import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class ValidateDownloadConditionsUseCaseTest {
-    private lateinit var mockDeviceEnvironmentRepository: DeviceEnvironmentRepositoryPort
+    private lateinit var mockDeviceEnvironmentRepository: FakeDeviceEnvironmentRepository
     private lateinit var useCase: ValidateDownloadConditionsUseCase
 
     @BeforeEach
     fun setup() {
-        MockKAnnotations.init(this)
-        mockkStatic(Log::class)
-        every { Log.d(any<String>(), any<String>()) } returns 0
-        every { Log.e(any<String>(), any<String>()) } returns 0
-        every { Log.w(any<String>(), any<String>()) } returns 0
-        every { Log.i(any<String>(), any<String>()) } returns 0
+        mockDeviceEnvironmentRepository = FakeDeviceEnvironmentRepository()
 
-        // Use non-relaxed mocks with proper every {} setup
-        mockDeviceEnvironmentRepository = mockk()
-
-        // Default mock behavior - return true for connected, false for storage
-        coEvery { mockDeviceEnvironmentRepository.isWifiConnected() } returns true
-        coEvery { mockDeviceEnvironmentRepository.hasRequiredStorage(any()) } returns true
+        // Default fake behavior - return true for connected, true for storage
+        mockDeviceEnvironmentRepository.wifiConnected = true
+        mockDeviceEnvironmentRepository.hasStorage = true
 
         useCase = ValidateDownloadConditionsUseCase(mockDeviceEnvironmentRepository)
-    }
-
-    @AfterEach
-    fun tearDown() {
-        unmockkStatic(Log::class)
     }
 
     @Test
@@ -97,8 +80,8 @@ class ValidateDownloadConditionsUseCaseTest {
     fun `invoke blocks download when wifiOnly enabled but not on WiFi`() =
         runTest {
             // Given
-            coEvery { mockDeviceEnvironmentRepository.isWifiConnected() } returns false
-            coEvery { mockDeviceEnvironmentRepository.hasRequiredStorage(any()) } returns true
+            mockDeviceEnvironmentRepository.wifiConnected = false
+            mockDeviceEnvironmentRepository.hasStorage = true
 
             val missingModels = listOf(createLocalModelAsset(ModelType.MAIN, "abc123"))
 
@@ -114,8 +97,8 @@ class ValidateDownloadConditionsUseCaseTest {
     fun `invoke allows download when wifiOnly enabled and on WiFi`() =
         runTest {
             // Given
-            coEvery { mockDeviceEnvironmentRepository.isWifiConnected() } returns true
-            coEvery { mockDeviceEnvironmentRepository.hasRequiredStorage(any()) } returns true
+            mockDeviceEnvironmentRepository.wifiConnected = true
+            mockDeviceEnvironmentRepository.hasStorage = true
 
             val missingModels = listOf(createLocalModelAsset(ModelType.MAIN, "abc123"))
 
@@ -131,8 +114,8 @@ class ValidateDownloadConditionsUseCaseTest {
     fun `invoke blocks download when insufficient storage`() =
         runTest {
             // Given
-            coEvery { mockDeviceEnvironmentRepository.isWifiConnected() } returns true
-            coEvery { mockDeviceEnvironmentRepository.hasRequiredStorage(any()) } returns false
+            mockDeviceEnvironmentRepository.wifiConnected = true
+            mockDeviceEnvironmentRepository.hasStorage = false
 
             val missingModels = listOf(createLocalModelAsset(ModelType.MAIN, "abc123"))
 
@@ -148,8 +131,8 @@ class ValidateDownloadConditionsUseCaseTest {
     fun `invoke allows download with mobile data when wifiOnly disabled`() =
         runTest {
             // Given
-            coEvery { mockDeviceEnvironmentRepository.isWifiConnected() } returns false
-            coEvery { mockDeviceEnvironmentRepository.hasRequiredStorage(any()) } returns true
+            mockDeviceEnvironmentRepository.wifiConnected = false
+            mockDeviceEnvironmentRepository.hasStorage = true
 
             val missingModels = listOf(createLocalModelAsset(ModelType.MAIN, "abc123"))
 
@@ -164,8 +147,8 @@ class ValidateDownloadConditionsUseCaseTest {
     fun `invoke returns missing models in result`() =
         runTest {
             // Given
-            coEvery { mockDeviceEnvironmentRepository.isWifiConnected() } returns true
-            coEvery { mockDeviceEnvironmentRepository.hasRequiredStorage(any()) } returns true
+            mockDeviceEnvironmentRepository.wifiConnected = true
+            mockDeviceEnvironmentRepository.hasStorage = true
 
             val missingModels =
                 listOf(
@@ -186,7 +169,7 @@ class ValidateDownloadConditionsUseCaseTest {
     fun `invoke checks wifi first then storage`() =
         runTest {
             // Given
-            coEvery { mockDeviceEnvironmentRepository.isWifiConnected() } returns false
+            mockDeviceEnvironmentRepository.wifiConnected = false
             // Storage check should not be called if WiFi check fails
 
             val missingModels = listOf(createLocalModelAsset(ModelType.MAIN, "abc123"))
@@ -196,14 +179,14 @@ class ValidateDownloadConditionsUseCaseTest {
 
             // Then - should fail on WiFi check, not check storage
             assertFalse(result.canStart)
-            coVerify { mockDeviceEnvironmentRepository.isWifiConnected() }
+            assertTrue(mockDeviceEnvironmentRepository.isWifiConnectedCallCount >= 1)
         }
 
     @Test
     fun `invoke with wifiOnly false does not check wifi connection`() =
         runTest {
             // Given - wifiOnly is false so we shouldn't care about wifi status
-            coEvery { mockDeviceEnvironmentRepository.hasRequiredStorage(any()) } returns true
+            mockDeviceEnvironmentRepository.hasStorage = true
 
             val missingModels = listOf(createLocalModelAsset(ModelType.MAIN, "abc123"))
 
@@ -212,7 +195,7 @@ class ValidateDownloadConditionsUseCaseTest {
 
             // Then
             assertTrue(result.canStart)
-            coVerify { mockDeviceEnvironmentRepository.hasRequiredStorage(any()) }
+            assertTrue(mockDeviceEnvironmentRepository.hasRequiredStorageCalls.isNotEmpty())
         }
 
     // ============================================================================
@@ -228,8 +211,8 @@ class ValidateDownloadConditionsUseCaseTest {
     fun `invoke blocks when no network available at all`() =
         runTest {
             // Given - no network connection
-            coEvery { mockDeviceEnvironmentRepository.isWifiConnected() } returns false
-            coEvery { mockDeviceEnvironmentRepository.hasRequiredStorage(any()) } returns true
+            mockDeviceEnvironmentRepository.wifiConnected = false
+            mockDeviceEnvironmentRepository.hasStorage = true
 
             val missingModels = listOf(createLocalModelAsset(ModelType.MAIN, "abc123"))
 
@@ -249,8 +232,8 @@ class ValidateDownloadConditionsUseCaseTest {
     fun `invoke blocks mobile data when wifiOnly is true`() =
         runTest {
             // Given - mobile data connected but not WiFi
-            coEvery { mockDeviceEnvironmentRepository.isWifiConnected() } returns false
-            coEvery { mockDeviceEnvironmentRepository.hasRequiredStorage(any()) } returns true
+            mockDeviceEnvironmentRepository.wifiConnected = false
+            mockDeviceEnvironmentRepository.hasStorage = true
 
             val missingModels = listOf(createLocalModelAsset(ModelType.MAIN, "abc123"))
 
@@ -270,8 +253,8 @@ class ValidateDownloadConditionsUseCaseTest {
     fun `invoke allows download when network available and wifiOnly is false`() =
         runTest {
             // Given - mobile network available
-            coEvery { mockDeviceEnvironmentRepository.isWifiConnected() } returns false
-            coEvery { mockDeviceEnvironmentRepository.hasRequiredStorage(any()) } returns true
+            mockDeviceEnvironmentRepository.wifiConnected = false
+            mockDeviceEnvironmentRepository.hasStorage = true
 
             val missingModels = listOf(createLocalModelAsset(ModelType.MAIN, "abc123"))
 
@@ -290,8 +273,8 @@ class ValidateDownloadConditionsUseCaseTest {
     fun `invoke checks storage even when network is available with wifiOnly false`() =
         runTest {
             // Given - network available but no storage
-            coEvery { mockDeviceEnvironmentRepository.isWifiConnected() } returns false
-            coEvery { mockDeviceEnvironmentRepository.hasRequiredStorage(any()) } returns false
+            mockDeviceEnvironmentRepository.wifiConnected = false
+            mockDeviceEnvironmentRepository.hasStorage = false
 
             val missingModels = listOf(createLocalModelAsset(ModelType.MAIN, "abc123"))
 

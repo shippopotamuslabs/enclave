@@ -15,8 +15,32 @@ class FakeApiModelRepository : ApiModelRepositoryPort {
     private val credentialsFlow = MutableStateFlow<List<ApiCredentials>>(emptyList())
     private val configurationsFlow = MutableStateFlow<List<ApiModelConfiguration>>(emptyList())
 
-    fun seedCredentials(credentials: List<ApiCredentials>) {
+    /** Recorded save/delete calls for assertions (ENC-28). */
+    data class SaveCredentialsCall(
+        val credentials: ApiCredentials,
+        val apiKey: String,
+        val sourceCredentialAlias: String?,
+    )
+
+    val saveCredentialsCalls = mutableListOf<SaveCredentialsCall>()
+    val saveConfigurationCalls = mutableListOf<ApiModelConfiguration>()
+    val deleteCredentialsCalls = mutableListOf<ApiCredentialsId>()
+
+    /** When set, [saveCredentials] returns this id instead of the credentials' own id. */
+    var saveCredentialsResultId: ApiCredentialsId? = null
+
+    /** Extra aliases unioned into [getAllCredentialAliases], e.g. aliases held by soft-deleted credentials (ENC-28). */
+    var additionalCredentialAliases: Set<String> = emptySet()
+
+    /** Api keys recorded per credentials id, mirroring the real repository's identity signature (ENC-28). */
+    private val apiKeysByCredentialsId = mutableMapOf<ApiCredentialsId, String>()
+
+    fun seedCredentials(
+        credentials: List<ApiCredentials>,
+        apiKeys: Map<ApiCredentialsId, String> = emptyMap(),
+    ) {
         credentialsFlow.value = credentials
+        apiKeysByCredentialsId.putAll(apiKeys)
     }
 
     fun seedConfigurations(configurations: List<ApiModelConfiguration>) {
@@ -30,7 +54,7 @@ class FakeApiModelRepository : ApiModelRepositoryPort {
     override suspend fun getAllCredentials(): List<ApiCredentials> = credentialsFlow.value
 
     override suspend fun getAllCredentialAliases(): Set<String> =
-        credentialsFlow.value.map { it.credentialAlias }.toSet()
+        credentialsFlow.value.map { it.credentialAlias }.toSet() + additionalCredentialAliases
 
     override suspend fun getCredentialsById(id: ApiCredentialsId): ApiCredentials? =
         credentialsFlow.value.firstOrNull { it.id == id }
@@ -40,14 +64,20 @@ class FakeApiModelRepository : ApiModelRepositoryPort {
         apiKey: String,
         sourceCredentialAlias: String?,
     ): ApiCredentialsId {
-        val existing = credentialsFlow.value.firstOrNull { it.id == credentials.id }
+        saveCredentialsCalls += SaveCredentialsCall(credentials, apiKey, sourceCredentialAlias)
+        // When a result id is forced, the stored row carries it too, mirroring a
+        // repository that assigns the id on insert (ENC-28).
+        val effectiveId = saveCredentialsResultId ?: credentials.id
+        val stored = if (credentials.id == effectiveId) credentials else credentials.copy(id = effectiveId)
+        apiKeysByCredentialsId[stored.id] = apiKey
+        val existing = credentialsFlow.value.firstOrNull { it.id == stored.id }
         credentialsFlow.value =
             if (existing == null) {
-                credentialsFlow.value + credentials
+                credentialsFlow.value + stored
             } else {
-                credentialsFlow.value.map { if (it.id == credentials.id) credentials else it }
+                credentialsFlow.value.map { if (it.id == stored.id) stored else it }
             }
-        return credentials.id
+        return effectiveId
     }
 
     override suspend fun findMatchingCredentials(
@@ -58,10 +88,14 @@ class FakeApiModelRepository : ApiModelRepositoryPort {
     ): ApiCredentials? =
         credentialsFlow.value.firstOrNull {
             it.provider == provider && it.baseUrl == baseUrl &&
-                (sourceCredentialAlias == null || it.credentialAlias == sourceCredentialAlias)
+                (sourceCredentialAlias == null || it.credentialAlias == sourceCredentialAlias) &&
+                // The real repository matches on a (provider, baseUrl, apiKey) signature; when a
+                // key is recorded for a credential, a different key must not match (ENC-28).
+                (apiKeysByCredentialsId[it.id] == null || apiKeysByCredentialsId[it.id] == apiKey)
         }
 
     override suspend fun deleteCredentials(id: ApiCredentialsId) {
+        deleteCredentialsCalls += id
         credentialsFlow.value = credentialsFlow.value.filterNot { it.id == id }
     }
 
@@ -72,6 +106,7 @@ class FakeApiModelRepository : ApiModelRepositoryPort {
         configurationsFlow.value.firstOrNull { it.id == id }
 
     override suspend fun saveConfiguration(config: ApiModelConfiguration): ApiModelConfigurationId {
+        saveConfigurationCalls += config
         val existing = configurationsFlow.value.firstOrNull { it.id == config.id }
         configurationsFlow.value =
             if (existing == null) {

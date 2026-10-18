@@ -18,6 +18,15 @@ class FakeSettingsRepository(
 
     var shouldFail: Boolean = false
 
+    /** Recorded [updateAllowMemories] values, in call order (ENC-28). */
+    val allowMemoriesUpdates = mutableListOf<Boolean>()
+
+    /** Recorded [updateCustomizationEnabled] values, in call order (ENC-28). */
+    val customizationEnabledUpdates = mutableListOf<Boolean>()
+
+    /** Recorded [updateSelectedPromptOption] values, in call order (ENC-28). */
+    val selectedPromptOptionUpdates = mutableListOf<SystemPromptOption>()
+
     override val settingsFlow: Flow<SettingsData> = state.asStateFlow()
 
     fun seed(data: SettingsData) {
@@ -33,13 +42,22 @@ class FakeSettingsRepository(
 
     override suspend fun updateHapticResponse(value: Boolean) = mutate { it.copy(hapticResponse = value) }
 
-    override suspend fun updateCustomizationEnabled(enabled: Boolean) = mutate { it.copy(customizationEnabled = enabled) }
+    override suspend fun updateCustomizationEnabled(enabled: Boolean) {
+        customizationEnabledUpdates += enabled
+        mutate { it.copy(customizationEnabled = enabled) }
+    }
 
-    override suspend fun updateSelectedPromptOption(option: SystemPromptOption) = mutate { it.copy(selectedPromptOption = option) }
+    override suspend fun updateSelectedPromptOption(option: SystemPromptOption) {
+        selectedPromptOptionUpdates += option
+        mutate { it.copy(selectedPromptOption = option) }
+    }
 
     override suspend fun updateCustomPromptText(text: String) = mutate { it.copy(customPromptText = text) }
 
-    override suspend fun updateAllowMemories(allowed: Boolean) = mutate { it.copy(allowMemories = allowed) }
+    override suspend fun updateAllowMemories(allowed: Boolean) {
+        allowMemoriesUpdates += allowed
+        mutate { it.copy(allowMemories = allowed) }
+    }
 
     override suspend fun updateSearchEnabled(enabled: Boolean) = mutate { it.copy(searchEnabled = enabled) }
 

@@ -1,5 +1,8 @@
 package com.browntowndev.enclave.domain.usecase.media
 
+import com.browntowndev.enclave.core.testing.FakeDefaultModelRepository
+import com.browntowndev.enclave.core.testing.FakeMediaProviderRepository
+import com.browntowndev.enclave.core.testing.FakeVideoGenerationPort
 import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.config.MediaProviderAsset
@@ -7,23 +10,18 @@ import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.media.VideoGenerationSettings
-import com.browntowndev.enclave.domain.port.media.VideoGenerationPort
-import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
-import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class GenerateVideoUseCaseTest {
-    private val defaultModelRepository = mockk<DefaultModelRepositoryPort>()
-    private val mediaProviderRepository = mockk<MediaProviderRepositoryPort>()
-    private val videoGenerationPort = mockk<VideoGenerationPort>()
+    private val defaultModelRepository = FakeDefaultModelRepository()
+    private val mediaProviderRepository = FakeMediaProviderRepository()
+    private val videoGenerationPort = FakeVideoGenerationPort()
     private lateinit var useCase: GenerateVideoUseCase
 
     @BeforeEach
@@ -43,8 +41,6 @@ class GenerateVideoUseCaseTest {
     @Test
     fun invoke_noVideoAssignment_returnsFailure() =
         runTest {
-            coEvery { defaultModelRepository.getDefault(ModelType.VIDEO_GENERATION) } returns null
-
             val result = useCase("prompt", VideoGenerationSettings())
 
             assertTrue(result.isFailure)
@@ -55,12 +51,12 @@ class GenerateVideoUseCaseTest {
     fun invoke_missingAssignedProvider_returnsFailure() =
         runTest {
             val providerId = MediaProviderId("provider-1")
-            coEvery { defaultModelRepository.getDefault(ModelType.VIDEO_GENERATION) } returns
+            defaultModelRepository.seed(
                 DefaultModelAssignment(
                     modelType = ModelType.VIDEO_GENERATION,
                     mediaProviderId = providerId,
-                )
-            coEvery { mediaProviderRepository.getMediaProvider(providerId) } returns null
+                ),
+            )
 
             val result = useCase("prompt", VideoGenerationSettings())
 
@@ -86,26 +82,25 @@ class GenerateVideoUseCaseTest {
                     referenceImageUri = "file://reference.png",
                 )
             val bytes = "video".toByteArray()
-            coEvery { defaultModelRepository.getDefault(ModelType.IMAGE_TO_VIDEO) } returns
+            defaultModelRepository.seed(
                 DefaultModelAssignment(
                     modelType = ModelType.IMAGE_TO_VIDEO,
                     mediaProviderId = providerId,
-                )
-            coEvery { mediaProviderRepository.getMediaProvider(providerId) } returns provider
-            coEvery { videoGenerationPort.generateVideo("prompt", provider, settings) } returns Result.success(bytes)
+                ),
+            )
+            mediaProviderRepository.emitProviders(listOf(provider))
+            videoGenerationPort.result = Result.success(bytes)
 
             val result = useCase("prompt", settings)
 
             assertTrue(result.isSuccess)
             assertArrayEquals(bytes, result.getOrThrow())
-            coVerify(exactly = 0) { defaultModelRepository.getDefault(ModelType.VIDEO_GENERATION) }
+            assertFalse(defaultModelRepository.getDefaultCalls.contains(ModelType.VIDEO_GENERATION))
         }
 
     @Test
     fun invoke_withReferenceImage_failsWhenNoImageToVideoProviderAssigned() =
         runTest {
-            coEvery { defaultModelRepository.getDefault(ModelType.IMAGE_TO_VIDEO) } returns null
-
             val result =
                 useCase(
                     "prompt",
@@ -130,24 +125,21 @@ class GenerateVideoUseCaseTest {
                 )
             val settings = VideoGenerationSettings(videoDuration = 8)
             val bytes = "video".toByteArray()
-            coEvery { defaultModelRepository.getDefault(ModelType.VIDEO_GENERATION) } returns
+            defaultModelRepository.seed(
                 DefaultModelAssignment(
                     modelType = ModelType.VIDEO_GENERATION,
                     mediaProviderId = providerId,
-                )
-            coEvery { mediaProviderRepository.getMediaProvider(providerId) } returns provider
-            coEvery { videoGenerationPort.generateVideo("prompt", provider, settings) } returns Result.success(bytes)
+                ),
+            )
+            mediaProviderRepository.emitProviders(listOf(provider))
+            videoGenerationPort.result = Result.success(bytes)
 
             val result = useCase("prompt", settings)
 
             assertTrue(result.isSuccess)
             assertArrayEquals(bytes, result.getOrThrow())
-            coVerify {
-                videoGenerationPort.generateVideo(
-                    prompt = "prompt",
-                    provider = provider,
-                    settings = settings,
-                )
-            }
+            assertEquals(listOf("prompt"), videoGenerationPort.calls)
+            assertEquals(listOf(provider), videoGenerationPort.providerCalls)
+            assertEquals(listOf(settings), videoGenerationPort.settingsCalls)
         }
 }

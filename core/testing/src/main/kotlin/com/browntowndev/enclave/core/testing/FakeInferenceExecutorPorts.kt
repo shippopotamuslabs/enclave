@@ -16,6 +16,9 @@ class FakeChatInferenceExecutorPort : ChatInferenceExecutorPort {
     var flow: Flow<MessageGenerationState> = emptyFlow()
     val executeCalls = mutableListOf<String>()
     val executeWithOverrideCalls = mutableListOf<String>()
+
+    /** Resolved configurations passed to [executeWithOverride], in call order (ENC-28). */
+    val executeWithOverrideConfigurations = mutableListOf<ActiveModelConfiguration>()
     var stopCount = 0
 
     override fun execute(
@@ -42,6 +45,7 @@ class FakeChatInferenceExecutorPort : ChatInferenceExecutorPort {
         backgroundInferenceEnabled: Boolean,
     ): Flow<MessageGenerationState> {
         executeWithOverrideCalls += prompt
+        executeWithOverrideConfigurations += resolvedConfiguration
         return flow
     }
 

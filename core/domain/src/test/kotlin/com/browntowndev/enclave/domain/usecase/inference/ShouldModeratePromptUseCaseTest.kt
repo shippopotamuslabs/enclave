@@ -1,5 +1,8 @@
 package com.browntowndev.enclave.domain.usecase.inference
 
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
+import com.browntowndev.enclave.core.testing.FakeDistributionConfiguration
+import com.browntowndev.enclave.core.testing.FakeTrustedDomainRepository
 import com.browntowndev.enclave.domain.model.chat.ChatModelOverride
 import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
@@ -7,24 +10,18 @@ import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.ModelConfigurationId
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.port.config.DistributionConfigurationPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
-import com.browntowndev.enclave.domain.port.repository.TrustedDomainRepositoryPort
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class ShouldModeratePromptUseCaseTest {
-    private lateinit var distributionConfig: DistributionConfigurationPort
-    private lateinit var activeModelProvider: ActiveModelProviderPort
-    private lateinit var trustedDomainRepository: TrustedDomainRepositoryPort
+    private lateinit var distributionConfig: FakeDistributionConfiguration
+    private lateinit var activeModelProvider: FakeActiveModelProvider
+    private lateinit var trustedDomainRepository: FakeTrustedDomainRepository
     private lateinit var useCase: ShouldModeratePromptUseCase
 
     private val trustedDomains = setOf("api.openai.com", "api.x.ai")
@@ -32,10 +29,9 @@ class ShouldModeratePromptUseCaseTest {
 
     @BeforeEach
     fun setup() {
-        distributionConfig = mockk()
-        activeModelProvider = mockk()
-        trustedDomainRepository = mockk()
-        every { distributionConfig.isPlayStoreFlavor } returns true
+        distributionConfig = FakeDistributionConfiguration(isPlayStoreFlavor = true)
+        activeModelProvider = FakeActiveModelProvider()
+        trustedDomainRepository = FakeTrustedDomainRepository()
         useCase =
             ShouldModeratePromptUseCase(
                 distributionConfig,
@@ -44,8 +40,8 @@ class ShouldModeratePromptUseCaseTest {
                 NoOpLoggingPort,
             )
 
-        coEvery { trustedDomainRepository.getTrustedDomains() } returns trustedDomains
-        coEvery { trustedDomainRepository.getTrustedWildcards() } returns trustedWildcards
+        trustedDomainRepository.domains = trustedDomains
+        trustedDomainRepository.wildcards = trustedWildcards
     }
 
     private fun createActiveConfig(
@@ -78,8 +74,8 @@ class ShouldModeratePromptUseCaseTest {
     @Test
     fun invoke_normalFlavor_returnsFalse_regardlessOfConfig() =
         runTest {
-            every { distributionConfig.isPlayStoreFlavor } returns false
-            coEvery { activeModelProvider.getActiveConfiguration(ModelType.FAST) } returns null
+            distributionConfig.isPlayStoreFlavor = false
+            activeModelProvider.configuration = null
 
             assertFalse(useCase(ModelType.FAST))
         }
@@ -87,7 +83,7 @@ class ShouldModeratePromptUseCaseTest {
     @Test
     fun invoke_normalFlavor_returnsFalse_evenForLocalModel() =
         runTest {
-            every { distributionConfig.isPlayStoreFlavor } returns false
+            distributionConfig.isPlayStoreFlavor = false
             val config =
                 createActiveConfig(
                     id = LocalModelConfigurationId("local-id"),
@@ -95,7 +91,7 @@ class ShouldModeratePromptUseCaseTest {
                     name = "Gemma 1B",
                     modelId = "gemma.gguf",
                 )
-            coEvery { activeModelProvider.getActiveConfiguration(ModelType.FAST) } returns config
+            activeModelProvider.configuration = config
 
             assertFalse(useCase(ModelType.FAST))
         }
@@ -105,7 +101,7 @@ class ShouldModeratePromptUseCaseTest {
     @Test
     fun invoke_playStoreFlavor_returnsTrue_whenNoActiveConfig() =
         runTest {
-            coEvery { activeModelProvider.getActiveConfiguration(ModelType.FAST) } returns null
+            activeModelProvider.configuration = null
             assertTrue(useCase(ModelType.FAST))
         }
 
@@ -119,7 +115,7 @@ class ShouldModeratePromptUseCaseTest {
                     name = "Gemma 1B",
                     modelId = "gemma.gguf",
                 )
-            coEvery { activeModelProvider.getActiveConfiguration(ModelType.FAST) } returns config
+            activeModelProvider.configuration = config
 
             assertTrue(useCase(ModelType.FAST))
         }
@@ -136,7 +132,7 @@ class ShouldModeratePromptUseCaseTest {
                     apiProvider = ApiProvider.OPENAI,
                     apiBaseUrl = "https://api.openai.com/v1",
                 )
-            coEvery { activeModelProvider.getActiveConfiguration(ModelType.FAST) } returns config
+            activeModelProvider.configuration = config
 
             assertFalse(useCase(ModelType.FAST))
         }
@@ -153,7 +149,7 @@ class ShouldModeratePromptUseCaseTest {
                     apiProvider = ApiProvider.GOOGLE,
                     apiBaseUrl = "https://us-central1-aiplatform.googleapis.com/v1",
                 )
-            coEvery { activeModelProvider.getActiveConfiguration(ModelType.FAST) } returns config
+            activeModelProvider.configuration = config
 
             assertFalse(useCase(ModelType.FAST))
         }
@@ -170,7 +166,7 @@ class ShouldModeratePromptUseCaseTest {
                     apiProvider = ApiProvider.OPENROUTER,
                     apiBaseUrl = "https://api.untrusted-model-host.com/v1",
                 )
-            coEvery { activeModelProvider.getActiveConfiguration(ModelType.FAST) } returns config
+            activeModelProvider.configuration = config
 
             assertTrue(useCase(ModelType.FAST))
         }
@@ -187,7 +183,7 @@ class ShouldModeratePromptUseCaseTest {
                     apiProvider = ApiProvider.XAI,
                     apiBaseUrl = null,
                 )
-            coEvery { activeModelProvider.getActiveConfiguration(ModelType.FAST) } returns config
+            activeModelProvider.configuration = config
 
             assertFalse(useCase(ModelType.FAST))
         }
@@ -204,7 +200,7 @@ class ShouldModeratePromptUseCaseTest {
                     apiProvider = null,
                     apiBaseUrl = null,
                 )
-            coEvery { activeModelProvider.getActiveConfiguration(ModelType.FAST) } returns config
+            activeModelProvider.configuration = config
 
             assertTrue(useCase(ModelType.FAST))
         }
@@ -221,7 +217,7 @@ class ShouldModeratePromptUseCaseTest {
                     apiProvider = ApiProvider.OPENAI,
                     apiBaseUrl = "https://API.OPENAI.COM/v1",
                 )
-            coEvery { activeModelProvider.getActiveConfiguration(ModelType.FAST) } returns config
+            activeModelProvider.configuration = config
 
             assertFalse(useCase(ModelType.FAST))
         }
@@ -238,7 +234,7 @@ class ShouldModeratePromptUseCaseTest {
                     apiProvider = ApiProvider.OPENAI,
                     apiBaseUrl = "https://fake-googleapis.com/v1",
                 )
-            coEvery { activeModelProvider.getActiveConfiguration(ModelType.FAST) } returns config
+            activeModelProvider.configuration = config
 
             assertTrue(useCase(ModelType.FAST))
         }
@@ -273,14 +269,15 @@ class ShouldModeratePromptUseCaseTest {
                     apiProvider = ApiProvider.OPENROUTER,
                     apiBaseUrl = "https://api.untrusted-model-host.com/v1",
                 )
-            coEvery { activeModelProvider.getActiveConfiguration(ModelType.FAST) } returns fastSlotConfig
-            coEvery { activeModelProvider.getActiveConfigurationByOverride(override) } returns overrideConfig
+            activeModelProvider.configuration = fastSlotConfig
+            activeModelProvider.hasOverrideConfiguration = true
+            activeModelProvider.overrideConfiguration = overrideConfig
 
             assertTrue(useCase(override))
 
             // Mutation defense: the FAST slot must never be consulted for an override.
-            coVerify(exactly = 0) { activeModelProvider.getActiveConfiguration(any()) }
-            coVerify(exactly = 1) { activeModelProvider.getActiveConfigurationByOverride(override) }
+            assertTrue(activeModelProvider.requestedModelTypes.isEmpty())
+            assertEquals(listOf(override), activeModelProvider.requestedOverrides)
         }
 
     @Test
@@ -298,7 +295,8 @@ class ShouldModeratePromptUseCaseTest {
                     name = "Local Override",
                     modelId = "gemma.gguf",
                 )
-            coEvery { activeModelProvider.getActiveConfigurationByOverride(override) } returns localConfig
+            activeModelProvider.hasOverrideConfiguration = true
+            activeModelProvider.overrideConfiguration = localConfig
 
             assertTrue(useCase(override))
         }
@@ -320,7 +318,8 @@ class ShouldModeratePromptUseCaseTest {
                     apiProvider = ApiProvider.OPENAI,
                     apiBaseUrl = "https://api.openai.com/v1",
                 )
-            coEvery { activeModelProvider.getActiveConfigurationByOverride(override) } returns trustedConfig
+            activeModelProvider.hasOverrideConfiguration = true
+            activeModelProvider.overrideConfiguration = trustedConfig
 
             assertFalse(useCase(override))
         }
@@ -342,7 +341,8 @@ class ShouldModeratePromptUseCaseTest {
                     apiProvider = ApiProvider.OPENROUTER,
                     apiBaseUrl = "https://api.untrusted-model-host.com/v1",
                 )
-            coEvery { activeModelProvider.getActiveConfigurationByOverride(override) } returns untrustedConfig
+            activeModelProvider.hasOverrideConfiguration = true
+            activeModelProvider.overrideConfiguration = untrustedConfig
 
             assertTrue(useCase(override))
         }
@@ -355,7 +355,8 @@ class ShouldModeratePromptUseCaseTest {
                     configId = ApiModelConfigurationId("api-missing"),
                     displayName = "Missing",
                 )
-            coEvery { activeModelProvider.getActiveConfigurationByOverride(override) } returns null
+            activeModelProvider.hasOverrideConfiguration = true
+            activeModelProvider.overrideConfiguration = null
 
             assertTrue(useCase(override))
         }
@@ -363,7 +364,7 @@ class ShouldModeratePromptUseCaseTest {
     @Test
     fun invoke_override_normalFlavor_returnsFalse() =
         runTest {
-            every { distributionConfig.isPlayStoreFlavor } returns false
+            distributionConfig.isPlayStoreFlavor = false
             val override =
                 ChatModelOverride.Api(
                     configId = ApiModelConfigurationId("api-any"),

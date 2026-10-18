@@ -1,17 +1,13 @@
 package com.browntowndev.enclave.domain.usecase.chat
 
-import com.browntowndev.enclave.domain.model.chat.ChatResponseMode
+import com.browntowndev.enclave.core.testing.FakeChatRepository
+import com.browntowndev.enclave.core.testing.FakeEmbeddingEngine
+import com.browntowndev.enclave.core.testing.FakeMessageRepository
 import com.browntowndev.enclave.domain.model.chat.MessageGenerationState
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.Mode
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
-import com.browntowndev.enclave.domain.port.repository.ChatRepository
 import com.browntowndev.enclave.domain.telemetry.TelemetryTestFixtures
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.mockk
-import io.mockk.slot
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
@@ -20,29 +16,7 @@ class GenerateChatResponseUseCaseTelemetryPersistenceTest {
     @Test
     fun `accumulator persists telemetry rows with assistant message`() =
         runTest {
-            val chatRepository = mockk<ChatRepository>(relaxed = true)
-            val telemetrySlot = slot<List<com.browntowndev.enclave.domain.model.telemetry.TurnTelemetry>>()
-            coEvery {
-                chatRepository.persistAllMessageData(
-                    messageId = any(),
-                    modelType = any(),
-                    thinkingStartTime = any(),
-                    thinkingEndTime = any(),
-                    thinkingDuration = any(),
-                    thinkingRaw = any(),
-                    content = any(),
-                    messageState = any(),
-                    pipelineStep = any(),
-                    webSearchSources = any(),
-                    artifacts = any(),
-                    generatedMediaUris = any(),
-                    generatedMediaAssetIds = any(),
-                    generatedMediaTypes = any(),
-                    generatedMediaPrompts = any(),
-                    transcriptSegments = any(),
-                    telemetry = capture(telemetrySlot),
-                )
-            } returns Unit
+            val chatRepository = FakeChatRepository()
 
             val manager =
                 ChatGenerationAccumulatorManager(
@@ -62,38 +36,20 @@ class GenerateChatResponseUseCaseTelemetryPersistenceTest {
 
             PersistAccumulatedChatMessagesUseCase(
                 chatRepository = chatRepository,
-                messageRepository = mockk(relaxed = true),
-                embeddingEngine =
-                    mockk<EmbeddingEnginePort> {
-                        coEvery { getEmbedding(any()) } returns floatArrayOf(0.1f)
-                    },
+                messageRepository = FakeMessageRepository(),
+                embeddingEngine = FakeEmbeddingEngine(),
                 extractedUrls = emptySet(),
             )(manager)
 
-            coVerify(exactly = 1) {
-                chatRepository.persistAllMessageData(
-                    messageId = TelemetryTestFixtures.mOpenAi1,
-                    telemetry = any(),
-                    modelType = any(),
-                    thinkingStartTime = any(),
-                    thinkingEndTime = any(),
-                    thinkingDuration = any(),
-                    thinkingRaw = any(),
-                    content = any(),
-                    messageState = any(),
-                    pipelineStep = any(),
-                    webSearchSources = any(),
-                    artifacts = any(),
-                    generatedMediaUris = any(),
-                    generatedMediaAssetIds = any(),
-                    generatedMediaTypes = any(),
-                    generatedMediaPrompts = any(),
-                    transcriptSegments = any(),
-                )
-            }
+            assertEquals(1, chatRepository.persistAllMessageDataCalls.size)
+            assertEquals(
+                TelemetryTestFixtures.mOpenAi1,
+                chatRepository.persistAllMessageDataCalls.single().messageId,
+            )
             assertEquals(
                 "0.002500",
-                telemetrySlot.captured
+                chatRepository.persistAllMessageDataTelemetryCalls
+                    .single()
                     .single()
                     .costUsd
                     ?.toPlainString(),

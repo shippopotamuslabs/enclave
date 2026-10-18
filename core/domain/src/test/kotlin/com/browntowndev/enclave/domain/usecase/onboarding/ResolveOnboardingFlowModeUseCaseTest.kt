@@ -1,5 +1,7 @@
 package com.browntowndev.enclave.domain.usecase.onboarding
 
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
+import com.browntowndev.enclave.core.testing.FakeApiModelRepository
 import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.enclave.domain.model.config.ApiCredentials
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
@@ -7,10 +9,6 @@ import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.onboarding.OnboardingFlowMode
-import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
-import com.browntowndev.enclave.domain.port.repository.ApiModelRepositoryPort
-import io.mockk.coEvery
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
@@ -18,16 +16,14 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 
 class ResolveOnboardingFlowModeUseCaseTest {
-    private lateinit var apiModelRepository: ApiModelRepositoryPort
-    private lateinit var activeModelProvider: ActiveModelProviderPort
+    private lateinit var apiModelRepository: FakeApiModelRepository
+    private lateinit var activeModelProvider: FakeActiveModelProvider
     private lateinit var useCase: ResolveOnboardingFlowModeUseCaseImpl
 
     @BeforeEach
     fun setUp() {
-        apiModelRepository = mockk()
-        activeModelProvider = mockk()
-        coEvery { apiModelRepository.getAllCredentials() } returns emptyList()
-        coEvery { activeModelProvider.getActiveConfiguration(any()) } returns null
+        apiModelRepository = FakeApiModelRepository()
+        activeModelProvider = FakeActiveModelProvider()
         useCase =
             ResolveOnboardingFlowModeUseCaseImpl(
                 apiModelRepository = apiModelRepository,
@@ -46,7 +42,7 @@ class ResolveOnboardingFlowModeUseCaseTest {
     @DisplayName("OB-FLOW-02 — Synced API credentials yield RESTORED flow")
     fun `invoke with credentials returns RESTORED`() =
         runTest {
-            coEvery { apiModelRepository.getAllCredentials() } returns
+            apiModelRepository.seedCredentials(
                 listOf(
                     ApiCredentials(
                         id = ApiCredentialsId("cred-1"),
@@ -54,7 +50,8 @@ class ResolveOnboardingFlowModeUseCaseTest {
                         provider = ApiProvider.OPENROUTER,
                         credentialAlias = "openrouter",
                     ),
-                )
+                ),
+            )
 
             assertEquals(OnboardingFlowMode.RESTORED, useCase())
         }
@@ -63,7 +60,7 @@ class ResolveOnboardingFlowModeUseCaseTest {
     @DisplayName("OB-FLOW-03 — Synced default slot configuration yields RESTORED flow")
     fun `invoke with configured text slot returns RESTORED`() =
         runTest {
-            coEvery { activeModelProvider.getActiveConfiguration(ModelType.MAIN) } returns
+            activeModelProvider.configurationsByType[ModelType.MAIN] =
                 ActiveModelConfiguration(
                     id = ApiModelConfigurationId("cfg-main"),
                     isLocal = false,

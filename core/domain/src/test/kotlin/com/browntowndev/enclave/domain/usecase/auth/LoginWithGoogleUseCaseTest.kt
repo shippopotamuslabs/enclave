@@ -1,88 +1,76 @@
 package com.browntowndev.enclave.domain.usecase.auth
 
-import android.util.Log
-import com.browntowndev.enclave.domain.port.auth.AuthManager
+import com.browntowndev.enclave.core.testing.FakeAuthManager
+import com.browntowndev.enclave.core.testing.FakeCloudSyncPort
+import com.browntowndev.enclave.core.testing.FakeCryptoManagerPort
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.port.auth.UserProfile
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.repository.CloudSyncPort
-import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.mockkStatic
-import io.mockk.unmockkStatic
-import io.mockk.verify
 import kotlinx.coroutines.test.runTest
-import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class LoginWithGoogleUseCaseTest {
-    private val authManager = mockk<AuthManager>()
-    private val cloudSyncPort = mockk<CloudSyncPort>(relaxed = true)
-    private val cryptoManager = mockk<CryptoManagerPort>()
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
+    private val authManager = FakeAuthManager()
+    private val cloudSyncPort = FakeCloudSyncPort()
+    private val cryptoManager = FakeCryptoManagerPort()
+    private val loggingPort = FakeLoggingPort()
     private lateinit var loginWithGoogleUseCase: LoginWithGoogleUseCase
 
     @BeforeEach
     fun setup() {
-        mockkStatic(Log::class)
-        every { Log.d(any(), any()) } returns 0
-        every { Log.e(any(), any()) } returns 0
-        every { Log.e(any(), any(), any()) } returns 0
-        every { cryptoManager.hasCachedKey() } returns false
+        cryptoManager.hasCachedKeyValue = false
 
         loginWithGoogleUseCase = LoginWithGoogleUseCase(authManager, loggingPort)
-    }
-
-    @AfterEach
-    fun tearDown() {
-        unmockkStatic(Log::class)
     }
 
     @Test
     fun `google sign-in does not initialize or sync vault while encryption is locked`() =
         runTest {
             val user = UserProfile("uid1", "Name", "email@test.com", null)
-            coEvery { authManager.signInWithGoogle() } answers { Result.success(user) }
+            authManager.signInResult = Result.success(user)
 
             val result = loginWithGoogleUseCase()
 
             assertTrue(result.isSuccess)
-            verify(exactly = 0) { cryptoManager.generateSalt() }
-            verify(exactly = 0) { cryptoManager.encodeBase64(any()) }
-            coVerify(exactly = 0) { cloudSyncPort.getVaultSalt() }
-            coVerify(exactly = 0) { cloudSyncPort.updateVaultSalt(any()) }
-            coVerify(exactly = 0) { cloudSyncPort.syncAllLocalDataToCloud() }
-            verify(exactly = 0) { cloudSyncPort.startListening() }
+            assertEquals(0, cryptoManager.generateSaltCallCount)
+            assertEquals(0, cryptoManager.encodeBase64CallCount)
+            assertEquals(0, cloudSyncPort.count("getVaultSalt"))
+            assertEquals(0, cloudSyncPort.count("updateVaultSalt"))
+            assertEquals(0, cloudSyncPort.count("syncAll"))
+            assertEquals(0, cloudSyncPort.count("startListening"))
         }
 
     @Test
     fun `google sign-in does NOT auto-sync even when vault is unlocked`() =
         runTest {
             val user = UserProfile("uid1", "Name", "email@test.com", null)
-            coEvery { authManager.signInWithGoogle() } answers { Result.success(user) }
-            every { cryptoManager.hasCachedKey() } returns true
+            authManager.signInResult = Result.success(user)
+            cryptoManager.hasCachedKeyValue = true
 
             val result = loginWithGoogleUseCase()
 
             assertTrue(result.isSuccess)
-            coVerify(exactly = 0) { cloudSyncPort.syncAllLocalDataToCloud() }
-            coVerify(exactly = 0) { cloudSyncPort.enqueueEmbeddingRegeneration() }
-            verify(exactly = 0) { cloudSyncPort.startListening() }
+            assertEquals(0, cloudSyncPort.count("syncAll"))
+            assertEquals(0, cloudSyncPort.count("enqueueEmbeddingRegeneration"))
+            assertEquals(0, cloudSyncPort.count("startListening"))
         }
 
     @Test
     fun `google sign-in failure does not start listener`() =
         runTest {
-            coEvery { authManager.signInWithGoogle() } returns Result.failure(IllegalStateException("network"))
+            authManager.signInResult = Result.failure(IllegalStateException("network"))
 
             val result = loginWithGoogleUseCase()
 
             assertTrue(result.isFailure)
-            verify(exactly = 0) { cloudSyncPort.startListening() }
-            coVerify(exactly = 0) { cloudSyncPort.syncAllLocalDataToCloud() }
+            assertEquals(0, cloudSyncPort.count("startListening"))
+            assertEquals(0, cloudSyncPort.count("syncAll"))
         }
 }

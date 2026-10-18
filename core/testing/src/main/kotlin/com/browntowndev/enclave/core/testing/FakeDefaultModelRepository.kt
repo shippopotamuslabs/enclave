@@ -26,8 +26,13 @@ class FakeDefaultModelRepository : DefaultModelRepositoryPort {
         defaultsFlow.update { current -> current.filterNot { it.modelType == assignment.modelType } + assignment }
     }
 
-    override suspend fun getDefault(modelType: ModelType): DefaultModelAssignment? =
-        defaultsFlow.value.firstOrNull { it.modelType == modelType }
+    /** Every [ModelType] passed to [getDefault], in call order (ENC-28). */
+    val getDefaultCalls = mutableListOf<ModelType>()
+
+    override suspend fun getDefault(modelType: ModelType): DefaultModelAssignment? {
+        getDefaultCalls += modelType
+        return defaultsFlow.value.firstOrNull { it.modelType == modelType }
+    }
 
     override fun observeDefaults(): Flow<List<DefaultModelAssignment>> = defaultsFlow.asStateFlow()
 

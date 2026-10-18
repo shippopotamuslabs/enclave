@@ -1,19 +1,15 @@
 package com.browntowndev.enclave.domain.usecase.modelconfig
 
+import com.browntowndev.enclave.core.testing.FakeDownloadWorkSchedulerPort
+import com.browntowndev.enclave.core.testing.FakeLocalModelRepository
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.model.config.LocalModelAsset
 import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.config.LocalModelMetadata
 import com.browntowndev.enclave.domain.model.download.DownloadRequestKind
 import com.browntowndev.enclave.domain.model.download.DownloadSource
-import com.browntowndev.enclave.domain.model.download.DownloadWorkRequest
 import com.browntowndev.enclave.domain.model.download.ScheduledDownload
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
-import com.browntowndev.enclave.domain.port.download.DownloadWorkSchedulerPort
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -29,9 +25,9 @@ import org.junit.jupiter.api.Test
  * - Re-download schedules via structured DownloadWorkRequest
  */
 class ReDownloadModelUseCaseTest {
-    private lateinit var localModelRepository: LocalModelRepositoryPort
-    private lateinit var downloadWorkScheduler: DownloadWorkSchedulerPort
-    private lateinit var loggingPort: LoggingPort
+    private lateinit var localModelRepository: FakeLocalModelRepository
+    private lateinit var downloadWorkScheduler: FakeDownloadWorkSchedulerPort
+    private lateinit var loggingPort: FakeLoggingPort
     private lateinit var useCase: ReDownloadModelUseCase
 
     private val modelId = LocalModelId("test-model-id")
@@ -55,9 +51,9 @@ class ReDownloadModelUseCaseTest {
 
     @BeforeEach
     fun setup() {
-        localModelRepository = mockk(relaxed = true)
-        downloadWorkScheduler = mockk(relaxed = true)
-        loggingPort = mockk(relaxed = true)
+        localModelRepository = FakeLocalModelRepository()
+        downloadWorkScheduler = FakeDownloadWorkSchedulerPort()
+        loggingPort = FakeLoggingPort()
 
         useCase =
             ReDownloadModelUseCase(
@@ -70,7 +66,7 @@ class ReDownloadModelUseCaseTest {
     @Test
     fun `invoke with non-existent model returns failure with IllegalStateException`() =
         runTest {
-            coEvery { localModelRepository.getAssetById(modelId) } returns null
+            // No soft-deleted model registered, so getAssetById returns null.
 
             val result = useCase(modelId)
 
@@ -91,16 +87,16 @@ class ReDownloadModelUseCaseTest {
     fun `does NOT call restoreSoftDeletedModel() before bytes land`() =
         runTest {
             // Given: Soft-deleted asset exists
-            coEvery { localModelRepository.getAssetById(modelId) } returns softDeletedAsset
+            localModelRepository.registerSoftDeletedModel(modelId, softDeletedAsset)
 
             // When
             val result = useCase(modelId)
 
-            // Then - verify restoreSoftDeletedModel was NOT called
+            // Then - restoreSoftDeletedModel was NOT called: the asset is still
+            // soft-deleted and has not reappeared among the live assets.
             // This is the key correctness fix: no early restoration
-            coVerify(exactly = 0) {
-                localModelRepository.restoreSoftDeletedModel(any(), any())
-            }
+            assertEquals(listOf(modelId), localModelRepository.getSoftDeletedModels().map { it.metadata.id })
+            assertTrue(localModelRepository.getAllLocalAssets().isEmpty())
 
             assertTrue(result.isSuccess)
         }
@@ -114,7 +110,7 @@ class ReDownloadModelUseCaseTest {
     fun `no repository mutation before bytes are downloaded`() =
         runTest {
             // Given
-            coEvery { localModelRepository.getAssetById(modelId) } returns softDeletedAsset
+            localModelRepository.registerSoftDeletedModel(modelId, softDeletedAsset)
 
             // When - scheduling happens, not completion
             val result = useCase(modelId)
@@ -122,15 +118,12 @@ class ReDownloadModelUseCaseTest {
             // Then - no repository mutations should have occurred
             assertTrue(result.isSuccess)
 
-            // Verify restoreSoftDeletedModel was NOT called (main mutation)
-            coVerify(exactly = 0) {
-                localModelRepository.restoreSoftDeletedModel(any(), any())
-            }
+            // restoreSoftDeletedModel was NOT called (main mutation): the asset
+            // is still soft-deleted.
+            assertEquals(listOf(modelId), localModelRepository.getSoftDeletedModels().map { it.metadata.id })
 
-            // Verify upsertLocalAsset was NOT called (another mutation)
-            coVerify(exactly = 0) {
-                localModelRepository.upsertLocalAsset(any())
-            }
+            // upsertLocalAsset was NOT called (another mutation): no live assets.
+            assertTrue(localModelRepository.getAllLocalAssets().isEmpty())
         }
 
     /**
@@ -140,7 +133,7 @@ class ReDownloadModelUseCaseTest {
     fun `returns ScheduledDownload with session info`() =
         runTest {
             // Given
-            coEvery { localModelRepository.getAssetById(modelId) } returns softDeletedAsset
+            localModelRepository.registerSoftDeletedModel(modelId, softDeletedAsset)
 
             // When
             val result = useCase(modelId)
@@ -164,22 +157,17 @@ class ReDownloadModelUseCaseTest {
     fun `schedules download via structured DownloadWorkRequest`() =
         runTest {
             // Given
-            coEvery { localModelRepository.getAssetById(modelId) } returns softDeletedAsset
+            localModelRepository.registerSoftDeletedModel(modelId, softDeletedAsset)
 
             // When
             useCase(modelId)
 
-            // Then - verify the structured scheduler was called with DownloadWorkRequest
-            coVerify {
-                downloadWorkScheduler.enqueue(
-                    match<DownloadWorkRequest> { request ->
-                        request.requestKind == DownloadRequestKind.RESTORE_SOFT_DELETED_MODEL &&
-                            request.targetModelId == modelId &&
-                            request.files.size == 1 &&
-                            request.files[0].sha256 == sha256
-                    },
-                )
-            }
+            // Then - the structured scheduler was called with a DownloadWorkRequest
+            val request = downloadWorkScheduler.enqueued.single()
+            assertEquals(DownloadRequestKind.RESTORE_SOFT_DELETED_MODEL, request.requestKind)
+            assertEquals(modelId, request.targetModelId)
+            assertEquals(1, request.files.size)
+            assertEquals(sha256, request.files[0].sha256)
         }
 
     /**
@@ -189,23 +177,17 @@ class ReDownloadModelUseCaseTest {
     fun `builds DownloadFileSpec from soft-deleted asset`() =
         runTest {
             // Given
-            coEvery { localModelRepository.getAssetById(modelId) } returns softDeletedAsset
+            localModelRepository.registerSoftDeletedModel(modelId, softDeletedAsset)
 
             // When
             useCase(modelId)
 
-            // Then - verify the file spec contains correct data from the soft-deleted asset
-            coVerify {
-                downloadWorkScheduler.enqueue(
-                    match<DownloadWorkRequest> { request ->
-                        val fileSpec = request.files[0]
-                        fileSpec.remoteFileName == softDeletedAsset.metadata.remoteFileName &&
-                            fileSpec.localFileName == softDeletedAsset.metadata.localFileName &&
-                            fileSpec.sha256 == softDeletedAsset.metadata.sha256 &&
-                            fileSpec.sizeInBytes == softDeletedAsset.metadata.sizeInBytes
-                    },
-                )
-            }
+            // Then - the file spec contains correct data from the soft-deleted asset
+            val fileSpec = downloadWorkScheduler.enqueued.single().files[0]
+            assertEquals(softDeletedAsset.metadata.remoteFileName, fileSpec.remoteFileName)
+            assertEquals(softDeletedAsset.metadata.localFileName, fileSpec.localFileName)
+            assertEquals(softDeletedAsset.metadata.sha256, fileSpec.sha256)
+            assertEquals(softDeletedAsset.metadata.sizeInBytes, fileSpec.sizeInBytes)
         }
 
     /**
@@ -215,7 +197,7 @@ class ReDownloadModelUseCaseTest {
     fun `returns Result of ScheduledDownload`() =
         runTest {
             // Given
-            coEvery { localModelRepository.getAssetById(modelId) } returns softDeletedAsset
+            localModelRepository.registerSoftDeletedModel(modelId, softDeletedAsset)
 
             // When
             val result = useCase(modelId)

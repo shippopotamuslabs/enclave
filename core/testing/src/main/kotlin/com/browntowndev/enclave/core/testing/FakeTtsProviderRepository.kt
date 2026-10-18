@@ -16,6 +16,11 @@ class FakeTtsProviderRepository(
     /** Every (asset, apiKey) pair passed to [saveTtsProvider], in call order. */
     val savedCalls = mutableListOf<Pair<TtsProviderAsset, String?>>()
 
+    /** Replaces all providers at once (drives getTtsProviders emissions) (ENC-28). */
+    fun emit(providers: List<TtsProviderAsset>) {
+        state.value = providers
+    }
+
     override fun getTtsProviders(): Flow<List<TtsProviderAsset>> = state.asStateFlow()
 
     override suspend fun getTtsProvidersSync(): List<TtsProviderAsset> = state.value

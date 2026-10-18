@@ -1,5 +1,17 @@
 package com.browntowndev.enclave.domain.usecase.chat
 
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
+import com.browntowndev.enclave.core.testing.FakeDefaultModelRepository
+import com.browntowndev.enclave.core.testing.FakeEmbeddingEngine
+import com.browntowndev.enclave.core.testing.FakeLlmInferencePort
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeMediaProviderRepository
+import com.browntowndev.enclave.core.testing.FakeMemoriesRepository
+import com.browntowndev.enclave.core.testing.FakeMessageRepository
+import com.browntowndev.enclave.core.testing.FakePromptComposer
+import com.browntowndev.enclave.core.testing.FakeSearchIntentClassifier
+import com.browntowndev.enclave.core.testing.FakeSettingsRepository
+import com.browntowndev.enclave.core.testing.FakeToolExecutor
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageGenerationState
 import com.browntowndev.enclave.domain.model.chat.MessageId
@@ -7,17 +19,9 @@ import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.error.ActiveModelConfigurationDecryptException
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.enclave.domain.port.inference.InferenceBusyException
 import com.browntowndev.enclave.domain.port.inference.InferenceEvent
-import com.browntowndev.enclave.domain.port.inference.LlmInferencePort
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.inference.PromptComposerPort
-import com.browntowndev.enclave.domain.port.inference.SearchIntentClassifierPort
 import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
-import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
-import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
-import com.browntowndev.enclave.domain.port.repository.MemoriesRepository
 import com.browntowndev.enclave.domain.port.repository.MessageRepository
 import com.browntowndev.enclave.domain.port.repository.SettingsData
 import com.browntowndev.enclave.domain.port.repository.SettingsRepository
@@ -25,8 +29,6 @@ import com.browntowndev.enclave.domain.usecase.FakeInferenceFactory
 import com.browntowndev.enclave.domain.usecase.FakeInferenceService
 import com.browntowndev.enclave.domain.usecase.media.GetProviderCapabilitiesUseCase
 import com.browntowndev.enclave.domain.usecase.media.MediaToolDefinitionFactory
-import io.mockk.*
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -35,78 +37,38 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class DirectChatInferenceExecutorTest {
-    private lateinit var activeModelProvider: ActiveModelProviderPort
-    private lateinit var messageRepository: MessageRepository
-    private lateinit var settingsRepository: SettingsRepository
-    private lateinit var memoriesRepository: MemoriesRepository
-    private lateinit var embeddingEnginePort: EmbeddingEnginePort
-    private lateinit var promptComposer: com.browntowndev.enclave.domain.port.inference.PromptComposerPort
-    private lateinit var defaultModelRepository: com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
-    private lateinit var mediaProviderRepository: com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
-    private lateinit var mediaToolDefinitionFactory: com.browntowndev.enclave.domain.usecase.media.MediaToolDefinitionFactory
-    private lateinit var getProviderCapabilitiesUseCase: com.browntowndev.enclave.domain.usecase.media.GetProviderCapabilitiesUseCase
-    private lateinit var loggingPort: LoggingPort
-    private lateinit var inferenceService: com.browntowndev.enclave.domain.port.inference.LlmInferencePort
-    private lateinit var inferenceFactory: com.browntowndev.enclave.domain.usecase.FakeInferenceFactory
+    private lateinit var activeModelProvider: FakeActiveModelProvider
+    private lateinit var messageRepository: FakeMessageRepository
+    private lateinit var settingsRepository: FakeSettingsRepository
+    private lateinit var memoriesRepository: FakeMemoriesRepository
+    private lateinit var embeddingEnginePort: FakeEmbeddingEngine
+    private lateinit var promptComposer: FakePromptComposer
+    private lateinit var defaultModelRepository: FakeDefaultModelRepository
+    private lateinit var mediaProviderRepository: FakeMediaProviderRepository
+    private lateinit var mediaToolDefinitionFactory: MediaToolDefinitionFactory
+    private lateinit var getProviderCapabilitiesUseCase: GetProviderCapabilitiesUseCase
+    private lateinit var loggingPort: FakeLoggingPort
+    private lateinit var inferenceService: FakeLlmInferencePort
+    private lateinit var inferenceFactory: FakeInferenceFactory
     private lateinit var executor: DirectChatInferenceExecutor
 
     @BeforeEach
     fun setup() {
-        inferenceFactory =
-            com.browntowndev.enclave.domain.usecase
-                .FakeInferenceFactory()
-        inferenceService = mockk<com.browntowndev.enclave.domain.port.inference.LlmInferencePort>(relaxed = true)
-        inferenceFactory.serviceMap[com.browntowndev.enclave.domain.model.inference.ModelType.FAST] = inferenceService
-        inferenceFactory.serviceMap[com.browntowndev.enclave.domain.model.inference.ModelType.VISION] = inferenceService
-        activeModelProvider =
-            mockk<com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort> {
-                coEvery { getActiveConfiguration(any()) } returns null
-            }
-        messageRepository = mockk<com.browntowndev.enclave.domain.port.repository.MessageRepository>(relaxed = true)
-        settingsRepository =
-            mockk<com.browntowndev.enclave.domain.port.repository.SettingsRepository> {
-                every { settingsFlow } returns
-                    flowOf(
-                        com.browntowndev.enclave.domain.port.repository
-                            .SettingsData(),
-                    )
-            }
-        memoriesRepository =
-            mockk<com.browntowndev.enclave.domain.port.repository.MemoriesRepository>(relaxed = true) {
-                coEvery { getCoreMemories() } returns emptyList()
-                coEvery { searchMemories(any(), any(), any(), any()) } returns emptyList()
-            }
-        embeddingEnginePort =
-            mockk<com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort>(relaxed = true) {
-                coEvery { getEmbedding(any()) } returns floatArrayOf()
-            }
-        promptComposer =
-            mockk {
-                every {
-                    compose(
-                        baseSystemPrompt = any(),
-                        toolCatalog = any(),
-                        activeTools = any(),
-                        currentChatId = any(),
-                        strategy = any(),
-                        coreMemories = any(),
-                        retrievedMemories = any(),
-                        retrievedSearchResults = any(),
-                        retrievedXSearchResults = any(),
-                        compactStaticPrompt = any(),
-                    )
-                } returns ""
-                every { composeVolatileTurnContext(any(), any(), any()) } returns null
-            }
-        defaultModelRepository = mockk<com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort>(relaxed = true)
-        mediaProviderRepository = mockk<com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort>(relaxed = true)
-        getProviderCapabilitiesUseCase =
-            com.browntowndev.enclave.domain.usecase.media
-                .GetProviderCapabilitiesUseCase()
-        mediaToolDefinitionFactory =
-            com.browntowndev.enclave.domain.usecase.media
-                .MediaToolDefinitionFactory(getProviderCapabilitiesUseCase)
-        loggingPort = mockk<com.browntowndev.enclave.domain.port.inference.LoggingPort>(relaxed = true)
+        inferenceFactory = FakeInferenceFactory()
+        inferenceService = FakeLlmInferencePort()
+        inferenceFactory.serviceMap[ModelType.FAST] = inferenceService
+        inferenceFactory.serviceMap[ModelType.VISION] = inferenceService
+        activeModelProvider = FakeActiveModelProvider(configuration = null)
+        messageRepository = FakeMessageRepository()
+        settingsRepository = FakeSettingsRepository()
+        memoriesRepository = FakeMemoriesRepository()
+        embeddingEnginePort = FakeEmbeddingEngine()
+        promptComposer = FakePromptComposer().apply { resultOverride = "" }
+        defaultModelRepository = FakeDefaultModelRepository()
+        mediaProviderRepository = FakeMediaProviderRepository()
+        getProviderCapabilitiesUseCase = GetProviderCapabilitiesUseCase()
+        mediaToolDefinitionFactory = MediaToolDefinitionFactory(getProviderCapabilitiesUseCase)
+        loggingPort = FakeLoggingPort()
 
         executor =
             DirectChatInferenceExecutor(
@@ -122,16 +84,16 @@ class DirectChatInferenceExecutorTest {
                 mediaToolDefinitionFactory = mediaToolDefinitionFactory,
                 getProviderCapabilitiesUseCase = getProviderCapabilitiesUseCase,
                 loggingPort = loggingPort,
-                searchIntentClassifier = mockk(relaxed = true),
-                toolExecutor = mockk(relaxed = true),
+                searchIntentClassifier = FakeSearchIntentClassifier(),
+                toolExecutor = FakeToolExecutor(),
             )
     }
 
     private fun createExecutor(
         inferenceFactory: FakeInferenceFactory,
-        activeModelProvider: ActiveModelProviderPort = mockActiveModelProvider(),
-        messageRepository: MessageRepository = mockMessageRepository(),
-        settingsRepository: SettingsRepository = mockSettingsRepository(),
+        activeModelProvider: ActiveModelProviderPort = fakeActiveModelProvider(),
+        messageRepository: MessageRepository = fakeMessageRepository(),
+        settingsRepository: SettingsRepository = fakeSettingsRepository(),
     ): DirectChatInferenceExecutor =
         DirectChatInferenceExecutor(
             inferenceFactory = inferenceFactory,
@@ -146,16 +108,18 @@ class DirectChatInferenceExecutorTest {
             mediaToolDefinitionFactory = mediaToolDefinitionFactory,
             getProviderCapabilitiesUseCase = getProviderCapabilitiesUseCase,
             loggingPort = loggingPort,
-            searchIntentClassifier = mockk(relaxed = true),
-            toolExecutor = mockk(relaxed = true),
+            searchIntentClassifier = FakeSearchIntentClassifier(),
+            toolExecutor = FakeToolExecutor(),
         )
 
     @Test
     fun `execute delegates search intent classification to injected classifier when search enabled`() =
         runTest {
-            val mockClassifier = mockk<SearchIntentClassifierPort>()
-            every { mockClassifier.getSearchIntentProbability(any()) } returns 0.9f
-            every { mockClassifier.requiresSearch(any(), any()) } returns true
+            val classifier =
+                FakeSearchIntentClassifier().apply {
+                    probability = 0.9f
+                    requiresSearchResult = true
+                }
 
             val factory = FakeInferenceFactory()
             factory.serviceMap[ModelType.FAST] =
@@ -168,11 +132,11 @@ class DirectChatInferenceExecutorTest {
                     inferenceFactory = factory,
                     activeModelProvider = activeModelProvider,
                     messageRepository = messageRepository,
-                    settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = true, tavilyKeyPresent = true)),
+                    settingsRepository = fakeSettingsRepository(SettingsData(searchEnabled = true, tavilyKeyPresent = true)),
                     memoriesRepository = memoriesRepository,
                     embeddingEnginePort =
-                        mockk {
-                            coEvery { getEmbedding(any()) } returns FloatArray(384) { 0.1f }
+                        FakeEmbeddingEngine().apply {
+                            uniformEmbedding = FloatArray(384) { 0.1f }
                         },
                     promptComposer = promptComposer,
                     defaultModelRepository = defaultModelRepository,
@@ -180,8 +144,8 @@ class DirectChatInferenceExecutorTest {
                     mediaToolDefinitionFactory = mediaToolDefinitionFactory,
                     getProviderCapabilitiesUseCase = getProviderCapabilitiesUseCase,
                     loggingPort = loggingPort,
-                    searchIntentClassifier = mockClassifier,
-                    toolExecutor = mockk(relaxed = true),
+                    searchIntentClassifier = classifier,
+                    toolExecutor = FakeToolExecutor(),
                 )
 
             executor
@@ -195,8 +159,8 @@ class DirectChatInferenceExecutorTest {
                     backgroundInferenceEnabled = false,
                 ).toList()
 
-            verify { mockClassifier.getSearchIntentProbability(any()) }
-            verify { mockClassifier.requiresSearch(any(), any()) }
+            assertTrue(classifier.probabilityCallCount >= 1)
+            assertTrue(classifier.requiresSearchCallCount >= 1)
         }
 
     @Test
@@ -497,7 +461,7 @@ class DirectChatInferenceExecutorTest {
 
             val failed = states.filterIsInstance<MessageGenerationState.Failed>()
             assertEquals(1, failed.size)
-            verify { loggingPort.error(any(), any(), any<RuntimeException>()) }
+            assertTrue(loggingPort.errorCalls.any { it.throwable is RuntimeException })
         }
 
     @Test
@@ -556,7 +520,7 @@ class DirectChatInferenceExecutorTest {
     fun `emits failed state with decrypt message when active model cannot be read`() =
         runTest {
             val decryptError = ActiveModelConfigurationDecryptException(ModelType.FAST)
-            coEvery { activeModelProvider.getActiveConfiguration(any()) } throws decryptError
+            activeModelProvider.failure = decryptError
 
             val states =
                 executor
@@ -575,7 +539,7 @@ class DirectChatInferenceExecutorTest {
             assertEquals(ActiveModelConfigurationDecryptException.USER_MESSAGE, failed.error.message)
         }
 
-    private fun mockActiveModelProvider(
+    private fun fakeActiveModelProvider(
         fastConfig: ActiveModelConfiguration =
             ActiveModelConfiguration(
                 modelId = "test-model",
@@ -593,18 +557,10 @@ class DirectChatInferenceExecutorTest {
                 thinkingEnabled = false,
                 isMultimodal = false,
             ),
-    ): ActiveModelProviderPort =
-        mockk(relaxed = true) {
-            coEvery { getActiveConfiguration(any()) } returns fastConfig
-        }
+    ): FakeActiveModelProvider = FakeActiveModelProvider(configuration = fastConfig)
 
-    private fun mockMessageRepository(): MessageRepository =
-        mockk(relaxed = true) {
-            coEvery { resolveLatestImageBearingUserMessage(any(), any()) } returns null
-        }
+    private fun fakeMessageRepository(): FakeMessageRepository = FakeMessageRepository()
 
-    private fun mockSettingsRepository(settings: SettingsData = SettingsData()): SettingsRepository =
-        mockk(relaxed = true) {
-            every { settingsFlow } returns flowOf(settings)
-        }
+    private fun fakeSettingsRepository(settings: SettingsData = SettingsData()): FakeSettingsRepository =
+        FakeSettingsRepository(initial = settings)
 }

@@ -1,10 +1,8 @@
 package com.browntowndev.enclave.domain.usecase.security
 
+import com.browntowndev.enclave.core.testing.FakeCloudSyncPort
 import com.browntowndev.enclave.domain.model.sync.CloudSyncEventReplayResult
 import com.browntowndev.enclave.domain.model.sync.CloudSyncReplayProgress
-import com.browntowndev.enclave.domain.port.repository.CloudSyncPort
-import io.mockk.coEvery
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
@@ -15,18 +13,19 @@ class UnlockProgressTddRedTest {
     @Test
     fun `SCENARIO-16 Unlock sync progress is reported and cleared correctly`() =
         runTest {
-            val port = mockk<CloudSyncPort>(relaxed = true)
+            val port = FakeCloudSyncPort()
 
             // Remaining count = 300 events
-            coEvery { port.getRemainingEventsCount() } returns Result.success(300L)
+            port.remainingEventsResult = Result.success(300L)
 
             // Page 1: 200 events applied
             // Page 2: 100 events applied, no more
-            coEvery { port.syncRemoteChangesFromCloud() } returnsMany
+            port.syncRemoteResults.addAll(
                 listOf(
                     Result.success(CloudSyncEventReplayResult(eventsApplied = 200, lastAppliedSequence = 200L, hasMore = true)),
                     Result.success(CloudSyncEventReplayResult(eventsApplied = 100, lastAppliedSequence = 300L, hasMore = false)),
-                )
+                ),
+            )
 
             val useCase = StartCloudSyncListeningUseCase(port)
             val progressUpdates = mutableListOf<CloudSyncReplayProgress>()
@@ -60,13 +59,13 @@ class UnlockProgressTddRedTest {
     @Test
     fun `SCENARIO-17 Unlock progress handles changing or unavailable totals`() =
         runTest {
-            val port = mockk<CloudSyncPort>(relaxed = true)
+            val port = FakeCloudSyncPort()
 
             // Count returns 0 — indeterminate
-            coEvery { port.getRemainingEventsCount() } returns Result.success(0L)
+            port.remainingEventsResult = Result.success(0L)
 
             // One page of events replayed successfully
-            coEvery { port.syncRemoteChangesFromCloud() } returns
+            port.syncRemoteResult =
                 Result.success(
                     CloudSyncEventReplayResult(eventsApplied = 50, lastAppliedSequence = 50L, hasMore = false),
                 )
@@ -99,6 +98,6 @@ class UnlockProgressTddRedTest {
             )
 
             // Listener should still have been started
-            coEvery { port.startListening() } returns Unit
+            assertEquals(1, port.count("startListening"))
         }
 }

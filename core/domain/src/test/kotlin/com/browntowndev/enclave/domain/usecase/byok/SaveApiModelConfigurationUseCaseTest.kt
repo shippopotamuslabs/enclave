@@ -1,12 +1,11 @@
 package com.browntowndev.enclave.domain.usecase.byok
 
+import com.browntowndev.enclave.core.testing.FakeApiModelRepository
+import com.browntowndev.enclave.domain.model.config.ApiCredentials
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.config.ApiModelConfiguration
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
-import com.browntowndev.enclave.domain.port.repository.ApiModelRepositoryPort
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.mockk
+import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -14,7 +13,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class SaveApiModelConfigurationUseCaseTest {
-    private val repository = mockk<ApiModelRepositoryPort>()
+    private val repository = FakeApiModelRepository()
     private lateinit var useCase: SaveApiModelConfigurationUseCase
 
     @BeforeEach
@@ -33,14 +32,22 @@ class SaveApiModelConfigurationUseCaseTest {
                     modelId = "gpt-4o",
                     displayName = "Test Config",
                 )
-            coEvery { repository.getCredentialsById(credId) } returns mockk()
-            coEvery { repository.saveConfiguration(config) } returns ApiModelConfigurationId("1")
+            repository.seedCredentials(
+                listOf(
+                    ApiCredentials(
+                        id = credId,
+                        displayName = "Test Provider",
+                        provider = ApiProvider.OPENAI,
+                        credentialAlias = "test_alias",
+                    ),
+                ),
+            )
 
             val result = useCase(config)
 
             assertTrue(result.isSuccess)
             assertEquals(ApiModelConfigurationId("1"), result.getOrNull())
-            coVerify(exactly = 1) { repository.saveConfiguration(config) }
+            assertEquals(listOf(config), repository.saveConfigurationCalls)
         }
 
     @Test
@@ -54,7 +61,7 @@ class SaveApiModelConfigurationUseCaseTest {
                     modelId = "gpt-4o",
                     displayName = "Test Config",
                 )
-            coEvery { repository.getCredentialsById(credId) } returns null
+            // No credentials seeded, so getCredentialsById returns null.
 
             val result = useCase(config)
 

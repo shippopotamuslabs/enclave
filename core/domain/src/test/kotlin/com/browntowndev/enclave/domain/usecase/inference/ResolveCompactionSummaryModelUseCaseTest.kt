@@ -6,10 +6,8 @@ import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
 import com.browntowndev.enclave.domain.util.TokenCounter
-import io.mockk.coEvery
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
@@ -90,8 +88,8 @@ class ResolveCompactionSummaryModelUseCaseTest {
         }
 
     private fun useCase(fastConfig: ActiveModelConfiguration?): ResolveCompactionSummaryModelUseCase {
-        val activeModelProvider = mockk<ActiveModelProviderPort>()
-        coEvery { activeModelProvider.getActiveConfiguration(ModelType.FAST) } returns fastConfig
+        val activeModelProvider = FakeActiveModelProvider()
+        activeModelProvider.configurationsByType[ModelType.FAST] = fastConfig
         return ResolveCompactionSummaryModelUseCase(activeModelProvider, tokenCounter)
     }
 

@@ -1,13 +1,9 @@
 package com.browntowndev.enclave.domain.usecase.chat
 
 import app.cash.turbine.test
+import com.browntowndev.enclave.core.testing.FakeChatRepository
 import com.browntowndev.enclave.domain.model.chat.Chat
 import com.browntowndev.enclave.domain.model.chat.ChatId
-import com.browntowndev.enclave.domain.port.repository.ChatRepository
-import io.mockk.every
-import io.mockk.mockk
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
@@ -21,7 +17,7 @@ import java.util.Date
  * Expected values come from scenario Givens, NOT from implementation spec.
  */
 class GetAllChatsUseCaseTest {
-    private lateinit var mockRepository: ChatRepository
+    private lateinit var repository: FakeChatRepository
 
     private val testDate = Date(1700_000_000_000L)
 
@@ -40,8 +36,7 @@ class GetAllChatsUseCaseTest {
 
     @BeforeEach
     fun setup() {
-        mockRepository = mockk(relaxed = true)
-        every { mockRepository.getAllChats() } returns MutableStateFlow<List<Chat>>(emptyList())
+        repository = FakeChatRepository()
     }
 
     // ========================================================================
@@ -65,11 +60,10 @@ class GetAllChatsUseCaseTest {
                     createTestChat(ChatId("2"), "Beta"),
                     createTestChat(ChatId("3"), "Gamma"),
                 )
-            val chatFlow = MutableStateFlow<List<Chat>>(testChats)
-            every { mockRepository.getAllChats() } returns chatFlow
+            repository.seedChats(testChats)
 
             // When: Use case is invoked
-            val useCase = GetAllChatsUseCase(mockRepository)
+            val useCase = GetAllChatsUseCase(repository)
 
             // Then: Flow emits exactly 3 Chat objects
             useCase().test {
@@ -93,11 +87,10 @@ class GetAllChatsUseCaseTest {
     fun `A2 empty database returns empty list`() =
         runTest {
             // Given: Repository returns Flow with empty list
-            val emptyFlow = MutableStateFlow<List<Chat>>(emptyList())
-            every { mockRepository.getAllChats() } returns emptyFlow
+            repository.seedChats(emptyList())
 
             // When: Use case is invoked
-            val useCase = GetAllChatsUseCase(mockRepository)
+            val useCase = GetAllChatsUseCase(repository)
 
             // Then: Flow emits empty list
             useCase().test {
@@ -119,10 +112,9 @@ class GetAllChatsUseCaseTest {
     fun `A3 flow emissions are forwarded`() =
         runTest {
             // Given: Repository flow that can emit multiple times
-            val chatFlow = MutableStateFlow<List<Chat>>(emptyList())
-            every { mockRepository.getAllChats() } returns chatFlow
+            repository.seedChats(emptyList())
 
-            val useCase = GetAllChatsUseCase(mockRepository)
+            val useCase = GetAllChatsUseCase(repository)
 
             // When/Then: Flow receives both emissions
             useCase().test {
@@ -130,11 +122,12 @@ class GetAllChatsUseCaseTest {
                 assertEquals(0, awaitItem().size)
 
                 // Emit second list with 2 chats
-                chatFlow.value =
+                repository.setChats(
                     listOf(
                         createTestChat(ChatId("1"), "Chat A"),
                         createTestChat(ChatId("2"), "Chat B"),
-                    )
+                    ),
+                )
 
                 // Second emission - 2 chats
                 val secondEmission = awaitItem()
@@ -155,12 +148,9 @@ class GetAllChatsUseCaseTest {
     fun `A4 repository error propagates`() =
         runTest {
             // Given: Repository that throws RuntimeException via flow error
-            every { mockRepository.getAllChats() } returns
-                flow {
-                    throw RuntimeException("DB Error")
-                }
+            repository.getAllChatsFailure = RuntimeException("DB Error")
 
-            val useCase = GetAllChatsUseCase(mockRepository)
+            val useCase = GetAllChatsUseCase(repository)
 
             // When/Then: Error propagates through use case
             useCase().test {
