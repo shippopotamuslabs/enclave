@@ -15,11 +15,6 @@ import com.browntowndev.enclave.domain.usecase.settings.DiscoverApiModelsUseCase
 import com.browntowndev.enclave.domain.usecase.settings.SaveApiProviderDraftUseCase
 import com.browntowndev.enclave.domain.usecase.settings.SettingsApiProviderUseCases
 import com.browntowndev.enclave.domain.usecase.settings.TestApiProviderConnectionUseCase
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.slot
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -39,34 +34,31 @@ import kotlin.reflect.full.primaryConstructor
 @OptIn(ExperimentalCoroutinesApi::class)
 @ExtendWith(MainDispatcherRule::class)
 class ByokModelOnPresetSettingsRedTest {
-    private val apiProviderUseCases = mockk<SettingsApiProviderUseCases>(relaxed = true)
-    private val deletionHelper = mockk<SettingsDeletionHelper>(relaxed = true)
-    private val errorHandler = mockk<ViewModelErrorHandler>()
+    private val apiProviderUseCases = FakeSettingsApiProviderUseCases()
+    private val deletionHelper =
+        SettingsDeletionHelper(FakeSettingsDeletionUseCases(), ReassignmentOptionUiMapper(), FakeViewModelErrorHandler())
+    private val errorHandler = FakeViewModelErrorHandler()
     private lateinit var coordinator: ByokProvidersCoordinator
     private lateinit var mapper: ApiModelAssetUiMapper
     private lateinit var uiStateFactory: SettingsUiStateFactory
 
     @BeforeEach
     fun setup() {
-        every { apiProviderUseCases.applyApiModelMetadataDefaults } returns ApplyApiModelMetadataDefaultsUseCase()
-        every {
-            errorHandler.coroutineExceptionHandler(any(), any(), any())
-        } returns CoroutineExceptionHandler { _, _ -> }
         coordinator =
             ByokProvidersCoordinator(
                 apiProviderUseCases = apiProviderUseCases,
                 deletionHelper = deletionHelper,
                 apiModelAssetUiMapper = ApiModelAssetUiMapper(),
                 errorHandler = errorHandler,
-                loggingPort = mockk(relaxed = true),
+                loggingPort = com.browntowndev.enclave.core.testing.FakeLoggingPort(),
             )
         mapper = ApiModelAssetUiMapper()
         uiStateFactory =
             buildSettingsUiStateFactory(
                 localModelAssetUiMapper = LocalModelAssetUiMapper(),
                 apiModelAssetUiMapper = mapper,
-                ttsProviderAssetUiMapper = mockk(relaxed = true),
-                mediaProviderAssetUiMapper = mockk(relaxed = true),
+                ttsProviderAssetUiMapper = TtsProviderAssetUiMapper(),
+                mediaProviderAssetUiMapper = MediaProviderAssetUiMapper(),
                 apiDiscoveryUiFilter = ApiDiscoveryUiFilter(),
                 applyApiModelMetadataDefaultsUseCase = ApplyApiModelMetadataDefaultsUseCase(),
                 usageSpendUiMapper =
@@ -234,11 +226,8 @@ class ByokModelOnPresetSettingsRedTest {
     @Test
     fun `SCN-UI-COORD-001 Coordinator Invokes Test Use Case`() =
         runTest {
-            val testUseCase = mockk<TestApiProviderConnectionUseCase>()
-            every { apiProviderUseCases.testApiProviderConnection } returns testUseCase
-            coEvery {
-                testUseCase(any(), any(), any(), any())
-            } returns Result.success(Unit)
+            val testUseCase = apiProviderUseCases.testApiProviderConnection
+            testUseCase.result = Result.success(Unit)
             val apiState =
                 MutableStateFlow(
                     ApiProvidersTransientState(
@@ -258,23 +247,24 @@ class ByokModelOnPresetSettingsRedTest {
             coordinator.onTestApiProviderConnection(this, apiState, currentApiKey, onShowSnackbar = {})
             advanceUntilIdle()
 
-            coVerify {
-                testUseCase(
-                    provider = ApiProvider.OPENAI,
-                    currentApiKey = "sk-test",
-                    credentialAlias = null,
-                    baseUrl = null,
-                )
-            }
+            assertEquals(
+                listOf(
+                    FakeTestApiProviderConnectionUseCase.Args(
+                        provider = ApiProvider.OPENAI,
+                        currentApiKey = "sk-test",
+                        credentialAlias = null,
+                        baseUrl = null,
+                    ),
+                ),
+                testUseCase.calls,
+            )
         }
 
     @Test
     fun `SCN-UI-COORD-002 Fetch Models Uses Preset Model Id`() =
         runTest {
-            val discover = mockk<DiscoverApiModelsUseCase>()
-            every { apiProviderUseCases.discoverApiModels } returns discover
-            val requestSlot = slot<ApiModelDiscoveryRequest>()
-            coEvery { discover(capture(requestSlot)) } returns
+            val discover = apiProviderUseCases.discoverApiModels
+            discover.result =
                 ApiModelDiscoveryResult(
                     models = emptyList(),
                     scope =
@@ -304,16 +294,14 @@ class ByokModelOnPresetSettingsRedTest {
             coordinator.onFetchApiModels(this, "tag", apiState, currentApiKey)
             advanceUntilIdle()
 
-            assertEquals("grok-4", requestSlot.captured.selectedModelId)
+            assertEquals("grok-4", discover.calls.single().selectedModelId)
         }
 
     @Test
     fun `SCN-UI-COORD-003 Save Credentials Draft Credential Only`() =
         runTest {
-            val saveDraft = mockk<SaveApiProviderDraftUseCase>()
-            every { apiProviderUseCases.saveApiProviderDraft } returns saveDraft
-            val draftSlot = slot<ApiProviderDraft>()
-            coEvery { saveDraft(capture(draftSlot)) } returns
+            val saveDraft = apiProviderUseCases.saveApiProviderDraft
+            saveDraft.result =
                 Result.success(
                     com.browntowndev.enclave.domain.usecase.settings.ApiProviderDraftSaveResult(
                         persistedAsset =
@@ -348,7 +336,7 @@ class ByokModelOnPresetSettingsRedTest {
             coordinator.onSaveApiCredentials(this, "tag", apiState, currentApiKey, onSuccess = { _, _ -> }, onShowSnackbar = {})
             advanceUntilIdle()
 
-            coVerify(exactly = 1) { saveDraft(any()) }
+            assertEquals(1, saveDraft.calls.size)
             val draftNames = ApiProviderDraft::class.memberProperties.map { it.name }.toSet()
             assertFalse("modelId" in draftNames)
             assertFalse("isMultimodal" in draftNames)

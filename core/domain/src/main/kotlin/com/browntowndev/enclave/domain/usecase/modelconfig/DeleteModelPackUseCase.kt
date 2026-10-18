@@ -9,7 +9,7 @@ import com.browntowndev.enclave.domain.port.repository.UtilityModelRepositoryPor
 import com.browntowndev.enclave.domain.usecase.download.ResolveModelCatalogUseCase
 import javax.inject.Inject
 
-class DeleteModelPackUseCase
+open class DeleteModelPackUseCase
     @Inject
     constructor(
         private val deleteLocalModel: DeleteLocalModelUseCase,
@@ -17,7 +17,7 @@ class DeleteModelPackUseCase
         private val modelFileScanner: ModelFileScannerPort,
         private val resolveModelCatalog: ResolveModelCatalogUseCase,
     ) {
-        suspend operator fun invoke(
+        open suspend operator fun invoke(
             packId: String,
             replacementLocalConfigId: LocalModelConfigurationId? = null,
             replacementApiConfigId: ApiModelConfigurationId? = null,

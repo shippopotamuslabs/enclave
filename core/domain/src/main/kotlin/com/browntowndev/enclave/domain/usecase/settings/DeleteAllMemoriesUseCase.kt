@@ -4,12 +4,12 @@ import com.browntowndev.enclave.domain.port.repository.MemoriesRepository
 import javax.inject.Inject
 
 /** Deletes every memory row tracked by [memoriesRepository]. */
-class DeleteAllMemoriesUseCase
+open class DeleteAllMemoriesUseCase
     @Inject
     constructor(
         private val memoriesRepository: MemoriesRepository,
     ) {
-        suspend operator fun invoke() {
+        open suspend operator fun invoke() {
             memoriesRepository.deleteAllMemories()
         }
     }

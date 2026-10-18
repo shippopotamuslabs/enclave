@@ -11,9 +11,6 @@ import com.browntowndev.enclave.domain.usecase.download.ObserveDownloadWorkUseCa
 import com.browntowndev.enclave.domain.usecase.modelconfig.ReDownloadModelPackUseCase
 import com.browntowndev.enclave.domain.usecase.modelconfig.ReDownloadModelUseCase
 import kotlinx.coroutines.flow.Flow
-import io.mockk.coEvery
-import io.mockk.every
-import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -27,8 +24,8 @@ import org.junit.jupiter.api.extension.ExtendWith
 @ExtendWith(MainDispatcherRule::class)
 @OptIn(ExperimentalCoroutinesApi::class)
 class ModelReDownloadViewModelTest {
-    private val reDownloadModelUseCase = mockk<ReDownloadModelUseCase>()
-    private val reDownloadModelPackUseCase = mockk<ReDownloadModelPackUseCase>(relaxed = true)
+    private val reDownloadModelUseCase = FakeReDownloadModelUseCase()
+    private val reDownloadModelPackUseCase = FakeReDownloadModelPackUseCase()
     private var workFlow: Flow<DownloadWorkSnapshot?> = flowOf(null)
     private val observerPort =
         object : DownloadWorkObserverPort {
@@ -70,7 +67,7 @@ class ModelReDownloadViewModelTest {
         runTest {
             val modelId = LocalModelId("test")
 
-            coEvery { reDownloadModelUseCase(modelId) } returns
+            reDownloadModelUseCase.result =
                 Result.success(
                     ScheduledDownload(
                         sessionId = "test-session",
@@ -94,7 +91,7 @@ class ModelReDownloadViewModelTest {
     fun `reDownloadModel on use case failure transitions to Failed`() =
         runTest {
             val modelId = LocalModelId("test")
-            coEvery { reDownloadModelUseCase(modelId) } returns Result.failure(Exception("Fetch failed"))
+            reDownloadModelUseCase.result = Result.failure(Exception("Fetch failed"))
 
             viewModel.reDownloadModel(modelId.value)
             advanceUntilIdle()
@@ -111,7 +108,7 @@ class ModelReDownloadViewModelTest {
         runTest {
             val modelId = LocalModelId("test")
 
-            coEvery { reDownloadModelUseCase(modelId) } returns
+            reDownloadModelUseCase.result =
                 Result.success(
                     ScheduledDownload(
                         sessionId = "test-session",
@@ -135,7 +132,7 @@ class ModelReDownloadViewModelTest {
     @Test
     fun `reDownloadPack waits for finalizer after downloader succeeds`() =
         runTest {
-            coEvery { reDownloadModelPackUseCase("sdxl-t2i") } returns
+            reDownloadModelPackUseCase.result =
                 Result.success(
                     listOf(
                         ScheduledDownload(

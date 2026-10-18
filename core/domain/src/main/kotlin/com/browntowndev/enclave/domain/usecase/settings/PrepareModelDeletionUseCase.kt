@@ -21,7 +21,7 @@ import com.browntowndev.enclave.domain.usecase.modelconfig.GetLocalModelAssetsUs
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 
-class PrepareModelDeletionUseCase
+open class PrepareModelDeletionUseCase
     @Inject
     constructor(
         private val getDefaultModelsUseCase: GetDefaultModelsUseCase,
@@ -33,7 +33,7 @@ class PrepareModelDeletionUseCase
         private val resolveModelCatalog: ResolveModelCatalogUseCase,
         private val getMediaProvidersUseCase: GetMediaProvidersUseCase,
     ) {
-        suspend operator fun invoke(target: ModelDeletionTarget): PreparedModelDeletion =
+        open suspend operator fun invoke(target: ModelDeletionTarget): PreparedModelDeletion =
             when (target) {
                 is ModelDeletionTarget.LocalModelAsset -> prepareLocalModelAsset(target.id)
                 is ModelDeletionTarget.LocalModelPreset -> prepareLocalModelPreset(target.id)

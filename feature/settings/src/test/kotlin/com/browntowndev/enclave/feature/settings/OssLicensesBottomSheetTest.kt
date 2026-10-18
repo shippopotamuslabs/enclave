@@ -29,8 +29,6 @@ import com.browntowndev.enclave.domain.usecase.settings.*
 import com.browntowndev.enclave.domain.usecase.settings.SettingsAuthUseCases
 import com.browntowndev.enclave.domain.usecase.settings.SettingsMemoriesUseCasesImpl
 import com.browntowndev.enclave.domain.usecase.settings.SettingsPreferencesUseCases
-import io.mockk.every
-import io.mockk.mockk
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
@@ -48,30 +46,28 @@ class OssLicensesBottomSheetTest {
 
     @Nested
     inner class DelegateToggle {
-        private val preferencesUseCases = mockk<SettingsPreferencesUseCases>(relaxed = true)
-        private val authUseCases = mockk<SettingsAuthUseCases>(relaxed = true)
-        private val errorHandler = mockk<ViewModelErrorHandler>()
+        private val preferencesUseCases = FakeSettingsPreferencesUseCases()
+        private val authUseCases = FakeSettingsAuthUseCases()
+        private val errorHandler = FakeViewModelErrorHandler()
         private lateinit var delegate: SettingsGeneralDelegate
         private lateinit var sheetVisibility: MutableStateFlow<SheetVisibilityState>
 
         @BeforeEach
         fun setup() {
-            every { errorHandler.coroutineExceptionHandler(any(), any(), any()) } returns
-                CoroutineExceptionHandler { _, _ -> }
             delegate =
                 SettingsGeneralDelegate(
                     preferencesUseCases = preferencesUseCases,
                     authUseCases = authUseCases,
                     errorHandler = errorHandler,
-                    detectVaultReconciliationStateUseCase = mockk(relaxed = true),
-                    adoptCloudVaultUseCase = mockk(relaxed = true),
-                    bootstrapCloudVaultFromLocalUseCase = mockk(relaxed = true),
-                    createVaultUseCase = mockk(relaxed = true),
-                    unlockVaultFromStoredMetadataUseCase = mockk(relaxed = true),
-                    startCloudSyncListeningUseCase = mockk(relaxed = true),
-                    cryptoManager = mockk(relaxed = true),
-                    vaultMetadataPort = mockk(relaxed = true),
-                    cloudSyncPort = mockk(relaxed = true),
+                    detectVaultReconciliationStateUseCase = FakeDetectVaultReconciliationStateUseCase(),
+                    adoptCloudVaultUseCase = FakeAdoptCloudVaultUseCase(),
+                    bootstrapCloudVaultFromLocalUseCase = FakeBootstrapCloudVaultFromLocalUseCase(),
+                    createVaultUseCase = FakeCreateVaultUseCase(),
+                    unlockVaultFromStoredMetadataUseCase = FakeUnlockVaultFromStoredMetadataUseCase(),
+                    startCloudSyncListeningUseCase = FakeStartCloudSyncListeningUseCase(),
+                    cryptoManager = com.browntowndev.enclave.core.testing.FakeCryptoManagerPort(),
+                    vaultMetadataPort = com.browntowndev.enclave.core.testing.FakeVaultMetadataPort(),
+                    cloudSyncPort = com.browntowndev.enclave.core.testing.FakeCloudSyncPort(),
                 )
             sheetVisibility = MutableStateFlow(SheetVisibilityState())
         }
@@ -115,7 +111,7 @@ class OssLicensesBottomSheetTest {
                     localModelAssetUiMapper = LocalModelAssetUiMapper(),
                     apiModelAssetUiMapper = ApiModelAssetUiMapper(),
                     ttsProviderAssetUiMapper = TtsProviderAssetUiMapper(),
-                    mediaProviderAssetUiMapper = mockk(relaxed = true),
+                    mediaProviderAssetUiMapper = MediaProviderAssetUiMapper(),
                     apiDiscoveryUiFilter = ApiDiscoveryUiFilter(),
                     applyApiModelMetadataDefaultsUseCase = ApplyApiModelMetadataDefaultsUseCase(),
                     usageSpendUiMapper =
@@ -384,148 +380,122 @@ private fun SettingsUiStateFactory.createMinimal(sheetVisibility: SheetVisibilit
  * onShowOssLicensesSheet / onShowFeedbackSheet wiring.
  */
 private fun buildMinimalViewModel(): SettingsViewModel {
-    val errorHandler = mockk<ViewModelErrorHandler>()
-    every { errorHandler.coroutineExceptionHandler(any(), any(), any()) } returns
-        CoroutineExceptionHandler { _, _ -> }
+    val errorHandler = FakeViewModelErrorHandler()
 
-    val getSettingsUseCase = mockk<GetSettingsUseCase>()
-    every { getSettingsUseCase() } returns MutableStateFlow(SettingsData())
-
-    val getLocalModelAssetsUseCase = mockk<GetLocalModelAssetsUseCase>()
-    every { getLocalModelAssetsUseCase() } returns MutableStateFlow(emptyList())
-
-    val getApiModelAssetsUseCase = mockk<GetApiModelAssetsUseCase>()
-    every { getApiModelAssetsUseCase() } returns MutableStateFlow(emptyList())
-
-    val getDefaultModelsUseCase = mockk<GetDefaultModelsUseCase>()
-    every { getDefaultModelsUseCase() } returns MutableStateFlow(emptyList())
-
-    val getTtsProvidersUseCase = mockk<GetTtsProvidersUseCase>()
-    every { getTtsProvidersUseCase() } returns MutableStateFlow(emptyList())
-
-    val getMediaProvidersUseCase = mockk<GetMediaProvidersUseCase>()
-    every { getMediaProvidersUseCase() } returns MutableStateFlow(emptyList())
-
-    val memoriesRepository = mockk<MemoriesRepository>()
-    every { memoriesRepository.getAllMemoriesFlow() } returns MutableStateFlow(emptyList())
-
-    val getAuthStateUseCase = mockk<GetAuthStateUseCase>(relaxed = true)
-    every { getAuthStateUseCase() } returns MutableStateFlow(AuthState.Loading)
-
-    val updateSearchProviderUseCase = mockk<UpdateSearchProviderUseCase>(relaxed = true)
-    val saveExaApiKeyUseCase = mockk<SaveExaApiKeyUseCase>(relaxed = true)
-    val clearExaApiKeyUseCase = mockk<ClearExaApiKeyUseCase>(relaxed = true)
-    val updateShowSearchProviderSwitchAlertUseCase = mockk<UpdateShowSearchProviderSwitchAlertUseCase>(relaxed = true)
-
-    val observeActiveUtilityModelsUseCase =
-        mockk<com.browntowndev.enclave.domain.usecase.modelconfig.ObserveActiveUtilityModelsUseCase>()
-    every { observeActiveUtilityModelsUseCase() } returns
-        kotlinx.coroutines.flow.flowOf(
-            emptyList<com.browntowndev.enclave.domain.model.config.UtilityModelMetadata>(),
-        )
+    val getSettingsUseCase = FakeGetSettingsUseCase()
+    val getLocalModelAssetsUseCase = FakeGetLocalModelAssetsUseCase()
+    val getApiModelAssetsUseCase = FakeGetApiModelAssetsUseCase()
+    val getDefaultModelsUseCase = FakeGetDefaultModelsUseCase()
+    val getTtsProvidersUseCase = FakeGetTtsProvidersUseCase()
+    val getMediaProvidersUseCase = FakeGetMediaProvidersUseCase()
+    val memoriesRepository = com.browntowndev.enclave.core.testing.FakeMemoriesRepository()
+    val getAuthStateUseCase = FakeGetAuthStateUseCase()
+    val updateSearchProviderUseCase = FakeUpdateSearchProviderUseCase()
+    val saveExaApiKeyUseCase = FakeSaveExaApiKeyUseCase()
+    val clearExaApiKeyUseCase = FakeClearExaApiKeyUseCase()
+    val updateShowSearchProviderSwitchAlertUseCase = FakeUpdateShowSearchProviderSwitchAlertUseCase()
+    val observeActiveUtilityModelsUseCase = FakeObserveActiveUtilityModelsUseCase()
 
     val settingsUseCases =
         SettingsUseCasesImpl(
             preferences =
                 SettingsPreferencesUseCasesImpl(
                     getSettings = getSettingsUseCase,
-                    updateTheme = mockk(relaxed = true),
-                    updateHapticResponse = mockk(relaxed = true),
-                    updateCustomizationEnabled = mockk(relaxed = true),
-                    updateSelectedPromptOption = mockk(relaxed = true),
-                    updateCustomPromptText = mockk(relaxed = true),
-                    updateAllowMemories = mockk(relaxed = true),
-                    updateSearchEnabled = mockk(relaxed = true),
+                    updateTheme = FakeUpdateThemeUseCase(),
+                    updateHapticResponse = FakeUpdateHapticResponseUseCase(),
+                    updateCustomizationEnabled = FakeUpdateCustomizationEnabledUseCase(),
+                    updateSelectedPromptOption = FakeUpdateSelectedPromptOptionUseCase(),
+                    updateCustomPromptText = FakeUpdateCustomPromptTextUseCase(),
+                    updateAllowMemories = FakeUpdateAllowMemoriesUseCase(),
+                    updateSearchEnabled = FakeUpdateSearchEnabledUseCase(),
                     updateSearchProvider = updateSearchProviderUseCase,
-                    saveTavilyApiKey = mockk(relaxed = true),
-                    clearTavilyApiKey = mockk(relaxed = true),
+                    saveTavilyApiKey = FakeSaveTavilyApiKeyUseCase(),
+                    clearTavilyApiKey = FakeClearTavilyApiKeyUseCase(),
                     saveExaApiKey = saveExaApiKeyUseCase,
                     clearExaApiKey = clearExaApiKeyUseCase,
-                    updateXSearchEnabled = mockk(relaxed = true),
-                    saveXApiKey = mockk(relaxed = true),
-                    clearXApiKey = mockk(relaxed = true),
+                    updateXSearchEnabled = FakeUpdateXSearchEnabledUseCase(),
+                    saveXApiKey = FakeSaveXApiKeyUseCase(),
+                    clearXApiKey = FakeClearXApiKeyUseCase(),
                     updateShowSearchProviderSwitchAlert = updateShowSearchProviderSwitchAlertUseCase,
-                    updateBackgroundInferenceEnabled = mockk(relaxed = true),
-                    updateAutomaticErrorTrackingEnabled = mockk(relaxed = true),
+                    updateBackgroundInferenceEnabled = FakeUpdateBackgroundInferenceEnabledUseCase(),
+                    updateAutomaticErrorTrackingEnabled = FakeUpdateAutomaticErrorTrackingEnabledUseCase(),
                 ),
             localModels =
                 SettingsLocalModelUseCasesImpl(
                     getLocalModelAssets = getLocalModelAssetsUseCase,
-                    getRestorableLocalModels = mockk(relaxed = true),
-                    saveLocalModelPreset = mockk(relaxed = true),
-                    reDownloadModel = mockk<ReDownloadModelUseCase>(relaxed = true),
-                    getModelPacksForSettings = mockk(relaxed = true),
+                    getRestorableLocalModels = FakeGetRestorableLocalModelsUseCase(),
+                    saveLocalModelPreset = FakeSaveLocalModelPresetUseCase(),
+                    reDownloadModel = FakeReDownloadModelUseCase(),
+                    getModelPacksForSettings = FakeGetModelPacksForSettingsUseCase(),
                     observeActiveUtilityModels = observeActiveUtilityModelsUseCase,
-                    reDownloadModelPack = mockk(relaxed = true),
-                    deleteModelPack = mockk(relaxed = true),
+                    reDownloadModelPack = FakeReDownloadModelPackUseCase(),
+                    deleteModelPack = FakeDeleteModelPackUseCase(),
                 ),
             apiProviders =
                 SettingsApiProviderUseCasesImpl(
                     getApiModelAssets = getApiModelAssetsUseCase,
-                    saveApiProviderDraft = mockk(relaxed = true),
-                    saveApiPreset = mockk(relaxed = true),
-                    discoverApiModels = mockk(relaxed = true),
-                    applyApiModelMetadataDefaults = mockk(relaxed = true),
-                    testApiProviderConnection = mockk(relaxed = true),
-                    fetchOpenRouterModelEndpoints = mockk(relaxed = true),
+                    saveApiProviderDraft = FakeSaveApiProviderDraftUseCase(),
+                    saveApiPreset = FakeSaveApiPresetUseCase(),
+                    discoverApiModels = FakeDiscoverApiModelsUseCase(),
+                    applyApiModelMetadataDefaults = ApplyApiModelMetadataDefaultsUseCase(),
+                    testApiProviderConnection = FakeTestApiProviderConnectionUseCase(),
+                    fetchOpenRouterModelEndpoints = FakeFetchOpenRouterModelEndpointsUseCase(),
                 ),
             assignments =
                 SettingsAssignmentUseCasesImpl(
                     getDefaultModels = getDefaultModelsUseCase,
-                    setDefaultModel = mockk(relaxed = true),
-                    clearDefaultModel = mockk(relaxed = true),
-                    resolveAssignedModelSelection = mockk(relaxed = true),
+                    setDefaultModel = FakeSetDefaultModelUseCase(),
+                    clearDefaultModel = FakeClearDefaultModelUseCase(),
+                    resolveAssignedModelSelection = FakeResolveAssignedModelSelectionUseCase(),
                 ),
             deletion =
                 SettingsDeletionUseCasesImpl(
-                    prepareModelDeletion = mockk(relaxed = true),
-                    executeModelDeletionWithReassignment = mockk(relaxed = true),
+                    prepareModelDeletion = FakePrepareModelDeletionUseCase(),
+                    executeModelDeletionWithReassignment = FakeExecuteModelDeletionWithReassignmentUseCase(),
                 ),
             tts =
                 SettingsTtsUseCasesImpl(
                     getTtsProviders = getTtsProvidersUseCase,
-                    saveTtsProvider = mockk(relaxed = true),
-                    deleteTtsProvider = mockk(relaxed = true),
+                    saveTtsProvider = FakeSaveTtsProviderUseCase(),
+                    deleteTtsProvider = FakeDeleteTtsProviderUseCase(),
                 ),
             media =
                 SettingsMediaUseCasesImpl(
                     getMediaProviders = getMediaProvidersUseCase,
-                    saveMediaProvider = mockk<SaveMediaProviderUseCase>(relaxed = true),
-                    deleteMediaProvider = mockk<DeleteMediaProviderUseCase>(relaxed = true),
+                    saveMediaProvider = FakeSaveMediaProviderUseCase(),
+                    deleteMediaProvider = FakeDeleteMediaProviderUseCase(),
                 ),
             auth =
                 SettingsAuthUseCasesImpl(
-                    loginWithGoogle = mockk(relaxed = true),
-                    logout = mockk(relaxed = true),
+                    loginWithGoogle = FakeLoginWithGoogleUseCase(),
+                    logout = FakeLogoutUseCase(),
                     getAuthState = getAuthStateUseCase,
                 ),
             memories = SettingsMemoriesUseCasesImpl(memoriesRepository),
             dataControls =
                 SettingsDataControlsUseCasesImpl(
-                    deleteAllChats = mockk(relaxed = true),
-                    deleteAllMedia = mockk(relaxed = true),
-                    deleteAllMemories = mockk(relaxed = true),
-                    deleteAllArtifacts = mockk(relaxed = true),
-                    deleteAccount = mockk(relaxed = true),
+                    deleteAllChats = FakeDeleteAllChatsUseCase(),
+                    deleteAllMedia = FakeDeleteAllMediaUseCase(),
+                    deleteAllMemories = FakeDeleteAllMemoriesUseCase(),
+                    deleteAllArtifacts = FakeDeleteAllArtifactsUseCase(),
+                    deleteAccount = FakeDeleteAccountUseCase(),
                 ),
         )
 
-    val embeddingProgressPort = mockk<EmbeddingProgressPort>()
-    every { embeddingProgressPort.isReindexing } returns MutableStateFlow(false)
-    every { embeddingProgressPort.progress } returns MutableStateFlow(0f)
+    val embeddingProgressPort = com.browntowndev.enclave.core.testing.FakeEmbeddingProgressPort()
 
     val observeDownloadWorkUseCase =
         com.browntowndev.enclave.domain.usecase.download.ObserveDownloadWorkUseCase(
             com.browntowndev.enclave.core.testing.download.FakeDownloadWorkObserverPort(),
         )
 
-    val detectVaultReconciliationStateUseCase = mockk<DetectVaultReconciliationStateUseCase>(relaxed = true)
-    val adoptCloudVaultUseCase = mockk<AdoptCloudVaultUseCase>(relaxed = true)
-    val bootstrapCloudVaultFromLocalUseCase = mockk<BootstrapCloudVaultFromLocalUseCase>(relaxed = true)
-    val createVaultUseCase = mockk<CreateVaultUseCase>(relaxed = true)
-    val cryptoManager = mockk<CryptoManagerPort>(relaxed = true)
-    val vaultMetadataPort = mockk<VaultMetadataPort>(relaxed = true)
-    val cloudSyncPort = mockk<CloudSyncPort>(relaxed = true)
+    val detectVaultReconciliationStateUseCase = FakeDetectVaultReconciliationStateUseCase()
+    val adoptCloudVaultUseCase = FakeAdoptCloudVaultUseCase()
+    val bootstrapCloudVaultFromLocalUseCase = FakeBootstrapCloudVaultFromLocalUseCase()
+    val createVaultUseCase = FakeCreateVaultUseCase()
+    val cryptoManager = com.browntowndev.enclave.core.testing.FakeCryptoManagerPort()
+    val vaultMetadataPort = com.browntowndev.enclave.core.testing.FakeVaultMetadataPort()
+    val cloudSyncPort = com.browntowndev.enclave.core.testing.FakeCloudSyncPort()
 
     val generalDelegate =
         SettingsGeneralDelegate(
@@ -536,8 +506,8 @@ private fun buildMinimalViewModel(): SettingsViewModel {
             adoptCloudVaultUseCase,
             bootstrapCloudVaultFromLocalUseCase,
             createVaultUseCase,
-            mockk<com.browntowndev.enclave.domain.usecase.security.UnlockVaultFromStoredMetadataUseCase>(relaxed = true),
-            mockk<com.browntowndev.enclave.domain.usecase.security.StartCloudSyncListeningUseCase>(relaxed = true),
+            FakeUnlockVaultFromStoredMetadataUseCase(),
+            FakeStartCloudSyncListeningUseCase(),
             cryptoManager,
             vaultMetadataPort,
             cloudSyncPort,
@@ -588,7 +558,7 @@ private fun buildMinimalViewModel(): SettingsViewModel {
         searchDelegate =
             SettingsSearchDelegate(
                 settingsUseCases.preferences,
-                mockk<com.browntowndev.enclave.domain.port.repository.CloudSyncPort>(relaxed = true),
+                com.browntowndev.enclave.core.testing.FakeCloudSyncPort(),
                 errorHandler,
             ),
         assignmentsDelegate = SettingsAssignmentsDelegate(settingsUseCases.assignments, errorHandler),

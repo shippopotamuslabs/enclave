@@ -7,12 +7,12 @@ import com.browntowndev.enclave.domain.model.inference.ApiProviderModelPolicy
 import com.browntowndev.enclave.domain.port.repository.TtsProviderRepositoryPort
 import javax.inject.Inject
 
-class SaveTtsProviderUseCase
+open class SaveTtsProviderUseCase
     @Inject
     constructor(
         private val repository: TtsProviderRepositoryPort,
     ) {
-        suspend operator fun invoke(draft: TtsProviderDraft): Result<TtsProviderId> =
+        open suspend operator fun invoke(draft: TtsProviderDraft): Result<TtsProviderId> =
             Result.runCatching {
                 if (draft.provider == ApiProvider.FAL) {
                     val modelName = draft.modelName?.trim().orEmpty()

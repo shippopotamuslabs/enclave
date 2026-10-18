@@ -12,10 +12,6 @@ import com.browntowndev.enclave.domain.usecase.settings.DeleteLiveVoiceProviderU
 import com.browntowndev.enclave.domain.usecase.settings.SettingsApiProviderUseCases
 import com.browntowndev.enclave.domain.usecase.settings.SettingsAssignmentUseCases
 import com.browntowndev.enclave.domain.usecase.settings.SettingsLiveVoiceUseCases
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
@@ -32,18 +28,14 @@ import org.junit.jupiter.api.extension.ExtendWith
 @OptIn(ExperimentalCoroutinesApi::class)
 @ExtendWith(MainDispatcherRule::class)
 class LiveVoiceProvidersCoordinatorTest {
-    private val apiProviderUseCases = mockk<SettingsApiProviderUseCases>(relaxed = true)
-    private val liveVoiceUseCases = mockk<SettingsLiveVoiceUseCases>(relaxed = true)
-    private val errorHandler = mockk<ViewModelErrorHandler>()
+    private val apiProviderUseCases = FakeSettingsApiProviderUseCases()
+    private val liveVoiceUseCases = FakeSettingsLiveVoiceUseCases()
+    private val errorHandler = FakeViewModelErrorHandler()
 
     private lateinit var coordinator: LiveVoiceProvidersCoordinator
 
     @BeforeEach
     fun setUp() {
-        every {
-            errorHandler.coroutineExceptionHandler(any(), any(), any())
-        } returns kotlinx.coroutines.CoroutineExceptionHandler { _, _ -> }
-
         coordinator =
             LiveVoiceProvidersCoordinator(
                 apiProviderUseCases = apiProviderUseCases,
@@ -83,29 +75,26 @@ class LiveVoiceProvidersCoordinatorTest {
         runTest {
             val providerId = LiveVoiceProviderId("live-voice-1")
             val operationOrder = mutableListOf<String>()
-            val getDefaultModelsUseCase = mockk<GetDefaultModelsUseCase>()
-            val clearDefaultModelUseCase = mockk<ClearDefaultModelUseCase>()
-            val deleteLiveVoiceProviderUseCase = mockk<DeleteLiveVoiceProviderUseCase>()
-            val assignmentsUseCases = mockk<SettingsAssignmentUseCases>()
-
-            every { assignmentsUseCases.getDefaultModels } returns getDefaultModelsUseCase
-            every { assignmentsUseCases.clearDefaultModel } returns clearDefaultModelUseCase
-            every { getDefaultModelsUseCase() } returns
-                flowOf(
-                    listOf(
-                        DefaultModelAssignment(
-                            modelType = ModelType.LIVE_VOICE,
-                            liveVoiceProviderId = providerId,
-                        ),
-                    ),
+            val clearDefaultModelUseCase = FakeClearDefaultModelUseCase()
+            val deleteLiveVoiceProviderUseCase = liveVoiceUseCases.deleteLiveVoiceProvider
+            val assignmentsUseCases =
+                FakeSettingsAssignmentUseCases(
+                    getDefaultModels =
+                        FakeGetDefaultModelsUseCase().apply {
+                            flow =
+                                flowOf(
+                                    listOf(
+                                        DefaultModelAssignment(
+                                            modelType = ModelType.LIVE_VOICE,
+                                            liveVoiceProviderId = providerId,
+                                        ),
+                                    ),
+                                )
+                        },
+                    clearDefaultModel = clearDefaultModelUseCase,
                 )
-            coEvery { clearDefaultModelUseCase(ModelType.LIVE_VOICE) } coAnswers {
-                operationOrder.add("clearDefault")
-            }
-            every { liveVoiceUseCases.deleteLiveVoiceProvider } returns deleteLiveVoiceProviderUseCase
-            coEvery { deleteLiveVoiceProviderUseCase(providerId) } coAnswers {
-                operationOrder.add("deleteProvider")
-            }
+            clearDefaultModelUseCase.onInvoke = { operationOrder.add("clearDefault") }
+            deleteLiveVoiceProviderUseCase.onInvoke = { operationOrder.add("deleteProvider") }
 
             coordinator.onDeleteLiveVoiceProviderAsset(
                 scope = this,
@@ -116,8 +105,8 @@ class LiveVoiceProvidersCoordinatorTest {
             advanceUntilIdle()
 
             assertEquals(listOf("clearDefault", "deleteProvider"), operationOrder)
-            coVerify(exactly = 1) { clearDefaultModelUseCase(ModelType.LIVE_VOICE) }
-            coVerify(exactly = 1) { deleteLiveVoiceProviderUseCase(providerId) }
+            assertEquals(listOf(ModelType.LIVE_VOICE), clearDefaultModelUseCase.calls)
+            assertEquals(listOf(providerId), deleteLiveVoiceProviderUseCase.calls)
         }
 
     @Test
@@ -126,23 +115,24 @@ class LiveVoiceProvidersCoordinatorTest {
         runTest {
             val providerId = LiveVoiceProviderId("live-voice-1")
             val otherDefaultId = LiveVoiceProviderId("live-voice-2")
-            val getDefaultModelsUseCase = mockk<GetDefaultModelsUseCase>()
-            val clearDefaultModelUseCase = mockk<ClearDefaultModelUseCase>(relaxed = true)
-            val deleteLiveVoiceProviderUseCase = mockk<DeleteLiveVoiceProviderUseCase>(relaxed = true)
-            val assignmentsUseCases = mockk<SettingsAssignmentUseCases>()
-
-            every { assignmentsUseCases.getDefaultModels } returns getDefaultModelsUseCase
-            every { assignmentsUseCases.clearDefaultModel } returns clearDefaultModelUseCase
-            every { getDefaultModelsUseCase() } returns
-                flowOf(
-                    listOf(
-                        DefaultModelAssignment(
-                            modelType = ModelType.LIVE_VOICE,
-                            liveVoiceProviderId = otherDefaultId,
-                        ),
-                    ),
+            val clearDefaultModelUseCase = FakeClearDefaultModelUseCase()
+            val deleteLiveVoiceProviderUseCase = liveVoiceUseCases.deleteLiveVoiceProvider
+            val assignmentsUseCases =
+                FakeSettingsAssignmentUseCases(
+                    getDefaultModels =
+                        FakeGetDefaultModelsUseCase().apply {
+                            flow =
+                                flowOf(
+                                    listOf(
+                                        DefaultModelAssignment(
+                                            modelType = ModelType.LIVE_VOICE,
+                                            liveVoiceProviderId = otherDefaultId,
+                                        ),
+                                    ),
+                                )
+                        },
+                    clearDefaultModel = clearDefaultModelUseCase,
                 )
-            every { liveVoiceUseCases.deleteLiveVoiceProvider } returns deleteLiveVoiceProviderUseCase
 
             coordinator.onDeleteLiveVoiceProviderAsset(
                 scope = this,
@@ -152,7 +142,7 @@ class LiveVoiceProvidersCoordinatorTest {
             )
             advanceUntilIdle()
 
-            coVerify(exactly = 0) { clearDefaultModelUseCase(any()) }
-            coVerify(exactly = 1) { deleteLiveVoiceProviderUseCase(providerId) }
+            assertTrue(clearDefaultModelUseCase.calls.isEmpty())
+            assertEquals(listOf(providerId), deleteLiveVoiceProviderUseCase.calls)
         }
 }

@@ -6,9 +6,6 @@ import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.usecase.settings.SettingsApiProviderUseCases
 import com.browntowndev.enclave.domain.usecase.settings.SettingsMediaUseCases
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,20 +20,16 @@ import org.junit.jupiter.api.extension.ExtendWith
 @OptIn(ExperimentalCoroutinesApi::class)
 @ExtendWith(MainDispatcherRule::class)
 class MediaProvidersCoordinatorTest {
-    private val apiProviderUseCases = mockk<SettingsApiProviderUseCases>(relaxed = true)
-    private val mediaUseCases = mockk<SettingsMediaUseCases>(relaxed = true)
+    private val apiProviderUseCases = FakeSettingsApiProviderUseCases()
+    private val mediaUseCases = FakeSettingsMediaUseCases()
     private val fetchApiProviderModelDetailUseCase =
-        mockk<com.browntowndev.enclave.domain.usecase.byok.FetchApiProviderModelDetailUseCase>(relaxed = true)
-    private val errorHandler = mockk<ViewModelErrorHandler>()
+        com.browntowndev.enclave.core.testing.FakeFetchApiProviderModelDetailUseCase()
+    private val errorHandler = FakeViewModelErrorHandler()
 
     private lateinit var coordinator: MediaProvidersCoordinator
 
     @BeforeEach
     fun setup() {
-        every {
-            errorHandler.coroutineExceptionHandler(any(), any(), any())
-        } returns CoroutineExceptionHandler { _, _ -> }
-
         coordinator =
             MediaProvidersCoordinator(
                 apiProviderUseCases = apiProviderUseCases,
@@ -102,7 +95,7 @@ class MediaProvidersCoordinatorTest {
                     ),
                 )
             val currentApiKey = MutableStateFlow("")
-            val assignmentsUseCases = mockk<com.browntowndev.enclave.domain.usecase.settings.SettingsAssignmentUseCases>(relaxed = true)
+            val assignmentsUseCases = FakeSettingsAssignmentUseCases()
 
             coordinator.onSaveMediaProvider(
                 scope = this,
@@ -114,12 +107,9 @@ class MediaProvidersCoordinatorTest {
             )
             advanceUntilIdle()
 
-            coVerify {
-                mediaUseCases.saveMediaProvider(
-                    match { it.credentialAlias == "openai" },
-                    null,
-                )
-            }
+            assertEquals(1, mediaUseCases.saveMediaProvider.calls.size)
+            assertEquals("openai", mediaUseCases.saveMediaProvider.calls.single().first.credentialAlias)
+            assertEquals(null, mediaUseCases.saveMediaProvider.calls.single().second)
         }
 
     @Test
@@ -165,9 +155,7 @@ class MediaProvidersCoordinatorTest {
                     credentialAlias = "alias",
                 )
 
-            io.mockk.coEvery {
-                apiProviderUseCases.discoverApiModels(any())
-            } returns
+            apiProviderUseCases.discoverApiModels.result =
                 com.browntowndev.enclave.domain.usecase.settings.ApiModelDiscoveryResult(
                     models = discoveredModels,
                     scope = mockScope,
@@ -224,9 +212,7 @@ class MediaProvidersCoordinatorTest {
                     ),
                 )
 
-            io.mockk.coEvery {
-                apiProviderUseCases.discoverApiModels(any())
-            } returns
+            apiProviderUseCases.discoverApiModels.result =
                 com.browntowndev.enclave.domain.usecase.settings.ApiModelDiscoveryResult(
                     models = discoveredModels,
                     scope =

@@ -1,13 +1,7 @@
 package com.browntowndev.enclave.feature.settings
 
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
-import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
-import com.browntowndev.enclave.domain.usecase.settings.SettingsApiProviderUseCases
-import com.browntowndev.enclave.domain.usecase.settings.SettingsTtsUseCases
-import io.mockk.every
-import io.mockk.mockk
-import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -21,18 +15,14 @@ import org.junit.jupiter.api.extension.ExtendWith
 @OptIn(ExperimentalCoroutinesApi::class)
 @ExtendWith(MainDispatcherRule::class)
 class TtsProvidersCoordinatorTest {
-    private val apiProviderUseCases = mockk<SettingsApiProviderUseCases>(relaxed = true)
-    private val ttsUseCases = mockk<SettingsTtsUseCases>(relaxed = true)
-    private val errorHandler = mockk<ViewModelErrorHandler>()
+    private val apiProviderUseCases = FakeSettingsApiProviderUseCases()
+    private val ttsUseCases = FakeSettingsTtsUseCases()
+    private val errorHandler = FakeViewModelErrorHandler()
 
     private lateinit var coordinator: TtsProvidersCoordinator
 
     @BeforeEach
     fun setup() {
-        every {
-            errorHandler.coroutineExceptionHandler(any(), any(), any())
-        } returns CoroutineExceptionHandler { _, _ -> }
-
         coordinator =
             TtsProvidersCoordinator(
                 apiProviderUseCases = apiProviderUseCases,
@@ -117,9 +107,7 @@ class TtsProvidersCoordinatorTest {
                     credentialAlias = "alias",
                 )
 
-            io.mockk.coEvery {
-                apiProviderUseCases.discoverApiModels(any())
-            } returns
+            apiProviderUseCases.discoverApiModels.result =
                 com.browntowndev.enclave.domain.usecase.settings.ApiModelDiscoveryResult(
                     models = discoveredModels,
                     scope = mockScope,
@@ -142,8 +130,8 @@ class TtsProvidersCoordinatorTest {
             assertTrue(resultModels.any { it.id == "fal-ai/minimax/speech-02-hd" })
 
             // ElevenLabs no longer passes isFalTtsModelCandidate, so selectedModelId is null
-            io.mockk.coVerify {
-                apiProviderUseCases.discoverApiModels(
+            assertEquals(
+                listOf(
                     com.browntowndev.enclave.domain.usecase.settings.ApiModelDiscoveryRequest(
                         provider = ApiProvider.FAL,
                         currentApiKey = "api-key",
@@ -151,8 +139,9 @@ class TtsProvidersCoordinatorTest {
                         baseUrl = null,
                         selectedModelId = null,
                     ),
-                )
-            }
+                ),
+                apiProviderUseCases.discoverApiModels.calls,
+            )
         }
 
     @Test
@@ -188,9 +177,7 @@ class TtsProvidersCoordinatorTest {
                     credentialAlias = "alias",
                 )
 
-            io.mockk.coEvery {
-                apiProviderUseCases.discoverApiModels(any())
-            } returns
+            apiProviderUseCases.discoverApiModels.result =
                 com.browntowndev.enclave.domain.usecase.settings.ApiModelDiscoveryResult(
                     models = discoveredModels,
                     scope = mockScope,
@@ -212,8 +199,8 @@ class TtsProvidersCoordinatorTest {
             assertEquals("gemini-1.5-flash-tts", resultModels.single().id)
 
             // Verify selectedModelId was passed because it is a valid Google TTS candidate
-            io.mockk.coVerify {
-                apiProviderUseCases.discoverApiModels(
+            assertEquals(
+                listOf(
                     com.browntowndev.enclave.domain.usecase.settings.ApiModelDiscoveryRequest(
                         provider = ApiProvider.GOOGLE,
                         currentApiKey = "api-key",
@@ -221,7 +208,8 @@ class TtsProvidersCoordinatorTest {
                         baseUrl = null,
                         selectedModelId = "gemini-1.5-flash-tts",
                     ),
-                )
-            }
+                ),
+                apiProviderUseCases.discoverApiModels.calls,
+            )
         }
 }

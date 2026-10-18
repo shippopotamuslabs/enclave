@@ -8,12 +8,12 @@ import javax.inject.Inject
 /**
  * Use case for saving a media provider configuration.
  */
-class SaveMediaProviderUseCase
+open class SaveMediaProviderUseCase
     @Inject
     constructor(
         private val mediaProviderRepository: MediaProviderRepositoryPort,
     ) {
-        suspend operator fun invoke(
+        open suspend operator fun invoke(
             asset: MediaProviderAsset,
             apiKey: String?,
         ): MediaProviderId = mediaProviderRepository.saveMediaProvider(asset, apiKey)

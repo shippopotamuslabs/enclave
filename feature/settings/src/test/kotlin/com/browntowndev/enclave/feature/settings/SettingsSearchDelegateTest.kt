@@ -4,20 +4,18 @@ import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.settings.SearchProvider
 import com.browntowndev.enclave.domain.port.repository.CloudSyncPort
 import com.browntowndev.enclave.domain.usecase.settings.SettingsPreferencesUseCases
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
 class SettingsSearchDelegateTest {
-    private val preferencesUseCases = mockk<SettingsPreferencesUseCases>(relaxed = true)
-    private val cloudSyncPort = mockk<CloudSyncPort>()
-    private val errorHandler = mockk<ViewModelErrorHandler>()
+    private val preferencesUseCases = FakeSettingsPreferencesUseCases()
+    private val cloudSyncPort = com.browntowndev.enclave.core.testing.FakeCloudSyncPort()
+    private val errorHandler = FakeViewModelErrorHandler()
     private val delegate =
         SettingsSearchDelegate(
             preferencesUseCases = preferencesUseCases,
@@ -27,16 +25,11 @@ class SettingsSearchDelegateTest {
 
     @BeforeEach
     fun setup() {
-        every {
-            errorHandler.coroutineExceptionHandler(any(), any(), any())
-        } returns CoroutineExceptionHandler { _, _ -> }
     }
 
     @Test
     fun `onSaveSearchSkillSettings flushes pending search tool settings to cloud`() =
         runTest {
-            every { cloudSyncPort.triggerSync() } returns Unit
-
             val transient = MutableStateFlow(SearchSkillTransientState(enabled = true, selectedProvider = SearchProvider.TAVILY))
             val editor =
                 SearchSkillEditorUiState(
@@ -58,6 +51,6 @@ class SettingsSearchDelegateTest {
 
             advanceUntilIdle()
 
-            verify(exactly = 1) { cloudSyncPort.triggerSync() }
+            assertEquals(1, cloudSyncPort.count("triggerSync"))
         }
 }

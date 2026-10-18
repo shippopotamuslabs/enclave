@@ -6,10 +6,10 @@ import com.browntowndev.enclave.domain.port.repository.InferenceTelemetryReposit
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 
-class ObserveUsageSpendSummaryUseCase
+open class ObserveUsageSpendSummaryUseCase
     @Inject
     constructor(
         private val repository: InferenceTelemetryRepositoryPort,
     ) {
-        operator fun invoke(period: UsagePeriod): Flow<UsageSpendSummary> = repository.observeUsageSpendSummary(period)
+        open operator fun invoke(period: UsagePeriod): Flow<UsageSpendSummary> = repository.observeUsageSpendSummary(period)
     }

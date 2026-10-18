@@ -28,7 +28,7 @@ import javax.inject.Inject
 private val CHAT_SLOT_TYPES = setOf(ModelType.MAIN, ModelType.THINKING)
 
 interface SetDefaultModelUseCase {
-    suspend operator fun invoke(
+    open suspend operator fun invoke(
         modelType: ModelType,
         localConfigId: LocalModelConfigurationId?,
         apiConfigId: ApiModelConfigurationId?,

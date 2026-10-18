@@ -3,10 +3,10 @@ package com.browntowndev.enclave.domain.usecase.settings
 import com.browntowndev.enclave.domain.port.repository.SettingsRepository
 import javax.inject.Inject
 
-class GetSettingsUseCase
+open class GetSettingsUseCase
     @Inject
     constructor(
         private val settingsRepository: SettingsRepository,
     ) {
-        operator fun invoke() = settingsRepository.settingsFlow
+        open operator fun invoke() = settingsRepository.settingsFlow
     }

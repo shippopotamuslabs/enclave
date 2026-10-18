@@ -12,7 +12,7 @@ import com.browntowndev.enclave.domain.usecase.modelconfig.DeleteLocalModelUseCa
 import com.browntowndev.enclave.domain.usecase.modelconfig.DeleteModelPackUseCase
 import javax.inject.Inject
 
-class ExecuteModelDeletionWithReassignmentUseCase
+open class ExecuteModelDeletionWithReassignmentUseCase
     @Inject
     constructor(
         private val deleteLocalModelUseCase: DeleteLocalModelUseCase,
@@ -22,7 +22,7 @@ class ExecuteModelDeletionWithReassignmentUseCase
         private val setDefaultModelUseCase: SetDefaultModelUseCase,
         private val deleteModelPackUseCase: DeleteModelPackUseCase,
     ) {
-        suspend operator fun invoke(
+        open suspend operator fun invoke(
             target: ModelDeletionTarget,
             modelTypesNeedingReassignment: List<ModelType>,
             replacementLocalConfigId: LocalModelConfigurationId?,
