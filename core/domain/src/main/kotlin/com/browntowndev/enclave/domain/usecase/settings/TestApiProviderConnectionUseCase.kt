@@ -4,12 +4,12 @@ import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.usecase.byok.FetchApiProviderModelsUseCase
 import javax.inject.Inject
 
-class TestApiProviderConnectionUseCase
+open class TestApiProviderConnectionUseCase
     @Inject
     constructor(
         private val fetchApiProviderModelsUseCase: FetchApiProviderModelsUseCase,
     ) {
-        suspend operator fun invoke(
+        open suspend operator fun invoke(
             provider: ApiProvider,
             currentApiKey: String,
             credentialAlias: String?,

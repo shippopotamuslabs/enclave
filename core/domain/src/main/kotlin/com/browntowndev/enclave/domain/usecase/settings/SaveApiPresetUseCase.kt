@@ -10,12 +10,12 @@ import com.browntowndev.enclave.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.enclave.domain.usecase.byok.SaveApiModelConfigurationUseCase
 import javax.inject.Inject
 
-class SaveApiPresetUseCase
+open class SaveApiPresetUseCase
     @Inject
     constructor(
         private val saveApiModelConfigurationUseCase: SaveApiModelConfigurationUseCase,
     ) {
-        suspend operator fun invoke(
+        open suspend operator fun invoke(
             provider: ApiProvider,
             parentCredentialsId: ApiCredentialsId,
             defaultReasoningEffort: ApiReasoningEffort?,

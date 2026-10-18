@@ -10,11 +10,6 @@ import com.browntowndev.enclave.domain.usecase.settings.DeleteAllMemoriesUseCase
 import com.browntowndev.enclave.domain.usecase.settings.SettingsDataControlsUseCases
 import com.browntowndev.enclave.domain.usecase.settings.SettingsPreferencesUseCases
 import com.browntowndev.enclave.domain.usecase.settings.UpdateAutomaticErrorTrackingEnabledUseCase
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -30,38 +25,32 @@ import org.junit.jupiter.api.extension.ExtendWith
 @OptIn(ExperimentalCoroutinesApi::class)
 @ExtendWith(MainDispatcherRule::class)
 class SettingsDataControlsDelegateTest {
-    private val deleteAllChats = mockk<DeleteAllChatsUseCase>()
-    private val deleteAllMedia = mockk<DeleteAllMediaUseCase>()
-    private val deleteAllMemories = mockk<DeleteAllMemoriesUseCase>()
-    private val deleteAllArtifacts = mockk<DeleteAllArtifactsUseCase>()
-    private val deleteAccount = mockk<DeleteAccountUseCase>()
+    private val deleteAllChats = FakeDeleteAllChatsUseCase()
+    private val deleteAllMedia = FakeDeleteAllMediaUseCase()
+    private val deleteAllMemories = FakeDeleteAllMemoriesUseCase()
+    private val deleteAllArtifacts = FakeDeleteAllArtifactsUseCase()
+    private val deleteAccount = FakeDeleteAccountUseCase()
     private val useCases =
-        mockk<SettingsDataControlsUseCases> {
-            every { deleteAllChats } returns this@SettingsDataControlsDelegateTest.deleteAllChats
-            every { deleteAllMedia } returns this@SettingsDataControlsDelegateTest.deleteAllMedia
-            every { deleteAllMemories } returns this@SettingsDataControlsDelegateTest.deleteAllMemories
-            every { deleteAllArtifacts } returns this@SettingsDataControlsDelegateTest.deleteAllArtifacts
-            every { deleteAccount } returns this@SettingsDataControlsDelegateTest.deleteAccount
-        }
+        FakeSettingsDataControlsUseCases(
+            deleteAllChats = deleteAllChats,
+            deleteAllMedia = deleteAllMedia,
+            deleteAllMemories = deleteAllMemories,
+            deleteAllArtifacts = deleteAllArtifacts,
+            deleteAccount = deleteAccount,
+        )
 
-    private val errorHandler = mockk<ViewModelErrorHandler>(relaxed = true)
-    private val updateAutomaticErrorTrackingEnabledUseCase =
-        mockk<UpdateAutomaticErrorTrackingEnabledUseCase>(relaxed = true)
+    private val errorHandler = FakeViewModelErrorHandler()
+    private val updateAutomaticErrorTrackingEnabledUseCase = FakeUpdateAutomaticErrorTrackingEnabledUseCase()
     private val preferencesUseCases =
-        mockk<SettingsPreferencesUseCases> {
-            every { updateAutomaticErrorTrackingEnabled } returns updateAutomaticErrorTrackingEnabledUseCase
-        }
+        FakeSettingsPreferencesUseCases(
+            updateAutomaticErrorTrackingEnabled = updateAutomaticErrorTrackingEnabledUseCase,
+        )
 
     private lateinit var delegate: SettingsDataControlsDelegate
 
     @BeforeEach
     fun setup() {
         delegate = SettingsDataControlsDelegate(useCases, preferencesUseCases, errorHandler)
-        coEvery { deleteAllChats.invoke() } returns Unit
-        coEvery { deleteAllMedia.invoke() } returns Unit
-        coEvery { deleteAllMemories.invoke() } returns Unit
-        coEvery { deleteAllArtifacts.invoke() } returns Unit
-        coEvery { deleteAccount.invoke() } returns Result.success(Unit)
     }
 
     @Test
@@ -126,66 +115,56 @@ class SettingsDataControlsDelegateTest {
             delegate.onConfirmDeleteAllChats(this, "tag", dc)
             advanceUntilIdle()
             assertEquals(DataControlsTransientState(), dc.value)
-            coVerify(exactly = 1) { deleteAllChats.invoke() }
+            assertEquals(1, deleteAllChats.callCount)
         }
 
     @Test
     fun `confirm delete chats sets error on failure`() =
         runTest {
-            coEvery { deleteAllChats.invoke() } throws RuntimeException("db error")
+            deleteAllChats.failure = RuntimeException("db error")
             val dc = MutableStateFlow(DataControlsTransientState())
             delegate.onConfirmDeleteAllChats(this, "tag", dc)
             advanceUntilIdle()
             assertEquals("db error", dc.value.deleteError)
             assertNull(dc.value.pendingAction)
             assertFalse(dc.value.isDeleting)
-            verify(exactly = 1) {
-                errorHandler.handleError(
-                    "tag",
-                    "Failed to delete all chats",
-                    match { it is RuntimeException && it.message == "db error" },
-                    "Couldn't delete chats",
-                )
-            }
+            assertEquals(listOf("tag"), errorHandler.handledTags)
+            assertEquals(listOf("Failed to delete all chats"), errorHandler.handledMessages)
+            assertEquals(listOf("Couldn't delete chats"), errorHandler.handledUserMessages)
+            assertTrue(errorHandler.handledThrowables.single() is RuntimeException)
+            assertEquals("db error", errorHandler.handledThrowables.single().message)
         }
 
     @Test
     fun `confirm delete account handles Result failure`() =
         runTest {
-            coEvery { deleteAccount.invoke() } returns Result.failure(Exception("purge failed"))
+            deleteAccount.result = Result.failure(Exception("purge failed"))
             val dc = MutableStateFlow(DataControlsTransientState())
             delegate.onConfirmDeleteAccount(this, "tag", dc)
             advanceUntilIdle()
             assertEquals("purge failed", dc.value.deleteError)
             assertNull(dc.value.pendingAction)
             assertFalse(dc.value.isDeleting)
-            verify(exactly = 1) {
-                errorHandler.handleError(
-                    "tag",
-                    "Failed to delete account",
-                    match { it is Exception && it.message == "purge failed" },
-                    "Couldn't delete account",
-                )
-            }
+            assertEquals(listOf("tag"), errorHandler.handledTags)
+            assertEquals(listOf("Failed to delete account"), errorHandler.handledMessages)
+            assertEquals(listOf("Couldn't delete account"), errorHandler.handledUserMessages)
+            assertEquals("purge failed", errorHandler.handledThrowables.single().message)
         }
 
     @Test
     fun `confirm delete account clears deleting state when invoke throws`() =
         runTest {
-            coEvery { deleteAccount.invoke() } throws RuntimeException("sign-out failed")
+            deleteAccount.failure = RuntimeException("sign-out failed")
             val dc = MutableStateFlow(DataControlsTransientState())
             delegate.onConfirmDeleteAccount(this, "tag", dc)
             advanceUntilIdle()
             assertEquals("sign-out failed", dc.value.deleteError)
             assertNull(dc.value.pendingAction)
             assertFalse(dc.value.isDeleting)
-            verify(exactly = 1) {
-                errorHandler.handleError(
-                    "tag",
-                    "Failed to delete account",
-                    match { it is RuntimeException && it.message == "sign-out failed" },
-                    "Couldn't delete account",
-                )
-            }
+            assertEquals(listOf("tag"), errorHandler.handledTags)
+            assertEquals(listOf("Failed to delete account"), errorHandler.handledMessages)
+            assertEquals(listOf("Couldn't delete account"), errorHandler.handledUserMessages)
+            assertTrue(errorHandler.handledThrowables.single() is RuntimeException)
+            assertEquals("sign-out failed", errorHandler.handledThrowables.single().message)
         }
 }

@@ -4,12 +4,12 @@ import com.browntowndev.enclave.domain.port.repository.CleanupRepository
 import javax.inject.Inject
 
 /** Deletes persisted artifacts/documents via [cleanupRepository]. */
-class DeleteAllArtifactsUseCase
+open class DeleteAllArtifactsUseCase
     @Inject
     constructor(
         private val cleanupRepository: CleanupRepository,
     ) {
-        suspend operator fun invoke() {
+        open suspend operator fun invoke() {
             cleanupRepository.deleteAllArtifacts()
         }
     }

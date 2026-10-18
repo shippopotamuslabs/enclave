@@ -53,9 +53,6 @@ import com.browntowndev.enclave.domain.usecase.settings.SettingsMemoriesUseCases
 import com.browntowndev.enclave.domain.usecase.telemetry.ObserveUsageSpendSummaryUseCase
 import org.junit.jupiter.api.DisplayName
 import com.browntowndev.enclave.feature.settings.usage.UsageSpendUiMapper
-import io.mockk.coEvery
-import io.mockk.every
-import io.mockk.mockk
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -74,105 +71,88 @@ import java.math.BigDecimal
 @ExtendWith(MainDispatcherRule::class)
 @OptIn(ExperimentalCoroutinesApi::class)
 class SettingsViewModelTest {
-    private val getSettingsUseCase = mockk<GetSettingsUseCase>()
-    private val updateThemeUseCase = mockk<UpdateThemeUseCase>(relaxed = true)
-    private val updateHapticResponseUseCase = mockk<UpdateHapticResponseUseCase>(relaxed = true)
-    private val updateCustomizationEnabledUseCase = mockk<UpdateCustomizationEnabledUseCase>(relaxed = true)
-    private val updateSelectedPromptOptionUseCase = mockk<UpdateSelectedPromptOptionUseCase>(relaxed = true)
-    private val updateCustomPromptTextUseCase = mockk<UpdateCustomPromptTextUseCase>(relaxed = true)
-    private val updateAllowMemoriesUseCase = mockk<UpdateAllowMemoriesUseCase>(relaxed = true)
-    private val updateSearchEnabledUseCase = mockk<UpdateSearchEnabledUseCase>(relaxed = true)
-    private val updateXSearchEnabledUseCase = mockk<UpdateXSearchEnabledUseCase>(relaxed = true)
-    private val saveTavilyApiKeyUseCase = mockk<SaveTavilyApiKeyUseCase>(relaxed = true)
-    private val clearTavilyApiKeyUseCase = mockk<ClearTavilyApiKeyUseCase>(relaxed = true)
-    private val saveXApiKeyUseCase = mockk<SaveXApiKeyUseCase>(relaxed = true)
-    private val clearXApiKeyUseCase = mockk<ClearXApiKeyUseCase>(relaxed = true)
-    private val updateBackgroundInferenceEnabledUseCase = mockk<UpdateBackgroundInferenceEnabledUseCase>(relaxed = true)
-    private val updateAutomaticErrorTrackingEnabledUseCase = mockk<UpdateAutomaticErrorTrackingEnabledUseCase>(relaxed = true)
-    private val getLocalModelAssetsUseCase = mockk<GetLocalModelAssetsUseCase>()
-    private val getRestorableLocalModelsUseCase = mockk<GetRestorableLocalModelsUseCase>(relaxed = true)
-    private val saveLocalModelPresetUseCase = mockk<SaveLocalModelPresetUseCase>(relaxed = true)
-    private val reDownloadModelUseCase = mockk<ReDownloadModelUseCase>(relaxed = true)
-    private val getModelPacksForSettingsUseCase = mockk<GetModelPacksForSettingsUseCase>(relaxed = true)
-    private val getApiModelAssetsUseCase = mockk<GetApiModelAssetsUseCase>()
-    private val saveApiProviderDraftUseCase = mockk<SaveApiProviderDraftUseCase>(relaxed = true)
-    private val saveApiPresetUseCase = mockk<SaveApiPresetUseCase>(relaxed = true)
-    private val discoverApiModelsUseCase = mockk<DiscoverApiModelsUseCase>(relaxed = true)
-    private val applyApiModelMetadataDefaultsUseCase = mockk<ApplyApiModelMetadataDefaultsUseCase>(relaxed = true)
-    private val getDefaultModelsUseCase = mockk<GetDefaultModelsUseCase>()
-    private val setDefaultModelUseCase = mockk<SetDefaultModelUseCase>(relaxed = true)
-    private val resolveAssignedModelSelectionUseCase = mockk<ResolveAssignedModelSelectionUseCase>(relaxed = true)
-    private val clearDefaultModelUseCase = mockk<ClearDefaultModelUseCase>(relaxed = true)
-    private val prepareModelDeletionUseCase = mockk<PrepareModelDeletionUseCase>(relaxed = true)
-    private val executeModelDeletionWithReassignmentUseCase = mockk<ExecuteModelDeletionWithReassignmentUseCase>(relaxed = true)
+    private val getSettingsUseCase = FakeGetSettingsUseCase()
+    private val updateThemeUseCase = FakeUpdateThemeUseCase()
+    private val updateHapticResponseUseCase = FakeUpdateHapticResponseUseCase()
+    private val updateCustomizationEnabledUseCase = FakeUpdateCustomizationEnabledUseCase()
+    private val updateSelectedPromptOptionUseCase = FakeUpdateSelectedPromptOptionUseCase()
+    private val updateCustomPromptTextUseCase = FakeUpdateCustomPromptTextUseCase()
+    private val updateAllowMemoriesUseCase = FakeUpdateAllowMemoriesUseCase()
+    private val updateSearchEnabledUseCase = FakeUpdateSearchEnabledUseCase()
+    private val updateXSearchEnabledUseCase = FakeUpdateXSearchEnabledUseCase()
+    private val saveTavilyApiKeyUseCase = FakeSaveTavilyApiKeyUseCase()
+    private val clearTavilyApiKeyUseCase = FakeClearTavilyApiKeyUseCase()
+    private val saveXApiKeyUseCase = FakeSaveXApiKeyUseCase()
+    private val clearXApiKeyUseCase = FakeClearXApiKeyUseCase()
+    private val updateBackgroundInferenceEnabledUseCase = FakeUpdateBackgroundInferenceEnabledUseCase()
+    private val updateAutomaticErrorTrackingEnabledUseCase = FakeUpdateAutomaticErrorTrackingEnabledUseCase()
+    private val getLocalModelAssetsUseCase = FakeGetLocalModelAssetsUseCase()
+    private val getRestorableLocalModelsUseCase = FakeGetRestorableLocalModelsUseCase()
+    private val saveLocalModelPresetUseCase = FakeSaveLocalModelPresetUseCase()
+    private val reDownloadModelUseCase = FakeReDownloadModelUseCase()
+    private val getModelPacksForSettingsUseCase = FakeGetModelPacksForSettingsUseCase()
+    private val getApiModelAssetsUseCase = FakeGetApiModelAssetsUseCase()
+    private val saveApiProviderDraftUseCase = FakeSaveApiProviderDraftUseCase()
+    private val saveApiPresetUseCase = FakeSaveApiPresetUseCase()
+    private val discoverApiModelsUseCase = FakeDiscoverApiModelsUseCase()
+    private val applyApiModelMetadataDefaultsUseCase = ApplyApiModelMetadataDefaultsUseCase()
+    private val getDefaultModelsUseCase = FakeGetDefaultModelsUseCase()
+    private val setDefaultModelUseCase = FakeSetDefaultModelUseCase()
+    private val resolveAssignedModelSelectionUseCase = FakeResolveAssignedModelSelectionUseCase()
+    private val clearDefaultModelUseCase = FakeClearDefaultModelUseCase()
+    private val prepareModelDeletionUseCase = FakePrepareModelDeletionUseCase()
+    private val executeModelDeletionWithReassignmentUseCase = FakeExecuteModelDeletionWithReassignmentUseCase()
 
-    private val getTtsProvidersUseCase = mockk<GetTtsProvidersUseCase>()
-    private val saveTtsProviderUseCase = mockk<SaveTtsProviderUseCase>(relaxed = true)
-    private val deleteTtsProviderUseCase = mockk<DeleteTtsProviderUseCase>(relaxed = true)
+    private val getTtsProvidersUseCase = FakeGetTtsProvidersUseCase()
+    private val saveTtsProviderUseCase = FakeSaveTtsProviderUseCase()
+    private val deleteTtsProviderUseCase = FakeDeleteTtsProviderUseCase()
 
-    private val getMediaProvidersUseCase = mockk<GetMediaProvidersUseCase>()
-    private val saveMediaProviderUseCase = mockk<SaveMediaProviderUseCase>(relaxed = true)
-    private val deleteMediaProviderUseCase = mockk<DeleteMediaProviderUseCase>(relaxed = true)
+    private val getMediaProvidersUseCase = FakeGetMediaProvidersUseCase()
+    private val saveMediaProviderUseCase = FakeSaveMediaProviderUseCase()
+    private val deleteMediaProviderUseCase = FakeDeleteMediaProviderUseCase()
 
-    private val loginWithGoogleUseCase = mockk<LoginWithGoogleUseCase>(relaxed = true)
-    private val logoutUseCase = mockk<LogoutUseCase>(relaxed = true)
-    private val getAuthStateUseCase = mockk<GetAuthStateUseCase>(relaxed = true)
+    private val loginWithGoogleUseCase = FakeLoginWithGoogleUseCase()
+    private val logoutUseCase = FakeLogoutUseCase()
+    private val getAuthStateUseCase = FakeGetAuthStateUseCase()
 
-    private val memoriesRepository = mockk<MemoriesRepository>()
+    private val memoriesRepository = com.browntowndev.enclave.core.testing.FakeMemoriesRepository()
 
     private val localModelAssetUiMapper = LocalModelAssetUiMapper()
     private val apiModelAssetUiMapper = ApiModelAssetUiMapper()
     private val ttsProviderAssetUiMapper = TtsProviderAssetUiMapper()
     private val mediaProviderAssetUiMapper = MediaProviderAssetUiMapper()
     private val reassignmentOptionUiMapper = ReassignmentOptionUiMapper()
-    private val errorHandler = mockk<ViewModelErrorHandler>()
+    private val errorHandler = FakeViewModelErrorHandler()
 
     private val localModelAssetsStateFlow = MutableStateFlow<List<LocalModelAsset>>(emptyList())
 
-    // ENC-27: recorded invocations replace MockK coVerify.
-    private data class SetDefaultModelArgs(
-        val modelType: ModelType,
-        val localConfigId: com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId?,
-        val apiConfigId: com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId?,
-        val ttsProviderId: com.browntowndev.enclave.domain.model.config.TtsProviderId?,
-        val mediaProviderId: com.browntowndev.enclave.domain.model.config.MediaProviderId?,
-        val liveVoiceProviderId: LiveVoiceProviderId?,
-    )
-
-    private data class ExecuteDeletionArgs(
-        val target: ModelDeletionTarget,
-        val modelTypesNeedingReassignment: List<ModelType>,
-        val replacementLocalConfigId: com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId?,
-        val replacementApiConfigId: com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId?,
-        val replacementMediaProviderId: com.browntowndev.enclave.domain.model.config.MediaProviderId?,
-    )
-
-    private val discoverModelsCalls = mutableListOf<ApiModelDiscoveryRequest>()
-    private val saveTtsProviderCalls = mutableListOf<TtsProviderDraft>()
-    private val setDefaultModelCalls = mutableListOf<SetDefaultModelArgs>()
-    private val clearDefaultModelCalls = mutableListOf<ModelType>()
-    private val saveApiProviderDraftCalls = mutableListOf<ApiProviderDraft>()
-    private val executeDeletionCalls = mutableListOf<ExecuteDeletionArgs>()
-    private val saveLocalModelPresetCalls = mutableListOf<LocalModelId>()
-    private val insertMemoryCalls = mutableListOf<Pair<MemoryCategory, String>>()
-    private val updateMemoryCalls = mutableListOf<Triple<String, String, MemoryCategory>>()
-    private val deleteMemoryCalls = mutableListOf<String>()
-    private val updateThemeCalls = mutableListOf<AppTheme>()
-    private val updateHapticCalls = mutableListOf<Boolean>()
-    private val updateBackgroundInferenceCalls = mutableListOf<Boolean>()
-    private val updateXSearchEnabledCalls = mutableListOf<Boolean>()
-    private val saveXApiKeyCalls = mutableListOf<String>()
-    private var loginWithGoogleCallCount = 0
-    private var logoutCallCount = 0
-    private var clearXApiKeyCallCount = 0
+    // ENC-27: recorded invocations replace MockK coVerify; the fakes record them (ENC-28).
+    private val discoverModelsCalls get() = discoverApiModelsUseCase.calls
+    private val saveTtsProviderCalls get() = saveTtsProviderUseCase.calls
+    private val setDefaultModelCalls get() = setDefaultModelUseCase.calls
+    private val clearDefaultModelCalls get() = clearDefaultModelUseCase.calls
+    private val saveApiProviderDraftCalls get() = saveApiProviderDraftUseCase.calls
+    private val executeDeletionCalls get() = executeModelDeletionWithReassignmentUseCase.calls
+    private val saveLocalModelPresetCalls get() = saveLocalModelPresetUseCase.calls.map { it.first }
+    private val insertMemoryCalls get() = memoriesRepository.insertCalls
+    private val updateMemoryCalls get() = memoriesRepository.updateCalls
+    private val deleteMemoryCalls get() = memoriesRepository.deleteCalls
+    private val updateThemeCalls get() = updateThemeUseCase.calls
+    private val updateHapticCalls get() = updateHapticResponseUseCase.calls
+    private val updateBackgroundInferenceCalls get() = updateBackgroundInferenceEnabledUseCase.calls
+    private val updateXSearchEnabledCalls get() = updateXSearchEnabledUseCase.calls
+    private val saveXApiKeyCalls get() = saveXApiKeyUseCase.calls
+    private val loginWithGoogleCallCount get() = loginWithGoogleUseCase.callCount
+    private val logoutCallCount get() = logoutUseCase.callCount
+    private val clearXApiKeyCallCount get() = clearXApiKeyUseCase.callCount
 
     private lateinit var viewModel: SettingsViewModel
 
     @BeforeEach
     fun setup() {
         val settingsFlow = MutableStateFlow(SettingsData())
-        every { getSettingsUseCase() } returns settingsFlow
-        every { getLocalModelAssetsUseCase() } returns localModelAssetsStateFlow
+        getSettingsUseCase.flow = settingsFlow
+        getLocalModelAssetsUseCase.flow = localModelAssetsStateFlow
         val apiAssets =
             MockSettingsData.apiModels.map { uiAsset ->
                 com.browntowndev.enclave.domain.model.config.ApiModelAsset(
@@ -196,67 +176,16 @@ class SettingsViewModelTest {
                         },
                 )
             }
-        every { getApiModelAssetsUseCase() } returns MutableStateFlow(apiAssets)
-        every { getDefaultModelsUseCase() } returns MutableStateFlow(emptyList())
-        every { getTtsProvidersUseCase() } returns MutableStateFlow(emptyList())
-        every { getMediaProvidersUseCase() } returns MutableStateFlow(emptyList())
-        every { memoriesRepository.getAllMemoriesFlow() } returns MutableStateFlow(emptyList())
-        coEvery { updateThemeUseCase(any()) } coAnswers {
-            updateThemeCalls += firstArg<AppTheme>()
-            Unit
-        }
-        coEvery { updateHapticResponseUseCase(any()) } coAnswers {
-            updateHapticCalls += firstArg<Boolean>()
-            Unit
-        }
-        coEvery { updateBackgroundInferenceEnabledUseCase(any()) } coAnswers {
-            updateBackgroundInferenceCalls += firstArg<Boolean>()
-            Unit
-        }
-        coEvery { updateXSearchEnabledUseCase(any()) } coAnswers {
-            updateXSearchEnabledCalls += firstArg<Boolean>()
-            Unit
-        }
-        coEvery { saveXApiKeyUseCase(any()) } coAnswers {
-            saveXApiKeyCalls += firstArg<String>()
-            Unit
-        }
-        coEvery { clearXApiKeyUseCase() } coAnswers {
-            clearXApiKeyCallCount++
-            Unit
-        }
-        coEvery { setDefaultModelUseCase(any(), any(), any(), any(), any(), any()) } coAnswers {
-            setDefaultModelCalls +=
-                SetDefaultModelArgs(
-                    modelType = arg<ModelType>(0),
-                    localConfigId = arg<String?>(1)?.let { com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId(it) },
-                    apiConfigId = arg<String?>(2)?.let { com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId(it) },
-                    ttsProviderId = arg<String?>(3)?.let { com.browntowndev.enclave.domain.model.config.TtsProviderId(it) },
-                    mediaProviderId = arg<String?>(4)?.let { com.browntowndev.enclave.domain.model.config.MediaProviderId(it) },
-                    liveVoiceProviderId = arg<String?>(5)?.let { LiveVoiceProviderId(it) },
-                )
-            Unit
-        }
-        coEvery { clearDefaultModelUseCase(any()) } coAnswers {
-            clearDefaultModelCalls += firstArg<ModelType>()
-            Unit
-        }
-        every { getAuthStateUseCase() } returns MutableStateFlow(com.browntowndev.enclave.domain.port.auth.AuthState.Loading)
-        every { errorHandler.coroutineExceptionHandler(any(), any(), any()) } returns CoroutineExceptionHandler { _, _ -> }
+        getApiModelAssetsUseCase.flow = MutableStateFlow(apiAssets)
 
-        val updateSearchProviderUseCase = mockk<UpdateSearchProviderUseCase>()
-        val saveExaApiKeyUseCase = mockk<SaveExaApiKeyUseCase>()
-        val clearExaApiKeyUseCase = mockk<ClearExaApiKeyUseCase>()
-        val updateShowSearchProviderSwitchAlertUseCase = mockk<UpdateShowSearchProviderSwitchAlertUseCase>()
+        val updateSearchProviderUseCase = FakeUpdateSearchProviderUseCase()
+        val saveExaApiKeyUseCase = FakeSaveExaApiKeyUseCase()
+        val clearExaApiKeyUseCase = FakeClearExaApiKeyUseCase()
+        val updateShowSearchProviderSwitchAlertUseCase = FakeUpdateShowSearchProviderSwitchAlertUseCase()
 
-        val observeActiveUtilityModelsUseCase =
-            mockk<com.browntowndev.enclave.domain.usecase.modelconfig.ObserveActiveUtilityModelsUseCase>()
-        every { observeActiveUtilityModelsUseCase() } returns
-            kotlinx.coroutines.flow.flowOf(
-                emptyList<com.browntowndev.enclave.domain.model.config.UtilityModelMetadata>(),
-            )
+        val observeActiveUtilityModelsUseCase = FakeObserveActiveUtilityModelsUseCase()
 
-        val dataControlsUseCases = mockk<SettingsDataControlsUseCases>(relaxed = true)
+        val dataControlsUseCases = FakeSettingsDataControlsUseCases()
 
         val settingsUseCases =
             SettingsUseCasesImpl(
@@ -290,8 +219,8 @@ class SettingsViewModelTest {
                         reDownloadModel = reDownloadModelUseCase,
                         getModelPacksForSettings = getModelPacksForSettingsUseCase,
                         observeActiveUtilityModels = observeActiveUtilityModelsUseCase,
-                        reDownloadModelPack = mockk(relaxed = true),
-                        deleteModelPack = mockk(relaxed = true),
+                        reDownloadModelPack = FakeReDownloadModelPackUseCase(),
+                        deleteModelPack = FakeDeleteModelPackUseCase(),
                     ),
                 apiProviders =
                     SettingsApiProviderUseCasesImpl(
@@ -300,8 +229,8 @@ class SettingsViewModelTest {
                         saveApiPreset = saveApiPresetUseCase,
                         discoverApiModels = discoverApiModelsUseCase,
                         applyApiModelMetadataDefaults = applyApiModelMetadataDefaultsUseCase,
-                        testApiProviderConnection = mockk(relaxed = true),
-                        fetchOpenRouterModelEndpoints = mockk(relaxed = true),
+                        testApiProviderConnection = FakeTestApiProviderConnectionUseCase(),
+                        fetchOpenRouterModelEndpoints = FakeFetchOpenRouterModelEndpointsUseCase(),
                     ),
                 assignments =
                     SettingsAssignmentUseCasesImpl(
@@ -337,22 +266,16 @@ class SettingsViewModelTest {
                 dataControls = dataControlsUseCases,
             )
 
-        val embeddingProgressPort = mockk<com.browntowndev.enclave.domain.port.repository.EmbeddingProgressPort>()
-        every { embeddingProgressPort.isReindexing } returns MutableStateFlow(false)
-        every { embeddingProgressPort.progress } returns MutableStateFlow(0f)
+        val embeddingProgressPort = com.browntowndev.enclave.core.testing.FakeEmbeddingProgressPort()
 
 
-        val detectVaultReconciliationStateUseCase =
-            mockk<com.browntowndev.enclave.domain.usecase.security.DetectVaultReconciliationStateUseCase>(relaxed = true)
-        val adoptCloudVaultUseCase =
-            mockk<com.browntowndev.enclave.domain.usecase.security.AdoptCloudVaultUseCase>(relaxed = true)
-        val bootstrapCloudVaultFromLocalUseCase =
-            mockk<com.browntowndev.enclave.domain.usecase.security.BootstrapCloudVaultFromLocalUseCase>(relaxed = true)
-        val createVaultUseCase = mockk<CreateVaultUseCase>(relaxed = true)
-        val cryptoManager = mockk<CryptoManagerPort>(relaxed = true)
-        val vaultMetadataPort = mockk<VaultMetadataPort>(relaxed = true)
-        val cloudSyncPort =
-            mockk<com.browntowndev.enclave.domain.port.repository.CloudSyncPort>(relaxed = true)
+        val detectVaultReconciliationStateUseCase = FakeDetectVaultReconciliationStateUseCase()
+        val adoptCloudVaultUseCase = FakeAdoptCloudVaultUseCase()
+        val bootstrapCloudVaultFromLocalUseCase = FakeBootstrapCloudVaultFromLocalUseCase()
+        val createVaultUseCase = FakeCreateVaultUseCase()
+        val cryptoManager = com.browntowndev.enclave.core.testing.FakeCryptoManagerPort()
+        val vaultMetadataPort = com.browntowndev.enclave.core.testing.FakeVaultMetadataPort()
+        val cloudSyncPort = com.browntowndev.enclave.core.testing.FakeCloudSyncPort()
         val generalDelegate =
             SettingsGeneralDelegate(
                 settingsUseCases.preferences,
@@ -362,8 +285,8 @@ class SettingsViewModelTest {
                 adoptCloudVaultUseCase,
                 bootstrapCloudVaultFromLocalUseCase,
                 createVaultUseCase,
-                mockk<com.browntowndev.enclave.domain.usecase.security.UnlockVaultFromStoredMetadataUseCase>(relaxed = true),
-                mockk<com.browntowndev.enclave.domain.usecase.security.StartCloudSyncListeningUseCase>(relaxed = true),
+                FakeUnlockVaultFromStoredMetadataUseCase(),
+                FakeStartCloudSyncListeningUseCase(),
                 cryptoManager,
                 vaultMetadataPort,
                 cloudSyncPort,
@@ -386,7 +309,7 @@ class SettingsViewModelTest {
         val searchDelegate =
             SettingsSearchDelegate(
                 settingsUseCases.preferences,
-                mockk<com.browntowndev.enclave.domain.port.repository.CloudSyncPort>(relaxed = true),
+                com.browntowndev.enclave.core.testing.FakeCloudSyncPort(),
                 errorHandler,
             )
         val assignmentsDelegate = SettingsAssignmentsDelegate(settingsUseCases.assignments, errorHandler)
@@ -424,10 +347,7 @@ class SettingsViewModelTest {
     @Test
     fun `onLoginWithGoogle calls loginWithGoogle`() =
         runTest {
-            coEvery { loginWithGoogleUseCase() } coAnswers {
-                loginWithGoogleCallCount++
-                Result.success(UserProfile("uid", "Name", "email", null))
-            }
+            loginWithGoogleUseCase.result = Result.success(UserProfile("uid", "Name", "email", null))
 
             viewModel.onLoginWithGoogle()
             advanceUntilIdle()
@@ -439,10 +359,7 @@ class SettingsViewModelTest {
     @Test
     fun `onLogout signs out and clears data`() =
         runTest {
-            coEvery { logoutUseCase() } coAnswers {
-                logoutCallCount++
-                Result.success(Unit)
-            }
+            logoutUseCase.result = Result.success(Unit)
 
             viewModel.onLogout()
             advanceUntilIdle()
@@ -471,8 +388,7 @@ class SettingsViewModelTest {
     @Test
     fun `onFetchTtsModels discovers models from TTS draft`() =
         runTest {
-            coEvery { discoverApiModelsUseCase(any()) } coAnswers {
-                discoverModelsCalls += firstArg<ApiModelDiscoveryRequest>()
+            discoverApiModelsUseCase.result =
                 ApiModelDiscoveryResult(
                     models =
                         listOf(
@@ -487,7 +403,6 @@ class SettingsViewModelTest {
                             credentialAlias = null,
                         ),
                 )
-            }
 
             viewModel.onStartCreateTtsProviderAsset()
             viewModel.onTtsAssetFieldChange(
@@ -520,10 +435,7 @@ class SettingsViewModelTest {
             val ttsId =
                 com.browntowndev.enclave.domain.model.config
                     .TtsProviderId("new-tts-id")
-            coEvery { saveTtsProviderUseCase(any()) } coAnswers {
-                saveTtsProviderCalls += firstArg<TtsProviderDraft>()
-                Result.success(ttsId)
-            }
+            saveTtsProviderUseCase.result = Result.success(ttsId)
 
             viewModel.onStartCreateTtsProviderAsset()
             viewModel.onTtsAssetFieldChange(
@@ -541,7 +453,7 @@ class SettingsViewModelTest {
             assertEquals(1, saveTtsProviderCalls.size)
             assertEquals("Google TTS", saveTtsProviderCalls.single().displayName)
             assertEquals(
-                listOf(SetDefaultModelArgs(ModelType.TTS, null, null, ttsId, null, null)),
+                listOf(FakeSetDefaultModelUseCase.Args(ModelType.TTS, null, null, ttsId, null, null)),
                 setDefaultModelCalls,
             )
         }
@@ -565,7 +477,7 @@ class SettingsViewModelTest {
             advanceUntilIdle()
 
             assertEquals(
-                listOf(SetDefaultModelArgs(ModelType.TTS, null, null, ttsId, null, null)),
+                listOf(FakeSetDefaultModelUseCase.Args(ModelType.TTS, null, null, ttsId, null, null)),
                 setDefaultModelCalls,
             )
         }
@@ -635,10 +547,6 @@ class SettingsViewModelTest {
     fun `onSaveMemory inserts new memory when id is empty`() =
         runTest {
             val draft = StoredMemory(id = "", text = "New memory", category = MemoryCategory.PREFERENCES)
-            coEvery { memoriesRepository.insertMemory(draft.category, draft.text) } coAnswers {
-                insertMemoryCalls += draft.category to draft.text
-                mockk()
-            }
 
             viewModel.onAddMemory()
             viewModel.onUpdateMemoryDraft(draft.text, draft.category)
@@ -654,10 +562,6 @@ class SettingsViewModelTest {
             val existingMemory = StoredMemory(id = "mem-1", text = "Old memory", category = MemoryCategory.PREFERENCES)
             val updatedDraft = existingMemory.copy(text = "Updated memory")
 
-            coEvery { memoriesRepository.updateMemory(updatedDraft.id, updatedDraft.text, updatedDraft.category) } coAnswers {
-                updateMemoryCalls += Triple(updatedDraft.id, updatedDraft.text, updatedDraft.category)
-                Unit
-            }
 
             viewModel.onEditMemory(existingMemory)
             viewModel.onUpdateMemoryDraft(updatedDraft.text, updatedDraft.category)
@@ -694,10 +598,6 @@ class SettingsViewModelTest {
     @Test
     fun `onDeleteMemory calls repository`() =
         runTest {
-            coEvery { memoriesRepository.deleteMemory("mem-1") } coAnswers {
-                deleteMemoryCalls += firstArg<String>()
-                Unit
-            }
             viewModel.onDeleteMemory("mem-1")
             advanceUntilIdle()
             assertEquals(listOf("mem-1"), deleteMemoryCalls)
@@ -708,13 +608,6 @@ class SettingsViewModelTest {
         runTest {
             val asset = MockSettingsData.localModels.first()
             val config = LocalModelConfigUi(displayName = "Config 1")
-            coEvery { saveLocalModelPresetUseCase(any(), any()) } coAnswers {
-                saveLocalModelPresetCalls += LocalModelId(firstArg<String>())
-                Result.success(
-                    com.browntowndev.enclave.domain.model.config
-                        .LocalModelConfigurationId("1"),
-                )
-            }
 
             viewModel.onSelectLocalModelAsset(asset)
             viewModel.onSelectLocalModelConfig(config)
@@ -798,13 +691,6 @@ class SettingsViewModelTest {
                     displayName = "My Preset",
                     contextWindow = "4096",
                 )
-            coEvery { saveLocalModelPresetUseCase(any(), any()) } coAnswers {
-                saveLocalModelPresetCalls += LocalModelId(firstArg<String>())
-                Result.success(
-                    com.browntowndev.enclave.domain.model.config
-                        .LocalModelConfigurationId("new-id"),
-                )
-            }
 
             viewModel.onSelectLocalModelAsset(asset)
             viewModel.onSelectLocalModelConfig(config)
@@ -838,15 +724,13 @@ class SettingsViewModelTest {
                         ),
                     configurations = emptyList(),
                 )
-            coEvery { saveApiProviderDraftUseCase(any()) } coAnswers {
-                saveApiProviderDraftCalls += firstArg<ApiProviderDraft>()
-                Result.success<com.browntowndev.enclave.domain.usecase.settings.ApiProviderDraftSaveResult>(
+            saveApiProviderDraftUseCase.result =
+                Result.success(
                     com.browntowndev.enclave.domain.usecase.settings.ApiProviderDraftSaveResult(
                         persistedAsset = persistedAsset,
                         createdPreset = null,
                     ),
                 )
-            }
 
             viewModel.onStartCreateApiModelAsset()
             viewModel.onApiModelAssetFieldChange(draft)
@@ -879,20 +763,7 @@ class SettingsViewModelTest {
                     modelTypesNeedingReassignment = listOf(ModelType.MAIN),
                     reassignmentCandidates = emptyList(),
                 )
-            coEvery { prepareModelDeletionUseCase(any()) } returns prepared
-            coEvery {
-                executeModelDeletionWithReassignmentUseCase(any(), any(), any(), any(), any())
-            } coAnswers {
-                executeDeletionCalls +=
-                    ExecuteDeletionArgs(
-                        target = arg<ModelDeletionTarget>(0),
-                        modelTypesNeedingReassignment = arg<List<ModelType>>(1),
-                        replacementLocalConfigId = arg<String?>(2)?.let { com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId(it) },
-                        replacementApiConfigId = arg<String?>(3)?.let { com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId(it) },
-                        replacementMediaProviderId = arg<String?>(4)?.let { com.browntowndev.enclave.domain.model.config.MediaProviderId(it) },
-                    )
-                Result.success<Unit>(Unit)
-            }
+            prepareModelDeletionUseCase.result = prepared
 
             // Trigger deletion prep
             viewModel.onDeleteLocalModelAsset(target.id)
@@ -907,7 +778,7 @@ class SettingsViewModelTest {
 
             assertEquals(
                 listOf(
-                    ExecuteDeletionArgs(
+                    FakeExecuteModelDeletionWithReassignmentUseCase.Args(
                         target = target,
                         modelTypesNeedingReassignment = listOf(ModelType.MAIN),
                         replacementLocalConfigId = replacementConfigId,
@@ -924,8 +795,7 @@ class SettingsViewModelTest {
         runTest {
             val asset = MockSettingsData.apiModels.first()
             val preset = asset.configurations.first()
-            val requestSlot = io.mockk.slot<ApiModelDiscoveryRequest>()
-            coEvery { discoverApiModelsUseCase(capture(requestSlot)) } returns
+            discoverApiModelsUseCase.result =
                 ApiModelDiscoveryResult(
                     models =
                         listOf(
@@ -946,10 +816,10 @@ class SettingsViewModelTest {
             viewModel.onFetchApiModels()
             advanceUntilIdle()
 
-            assertEquals(ApiProvider.OPENAI, requestSlot.captured.provider)
-            assertEquals("secret", requestSlot.captured.currentApiKey)
-            assertEquals(asset.credentialAlias, requestSlot.captured.credentialAlias)
-            assertEquals(preset.modelId, requestSlot.captured.selectedModelId)
+            assertEquals(ApiProvider.OPENAI, discoverApiModelsUseCase.calls.single().provider)
+            assertEquals("secret", discoverApiModelsUseCase.calls.single().currentApiKey)
+            assertEquals(asset.credentialAlias, discoverApiModelsUseCase.calls.single().credentialAlias)
+            assertEquals(preset.modelId, discoverApiModelsUseCase.calls.single().selectedModelId)
             assertEquals(2, viewModel.uiState.value.apiProviderEditor.discovery.models.size)
             assertEquals(
                 "gpt-4o",
@@ -969,8 +839,7 @@ class SettingsViewModelTest {
                     DiscoveredApiModel(id = "gpt-4o", isChatCapable = true), // Should be filtered out
                 )
 
-            coEvery { discoverApiModelsUseCase(any()) } coAnswers {
-                discoverModelsCalls += firstArg<ApiModelDiscoveryRequest>()
+            discoverApiModelsUseCase.result =
                 ApiModelDiscoveryResult(
                     models = xaiModels,
                     scope =
@@ -980,7 +849,6 @@ class SettingsViewModelTest {
                             credentialAlias = "xai-alias",
                         ),
                 )
-            }
 
             // Mock starting media creation for xAI IMAGE
             viewModel.onStartCreateMediaProviderAsset()
@@ -1075,7 +943,7 @@ class SettingsViewModelTest {
                     apiAsset = asset,
                     apiConfig = null,
                 )
-            coEvery { resolveAssignedModelSelectionUseCase(ModelType.MAIN) } returns selection
+            resolveAssignedModelSelectionUseCase.result = selection
 
             viewModel.onSelectModelType(ModelType.MAIN)
             advanceUntilIdle()
@@ -1098,8 +966,7 @@ class SettingsViewModelTest {
                     credentialAlias = "media-alias",
                 )
 
-            coEvery { discoverApiModelsUseCase(any()) } coAnswers {
-                discoverModelsCalls += firstArg<ApiModelDiscoveryRequest>()
+            discoverApiModelsUseCase.result =
                 ApiModelDiscoveryResult(
                     models =
                         listOf(
@@ -1113,7 +980,6 @@ class SettingsViewModelTest {
                             credentialAlias = "media-alias",
                         ),
                 )
-            }
 
             viewModel.onSelectMediaProviderAsset(mediaAsset)
             viewModel.onFetchMediaModels()
@@ -1192,7 +1058,7 @@ class SettingsViewModelTest {
                 isEligible = false,
             )
 
-            coEvery { getModelPacksForSettingsUseCase() } returns listOf(packRow)
+            getModelPacksForSettingsUseCase.result = listOf(packRow)
             localModelAssetsStateFlow.value = listOf(juggernautAsset)
 
             viewModel.onShowModelConfigSheet(show = true)
@@ -1270,7 +1136,7 @@ class SettingsViewModelTest {
                 isEligible = false,
             )
 
-            coEvery { getModelPacksForSettingsUseCase() } returns listOf(packRow)
+            getModelPacksForSettingsUseCase.result = listOf(packRow)
             localModelAssetsStateFlow.value = listOf(sdxlAsset)
 
             viewModel.onShowModelConfigSheet(show = true)
@@ -1296,19 +1162,4 @@ class SettingsViewModelTest {
         }
 }
 
-internal fun testUsageSpendSummaryUseCase(): ObserveUsageSpendSummaryUseCase {
-    val useCase = io.mockk.mockk<ObserveUsageSpendSummaryUseCase>()
-    every { useCase.invoke(any()) } returns
-        flowOf(
-            UsageSpendSummary(
-                period = UsagePeriod.LIFETIME,
-                periodStartUtcMs = null,
-                periodEndUtcMs = null,
-                totalCostUsd = BigDecimal.ZERO,
-                telemetryBackedTurnCount = 0,
-                missingCostTurnCount = 0,
-                providerBreakdown = emptyList(),
-            ),
-        )
-    return useCase
-}
+internal fun testUsageSpendSummaryUseCase(): ObserveUsageSpendSummaryUseCase = FakeObserveUsageSpendSummaryUseCase()

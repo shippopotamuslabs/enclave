@@ -11,8 +11,6 @@ import com.browntowndev.enclave.domain.usecase.security.CreateVaultUseCase
 import com.browntowndev.enclave.domain.usecase.security.DetectVaultReconciliationStateUseCase
 import com.browntowndev.enclave.domain.usecase.settings.SettingsAuthUseCases
 import com.browntowndev.enclave.domain.usecase.settings.SettingsPreferencesUseCases
-import io.mockk.every
-import io.mockk.mockk
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -22,26 +20,22 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class TosSheetTest {
-    private val preferencesUseCases = mockk<SettingsPreferencesUseCases>(relaxed = true)
-    private val authUseCases = mockk<SettingsAuthUseCases>(relaxed = true)
-    private val errorHandler = mockk<ViewModelErrorHandler>()
-    private val detectVaultReconciliationStateUseCase = mockk<DetectVaultReconciliationStateUseCase>()
-    private val adoptCloudVaultUseCase = mockk<AdoptCloudVaultUseCase>(relaxed = true)
-    private val bootstrapCloudVaultFromLocalUseCase = mockk<BootstrapCloudVaultFromLocalUseCase>(relaxed = true)
-    private val createVaultUseCase = mockk<CreateVaultUseCase>()
-    private val cryptoManager = mockk<CryptoManagerPort>()
-    private val vaultMetadataPort = mockk<VaultMetadataPort>()
-    private val cloudSyncPort = mockk<CloudSyncPort>()
+    private val preferencesUseCases = FakeSettingsPreferencesUseCases()
+    private val authUseCases = FakeSettingsAuthUseCases()
+    private val errorHandler = FakeViewModelErrorHandler()
+    private val detectVaultReconciliationStateUseCase = FakeDetectVaultReconciliationStateUseCase()
+    private val adoptCloudVaultUseCase = FakeAdoptCloudVaultUseCase()
+    private val bootstrapCloudVaultFromLocalUseCase = FakeBootstrapCloudVaultFromLocalUseCase()
+    private val createVaultUseCase = FakeCreateVaultUseCase()
+    private val cryptoManager = com.browntowndev.enclave.core.testing.FakeCryptoManagerPort()
+    private val vaultMetadataPort = com.browntowndev.enclave.core.testing.FakeVaultMetadataPort()
+    private val cloudSyncPort = com.browntowndev.enclave.core.testing.FakeCloudSyncPort()
 
     private lateinit var delegate: SettingsGeneralDelegate
     private lateinit var sheetVisibility: MutableStateFlow<SheetVisibilityState>
 
     @BeforeEach
     fun setup() {
-        every {
-            errorHandler.coroutineExceptionHandler(any(), any(), any())
-        } returns CoroutineExceptionHandler { _, _ -> }
-
         delegate =
             SettingsGeneralDelegate(
                 preferencesUseCases = preferencesUseCases,
@@ -51,10 +45,8 @@ class TosSheetTest {
                 adoptCloudVaultUseCase = adoptCloudVaultUseCase,
                 bootstrapCloudVaultFromLocalUseCase = bootstrapCloudVaultFromLocalUseCase,
                 createVaultUseCase = createVaultUseCase,
-                unlockVaultFromStoredMetadataUseCase =
-                    mockk<com.browntowndev.enclave.domain.usecase.security.UnlockVaultFromStoredMetadataUseCase>(relaxed = true),
-                startCloudSyncListeningUseCase =
-                    mockk<com.browntowndev.enclave.domain.usecase.security.StartCloudSyncListeningUseCase>(relaxed = true),
+                unlockVaultFromStoredMetadataUseCase = FakeUnlockVaultFromStoredMetadataUseCase(),
+                startCloudSyncListeningUseCase = FakeStartCloudSyncListeningUseCase(),
                 cryptoManager = cryptoManager,
                 vaultMetadataPort = vaultMetadataPort,
                 cloudSyncPort = cloudSyncPort,

@@ -27,7 +27,7 @@ class ModelPackSettingsUiTest {
                 localModelAssetUiMapper = LocalModelAssetUiMapper(),
                 apiModelAssetUiMapper = ApiModelAssetUiMapper(),
                 ttsProviderAssetUiMapper = TtsProviderAssetUiMapper(),
-                mediaProviderAssetUiMapper = io.mockk.mockk(relaxed = true),
+                mediaProviderAssetUiMapper = MediaProviderAssetUiMapper(),
                 apiDiscoveryUiFilter = ApiDiscoveryUiFilter(),
                 applyApiModelMetadataDefaultsUseCase =
                     com.browntowndev.enclave.domain.usecase.settings

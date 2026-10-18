@@ -10,7 +10,7 @@ import javax.inject.Inject
  * vault metadata, persists it locally, and unlocks. Shared by Settings re-auth and any flow that
  * must cache the DEK after reconciliation without duplicating cloud-vs-local branching.
  */
-class UnlockVaultFromStoredMetadataUseCase
+open class UnlockVaultFromStoredMetadataUseCase
     @Inject
     constructor(
         private val unlockVaultUseCase: UnlockVaultUseCase,
@@ -18,7 +18,7 @@ class UnlockVaultFromStoredMetadataUseCase
         private val vaultMetadataPort: VaultMetadataPort,
         private val cloudSyncPort: CloudSyncPort,
     ) {
-        suspend operator fun invoke(password: String): Result<Unit> {
+        open suspend operator fun invoke(password: String): Result<Unit> {
             val localSaltBase64 = vaultMetadataPort.getVaultSalt()?.takeIf { it.isNotBlank() }
             val localWrappedBase64 = vaultMetadataPort.getWrappedDek()?.takeIf { it.isNotBlank() }
             return if (localSaltBase64 != null && localWrappedBase64 != null) {

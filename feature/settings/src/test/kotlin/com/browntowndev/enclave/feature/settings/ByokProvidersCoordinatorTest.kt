@@ -15,11 +15,6 @@ import com.browntowndev.enclave.domain.usecase.settings.ApplyApiModelMetadataDef
 import com.browntowndev.enclave.domain.usecase.settings.SaveApiPresetUseCase
 import com.browntowndev.enclave.domain.usecase.settings.SaveApiProviderDraftUseCase
 import com.browntowndev.enclave.domain.usecase.settings.SettingsApiProviderUseCases
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.slot
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -37,22 +32,16 @@ import org.junit.jupiter.api.extension.ExtendWith
 @OptIn(ExperimentalCoroutinesApi::class)
 @ExtendWith(MainDispatcherRule::class)
 class ByokProvidersCoordinatorTest {
-    private val apiProviderUseCases = mockk<SettingsApiProviderUseCases>(relaxed = true)
-    private val deletionHelper = mockk<SettingsDeletionHelper>(relaxed = true)
-    private val errorHandler = mockk<ViewModelErrorHandler>()
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
+    private val apiProviderUseCases = FakeSettingsApiProviderUseCases()
+    private val deletionHelper =
+        SettingsDeletionHelper(FakeSettingsDeletionUseCases(), ReassignmentOptionUiMapper(), FakeViewModelErrorHandler())
+    private val errorHandler = FakeViewModelErrorHandler()
+    private val loggingPort = com.browntowndev.enclave.core.testing.FakeLoggingPort()
 
     private lateinit var coordinator: ByokProvidersCoordinator
 
     @BeforeEach
     fun setup() {
-        every {
-            apiProviderUseCases.applyApiModelMetadataDefaults
-        } returns ApplyApiModelMetadataDefaultsUseCase()
-        every {
-            errorHandler.coroutineExceptionHandler(any(), any(), any())
-        } returns CoroutineExceptionHandler { _, _ -> }
-
         coordinator =
             ByokProvidersCoordinator(
                 apiProviderUseCases = apiProviderUseCases,
@@ -119,9 +108,7 @@ class ByokProvidersCoordinatorTest {
     @Test
     fun `onSaveApiCredentials persists draft clears key and updates selection`() =
         runTest {
-            val saveDraft = mockk<SaveApiProviderDraftUseCase>()
-            every { apiProviderUseCases.saveApiProviderDraft } returns saveDraft
-            val draftSlot = slot<ApiProviderDraft>()
+            val saveDraft = apiProviderUseCases.saveApiProviderDraft
             val persistedAsset =
                 ApiModelAsset(
                     credentials =
@@ -133,10 +120,7 @@ class ByokProvidersCoordinatorTest {
                         ),
                     configurations = emptyList(),
                 )
-            coEvery { saveDraft(capture(draftSlot)) } returns
-                Result.success(
-                    ApiProviderDraftSaveResult(persistedAsset = persistedAsset),
-                )
+            saveDraft.result = Result.success(ApiProviderDraftSaveResult(persistedAsset = persistedAsset))
             val apiState =
                 MutableStateFlow(
                     ApiProvidersTransientState(
@@ -164,8 +148,8 @@ class ByokProvidersCoordinatorTest {
             )
             advanceUntilIdle()
 
-            coVerify(exactly = 1) { saveDraft(any()) }
-            assertEquals("sk-test", draftSlot.captured.apiKey)
+            assertEquals(1, saveDraft.calls.size)
+            assertEquals("sk-test", saveDraft.calls.single().apiKey)
             assertEquals("", currentApiKey.value)
             assertEquals(ApiCredentialsId("saved-cred"), apiState.value.selectedAsset?.credentialsId)
             assertEquals("OpenAI", apiState.value.assetDraft?.displayName)
@@ -187,17 +171,8 @@ class ByokProvidersCoordinatorTest {
     @Test
     fun `onSaveApiModelConfig forwards parameter exclusions to saveApiPreset`() =
         runTest {
-            val saveApiPreset = mockk<SaveApiPresetUseCase>()
-            every { apiProviderUseCases.saveApiPreset } returns saveApiPreset
-            val draftSlot = slot<ApiPresetDraft>()
-            coEvery {
-                saveApiPreset(
-                    provider = any(),
-                    parentCredentialsId = any(),
-                    defaultReasoningEffort = any(),
-                    draft = capture(draftSlot),
-                )
-            } returns Result.success(ApiModelConfigurationId("preset-1"))
+            val saveApiPreset = apiProviderUseCases.saveApiPreset
+            saveApiPreset.result = Result.success(ApiModelConfigurationId("preset-1"))
 
             val credentialsId = ApiCredentialsId("cred-1")
             val apiState =
@@ -236,22 +211,21 @@ class ByokProvidersCoordinatorTest {
             )
             advanceUntilIdle()
 
-            coVerify(exactly = 1) { saveApiPreset(any(), any(), any(), any()) }
-            assertEquals(true, draftSlot.captured.maxTokensDisabled)
-            assertEquals(true, draftSlot.captured.temperatureDisabled)
-            assertEquals(true, draftSlot.captured.topPDisabled)
-            assertEquals(false, draftSlot.captured.topKDisabled)
-            assertEquals(false, draftSlot.captured.minPDisabled)
-            assertEquals(true, draftSlot.captured.frequencyPenaltyDisabled)
-            assertEquals(false, draftSlot.captured.presencePenaltyDisabled)
+            assertEquals(1, saveApiPreset.calls.size)
+            assertEquals(true, saveApiPreset.calls.single().draft.maxTokensDisabled)
+            assertEquals(true, saveApiPreset.calls.single().draft.temperatureDisabled)
+            assertEquals(true, saveApiPreset.calls.single().draft.topPDisabled)
+            assertEquals(false, saveApiPreset.calls.single().draft.topKDisabled)
+            assertEquals(false, saveApiPreset.calls.single().draft.minPDisabled)
+            assertEquals(true, saveApiPreset.calls.single().draft.frequencyPenaltyDisabled)
+            assertEquals(false, saveApiPreset.calls.single().draft.presencePenaltyDisabled)
         }
 
     @Test
     @org.junit.jupiter.api.DisplayName("SCN-UI-STATE-001")
     fun scnUiState001_onShowOpenRouterProvidersSheetUpdatesUiStateOnSuccess() =
         runTest {
-            val fetchUseCase = mockk<FetchOpenRouterModelEndpointsUseCase>()
-            every { apiProviderUseCases.fetchOpenRouterModelEndpoints } returns fetchUseCase
+            val fetchUseCase = apiProviderUseCases.fetchOpenRouterModelEndpoints
 
             val mockEndpoints =
                 listOf(
@@ -269,14 +243,7 @@ class ByokProvidersCoordinatorTest {
                     ),
                 )
 
-            coEvery {
-                fetchUseCase(
-                    modelId = "meta-llama/llama-3.3-70b-instruct",
-                    currentApiKey = "sk-or-key",
-                    credentialAlias = "alias",
-                    baseUrl = "https://openrouter.ai",
-                )
-            } returns mockEndpoints
+            fetchUseCase.result = mockEndpoints
 
             val apiState = MutableStateFlow(ApiProvidersTransientState())
 
@@ -305,17 +272,9 @@ class ByokProvidersCoordinatorTest {
     @org.junit.jupiter.api.DisplayName("SCN-ERROR-001")
     fun scnError001_onShowOpenRouterProvidersSheetEmitsErrorOnFailure() =
         runTest {
-            val fetchUseCase = mockk<FetchOpenRouterModelEndpointsUseCase>()
-            every { apiProviderUseCases.fetchOpenRouterModelEndpoints } returns fetchUseCase
+            val fetchUseCase = apiProviderUseCases.fetchOpenRouterModelEndpoints
 
-            coEvery {
-                fetchUseCase(
-                    modelId = "meta-llama/llama-3.3-70b-instruct",
-                    currentApiKey = "sk-or-key",
-                    credentialAlias = "alias",
-                    baseUrl = "https://openrouter.ai",
-                )
-            } throws java.io.IOException("HTTP 500")
+            fetchUseCase.failure = java.io.IOException("HTTP 500")
 
             val apiState = MutableStateFlow(ApiProvidersTransientState())
             var snackbarMessage: String? = null
@@ -336,20 +295,16 @@ class ByokProvidersCoordinatorTest {
             assertFalse(apiState.value.isLoadingEndpoints)
             assertTrue(apiState.value.endpointFetchError)
             assertEquals("Failed to fetch providers", snackbarMessage)
-            coVerify(exactly = 1) {
-                loggingPort.error(
-                    tag = "ByokProvidersCoordinator",
-                    message = "Failed to fetch OpenRouter model endpoints",
-                    throwable = any<java.io.IOException>()
-                )
-            }
+            assertEquals(1, loggingPort.errorCalls.size)
+            assertEquals("ByokProvidersCoordinator", loggingPort.errorCalls.single().tag)
+            assertEquals("Failed to fetch OpenRouter model endpoints", loggingPort.errorCalls.single().message)
+            assertTrue(loggingPort.errorCalls.single().throwable is java.io.IOException)
         }
 
     @Test
     fun `onShowOpenRouterProvidersSheet with blank modelId does not fetch or open sheet`() =
         runTest {
-            val fetchUseCase = mockk<FetchOpenRouterModelEndpointsUseCase>()
-            every { apiProviderUseCases.fetchOpenRouterModelEndpoints } returns fetchUseCase
+            val fetchUseCase = apiProviderUseCases.fetchOpenRouterModelEndpoints
 
             val apiState = MutableStateFlow(ApiProvidersTransientState())
             var snackbarMessage: String? = null
@@ -371,13 +326,6 @@ class ByokProvidersCoordinatorTest {
             assertFalse(apiState.value.isLoadingEndpoints)
             assertFalse(apiState.value.endpointFetchError)
             assertNull(snackbarMessage)
-            coVerify(exactly = 0) {
-                fetchUseCase(
-                    modelId = any(),
-                    currentApiKey = any(),
-                    credentialAlias = any(),
-                    baseUrl = any(),
-                )
-            }
+            assertTrue(fetchUseCase.calls.isEmpty())
         }
 }
