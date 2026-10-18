@@ -18,14 +18,14 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import javax.inject.Inject
 import kotlin.math.abs
 
-class OpenAiVideoGenerationAdapter(
+open class OpenAiVideoGenerationAdapter(
     private val okHttpClient: OkHttpClient,
     private val pollDelayMillis: Long,
 ) {
     @Inject
     constructor(okHttpClient: OkHttpClient) : this(okHttpClient, DEFAULT_POLL_DELAY_MILLIS)
 
-    suspend fun generateVideo(
+    open suspend fun generateVideo(
         prompt: String,
         apiKey: String,
         modelId: String,

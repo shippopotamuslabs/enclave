@@ -9,7 +9,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class FalOutputSchemaResolver
+open class FalOutputSchemaResolver
     @Inject
     constructor(
         private val apiModelCatalog: ApiModelCatalogPort,
@@ -17,7 +17,7 @@ class FalOutputSchemaResolver
         // Use Optional wrapper since ConcurrentHashMap doesn't allow null values
         private val cache = ConcurrentHashMap<String, Optional<ModelGenerationOutputSchema>>()
 
-        suspend fun resolve(
+        open suspend fun resolve(
             modelId: String,
             apiKey: String,
             baseUrl: String?,

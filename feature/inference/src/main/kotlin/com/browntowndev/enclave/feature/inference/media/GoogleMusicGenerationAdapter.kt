@@ -31,7 +31,7 @@ open class GoogleMusicGenerationAdapter
     constructor(
         private val clientProvider: GoogleGenAiClientProviderPort,
     ) {
-        suspend fun generateMusic(
+        open suspend fun generateMusic(
             prompt: String,
             apiKey: String,
             modelId: String,

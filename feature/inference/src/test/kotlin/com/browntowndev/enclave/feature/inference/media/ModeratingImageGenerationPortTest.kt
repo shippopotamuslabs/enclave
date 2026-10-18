@@ -5,9 +5,7 @@ import com.browntowndev.enclave.domain.model.media.ImageGenerationTarget
 import com.browntowndev.enclave.domain.port.inference.ImageModerationPort
 import com.browntowndev.enclave.domain.port.inference.ImageModerationResult
 import com.browntowndev.enclave.domain.port.media.ImageGenerationPort
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.mockk
+import com.browntowndev.enclave.feature.inference.RecordingImageGenerationPort
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -56,30 +54,26 @@ class ModeratingImageGenerationPortTest {
     @Test
     fun `generateImage delegates prompt target and settings to the wrapped port`() =
         runTest {
-            val delegate = mockk<ImageGenerationPort>()
-            coEvery { delegate.generateImage(any(), any(), any(), any()) } returns Result.success(emptyList())
+            val delegate = RecordingImageGenerationPort()
+            delegate.result = Result.success(emptyList())
             val port = buildPort(delegate, blockPredicate = { false }, placeholder = ByteArray(0))
             val target = anyRemoteTarget()
             val settings = ImageGenerationSettings()
 
             port.generateImage("prompt", target, settings)
 
-            coVerify {
-                delegate.generateImage(
-                    prompt = "prompt",
-                    target = target,
-                    settings = settings,
-                    onProgress = any(),
-                )
-            }
+            val call = delegate.calls.single()
+            assertEquals("prompt", call.prompt)
+            assertEquals(target, call.target)
+            assertEquals(settings, call.settings)
         }
 
     @Test
     fun `generateImage propagates delegate failure without invoking moderation`() =
         runTest {
-            val delegate = mockk<ImageGenerationPort>()
+            val delegate = RecordingImageGenerationPort()
             val failure = IllegalStateException("boom")
-            coEvery { delegate.generateImage(any(), any(), any(), any()) } returns Result.failure(failure)
+            delegate.result = Result.failure(failure)
             val port = buildPort(delegate, blockPredicate = { true }, placeholder = "BLOCKED".toByteArray())
 
             val result = port.generateImage("p", anyRemoteTarget(), ImageGenerationSettings())
@@ -145,8 +139,8 @@ class ModeratingImageGenerationPortTest {
     }
 
     private fun stubDelegateReturning(images: List<ByteArray>): ImageGenerationPort {
-        val delegate = mockk<ImageGenerationPort>()
-        coEvery { delegate.generateImage(any(), any(), any(), any()) } returns Result.success(images)
+        val delegate = RecordingImageGenerationPort()
+        delegate.result = Result.success(images)
         return delegate
     }
 

@@ -12,8 +12,13 @@ import com.browntowndev.enclave.feature.inference.telemetry.ProviderTelemetryNor
 import com.browntowndev.enclave.feature.inference.telemetry.SavedApiModelPricingEstimator
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 import java.math.BigDecimal
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class OpenAiTelemetryCaptureTest {
     private val normalizer =
         ProviderTelemetryNormalizer(

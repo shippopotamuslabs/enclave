@@ -1,3 +1,6 @@
+@file:Suppress("ForbiddenMockKInTests")
+
+// MockK retained only for the OpenAI Java SDK surface (third-party SDK boundary).
 package com.browntowndev.enclave.feature.inference.openai
 
 import com.openai.models.chat.completions.ChatCompletionChunk

@@ -10,7 +10,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class MnnCpuStableDiffusionBackend
+open class MnnCpuStableDiffusionBackend
     @Inject
     constructor(
         private val nativeRuntime: NativeLocalImageGenRuntime,

@@ -30,7 +30,7 @@ import com.browntowndev.enclave.domain.model.chat.ChatMessage as DomainChatMessa
  * We use a dedicated single-thread executor to ensure thread safety.
  */
 @Singleton
-class JniLlamaEngine
+open class JniLlamaEngine
     @Inject
     constructor(
         private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
@@ -365,7 +365,7 @@ class JniLlamaEngine
         private external fun nativeClearKvCache()
 
         @Suppress("LongParameterList")
-        internal fun startCompletion(
+        internal open fun startCompletion(
             roles: Array<String>,
             contents: Array<String>,
             imagePaths: Array<String>,

@@ -36,7 +36,6 @@ import com.browntowndev.enclave.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.enclave.domain.port.inference.LlmInferencePort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
-import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.DeviceEnvironmentRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.NoopDeviceEnvironmentRepository
 import com.browntowndev.enclave.domain.usecase.chat.InMemoryCommittedInferenceTranscriptStore
@@ -47,9 +46,8 @@ import com.browntowndev.enclave.feature.inference.conversation.ConversationCance
 import com.browntowndev.enclave.feature.inference.conversation.ConversationSignatureCache
 import com.browntowndev.enclave.feature.inference.conversation.LiteRtToolCallLoop
 import com.browntowndev.enclave.feature.inference.conversation.NoopAgentPolicyPort
-import io.mockk.coEvery
-import io.mockk.mockk
-import io.mockk.verify
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.flow.Flow
@@ -852,7 +850,7 @@ class RustLoopInferenceServiceTest {
     @DisplayName("SC-FMT-04 DEBUG log on cacheHints")
     fun SC_FMT_04_logsCacheHintsAtDebugWithPromptCacheTag() =
         runTest {
-            val mockLogger = mockk<LoggingPort>(relaxed = true)
+            val mockLogger = FakeLoggingPort()
             val inner = RecordingRustCompatibleService()
             val port =
                 CapturingAgentLoopPort { host ->
@@ -869,12 +867,11 @@ class RustLoopInferenceServiceTest {
 
             service.sendPrompt("log hints").toList()
 
-            verify {
-                mockLogger.debug(
-                    tag = "PROMPT_CACHE",
-                    message = match { it.contains("breakpoint:system") && it.contains("reuse:prefix") },
-                )
-            }
+            assertTrue(
+                mockLogger.debugCalls.any { (tag, message) ->
+                    tag == "PROMPT_CACHE" && message.contains("breakpoint:system") && message.contains("reuse:prefix")
+                },
+            )
             assertNull(inner.lastContextSidecars)
             inner.lastContextSidecars?.let { assertFalse(it.contains("Cache hints:")) }
         }
@@ -1872,8 +1869,7 @@ class RustLoopInferenceServiceTest {
     @Test
     fun `web search and X tools are marked disabled in sidecars when offline and fail fast`() =
         runTest {
-            val deviceEnvironment = mockk<DeviceEnvironmentRepositoryPort>()
-            coEvery { deviceEnvironment.isNetworkAvailable() } returns false
+            val deviceEnvironment = FakeDeviceEnvironmentRepositoryPort().apply { networkAvailable = false }
 
             val innerService =
                 RecordingRustCompatibleService(
@@ -1934,11 +1930,10 @@ class RustLoopInferenceServiceTest {
     @Test
     fun `web search and X tools dynamic connectivity state transitions`() =
         runTest {
-            val deviceEnvironment = mockk<DeviceEnvironmentRepositoryPort>()
-            val networkStates = mutableListOf(true, false, true)
-            coEvery { deviceEnvironment.isNetworkAvailable() } answers {
-                networkStates.removeFirst()
-            }
+            val deviceEnvironment =
+                FakeDeviceEnvironmentRepositoryPort().apply {
+                    networkAvailableSequence.addAll(listOf(true, false, true))
+                }
 
             val sidecarsList = mutableListOf<String?>()
             val innerService =
@@ -2063,8 +2058,10 @@ class RustLoopInferenceServiceTest {
         )
 
     private fun resolveCompactionSummaryModel(fastConfig: ActiveModelConfiguration?): ResolveCompactionSummaryModelUseCase {
-        val activeModelProvider = mockk<ActiveModelProviderPort>()
-        coEvery { activeModelProvider.getActiveConfiguration(ModelType.FAST) } returns fastConfig
+        val activeModelProvider =
+            FakeActiveModelProvider().apply {
+                if (fastConfig != null) configurationsByType[ModelType.FAST] = fastConfig
+            }
         return ResolveCompactionSummaryModelUseCase(activeModelProvider, JTokkitTokenCounter)
     }
 

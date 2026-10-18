@@ -2,11 +2,8 @@ package com.browntowndev.enclave.feature.inference.moderation
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
-import com.browntowndev.enclave.domain.model.config.UtilityType
 import com.browntowndev.enclave.domain.port.inference.ImageModerationResult
-import com.browntowndev.enclave.domain.port.repository.UtilityModelFilePort
-import io.mockk.coEvery
-import io.mockk.mockk
+import com.browntowndev.enclave.feature.inference.FakeUtilityModelFilePort
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -25,8 +22,8 @@ class OnnxImageSafetyClassifierTest {
     @BeforeEach
     fun setup() {
         context = ApplicationProvider.getApplicationContext()
-        val utilityModelFilePort = mockk<UtilityModelFilePort>()
-        coEvery { utilityModelFilePort.resolveUtilityModelPath(UtilityType.IMAGE_SAFETY_CLASSIFIER) } returns null
+        // No path seeded: the fake resolves null, so the classifier degrades silently.
+        val utilityModelFilePort = FakeUtilityModelFilePort()
         classifier = OnnxImageSafetyClassifier(context, utilityModelFilePort)
     }
 

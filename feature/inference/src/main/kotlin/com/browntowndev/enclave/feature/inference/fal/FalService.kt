@@ -20,7 +20,7 @@ data class FalRequest(
     val cancelUrl: String?,
 )
 
-class FalService
+open class FalService
     @Inject
     constructor(
         private val okHttpClient: OkHttpClient,
@@ -28,7 +28,7 @@ class FalService
         private val json = Json { ignoreUnknownKeys = true }
         private val queueStatusStream = FalQueueStatusStream(okHttpClient, json)
 
-        fun runSync(
+        open fun runSync(
             apiKey: String,
             modelId: String,
             body: JsonObject,
@@ -45,7 +45,7 @@ class FalService
                 failurePrefix = "fal sync request failed",
             )
 
-        fun submitQueue(
+        open fun submitQueue(
             apiKey: String,
             modelId: String,
             body: JsonObject,
@@ -71,12 +71,12 @@ class FalService
         }
 
         /** Blocks until the queue reports a terminal status via Fal's SSE status stream. */
-        fun awaitStatusStream(
+        open fun awaitStatusStream(
             apiKey: String,
             statusUrl: String,
         ): JsonObject = queueStatusStream.awaitTerminalStatus(apiKey = apiKey, statusUrl = statusUrl)
 
-        fun status(
+        open fun status(
             apiKey: String,
             statusUrl: String,
         ): JsonObject =
@@ -92,7 +92,7 @@ class FalService
                 retryOnTransient = true,
             )
 
-        fun result(
+        open fun result(
             apiKey: String,
             responseUrl: String,
         ): JsonObject =
@@ -108,7 +108,7 @@ class FalService
                 retryOnTransient = true,
             )
 
-        fun cancel(
+        open fun cancel(
             apiKey: String,
             statusUrl: String,
         ) {
@@ -123,7 +123,7 @@ class FalService
             )
         }
 
-        fun downloadBytes(
+        open fun downloadBytes(
             url: String,
             apiKey: String? = null,
         ): ByteArray = downloadBytesWithRetry(url, apiKey)
@@ -143,7 +143,7 @@ class FalService
             )
         }
 
-        fun resolveMediaBytes(
+        open fun resolveMediaBytes(
             url: String,
             apiKey: String? = null,
         ): ByteArray =
@@ -169,22 +169,22 @@ class FalService
                 downloadBytesWithRetry(url, apiKey)
             }
 
-        fun mediaUrls(
+        open fun mediaUrls(
             response: JsonObject,
             outputSchema: ModelGenerationOutputSchema? = null,
         ): List<String> = FalResponseMediaUrls.mediaUrls(response, outputSchema)
 
-        fun primaryMediaUrls(
+        open fun primaryMediaUrls(
             response: JsonObject,
             outputSchema: ModelGenerationOutputSchema? = null,
         ): List<String> = FalResponseMediaUrls.primaryMediaUrls(response, outputSchema)
 
-        fun primaryVideoUrls(
+        open fun primaryVideoUrls(
             response: JsonObject,
             outputSchema: ModelGenerationOutputSchema? = null,
         ): List<String> = FalResponseMediaUrls.primaryVideoUrls(response, outputSchema)
 
-        fun statusValue(response: JsonObject): String? = response.queueStatusValue()
+        open fun statusValue(response: JsonObject): String? = response.queueStatusValue()
 
         private fun JsonObject.requiredString(name: String): String =
             optionalString(name) ?: throw IllegalStateException("Missing fal $name")

@@ -2,7 +2,8 @@ package com.browntowndev.enclave.feature.inference.media.local
 
 import android.app.ActivityManager
 import android.content.Context
-import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
+import androidx.test.core.app.ApplicationProvider
+import com.browntowndev.enclave.core.testing.FakeStudioRepository
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.media.AspectRatio
 import com.browntowndev.enclave.domain.model.media.GenerationQuality
@@ -14,44 +15,51 @@ import com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilit
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationError
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId
 import com.browntowndev.enclave.domain.model.media.ProviderCapabilities
-import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
-import com.browntowndev.enclave.domain.usecase.inference.InferenceType
-import io.mockk.coEvery
-import io.mockk.every
-import io.mockk.just
-import io.mockk.mockk
-import io.mockk.runs
+import com.browntowndev.enclave.feature.inference.FakeInferenceLockManager
+import com.browntowndev.enclave.feature.inference.FakeLocalImageGenerationEngine
+import com.browntowndev.enclave.feature.inference.ShadowFakeNativeLocalImageGenRuntime
+import com.browntowndev.enclave.localimagegen.NativeLocalImageGenRuntime
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.Shadows.shadowOf
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34], shadows = [ShadowFakeNativeLocalImageGenRuntime::class])
 class LocalStableDiffusionImageGeneratorFailureTest {
-    private val studioRepository = mockk<StudioRepositoryPort>(relaxed = true)
+    private val studioRepository = FakeStudioRepository()
 
-    private val lockManager =
-        mockk<InferenceLockManager> {
-            every { acquireLock(InferenceType.ON_DEVICE) } returns true
-            every { releaseLock(InferenceType.ON_DEVICE) } just runs
-        }
+    private val lockManager = FakeInferenceLockManager()
+
+    private lateinit var context: Context
+    private lateinit var runtime: NativeLocalImageGenRuntime
+
+    @BeforeEach
+    fun setUp() {
+        context = ApplicationProvider.getApplicationContext()
+        runtime = NativeLocalImageGenRuntime(context)
+        val activityManager = context.getSystemService(ActivityManager::class.java)
+        shadowOf(activityManager).setMemoryClass(512)
+    }
 
     @Test
     fun `typed generation error surfaces backend detail`() =
         runTest {
-            val engine =
-                mockk<LocalImageGenerationEngine> {
-                    coEvery { generate(any()) } returns
-                        Result.failure(
-                            LocalImageGenerationError.RuntimeNotPackaged(
-                                LocalImageGenerationBackendKind.QNN_NPU,
-                                "QNN runtime not packaged",
-                            ),
-                        )
-                }
-            val context = mockk<Context>(relaxed = true)
-            every { context.cacheDir } returns java.io.File.createTempFile("cache", "").parentFile!!
-            val generator = createGenerator(context, engine)
+            val engine = FakeLocalImageGenerationEngine(runtime)
+            engine.result =
+                Result.failure(
+                    LocalImageGenerationError.RuntimeNotPackaged(
+                        LocalImageGenerationBackendKind.QNN_NPU,
+                        "QNN runtime not packaged",
+                    ),
+                )
+            val generator = createGenerator(engine)
 
             val result =
                 generator.generate(
@@ -64,21 +72,15 @@ class LocalStableDiffusionImageGeneratorFailureTest {
             assertTrue(result.exceptionOrNull() is LocalImageGenerationError.RuntimeNotPackaged)
         }
 
-    private fun createGenerator(
-        context: Context,
-        engine: LocalImageGenerationEngine,
-    ): LocalStableDiffusionImageGenerator {
-        val activityManager = mockk<ActivityManager> { every { memoryClass } returns 512 }
-        every { context.getSystemService(Context.ACTIVITY_SERVICE) } returns activityManager
-        return LocalStableDiffusionImageGenerator(
+    private fun createGenerator(engine: LocalImageGenerationEngine): LocalStableDiffusionImageGenerator =
+        LocalStableDiffusionImageGenerator(
             context = context,
             engine = engine,
-            nativeRuntime = mockk(relaxed = true),
+            nativeRuntime = runtime,
             inferenceLockManager = lockManager,
             studioRepository = studioRepository,
             dispatcher = Dispatchers.Unconfined,
         )
-    }
 
     private fun localTarget(): ImageGenerationTarget.LocalStableDiffusion =
         ImageGenerationTarget.LocalStableDiffusion(
@@ -113,17 +115,9 @@ class LocalStableDiffusionImageGeneratorFailureTest {
     @Test
     fun `INF-001 SD15 native request uses policy-normalized 512 square 20 and 7_5`() =
         runTest {
-            val capturedRequest = io.mockk.slot<LocalImageGenerationNativeRequest>()
-            val engine =
-                mockk<LocalImageGenerationEngine> {
-                    coEvery { generate(capture(capturedRequest)) } returns
-                        Result.success(
-                            LocalImageGenerationNativeResult(emptyList(), 512, 512, 0L),
-                        )
-                }
-            val context = mockk<Context>(relaxed = true)
-            every { context.cacheDir } returns java.io.File.createTempFile("cache", "").parentFile!!
-            val generator = createGenerator(context, engine)
+            val engine = FakeLocalImageGenerationEngine(runtime)
+            engine.result = Result.success(LocalImageGenerationNativeResult(emptyList(), 512, 512, 0L))
+            val generator = createGenerator(engine)
 
             val result =
                 generator.generate(
@@ -139,26 +133,19 @@ class LocalStableDiffusionImageGeneratorFailureTest {
 
             assertTrue(result.isSuccess)
             // Legacy hardcoded path derives 512x288 from 16:9; policy must force SD15 square 512x512.
-            assertEquals(512, capturedRequest.captured.width)
-            assertEquals(512, capturedRequest.captured.height)
-            assertEquals(20, capturedRequest.captured.steps)
-            assertEquals(7.5f, capturedRequest.captured.cfgScale)
+            val capturedRequest = engine.generateCalls.single()
+            assertEquals(512, capturedRequest.width)
+            assertEquals(512, capturedRequest.height)
+            assertEquals(20, capturedRequest.steps)
+            assertEquals(7.5f, capturedRequest.cfgScale)
         }
 
     @Test
     fun `INF-002 SDXL native request uses 1024 selected steps CFG and lcm`() =
         runTest {
-            val capturedRequest = io.mockk.slot<LocalImageGenerationNativeRequest>()
-            val engine =
-                mockk<LocalImageGenerationEngine> {
-                    coEvery { generate(capture(capturedRequest)) } returns
-                        Result.success(
-                            LocalImageGenerationNativeResult(emptyList(), 1024, 1024, 0L),
-                        )
-                }
-            val context = mockk<Context>(relaxed = true)
-            every { context.cacheDir } returns java.io.File.createTempFile("cache", "").parentFile!!
-            val generator = createGenerator(context, engine)
+            val engine = FakeLocalImageGenerationEngine(runtime)
+            engine.result = Result.success(LocalImageGenerationNativeResult(emptyList(), 1024, 1024, 0L))
+            val generator = createGenerator(engine)
 
             val sdxlTarget =
                 localTarget().copy(
@@ -185,20 +172,19 @@ class LocalStableDiffusionImageGeneratorFailureTest {
                 )
 
             assertTrue(result.isSuccess)
-            assertEquals(1024, capturedRequest.captured.width)
-            assertEquals(1024, capturedRequest.captured.height)
-            assertEquals(8, capturedRequest.captured.steps)
-            assertEquals(1.5f, capturedRequest.captured.cfgScale)
-            assertEquals("lcm", capturedRequest.captured.scheduler)
+            val capturedRequest = engine.generateCalls.single()
+            assertEquals(1024, capturedRequest.width)
+            assertEquals(1024, capturedRequest.height)
+            assertEquals(8, capturedRequest.steps)
+            assertEquals(1.5f, capturedRequest.cfgScale)
+            assertEquals("lcm", capturedRequest.scheduler)
         }
 
     @Test
     fun `INF-003 stale SD15 1024 request fails before native launch with exact error`() =
         runTest {
-            val engine = mockk<LocalImageGenerationEngine>()
-            val context = mockk<Context>(relaxed = true)
-            every { context.cacheDir } returns java.io.File.createTempFile("cache", "").parentFile!!
-            val generator = createGenerator(context, engine)
+            val engine = FakeLocalImageGenerationEngine(runtime)
+            val generator = createGenerator(engine)
 
             val result = generator.generate(
                 prompt = "sunset",
@@ -218,15 +204,9 @@ class LocalStableDiffusionImageGeneratorFailureTest {
     @Test
     fun `INF-004 stale SDXL step 13 clamps to 16 before native launch`() =
         runTest {
-            val capturedRequest = io.mockk.slot<LocalImageGenerationNativeRequest>()
-            val engine = mockk<LocalImageGenerationEngine> {
-                coEvery { generate(capture(capturedRequest)) } returns Result.success(
-                    LocalImageGenerationNativeResult(emptyList(), 1024, 1024, 0L)
-                )
-            }
-            val context = mockk<Context>(relaxed = true)
-            every { context.cacheDir } returns java.io.File.createTempFile("cache", "").parentFile!!
-            val generator = createGenerator(context, engine)
+            val engine = FakeLocalImageGenerationEngine(runtime)
+            engine.result = Result.success(LocalImageGenerationNativeResult(emptyList(), 1024, 1024, 0L))
+            val generator = createGenerator(engine)
 
             val sdxlTarget = localTarget().copy(
                 modelId = LocalImageGenerationModelId.SDXL_QNN,
@@ -250,21 +230,15 @@ class LocalStableDiffusionImageGeneratorFailureTest {
             )
 
             assertTrue(result.isSuccess)
-            assertEquals(16, capturedRequest.captured.steps)
+            assertEquals(16, engine.generateCalls.single().steps)
         }
 
     @Test
     fun `MUT-003 lazy any-step implementation fails because step 13 must clamp to 16`() =
         runTest {
-            val capturedRequest = io.mockk.slot<LocalImageGenerationNativeRequest>()
-            val engine = mockk<LocalImageGenerationEngine> {
-                coEvery { generate(capture(capturedRequest)) } returns Result.success(
-                    LocalImageGenerationNativeResult(emptyList(), 1024, 1024, 0L)
-                )
-            }
-            val context = mockk<Context>(relaxed = true)
-            every { context.cacheDir } returns java.io.File.createTempFile("cache", "").parentFile!!
-            val generator = createGenerator(context, engine)
+            val engine = FakeLocalImageGenerationEngine(runtime)
+            engine.result = Result.success(LocalImageGenerationNativeResult(emptyList(), 1024, 1024, 0L))
+            val generator = createGenerator(engine)
 
             val sdxlTarget = localTarget().copy(
                 modelId = LocalImageGenerationModelId.SDXL_QNN,
@@ -289,31 +263,39 @@ class LocalStableDiffusionImageGeneratorFailureTest {
 
             assertTrue(result.isSuccess)
             // A lazy forwarder would emit 13 unchanged; the unsupported step must clamp to 16.
-            assertEquals(16, capturedRequest.captured.steps)
+            assertEquals(16, engine.generateCalls.single().steps)
         }
 
     @Test
     fun `img2img failure deletes init image from cache`() =
         runTest {
             val cacheRoot = java.nio.file.Files.createTempDirectory("local-image-gen-cache").toFile()
+            val cacheContext =
+                object : android.content.ContextWrapper(context) {
+                    override fun getCacheDir(): java.io.File = cacheRoot
+                }
             val outputDir = cacheRoot.resolve("local-image-gen").apply { mkdirs() }
             val modelDir = java.io.File.createTempFile("model", "").parentFile!!.resolve("img2img-model")
             modelDir.mkdirs()
             java.io.File(modelDir, "vae_encoder.bin").writeBytes(byteArrayOf(1))
-            val engine =
-                mockk<LocalImageGenerationEngine> {
-                    coEvery { generate(any()) } returns
-                        Result.failure(
-                            LocalImageGenerationError.GenerationFailed(
-                                LocalImageGenerationBackendKind.QNN_NPU,
-                                "Generation failed",
-                            ),
-                        )
-                }
-            val context = mockk<Context>(relaxed = true)
-            every { context.cacheDir } returns cacheRoot
-            coEvery { studioRepository.readMediaBytes("cache://reference.png") } returns byteArrayOf(1, 2, 3)
-            val generator = createGenerator(context, engine)
+            val engine = FakeLocalImageGenerationEngine(runtime)
+            engine.result =
+                Result.failure(
+                    LocalImageGenerationError.GenerationFailed(
+                        LocalImageGenerationBackendKind.QNN_NPU,
+                        "Generation failed",
+                    ),
+                )
+            studioRepository.mediaBytes["cache://reference.png"] = byteArrayOf(1, 2, 3)
+            val generator =
+                LocalStableDiffusionImageGenerator(
+                    context = cacheContext,
+                    engine = engine,
+                    nativeRuntime = runtime,
+                    inferenceLockManager = lockManager,
+                    studioRepository = studioRepository,
+                    dispatcher = Dispatchers.Unconfined,
+                )
 
             val result =
                 generator.generate(
@@ -333,21 +315,13 @@ class LocalStableDiffusionImageGeneratorFailureTest {
     @Test
     fun `INF-005 img2img native request forwards clamped denoise strength`() =
         runTest {
-            val capturedRequest = io.mockk.slot<LocalImageGenerationNativeRequest>()
-            val engine =
-                mockk<LocalImageGenerationEngine> {
-                    coEvery { generate(capture(capturedRequest)) } returns
-                        Result.success(
-                            LocalImageGenerationNativeResult(emptyList(), 512, 512, 0L),
-                        )
-                }
+            val engine = FakeLocalImageGenerationEngine(runtime)
+            engine.result = Result.success(LocalImageGenerationNativeResult(emptyList(), 512, 512, 0L))
             val modelDir = java.io.File.createTempFile("model", "").parentFile!!.resolve("img2img-model")
             modelDir.mkdirs()
             java.io.File(modelDir, "vae_encoder.bin").writeBytes(byteArrayOf(1))
-            val context = mockk<Context>(relaxed = true)
-            every { context.cacheDir } returns java.io.File.createTempFile("cache", "").parentFile!!
-            coEvery { studioRepository.readMediaBytes("cache://reference.png") } returns byteArrayOf(1, 2, 3)
-            val generator = createGenerator(context, engine)
+            studioRepository.mediaBytes["cache://reference.png"] = byteArrayOf(1, 2, 3)
+            val generator = createGenerator(engine)
 
             val result =
                 generator.generate(
@@ -362,24 +336,17 @@ class LocalStableDiffusionImageGeneratorFailureTest {
                 )
 
             assertTrue(result.isSuccess)
-            assertEquals(LocalImageGenerationMode.IMG2IMG, capturedRequest.captured.mode)
-            assertEquals(0.4f, capturedRequest.captured.denoiseStrength)
+            val capturedRequest = engine.generateCalls.single()
+            assertEquals(LocalImageGenerationMode.IMG2IMG, capturedRequest.mode)
+            assertEquals(0.4f, capturedRequest.denoiseStrength)
         }
 
     @Test
     fun `INF-006 Juggernaut native request uses 1024 24 CFG 4_0 and scheduler dpm`() =
         runTest {
-            val capturedRequest = io.mockk.slot<LocalImageGenerationNativeRequest>()
-            val engine =
-                mockk<LocalImageGenerationEngine> {
-                    coEvery { generate(capture(capturedRequest)) } returns
-                        Result.success(
-                            LocalImageGenerationNativeResult(emptyList(), 1024, 1024, 0L),
-                        )
-                }
-            val context = mockk<Context>(relaxed = true)
-            every { context.cacheDir } returns java.io.File.createTempFile("cache", "").parentFile!!
-            val generator = createGenerator(context, engine)
+            val engine = FakeLocalImageGenerationEngine(runtime)
+            engine.result = Result.success(LocalImageGenerationNativeResult(emptyList(), 1024, 1024, 0L))
+            val generator = createGenerator(engine)
 
             val juggernautTarget =
                 localTarget().copy(
@@ -406,27 +373,20 @@ class LocalStableDiffusionImageGeneratorFailureTest {
                 )
 
             assertTrue(result.isSuccess)
-            assertEquals(1024, capturedRequest.captured.width)
-            assertEquals(1024, capturedRequest.captured.height)
-            assertEquals(24, capturedRequest.captured.steps)
-            assertEquals(4.0f, capturedRequest.captured.cfgScale)
-            assertEquals("dpm", capturedRequest.captured.scheduler)
+            val capturedRequest = engine.generateCalls.single()
+            assertEquals(1024, capturedRequest.width)
+            assertEquals(1024, capturedRequest.height)
+            assertEquals(24, capturedRequest.steps)
+            assertEquals(4.0f, capturedRequest.cfgScale)
+            assertEquals("dpm", capturedRequest.scheduler)
         }
 
     @Test
     fun `INF-007 stale Juggernaut step 23 clamps to 24 before native launch`() =
         runTest {
-            val capturedRequest = io.mockk.slot<LocalImageGenerationNativeRequest>()
-            val engine =
-                mockk<LocalImageGenerationEngine> {
-                    coEvery { generate(capture(capturedRequest)) } returns
-                        Result.success(
-                            LocalImageGenerationNativeResult(emptyList(), 1024, 1024, 0L),
-                        )
-                }
-            val context = mockk<Context>(relaxed = true)
-            every { context.cacheDir } returns java.io.File.createTempFile("cache", "").parentFile!!
-            val generator = createGenerator(context, engine)
+            val engine = FakeLocalImageGenerationEngine(runtime)
+            engine.result = Result.success(LocalImageGenerationNativeResult(emptyList(), 1024, 1024, 0L))
+            val generator = createGenerator(engine)
 
             val juggernautTarget =
                 localTarget().copy(
@@ -453,23 +413,15 @@ class LocalStableDiffusionImageGeneratorFailureTest {
                 )
 
             assertTrue(result.isSuccess)
-            assertEquals(24, capturedRequest.captured.steps)
+            assertEquals(24, engine.generateCalls.single().steps)
         }
 
     @Test
     fun `MUT-005 reusing SDXL lcm policy for Juggernaut fails scheduler and CFG checks`() =
         runTest {
-            val capturedRequest = io.mockk.slot<LocalImageGenerationNativeRequest>()
-            val engine =
-                mockk<LocalImageGenerationEngine> {
-                    coEvery { generate(capture(capturedRequest)) } returns
-                        Result.success(
-                            LocalImageGenerationNativeResult(emptyList(), 1024, 1024, 0L),
-                        )
-                }
-            val context = mockk<Context>(relaxed = true)
-            every { context.cacheDir } returns java.io.File.createTempFile("cache", "").parentFile!!
-            val generator = createGenerator(context, engine)
+            val engine = FakeLocalImageGenerationEngine(runtime)
+            engine.result = Result.success(LocalImageGenerationNativeResult(emptyList(), 1024, 1024, 0L))
+            val generator = createGenerator(engine)
 
             val juggernautTarget =
                 localTarget().copy(
@@ -496,8 +448,9 @@ class LocalStableDiffusionImageGeneratorFailureTest {
                 )
 
             assertTrue(result.isSuccess)
-            assertEquals("dpm", capturedRequest.captured.scheduler)
-            assertEquals(4.0f, capturedRequest.captured.cfgScale)
-            assertEquals(24, capturedRequest.captured.steps)
+            val capturedRequest = engine.generateCalls.single()
+            assertEquals("dpm", capturedRequest.scheduler)
+            assertEquals(4.0f, capturedRequest.cfgScale)
+            assertEquals(24, capturedRequest.steps)
         }
 }

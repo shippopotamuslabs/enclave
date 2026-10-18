@@ -14,7 +14,7 @@ open class GoogleImageGenerationAdapter
     constructor(
         private val clientProvider: GoogleGenAiClientProviderPort,
     ) {
-        suspend fun generateImage(
+        open suspend fun generateImage(
             prompt: String,
             apiKey: String,
             modelId: String,

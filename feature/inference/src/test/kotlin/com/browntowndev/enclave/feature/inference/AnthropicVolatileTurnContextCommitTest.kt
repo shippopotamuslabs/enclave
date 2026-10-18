@@ -1,3 +1,6 @@
+// MockK is used only for Anthropic Java SDK types (com.anthropic.*), a third-party SDK boundary.
+@file:Suppress("ForbiddenMockKInTests")
+
 package com.browntowndev.enclave.feature.inference
 
 import com.anthropic.client.AnthropicClient
@@ -8,8 +11,8 @@ import com.anthropic.services.blocking.MessageService
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.AgentLoopMessage
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.util.FakeToolEnvelopeParserPort
 import com.browntowndev.enclave.domain.util.FakeToolStreamGatePort
 import io.mockk.every
@@ -24,7 +27,7 @@ import java.util.stream.Stream
  * Anthropic-specific provider coverage for volatile turn context commit correctness.
  */
 class AnthropicVolatileTurnContextCommitTest {
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
+    private val loggingPort = FakeLoggingPort()
 
     // ---------------------------------------------------------------------------
     // CSPC-ANTHRO-03a — RAG prefix is not double-prepended in Anthropic wire body

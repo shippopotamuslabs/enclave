@@ -1,9 +1,6 @@
 package com.browntowndev.enclave.feature.inference.tts
 
-import com.browntowndev.enclave.feature.inference.fal.FalService
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.slot
+import com.browntowndev.enclave.feature.inference.FakeFalService
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -14,16 +11,15 @@ import org.junit.jupiter.api.Test
 import java.util.Base64
 
 class FalTtsServiceTest {
-    private val falService = mockk<FalService>()
+    private val falService = FakeFalService()
     private val service = FalTtsService(falService = falService, apiKey = "key", baseUrl = null)
 
     @Test
     fun synthesizeSpeech_syncResponse_downloadsAudioUrl() =
         runTest {
             val response = buildJsonObject { put("audio_url", "https://cdn.test/speech.mp3") }
-            every { falService.runSync(any(), any(), any(), any()) } returns response
-            every { falService.mediaUrls(response) } returns listOf("https://cdn.test/speech.mp3")
-            every { falService.resolveMediaBytes("https://cdn.test/speech.mp3", any()) } returns "mp3".toByteArray()
+            falService.runSyncResult = response
+            falService.resolveMediaBytesResult = "mp3".toByteArray()
 
             val result = service.synthesizeSpeech("hello", "Wise_Woman", "fal-ai/minimax/speech-02-hd")
 
@@ -37,9 +33,8 @@ class FalTtsServiceTest {
             val bytes = "mp3".toByteArray()
             val dataUri = "data:audio/mpeg;base64,${Base64.getEncoder().encodeToString(bytes)}"
             val response = buildJsonObject { put("audio_url", dataUri) }
-            every { falService.runSync(any(), any(), any(), any()) } returns response
-            every { falService.mediaUrls(response) } returns listOf(dataUri)
-            every { falService.resolveMediaBytes(dataUri, any()) } returns bytes
+            falService.runSyncResult = response
+            falService.resolveMediaBytesResult = bytes
 
             val result = service.synthesizeSpeech("hello", "Wise_Woman", "fal-ai/minimax/speech-02-hd")
 
@@ -50,24 +45,21 @@ class FalTtsServiceTest {
     @Test
     fun synthesizeSpeech_nullModelUsesDefaultModel() =
         runTest {
-            val modelIdSlot = slot<String>()
             val response = buildJsonObject { put("audio_url", "https://cdn.test/speech.mp3") }
-            every { falService.runSync(any(), capture(modelIdSlot), any(), any()) } returns response
-            every { falService.mediaUrls(response) } returns listOf("https://cdn.test/speech.mp3")
-            every { falService.resolveMediaBytes("https://cdn.test/speech.mp3", any()) } returns "mp3".toByteArray()
+            falService.runSyncResult = response
+            falService.resolveMediaBytesResult = "mp3".toByteArray()
 
             val result = service.synthesizeSpeech("hello", "Wise_Woman", null)
 
             assertTrue(result.isSuccess)
-            assertEquals("fal-ai/minimax/speech-02-hd", modelIdSlot.captured)
+            assertEquals("fal-ai/minimax/speech-02-hd", falService.runSyncCalls.single())
         }
 
     @Test
     fun synthesizeSpeech_noUrls_returnsFailure() =
         runTest {
             val response = buildJsonObject {}
-            every { falService.runSync(any(), any(), any(), any()) } returns response
-            every { falService.mediaUrls(response) } returns emptyList()
+            falService.runSyncResult = response
 
             val result = service.synthesizeSpeech("hello", "Wise_Woman", "fal-ai/minimax/speech-02-hd")
 

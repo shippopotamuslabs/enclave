@@ -2,7 +2,6 @@ package com.browntowndev.enclave.feature.inference.llama
 
 import com.browntowndev.enclave.domain.model.inference.LlamaModelConfig
 import com.browntowndev.enclave.domain.model.inference.LlamaSamplingConfig
-import io.mockk.spyk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -12,7 +11,7 @@ class JniLlamaEnginePerformanceAuditTest {
 
     @BeforeEach
     fun setup() {
-        engine = spyk(JniLlamaEngine())
+        engine = JniLlamaEngine()
     }
 
     @Test

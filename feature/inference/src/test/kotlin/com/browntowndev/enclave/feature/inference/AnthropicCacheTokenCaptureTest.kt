@@ -1,5 +1,10 @@
+// MockK is used only for Anthropic Java SDK types (com.anthropic.*), a third-party SDK boundary.
+@file:Suppress("ForbiddenMockKInTests")
+
 package com.browntowndev.enclave.feature.inference
 
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
 import com.anthropic.client.AnthropicClient
 import com.anthropic.core.http.StreamResponse
 import com.anthropic.models.messages.Message
@@ -10,12 +15,15 @@ import com.anthropic.models.messages.RawMessageStartEvent
 import com.anthropic.models.messages.RawMessageStreamEvent
 import com.anthropic.models.messages.Usage
 import com.anthropic.services.blocking.MessageService
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.domain.model.chat.ChatId
+import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.AgentLoopMessage
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.ModelType
+import com.browntowndev.enclave.domain.model.telemetry.TelemetryClientBuild
 import com.browntowndev.enclave.domain.model.telemetry.TurnTelemetry
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.util.FakeToolEnvelopeParserPort
 import com.browntowndev.enclave.domain.util.FakeToolStreamGatePort
 import com.browntowndev.enclave.feature.inference.telemetry.InferenceTelemetrySupport
@@ -24,11 +32,16 @@ import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 import java.util.Optional
 import java.util.stream.Stream
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class AnthropicCacheTokenCaptureTest {
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
+    private val loggingPort = FakeLoggingPort()
 
     @Test
     fun `messageStart with zero cache read tokens preserves zero instead of null`() =
@@ -145,36 +158,29 @@ class AnthropicCacheTokenCaptureTest {
         val client = mockk<AnthropicClient>()
         val messageService = mockk<MessageService>()
         val streamResponse = mockk<StreamResponse<RawMessageStreamEvent>>()
-        val telemetrySupport = mockk<InferenceTelemetrySupport>()
-        val captureContext = mockk<InferenceTelemetrySupport.CaptureContext>(relaxed = true)
+        val telemetrySupport =
+            FakeInferenceTelemetrySupport(ApplicationProvider.getApplicationContext<Context>())
+        val captureContext =
+            InferenceTelemetrySupport.CaptureContext(
+                messageId = MessageId("msg_1"),
+                chatId = ChatId("chat_1"),
+                sequenceIndex = 0,
+                clientBuild =
+                    TelemetryClientBuild(
+                        appVersionName = "test",
+                        appVersionCode = 1L,
+                        telemetrySchemaVersion = 1,
+                    ),
+            )
 
         every { client.messages() } returns messageService
         every { messageService.createStreaming(any<MessageCreateParams>()) } returns streamResponse
         every { streamResponse.stream() } returns stream
         every { streamResponse.close() } returns Unit
 
-        every { telemetrySupport.captureContext(any()) } returns captureContext
-        every {
-            telemetrySupport.anthropicTurnTelemetry(
-                context = any(),
-                providerLabel = any(),
-                modelId = any(),
-                modelLabel = any(),
-                timing = any(),
-                inputTokens = any(),
-                outputTokens = any(),
-                reasoningTokens = any(),
-                cacheCreationInputTokens = any(),
-                cacheReadInputTokens = any(),
-                savedPricing = any(),
-            )
-        } answers {
-            val cc = firstArg<InferenceTelemetrySupport.CaptureContext>()
-            val inTok = arg<Int?>(5)
-            val outTok = arg<Int?>(6)
-            val reasonTok = arg<Int?>(7)
-            val cacheCreate = arg<Int?>(8)
-            val cacheRead = arg<Int?>(9)
+        telemetrySupport.captureContextResult = captureContext
+        telemetrySupport.anthropicTelemetryBuilder = { call ->
+            val cc = call.context
             TurnTelemetry(
                 id = com.browntowndev.enclave.domain.model.telemetry.TurnTelemetryId("test"),
                 messageId = cc.messageId,
@@ -188,13 +194,13 @@ class AnthropicCacheTokenCaptureTest {
                 requestStartedAtMs = 0L,
                 firstOutputTokenAtMs = null,
                 completedAtMs = 1L,
-                inputTokens = inTok,
-                outputTokens = outTok,
-                reasoningTokens = reasonTok,
+                inputTokens = call.inputTokens,
+                outputTokens = call.outputTokens,
+                reasoningTokens = call.reasoningTokens,
                 cachedInputTokens = null,
-                cacheReadInputTokens = cacheRead,
+                cacheReadInputTokens = call.cacheReadInputTokens,
                 cacheWriteInputTokens = null,
-                cacheCreationInputTokens = cacheCreate,
+                cacheCreationInputTokens = call.cacheCreationInputTokens,
                 costUsd = null,
                 costStatus = com.browntowndev.enclave.domain.model.telemetry.TelemetryCostStatus.UNAVAILABLE,
                 costSource = com.browntowndev.enclave.domain.model.telemetry.TelemetryCostSource.NOT_AVAILABLE,

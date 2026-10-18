@@ -1,6 +1,8 @@
 package com.browntowndev.enclave.feature.inference.media.local
 
 import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import com.browntowndev.enclave.core.testing.FakeStudioRepository
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.media.AspectRatio
 import com.browntowndev.enclave.domain.model.media.GenerationQuality
@@ -12,37 +14,36 @@ import com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilit
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationError
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId
 import com.browntowndev.enclave.domain.model.media.ProviderCapabilities
-import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
-import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
-import com.browntowndev.enclave.domain.usecase.inference.InferenceType
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
+import com.browntowndev.enclave.feature.inference.FakeInferenceLockManager
+import com.browntowndev.enclave.feature.inference.FakeLocalImageGenerationEngine
+import com.browntowndev.enclave.feature.inference.ShadowFakeNativeLocalImageGenRuntime
+import com.browntowndev.enclave.localimagegen.NativeLocalImageGenRuntime
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34], shadows = [ShadowFakeNativeLocalImageGenRuntime::class])
 class LocalStableDiffusionImageGeneratorLockTest {
     @Test
     fun `busy shared on-device lock rejects image generation before native launch`() =
         runTest {
-            val lockManager =
-                mockk<InferenceLockManager> {
-                    every { acquireLock(InferenceType.ON_DEVICE) } returns false
-                }
-            val engine = mockk<LocalImageGenerationEngine>()
-            val context =
-                mockk<Context>(relaxed = true) {
-                    every { cacheDir } returns java.io.File.createTempFile("cache", "").parentFile!!
-                }
+            val context: Context = ApplicationProvider.getApplicationContext()
+            val runtime = NativeLocalImageGenRuntime(context)
+            val lockManager = FakeInferenceLockManager()
+            lockManager.acquireResult = false
+            val engine = FakeLocalImageGenerationEngine(runtime)
             val generator =
                 LocalStableDiffusionImageGenerator(
                     context = context,
                     engine = engine,
-                    nativeRuntime = mockk(relaxed = true),
+                    nativeRuntime = runtime,
                     inferenceLockManager = lockManager,
-                    studioRepository = mockk<StudioRepositoryPort>(relaxed = true),
+                    studioRepository = FakeStudioRepository(),
                     dispatcher = Dispatchers.Unconfined,
                 )
 
@@ -54,7 +55,7 @@ class LocalStableDiffusionImageGeneratorLockTest {
                 )
 
             assertTrue(result.exceptionOrNull() is LocalImageGenerationError.Busy)
-            coVerify(exactly = 0) { engine.generate(any()) }
+            assertTrue(engine.generateCalls.isEmpty())
         }
 
     private fun localTarget(): ImageGenerationTarget.LocalStableDiffusion =

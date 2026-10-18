@@ -1,3 +1,6 @@
+@file:Suppress("ForbiddenMockKInTests")
+
+// MockK is retained only for the third-party okhttp3 Call/OkHttpClient boundary.
 package com.browntowndev.enclave.feature.inference
 
 import com.browntowndev.enclave.domain.model.media.AspectRatio

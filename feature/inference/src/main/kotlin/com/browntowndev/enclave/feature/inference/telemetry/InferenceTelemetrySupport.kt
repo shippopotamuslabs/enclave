@@ -28,7 +28,7 @@ class InferenceTurnTiming {
 }
 
 @Singleton
-class InferenceTelemetrySupport
+open class InferenceTelemetrySupport
     @Inject
     constructor(
         private val normalizer: ProviderTelemetryNormalizer,
@@ -41,7 +41,7 @@ class InferenceTelemetrySupport
             val clientBuild: TelemetryClientBuild,
         )
 
-        fun captureContext(options: GenerationOptions): CaptureContext? {
+        open fun captureContext(options: GenerationOptions): CaptureContext? {
             val messageId = options.assistantMessageId ?: return null
             val chatId = options.chatId ?: return null
             return CaptureContext(
@@ -52,7 +52,7 @@ class InferenceTelemetrySupport
             )
         }
 
-        suspend fun emitCaptured(
+        open suspend fun emitCaptured(
             telemetry: TurnTelemetry?,
             modelType: ModelType,
             emit: suspend (InferenceEvent) -> Unit,
@@ -62,7 +62,7 @@ class InferenceTelemetrySupport
             }
         }
 
-        fun openAiTurnTelemetry(
+        open fun openAiTurnTelemetry(
             context: CaptureContext,
             providerLabel: String,
             modelId: String,
@@ -99,7 +99,7 @@ class InferenceTelemetrySupport
                 ),
             )
 
-        fun anthropicTurnTelemetry(
+        open fun anthropicTurnTelemetry(
             context: CaptureContext,
             providerLabel: String,
             modelId: String,
@@ -134,7 +134,7 @@ class InferenceTelemetrySupport
                 ),
             )
 
-        fun localTurnTelemetry(
+        open fun localTurnTelemetry(
             context: CaptureContext,
             providerLabel: String,
             modelLabel: String,

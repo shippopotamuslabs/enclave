@@ -4,14 +4,12 @@ import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderAsset
 import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
-import io.mockk.every
-import io.mockk.mockk
+import com.browntowndev.enclave.feature.inference.RecordingWebSocket
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import okhttp3.WebSocket
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -41,14 +39,8 @@ class GeminiLiveToolsPayloadTest {
     @DisplayName("LV-TOOL-051")
     fun lvTool051_sendToolResultEmitsToolResponse() =
         runTest {
-            val sentMessages = mutableListOf<String>()
-            val webSocket =
-                mockk<WebSocket> {
-                    every { send(any<String>()) } answers {
-                        sentMessages.add(firstArg())
-                        true
-                    }
-                }
+            val webSocket = RecordingWebSocket()
+            val sentMessages = webSocket.sentTexts
             val session =
                 GeminiLiveSession(
                     asset = geminiAsset(),
@@ -75,14 +67,8 @@ class GeminiLiveToolsPayloadTest {
     @DisplayName("LV-TOOL-052")
     fun lvTool052_nonJsonResultWrappedAsError() =
         runTest {
-            val sentMessages = mutableListOf<String>()
-            val webSocket =
-                mockk<WebSocket> {
-                    every { send(any<String>()) } answers {
-                        sentMessages.add(firstArg())
-                        true
-                    }
-                }
+            val webSocket = RecordingWebSocket()
+            val sentMessages = webSocket.sentTexts
             val session =
                 GeminiLiveSession(
                     asset = geminiAsset(),

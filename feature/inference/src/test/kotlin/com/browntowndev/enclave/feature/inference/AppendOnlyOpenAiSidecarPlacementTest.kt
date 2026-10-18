@@ -1,3 +1,6 @@
+@file:Suppress("ForbiddenMockKInTests")
+
+// MockK retained only for the OpenAI Java SDK surface (third-party SDK boundary).
 package com.browntowndev.enclave.feature.inference
 
 import com.browntowndev.enclave.domain.model.chat.Role
@@ -6,14 +9,13 @@ import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.port.inference.InferenceEvent
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.util.FakeToolStreamGatePort
 import com.browntowndev.enclave.feature.inference.openai.StreamedOpenAiResponse
 import com.browntowndev.enclave.feature.inference.appendonly.SidecarUserContentEmbedder
 import com.openai.client.OpenAIClient
 import com.openai.models.chat.completions.ChatCompletionCreateParams
 import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -24,7 +26,7 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 
 class AppendOnlyOpenAiSidecarPlacementTest {
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
+    private val loggingPort = FakeLoggingPort()
 
     @Test
     fun AOC_02_single_user_message_tail_sidecar() =
@@ -229,12 +231,12 @@ class AppendOnlyOpenAiSidecarPlacementTest {
                 options = GenerationOptions(reasoningBudget = 0),
             )
 
-            verify {
-                loggingPort.warning(
-                    "AppendOnlyOpenAiSidecarPlacementTest",
-                    match { it.contains("digest_mismatch") },
-                )
-            }
+            assertTrue(
+                loggingPort.warningCalls.any {
+                    it.first == "AppendOnlyOpenAiSidecarPlacementTest" &&
+                        it.second.contains("digest_mismatch")
+                },
+            )
         }
 
     @Test

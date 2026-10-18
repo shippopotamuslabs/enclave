@@ -1,10 +1,12 @@
 package com.browntowndev.enclave.feature.inference.tts.media
 
+import com.browntowndev.enclave.core.testing.FakeAutomaticErrorTrackingGate
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.feature.inference.AndroidLoggingAdapter
+import com.browntowndev.enclave.feature.inference.FakeGoogleGenAiClientProviderPort
+import com.browntowndev.enclave.feature.inference.FakeOpenAiClientProviderPort
 import com.browntowndev.enclave.feature.inference.GoogleGenAiClientProviderPort
 import com.browntowndev.enclave.feature.inference.OpenAiClientProviderPort
-import io.mockk.mockk
 import okhttp3.OkHttpClient
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
@@ -14,9 +16,9 @@ import org.junit.jupiter.api.Test
 
 class TtsMediaStreamFactoryTest {
     private val httpClient: OkHttpClient = OkHttpClient()
-    private val openAiClientProvider: OpenAiClientProviderPort = mockk()
-    private val googleClientProvider: GoogleGenAiClientProviderPort = mockk()
-    private val logger: AndroidLoggingAdapter = mockk(relaxed = true)
+    private val openAiClientProvider: OpenAiClientProviderPort = FakeOpenAiClientProviderPort()
+    private val googleClientProvider: GoogleGenAiClientProviderPort = FakeGoogleGenAiClientProviderPort()
+    private val logger: AndroidLoggingAdapter = AndroidLoggingAdapter(FakeAutomaticErrorTrackingGate())
     private lateinit var factory: TtsMediaStreamFactory
 
     @BeforeEach

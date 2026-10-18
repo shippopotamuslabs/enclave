@@ -11,7 +11,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class GoogleGenAiClientProvider
+open class GoogleGenAiClientProvider
     @Inject
     constructor() {
         companion object {
@@ -73,7 +73,7 @@ class GoogleGenAiClientProvider
             return client!!
         }
 
-        fun listModels(
+        open fun listModels(
             apiKey: String,
             baseUrl: String?,
             headers: Map<String, String> = emptyMap(),

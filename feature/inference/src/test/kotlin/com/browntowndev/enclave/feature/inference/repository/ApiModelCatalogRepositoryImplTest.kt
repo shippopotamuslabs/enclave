@@ -1,21 +1,24 @@
+@file:Suppress("ForbiddenMockKInTests") // OpenAI SDK client graph and com.google.genai Model are third-party SDK types; MockK is used only for them.
+
 package com.browntowndev.enclave.feature.inference.repository
 
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
+import com.browntowndev.enclave.feature.inference.FakeGoogleGenAiClientProvider
+import com.browntowndev.enclave.feature.inference.FakeOpenAiClientProvider
 import com.browntowndev.enclave.feature.inference.anthropic.AnthropicSdkBaseUrl
-import com.browntowndev.enclave.feature.inference.google.GoogleGenAiClientProvider
-import com.browntowndev.enclave.feature.inference.openai.OpenAiClientProvider
 import com.google.genai.types.Model
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
+import okio.Timeout
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
@@ -25,9 +28,9 @@ import java.time.ZoneOffset
 import java.util.Optional
 
 class ApiModelCatalogRepositoryImplTest {
-    private val openAiClientProvider = mockk<OpenAiClientProvider>()
-    private val googleGenAiClientProvider = mockk<GoogleGenAiClientProvider>()
-    private val httpClient = mockk<Call.Factory>()
+    private val openAiClientProvider = FakeOpenAiClientProvider()
+    private val googleGenAiClientProvider = FakeGoogleGenAiClientProvider()
+    private val httpClient = FakeCallFactory()
     private val googleModelA = mockk<Model>()
     private val googleModelB = mockk<Model>()
 
@@ -42,7 +45,7 @@ class ApiModelCatalogRepositoryImplTest {
                 httpClient = httpClient,
             )
 
-        every { googleGenAiClientProvider.listModels(any(), any(), any(), any()) } returns listOf(googleModelA, googleModelB)
+        googleGenAiClientProvider.modelsResult = listOf(googleModelA, googleModelB)
         every { googleModelA.name() } returns Optional.of("models/gemini-2.5-flash")
         every { googleModelB.name() } returns Optional.of("publishers/google/models/gemini-2.5-pro")
         every { googleModelA.inputTokenLimit() } returns Optional.of(1_048_576)
@@ -56,10 +59,7 @@ class ApiModelCatalogRepositoryImplTest {
     @Test
     fun `fetchModels filters compatible model discovery to native Anthropic shape`() =
         runTest {
-            val call = mockk<Call>()
-            val requestSlot = io.mockk.slot<Request>()
-            every { httpClient.newCall(capture(requestSlot)) } returns call
-            every { call.execute() } returns
+            httpClient.responseFactory = {
                 jsonResponse(
                     request = Request.Builder().url("https://opencode.ai/zen/go/v1/models").build(),
                     body =
@@ -87,6 +87,7 @@ class ApiModelCatalogRepositoryImplTest {
                         }
                         """.trimIndent(),
                 )
+            }
 
             val catalog =
                 repo.fetchModels(
@@ -115,17 +116,15 @@ class ApiModelCatalogRepositoryImplTest {
                 ),
                 catalog.models,
             )
-            assertEquals("https://opencode.ai/zen/go/v1/models", requestSlot.captured.url.toString())
-            assertEquals("key", requestSlot.captured.header("x-api-key"))
-            assertEquals("Bearer key", requestSlot.captured.header("Authorization"))
+            val request = httpClient.requests.single()
+            assertEquals("https://opencode.ai/zen/go/v1/models", request.url.toString())
+            assertEquals("key", request.header("x-api-key"))
+            assertEquals("Bearer key", request.header("Authorization"))
         }
 
     @Test
     fun `SCN-DISCOVERY-001 fetchModels discovers DeepSeek models via openai-compatible list`() = runTest {
-        val call = mockk<Call>()
-        val requestSlot = io.mockk.slot<Request>()
-        every { httpClient.newCall(capture(requestSlot)) } returns call
-        every { call.execute() } returns
+        httpClient.responseFactory = {
             jsonResponse(
                 request = Request.Builder().url("https://api.deepseek.com/v1/models").build(),
                 body =
@@ -139,6 +138,7 @@ class ApiModelCatalogRepositoryImplTest {
                     }
                     """.trimIndent(),
             )
+        }
 
         val catalog =
             repo.fetchModels(
@@ -152,15 +152,13 @@ class ApiModelCatalogRepositoryImplTest {
         assertEquals(null, catalog.models[0].created)
         assertEquals("deepseek-reasoner", catalog.models[1].id)
         assertEquals(1_700_000_000L, catalog.models[1].created)
-        assertEquals("https://api.deepseek.com/v1/models", requestSlot.captured.url.toString())
-        verify(exactly = 0) { openAiClientProvider.getClient(any(), any(), any()) }
+        assertEquals("https://api.deepseek.com/v1/models", httpClient.requests.single().url.toString())
+        assertTrue(openAiClientProvider.getClientRequests.isEmpty())
     }
 
     @Test
     fun `fetchModels discovers Zai models via openai-compatible endpoint`() = runTest {
-        val call = mockk<Call>()
-        every { httpClient.newCall(any()) } returns call
-        every { call.execute() } returns
+        httpClient.responseFactory = {
             jsonResponse(
                 request = Request.Builder().url("https://api.z.ai/api/paas/v4/models").build(),
                 body =
@@ -172,6 +170,7 @@ class ApiModelCatalogRepositoryImplTest {
                     }
                     """.trimIndent(),
             )
+        }
 
         val catalog =
             repo.fetchModels(
@@ -182,7 +181,7 @@ class ApiModelCatalogRepositoryImplTest {
 
         assertEquals(1, catalog.models.size)
         assertEquals("glm-4.6", catalog.models[0].id)
-        verify(exactly = 0) { openAiClientProvider.getClient(any(), any(), any()) }
+        assertTrue(openAiClientProvider.getClientRequests.isEmpty())
     }
 
     @Test
@@ -255,14 +254,10 @@ class ApiModelCatalogRepositoryImplTest {
                 ),
                 catalog.models,
             )
-            verify {
-                googleGenAiClientProvider.listModels(
-                    apiKey = "key",
-                    baseUrl = ApiProvider.GOOGLE.defaultBaseUrl(),
-                    headers = emptyMap(),
-                    apiVersion = any(),
-                )
-            }
+            val request = googleGenAiClientProvider.listModelsRequests.single()
+            assertEquals("key", request.apiKey)
+            assertEquals(ApiProvider.GOOGLE.defaultBaseUrl(), request.baseUrl)
+            assertEquals(emptyMap<String, String>(), request.headers)
         }
 
     @Test
@@ -498,7 +493,7 @@ class ApiModelCatalogRepositoryImplTest {
     @Test
     fun `fetchModels filters out blacklisted OpenAI models`() =
         runTest {
-            every { openAiClientProvider.getClient(any(), any(), any()) } returns
+            openAiClientProvider.client =
                 mockk {
                     every { models() } returns
                         mockk {
@@ -623,9 +618,7 @@ class ApiModelCatalogRepositoryImplTest {
     @Test
     fun `fetchModels falProvider truncatesAtMaxPages`() =
         runTest {
-            val call = mockk<Call>()
-            every { httpClient.newCall(any()) } returns call
-            every { call.execute() } answers {
+            httpClient.responseFactory = {
                 jsonResponse(
                     request = Request.Builder().url("https://api.fal.ai/v1/models").build(),
                     body = """{"models": [], "next_cursor": "more-data"}""",
@@ -634,7 +627,7 @@ class ApiModelCatalogRepositoryImplTest {
 
             val catalog = repo.fetchModels(ApiProvider.FAL, apiKey = "key", baseUrl = null)
 
-            verify(exactly = 50) { httpClient.newCall(any()) }
+            assertEquals(50, httpClient.requests.size)
             assertTrue(catalog.isTruncated)
             assertTrue(catalog.models.isNotEmpty())
         }
@@ -643,10 +636,7 @@ class ApiModelCatalogRepositoryImplTest {
     @org.junit.jupiter.api.DisplayName("SCN-INFRA-001")
     fun scnInfra001_apiModelCatalogRepositoryFetchesAndParsesEndpointsFromOpenRouterApi() =
         runTest {
-            val call = mockk<Call>()
-            val requestSlot = io.mockk.slot<Request>()
-            every { httpClient.newCall(capture(requestSlot)) } returns call
-            every { call.execute() } returns
+            httpClient.responseFactory = {
                 jsonResponse(
                     request =
                         Request
@@ -680,6 +670,7 @@ class ApiModelCatalogRepositoryImplTest {
                         }
                         """.trimIndent(),
                 )
+            }
 
             val result =
                 repo.fetchModelEndpoints(
@@ -688,11 +679,12 @@ class ApiModelCatalogRepositoryImplTest {
                     baseUrl = null,
                 )
 
+            val request = httpClient.requests.single()
             assertEquals(
                 "https://openrouter.ai/api/v1/models/meta-llama/llama-3.3-70b-instruct/endpoints",
-                requestSlot.captured.url.toString(),
+                request.url.toString(),
             )
-            assertEquals("Bearer sk-or-key", requestSlot.captured.header("Authorization"))
+            assertEquals("Bearer sk-or-key", request.header("Authorization"))
 
             assertEquals(1, result.size)
             val endpoint = result[0]
@@ -721,4 +713,46 @@ class ApiModelCatalogRepositoryImplTest {
             .message("OK")
             .body(body.toResponseBody("application/json".toMediaType()))
             .build()
+
+    /** Hand-written OkHttp [Call.Factory] fake: records requests, serves [responseFactory] responses. */
+    private class FakeCallFactory : Call.Factory {
+        val requests = mutableListOf<Request>()
+        var responseFactory: () -> Response = { error("No response stubbed") }
+
+        override fun newCall(request: Request): Call {
+            requests += request
+            return FakeCall(request, responseFactory)
+        }
+    }
+
+    private class FakeCall(
+        private val callRequest: Request,
+        private val responseFactory: () -> Response,
+    ) : Call {
+        override fun request(): Request = callRequest
+
+        override fun execute(): Response = responseFactory()
+
+        override fun enqueue(responseCallback: Callback) {
+            responseCallback.onResponse(this, responseFactory())
+        }
+
+        override fun cancel() = Unit
+
+        override fun isExecuted(): Boolean = true
+
+        override fun isCanceled(): Boolean = false
+
+        override fun clone(): Call = FakeCall(callRequest, responseFactory)
+
+        override fun timeout(): Timeout = Timeout.NONE
+
+        override fun <T : Any> tag(type: kotlin.reflect.KClass<T>): T? = null
+
+        override fun <T> tag(type: Class<out T>): T? = null
+
+        override fun <T : Any> tag(type: kotlin.reflect.KClass<T>, computeIfAbsent: () -> T): T = computeIfAbsent()
+
+        override fun <T : Any> tag(type: Class<T>, computeIfAbsent: () -> T): T = computeIfAbsent()
+    }
 }

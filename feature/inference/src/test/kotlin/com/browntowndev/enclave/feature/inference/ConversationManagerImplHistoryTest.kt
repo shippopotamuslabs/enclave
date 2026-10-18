@@ -1,42 +1,44 @@
+// MockK is used only for LiteRT-LM SDK types (com.google.ai.edge.litertlm.*), a third-party SDK boundary.
+@file:Suppress("ForbiddenMockKInTests")
+
 package com.browntowndev.enclave.feature.inference
 
 import android.content.Context
 import android.util.Log
+import androidx.test.core.app.ApplicationProvider
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
+import com.browntowndev.enclave.core.testing.FakeEmbeddingEngine
+import com.browntowndev.enclave.core.testing.FakeLocalModelRepository
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeToolExecutor
 import com.browntowndev.enclave.domain.model.chat.ChatMessage
 import com.browntowndev.enclave.domain.model.chat.Role
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
-import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
-import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.google.ai.edge.litertlm.Conversation
-import io.mockk.MockKAnnotations
-import io.mockk.every
 import io.mockk.mockk
-import io.mockk.mockkStatic
-import io.mockk.unmockkStatic
 import io.mockk.verify
 import kotlinx.coroutines.test.runTest
-import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowLog
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class ConversationManagerImplHistoryTest {
-    private val context = mockk<Context>(relaxed = true)
-    private val localModelRepository = mockk<LocalModelRepositoryPort>(relaxed = true)
-    private val activeModelProvider = mockk<ActiveModelProviderPort>(relaxed = true)
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
-    private val toolExecutor = mockk<ToolExecutorPort>(relaxed = true)
+    private val localModelRepository = FakeLocalModelRepository()
+    private val activeModelProvider = FakeActiveModelProvider()
+    private val loggingPort = FakeLoggingPort()
+    private val toolExecutor = FakeToolExecutor()
 
     private lateinit var manager: ConversationManagerImpl
 
     @BeforeEach
     fun setUp() {
-        MockKAnnotations.init(this)
-        mockkStatic(Log::class)
-        every { Log.d(any(), any()) } returns 0
-        every { Log.i(any(), any()) } returns 0
-
+        val context = ApplicationProvider.getApplicationContext<Context>()
         manager =
             ConversationManagerImpl(
                 context = context,
@@ -44,13 +46,8 @@ class ConversationManagerImplHistoryTest {
                 activeModelProvider = activeModelProvider,
                 loggingPort = loggingPort,
                 toolExecutor = toolExecutor,
-            embeddingEnginePort = mockk(relaxed = true),
+                embeddingEnginePort = FakeEmbeddingEngine(),
             )
-    }
-
-    @AfterEach
-    fun tearDown() {
-        unmockkStatic(Log::class)
     }
 
     @Test
@@ -67,12 +64,14 @@ class ConversationManagerImplHistoryTest {
                 )
             manager.setHistory(turn2History)
 
-            verify(exactly = 1) {
-                Log.d("ConversationManager", match { it.contains("History is a continuation. Reusing conversation.") })
-            }
-            verify(exactly = 0) {
-                Log.d("ConversationManager", match { it.contains("History discontinuity detected") })
-            }
+            assertEquals(
+                1,
+                debugLogCount("History is a continuation. Reusing conversation."),
+            )
+            assertEquals(
+                0,
+                debugLogCount("History discontinuity detected"),
+            )
         }
 
     @Test
@@ -84,10 +83,16 @@ class ConversationManagerImplHistoryTest {
 
             manager.setHistory(emptyList())
 
-            verify(exactly = 1) {
-                Log.d("ConversationManager", match { it.contains("Empty rehydrated history requires native conversation reset") })
-            }
+            assertEquals(
+                1,
+                debugLogCount("Empty rehydrated history requires native conversation reset"),
+            )
             verify(exactly = 1) { mockLiteRtConversation.close() }
             assertNull(manager.conversation)
         }
+
+    private fun debugLogCount(messagePart: String): Int =
+        ShadowLog
+            .getLogsForTag("ConversationManager")
+            .count { it.type == Log.DEBUG && it.msg.contains(messagePart) }
 }

@@ -1,13 +1,16 @@
 package com.browntowndev.enclave.feature.inference.llama
 
-import io.mockk.mockk
-import io.mockk.verify
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
 class LlamaModelLifecycleTest {
     @Test
     fun `checkAndCompressContext reports native context usage without mutating KV positions`() {
-        val compress = mockk<(Int, Int) -> Boolean>(relaxed = true)
+        var compressCalls = 0
+        val compress: (Int, Int) -> Boolean = { _, _ ->
+            compressCalls++
+            true
+        }
         val lifecycle =
             LlamaModelLifecycle(
                 getContextSize = { 100 },
@@ -22,12 +25,16 @@ class LlamaModelLifecycleTest {
 
         lifecycle.checkAndCompressContext()
 
-        verify(exactly = 0) { compress(any(), any()) }
+        assertEquals(0, compressCalls)
     }
 
     @Test
     fun `checkAndCompressContext falls back to tracked token counts without mutating KV positions`() {
-        val compress = mockk<(Int, Int) -> Boolean>(relaxed = true)
+        var compressCalls = 0
+        val compress: (Int, Int) -> Boolean = { _, _ ->
+            compressCalls++
+            true
+        }
         val lifecycle =
             LlamaModelLifecycle(
                 getContextSize = { 100 },
@@ -42,6 +49,6 @@ class LlamaModelLifecycleTest {
 
         lifecycle.checkAndCompressContext()
 
-        verify(exactly = 0) { compress(any(), any()) }
+        assertEquals(0, compressCalls)
     }
 }

@@ -1,3 +1,6 @@
+// MockK is used only for Anthropic Java SDK types (com.anthropic.*), a third-party SDK boundary.
+@file:Suppress("ForbiddenMockKInTests")
+
 package com.browntowndev.enclave.feature.inference.telemetry
 
 import com.anthropic.core.JsonValue
