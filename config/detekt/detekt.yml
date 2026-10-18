@@ -10,17 +10,18 @@ config:
   warningsAsErrors: false
 
 # Custom Enclave rule set (:detekt-rules, ENC-10). Enabled per scope by
-# ENC-22 after remediation; still-inactive rules have per-rule follow-ups:
+# ENC-22 after remediation. All custom rules are now active:
 # ForbiddenMaterialComposeInFeatures (ENC-25), ForbiddenDomainTypeInComposable
 # + ForbiddenDomainTypeInUiState (ENC-26), ForbiddenVerifyInViewModelTests
-# (ENC-27), ForbiddenMockKInTests (ENC-28).
+# (ENC-27), ForbiddenMockKInTests (ENC-28; repo-wide unsuppressed MockK
+# reached zero 2026-10-18, remaining uses are @file:Suppress'd SDK-only).
 enclave:
   ForbiddenMaterialComposeInFeatures:
     active: true
   ForbiddenRawColorLiteralInFeatures:
     active: true
   ForbiddenMockKInTests:
-    active: false
+    active: true
   ForbiddenVerifyInViewModelTests:
     active: true
   ForbiddenRepositoryInViewModel:
