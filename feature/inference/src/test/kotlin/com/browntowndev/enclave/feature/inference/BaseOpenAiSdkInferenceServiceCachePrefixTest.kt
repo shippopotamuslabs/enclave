@@ -1,3 +1,6 @@
+@file:Suppress("ForbiddenMockKInTests")
+
+// MockK retained only for the OpenAI Java SDK surface (third-party SDK boundary).
 package com.browntowndev.enclave.feature.inference
 
 import com.browntowndev.enclave.domain.model.chat.ChatId
@@ -10,7 +13,7 @@ import com.browntowndev.enclave.domain.model.config.OpenRouterRoutingConfigurati
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.InferenceEvent
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.util.FakeToolStreamGatePort
 import com.browntowndev.enclave.feature.inference.openai.StreamedOpenAiResponse
 import com.openai.client.OpenAIClient
@@ -23,7 +26,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class BaseOpenAiSdkInferenceServiceCachePrefixTest {
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
+    private val loggingPort = FakeLoggingPort()
 
     @Test
     fun `completeSingleTurn message prefix is stable across turns for OpenAI`() =

@@ -3,15 +3,14 @@ package com.browntowndev.enclave.feature.inference
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.AgentLoopMessage
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import io.mockk.mockk
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class AgentLoopOpenAiResponseMapperTest {
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
+    private val loggingPort = FakeLoggingPort()
 
     @Test
     fun `mapSession maps assistant raw_tool_calls to function_call input items`() {

@@ -13,7 +13,7 @@ import com.browntowndev.enclave.domain.model.chat.ChatMessage as DomainChatMessa
  * Manages the lifecycle of llama.cpp chat sessions.
  * Keeps conversation state separate from raw engine lifecycle.
  */
-class LlamaChatSessionManager
+open class LlamaChatSessionManager
     @Inject
     constructor(
         private val engine: LlamaEnginePort,

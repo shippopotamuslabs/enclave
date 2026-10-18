@@ -16,7 +16,7 @@ import kotlinx.serialization.json.putJsonObject
 import java.util.Base64
 import javax.inject.Inject
 
-class FalImageGenerationAdapter(
+open class FalImageGenerationAdapter(
     private val falService: FalService,
     private val outputSchemaResolver: FalOutputSchemaResolver,
     private val pollDelayMillis: Long,
@@ -27,7 +27,7 @@ class FalImageGenerationAdapter(
         outputSchemaResolver: FalOutputSchemaResolver,
     ) : this(falService, outputSchemaResolver, DEFAULT_POLL_DELAY_MILLIS)
 
-    suspend fun generateImage(
+    open suspend fun generateImage(
         prompt: String,
         apiKey: String,
         modelId: String,

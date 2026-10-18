@@ -1,5 +1,19 @@
+@file:Suppress("ForbiddenMockKInTests") // OpenAIClient/AnthropicClient/genai Client are third-party SDK types; MockK is used only for them.
+
 package com.browntowndev.enclave.feature.inference
 
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import com.anthropic.client.AnthropicClient
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
+import com.browntowndev.enclave.core.testing.FakeApiKeyProvider
+import com.browntowndev.enclave.core.testing.FakeApiModelRepository
+import com.browntowndev.enclave.core.testing.FakeDefaultModelRepository
+import com.browntowndev.enclave.core.testing.FakeEmbeddingEngine
+import com.browntowndev.enclave.core.testing.FakeLocalModelRepository
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeTelemetryEventPort
+import com.browntowndev.enclave.core.testing.FakeToolExecutor
 import com.browntowndev.enclave.domain.model.config.ApiCredentials
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.config.ApiModelConfiguration
@@ -7,54 +21,57 @@ import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.port.repository.ApiModelRepositoryPort
-import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
-import com.browntowndev.enclave.domain.port.security.ApiKeyProviderPort
-import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
+import com.google.genai.Client
 import com.openai.client.OpenAIClient
-import io.mockk.coEvery
-import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 import kotlin.reflect.full.declaredFunctions
 import kotlin.reflect.jvm.isAccessible
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class ByokModelOnPresetInferenceTest {
-    private val defaultModelRepository = mockk<DefaultModelRepositoryPort>()
-    private val apiModelRepository = mockk<ApiModelRepositoryPort>()
-    private val apiKeyProvider = mockk<ApiKeyProviderPort>()
-    private val openAiClientProvider = mockk<OpenAiClientProviderPort>(relaxed = true)
+    private val defaultModelRepository = FakeDefaultModelRepository()
+    private val apiModelRepository = FakeApiModelRepository()
+    private val apiKeyProvider = FakeApiKeyProvider()
+    private val openAiClientProvider = FakeOpenAiClientProviderPort()
     private val openAiClient = mockk<OpenAIClient>(relaxed = true)
-    private val inferenceLockManager = mockk<InferenceLockManager>()
+    private val inferenceLockManager = FakeInferenceLockManager()
     private lateinit var factory: InferenceFactoryImpl
 
     @BeforeEach
     fun setUp() {
-        every { inferenceLockManager.acquireLock(any()) } returns true
-        every { inferenceLockManager.releaseLock(any()) } returns Unit
-        every { openAiClientProvider.getClient(any(), any(), any(), any(), any()) } returns openAiClient
+        openAiClientProvider.client = openAiClient
         factory =
             InferenceFactoryImpl(
-                context = mockk(relaxed = true),
+                context = ApplicationProvider.getApplicationContext<Context>(),
                 defaultModelRepository = defaultModelRepository,
-                localModelRepository = mockk(relaxed = true),
-                activeModelProvider = mockk(relaxed = true),
+                localModelRepository = FakeLocalModelRepository(),
+                activeModelProvider = FakeActiveModelProvider(),
                 apiModelRepository = apiModelRepository,
                 apiKeyProvider = apiKeyProvider,
-                processThinkingTokens = mockk(relaxed = true),
-                llamaChatSessionManagerProvider = providerOf(mockk(relaxed = true)),
-                conversationManagerProvider = providerOf(mockk(relaxed = true)),
+                processThinkingTokens = FakeProcessThinkingTokensUseCase(),
+                llamaChatSessionManagerProvider =
+                    providerOf(
+                        com.browntowndev.enclave.feature.inference.llama.LlamaChatSessionManager(FakeLlamaEnginePort()),
+                    ),
+                conversationManagerProvider = providerOf(FakeConversationManager()),
                 openAiClientProvider = openAiClientProvider,
-                anthropicClientProvider = mockk(relaxed = true),
-                googleGenAiClientProvider = mockk(relaxed = true),
-                loggingPort = mockk(relaxed = true),
+                anthropicClientProvider =
+                    FakeAnthropicClientProviderPort().apply { client = mockk<AnthropicClient>(relaxed = true) },
+                googleGenAiClientProvider =
+                    FakeGoogleGenAiClientProviderPort().apply { client = mockk<Client>(relaxed = true) },
+                loggingPort = FakeLoggingPort(),
                 inferenceLockManager = inferenceLockManager,
-                toolExecutionEventPort = mockk(relaxed = true),
-                agentLoopPort = mockk(relaxed = true),
-                toolExecutorPort = mockk(relaxed = true),
+                toolExecutionEventPort = FakeToolExecutionEventPort(),
+                agentLoopPort = FakeAgentLoopPort(),
+                toolExecutorPort = FakeToolExecutor(),
                 toolEnvelopeParserPort =
                     com.browntowndev.enclave.domain.util
                         .FakeToolEnvelopeParserPort(),
@@ -62,8 +79,8 @@ class ByokModelOnPresetInferenceTest {
                     com.browntowndev.enclave.domain.util
                         .FakeToolStreamGatePort(),
                 telemetrySupport = testInferenceTelemetrySupport(),
-                telemetryEventPort = mockk(relaxed = true),
-                embeddingEnginePort = mockk(relaxed = true),
+                telemetryEventPort = FakeTelemetryEventPort(),
+                embeddingEnginePort = FakeEmbeddingEngine(),
                 monotonicToolActivation =
                     com.browntowndev.enclave.domain.usecase.chat.InMemoryMonotonicToolActivationStore(),
                 toolSearchEmbeddingCache =
@@ -80,19 +97,22 @@ class ByokModelOnPresetInferenceTest {
         runTest {
             val configId = ApiModelConfigurationId("cfg-primary")
             val credId = ApiCredentialsId("cred-1")
-            coEvery { defaultModelRepository.getDefault(ModelType.MAIN) } returns
-                DefaultModelAssignment(modelType = ModelType.MAIN, apiConfigId = configId)
-            coEvery { apiModelRepository.getConfigurationById(configId) } returns
-                apiConfiguration(modelId = "gpt-4o", credId = credId)
-            coEvery { apiModelRepository.getCredentialsById(credId) } returns
-                ApiCredentials(
-                    id = credId,
-                    displayName = "OpenAI",
-                    provider = ApiProvider.OPENAI,
-                    baseUrl = "https://api.openai.com/v1",
-                    credentialAlias = "alias",
-                )
-            coEvery { apiKeyProvider.getApiKey("alias") } returns "secret"
+            defaultModelRepository.seed(
+                DefaultModelAssignment(modelType = ModelType.MAIN, apiConfigId = configId),
+            )
+            apiModelRepository.seedConfigurations(listOf(apiConfiguration(modelId = "gpt-4o", credId = credId).copy(id = configId)))
+            apiModelRepository.seedCredentials(
+                listOf(
+                    ApiCredentials(
+                        id = credId,
+                        displayName = "OpenAI",
+                        provider = ApiProvider.OPENAI,
+                        baseUrl = "https://api.openai.com/v1",
+                        credentialAlias = "alias",
+                    ),
+                ),
+            )
+            apiKeyProvider.saveApiKey("alias", "secret")
 
             factory.withInferenceService(ModelType.MAIN) { }
 
@@ -127,19 +147,22 @@ class ByokModelOnPresetInferenceTest {
         runTest {
             val configId = ApiModelConfigurationId("cfg-primary")
             val credId = ApiCredentialsId("cred-1")
-            coEvery { defaultModelRepository.getDefault(ModelType.MAIN) } returns
-                DefaultModelAssignment(modelType = ModelType.MAIN, apiConfigId = configId)
-            coEvery { apiModelRepository.getConfigurationById(configId) } returns
-                apiConfiguration(modelId = "gpt-4o", credId = credId)
-            coEvery { apiModelRepository.getCredentialsById(credId) } returns
-                ApiCredentials(
-                    id = credId,
-                    displayName = "OpenAI",
-                    provider = ApiProvider.OPENAI,
-                    baseUrl = "https://api.openai.com/v1",
-                    credentialAlias = "alias",
-                )
-            coEvery { apiKeyProvider.getApiKey("alias") } returns "secret"
+            defaultModelRepository.seed(
+                DefaultModelAssignment(modelType = ModelType.MAIN, apiConfigId = configId),
+            )
+            apiModelRepository.seedConfigurations(listOf(apiConfiguration(modelId = "gpt-4o", credId = credId).copy(id = configId)))
+            apiModelRepository.seedCredentials(
+                listOf(
+                    ApiCredentials(
+                        id = credId,
+                        displayName = "OpenAI",
+                        provider = ApiProvider.OPENAI,
+                        baseUrl = "https://api.openai.com/v1",
+                        credentialAlias = "alias",
+                    ),
+                ),
+            )
+            apiKeyProvider.saveApiKey("alias", "secret")
 
             factory.withInferenceService(ModelType.MAIN) { }
 

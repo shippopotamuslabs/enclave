@@ -8,7 +8,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class OpenAiClientProvider
+open class OpenAiClientProvider
     @Inject
     constructor() {
         private val clientCache =
@@ -25,7 +25,7 @@ class OpenAiClientProvider
                 }
             }
 
-        fun getClient(
+        open fun getClient(
             apiKey: String,
             baseUrl: String?,
             organizationId: String? = null,

@@ -1,5 +1,9 @@
+@file:Suppress("ForbiddenMockKInTests")
+
+// MockK retained only for the OpenAI Java SDK surface (third-party SDK boundary).
 package com.browntowndev.enclave.feature.inference
 
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.Role
@@ -27,7 +31,6 @@ import com.openai.models.chat.completions.ChatCompletionCreateParams
 import com.openai.models.responses.ResponseCreateParams
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
@@ -43,7 +46,7 @@ import kotlin.test.assertFalse
  * - completeSingleTurn provider-message mapping
  */
 class BaseOpenAiSdkInferenceServiceTest {
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
+    private val loggingPort = FakeLoggingPort()
     private val client = mockk<OpenAIClient>()
 
     // ── describeException ──────────────────────────────────────────────────────
@@ -63,12 +66,12 @@ class BaseOpenAiSdkInferenceServiceTest {
 
         assertFalse(description.contains("code="))
         assertFalse(description.contains("IllegalStateException"))
-        verify {
-            loggingPort.warning(
-                "BaseOpenAiSdkInferenceServiceTest",
-                match { it.contains("Skipping malformed API error field") },
-            )
-        }
+        assertTrue(
+            loggingPort.warningCalls.any {
+                it.first == "BaseOpenAiSdkInferenceServiceTest" &&
+                    it.second.contains("Skipping malformed API error field")
+            },
+        )
     }
 
     @Test

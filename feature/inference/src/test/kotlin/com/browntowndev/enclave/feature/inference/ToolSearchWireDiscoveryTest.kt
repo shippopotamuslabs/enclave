@@ -31,8 +31,8 @@ import com.browntowndev.enclave.domain.usecase.chat.InMemoryMonotonicToolActivat
 import com.browntowndev.enclave.domain.usecase.chat.RollingSummarizer
 import com.browntowndev.enclave.domain.usecase.inference.ResolveCompactionSummaryModelUseCase
 import com.browntowndev.enclave.domain.util.JTokkitTokenCounter
-import io.mockk.coEvery
-import io.mockk.mockk
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
+import com.browntowndev.enclave.core.testing.FakeInferenceFactory
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.flow.Flow
@@ -391,11 +391,11 @@ class ToolSearchWireDiscoveryTest {
             loggingPort = logger,
             provider = "OPENAI",
             modelType = ModelType.THINKING,
-            inferenceFactoryProvider = Provider { mockk(relaxed = true) },
+            inferenceFactoryProvider = Provider { FakeInferenceFactory() },
             rollingSummarizer = RollingSummarizer(logger, JTokkitTokenCounter),
             resolveCompactionSummaryModel =
                 ResolveCompactionSummaryModelUseCase(
-                    mockk { coEvery { getActiveConfiguration(ModelType.FAST) } returns null },
+                    FakeActiveModelProvider(),
                     JTokkitTokenCounter,
                 ),
             committedInferenceTranscripts = InMemoryCommittedInferenceTranscriptStore(),

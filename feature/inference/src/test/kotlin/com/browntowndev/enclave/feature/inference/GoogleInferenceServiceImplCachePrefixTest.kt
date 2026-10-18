@@ -1,55 +1,32 @@
 package com.browntowndev.enclave.feature.inference
 
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.AgentLoopMessage
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.util.FakeToolEnvelopeParserPort
 import com.browntowndev.enclave.domain.util.FakeToolStreamGatePort
-import com.google.genai.types.Content
-import com.google.genai.types.GenerateContentConfig
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.mockk
-import io.mockk.slot
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class GoogleInferenceServiceImplCachePrefixTest {
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
+    private val loggingPort = FakeLoggingPort()
 
     @Test
     fun `completeSingleTurn creates, reuses and deletes prompt cache for Google`() =
         runTest {
-            val sdkClient = mockk<GoogleGenAiSdkClient>()
-            val contentsSlot = slot<List<Content>>()
-            val configSlot = slot<GenerateContentConfig>()
-
-            // Mock stream responses
-            coEvery {
-                sdkClient.generateContentStream(
-                    modelId = any(),
-                    contents = capture(contentsSlot),
-                    config = capture(configSlot),
-                    allowToolCall = any(),
-                    emitEvent = any(),
-                )
-            } returns
+            val sdkClient = FakeGoogleGenAiSdkClient()
+            sdkClient.streamResult =
                 GoogleSdkResult(
                     emittedAny = true,
                     functionCall = null,
                     assistantContent = null,
                     finishReason = "STOP",
                 )
-
-            // Mock cache creation/deletion
-            coEvery {
-                sdkClient.createCachedContent(any(), any(), any(), any(), any())
-            } returns "cachedContents/test-cache-999"
-            coEvery { sdkClient.deleteCachedContent(any()) } returns Unit
+            sdkClient.createCachedContentResult = "cachedContents/test-cache-999"
 
             val service =
                 GoogleInferenceServiceImpl(
@@ -83,27 +60,21 @@ class GoogleInferenceServiceImplCachePrefixTest {
             )
 
             // Verify cache creation on Turn 1
-            coVerify(exactly = 1) {
-                sdkClient.createCachedContent(
-                    modelId = "gemini-2.5-flash",
-                    contents = any(),
-                    systemInstruction = any(),
-                    tools = any(),
-                    ttlSeconds = 300L,
-                )
-            }
+            assertEquals(listOf("gemini-2.5-flash"), sdkClient.createCachedContentCalls)
+            assertEquals(listOf(300L), sdkClient.createCachedContentTtls)
 
             // Verify Turn 1 request configuration: cache is created, but the generation call itself uses the cached content.
-            val config1 = configSlot.captured
+            val config1 = sdkClient.lastGenerateConfig!!
             assertTrue(config1.cachedContent().isPresent)
             assertEquals("cachedContents/test-cache-999", config1.cachedContent().get())
 
             // Verify Turn 1 contentsToSend only contains delta contents (the last user message "Turn 1 active user message").
             // Since Turn 1's stableHistory is cached, only the delta (turn1Messages.last()) is sent.
-            assertEquals(1, contentsSlot.captured.size)
+            val capturedContents1 = sdkClient.lastGenerateContents!!
+            assertEquals(1, capturedContents1.size)
             assertEquals(
                 "Turn 1 active user message",
-                contentsSlot.captured
+                capturedContents1
                     .single()
                     .parts()
                     .get()
@@ -134,10 +105,10 @@ class GoogleInferenceServiceImplCachePrefixTest {
             )
 
             // Verify no new cached content was created (the existing one was reused)
-            coVerify(exactly = 1) { sdkClient.createCachedContent(any(), any(), any(), any(), any()) }
+            assertEquals(1, sdkClient.createCachedContentCalls.size)
 
             // Verify Turn 2 request configuration continues to use the active cached content
-            val config2 = configSlot.captured
+            val config2 = sdkClient.lastGenerateConfig!!
             assertTrue(config2.cachedContent().isPresent)
             assertEquals("cachedContents/test-cache-999", config2.cachedContent().get())
 
@@ -145,7 +116,7 @@ class GoogleInferenceServiceImplCachePrefixTest {
             // Cached signature contains stable history up to [u1, a1].
             // So delta history has u2, a2, and the live message u3.
             // That is 3 messages total!
-            val capturedContents2 = contentsSlot.captured
+            val capturedContents2 = sdkClient.lastGenerateContents!!
             assertEquals(3, capturedContents2.size)
             assertEquals(
                 "Turn 1 active user message",
@@ -177,6 +148,6 @@ class GoogleInferenceServiceImplCachePrefixTest {
 
             // Close session and verify cleanup
             service.closeSession()
-            coVerify(exactly = 1) { sdkClient.deleteCachedContent("cachedContents/test-cache-999") }
+            assertEquals(listOf("cachedContents/test-cache-999"), sdkClient.deleteCachedContentCalls)
         }
 }

@@ -1,3 +1,5 @@
+@file:Suppress("ForbiddenMockKInTests") // com.google.genai.Models is a third-party SDK class; MockK is used only for it.
+
 package com.browntowndev.enclave.feature.inference.tts
 
 import com.google.genai.Models

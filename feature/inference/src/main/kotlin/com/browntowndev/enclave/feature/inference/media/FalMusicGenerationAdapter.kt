@@ -12,7 +12,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import javax.inject.Inject
 
-class FalMusicGenerationAdapter(
+open class FalMusicGenerationAdapter(
     private val falService: FalService,
     private val outputSchemaResolver: FalOutputSchemaResolver,
     private val pollDelayMillis: Long,
@@ -23,7 +23,7 @@ class FalMusicGenerationAdapter(
         outputSchemaResolver: FalOutputSchemaResolver,
     ) : this(falService, outputSchemaResolver, DEFAULT_POLL_DELAY_MILLIS)
 
-    suspend fun generateMusic(
+    open suspend fun generateMusic(
         prompt: String,
         apiKey: String,
         modelId: String,

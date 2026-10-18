@@ -2,29 +2,19 @@ package com.browntowndev.enclave.feature.inference
 
 import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
 import com.browntowndev.enclave.domain.model.media.VideoGenerationSettings
-import com.browntowndev.enclave.feature.inference.fal.FalOutputSchemaResolver
 import com.browntowndev.enclave.feature.inference.fal.FalRequest
-import com.browntowndev.enclave.feature.inference.fal.FalService
 import com.browntowndev.enclave.feature.inference.media.FalImageGenerationAdapter
 import com.browntowndev.enclave.feature.inference.media.FalVideoGenerationAdapter
-import io.mockk.coEvery
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.slot
-import io.mockk.verify
 import kotlinx.coroutines.test.runTest
-import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class FalMediaAdapterTasksRedTest {
-    private val falService = mockk<FalService>()
-    private val outputSchemaResolver =
-        mockk<FalOutputSchemaResolver>().also { resolver ->
-            coEvery { resolver.resolve(any(), any(), any()) } returns null
-        }
+    private val falService = SequencedFalService()
+    private val outputSchemaResolver = FakeFalOutputSchemaResolver()
 
     private fun imageAdapter() =
         FalImageGenerationAdapter(
@@ -43,8 +33,7 @@ class FalMediaAdapterTasksRedTest {
     @Test
     fun `IMGADAPTER-01 edit-capable fal image request includes image fields`() =
         runTest {
-            val bodySlot = slot<JsonObject>()
-            stubCompletedImage(bodySlot)
+            stubCompletedImage()
 
             imageAdapter().generateImage(
                 prompt = "draw",
@@ -56,15 +45,15 @@ class FalMediaAdapterTasksRedTest {
                 supportsEdit = true,
             )
 
-            assertTrue("image_url" in bodySlot.captured)
-            assertTrue("image" !in bodySlot.captured)
+            val body = falService.submittedBodies.single()
+            assertTrue("image_url" in body)
+            assertTrue("image" !in body)
         }
 
     @Test
     fun `IMGADAPTER-02 text-to-image-only fal image request omits image fields`() =
         runTest {
-            val bodySlot = slot<JsonObject>()
-            stubCompletedImage(bodySlot)
+            stubCompletedImage()
 
             imageAdapter().generateImage(
                 prompt = "draw",
@@ -76,16 +65,16 @@ class FalMediaAdapterTasksRedTest {
                 supportsEdit = false,
             )
 
-            assertTrue("image_url" !in bodySlot.captured)
-            assertTrue("image" !in bodySlot.captured)
-            assertTrue("prompt" in bodySlot.captured)
+            val body = falService.submittedBodies.single()
+            assertTrue("image_url" !in body)
+            assertTrue("image" !in body)
+            assertTrue("prompt" in body)
         }
 
     @Test
     fun `VIDADAPTER-01 image-to-video fal request includes image_url and succeeds`() =
         runTest {
-            val bodySlot = slot<JsonObject>()
-            stubCompletedVideo(bodySlot)
+            stubCompletedVideo()
 
             val result =
                 videoAdapter().generateVideo(
@@ -98,7 +87,7 @@ class FalMediaAdapterTasksRedTest {
                     supportsImageToVideo = true,
                 )
 
-            assertTrue("image_url" in bodySlot.captured)
+            assertTrue("image_url" in falService.submittedBodies.single())
             assertTrue(result.isSuccess)
         }
 
@@ -122,14 +111,13 @@ class FalMediaAdapterTasksRedTest {
                 "Model 'fal-ai/kling-video/v2.1/master/image-to-video' requires a reference image but none was provided.",
                 result.exceptionOrNull()?.message,
             )
-            verify(exactly = 0) { falService.submitQueue(any(), any(), any(), any()) }
+            assertTrue(falService.submitQueueCalls.isEmpty())
         }
 
     @Test
     fun `VIDADAPTER-03 text-to-video ignores image-to-video-looking model id when task is unsupported`() =
         runTest {
-            val bodySlot = slot<JsonObject>()
-            stubCompletedVideo(bodySlot)
+            stubCompletedVideo()
 
             val result =
                 videoAdapter().generateVideo(
@@ -142,15 +130,14 @@ class FalMediaAdapterTasksRedTest {
                     supportsImageToVideo = false,
                 )
 
-            assertTrue("image_url" !in bodySlot.captured)
+            assertTrue("image_url" !in falService.submittedBodies.single())
             assertTrue(result.isSuccess)
         }
 
     @Test
     fun `MUT-01 text-to-image-only request never attaches image fields`() =
         runTest {
-            val bodySlot = slot<JsonObject>()
-            stubCompletedImage(bodySlot)
+            stubCompletedImage()
 
             imageAdapter().generateImage(
                 prompt = "draw",
@@ -162,32 +149,26 @@ class FalMediaAdapterTasksRedTest {
                 supportsEdit = false,
             )
 
-            assertTrue("image_url" !in bodySlot.captured)
-            assertTrue("image" !in bodySlot.captured)
+            val body = falService.submittedBodies.single()
+            assertTrue("image_url" !in body)
+            assertTrue("image" !in body)
         }
 
-    private fun stubCompletedImage(bodySlot: io.mockk.CapturingSlot<JsonObject>) {
-        val status = kotlinx.serialization.json.buildJsonObject { put("status", "COMPLETED") }
-        every { falService.submitQueue(any(), any(), capture(bodySlot), any()) } returns
-            FalRequest("request-1", "https://queue.test/status", null, null)
-        every { falService.status("key", "https://queue.test/status") } returns status
-        every { falService.statusValue(status) } returns "COMPLETED"
-        every { falService.primaryMediaUrls(status) } returns emptyList()
-        every { falService.mediaUrls(status) } returns listOf("https://cdn.test/image.png")
-        every { falService.resolveMediaBytes("https://cdn.test/image.png", "key") } returns byteArrayOf(4, 5, 6)
+    private fun stubCompletedImage() {
+        val status =
+            buildJsonObject {
+                put("status", "COMPLETED")
+                put("image_url", "https://cdn.test/image.png")
+            }
+        falService.submitQueueResult = FalRequest("request-1", "https://queue.test/status", null, null)
+        falService.statusResult = status
+        falService.resolveMediaBytesResult = byteArrayOf(4, 5, 6)
     }
 
-    private fun stubCompletedVideo(bodySlot: io.mockk.CapturingSlot<JsonObject>) {
-        val status = kotlinx.serialization.json.buildJsonObject { put("status", "COMPLETED") }
-        val result = kotlinx.serialization.json.buildJsonObject { put("video_url", "https://cdn.test/video.mp4") }
-        every { falService.submitQueue(any(), any(), capture(bodySlot), any()) } returns
-            FalRequest("request-1", "https://queue.test/status", null, null)
-        every { falService.status("key", "https://queue.test/status") } returns status
-        every { falService.statusValue(status) } returns "COMPLETED"
-        every { falService.result("key", "https://queue.test") } returns result
-        every { falService.primaryVideoUrls(any(), any()) } returns listOf("https://cdn.test/video.mp4")
-        every { falService.primaryMediaUrls(any(), any()) } returns listOf("https://cdn.test/video.mp4")
-        every { falService.mediaUrls(any(), any()) } returns listOf("https://cdn.test/video.mp4")
-        every { falService.resolveMediaBytes("https://cdn.test/video.mp4", "key") } returns byteArrayOf(4, 5, 6)
+    private fun stubCompletedVideo() {
+        falService.submitQueueResult = FalRequest("request-1", "https://queue.test/status", null, null)
+        falService.statusResult = buildJsonObject { put("status", "COMPLETED") }
+        falService.resultResult = buildJsonObject { put("video_url", "https://cdn.test/video.mp4") }
+        falService.resolveMediaBytesResult = byteArrayOf(4, 5, 6)
     }
 }

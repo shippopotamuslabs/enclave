@@ -1,45 +1,47 @@
 package com.browntowndev.enclave.feature.inference
 
 import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
+import com.browntowndev.enclave.core.testing.FakeEmbeddingEngine
+import com.browntowndev.enclave.core.testing.FakeLocalModelRepository
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeToolExecutor
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
-import com.browntowndev.enclave.domain.model.inference.ToolExecutionResult
 import com.browntowndev.enclave.domain.port.inference.AgentPolicyPort
 import com.browntowndev.enclave.domain.port.inference.AgentPolicyRepairResult
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
-import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
-import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.enclave.feature.inference.conversation.NoopAgentPolicyPort
-import io.mockk.coEvery
-import io.mockk.mockk
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
 /**
  * Contract for LiteRT generation request ownership: an older request draining its
  * `finally` block must not cancel or epoch-bump state owned by a newer request.
  */
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class LiteRtActiveGenerationContractTest {
-    private val context = mockk<Context>(relaxed = true)
-    private val localModelRepository = mockk<LocalModelRepositoryPort>(relaxed = true)
-    private val activeModelProvider = mockk<ActiveModelProviderPort>(relaxed = true)
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
-    private val toolExecutor = mockk<ToolExecutorPort>(relaxed = true)
+    private val localModelRepository = FakeLocalModelRepository()
+    private val activeModelProvider = FakeActiveModelProvider()
+    private val loggingPort = FakeLoggingPort()
+    private val toolExecutor = FakeToolExecutor()
 
     private fun manager(policy: AgentPolicyPort = NoopAgentPolicyPort): ConversationManagerImpl =
         ConversationManagerImpl(
-            context = context,
+            context = ApplicationProvider.getApplicationContext<Context>(),
             localModelRepository = localModelRepository,
             activeModelProvider = activeModelProvider,
             loggingPort = loggingPort,
             toolExecutor = toolExecutor,
-            embeddingEnginePort = mockk(relaxed = true),
+            embeddingEnginePort = FakeEmbeddingEngine(),
             agentPolicyPort = policy,
         )
 
@@ -73,11 +75,7 @@ class LiteRtActiveGenerationContractTest {
         runTest {
             val policy = FakeAgentPolicyPort(maxAllowedStreak = 1u)
             val manager = manager(policy)
-            coEvery { toolExecutor.execute(any()) } returns
-                ToolExecutionResult(
-                    toolName = "web_search",
-                    resultJson = """{"status":"error","message":"provider failed"}""",
-                )
+            toolExecutor.resultJson = """{"status":"error","message":"provider failed"}"""
 
             manager.beginGenerationRequest()
             val turn = manager.defaultTurnContextForTest()

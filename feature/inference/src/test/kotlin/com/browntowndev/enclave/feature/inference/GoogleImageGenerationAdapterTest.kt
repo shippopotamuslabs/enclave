@@ -1,11 +1,12 @@
+@file:Suppress("ForbiddenMockKInTests") // MockK only for the raw google-genai SDK Client handed through the owned provider port.
+
 package com.browntowndev.enclave.feature.inference
 
 import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
 import com.browntowndev.enclave.feature.inference.media.GoogleImageGenerationAdapter
-import com.google.common.collect.ImmutableList
 import com.google.genai.Client
 import com.google.genai.types.*
-import io.mockk.*
+import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -18,24 +19,24 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class GoogleImageGenerationAdapterTest {
-    private val clientProvider = mockk<GoogleGenAiClientProviderPort>()
+    private val clientProvider = FakeGoogleGenAiClientProviderPort()
 
     @Test
     fun testMockkMatch() {
-        val mock = mockk<GoogleGenAiClientProviderPort>()
+        val provider = FakeGoogleGenAiClientProviderPort()
         val client = mockk<Client>()
-        every { mock.getClient(any(), any(), any(), any()) } returns client
+        provider.client = client
 
-        assertNotNull(mock.getClient("key", null, emptyMap(), "v1alpha"))
+        assertNotNull(provider.getClient("key", null, emptyMap(), "v1alpha"))
     }
 
     @Test
     fun generateImage_noReference_callsGenerateContent() =
         runTest {
-            val promptSlot = slot<String>()
-            val contentsSlot = slot<List<Content>>()
-            val configSlot = slot<GenerateContentConfig>()
-            val mockProvider = mockk<GoogleGenAiClientProviderPort>()
+            var capturedModelId: String? = null
+            var capturedContents: List<Content>? = null
+            var capturedConfig: GenerateContentConfig? = null
+            val mockProvider = FakeGoogleGenAiClientProviderPort()
             val mockClient = mockk<Client>()
 
             val adapter =
@@ -46,24 +47,38 @@ class GoogleImageGenerationAdapterTest {
                         contents: List<Content>,
                         config: GenerateContentConfig,
                     ): GenerateContentResponse {
-                        promptSlot.captured = modelId
-                        contentsSlot.captured = contents
-                        configSlot.captured = config
+                        capturedModelId = modelId
+                        capturedContents = contents
+                        capturedConfig = config
 
-                        val blob = mockk<Blob>()
-                        every { blob.data() } returns java.util.Optional.of("modern".toByteArray())
+                        val part =
+                            Part
+                                .builder()
+                                .inlineData(
+                                    Blob
+                                        .builder()
+                                        .data("modern".toByteArray())
+                                        .build(),
+                                ).build()
 
-                        val part = mockk<Part>()
-                        every { part.inlineData() } returns java.util.Optional.of(blob)
-
-                        val response = mockk<GenerateContentResponse>()
-                        every { response.parts() } returns ImmutableList.of(part)
-
-                        return response
+                        return GenerateContentResponse
+                            .builder()
+                            .candidates(
+                                listOf(
+                                    Candidate
+                                        .builder()
+                                        .content(
+                                            Content
+                                                .builder()
+                                                .parts(listOf(part))
+                                                .build(),
+                                        ).build(),
+                                ),
+                            ).build()
                     }
                 }
 
-            every { mockProvider.getClient(any(), any(), any(), any()) } returns mockClient
+            mockProvider.client = mockClient
 
             val result =
                 adapter.generateImage(
@@ -77,32 +92,32 @@ class GoogleImageGenerationAdapterTest {
 
             assertTrue(result.isSuccess)
             assertEquals("modern", String(result.getOrThrow()[0]))
-            assertEquals("gemini-3.1-flash-image-preview", promptSlot.captured)
-            assertEquals(1, contentsSlot.captured.size)
+            assertEquals("gemini-3.1-flash-image-preview", capturedModelId)
+            assertEquals(1, capturedContents!!.size)
             assertEquals(
                 1,
-                contentsSlot.captured[0]
+                capturedContents!![0]
                     .parts()
                     .get()
                     .size,
             )
             assertEquals(
                 "modern prompt",
-                contentsSlot.captured[0]
+                capturedContents!![0]
                     .parts()
                     .get()[0]
                     .text()
                     .get(),
             )
-            assertEquals(listOf("IMAGE"), configSlot.captured.responseModalities().get())
-            assertEquals(2, configSlot.captured.candidateCount().get())
+            assertEquals(listOf("IMAGE"), capturedConfig!!.responseModalities().get())
+            assertEquals(2, capturedConfig!!.candidateCount().get())
         }
 
     @Test
     fun generateImage_withReference_callsGenerateContent() =
         runTest {
-            val contentsSlot = slot<List<Content>>()
-            val mockProvider = mockk<GoogleGenAiClientProviderPort>()
+            var capturedContents: List<Content>? = null
+            val mockProvider = FakeGoogleGenAiClientProviderPort()
             val mockClient = mockk<Client>()
 
             val adapter =
@@ -113,22 +128,36 @@ class GoogleImageGenerationAdapterTest {
                         contents: List<Content>,
                         config: GenerateContentConfig,
                     ): GenerateContentResponse {
-                        contentsSlot.captured = contents
+                        capturedContents = contents
 
-                        val blob = mockk<Blob>()
-                        every { blob.data() } returns java.util.Optional.of("edited".toByteArray())
+                        val part =
+                            Part
+                                .builder()
+                                .inlineData(
+                                    Blob
+                                        .builder()
+                                        .data("edited".toByteArray())
+                                        .build(),
+                                ).build()
 
-                        val part = mockk<Part>()
-                        every { part.inlineData() } returns java.util.Optional.of(blob)
-
-                        val response = mockk<GenerateContentResponse>()
-                        every { response.parts() } returns ImmutableList.of(part)
-
-                        return response
+                        return GenerateContentResponse
+                            .builder()
+                            .candidates(
+                                listOf(
+                                    Candidate
+                                        .builder()
+                                        .content(
+                                            Content
+                                                .builder()
+                                                .parts(listOf(part))
+                                                .build(),
+                                        ).build(),
+                                ),
+                            ).build()
                     }
                 }
 
-            every { mockProvider.getClient(any(), any(), any(), any()) } returns mockClient
+            mockProvider.client = mockClient
 
             val refBytes = "reference".toByteArray()
             val result =
@@ -143,8 +172,8 @@ class GoogleImageGenerationAdapterTest {
 
             assertTrue(result.isSuccess)
             assertEquals("edited", String(result.getOrThrow()[0]))
-            assertEquals(1, contentsSlot.captured.size)
-            val parts = contentsSlot.captured[0].parts().get()
+            assertEquals(1, capturedContents!!.size)
+            val parts = capturedContents!![0].parts().get()
             assertEquals(2, parts.size)
             assertEquals("edit prompt", parts[0].text().get())
             assertEquals(

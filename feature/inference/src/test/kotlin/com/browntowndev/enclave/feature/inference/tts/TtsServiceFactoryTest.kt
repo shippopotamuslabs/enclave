@@ -1,11 +1,10 @@
 package com.browntowndev.enclave.feature.inference.tts
 
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.feature.inference.GoogleGenAiClientProviderPort
-import com.browntowndev.enclave.feature.inference.OpenAiClientProviderPort
-import com.browntowndev.enclave.feature.inference.fal.FalService
-import io.mockk.mockk
+import com.browntowndev.enclave.feature.inference.FakeFalService
+import com.browntowndev.enclave.feature.inference.FakeGoogleGenAiClientProviderPort
+import com.browntowndev.enclave.feature.inference.FakeOpenAiClientProviderPort
 import okhttp3.OkHttpClient
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -15,10 +14,10 @@ class TtsServiceFactoryTest {
     private val factory =
         TtsServiceFactory(
             httpClient = OkHttpClient(),
-            openAiClientProvider = mockk<OpenAiClientProviderPort>(),
-            googleClientProvider = mockk<GoogleGenAiClientProviderPort>(),
-            logger = mockk<LoggingPort>(relaxed = true),
-            falService = mockk<FalService>(),
+            openAiClientProvider = FakeOpenAiClientProviderPort(),
+            googleClientProvider = FakeGoogleGenAiClientProviderPort(),
+            logger = FakeLoggingPort(),
+            falService = FakeFalService(),
         )
 
     @Test

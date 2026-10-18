@@ -1,22 +1,23 @@
 package com.browntowndev.enclave.feature.inference.tts.media
 
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
+import okhttp3.OkHttpClient
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class XAiMediaStreamServiceTest {
-    private val logger: LoggingPort = mockk(relaxed = true)
+    private val logger: LoggingPort = FakeLoggingPort()
     private lateinit var service: XAiMediaStreamService
 
     @BeforeEach
     fun setUp() {
         service =
             XAiMediaStreamService(
-                httpClient = mockk(),
+                httpClient = OkHttpClient(),
                 apiKey = "xai-test",
                 logger = logger,
             )

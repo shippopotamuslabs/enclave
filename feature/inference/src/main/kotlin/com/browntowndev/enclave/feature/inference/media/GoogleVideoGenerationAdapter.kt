@@ -24,7 +24,7 @@ open class GoogleVideoGenerationAdapter(
         clientProvider: GoogleGenAiClientProviderPort,
     ) : this(okHttpClient, clientProvider, DEFAULT_POLL_DELAY_MILLIS)
 
-    suspend fun generateVideo(
+    open suspend fun generateVideo(
         prompt: String,
         apiKey: String,
         modelId: String,

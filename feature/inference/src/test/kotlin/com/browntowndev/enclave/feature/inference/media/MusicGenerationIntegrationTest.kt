@@ -1,12 +1,13 @@
 package com.browntowndev.enclave.feature.inference.media
 
+import com.browntowndev.enclave.core.testing.FakeApiKeyProvider
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.config.MediaProviderAsset
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.media.MusicGenerationSettings
-import io.mockk.coEvery
-import io.mockk.mockk
+import com.browntowndev.enclave.feature.inference.FakeFalMusicGenerationAdapter
+import com.browntowndev.enclave.feature.inference.FakeGoogleMusicGenerationAdapter
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -14,9 +15,9 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class MusicGenerationIntegrationTest {
-    private val apiKeyProvider = mockk<com.browntowndev.enclave.domain.port.security.ApiKeyProviderPort>()
-    private val googleAdapter = mockk<GoogleMusicGenerationAdapter>()
-    private val falAdapter = mockk<FalMusicGenerationAdapter>()
+    private val apiKeyProvider = FakeApiKeyProvider()
+    private val googleAdapter = FakeGoogleMusicGenerationAdapter()
+    private val falAdapter = FakeFalMusicGenerationAdapter()
     private val musicPort = MusicGenerationPortImpl(apiKeyProvider, googleAdapter, falAdapter)
 
     @Test
@@ -36,10 +37,8 @@ class MusicGenerationIntegrationTest {
                 )
             val expectedBytes = "music bytes".toByteArray()
 
-            coEvery { apiKeyProvider.getApiKey("google-alias") } returns "test-key"
-            coEvery {
-                googleAdapter.generateMusic(prompt, "test-key", "lyria-3-clip-preview", any(), settings)
-            } returns Result.success(expectedBytes)
+            apiKeyProvider.saveApiKey("google-alias", "test-key")
+            googleAdapter.result = Result.success(expectedBytes)
 
             // When
             val result = musicPort.generateMusic(prompt, provider, settings)
@@ -47,6 +46,11 @@ class MusicGenerationIntegrationTest {
             // Then
             assertTrue(result.isSuccess)
             assertArrayEquals(expectedBytes, result.getOrNull())
+            val call = googleAdapter.calls.single()
+            assertEquals(prompt, call.prompt)
+            assertEquals("test-key", call.apiKey)
+            assertEquals("lyria-3-clip-preview", call.modelId)
+            assertEquals(settings, call.settings)
         }
 
     @Test
@@ -63,7 +67,7 @@ class MusicGenerationIntegrationTest {
                     credentialAlias = "google-alias",
                 )
 
-            coEvery { apiKeyProvider.getApiKey("google-alias") } returns "test-key"
+            apiKeyProvider.saveApiKey("google-alias", "test-key")
 
             val result = musicPort.generateMusic(prompt, provider, settings)
 
@@ -90,15 +94,18 @@ class MusicGenerationIntegrationTest {
                 )
             val expectedBytes = "fal music bytes".toByteArray()
 
-            coEvery { apiKeyProvider.getApiKey("fal-alias") } returns "test-key"
-            coEvery {
-                falAdapter.generateMusic(prompt, "test-key", "fal-ai/stable-audio", any(), settings)
-            } returns Result.success(expectedBytes)
+            apiKeyProvider.saveApiKey("fal-alias", "test-key")
+            falAdapter.result = Result.success(expectedBytes)
 
             val result = musicPort.generateMusic(prompt, provider, settings)
 
             assertTrue(result.isSuccess)
             assertArrayEquals(expectedBytes, result.getOrNull())
+            val call = falAdapter.calls.single()
+            assertEquals(prompt, call.prompt)
+            assertEquals("test-key", call.apiKey)
+            assertEquals("fal-ai/stable-audio", call.modelId)
+            assertEquals(settings, call.settings)
         }
 
     @Test
@@ -115,7 +122,7 @@ class MusicGenerationIntegrationTest {
                     credentialAlias = "openai-alias",
                 )
 
-            coEvery { apiKeyProvider.getApiKey("openai-alias") } returns "test-key"
+            apiKeyProvider.saveApiKey("openai-alias", "test-key")
 
             val result = musicPort.generateMusic(prompt, provider, settings)
 
@@ -138,14 +145,17 @@ class MusicGenerationIntegrationTest {
                 )
             val expectedBytes = "fal music bytes".toByteArray()
 
-            coEvery { apiKeyProvider.getApiKey("fal-alias") } returns "test-key"
-            coEvery {
-                falAdapter.generateMusic(prompt, "test-key", "fal-ai/stable-audio", any(), settings)
-            } returns Result.success(expectedBytes)
+            apiKeyProvider.saveApiKey("fal-alias", "test-key")
+            falAdapter.result = Result.success(expectedBytes)
 
             val result = musicPort.generateMusic(prompt, provider, settings)
 
             assertTrue(result.isSuccess)
             assertArrayEquals(expectedBytes, result.getOrNull())
+            val call = falAdapter.calls.single()
+            assertEquals(prompt, call.prompt)
+            assertEquals("test-key", call.apiKey)
+            assertEquals("fal-ai/stable-audio", call.modelId)
+            assertEquals(settings, call.settings)
         }
 }

@@ -1,3 +1,6 @@
+@file:Suppress("ForbiddenMockKInTests")
+
+// MockK retained only for third-party SDK surfaces (OpenAI and Anthropic Java SDKs); owned ports use hand-written fakes.
 package com.browntowndev.enclave.feature.inference
 
 import com.anthropic.client.AnthropicClient
@@ -10,16 +13,13 @@ import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.port.inference.InferenceEvent
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.util.FakeToolEnvelopeParserPort
 import com.browntowndev.enclave.domain.util.FakeToolStreamGatePort
 import com.browntowndev.enclave.feature.inference.openai.StreamedOpenAiResponse
 import com.google.genai.types.Content
-import com.google.genai.types.GenerateContentConfig
 import com.openai.client.OpenAIClient
 import com.openai.models.chat.completions.ChatCompletionCreateParams
-import io.mockk.coEvery
-import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -32,7 +32,7 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 
 class PromptCachingTest {
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
+    private val loggingPort = FakeLoggingPort()
 
     @Test
     @DisplayName("SC-REG-01 OpenAI separates stable system and sidecar")
@@ -126,7 +126,7 @@ class PromptCachingTest {
     fun test_PC_01_multi_turn_tail_placement() =
         runTest {
             val client = mockk<OpenAIClient>()
-            val capturedParams = slot<ChatCompletionCreateParams>()
+            var capturedParams: ChatCompletionCreateParams? = null
 
             val service =
                 object : BaseOpenAiSdkInferenceService(
@@ -146,7 +146,7 @@ class PromptCachingTest {
                         assistantMessageId: com.browntowndev.enclave.domain.model.chat.MessageId?,
                         emitEvent: suspend (InferenceEvent) -> Unit,
                     ): StreamedOpenAiResponse {
-                        capturedParams.captured = params
+                        capturedParams = params
                         return StreamedOpenAiResponse(
                             emittedAny = true,
                             functionCalls = emptyList(),
@@ -173,7 +173,7 @@ class PromptCachingTest {
                 options = GenerationOptions(reasoningBudget = 0),
             )
 
-            val messages = capturedParams.captured.messages()
+            val messages = capturedParams!!.messages()
             assertEquals(3, messages.size)
             assertEquals("You are a helpful assistant.", messages[0].asSystem().content().asText())
             assertEquals("Hello", messages[1].asUser().content().asText())
@@ -441,7 +441,7 @@ class PromptCachingTest {
     @Test
     fun test_PC_04_GoogleGenAiCreatesCachedContentOnExceededThreshold() =
         runTest {
-            val sdkClient = mockk<GoogleGenAiSdkClient>()
+            val sdkClient = FakeGoogleGenAiSdkClient()
             val service =
                 GoogleInferenceServiceImpl(
                     sdkClient = sdkClient,
@@ -453,8 +453,8 @@ class PromptCachingTest {
                 )
 
             // Mock caching endpoints
-            coEvery { sdkClient.createCachedContent(any(), any(), any(), any(), any()) } returns "cachedContents/mock-cache-123"
-            coEvery { sdkClient.generateContentStream(any(), any(), any(), any(), any()) } returns
+            sdkClient.createCachedContentResult = "cachedContents/mock-cache-123"
+            sdkClient.streamResult =
                 GoogleSdkResult(
                     emittedAny = true,
                     functionCall = null,
@@ -485,21 +485,13 @@ class PromptCachingTest {
                 options = GenerationOptions(reasoningBudget = 0),
             )
 
-            val contentsSlot = slot<List<Content>>()
-            val systemSlot = slot<Content>()
-            coVerify {
-                sdkClient.createCachedContent(
-                    modelId = "gemini-2.5-flash",
-                    contents = capture(contentsSlot),
-                    systemInstruction = capture(systemSlot),
-                    tools = any(),
-                    ttlSeconds = 300L,
-                )
-            }
-            assertEquals(9, contentsSlot.captured.size)
+            val createRequest = sdkClient.createCachedContentRequests.single()
+            assertEquals("gemini-2.5-flash", createRequest.modelId)
+            assertEquals(300L, createRequest.ttlSeconds)
+            assertEquals(9, createRequest.contents.size)
             assertEquals(
                 "System instruction prompt",
-                systemSlot.captured
+                requireNotNull(createRequest.systemInstruction)
                     .parts()
                     .orElse(null)
                     ?.firstOrNull()
@@ -507,21 +499,13 @@ class PromptCachingTest {
                     ?.orElse(null),
             )
 
-            val configSlot = slot<GenerateContentConfig>()
-            val contentsGenSlot = slot<List<Content>>()
-            coVerify {
-                sdkClient.generateContentStream(
-                    modelId = "gemini-2.5-flash",
-                    contents = capture(contentsGenSlot),
-                    config = capture(configSlot),
-                    allowToolCall = false,
-                    emitEvent = any(),
-                )
-            }
-            assertEquals("cachedContents/mock-cache-123", configSlot.captured.cachedContent().orElse(null))
-            assertEquals(1, contentsGenSlot.captured.size)
+            val generateRequest = sdkClient.generateRequests.single()
+            assertEquals("gemini-2.5-flash", generateRequest.modelId)
+            assertFalse(generateRequest.allowToolCall)
+            assertEquals("cachedContents/mock-cache-123", generateRequest.config.cachedContent().orElse(null))
+            assertEquals(1, generateRequest.contents.size)
             val lastMsgPart =
-                contentsGenSlot.captured[0]
+                generateRequest.contents[0]
                     .parts()
                     .orElse(null)
                     ?.firstOrNull()
@@ -532,7 +516,7 @@ class PromptCachingTest {
     @Test
     fun test_PC_05_GoogleGenAiReusesCachedContentAndTransmitsOnlyDeltas() =
         runTest {
-            val sdkClient = mockk<GoogleGenAiSdkClient>()
+            val sdkClient = FakeGoogleGenAiSdkClient()
             val service =
                 GoogleInferenceServiceImpl(
                     sdkClient = sdkClient,
@@ -549,8 +533,8 @@ class PromptCachingTest {
             // Let's call completeSingleTurn once to establish cache, then a second time.
             // Wait, to keep tests focused, since we can't write internal state directly, we mock createCachedContent for the first turn,
             // and check that the second completeSingleTurn call utilizes the same cachedContent name and only generates delta.
-            coEvery { sdkClient.createCachedContent(any(), any(), any(), any(), any()) } returns "cachedContents/mock-cache-123"
-            coEvery { sdkClient.generateContentStream(any(), any(), any(), any(), any()) } returns
+            sdkClient.createCachedContentResult = "cachedContents/mock-cache-123"
+            sdkClient.streamResult =
                 GoogleSdkResult(
                     emittedAny = true,
                     functionCall = null,
@@ -592,10 +576,12 @@ class PromptCachingTest {
                     AgentLoopMessage(id = "u4", role = Role.USER, content = "User message 4"),
                 )
 
-            // Clear verify records
-            io.mockk.clearMocks(sdkClient)
-            coEvery { sdkClient.createCachedContent(any(), any(), any(), any(), any()) } returns "cachedContents/mock-cache-123"
-            coEvery { sdkClient.generateContentStream(any(), any(), any(), any(), any()) } returns
+            // Clear recorded calls (fake knobs keep their stubbed values)
+            sdkClient.createCachedContentRequests.clear()
+            sdkClient.generateRequests.clear()
+            sdkClient.deleteCachedContentCalls.clear()
+            sdkClient.createCachedContentResult = "cachedContents/mock-cache-123"
+            sdkClient.streamResult =
                 GoogleSdkResult(
                     emittedAny = true,
                     functionCall = null,
@@ -615,37 +601,27 @@ class PromptCachingTest {
             )
 
             // createCachedContent should NOT be called on second turn (cache reused)
-            coVerify(exactly = 0) {
-                sdkClient.createCachedContent(any(), any(), any(), any(), any())
-            }
+            assertTrue(sdkClient.createCachedContentRequests.isEmpty())
 
             // generateContentStream should be called with cachedContents/mock-cache-123 and delta contents: [U3, A3, U4 with sidecars]
-            val contentsGenSlot = slot<List<Content>>()
-            val configSlot = slot<GenerateContentConfig>()
-            coVerify {
-                sdkClient.generateContentStream(
-                    modelId = "gemini-2.5-flash",
-                    contents = capture(contentsGenSlot),
-                    config = capture(configSlot),
-                    allowToolCall = false,
-                    emitEvent = any(),
-                )
-            }
-            assertEquals("cachedContents/mock-cache-123", configSlot.captured.cachedContent().orElse(null))
-            assertEquals(3, contentsGenSlot.captured.size)
+            val generateRequest = sdkClient.generateRequests.single()
+            assertEquals("gemini-2.5-flash", generateRequest.modelId)
+            assertFalse(generateRequest.allowToolCall)
+            assertEquals("cachedContents/mock-cache-123", generateRequest.config.cachedContent().orElse(null))
+            assertEquals(3, generateRequest.contents.size)
             // contents must be U3, A3, U4
             val u3Part =
-                contentsGenSlot.captured[0]
+                generateRequest.contents[0]
                     .parts()
                     .orElse(null)
                     ?.firstOrNull()
             val a3Part =
-                contentsGenSlot.captured[1]
+                generateRequest.contents[1]
                     .parts()
                     .orElse(null)
                     ?.firstOrNull()
             val u4Part =
-                contentsGenSlot.captured[2]
+                generateRequest.contents[2]
                     .parts()
                     .orElse(null)
                     ?.firstOrNull()
@@ -659,7 +635,7 @@ class PromptCachingTest {
     @Test
     fun test_PC_06_GoogleGenAiDeletesOldCacheAndRecreatesOnDeltaExceeded() =
         runTest {
-            val sdkClient = mockk<GoogleGenAiSdkClient>()
+            val sdkClient = FakeGoogleGenAiSdkClient()
             val service =
                 GoogleInferenceServiceImpl(
                     sdkClient = sdkClient,
@@ -670,10 +646,10 @@ class PromptCachingTest {
                     toolStreamGatePort = FakeToolStreamGatePort(),
                 )
 
-            coEvery { sdkClient.createCachedContent(any(), any(), any(), any(), any()) } returnsMany
-                listOf("cachedContents/mock-cache-123", "cachedContents/mock-cache-456")
-            coEvery { sdkClient.deleteCachedContent(any()) } returns Unit
-            coEvery { sdkClient.generateContentStream(any(), any(), any(), any(), any()) } returns
+            sdkClient.createCachedContentResults.addAll(
+                listOf("cachedContents/mock-cache-123", "cachedContents/mock-cache-456"),
+            )
+            sdkClient.streamResult =
                 GoogleSdkResult(
                     emittedAny = true,
                     functionCall = null,
@@ -703,17 +679,11 @@ class PromptCachingTest {
                 options = GenerationOptions(reasoningBudget = 0),
             )
 
-            // Clear verify records
-            io.mockk.clearMocks(sdkClient)
-            coEvery { sdkClient.createCachedContent(any(), any(), any(), any(), any()) } returns "cachedContents/mock-cache-456"
-            coEvery { sdkClient.deleteCachedContent(any()) } returns Unit
-            coEvery { sdkClient.generateContentStream(any(), any(), any(), any(), any()) } returns
-                GoogleSdkResult(
-                    emittedAny = true,
-                    functionCall = null,
-                    assistantContent = null,
-                    finishReason = "STOP",
-                )
+            // Clear recorded calls
+            sdkClient.createCachedContentRequests.clear()
+            sdkClient.generateRequests.clear()
+            sdkClient.deleteCachedContentCalls.clear()
+            sdkClient.createCachedContentResult = "cachedContents/mock-cache-456"
 
             // Second turn: U1, A1, U2, A2, U3, A3, latest is U4.
             // Delta (U3, A3) is set to be very large (exceeding 1024 tokens).
@@ -740,39 +710,22 @@ class PromptCachingTest {
             )
 
             // Verify old cache was deleted
-            coVerify(exactly = 1) {
-                sdkClient.deleteCachedContent("cachedContents/mock-cache-123")
-            }
+            assertEquals(listOf("cachedContents/mock-cache-123"), sdkClient.deleteCachedContentCalls)
 
             // Verify new cache created with all history [U1, A1, U2, A2, U3, A3]
-            val contentsSlot = slot<List<Content>>()
-            coVerify {
-                sdkClient.createCachedContent(
-                    modelId = "gemini-2.5-flash",
-                    contents = capture(contentsSlot),
-                    systemInstruction = any(),
-                    tools = any(),
-                    ttlSeconds = 300L,
-                )
-            }
-            assertEquals(6, contentsSlot.captured.size)
+            val createRequest = sdkClient.createCachedContentRequests.single()
+            assertEquals("gemini-2.5-flash", createRequest.modelId)
+            assertEquals(300L, createRequest.ttlSeconds)
+            assertEquals(6, createRequest.contents.size)
 
             // Verify generateContentStream called with cachedContents/mock-cache-456 and only latest message U4
-            val contentsGenSlot = slot<List<Content>>()
-            val configSlot = slot<GenerateContentConfig>()
-            coVerify {
-                sdkClient.generateContentStream(
-                    modelId = "gemini-2.5-flash",
-                    contents = capture(contentsGenSlot),
-                    config = capture(configSlot),
-                    allowToolCall = false,
-                    emitEvent = any(),
-                )
-            }
-            assertEquals("cachedContents/mock-cache-456", configSlot.captured.cachedContent().orElse(null))
-            assertEquals(1, contentsGenSlot.captured.size)
+            val generateRequest = sdkClient.generateRequests.single()
+            assertEquals("gemini-2.5-flash", generateRequest.modelId)
+            assertFalse(generateRequest.allowToolCall)
+            assertEquals("cachedContents/mock-cache-456", generateRequest.config.cachedContent().orElse(null))
+            assertEquals(1, generateRequest.contents.size)
             assertTrue(
-                contentsGenSlot.captured[0]
+                generateRequest.contents[0]
                     .parts()
                     .orElse(null)
                     ?.firstOrNull()
@@ -785,7 +738,7 @@ class PromptCachingTest {
     @Test
     fun test_PC_07_GoogleGenAiDeletesCachedContentOnSessionClose() =
         runTest {
-            val sdkClient = mockk<GoogleGenAiSdkClient>()
+            val sdkClient = FakeGoogleGenAiSdkClient()
             val service =
                 GoogleInferenceServiceImpl(
                     sdkClient = sdkClient,
@@ -796,9 +749,8 @@ class PromptCachingTest {
                     toolStreamGatePort = FakeToolStreamGatePort(),
                 )
 
-            coEvery { sdkClient.createCachedContent(any(), any(), any(), any(), any()) } returns "cachedContents/mock-cache-123"
-            coEvery { sdkClient.deleteCachedContent(any()) } returns Unit
-            coEvery { sdkClient.generateContentStream(any(), any(), any(), any(), any()) } returns
+            sdkClient.createCachedContentResult = "cachedContents/mock-cache-123"
+            sdkClient.streamResult =
                 GoogleSdkResult(
                     emittedAny = true,
                     functionCall = null,
@@ -830,15 +782,13 @@ class PromptCachingTest {
             service.closeSession()
 
             // Verify activeCacheName was deleted from server
-            coVerify(exactly = 1) {
-                sdkClient.deleteCachedContent("cachedContents/mock-cache-123")
-            }
+            assertEquals(listOf("cachedContents/mock-cache-123"), sdkClient.deleteCachedContentCalls)
         }
 
     @Test
     fun test_PC_08_GoogleGenAiDoesNotCreateCacheWhenBelowThreshold() =
         runTest {
-            val sdkClient = mockk<GoogleGenAiSdkClient>()
+            val sdkClient = FakeGoogleGenAiSdkClient()
             val service =
                 GoogleInferenceServiceImpl(
                     sdkClient = sdkClient,
@@ -849,7 +799,7 @@ class PromptCachingTest {
                     toolStreamGatePort = FakeToolStreamGatePort(),
                 )
 
-            coEvery { sdkClient.generateContentStream(any(), any(), any(), any(), any()) } returns
+            sdkClient.streamResult =
                 GoogleSdkResult(
                     emittedAny = true,
                     functionCall = null,
@@ -877,26 +827,16 @@ class PromptCachingTest {
             )
 
             // verify createCachedContent was NOT called
-            coVerify(exactly = 0) {
-                sdkClient.createCachedContent(any(), any(), any(), any(), any())
-            }
+            assertTrue(sdkClient.createCachedContentRequests.isEmpty())
 
             // verify generateContentStream called with cachedContent = null in GenerateContentConfig and all 3 messages
-            val contentsGenSlot = slot<List<Content>>()
-            val configSlot = slot<GenerateContentConfig>()
-            coVerify {
-                sdkClient.generateContentStream(
-                    modelId = "gemini-2.5-flash",
-                    contents = capture(contentsGenSlot),
-                    config = capture(configSlot),
-                    allowToolCall = false,
-                    emitEvent = any(),
-                )
-            }
-            assertTrue(configSlot.captured.cachedContent().orElse(null) == null)
-            assertEquals(3, contentsGenSlot.captured.size)
+            val generateRequest = sdkClient.generateRequests.single()
+            assertEquals("gemini-2.5-flash", generateRequest.modelId)
+            assertFalse(generateRequest.allowToolCall)
+            assertTrue(generateRequest.config.cachedContent().orElse(null) == null)
+            assertEquals(3, generateRequest.contents.size)
             val u2Part =
-                contentsGenSlot.captured[2]
+                generateRequest.contents[2]
                     .parts()
                     .orElse(null)
                     ?.firstOrNull()
@@ -1074,7 +1014,7 @@ class PromptCachingTest {
     @DisplayName("SC-AG-03 Google first hop sidecar at freeze index")
     fun SC_AG_03_googleFirstHopSidecarAtFreezeIndex() =
         runTest {
-            val sdkClient = mockk<GoogleGenAiSdkClient>()
+            val sdkClient = FakeGoogleGenAiSdkClient()
             val service =
                 GoogleInferenceServiceImpl(
                     sdkClient = sdkClient,
@@ -1084,18 +1024,14 @@ class PromptCachingTest {
                     toolEnvelopeParserPort = FakeToolEnvelopeParserPort(),
                     toolStreamGatePort = FakeToolStreamGatePort(),
                 )
-            coEvery { sdkClient.createCachedContent(any(), any(), any(), any(), any()) } returns "cachedContents/mock-cache-123"
-            val capturedContents = mutableListOf<List<Content>>()
-            coEvery { sdkClient.generateContentStream(any(), any(), any(), any(), any()) } coAnswers {
-                @Suppress("UNCHECKED_CAST")
-                capturedContents.add(invocation.args[1] as List<Content>)
+            sdkClient.createCachedContentResult = "cachedContents/mock-cache-123"
+            sdkClient.streamResult =
                 GoogleSdkResult(
                     emittedAny = true,
                     functionCall = null,
                     assistantContent = null,
                     finishReason = "STOP",
                 )
-            }
 
             val padding = "padding ".repeat(1200)
             val hop1Messages =
@@ -1135,7 +1071,7 @@ class PromptCachingTest {
                 options = GenerationOptions(reasoningBudget = 0),
             )
 
-            val hop2Contents = capturedContents.last()
+            val hop2Contents = sdkClient.generateRequests.last().contents
             fun contentTextAt(contents: List<Content>, index: Int): String? =
                 contents.getOrNull(index)
                     ?.parts()
@@ -1156,7 +1092,7 @@ class PromptCachingTest {
     @DisplayName("SC-AG-04 two distinct sidecars across turns")
     fun SC_AG_04_googleFrozenSidecarIndexStability() =
         runTest {
-            val sdkClient = mockk<GoogleGenAiSdkClient>()
+            val sdkClient = FakeGoogleGenAiSdkClient()
             val service =
                 GoogleInferenceServiceImpl(
                     sdkClient = sdkClient,
@@ -1166,18 +1102,14 @@ class PromptCachingTest {
                     toolEnvelopeParserPort = FakeToolEnvelopeParserPort(),
                     toolStreamGatePort = FakeToolStreamGatePort(),
                 )
-            coEvery { sdkClient.createCachedContent(any(), any(), any(), any(), any()) } returns "cachedContents/mock-cache-123"
-            val capturedContents = mutableListOf<List<Content>>()
-            coEvery { sdkClient.generateContentStream(any(), any(), any(), any(), any()) } coAnswers {
-                @Suppress("UNCHECKED_CAST")
-                capturedContents.add(invocation.args[1] as List<Content>)
+            sdkClient.createCachedContentResult = "cachedContents/mock-cache-123"
+            sdkClient.streamResult =
                 GoogleSdkResult(
                     emittedAny = true,
                     functionCall = null,
                     assistantContent = null,
                     finishReason = "STOP",
                 )
-            }
 
             val padding = "padding ".repeat(1200)
             val hop1Messages =
@@ -1220,7 +1152,7 @@ class PromptCachingTest {
                 2,
                 requireNotNull(service.appendOnlyContextForTests()).frozenSidecarsForWireReplay().size,
             )
-            val hop2Contents = capturedContents.last()
+            val hop2Contents = sdkClient.generateRequests.last().contents
             fun contentTextAt(contents: List<Content>, index: Int): String? =
                 contents.getOrNull(index)
                     ?.parts()

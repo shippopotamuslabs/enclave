@@ -1,20 +1,17 @@
 package com.browntowndev.enclave.feature.inference
 
-import android.content.Context
-import android.util.Log
+import androidx.test.core.app.ApplicationProvider
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
+import com.browntowndev.enclave.core.testing.FakeLocalModelRepository
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeToolExecutor
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
 import com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.model.inference.ToolDisclosureMode
-import com.browntowndev.enclave.domain.model.inference.ToolExecutionResult
 import com.browntowndev.enclave.domain.port.inference.Bm25OnlyEmbeddingEnginePort
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
-import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
-import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.enclave.domain.usecase.chat.SearchToolsHostCoordinator
 import com.browntowndev.enclave.domain.usecase.chat.ToolCallStrategy
 import com.browntowndev.enclave.domain.usecase.chat.ToolSessionActivationRegistry
@@ -26,28 +23,22 @@ import com.browntowndev.enclave.feature.inference.conversation.LiteRtTurnSnapsho
 import com.browntowndev.enclave.feature.inference.conversation.LiteRtToolContext
 import com.browntowndev.enclave.feature.inference.conversation.SystemPromptTemplates
 import com.browntowndev.enclave.feature.inference.conversation.NoopAgentPolicyPort
-import io.mockk.MockKAnnotations
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.mockkStatic
-import io.mockk.slot
-import io.mockk.unmockkStatic
-import io.mockk.verify
 import kotlinx.coroutines.test.runTest
-import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class ConversationManagerImplToolsTest {
-    private val context = mockk<Context>(relaxed = true)
-    private val localModelRepository = mockk<LocalModelRepositoryPort>(relaxed = true)
-    private val activeModelProvider = mockk<ActiveModelProviderPort>(relaxed = true)
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
-    private val toolExecutor = mockk<ToolExecutorPort>(relaxed = true)
+    private val localModelRepository = FakeLocalModelRepository()
+    private val activeModelProvider = FakeActiveModelProvider()
+    private val loggingPort = FakeLoggingPort()
+    private val toolExecutor = FakeToolExecutor()
 
     private lateinit var manager: ConversationManagerImpl
     private lateinit var toolLoop: LiteRtToolCallLoop
@@ -56,16 +47,9 @@ class ConversationManagerImplToolsTest {
 
     @BeforeEach
     fun setUp() {
-        MockKAnnotations.init(this)
-        mockkStatic(Log::class)
-        every { Log.d(any<String>(), any<String>()) } returns 0
-        every { Log.i(any<String>(), any<String>()) } returns 0
-        every { Log.w(any<String>(), any<String>()) } returns 0
-        every { Log.e(any<String>(), any<String>(), any<Throwable>()) } returns 0
-
         manager =
             ConversationManagerImpl(
-                context = context,
+                context = ApplicationProvider.getApplicationContext(),
                 localModelRepository = localModelRepository,
                 activeModelProvider = activeModelProvider,
                 loggingPort = loggingPort,
@@ -92,11 +76,6 @@ class ConversationManagerImplToolsTest {
                         embeddingEngine = Bm25OnlyEmbeddingEnginePort,
                     ),
             )
-    }
-
-    @AfterEach
-    fun tearDown() {
-        unmockkStatic(Log::class)
     }
 
     @Test
@@ -181,14 +160,11 @@ class ConversationManagerImplToolsTest {
 
             val searchMethod = toolset.javaClass.getDeclaredMethod("search_chat_history", String::class.java)
 
-            coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult("search_chat_history", "{\"results\":[]}")
+            toolExecutor.resultJson = "{\"results\":[]}"
 
             searchMethod.invoke(toolset, "query1, query2 ,  query3")
 
-            val requestSlot = slot<ToolCallRequest>()
-            coVerify { toolExecutor.execute(capture(requestSlot)) }
-
-            val request = requestSlot.captured
+            val request = toolExecutor.executedRequests.single()
             assertTrue(request.argumentsJson.contains("query1"))
             assertTrue(request.argumentsJson.contains("query2"))
             assertTrue(request.argumentsJson.contains("query3"))
@@ -207,14 +183,11 @@ class ConversationManagerImplToolsTest {
                     String::class.java,
                 )
 
-            coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult("tavily_extract", "{\"results\":[]}")
+            toolExecutor.resultJson = "{\"results\":[]}"
 
             extractMethod.invoke(toolset, "[\"https://example.com\", \"https://google.com\"]", "advanced", "markdown")
 
-            val requestSlot = slot<ToolCallRequest>()
-            coVerify { toolExecutor.execute(capture(requestSlot)) }
-
-            val request = requestSlot.captured
+            val request = toolExecutor.executedRequests.single()
             assertTrue(request.argumentsJson.contains("https://example.com"))
             assertTrue(request.argumentsJson.contains("https://google.com"))
             assertTrue(request.argumentsJson.contains("advanced"))
@@ -224,10 +197,10 @@ class ConversationManagerImplToolsTest {
     @Test
     fun `executeToolSafely handles tool execution failure and returns error JSON`() =
         runTest {
-            coEvery { toolExecutor.execute(any()) } throws RuntimeException("Network error")
+            toolExecutor.failure = RuntimeException("Network error")
 
             val request =
-                ToolCallRequest(
+                com.browntowndev.enclave.domain.model.inference.ToolCallRequest(
                     toolName = "web_search",
                     argumentsJson = "{\"query\":\"test\"}",
                     provider = "LITERT",
@@ -238,7 +211,7 @@ class ConversationManagerImplToolsTest {
 
             assertTrue(result.contains("tool_execution_failed"))
             assertTrue(result.contains("Network error"))
-            verify { loggingPort.error(any(), any(), any()) }
+            assertTrue(loggingPort.errorCalls.isNotEmpty())
         }
 
     @Test
