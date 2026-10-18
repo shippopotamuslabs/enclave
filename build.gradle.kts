@@ -180,7 +180,7 @@ subprojects {
     }
 
     // Centralized Linting and Static Analysis
-    val excludedModules = listOf(":llama-android", ":whisper-android", ":detekt-rules")
+    val excludedModules = listOf(":llama-android", ":detekt-rules")
     if (path !in excludedModules) {
         apply(plugin = "org.jlleitschuh.gradle.ktlint")
         apply(plugin = "io.gitlab.arturbosch.detekt")
