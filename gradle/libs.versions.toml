@@ -61,6 +61,7 @@ javax-inject = "1"
 
 [libraries]
 javax-inject = { group = "javax.inject", name = "javax.inject", version.ref = "javax-inject" }
+whisper-android = { group = "com.shippopotamuslabs", name = "whisper-android", version = "0.1.0-SNAPSHOT" }
 uniffi-kotlin-runtime = { group = "ch.ubique.uniffi", name = "runtime", version.ref = "uniffi-kotlin" }
 jtokkit = { group = "com.knuddels", name = "jtokkit", version.ref = "jtokkit" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinx-serialization" }

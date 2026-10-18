@@ -27,7 +27,6 @@ dependencyResolutionManagement {
 rootProject.name = "Enclave"
 include(":app")
 include(":llama-android")
-include(":whisper-android")
 include(":local-image-gen-android")
 
 // Core modules
@@ -50,3 +49,15 @@ include(":feature:chat-inference-service")
 include(":feature:studio")
 include(":feature:studio-generation-service")
 include(":feature:onboarding")
+
+// whisper-android lives in its own repo (browntown.development-group/whisper-android),
+// vendored as a submodule and consumed via composite build (ENC-53). The Maven
+// coordinates are substituted with the included build's projects during development.
+includeBuild("third_party/whisper-android") {
+    dependencySubstitution {
+        substitute(module("com.shippopotamuslabs:whisper-android"))
+            .using(project(":whisper-android"))
+        substitute(module("com.shippopotamuslabs:whisper-android-hilt"))
+            .using(project(":whisper-android-hilt"))
+    }
+}
