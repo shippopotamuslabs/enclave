@@ -6,12 +6,12 @@ import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.usecase.modelconfig.SaveLocalModelConfigurationUseCase
 import javax.inject.Inject
 
-class SaveLocalModelPresetUseCase
+open class SaveLocalModelPresetUseCase
     @Inject
     constructor(
         private val saveLocalModelConfigurationUseCase: SaveLocalModelConfigurationUseCase,
     ) {
-        suspend operator fun invoke(
+        open suspend operator fun invoke(
             localModelId: LocalModelId,
             draft: LocalModelPresetDraft,
         ): Result<LocalModelConfigurationId> {

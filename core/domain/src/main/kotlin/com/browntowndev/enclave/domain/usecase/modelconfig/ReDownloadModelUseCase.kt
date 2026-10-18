@@ -19,7 +19,7 @@ import javax.inject.Inject
  * ensuring the database is never in an inconsistent state where the model is
  * "restored" but the physical file is still missing.
  */
-class ReDownloadModelUseCase
+open class ReDownloadModelUseCase
     @Inject
     constructor(
         private val localModelRepository: LocalModelRepositoryPort,
@@ -35,7 +35,7 @@ class ReDownloadModelUseCase
          * @param modelId The ID of the soft-deleted model to re-download
          * @return Result containing ScheduledDownload with session metadata for UI tracking
          */
-        suspend operator fun invoke(modelId: LocalModelId): Result<ScheduledDownload> =
+        open suspend operator fun invoke(modelId: LocalModelId): Result<ScheduledDownload> =
             runCatching {
                 loggingPort.debug("ReDownloadModelUseCase", "Starting re-download for model: $modelId")
 

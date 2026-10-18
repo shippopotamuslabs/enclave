@@ -4,12 +4,12 @@ import com.browntowndev.enclave.domain.port.repository.ChatRepository
 import javax.inject.Inject
 
 /** Deletes every chat tracked by [chatRepository]. */
-class DeleteAllChatsUseCase
+open class DeleteAllChatsUseCase
     @Inject
     constructor(
         private val chatRepository: ChatRepository,
     ) {
-        suspend operator fun invoke() {
+        open suspend operator fun invoke() {
             chatRepository.deleteAllChats()
         }
     }

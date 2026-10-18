@@ -37,6 +37,13 @@ class FakeCloudSyncPort : CloudSyncPort {
 
     fun count(name: String): Int = calls.count { it == name }
 
+    var remainingEventsResult: Result<Long> = Result.success(0L)
+
+    override suspend fun getRemainingEventsCount(): Result<Long> {
+        record("getRemainingEventsCount")
+        return remainingEventsResult
+    }
+
     override fun startListening() {
         record("startListening")
     }

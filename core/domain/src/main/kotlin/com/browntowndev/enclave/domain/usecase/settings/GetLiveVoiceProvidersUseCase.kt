@@ -5,10 +5,10 @@ import com.browntowndev.enclave.domain.port.repository.LiveVoiceProviderReposito
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 
-class GetLiveVoiceProvidersUseCase
+open class GetLiveVoiceProvidersUseCase
     @Inject
     constructor(
         private val repository: LiveVoiceProviderRepositoryPort,
     ) {
-        operator fun invoke(): Flow<List<LiveVoiceProviderAsset>> = repository.getLiveVoiceProviders()
+        open operator fun invoke(): Flow<List<LiveVoiceProviderAsset>> = repository.getLiveVoiceProviders()
     }

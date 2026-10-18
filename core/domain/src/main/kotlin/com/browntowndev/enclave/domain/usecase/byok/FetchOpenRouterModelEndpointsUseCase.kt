@@ -6,7 +6,7 @@ import com.browntowndev.enclave.domain.port.security.ApiKeyProviderPort
 import javax.inject.Inject
 
 interface FetchOpenRouterModelEndpointsUseCase {
-    suspend operator fun invoke(
+    open suspend operator fun invoke(
         modelId: String,
         currentApiKey: String,
         credentialAlias: String? = null,

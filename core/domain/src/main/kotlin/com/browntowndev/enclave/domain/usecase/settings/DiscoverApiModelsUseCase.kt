@@ -6,13 +6,13 @@ import com.browntowndev.enclave.domain.usecase.byok.FetchApiProviderModelDetailU
 import com.browntowndev.enclave.domain.usecase.byok.FetchApiProviderModelsUseCase
 import javax.inject.Inject
 
-class DiscoverApiModelsUseCase
+open class DiscoverApiModelsUseCase
     @Inject
     constructor(
         private val fetchApiProviderModelsUseCase: FetchApiProviderModelsUseCase,
         private val fetchApiProviderModelDetailUseCase: FetchApiProviderModelDetailUseCase,
     ) {
-        suspend operator fun invoke(request: ApiModelDiscoveryRequest): ApiModelDiscoveryResult {
+        open suspend operator fun invoke(request: ApiModelDiscoveryRequest): ApiModelDiscoveryResult {
             val catalog =
                 fetchApiProviderModelsUseCase(
                     provider = request.provider,

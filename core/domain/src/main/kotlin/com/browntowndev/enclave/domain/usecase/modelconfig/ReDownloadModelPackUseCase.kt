@@ -12,14 +12,14 @@ import com.browntowndev.enclave.domain.usecase.download.VerifyModelPackCompleten
 import java.util.UUID
 import javax.inject.Inject
 
-class ReDownloadModelPackUseCase
+open class ReDownloadModelPackUseCase
     @Inject
     constructor(
         private val downloadWorkScheduler: DownloadWorkSchedulerPort,
         private val verifyModelPackCompleteness: VerifyModelPackCompletenessUseCase,
         private val resolveModelCatalog: ResolveModelCatalogUseCase,
     ) {
-        suspend operator fun invoke(packId: String): Result<List<ScheduledDownload>> =
+        open suspend operator fun invoke(packId: String): Result<List<ScheduledDownload>> =
             runCatching {
                 val completeness = verifyModelPackCompleteness(packId).getOrThrow()
                 if (completeness.isComplete) {

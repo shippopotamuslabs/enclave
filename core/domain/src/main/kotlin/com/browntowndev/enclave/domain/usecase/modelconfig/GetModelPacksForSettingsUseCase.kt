@@ -31,7 +31,7 @@ data class ModelPackSettingsRow(
     val sd15CpuFallbackActive: Boolean = false,
 )
 
-class GetModelPacksForSettingsUseCase
+open class GetModelPacksForSettingsUseCase
     @Inject
     constructor(
         private val resolveModelCatalog: ResolveModelCatalogUseCase,
@@ -41,7 +41,7 @@ class GetModelPacksForSettingsUseCase
         private val utilityModelRepository: UtilityModelRepositoryPort,
         private val capabilityPort: LocalImageGenerationCapabilityPort,
     ) {
-        suspend operator fun invoke(): List<ModelPackSettingsRow> {
+        open suspend operator fun invoke(): List<ModelPackSettingsRow> {
             if (!LOCAL_ON_DEVICE_IMAGE_GENERATION_ENABLED) {
                 return emptyList()
             }

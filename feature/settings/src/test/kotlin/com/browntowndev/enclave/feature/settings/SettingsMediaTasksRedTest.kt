@@ -24,16 +24,11 @@ import com.browntowndev.enclave.domain.usecase.byok.SetDefaultModelUseCase
 import com.browntowndev.enclave.domain.usecase.modelconfig.ModelPackSettingsRow
 import com.browntowndev.enclave.domain.usecase.settings.ApplyApiModelMetadataDefaultsUseCase
 import com.browntowndev.enclave.feature.settings.usage.UsageSpendUiMapper
-import io.mockk.mockk
 import java.math.BigDecimal
 import com.browntowndev.enclave.domain.usecase.media.SaveMediaProviderUseCase
 import com.browntowndev.enclave.domain.usecase.settings.SettingsApiProviderUseCases
 import com.browntowndev.enclave.domain.usecase.settings.SettingsAssignmentUseCases
 import com.browntowndev.enclave.domain.usecase.settings.SettingsMediaUseCases
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -109,11 +104,9 @@ class SettingsMediaTasksRedTest {
     @Test
     fun `SETTINGS-04 provider save persists selected tasks`() =
         runTest {
-            val saveMediaProviderUseCase = mockk<SaveMediaProviderUseCase>()
-            val mediaUseCases = mockk<SettingsMediaUseCases>()
-            val assignmentsUseCases = mockk<SettingsAssignmentUseCases>(relaxed = true)
-            every { mediaUseCases.saveMediaProvider } returns saveMediaProviderUseCase
-            coEvery { saveMediaProviderUseCase(any(), any()) } returns MediaProviderId("edit")
+            val saveMediaProviderUseCase = FakeSaveMediaProviderUseCase()
+            val mediaUseCases = FakeSettingsMediaUseCases(saveMediaProvider = saveMediaProviderUseCase)
+            val assignmentsUseCases = FakeSettingsAssignmentUseCases()
             val coordinator = mediaProvidersCoordinator(mediaUseCases = mediaUseCases)
             val mediaState =
                 MutableStateFlow(
@@ -141,24 +134,18 @@ class SettingsMediaTasksRedTest {
             )
             advanceUntilIdle()
 
-            coVerify {
-                saveMediaProviderUseCase(
-                    match { it.tasks == setOf(MediaTask.EDIT_IMAGE) },
-                    null,
-                )
-            }
+            assertEquals(1, saveMediaProviderUseCase.calls.size)
+            assertEquals(setOf(MediaTask.EDIT_IMAGE), saveMediaProviderUseCase.calls.single().first.tasks)
+            assertEquals(null, saveMediaProviderUseCase.calls.single().second)
         }
 
     @Test
     fun `SETTINGS-05 edit task set-default targets IMAGE_EDIT slot`() =
         runTest {
-            val saveMediaProviderUseCase = mockk<SaveMediaProviderUseCase>()
-            val setDefaultModelUseCase = mockk<SetDefaultModelUseCase>(relaxed = true)
-            val mediaUseCases = mockk<SettingsMediaUseCases>()
-            val assignmentsUseCases = mockk<SettingsAssignmentUseCases>(relaxed = true)
-            every { mediaUseCases.saveMediaProvider } returns saveMediaProviderUseCase
-            every { assignmentsUseCases.setDefaultModel } returns setDefaultModelUseCase
-            coEvery { saveMediaProviderUseCase(any(), any()) } returns MediaProviderId("edit")
+            val saveMediaProviderUseCase = FakeSaveMediaProviderUseCase()
+            val setDefaultModelUseCase = FakeSetDefaultModelUseCase()
+            val mediaUseCases = FakeSettingsMediaUseCases(saveMediaProvider = saveMediaProviderUseCase)
+            val assignmentsUseCases = FakeSettingsAssignmentUseCases(setDefaultModel = setDefaultModelUseCase)
             val coordinator = mediaProvidersCoordinator(mediaUseCases = mediaUseCases)
             val mediaState =
                 MutableStateFlow(
@@ -187,14 +174,19 @@ class SettingsMediaTasksRedTest {
             )
             advanceUntilIdle()
 
-            coVerify {
-                setDefaultModelUseCase(
-                    modelType = ModelType.IMAGE_EDIT,
-                    localConfigId = null,
-                    apiConfigId = null,
-                    mediaProviderId = MediaProviderId("edit"),
-                )
-            }
+            assertEquals(
+                listOf(
+                    FakeSetDefaultModelUseCase.Args(
+                        modelType = ModelType.IMAGE_EDIT,
+                        localConfigId = null,
+                        apiConfigId = null,
+                        mediaProviderId = MediaProviderId("edit"),
+                        ttsProviderId = null,
+                        liveVoiceProviderId = null,
+                    ),
+                ),
+                setDefaultModelUseCase.calls,
+            )
         }
 
     @Test
@@ -204,7 +196,7 @@ class SettingsMediaTasksRedTest {
                 localModelAssetUiMapper = LocalModelAssetUiMapper(),
                 apiModelAssetUiMapper = ApiModelAssetUiMapper(),
                 ttsProviderAssetUiMapper = TtsProviderAssetUiMapper(),
-                mediaProviderAssetUiMapper = mockk(relaxed = true),
+                mediaProviderAssetUiMapper = MediaProviderAssetUiMapper(),
                 apiDiscoveryUiFilter = ApiDiscoveryUiFilter(),
                 applyApiModelMetadataDefaultsUseCase = ApplyApiModelMetadataDefaultsUseCase(),
                 usageSpendUiMapper = UsageSpendUiMapper(),
@@ -300,7 +292,7 @@ class SettingsMediaTasksRedTest {
                 localModelAssetUiMapper = LocalModelAssetUiMapper(),
                 apiModelAssetUiMapper = ApiModelAssetUiMapper(),
                 ttsProviderAssetUiMapper = TtsProviderAssetUiMapper(),
-                mediaProviderAssetUiMapper = mockk(relaxed = true),
+                mediaProviderAssetUiMapper = MediaProviderAssetUiMapper(),
                 apiDiscoveryUiFilter = ApiDiscoveryUiFilter(),
                 applyApiModelMetadataDefaultsUseCase = ApplyApiModelMetadataDefaultsUseCase(),
                 usageSpendUiMapper = UsageSpendUiMapper(),
@@ -394,7 +386,7 @@ class SettingsMediaTasksRedTest {
                 localModelAssetUiMapper = LocalModelAssetUiMapper(),
                 apiModelAssetUiMapper = ApiModelAssetUiMapper(),
                 ttsProviderAssetUiMapper = TtsProviderAssetUiMapper(),
-                mediaProviderAssetUiMapper = mockk(relaxed = true),
+                mediaProviderAssetUiMapper = MediaProviderAssetUiMapper(),
                 apiDiscoveryUiFilter = ApiDiscoveryUiFilter(),
                 applyApiModelMetadataDefaultsUseCase = ApplyApiModelMetadataDefaultsUseCase(),
                 usageSpendUiMapper = UsageSpendUiMapper(),
@@ -522,13 +514,12 @@ class SettingsMediaTasksRedTest {
     }
 
     private fun mediaProvidersCoordinator(mediaUseCases: SettingsMediaUseCases): MediaProvidersCoordinator {
-        val errorHandler = mockk<ViewModelErrorHandler>()
-        every { errorHandler.coroutineExceptionHandler(any(), any(), any()) } returns CoroutineExceptionHandler { _, _ -> }
+        val errorHandler = FakeViewModelErrorHandler()
         return MediaProvidersCoordinator(
-            apiProviderUseCases = mockk<SettingsApiProviderUseCases>(relaxed = true),
+            apiProviderUseCases = FakeSettingsApiProviderUseCases(),
             mediaUseCases = mediaUseCases,
             fetchApiProviderModelDetailUseCase =
-                mockk<com.browntowndev.enclave.domain.usecase.byok.FetchApiProviderModelDetailUseCase>(relaxed = true),
+                com.browntowndev.enclave.core.testing.FakeFetchApiProviderModelDetailUseCase(),
             errorHandler = errorHandler,
         )
     }

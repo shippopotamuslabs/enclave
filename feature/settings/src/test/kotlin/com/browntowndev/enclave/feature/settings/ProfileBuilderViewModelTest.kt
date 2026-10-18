@@ -19,9 +19,6 @@ import com.browntowndev.enclave.domain.usecase.profile.ObserveProfileAnalysisPro
 import com.browntowndev.enclave.domain.usecase.profile.PrepareProfileCorpusUseCase
 import com.browntowndev.enclave.domain.usecase.profile.SavePsychProfileUseCase
 import com.browntowndev.enclave.domain.usecase.profile.StartProfileAnalysisUseCase
-import io.mockk.coEvery
-import io.mockk.every
-import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -37,57 +34,24 @@ import java.math.BigDecimal
 @ExtendWith(MainDispatcherRule::class)
 @OptIn(ExperimentalCoroutinesApi::class)
 class ProfileBuilderViewModelTest {
-    private val apiModelRepository = mockk<ApiModelRepositoryPort>()
-    private val ingestionPort = mockk<ProfileExportIngestionPort>(relaxed = true)
-    private val analysisPort = mockk<ProfileAnalysisPort>(relaxed = true)
-    private val memoriesRepository = mockk<MemoriesRepository>(relaxed = true)
+    private val apiModelRepository = com.browntowndev.enclave.core.testing.FakeApiModelRepository()
+    private val ingestionPort = com.browntowndev.enclave.core.testing.FakeProfileExportIngestionPort()
+    private val analysisPort = com.browntowndev.enclave.core.testing.FakeProfileAnalysisPort()
+    private val memoriesRepository = com.browntowndev.enclave.core.testing.FakeMemoriesRepository()
 
-    private val configsFlow = MutableStateFlow<List<ApiModelConfiguration>>(emptyList())
-    private val progressFlow =
-        MutableStateFlow(
-            ProfileAnalysisProgress(
-                currentPass = 0,
-                totalPasses = 4,
-                isRunning = true,
-                isComplete = false,
-                error = null,
-            ),
-        )
+    private val progressFlow = analysisPort.progressFlow
 
-    // ENC-27: recorded invocations replace MockK coVerify.
-    private val startAnalysisCalls = mutableListOf<Pair<String, ApiModelConfigurationId>>()
-    private val observeProgressCalls = mutableListOf<String>()
-    private val insertMemoryCalls = mutableListOf<Pair<MemoryCategory, String>>()
-    private val updateMemoryCalls = mutableListOf<Triple<String, String, MemoryCategory?>>()
-    private val clearAllCalls = mutableListOf<String>()
+    // ENC-27: recorded invocations replace MockK coVerify; the fakes record them (ENC-28).
+    private val startAnalysisCalls get() = analysisPort.startAnalysisCalls
+    private val observeProgressCalls get() = analysisPort.observeProgressCalls
+    private val insertMemoryCalls get() = memoriesRepository.insertCalls
+    private val updateMemoryCalls get() = memoriesRepository.updateCalls
+    private val clearAllCalls get() = ingestionPort.clearAllCalls
 
     private lateinit var viewModel: ProfileBuilderViewModel
 
     @BeforeEach
     fun setup() {
-        every { apiModelRepository.observeAllConfigurations() } returns configsFlow
-        coEvery { memoriesRepository.getCoreMemories() } returns emptyList()
-        every { analysisPort.observeAnalysisProgress(any()) } answers {
-            observeProgressCalls += firstArg<String>()
-            progressFlow
-        }
-        coEvery { analysisPort.startAnalysis(any(), any()) } coAnswers {
-            startAnalysisCalls += firstArg<String>() to ApiModelConfigurationId(secondArg<String>())
-            Unit
-        }
-        coEvery { memoriesRepository.insertMemory(any(), any()) } coAnswers {
-            insertMemoryCalls += firstArg<MemoryCategory>() to secondArg<String>()
-            mockk()
-        }
-        coEvery { memoriesRepository.updateMemory(any(), any(), any()) } coAnswers {
-            updateMemoryCalls += Triple(firstArg<String>(), secondArg<String>(), thirdArg<MemoryCategory?>())
-            Unit
-        }
-        coEvery { ingestionPort.clearAll(any()) } coAnswers {
-            clearAllCalls += firstArg<String>()
-            Unit
-        }
-
         viewModel =
             ProfileBuilderViewModel(
                 observeApiModelConfigurations = ObserveApiModelConfigurationsUseCase(apiModelRepository),
@@ -110,7 +74,7 @@ class ProfileBuilderViewModelTest {
                     modelId = "gpt-test",
                     displayName = "Test Config",
                 )
-            configsFlow.value = listOf(config)
+            apiModelRepository.seedConfigurations(listOf(config))
             advanceUntilIdle()
 
             assertEquals(listOf(config.toUi()), viewModel.uiState.value.configuredModels)
@@ -131,7 +95,7 @@ class ProfileBuilderViewModelTest {
                     selectedConversationCount = 10,
                     totalConversationCount = 20,
                 )
-            coEvery { analysisPort.prepareCorpus(any(), uris, null) } returns estimate
+            analysisPort.prepareCorpusResult = estimate
 
             viewModel.onProceedFromFiles()
             advanceUntilIdle()
@@ -185,7 +149,7 @@ class ProfileBuilderViewModelTest {
             val configId = ApiModelConfigurationId("config-abc")
             viewModel.onModelSelected(configId.value)
 
-            coEvery { analysisPort.getLatestProfileSynthesis(any()) } returns "Tends toward extreme focus."
+            analysisPort.latestSynthesis = "Tends toward extreme focus."
 
             viewModel.startAnalysis()
             advanceUntilIdle()
@@ -229,8 +193,7 @@ class ProfileBuilderViewModelTest {
         runTest {
             viewModel.onProfileContentEdited("Refined profile content.")
 
-            // 1. Test Insert
-            coEvery { memoriesRepository.getCoreMemories() } returns emptyList()
+            // 1. Test Insert (no core memories seeded)
 
             viewModel.saveProfile()
             advanceUntilIdle()
@@ -241,7 +204,7 @@ class ProfileBuilderViewModelTest {
 
             // 2. Test Update
             val existing = Memory(id = "mem-123", category = MemoryCategory.PSYCH_PROFILE, content = "Old content")
-            coEvery { memoriesRepository.getCoreMemories() } returns listOf(existing)
+            memoriesRepository.seed(listOf(existing))
 
             viewModel.saveProfile()
             advanceUntilIdle()
