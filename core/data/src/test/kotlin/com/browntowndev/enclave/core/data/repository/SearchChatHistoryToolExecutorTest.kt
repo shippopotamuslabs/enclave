@@ -1,5 +1,9 @@
 package com.browntowndev.enclave.core.data.repository
 
+import com.browntowndev.enclave.core.testing.FakeChatRepository
+import com.browntowndev.enclave.core.testing.FakeEmbeddingEngine
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeMessageRepository
 import com.browntowndev.enclave.domain.model.chat.Chat
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.Content
@@ -9,12 +13,6 @@ import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
-import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.repository.ChatRepository
-import com.browntowndev.enclave.domain.port.repository.MessageRepository
-import io.mockk.coEvery
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.int
@@ -27,24 +25,27 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.util.Date
 
+/**
+ * Translated from MockK to `:core:testing` fakes (ENC-28): the message
+ * repository fake returns the canned cross-chat matches and around-context
+ * through its override knobs, and the chat repository fake serves its
+ * seeded chats.
+ */
 class SearchChatHistoryToolExecutorTest {
-    private lateinit var loggingPort: LoggingPort
-    private lateinit var messageRepository: MessageRepository
-    private lateinit var chatRepository: ChatRepository
-    private lateinit var embeddingEngine: EmbeddingEnginePort
+    private lateinit var messageRepository: FakeMessageRepository
+    private lateinit var chatRepository: FakeChatRepository
     private lateinit var executor: SearchChatHistoryToolExecutor
     private val embeddingVector = floatArrayOf(0.1f, 0.2f, 0.3f)
 
     @BeforeEach
     fun setup() {
-        loggingPort = mockk(relaxed = true)
-        messageRepository = mockk()
-        chatRepository = mockk(relaxed = true)
-        embeddingEngine = mockk()
-        coEvery { embeddingEngine.getEmbedding(any()) } returns embeddingVector
+        messageRepository = FakeMessageRepository()
+        chatRepository = FakeChatRepository()
+        val embeddingEngine = FakeEmbeddingEngine()
+        embeddingEngine.uniformEmbedding = embeddingVector
         executor =
             SearchChatHistoryToolExecutor(
-                loggingPort = loggingPort,
+                loggingPort = FakeLoggingPort(),
                 messageRepository = messageRepository,
                 chatRepository = chatRepository,
                 embeddingEngine = embeddingEngine,
@@ -62,6 +63,15 @@ class SearchChatHistoryToolExecutorTest {
         chatId = ChatId("chat-1"),
         userMessageId = null,
     )
+
+    private fun seedChat(
+        id: String,
+        name: String,
+    ) {
+        chatRepository.seedChats(
+            listOf(Chat(id = ChatId(id), name = name, created = Date(1000L), lastModified = Date(2000L))),
+        )
+    }
 
     @Test
     fun `execute returns messages with chat metadata and match_type`() =
@@ -83,8 +93,8 @@ class SearchChatHistoryToolExecutorTest {
                         createdAt = 1700000001L,
                     ),
                 )
-            coEvery { messageRepository.searchMessagesAcrossChats(embeddingVector) } returns messages
-            coEvery { messageRepository.getMessagesAround(ChatId("c1"), any(), 2, 2) } returns
+            messageRepository.searchAcrossChatsResults = messages
+            messageRepository.messagesAroundResults =
                 listOf(
                     Message(
                         id = MessageId("m0"),
@@ -94,10 +104,7 @@ class SearchChatHistoryToolExecutorTest {
                         createdAt = 1699999999L,
                     ),
                 )
-            coEvery { chatRepository.getChatsByIds(any()) } returns
-                mapOf(
-                    ChatId("c1") to Chat(id = ChatId("c1"), name = "Kotlin Discussion", created = Date(1000L), lastModified = Date(2000L)),
-                )
+            seedChat("c1", "Kotlin Discussion")
 
             val result = executor.execute(baseRequest())
 
@@ -123,8 +130,8 @@ class SearchChatHistoryToolExecutorTest {
                     role = Role.USER,
                     createdAt = 1700000000L,
                 )
-            coEvery { messageRepository.searchMessagesAcrossChats(any()) } returns listOf(matchedMessage)
-            coEvery { messageRepository.getMessagesAround(ChatId("c1"), any(), 2, 2) } returns
+            messageRepository.searchAcrossChatsResults = listOf(matchedMessage)
+            messageRepository.messagesAroundResults =
                 listOf(
                     Message(
                         id = MessageId("m1"),
@@ -141,10 +148,7 @@ class SearchChatHistoryToolExecutorTest {
                         createdAt = 1700000001L,
                     ),
                 )
-            coEvery { chatRepository.getChatsByIds(any()) } returns
-                mapOf(
-                    ChatId("c1") to Chat(id = ChatId("c1"), name = "Chat", created = Date(1000L), lastModified = Date(2000L)),
-                )
+            seedChat("c1", "Chat")
 
             val result = executor.execute(baseRequest())
             val json = Json.parseToJsonElement(result.resultJson).jsonObject
@@ -167,12 +171,9 @@ class SearchChatHistoryToolExecutorTest {
                         createdAt = 1000L,
                     ),
                 )
-            coEvery { messageRepository.searchMessagesAcrossChats(embeddingVector) } returns messages
-            coEvery { messageRepository.getMessagesAround(any(), any(), any(), any()) } returns emptyList()
-            coEvery { chatRepository.getChatsByIds(any()) } returns
-                mapOf(
-                    ChatId("c1") to Chat(id = ChatId("c1"), name = "Farm Chat", created = Date(1000L), lastModified = Date(2000L)),
-                )
+            messageRepository.searchAcrossChatsResults = messages
+            messageRepository.messagesAroundResults = emptyList()
+            seedChat("c1", "Farm Chat")
 
             val request = baseRequest(argumentsJson = """{"queries":["cow","cow photo","moo"]}""")
             val result = executor.execute(request)
@@ -221,12 +222,9 @@ class SearchChatHistoryToolExecutorTest {
                         createdAt = 1000L,
                     ),
                 )
-            coEvery { messageRepository.searchMessagesAcrossChats(embeddingVector) } returns messages
-            coEvery { messageRepository.getMessagesAround(any(), any(), any(), any()) } returns emptyList()
-            coEvery { chatRepository.getChatsByIds(any()) } returns
-                mapOf(
-                    ChatId("c1") to Chat(id = ChatId("c1"), name = "Farm Chat", created = Date(1000L), lastModified = Date(2000L)),
-                )
+            messageRepository.searchAcrossChatsResults = messages
+            messageRepository.messagesAroundResults = emptyList()
+            seedChat("c1", "Farm Chat")
 
             val request = baseRequest(argumentsJson = """{"query":"cow"}""")
             val result = executor.execute(request)
@@ -250,12 +248,9 @@ class SearchChatHistoryToolExecutorTest {
                         createdAt = 1000L,
                     ),
                 )
-            coEvery { messageRepository.searchMessagesAcrossChats(embeddingVector) } returns messages
-            coEvery { messageRepository.getMessagesAround(any(), any(), any(), any()) } returns emptyList()
-            coEvery { chatRepository.getChatsByIds(any()) } returns
-                mapOf(
-                    ChatId("c1") to Chat(id = ChatId("c1"), name = "Chat", created = Date(1000L), lastModified = Date(2000L)),
-                )
+            messageRepository.searchAcrossChatsResults = messages
+            messageRepository.messagesAroundResults = emptyList()
+            seedChat("c1", "Chat")
 
             val request = baseRequest(argumentsJson = """{"queries":["cow","moo"],"query":"cow"}""")
             val result = executor.execute(request)
@@ -281,7 +276,7 @@ class SearchChatHistoryToolExecutorTest {
     @Test
     fun `execute returns empty results when no messages match`() =
         runTest {
-            coEvery { messageRepository.searchMessagesAcrossChats(any()) } returns emptyList()
+            messageRepository.searchAcrossChatsResults = emptyList()
 
             val result = executor.execute(baseRequest())
             val json = Json.parseToJsonElement(result.resultJson).jsonObject
@@ -303,12 +298,9 @@ class SearchChatHistoryToolExecutorTest {
                         createdAt = 1700000000L,
                     ),
                 )
-            coEvery { messageRepository.searchMessagesAcrossChats(any()) } returns messages
-            coEvery { messageRepository.getMessagesAround(any(), any(), any(), any()) } returns emptyList()
-            coEvery { chatRepository.getChatsByIds(any()) } returns
-                mapOf(
-                    ChatId("c1") to Chat(id = ChatId("c1"), name = "Chat", created = Date(1000L), lastModified = Date(2000L)),
-                )
+            messageRepository.searchAcrossChatsResults = messages
+            messageRepository.messagesAroundResults = emptyList()
+            seedChat("c1", "Chat")
 
             val result = executor.execute(baseRequest())
             val json = Json.parseToJsonElement(result.resultJson).jsonObject
@@ -334,9 +326,9 @@ class SearchChatHistoryToolExecutorTest {
                         createdAt = 1000L,
                     ),
                 )
-            coEvery { messageRepository.searchMessagesAcrossChats(any()) } returns messages
-            coEvery { messageRepository.getMessagesAround(any(), any(), any(), any()) } returns emptyList()
-            coEvery { chatRepository.getChatsByIds(any()) } returns emptyMap()
+            messageRepository.searchAcrossChatsResults = messages
+            messageRepository.messagesAroundResults = emptyList()
+            chatRepository.seedChats(emptyList())
 
             val result = executor.execute(baseRequest())
             val json = Json.parseToJsonElement(result.resultJson).jsonObject

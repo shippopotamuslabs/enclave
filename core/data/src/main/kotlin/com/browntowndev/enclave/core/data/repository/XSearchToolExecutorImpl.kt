@@ -13,7 +13,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class XSearchToolExecutorImpl
+open class XSearchToolExecutorImpl
     @Inject
     constructor(
         private val loggingPort: LoggingPort,
@@ -25,7 +25,7 @@ class XSearchToolExecutorImpl
             private const val TAG = "XSearchToolExecutor"
         }
 
-        override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
+        open override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
             requireSupportedTool(request.toolName)
             val params = request.parameters as XSearchParams
 

@@ -1,39 +1,34 @@
 package com.browntowndev.enclave.core.data.download
 
 import android.content.Context
-import android.content.SharedPreferences
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.verify
+import androidx.test.core.app.ApplicationProvider
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class DownloadSessionManagerTest {
-    private lateinit var mockContext: Context
-    private lateinit var mockSharedPreferences: SharedPreferences
-    private lateinit var mockEditor: SharedPreferences.Editor
+    private lateinit var context: Context
     private lateinit var sessionManager: DownloadSessionManager
 
     @BeforeEach
     fun setup() {
-        mockContext = mockk(relaxed = true)
-        mockSharedPreferences = mockk(relaxed = true)
-        mockEditor = mockk(relaxed = true)
-
-        every { mockContext.getSharedPreferences(any(), any()) } returns mockSharedPreferences
-        every { mockSharedPreferences.edit() } returns mockEditor
-        every { mockSharedPreferences.getString(any(), any()) } returns null
-        every { mockEditor.putString(any(), any()) } returns mockEditor
-        every { mockEditor.remove(any()) } returns mockEditor
-        every { mockEditor.apply() } returns Unit
-        every { mockEditor.commit() } returns true
-
-        sessionManager = DownloadSessionManager(mockContext)
+        context = ApplicationProvider.getApplicationContext()
+        sessionManager = DownloadSessionManager(context)
     }
+
+    private fun persistedSessionId(): String? =
+        context
+            .getSharedPreferences("model_download_prefs", Context.MODE_PRIVATE)
+            .getString("download_session_id", null)
 
     @Test
     fun createNewSession_generatesUniqueId() {
@@ -45,11 +40,11 @@ class DownloadSessionManagerTest {
 
     @Test
     fun createNewSession_persistsWithApply() {
-        sessionManager.createNewSession()
+        val sessionId = sessionManager.createNewSession()
 
-        verify { mockEditor.putString("download_session_id", any()) }
-        verify { mockEditor.apply() }
-        verify(exactly = 0) { mockEditor.commit() }
+        // The new id is durably written to SharedPreferences under the session key.
+        assertEquals(sessionId, persistedSessionId())
+        assertEquals(sessionId, sessionManager.currentSessionId)
     }
 
     @Test
@@ -88,13 +83,12 @@ class DownloadSessionManagerTest {
 
     @Test
     fun clearSession_clearsCachedSessionAndRemovesFromPrefs() {
-        val sessionId = sessionManager.createNewSession()
+        sessionManager.createNewSession()
 
         sessionManager.clearSession()
 
         assertNull(sessionManager.currentSessionId)
-        verify { mockEditor.remove("download_session_id") }
-        verify { mockEditor.apply() }
-        verify(exactly = 0) { mockEditor.commit() }
+        // The persisted key is removed as well.
+        assertNull(persistedSessionId())
     }
 }

@@ -1,58 +1,90 @@
+@file:Suppress("ForbiddenMockKInTests")
+// MockK is used only for Firebase SDK classes (FirebaseFirestore, DocumentSnapshot/Reference, CollectionReference), third-party SDK types with no hand-writable fakes (ENC-28).
+
 package com.browntowndev.enclave.core.data
 
+import android.content.Context
+import androidx.room.Room
+import androidx.test.core.app.ApplicationProvider
 import com.browntowndev.enclave.core.data.local.EnclaveDatabase
-import com.browntowndev.enclave.core.data.local.MediaProviderDao
 import com.browntowndev.enclave.core.data.local.MediaProviderEntity
+import com.browntowndev.enclave.core.data.remote.FirestoreSensitiveFieldRepairer
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncContext
 import com.browntowndev.enclave.core.data.remote.firestore.handlers.MediaProviderSyncHandler
 import com.browntowndev.enclave.core.data.remote.testFirestoreSyncDaos
 import com.browntowndev.enclave.core.data.repository.FakeLocalDataEncryptionService
 import com.browntowndev.enclave.core.data.repository.MediaProviderRepositoryImpl
+import com.browntowndev.enclave.core.data.repository.realReadRepairApplier
 import com.browntowndev.enclave.core.data.repository.testSensitiveSelfHealer
-import com.browntowndev.enclave.core.data.security.ApiKeyManager
-import com.browntowndev.enclave.core.data.security.SensitiveRoomReadRepairApplier
-import com.browntowndev.enclave.core.data.sync.CloudSyncTrigger
+import com.browntowndev.enclave.core.data.security.StaticSensitiveFieldCatalog
+import com.browntowndev.enclave.core.data.sync.EmbeddingRegenerationCoordinator
+import com.browntowndev.enclave.core.testing.FakeCryptoManagerPort
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.config.MediaProviderAsset
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.config.MediaTask
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
 import com.google.firebase.firestore.CollectionReference
 import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
-import io.mockk.coEvery
-import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
 import org.objectweb.asm.AnnotationVisitor
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.ClassVisitor
 import org.objectweb.asm.Opcodes
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 import java.util.concurrent.atomic.AtomicBoolean
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class MediaTaskPersistenceRedTest {
-    private val mediaProviderDao = mockk<MediaProviderDao>()
-    private val repository =
-        MediaProviderRepositoryImpl(
-            syncTrigger = mockk<CloudSyncTrigger>(relaxed = true),
-            mediaProviderDao = mediaProviderDao,
-            apiKeyManager = mockk<ApiKeyManager>(relaxed = true),
-            healer = testSensitiveSelfHealer(FakeLocalDataEncryptionService()),
-            readRepairApplier = mockk<SensitiveRoomReadRepairApplier>(relaxed = true),
-        )
+    private lateinit var database: EnclaveDatabase
+    private val mediaProviderDao = FakeMediaProviderDao()
+    private lateinit var repository: MediaProviderRepositoryImpl
+
+    @BeforeEach
+    fun setup() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        database =
+            Room
+                .inMemoryDatabaseBuilder(context, EnclaveDatabase::class.java)
+                .allowMainThreadQueries()
+                .build()
+        repository =
+            MediaProviderRepositoryImpl(
+                syncTrigger = FakeCloudSyncTrigger(testWorkManager(context)),
+                mediaProviderDao = mediaProviderDao,
+                apiKeyManager = FakeApiKeyManager(),
+                healer = testSensitiveSelfHealer(FakeLocalDataEncryptionService()),
+                readRepairApplier = database.realReadRepairApplier(),
+            )
+    }
+
+    @AfterEach
+    fun teardown() {
+        database.close()
+    }
 
     @Test
     fun `ENTITY-01 entity to domain mapper reads tasks_mask`() =
         runTest {
-            coEvery { mediaProviderDao.observeAllMediaProviders() } returns
+            mediaProviderDao.observeAllResult =
                 flowOf(
                     listOf(
                         MediaProviderEntity(
@@ -77,7 +109,7 @@ class MediaTaskPersistenceRedTest {
     @Test
     fun `ENTITY-03 unknown tasks_mask seeds legacy tasks for capability`() =
         runTest {
-            coEvery { mediaProviderDao.observeAllMediaProviders() } returns
+            mediaProviderDao.observeAllResult =
                 flowOf(
                     listOf(
                         MediaProviderEntity(
@@ -101,8 +133,6 @@ class MediaTaskPersistenceRedTest {
     @Test
     fun `ENTITY-02 domain to entity save writes tasks_mask`() =
         runTest {
-            coEvery { mediaProviderDao.upsert(any()) } returns Unit
-
             repository.saveMediaProvider(
                 MediaProviderAsset(
                     id = MediaProviderId("provider"),
@@ -117,7 +147,7 @@ class MediaTaskPersistenceRedTest {
                 apiKey = "key",
             )
 
-            coVerify { mediaProviderDao.upsert(match { it.tasksMask == 8 }) }
+            assertTrue(mediaProviderDao.upsertCalls.any { it.tasksMask == 8 })
         }
 
     @Test
@@ -156,17 +186,26 @@ class MediaTaskPersistenceRedTest {
 
     private fun createContext(): FirestoreSyncContext {
         val localEncryption = FakeLocalDataEncryptionService()
-        val loggingPort = mockk<LoggingPort>(relaxed = true)
+        val loggingPort = FakeLoggingPort()
+        val healer = testSensitiveSelfHealer(localEncryption)
         return FirestoreSyncContext(
             firestore = mockk<FirebaseFirestore>(relaxed = true),
             daos = testFirestoreSyncDaos(mediaProviderDao = mediaProviderDao),
             localEncryption = localEncryption,
-            sensitiveSelfHealer = testSensitiveSelfHealer(localEncryption),
-            firestoreSensitiveFieldRepairer = mockk(relaxed = true),
-            cryptoManager = mockk<CryptoManagerPort>(relaxed = true),
+            sensitiveSelfHealer = healer,
+            firestoreSensitiveFieldRepairer =
+                FirestoreSensitiveFieldRepairer(
+                    catalog = StaticSensitiveFieldCatalog(),
+                    healer = healer,
+                ),
+            cryptoManager = FakeCryptoManagerPort(),
             loggingPort = loggingPort,
-            apiKeyManager = mockk(relaxed = true),
-            embeddingCoordinator = mockk(relaxed = true),
+            apiKeyManager = FakeApiKeyManager(),
+            embeddingCoordinator =
+                EmbeddingRegenerationCoordinator(
+                    testWorkManager(ApplicationProvider.getApplicationContext()),
+                    CoroutineScope(SupervisorJob() + Dispatchers.Default),
+                ),
             userIdProvider = { "user-1" },
             purgeInProgress = AtomicBoolean(false),
         )

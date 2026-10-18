@@ -1,25 +1,23 @@
 package com.browntowndev.enclave.core.data.remote.firestore
 
-import com.browntowndev.enclave.core.data.local.ChatDao
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import io.mockk.coEvery
-import io.mockk.mockk
-import io.mockk.verify
+import com.browntowndev.enclave.core.data.local.ChatEntity
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.domain.model.chat.ChatId
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import java.util.Date
 
 class FirestoreSyncHydrationRecoveryTest {
-    private val chatDao = mockk<ChatDao>()
+    private val chatDao = FakeChatDao()
     private val syncStateStore = HydrationRecoveryTestSyncStateStore(sequence = 42L)
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
+    private val loggingPort = FakeLoggingPort()
 
     @Test
     fun `resets cursor when Room has no chats but watermark is ahead`() =
         runTest {
-            coEvery { chatDao.countActiveChats() } returns 0
             val recovery =
                 FirestoreSyncHydrationRecovery(
                     chatDao = chatDao,
@@ -30,13 +28,23 @@ class FirestoreSyncHydrationRecoveryTest {
             assertTrue(recovery.resetStaleCursorIfLocalStoreEmpty("alice"))
 
             assertEquals(0L, syncStateStore.lastAppliedSequence("alice"))
-            verify { loggingPort.warning(any(), any()) }
+            assertTrue(loggingPort.warningCalls.isNotEmpty())
         }
 
     @Test
     fun `does not reset when chats exist locally`() =
         runTest {
-            coEvery { chatDao.countActiveChats() } returns 3
+            repeat(3) { index ->
+                chatDao.seed(
+                    ChatEntity(
+                        id = ChatId("chat-$index"),
+                        name = "Chat $index",
+                        created = Date(0),
+                        lastModified = Date(0),
+                        pinned = false,
+                    ),
+                )
+            }
             val recovery =
                 FirestoreSyncHydrationRecovery(
                     chatDao = chatDao,
@@ -53,7 +61,6 @@ class FirestoreSyncHydrationRecoveryTest {
     fun `does not reset when watermark is already zero`() =
         runTest {
             syncStateStore.setLastAppliedSequence("alice", 0L)
-            coEvery { chatDao.countActiveChats() } returns 0
             val recovery =
                 FirestoreSyncHydrationRecovery(
                     chatDao = chatDao,

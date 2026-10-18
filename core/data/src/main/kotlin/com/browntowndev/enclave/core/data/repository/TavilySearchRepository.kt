@@ -38,7 +38,7 @@ private data class ExtractResponse(
 )
 
 @Singleton
-class TavilySearchRepository
+open class TavilySearchRepository
     @Inject
     constructor(
         private val okHttpClient: OkHttpClient,
@@ -51,7 +51,7 @@ class TavilySearchRepository
             private val json = Json { ignoreUnknownKeys = true }
         }
 
-        fun search(query: String): String {
+        open fun search(query: String): String {
             val apiKey =
                 apiKeyManager.get(ApiKeyManager.TAVILY_SEARCH_ALIAS)
                     ?: throw IllegalStateException("Tavily API key is required when search is enabled")
@@ -86,7 +86,7 @@ class TavilySearchRepository
             return Json.encodeToString(MappedSearchResponse(query, response.results))
         }
 
-        fun extract(
+        open fun extract(
             urls: List<String>,
             extractDepth: String = "basic",
             format: String = "markdown",

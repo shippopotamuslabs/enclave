@@ -3,28 +3,33 @@ package com.browntowndev.enclave.core.data.download
 import androidx.work.Data
 import androidx.work.WorkInfo
 import com.browntowndev.enclave.domain.model.download.DownloadKey
-import io.mockk.every
-import io.mockk.mockk
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import java.util.UUID
 
 class DownloadWorkChainObserverTest {
+    private fun workInfo(
+        state: WorkInfo.State,
+        tags: Set<String> = emptySet(),
+        outputData: Data = Data.EMPTY,
+        progress: Data = Data.EMPTY,
+    ): WorkInfo = WorkInfo(UUID.randomUUID(), state, tags, outputData, progress, 0, 0)
+
     @Test
     fun intermediateDownloadSuccess_isNotTerminal() {
         val workInfo =
-            mockk<WorkInfo> {
-                every { state } returns WorkInfo.State.SUCCEEDED
-                every { tags } returns setOf(ModelDownloadWorker::class.java.name)
-                every { outputData } returns
+            workInfo(
+                state = WorkInfo.State.SUCCEEDED,
+                tags = setOf(ModelDownloadWorker::class.java.name),
+                outputData =
                     Data
                         .Builder()
                         .putString(DownloadWorkKeys.KEY_WORKER_STAGE, DownloadWorkKeys.STAGE_DOWNLOAD)
-                        .build()
-                every { progress } returns Data.EMPTY
-            }
+                        .build(),
+            )
 
         assertTrue(DownloadWorkChainObserver.isIntermediateDownloadSuccess(workInfo))
         assertFalse(DownloadWorkChainObserver.isTerminalSuccess(workInfo))
@@ -34,16 +39,15 @@ class DownloadWorkChainObserverTest {
     @Test
     fun finalizerSuccess_isTerminal() {
         val workInfo =
-            mockk<WorkInfo> {
-                every { state } returns WorkInfo.State.SUCCEEDED
-                every { tags } returns setOf(DownloadFinalizeWorker::class.java.name)
-                every { outputData } returns
+            workInfo(
+                state = WorkInfo.State.SUCCEEDED,
+                tags = setOf(DownloadFinalizeWorker::class.java.name),
+                outputData =
                     Data
                         .Builder()
                         .putString(DownloadWorkKeys.KEY_WORKER_STAGE, DownloadWorkKeys.STAGE_FINALIZE)
-                        .build()
-                every { progress } returns Data.EMPTY
-            }
+                        .build(),
+            )
 
         assertTrue(DownloadWorkChainObserver.isTerminalSuccess(workInfo))
         assertFalse(DownloadWorkChainObserver.isIntermediateDownloadSuccess(workInfo))
@@ -52,24 +56,22 @@ class DownloadWorkChainObserverTest {
     @Test
     fun readPostProcessProgress_returnsFractionWhenPresent() {
         val workInfo =
-            mockk<WorkInfo> {
-                every { progress } returns
+            workInfo(
+                state = WorkInfo.State.RUNNING,
+                progress =
                     Data
                         .Builder()
                         .putLong(DownloadKey.POST_PROCESS_BYTES.key, 500L)
                         .putLong(DownloadKey.POST_PROCESS_TOTAL.key, 1_000L)
-                        .build()
-            }
+                        .build(),
+            )
 
         assertEquals(0.5f, DownloadWorkChainObserver.readPostProcessProgress(workInfo))
     }
 
     @Test
     fun readPostProcessProgress_returnsNullWhenTotalMissing() {
-        val workInfo =
-            mockk<WorkInfo> {
-                every { progress } returns Data.EMPTY
-            }
+        val workInfo = workInfo(state = WorkInfo.State.RUNNING, progress = Data.EMPTY)
 
         assertNull(DownloadWorkChainObserver.readPostProcessProgress(workInfo))
     }

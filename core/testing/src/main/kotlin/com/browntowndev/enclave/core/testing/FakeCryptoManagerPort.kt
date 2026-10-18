@@ -69,18 +69,37 @@ class FakeCryptoManagerPort : CryptoManagerPort {
 
     override fun hasCachedKey(): Boolean = hasCachedKeyValue
 
-    override fun encrypt(plaintext: String, aad: ByteArray?): Result<ByteArray> = encryptResult
+    /** Every (plaintext, aad) pair passed to [encrypt], in call order (ENC-28). */
+    val encryptCalls = mutableListOf<Pair<String, ByteArray?>>()
 
-    override fun encryptBytes(data: ByteArray, aad: ByteArray?): Result<ByteArray> =
-        Result.success(data)
+    override fun encrypt(plaintext: String, aad: ByteArray?): Result<ByteArray> {
+        encryptCalls += plaintext to aad
+        return encryptResult
+    }
+
+    /** Every [encryptBytes] input, in call order (ENC-28). */
+    val encryptBytesCalls = mutableListOf<ByteArray>()
+
+    override fun encryptBytes(data: ByteArray, aad: ByteArray?): Result<ByteArray> {
+        encryptBytesCalls += data
+        return Result.success(data)
+    }
 
     override fun decrypt(ciphertext: ByteArray, aad: ByteArray?): Result<String> {
         decryptCalls += ciphertext to aad
         return decryptResult
     }
 
-    override fun decryptBytes(ciphertext: ByteArray, aad: ByteArray?): Result<ByteArray> =
-        Result.success(ciphertext)
+    /** When set, [decryptBytes] returns it instead of the identity result (ENC-28). */
+    var decryptBytesResult: Result<ByteArray>? = null
+
+    /** Every [decryptBytes] input pair, in call order (ENC-28). */
+    val decryptBytesCalls = mutableListOf<Pair<ByteArray, ByteArray?>>()
+
+    override fun decryptBytes(ciphertext: ByteArray, aad: ByteArray?): Result<ByteArray> {
+        decryptBytesCalls += ciphertext to aad
+        return decryptBytesResult ?: Result.success(ciphertext)
+    }
 
     override fun generateSalt(): ByteArray {
         generateSaltCallCount++

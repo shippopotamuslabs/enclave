@@ -64,7 +64,7 @@ private data class ExaContentResult(
 )
 
 @Singleton
-class ExaSearchRepository
+open class ExaSearchRepository
     @Inject
     constructor(
         private val okHttpClient: OkHttpClient,
@@ -77,7 +77,7 @@ class ExaSearchRepository
             private val json = Json { ignoreUnknownKeys = true }
         }
 
-        fun search(query: String): String {
+        open fun search(query: String): String {
             val apiKey =
                 apiKeyManager.get(ApiKeyManager.EXA_SEARCH_ALIAS)
                     ?: throw IllegalStateException("Exa API key is required when search is enabled and Exa is selected")
@@ -121,7 +121,7 @@ class ExaSearchRepository
             }
         }
 
-        fun extract(urls: List<String>): String {
+        open fun extract(urls: List<String>): String {
             val apiKey =
                 apiKeyManager.get(ApiKeyManager.EXA_SEARCH_ALIAS)
                     ?: throw IllegalStateException("Exa API key is required when search is enabled and Exa is selected")

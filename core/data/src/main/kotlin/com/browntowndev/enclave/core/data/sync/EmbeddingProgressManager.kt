@@ -9,7 +9,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class EmbeddingProgressManager
+open class EmbeddingProgressManager
     @Inject
     constructor(
         private val workManager: androidx.work.WorkManager,
@@ -54,7 +54,7 @@ class EmbeddingProgressManager
             if (!active) _progress.value = 0f
         }
 
-        fun updateProgress(
+        open fun updateProgress(
             current: Int,
             total: Int,
         ) {

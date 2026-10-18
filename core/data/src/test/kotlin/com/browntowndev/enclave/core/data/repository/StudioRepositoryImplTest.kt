@@ -1,87 +1,104 @@
 package com.browntowndev.enclave.core.data.repository
 
 import android.content.Context
+import android.net.Uri
+import androidx.test.core.app.ApplicationProvider
 import app.cash.turbine.test
-import com.browntowndev.enclave.core.data.local.StudioAlbumDao
+import com.browntowndev.enclave.core.data.local.EnclaveDatabase
 import com.browntowndev.enclave.core.data.local.StudioAlbumEntity
-import com.browntowndev.enclave.core.data.local.StudioMediaDao
 import com.browntowndev.enclave.core.data.local.StudioMediaEntity
-import com.browntowndev.enclave.core.data.security.SensitiveRoomReadRepairApplier
-import com.browntowndev.enclave.core.data.sync.CloudSyncTrigger
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
 import com.browntowndev.enclave.domain.port.repository.ActiveStudioGeneration
 import com.browntowndev.enclave.domain.port.repository.DEFAULT_GALLERY_ALBUM_ID
 import com.browntowndev.enclave.domain.port.repository.TransactionProvider
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.coVerifyOrder
-import io.mockk.every
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.io.TempDir
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.Shadows.shadowOf
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
+import java.io.ByteArrayInputStream
 import java.io.File
+import org.robolectric.annotation.Config as RoboConfig
 
+/**
+ * Translated from MockK to hand-written fakes (ENC-28): recording DAO
+ * fakes, a recording sync trigger, the real [ActiveStudioGenerationPersistence]
+ * over an in-memory DataStore, and the Robolectric application context (its
+ * cache/files dirs are real writable directories). Incidental cleanup DAO /
+ * read-repair applier are the real implementations over an in-memory Room
+ * database.
+ */
+@ExtendWith(RobolectricExtension::class)
+@RoboConfig(sdk = [34])
 class StudioRepositoryImplTest {
-    private val studioMediaDao = mockk<StudioMediaDao>(relaxed = true)
-    private val studioAlbumDao = mockk<StudioAlbumDao>(relaxed = true)
-    private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
+    private lateinit var database: EnclaveDatabase
+    private val callLog = mutableListOf<String>()
+    private val studioMediaDao = FakeStudioMediaDao(callLog)
+    private val studioAlbumDao = FakeStudioAlbumDao(callLog)
+    private lateinit var syncTrigger: RecordingCloudSyncTrigger
     private val transactionProvider = FakeTransactionProvider()
-    private val context = mockk<Context>()
-
-    @TempDir
-    lateinit var tempDir: File
+    private lateinit var context: Context
 
     private lateinit var cacheDir: File
     private lateinit var filesDir: File
-    private val healer = testSensitiveSelfHealer(FakeLocalDataEncryptionService())
-    private val readRepairApplier = mockk<SensitiveRoomReadRepairApplier>(relaxed = true)
-    private val activeGenerationPersistence = mockk<ActiveStudioGenerationPersistence>(relaxed = true)
+    private val healer = testSensitiveSelfHealer(FakeLocalDataEncryptionService(), FakeLoggingPort())
+    private lateinit var activeGenerationPersistence: ActiveStudioGenerationPersistence
     private lateinit var repository: StudioRepositoryImpl
 
     @BeforeEach
     fun setup() {
-        cacheDir = File(tempDir, "cache")
-        filesDir = File(tempDir, "files")
-        cacheDir.mkdirs()
-        filesDir.mkdirs()
-
-        every { context.cacheDir } returns cacheDir
-        every { context.filesDir } returns filesDir
-        coEvery { activeGenerationPersistence.load() } returns null
+        syncTrigger = RecordingCloudSyncTrigger()
+        database = createInMemoryEnclaveDatabase()
+        context = ApplicationProvider.getApplicationContext()
+        cacheDir = context.cacheDir
+        filesDir = context.filesDir
+        activeGenerationPersistence = ActiveStudioGenerationPersistence(InMemoryPreferencesDataStore())
 
         repository =
             StudioRepositoryImpl(
                 studioMediaDao = studioMediaDao,
                 studioAlbumDao = studioAlbumDao,
                 transactionProvider = transactionProvider,
-                cleanupDao = mockk(relaxed = true),
+                cleanupDao = database.cleanupDao(),
                 syncTrigger = syncTrigger,
                 healer = healer,
-                readRepairApplier = readRepairApplier,
+                readRepairApplier = database.realReadRepairApplier(),
                 activeGenerationPersistence = activeGenerationPersistence,
                 context = context,
             )
+    }
+
+    @AfterEach
+    fun tearDown() {
+        database.close()
     }
 
     @Test
     fun `cacheEphemeralMedia saves bytes to cache subfolder`() =
         runTest {
             val bytes = "test data".toByteArray()
+            // Robolectric sandbox dirs are shared across this class's tests, so
+            // assert on the one new file rather than the folder's total contents.
+            val ephemeralDir = File(cacheDir, "studio_ephemeral")
+            val before = ephemeralDir.listFiles()?.toSet() ?: emptySet()
             val uriString = repository.cacheEphemeralMedia(bytes, "IMAGE")
 
-            val ephemeralDir = File(cacheDir, "studio_ephemeral")
             assertTrue(ephemeralDir.exists())
-            val files = ephemeralDir.listFiles()
-            assertEquals(1, files?.size)
-            assertTrue(files!![0].name.endsWith(".png"))
-            assertEquals("test data", files[0].readText())
+            val newFiles = (ephemeralDir.listFiles()?.toSet() ?: emptySet()) - before
+            assertEquals(1, newFiles.size)
+            val written = newFiles.single()
+            assertTrue(written.name.endsWith(".png"))
+            assertEquals("test data", written.readText())
             assertTrue(uriString.contains("studio_ephemeral"))
         }
 
@@ -160,11 +177,11 @@ class StudioRepositoryImplTest {
                     mediaType = MediaCapability.IMAGE,
                     settings = ImageGenerationSettings(),
                 )
-            coEvery { activeGenerationPersistence.load() } returns staleGeneration
+            activeGenerationPersistence.persist(staleGeneration)
 
             repository.reconcilePersistedActiveGeneration()
 
-            coVerify { activeGenerationPersistence.clear() }
+            assertNull(activeGenerationPersistence.load())
             repository.observeGenerationError().test {
                 assertNull(awaitItem())
                 cancelAndIgnoreRemainingEvents()
@@ -200,8 +217,7 @@ class StudioRepositoryImplTest {
             sourceFile.writeText("image data")
             val cacheUri = "file://${sourceFile.absolutePath}"
 
-            coEvery { studioMediaDao.insertMedia(any()) } returns Unit
-            coEvery { studioMediaDao.getMediaById(any()) } returns
+            studioMediaDao.getMediaByIdOverride =
                 StudioMediaEntity(
                     id = "uuid-1",
                     prompt = "PCENC:v1:aes-gcm:prompt",
@@ -222,15 +238,10 @@ class StudioRepositoryImplTest {
             assertFalse(sourceFile.exists())
 
             // Verify DAO insertion
-            coVerify {
-                studioMediaDao.insertMedia(
-                    match {
-                        it.prompt == "PCENC:v1:aes-gcm:prompt" &&
-                            it.mediaUri == "PCENC:v1:aes-gcm:file://${destinationFile.absolutePath}" &&
-                            it.albumId == "123"
-                    },
-                )
-            }
+            val inserted = studioMediaDao.insertCalls.single()
+            assertEquals("PCENC:v1:aes-gcm:prompt", inserted.prompt)
+            assertEquals("PCENC:v1:aes-gcm:file://${destinationFile.absolutePath}", inserted.mediaUri)
+            assertEquals("123", inserted.albumId)
             assertEquals("file://${destinationFile.absolutePath}", resultAsset.localUri)
             assertEquals("uuid-1", resultAsset.id)
         }
@@ -240,8 +251,7 @@ class StudioRepositoryImplTest {
         runTest {
             val bytes = "new image".toByteArray()
 
-            coEvery { studioMediaDao.insertMedia(any()) } returns Unit
-            coEvery { studioMediaDao.getMediaById(any()) } returns
+            studioMediaDao.getMediaByIdOverride =
                 StudioMediaEntity(
                     id = "uuid-2",
                     prompt = "PCENC:v1:aes-gcm:new prompt",
@@ -251,44 +261,28 @@ class StudioRepositoryImplTest {
                     albumId = null,
                 )
 
+            val before = filesDir.listFiles()?.toSet() ?: emptySet()
             val resultAsset = repository.saveMedia(bytes, "new prompt", "IMAGE", albumId = null)
 
-            val files = filesDir.listFiles()
-            assertEquals(1, files?.size)
-            assertEquals("new image", files!![0].readText())
+            // Exactly one new file appears in filesDir (sandbox dirs are shared across tests).
+            val newFiles = (filesDir.listFiles()?.toSet() ?: emptySet()) - before
+            assertEquals(1, newFiles.size)
+            assertEquals("new image", newFiles.single().readText())
 
-            coVerify {
-                studioMediaDao.insertMedia(
-                    match {
-                        it.prompt == "PCENC:v1:aes-gcm:new prompt" &&
-                            it.albumId == null
-                    },
-                )
-            }
+            val inserted = studioMediaDao.insertCalls.single()
+            assertEquals("PCENC:v1:aes-gcm:new prompt", inserted.prompt)
+            assertEquals(null, inserted.albumId)
             assertEquals("uuid-2", resultAsset.id)
         }
 
     @Test
     fun `saveMedia stores prompt encrypted and returns plaintext domain model`() =
         runTest {
-            val encryptedRepository =
-                StudioRepositoryImpl(
-                    studioMediaDao = studioMediaDao,
-                    studioAlbumDao = studioAlbumDao,
-                    transactionProvider = transactionProvider,
-                    cleanupDao = mockk(relaxed = true),
-                    syncTrigger = syncTrigger,
-                    healer = healer,
-                    readRepairApplier = readRepairApplier,
-                    activeGenerationPersistence = activeGenerationPersistence,
-                    context = context,
-                )
             val sourceFile = File(filesDir, "encrypted-test.jpg")
             sourceFile.writeText("image data")
             val localUri = "file://${sourceFile.absolutePath}"
 
-            coEvery { studioMediaDao.insertMedia(any()) } returns Unit
-            coEvery { studioMediaDao.getMediaById(any()) } returns
+            studioMediaDao.getMediaByIdOverride =
                 StudioMediaEntity(
                     id = "uuid-3",
                     prompt = "PCENC:v1:aes-gcm:private prompt",
@@ -298,16 +292,11 @@ class StudioRepositoryImplTest {
                     albumId = null,
                 )
 
-            val resultAsset = encryptedRepository.saveMedia(localUri, "private prompt", "IMAGE", albumId = null)
+            val resultAsset = repository.saveMedia(localUri, "private prompt", "IMAGE", albumId = null)
 
-            coVerify {
-                studioMediaDao.insertMedia(
-                    match {
-                        it.prompt == "PCENC:v1:aes-gcm:private prompt" &&
-                            it.mediaUri == "PCENC:v1:aes-gcm:$localUri"
-                    },
-                )
-            }
+            val inserted = studioMediaDao.insertCalls.single()
+            assertEquals("PCENC:v1:aes-gcm:private prompt", inserted.prompt)
+            assertEquals("PCENC:v1:aes-gcm:$localUri", inserted.mediaUri)
             assertEquals("private prompt", resultAsset.prompt)
         }
 
@@ -317,7 +306,7 @@ class StudioRepositoryImplTest {
             val localFile = File(filesDir, "present.jpg")
             localFile.writeText("bytes")
 
-            coEvery { studioMediaDao.getUploaded() } returns
+            studioMediaDao.uploadedEntities =
                 listOf(
                     // Synced down on a fresh device: mediaUri points at the remote URL, no local file.
                     StudioMediaEntity(
@@ -357,7 +346,7 @@ class StudioRepositoryImplTest {
     fun `materializeDownloadedMedia writes bytes locally and repoints the row without re-uploading`() =
         runTest {
             val bytes = "decrypted image".toByteArray()
-            coEvery { studioMediaDao.getMediaById("media-1") } returns
+            studioMediaDao.getMediaByIdOverride =
                 StudioMediaEntity(
                     id = "media-1",
                     prompt = "PCENC:v1:aes-gcm:p",
@@ -374,32 +363,23 @@ class StudioRepositoryImplTest {
             assertTrue(written.exists())
             assertEquals("decrypted image", written.readText())
 
-            coVerify {
-                studioMediaDao.insertMedia(
-                    match {
-                        it.id == "media-1" &&
-                            it.mediaUri == "PCENC:v1:aes-gcm:file://${written.absolutePath}" &&
-                            it.syncStatus == "UPLOADED" &&
-                            it.pendingSync == 0
-                    },
-                )
-            }
+            val inserted = studioMediaDao.insertCalls.single()
+            assertEquals("media-1", inserted.id)
+            assertEquals("PCENC:v1:aes-gcm:file://${written.absolutePath}", inserted.mediaUri)
+            assertEquals("UPLOADED", inserted.syncStatus)
+            assertEquals(0, inserted.pendingSync)
         }
 
     @Test
     fun `renameAlbum trims name and updates album row`() =
         runTest {
-            coEvery { studioAlbumDao.getAlbumById("42") } returns
+            studioAlbumDao.entities["42"] =
                 StudioAlbumEntity(id = "42", name = "PCENC:v1:aes-gcm:Old", pendingSync = 0)
             repository.renameAlbum("42", "  Sunrise  ")
 
-            coVerify {
-                studioAlbumDao.insertAlbum(
-                    match {
-                        it.id == "42" && it.name == "PCENC:v1:aes-gcm:Sunrise"
-                    },
-                )
-            }
+            val inserted = studioAlbumDao.insertCalls.single()
+            assertEquals("42", inserted.id)
+            assertEquals("PCENC:v1:aes-gcm:Sunrise", inserted.name)
         }
 
     @Test
@@ -407,9 +387,7 @@ class StudioRepositoryImplTest {
         runTest {
             repository.renameAlbum("42", "   ")
 
-            coVerify(exactly = 0) {
-                studioAlbumDao.insertAlbum(any())
-            }
+            assertTrue(studioAlbumDao.insertCalls.isEmpty())
         }
 
     @Test
@@ -417,10 +395,12 @@ class StudioRepositoryImplTest {
         runTest {
             repository.deleteAlbum("7")
 
-            coVerifyOrder {
-                studioMediaDao.reassignMediaToDefault("7", any())
-                studioAlbumDao.softDeleteById("7", any())
-            }
+            assertEquals(listOf("7"), studioMediaDao.reassignCalls.map { it.first })
+            assertEquals(listOf("7"), studioAlbumDao.softDeleteCalls.map { it.first })
+            assertTrue(
+                callLog.indexOf("reassignMediaToDefault") < callLog.indexOf("albumSoftDeleteById"),
+                "media must be reassigned before the album row is deleted: $callLog",
+            )
         }
 
     @Test
@@ -429,14 +409,13 @@ class StudioRepositoryImplTest {
             val uuid = "5a8277e4-dcc0-45d4-81ab-8fb1324c96c9"
             repository.deleteMedia(uuid)
 
-            coVerify { studioMediaDao.softDeleteById(uuid, any()) }
+            assertEquals(listOf(uuid), studioMediaDao.softDeleteCalls.map { it.first })
         }
 
     @Test
     fun `saveMedia maps 'default' albumId to null`() =
         runTest {
-            coEvery { studioMediaDao.insertMedia(any()) } returns Unit
-            coEvery { studioMediaDao.getMediaById(any()) } returns
+            studioMediaDao.getMediaByIdOverride =
                 StudioMediaEntity(
                     id = "uuid-1",
                     prompt = "PCENC:v1:aes-gcm:prompt",
@@ -448,9 +427,7 @@ class StudioRepositoryImplTest {
 
             repository.saveMedia("uri", "prompt", "IMAGE", albumId = DEFAULT_GALLERY_ALBUM_ID)
 
-            coVerify {
-                studioMediaDao.insertMedia(match { it.albumId == null })
-            }
+            assertEquals(null, studioMediaDao.insertCalls.single().albumId)
         }
 
     @Test
@@ -458,34 +435,23 @@ class StudioRepositoryImplTest {
         runTest {
             repository.moveMediaToAlbum(listOf("media-1"), DEFAULT_GALLERY_ALBUM_ID)
 
-            coVerify {
-                studioMediaDao.updateMediaAlbum(listOf("media-1"), null, any())
-            }
+            val call = studioMediaDao.updateMediaAlbumCalls.single()
+            assertEquals(listOf("media-1"), call.first)
+            assertEquals(null, call.second)
         }
 
     @Test
     fun `readMediaBytes reads content uri using content resolver`() =
         runTest {
             val uriString = "content://media/external/images/media/1"
-            val mockResolver = mockk<android.content.ContentResolver>()
-            every { context.contentResolver } returns mockResolver
-
             val bytes = "content data".toByteArray()
-            val mockInputStream = java.io.ByteArrayInputStream(bytes)
-
-            io.mockk.mockkStatic(android.net.Uri::class)
-            val mockUri = mockk<android.net.Uri>()
-            every { android.net.Uri.parse(uriString) } returns mockUri
-            every { mockResolver.openInputStream(mockUri) } returns mockInputStream
+            val uri = Uri.parse(uriString)
+            shadowOf(context.contentResolver).registerInputStream(uri, ByteArrayInputStream(bytes))
 
             val result = repository.readMediaBytes(uriString)
 
-            org.junit.jupiter.api.Assertions
-                .assertNotNull(result)
-            org.junit.jupiter.api.Assertions
-                .assertArrayEquals(bytes, result)
-
-            io.mockk.unmockkStatic(android.net.Uri::class)
+            assertNotNull(result)
+            assertArrayEquals(bytes, result)
         }
 
     @Test
@@ -503,7 +469,7 @@ class StudioRepositoryImplTest {
                     createdAt = 1_000L,
                     albumId = null,
                 )
-            coEvery { studioMediaDao.getMediaById("media-uploaded") } returns existingEntity
+            studioMediaDao.entities[existingEntity.id] = existingEntity
 
             repository.updateMedia(
                 com.browntowndev.enclave.domain.port.repository.StudioMediaAsset(
@@ -516,23 +482,16 @@ class StudioRepositoryImplTest {
                 ),
             )
 
-            coVerify {
-                studioMediaDao.insertMedia(
-                    match { entity ->
-                        entity.remoteUrl == "PCENC:v1:aes-gcm:https://cdn.example.com/photo.jpg" &&
-                            entity.syncStatus == "UPLOADED" &&
-                            entity.prompt == "PCENC:v1:aes-gcm:updated prompt" &&
-                            entity.mediaUri == "PCENC:v1:aes-gcm:file:///data/files/photo.jpg"
-                    },
-                )
-            }
+            val inserted = studioMediaDao.insertCalls.single()
+            assertEquals("PCENC:v1:aes-gcm:https://cdn.example.com/photo.jpg", inserted.remoteUrl)
+            assertEquals("UPLOADED", inserted.syncStatus)
+            assertEquals("PCENC:v1:aes-gcm:updated prompt", inserted.prompt)
+            assertEquals("PCENC:v1:aes-gcm:file:///data/files/photo.jpg", inserted.mediaUri)
         }
 
     @Test
     fun `updateMedia uses PENDING_UPLOAD syncStatus when entity has never been uploaded`() =
         runTest {
-            coEvery { studioMediaDao.getMediaById("media-new") } returns null
-
             repository.updateMedia(
                 com.browntowndev.enclave.domain.port.repository.StudioMediaAsset(
                     id = "media-new",
@@ -544,21 +503,14 @@ class StudioRepositoryImplTest {
                 ),
             )
 
-            coVerify {
-                studioMediaDao.insertMedia(
-                    match { entity ->
-                        entity.remoteUrl == null &&
-                            entity.syncStatus == "PENDING_UPLOAD"
-                    },
-                )
-            }
+            val inserted = studioMediaDao.insertCalls.single()
+            assertEquals(null, inserted.remoteUrl)
+            assertEquals("PENDING_UPLOAD", inserted.syncStatus)
         }
 
     @Test
     fun `updateMedia maps DEFAULT_GALLERY_ALBUM_ID to null albumId`() =
         runTest {
-            coEvery { studioMediaDao.getMediaById("media-1") } returns null
-
             repository.updateMedia(
                 com.browntowndev.enclave.domain.port.repository.StudioMediaAsset(
                     id = "media-1",
@@ -570,9 +522,7 @@ class StudioRepositoryImplTest {
                 ),
             )
 
-            coVerify {
-                studioMediaDao.insertMedia(match { it.albumId == null })
-            }
+            assertEquals(null, studioMediaDao.insertCalls.single().albumId)
         }
 }
 

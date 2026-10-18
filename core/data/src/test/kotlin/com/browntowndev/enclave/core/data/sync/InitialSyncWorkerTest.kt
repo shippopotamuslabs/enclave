@@ -2,40 +2,58 @@ package com.browntowndev.enclave.core.data.sync
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import androidx.work.Configuration
 import androidx.work.ListenableWorker
+import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.testing.TestListenableWorkerBuilder
+import androidx.work.testing.WorkManagerTestInitHelper
 import androidx.work.workDataOf
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.core.testing.FakeCloudSyncPort
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.usecase.security.StartCloudSyncListeningUseCase
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.robolectric.annotation.Config
 import tech.apter.junit.jupiter.robolectric.RobolectricExtension
+import java.util.concurrent.Executor
 
 @ExtendWith(RobolectricExtension::class)
 @Config(sdk = [34])
 class InitialSyncWorkerTest {
     private lateinit var context: Context
-    private val startCloudSyncListeningUseCase = mockk<StartCloudSyncListeningUseCase>()
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
-    private val cloudSyncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
+    private lateinit var workManager: WorkManager
+    private val cloudSyncPort = FakeCloudSyncPort()
+    private val loggingPort = FakeLoggingPort()
+    private lateinit var startCloudSyncListeningUseCase: StartCloudSyncListeningUseCase
+    private lateinit var cloudSyncTrigger: CloudSyncTrigger
 
     @BeforeEach
     fun setup() {
         context = ApplicationProvider.getApplicationContext()
+        // Holding background executor: triggered work stays ENQUEUED and observable.
+        val config =
+            Configuration
+                .Builder()
+                .setTaskExecutor(androidx.work.impl.utils.SynchronousExecutor())
+                .setExecutor(Executor { })
+                .build()
+        WorkManagerTestInitHelper.initializeTestWorkManager(context, config)
+        workManager = WorkManager.getInstance(context)
+        startCloudSyncListeningUseCase = StartCloudSyncListeningUseCase(cloudSyncPort)
+        cloudSyncTrigger = CloudSyncTrigger(workManager, loggingPort)
     }
+
+    private fun mediaDownloadWorkCount(): Int = workManager.getWorkInfosForUniqueWork("enclave_media_download").get().size
 
     @Test
     fun `doWork delegates to startCloudSyncListeningUseCase and returns success`() =
         runTest {
-            coEvery { startCloudSyncListeningUseCase(uploadLocalFirst = true, any()) } returns Result.success(Unit)
+            cloudSyncPort.syncAllResult = Result.success(Unit)
 
             val worker =
                 TestListenableWorkerBuilder<InitialSyncWorker>(context)
@@ -45,14 +63,15 @@ class InitialSyncWorkerTest {
             val result = worker.doWork()
 
             assertEquals(ListenableWorker.Result.success(), result)
-            coVerify(exactly = 1) { startCloudSyncListeningUseCase(uploadLocalFirst = true, any()) }
-            io.mockk.verify(exactly = 1) { cloudSyncTrigger.triggerMediaDownload() }
+            // The real use case ran exactly one upload-first pass.
+            assertEquals(1, cloudSyncPort.count("syncAll"))
+            assertEquals(1, mediaDownloadWorkCount())
         }
 
     @Test
     fun `doWork respects input data for uploadLocalFirst`() =
         runTest {
-            coEvery { startCloudSyncListeningUseCase(uploadLocalFirst = false, any()) } returns Result.success(Unit)
+            cloudSyncPort.syncAllResult = Result.success(Unit)
 
             val worker =
                 TestListenableWorkerBuilder<InitialSyncWorker>(context)
@@ -63,13 +82,15 @@ class InitialSyncWorkerTest {
             val result = worker.doWork()
 
             assertEquals(ListenableWorker.Result.success(), result)
-            coVerify(exactly = 1) { startCloudSyncListeningUseCase(uploadLocalFirst = false, any()) }
+            // uploadLocalFirst = false skips the upload pass entirely.
+            assertEquals(0, cloudSyncPort.count("syncAll"))
+            assertTrue(cloudSyncPort.count("startListening") == 1)
         }
 
     @Test
     fun `doWork returns failure when startCloudSyncListeningUseCase fails`() =
         runTest {
-            coEvery { startCloudSyncListeningUseCase(any(), any()) } returns Result.failure(RuntimeException("Sync error"))
+            cloudSyncPort.syncAllResult = Result.failure(RuntimeException("Sync error"))
 
             val worker =
                 TestListenableWorkerBuilder<InitialSyncWorker>(context)
@@ -79,7 +100,7 @@ class InitialSyncWorkerTest {
             val result = worker.doWork()
 
             assertEquals(ListenableWorker.Result.failure(workDataOf(InitialSyncWorker.KEY_PROGRESS_STATUS to "Sync error")), result)
-            io.mockk.verify(exactly = 0) { cloudSyncTrigger.triggerMediaDownload() }
+            assertEquals(0, mediaDownloadWorkCount())
         }
 
     private inner class InitialSyncWorkerFactory : androidx.work.WorkerFactory() {

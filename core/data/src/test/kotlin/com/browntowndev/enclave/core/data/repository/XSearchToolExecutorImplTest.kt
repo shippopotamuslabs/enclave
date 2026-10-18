@@ -1,38 +1,36 @@
 package com.browntowndev.enclave.core.data.repository
 
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeSettingsRepository
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.port.repository.SettingsData
-import com.browntowndev.enclave.domain.port.repository.SettingsRepository
 import com.browntowndev.enclave.domain.usecase.inference.BuildXQueryUseCase
-import io.mockk.coEvery
-import io.mockk.every
-import io.mockk.mockk
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import kotlin.test.assertFailsWith
 
+/**
+ * Translated from MockK to hand-written fakes (ENC-28): the settings port
+ * is the `:core:testing` fake seeded with the required [SettingsData], the
+ * X search repository is a subclass fake over the production open seam,
+ * and the query builder is the real no-arg [BuildXQueryUseCase].
+ */
 class XSearchToolExecutorImplTest {
     @Test
     fun `execute delegates to XSearchRepository when X Search is enabled`() =
         runTest {
-            val settingsRepository = mockk<SettingsRepository>()
-            val xSearchRepository = mockk<XSearchRepository>()
-            val buildXQueryUseCase = mockk<BuildXQueryUseCase>()
-
-            every { settingsRepository.settingsFlow } returns flowOf(SettingsData(xSearchEnabled = true))
-            every { buildXQueryUseCase(any()) } returns "AI news"
-            coEvery { xSearchRepository.search("AI news", any()) } returns """{"query":"AI news","result_count":1,"posts":[]}"""
+            val settingsRepository = FakeSettingsRepository(SettingsData(xSearchEnabled = true))
+            val xSearchRepository = FakeXSearchRepository()
+            xSearchRepository.defaultResult = """{"query":"AI news","result_count":1,"posts":[]}"""
 
             val executor =
                 XSearchToolExecutorImpl(
-                    loggingPort = mockk<LoggingPort>(relaxed = true),
+                    loggingPort = FakeLoggingPort(),
                     settingsRepository = settingsRepository,
                     xSearchRepository = xSearchRepository,
-                    buildXQueryUseCase = buildXQueryUseCase,
+                    buildXQueryUseCase = BuildXQueryUseCase(),
                 )
 
             val result =
@@ -51,19 +49,14 @@ class XSearchToolExecutorImplTest {
     @Test
     fun `execute throws IllegalStateException when X Search is disabled`() =
         runTest {
-            val settingsRepository = mockk<SettingsRepository>()
-            val xSearchRepository = mockk<XSearchRepository>()
-            val buildXQueryUseCase = mockk<BuildXQueryUseCase>()
-
-            every { settingsRepository.settingsFlow } returns flowOf(SettingsData(xSearchEnabled = false))
-            every { buildXQueryUseCase(any()) } returns "test"
+            val settingsRepository = FakeSettingsRepository(SettingsData(xSearchEnabled = false))
 
             val executor =
                 XSearchToolExecutorImpl(
-                    loggingPort = mockk<LoggingPort>(relaxed = true),
+                    loggingPort = FakeLoggingPort(),
                     settingsRepository = settingsRepository,
-                    xSearchRepository = xSearchRepository,
-                    buildXQueryUseCase = buildXQueryUseCase,
+                    xSearchRepository = FakeXSearchRepository(),
+                    buildXQueryUseCase = BuildXQueryUseCase(),
                 )
 
             assertFailsWith<IllegalStateException> {
@@ -83,10 +76,10 @@ class XSearchToolExecutorImplTest {
         runTest {
             val executor =
                 XSearchToolExecutorImpl(
-                    loggingPort = mockk<LoggingPort>(relaxed = true),
-                    settingsRepository = mockk(),
-                    xSearchRepository = mockk(),
-                    buildXQueryUseCase = mockk(),
+                    loggingPort = FakeLoggingPort(),
+                    settingsRepository = FakeSettingsRepository(),
+                    xSearchRepository = FakeXSearchRepository(),
+                    buildXQueryUseCase = BuildXQueryUseCase(),
                 )
             assertFailsWith<IllegalArgumentException> {
                 executor.execute(
@@ -103,20 +96,16 @@ class XSearchToolExecutorImplTest {
     @Test
     fun `execute returns error JSON when search throws IOException`() =
         runTest {
-            val settingsRepository = mockk<SettingsRepository>()
-            val xSearchRepository = mockk<XSearchRepository>()
-            val buildXQueryUseCase = mockk<BuildXQueryUseCase>()
-
-            every { settingsRepository.settingsFlow } returns flowOf(SettingsData(xSearchEnabled = true))
-            every { buildXQueryUseCase(any()) } returns "AI news"
-            coEvery { xSearchRepository.search("AI news", any()) } throws java.io.IOException("Connection refused")
+            val settingsRepository = FakeSettingsRepository(SettingsData(xSearchEnabled = true))
+            val xSearchRepository = FakeXSearchRepository()
+            xSearchRepository.searchFailure = java.io.IOException("Connection refused")
 
             val executor =
                 XSearchToolExecutorImpl(
-                    loggingPort = mockk<LoggingPort>(relaxed = true),
+                    loggingPort = FakeLoggingPort(),
                     settingsRepository = settingsRepository,
                     xSearchRepository = xSearchRepository,
-                    buildXQueryUseCase = buildXQueryUseCase,
+                    buildXQueryUseCase = BuildXQueryUseCase(),
                 )
 
             val result =

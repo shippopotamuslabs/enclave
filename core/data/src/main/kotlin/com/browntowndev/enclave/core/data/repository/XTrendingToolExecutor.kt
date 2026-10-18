@@ -12,7 +12,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class XTrendingToolExecutor
+open class XTrendingToolExecutor
     @Inject
     constructor(
         private val loggingPort: LoggingPort,
@@ -23,7 +23,7 @@ class XTrendingToolExecutor
             private const val TAG = "XTrendingToolExecutor"
         }
 
-        override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
+        open override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
             requireSupportedTool(request.toolName)
             val settings = settingsRepository.settingsFlow.first()
             if (!settings.xSearchEnabled) {

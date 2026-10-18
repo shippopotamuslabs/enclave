@@ -1,41 +1,53 @@
 package com.browntowndev.enclave.core.data.repository
 
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
 import com.browntowndev.enclave.core.data.security.ApiKeyManager
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.slot
-import okhttp3.Call
-import okhttp3.OkHttpClient
-import okhttp3.Protocol
-import okhttp3.Request
-import okhttp3.Response
-import okhttp3.ResponseBody.Companion.toResponseBody
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import okio.Buffer
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.junit.jupiter.api.extension.ExtendWith
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 import java.io.IOException
+import org.robolectric.annotation.Config as RoboConfig
 
+/**
+ * Translated from MockK to a real OkHttpClient over a stub interceptor
+ * (ENC-28): the interceptor records the outgoing request and serves the
+ * canned response, and the API key manager is the real class over
+ * Robolectric SharedPreferences (the [testApiKeyManager] pattern).
+ */
+@ExtendWith(RobolectricExtension::class)
+@RoboConfig(sdk = [34])
 class TavilySearchRepositoryExtractTest {
-    private val okHttpClient = mockk<OkHttpClient>()
-    private val apiKeyManager = mockk<ApiKeyManager>()
-    private val repository = TavilySearchRepository(okHttpClient, apiKeyManager)
+    private val interceptor = StubHttpInterceptor()
+    private lateinit var apiKeyManager: ApiKeyManager
+    private lateinit var repository: TavilySearchRepository
+
+    @BeforeEach
+    fun setup() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        apiKeyManager =
+            testApiKeyManager(context, CoroutineScope(SupervisorJob() + Dispatchers.Default), "tavily_extract_test_prefs")
+        repository = TavilySearchRepository(stubHttpClient(interceptor), apiKeyManager)
+    }
 
     @Test
     fun `extract posts to extract endpoint and maps response`() {
-        val call = mockk<Call>()
-        val requestSlot = slot<Request>()
-        every { apiKeyManager.get(ApiKeyManager.TAVILY_SEARCH_ALIAS) } returns "tavily-secret"
-        every { okHttpClient.newCall(capture(requestSlot)) } returns call
-        every { call.execute() } returns
-            httpResponse(
-                code = 200,
-                body =
-                    """
-                    {"results":[{"url":"https://developer.android.com","raw_content":"# Title\nContent"}]}
-                    """.trimIndent(),
-            )
+        apiKeyManager.save(ApiKeyManager.TAVILY_SEARCH_ALIAS, "tavily-secret")
+        interceptor.respondToAll(
+            code = 200,
+            body =
+                """
+                {"results":[{"url":"https://developer.android.com","raw_content":"# Title\nContent"}]}
+                """.trimIndent(),
+        )
 
         val result =
             repository.extract(
@@ -44,10 +56,11 @@ class TavilySearchRepositoryExtractTest {
                 format = "markdown",
             )
 
-        assertEquals("https://api.tavily.com/extract", requestSlot.captured.url.toString())
+        val request = interceptor.requests.single()
+        assertEquals("https://api.tavily.com/extract", request.url.toString())
 
         val bodyBuffer = Buffer()
-        requestSlot.captured.body!!.writeTo(bodyBuffer)
+        request.body!!.writeTo(bodyBuffer)
         val requestBody = bodyBuffer.readUtf8()
         assertTrue(requestBody.contains("\"urls\""), "Request body should contain 'urls'")
         assertTrue(requestBody.contains("https://developer.android.com"), "Request body should contain the URL")
@@ -61,8 +74,6 @@ class TavilySearchRepositoryExtractTest {
 
     @Test
     fun `extract throws when API key is missing`() {
-        every { apiKeyManager.get(ApiKeyManager.TAVILY_SEARCH_ALIAS) } returns null
-
         val error =
             assertThrows<IllegalStateException> {
                 repository.extract(
@@ -77,10 +88,8 @@ class TavilySearchRepositoryExtractTest {
 
     @Test
     fun `extract throws on non-successful response`() {
-        val call = mockk<Call>()
-        every { apiKeyManager.get(ApiKeyManager.TAVILY_SEARCH_ALIAS) } returns "tavily-secret"
-        every { okHttpClient.newCall(any()) } returns call
-        every { call.execute() } returns httpResponse(code = 503, body = """{"error":"unavailable"}""")
+        apiKeyManager.save(ApiKeyManager.TAVILY_SEARCH_ALIAS, "tavily-secret")
+        interceptor.respondToAll(code = 503, body = """{"error":"unavailable"}""")
 
         val error =
             assertThrows<IOException> {
@@ -111,17 +120,4 @@ class TavilySearchRepositoryExtractTest {
         assertTrue(mapped.contains("raw_content"), "Mapped response should contain raw_content")
         assertTrue(mapped.contains("# Title"), "Mapped response should contain the raw content text")
     }
-
-    private fun httpResponse(
-        code: Int,
-        body: String,
-    ): Response =
-        Response
-            .Builder()
-            .request(Request.Builder().url("https://api.tavily.com/extract").build())
-            .protocol(Protocol.HTTP_1_1)
-            .code(code)
-            .message(if (code in 200..299) "OK" else "Error")
-            .body(body.toResponseBody())
-            .build()
 }

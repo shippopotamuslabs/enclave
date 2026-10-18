@@ -1,28 +1,26 @@
 package com.browntowndev.enclave.core.data.remote.firestore
 
-import com.browntowndev.enclave.core.data.local.ChatDao
 import com.browntowndev.enclave.core.data.local.ChatEntity
-import com.browntowndev.enclave.core.data.local.EnclaveDatabase
 import com.browntowndev.enclave.core.data.remote.firestore.handlers.ChatSyncHandler
 import com.browntowndev.enclave.core.data.repository.FakeLocalDataEncryptionService
+import com.browntowndev.enclave.core.testing.FakeCryptoManagerPort
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.model.chat.ChatId
-import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import java.util.Date
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class FirestoreSyncConflictPolicyIntegrationTest {
     @Test
     fun `SCN conflict policy applies newer remote chat even when local row is dirty`() =
         runTest {
-            val chatDao = mockk<ChatDao>(relaxed = true)
-            val database = mockk<EnclaveDatabase>(relaxed = true)
-            every { database.chatDao() } returns chatDao
+            val chatDao = FakeChatDao()
             val dirtyLocal =
                 ChatEntity(
                     id = ChatId("chat-1"),
@@ -33,11 +31,10 @@ class FirestoreSyncConflictPolicyIntegrationTest {
                     pendingSync = 1,
                     updatedAt = 1700000001000L,
                 )
-            val captured = mutableListOf<ChatEntity>()
-            coEvery { chatDao.getChatById(ChatId("chat-1")) } returns dirtyLocal
-            coEvery { chatDao.upsert(capture(captured)) } returns 1L
-            val cryptoManager = mockk<CryptoManagerPort>(relaxed = true)
-            every { cryptoManager.hasCachedKey() } returns true
+            chatDao.seed(dirtyLocal)
+            val captured = chatDao.upsertedChats
+            val cryptoManager = FakeCryptoManagerPort()
+            cryptoManager.hasCachedKeyValue = true
             val stateStore = DeterministicConflictTestStateStore(localDeviceId = "device-a")
             val localEncryption = FakeLocalDataEncryptionService()
             val sourceDocuments = SharedFakeSyncSourceDocumentStore()
@@ -49,7 +46,7 @@ class FirestoreSyncConflictPolicyIntegrationTest {
                     updatedAt = 1700000005000L,
                 ),
             )
-            val loggingPort = mockk<com.browntowndev.enclave.domain.port.inference.LoggingPort>(relaxed = true)
+            val loggingPort = FakeLoggingPort()
             val syncContext =
                 buildTestSyncContext(
                     chatDao = chatDao,
@@ -64,8 +61,6 @@ class FirestoreSyncConflictPolicyIntegrationTest {
                     localStore =
                         PolicyEnforcingSyncLocalStore(
                             delegate = HandlerBackedSyncLocalStore(chatHandler = chatHandler),
-                            pendingSyncLookup = FirestoreSyncPendingSyncLookup(database),
-                            stateStore = stateStore,
                         ),
                     stateStore = stateStore,
                 )
@@ -99,9 +94,7 @@ class FirestoreSyncConflictPolicyIntegrationTest {
     @Test
     fun `SCN conflict policy preserves dirty local chat when remote event is from another device`() =
         runTest {
-            val chatDao = mockk<ChatDao>(relaxed = true)
-            val database = mockk<EnclaveDatabase>(relaxed = true)
-            every { database.chatDao() } returns chatDao
+            val chatDao = FakeChatDao()
             val dirtyLocal =
                 ChatEntity(
                     id = ChatId("chat-1"),
@@ -112,11 +105,10 @@ class FirestoreSyncConflictPolicyIntegrationTest {
                     pendingSync = 1,
                     updatedAt = 1700000005000L,
                 )
-            val captured = mutableListOf<ChatEntity>()
-            coEvery { chatDao.getChatById(ChatId("chat-1")) } returns dirtyLocal
-            coEvery { chatDao.upsert(capture(captured)) } returns 1L
-            val cryptoManager = mockk<CryptoManagerPort>(relaxed = true)
-            every { cryptoManager.hasCachedKey() } returns true
+            chatDao.seed(dirtyLocal)
+            val captured = chatDao.upsertedChats
+            val cryptoManager = FakeCryptoManagerPort()
+            cryptoManager.hasCachedKeyValue = true
             val stateStore = DeterministicConflictTestStateStore(localDeviceId = "device-a")
             val localEncryption = FakeLocalDataEncryptionService()
             val sourceDocuments = SharedFakeSyncSourceDocumentStore()
@@ -124,7 +116,7 @@ class FirestoreSyncConflictPolicyIntegrationTest {
                 "users/alice/chats/chat-1",
                 encryptedChatSourcePayload("Remote Roadmap", localEncryption),
             )
-            val loggingPort = mockk<com.browntowndev.enclave.domain.port.inference.LoggingPort>(relaxed = true)
+            val loggingPort = FakeLoggingPort()
             val syncContext =
                 buildTestSyncContext(
                     chatDao = chatDao,
@@ -139,8 +131,6 @@ class FirestoreSyncConflictPolicyIntegrationTest {
                     localStore =
                         PolicyEnforcingSyncLocalStore(
                             delegate = HandlerBackedSyncLocalStore(chatHandler = chatHandler),
-                            pendingSyncLookup = FirestoreSyncPendingSyncLookup(database),
-                            stateStore = stateStore,
                         ),
                     stateStore = stateStore,
                 )
@@ -167,16 +157,13 @@ class FirestoreSyncConflictPolicyIntegrationTest {
             )
 
             assertEquals(0, captured.size)
-            coVerify(exactly = 0) { chatDao.upsert(any()) }
             assertEquals(1, stateStore.sequence)
         }
 
     @Test
     fun `SCN conflict policy preserves dirty local chat when remote event has null deviceId`() =
         runTest {
-            val chatDao = mockk<ChatDao>(relaxed = true)
-            val database = mockk<EnclaveDatabase>(relaxed = true)
-            every { database.chatDao() } returns chatDao
+            val chatDao = FakeChatDao()
             val dirtyLocal =
                 ChatEntity(
                     id = ChatId("chat-1"),
@@ -187,11 +174,10 @@ class FirestoreSyncConflictPolicyIntegrationTest {
                     pendingSync = 1,
                     updatedAt = 1700000005000L,
                 )
-            val captured = mutableListOf<ChatEntity>()
-            coEvery { chatDao.getChatById(ChatId("chat-1")) } returns dirtyLocal
-            coEvery { chatDao.upsert(capture(captured)) } returns 1L
-            val cryptoManager = mockk<CryptoManagerPort>(relaxed = true)
-            every { cryptoManager.hasCachedKey() } returns true
+            chatDao.seed(dirtyLocal)
+            val captured = chatDao.upsertedChats
+            val cryptoManager = FakeCryptoManagerPort()
+            cryptoManager.hasCachedKeyValue = true
             val stateStore = DeterministicConflictTestStateStore(localDeviceId = "device-a")
             val localEncryption = FakeLocalDataEncryptionService()
             val sourceDocuments = SharedFakeSyncSourceDocumentStore()
@@ -199,7 +185,7 @@ class FirestoreSyncConflictPolicyIntegrationTest {
                 "users/alice/chats/chat-1",
                 encryptedChatSourcePayload("Remote Roadmap", localEncryption),
             )
-            val loggingPort = mockk<com.browntowndev.enclave.domain.port.inference.LoggingPort>(relaxed = true)
+            val loggingPort = FakeLoggingPort()
             val syncContext =
                 buildTestSyncContext(
                     chatDao = chatDao,
@@ -214,8 +200,6 @@ class FirestoreSyncConflictPolicyIntegrationTest {
                     localStore =
                         PolicyEnforcingSyncLocalStore(
                             delegate = HandlerBackedSyncLocalStore(chatHandler = chatHandler),
-                            pendingSyncLookup = FirestoreSyncPendingSyncLookup(database),
-                            stateStore = stateStore,
                         ),
                     stateStore = stateStore,
                 )
@@ -242,7 +226,6 @@ class FirestoreSyncConflictPolicyIntegrationTest {
             )
 
             assertEquals(0, captured.size)
-            coVerify(exactly = 0) { chatDao.upsert(any()) }
             assertEquals(1, stateStore.sequence)
         }
 }
@@ -266,10 +249,6 @@ private class DeterministicConflictTestStateStore(
 
 private class PolicyEnforcingSyncLocalStore(
     private val delegate: FirestoreSyncLocalStore,
-    @Suppress("UnusedPrivateProperty")
-    private val pendingSyncLookup: FirestoreSyncPendingSyncLookup,
-    @Suppress("UnusedPrivateProperty")
-    private val stateStore: FirestoreSyncStateStore,
 ) : FirestoreSyncLocalStore {
     override suspend fun upsert(
         collectionPath: String,

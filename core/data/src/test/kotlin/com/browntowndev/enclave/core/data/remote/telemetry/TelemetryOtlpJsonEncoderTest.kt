@@ -1,7 +1,7 @@
 package com.browntowndev.enclave.core.data.remote.telemetry
 
 import com.browntowndev.enclave.core.data.local.TelemetryEventEntity
-import io.mockk.mockk
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -38,7 +38,7 @@ class TelemetryOtlpJsonEncoderTest {
                         endpointUrl = "https://otlp.example.com/otlp",
                         apiKey = "test-key",
                     ),
-                loggingPort = mockk(relaxed = true),
+                loggingPort = FakeLoggingPort(),
             )
         assertEquals(
             "https://otlp.example.com/otlp/v1/logs",

@@ -1,10 +1,9 @@
 package com.browntowndev.enclave.core.data.repository
 
+import android.content.Context
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
-import com.browntowndev.enclave.core.data.security.ApiKeyManager
+import androidx.test.core.app.ApplicationProvider
 import com.browntowndev.enclave.core.data.security.LocalDataEncryptionService
-import io.mockk.every
-import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
@@ -13,10 +12,15 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.io.TempDir
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 import java.nio.file.Path
+import org.robolectric.annotation.Config as RoboConfig
 
 @OptIn(ExperimentalCoroutinesApi::class)
+@ExtendWith(RobolectricExtension::class)
+@RoboConfig(sdk = [34])
 class SettingsRepositoryOnboardingTest {
     @TempDir
     lateinit var tempDir: Path
@@ -70,12 +74,9 @@ class SettingsRepositoryOnboardingTest {
                 scope = scope,
                 produceFile = { tempDir.resolve("settings-${System.nanoTime()}.preferences_pb").toFile() },
             )
-        val apiKeyManager =
-            mockk<ApiKeyManager> {
-                every { has(ApiKeyManager.TAVILY_SEARCH_ALIAS) } returns false
-                every { has(ApiKeyManager.EXA_SEARCH_ALIAS) } returns false
-                every { has(ApiKeyManager.X_SEARCH_ALIAS) } returns false
-            }
+        // Real ApiKeyManager over cleared Robolectric prefs: has() is false for every alias.
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val apiKeyManager = testApiKeyManager(context, scope, "settings_onboarding_test_prefs")
         return SettingsRepositoryImpl(
             dataStore = dataStore,
             apiKeyManager = apiKeyManager,

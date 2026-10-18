@@ -1,18 +1,21 @@
 package com.browntowndev.enclave.core.data.download.remote
+
 import com.browntowndev.enclave.core.data.download.DownloadMetaFile
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.port.download.FileDownloaderPort
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import io.mockk.MockKAnnotations
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.slot
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import okhttp3.MediaType
 import okhttp3.OkHttpClient
+import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody
+import okhttp3.ResponseBody.Companion.toResponseBody
+import okio.BufferedSource
+import okio.buffer
+import okio.source
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
@@ -27,10 +30,21 @@ import java.io.InputStream
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 
+/**
+ * ENC-28: the OkHttp transport is a REAL [OkHttpClient] whose application
+ * interceptor fabricates real [Response]s from the per-test [handler] (or throws
+ * the per-test [handlerFailure]). No MockK: responses, bodies and streams are
+ * real OkHttp/JDK objects, so header/code/prior-response semantics are the
+ * library's own.
+ */
 class HttpFileDownloaderTest {
-    private lateinit var mockClient: OkHttpClient
-    private lateinit var mockLogger: LoggingPort
     private lateinit var httpFileDownloader: HttpFileDownloader
+
+    /** Fabricates the response for each request; replaced per test. */
+    private var handler: (Request) -> Response = { request -> response(request, code = 404, message = "Not Found") }
+
+    /** When set, the transport throws this instead of invoking [handler]. */
+    private var handlerFailure: Exception? = null
 
     @TempDir
     lateinit var tempDir: File
@@ -48,12 +62,68 @@ class HttpFileDownloaderTest {
             expectedSizeBytes = content.toByteArray(StandardCharsets.UTF_8).size.toLong(),
         )
 
+    /** Builds a real [Response] for [request] with the given code/headers/body. */
+    private fun response(
+        request: Request,
+        code: Int,
+        message: String = "OK",
+        body: ResponseBody? = null,
+        headers: Map<String, String> = emptyMap(),
+        priorResponse: Response? = null,
+        requestOverride: Request? = null,
+    ): Response {
+        val builder =
+            Response
+                .Builder()
+                .request(requestOverride ?: request)
+                .protocol(Protocol.HTTP_1_1)
+                .code(code)
+                .message(message)
+        headers.forEach { (name, value) -> builder.header(name, value) }
+        if (body != null) builder.body(body)
+        if (priorResponse != null) builder.priorResponse(priorResponse)
+        return builder.build()
+    }
+
+    /** A real [ResponseBody] whose source is built from [streamFactory] on each access. */
+    private fun streamBody(
+        contentLength: Long = -1L,
+        streamFactory: () -> InputStream,
+    ): ResponseBody =
+        object : ResponseBody() {
+            override fun contentType(): MediaType? = null
+
+            override fun contentLength(): Long = contentLength
+
+            override fun source(): BufferedSource = streamFactory().source().buffer()
+        }
+
+    /** Successful (or [code]) response carrying [content] with a Content-Length header. */
+    private fun contentResponse(
+        request: Request,
+        content: ByteArray,
+        code: Int = 200,
+        extraHeaders: Map<String, String> = emptyMap(),
+    ): Response =
+        response(
+            request = request,
+            code = code,
+            body = content.toResponseBody(),
+            headers = mapOf("Content-Length" to content.size.toString()) + extraHeaders,
+        )
+
     @BeforeEach
     fun setup() {
-        MockKAnnotations.init(this)
-        mockClient = mockk()
-        mockLogger = mockk(relaxed = true)
-        httpFileDownloader = HttpFileDownloader(mockClient, mockLogger)
+        handler = { request -> response(request, code = 404, message = "Not Found") }
+        handlerFailure = null
+        val client =
+            OkHttpClient
+                .Builder()
+                .addInterceptor { chain ->
+                    handlerFailure?.let { throw it }
+                    handler(chain.request())
+                }.build()
+        httpFileDownloader = HttpFileDownloader(client, FakeLoggingPort())
     }
 
     // ============ getServerFileSize Tests ============
@@ -61,14 +131,10 @@ class HttpFileDownloaderTest {
     @Test
     fun getServerFileSize_returnsSize_whenServerRespondsWithContentLength() =
         kotlinx.coroutines.test.runTest {
-            // Given: Mock HTTP client returns successful response with Content-Length
-            val mockCall = mockk<okhttp3.Call>(relaxed = true)
-            val mockResponse = mockk<Response>(relaxed = true)
-
-            every { mockClient.newCall(any()) } returns mockCall
-            every { mockCall.execute() } returns mockResponse
-            every { mockResponse.isSuccessful } returns true
-            every { mockResponse.header("Content-Length") } returns "2048"
+            // Given: HTTP transport returns successful response with Content-Length
+            handler = { request ->
+                response(request, code = 200, headers = mapOf("Content-Length" to "2048"))
+            }
 
             // When: Get server file size
             val result = httpFileDownloader.getServerFileSize("https://example.com/model.gguf")
@@ -80,13 +146,8 @@ class HttpFileDownloaderTest {
     @Test
     fun getServerFileSize_returnsNull_whenServerReturnsError() =
         kotlinx.coroutines.test.runTest {
-            // Given: Mock HTTP client returns error response
-            val mockCall = mockk<okhttp3.Call>(relaxed = true)
-            val mockResponse = mockk<Response>(relaxed = true)
-
-            every { mockClient.newCall(any()) } returns mockCall
-            every { mockCall.execute() } returns mockResponse
-            every { mockResponse.isSuccessful } returns false
+            // Given: HTTP transport returns error response
+            handler = { request -> response(request, code = 404, message = "Not Found") }
 
             // When: Get server file size
             val result = httpFileDownloader.getServerFileSize("https://example.com/model.gguf")
@@ -98,11 +159,8 @@ class HttpFileDownloaderTest {
     @Test
     fun getServerFileSize_returnsNull_onException() =
         kotlinx.coroutines.test.runTest {
-            // Given: Mock HTTP client throws exception
-            val mockCall = mockk<okhttp3.Call>(relaxed = true)
-
-            every { mockClient.newCall(any()) } returns mockCall
-            every { mockCall.execute() } throws Exception("Network error")
+            // Given: HTTP transport throws exception
+            handlerFailure = Exception("Network error")
 
             // When: Get server file size
             val result = httpFileDownloader.getServerFileSize("https://example.com/model.gguf")
@@ -130,17 +188,7 @@ class HttpFileDownloaderTest {
                 committedOffset = 0L,
             )
 
-            val mockCall = mockk<okhttp3.Call>(relaxed = true)
-            val mockResponse = mockk<Response>(relaxed = true)
-            val mockBody = mockk<ResponseBody>(relaxed = true)
-
-            every { mockClient.newCall(any()) } returns mockCall
-            every { mockCall.execute() } returns mockResponse
-            every { mockResponse.isSuccessful } returns true
-            every { mockResponse.code } returns 200
-            every { mockResponse.body } returns mockBody
-            every { mockResponse.header("Content-Length") } returns contentBytes.size.toString()
-            every { mockBody.byteStream() } returns contentBytes.inputStream()
+            handler = { request -> contentResponse(request, contentBytes) }
 
             val result =
                 httpFileDownloader.downloadFile(
@@ -163,17 +211,7 @@ class HttpFileDownloaderTest {
             val contentBytes = testContent.toByteArray(StandardCharsets.UTF_8)
             val testConfig = createTestConfig(testContent)
 
-            val mockCall = mockk<okhttp3.Call>(relaxed = true)
-            val mockResponse = mockk<Response>(relaxed = true)
-            val mockBody = mockk<ResponseBody>(relaxed = true)
-
-            every { mockClient.newCall(any()) } returns mockCall
-            every { mockCall.execute() } returns mockResponse
-            every { mockResponse.isSuccessful } returns true
-            every { mockResponse.code } returns 200
-            every { mockResponse.body } returns mockBody
-            every { mockResponse.header("Content-Length") } returns contentBytes.size.toString()
-            every { mockBody.byteStream() } returns contentBytes.inputStream()
+            handler = { request -> contentResponse(request, contentBytes) }
 
             // When: Download file
             val result =
@@ -213,19 +251,18 @@ class HttpFileDownloaderTest {
                     expectedSizeBytes = totalContent.length.toLong(),
                 )
 
-            val mockCall = mockk<okhttp3.Call>(relaxed = true)
-            val mockResponse = mockk<Response>(relaxed = true)
-            val mockBody = mockk<ResponseBody>(relaxed = true)
-
-            every { mockClient.newCall(any()) } returns mockCall
-            every { mockCall.execute() } returns mockResponse
-            every { mockResponse.isSuccessful } returns true
-            every { mockResponse.code } returns 206 // Partial Content
-            every { mockResponse.body } returns mockBody
-            every { mockResponse.header("Content-Length") } returns newContent.length.toString()
-            every { mockResponse.header("Content-Range") } returns
-                "bytes ${existingContent.length}-${totalContent.length - 1}/${totalContent.length}"
-            every { mockBody.byteStream() } returns newContent.byteInputStream()
+            handler = { request ->
+                contentResponse(
+                    request,
+                    newContent.toByteArray(StandardCharsets.UTF_8),
+                    code = 206, // Partial Content
+                    extraHeaders =
+                        mapOf(
+                            "Content-Range" to
+                                "bytes ${existingContent.length}-${totalContent.length - 1}/${totalContent.length}",
+                        ),
+                )
+            }
 
             // When: Download file with resume
             val result =
@@ -257,17 +294,7 @@ class HttpFileDownloaderTest {
                     expectedSizeBytes = fullContent.length.toLong(),
                 )
 
-            val mockCall = mockk<okhttp3.Call>(relaxed = true)
-            val mockResponse = mockk<Response>(relaxed = true)
-            val mockBody = mockk<ResponseBody>(relaxed = true)
-
-            every { mockClient.newCall(any()) } returns mockCall
-            every { mockCall.execute() } returns mockResponse
-            every { mockResponse.isSuccessful } returns true
-            every { mockResponse.code } returns 200
-            every { mockResponse.body } returns mockBody
-            every { mockResponse.header("Content-Length") } returns fullContent.length.toString()
-            every { mockBody.byteStream() } returns fullContent.byteInputStream()
+            handler = { request -> contentResponse(request, fullContent.toByteArray(StandardCharsets.UTF_8)) }
 
             val result =
                 httpFileDownloader.downloadFile(
@@ -297,17 +324,7 @@ class HttpFileDownloaderTest {
                     expectedSizeBytes = contentBytes.size.toLong(),
                 )
 
-            val mockCall = mockk<okhttp3.Call>(relaxed = true)
-            val mockResponse = mockk<Response>(relaxed = true)
-            val mockBody = mockk<ResponseBody>(relaxed = true)
-
-            every { mockClient.newCall(any()) } returns mockCall
-            every { mockCall.execute() } returns mockResponse
-            every { mockResponse.isSuccessful } returns true
-            every { mockResponse.code } returns 200
-            every { mockResponse.body } returns mockBody
-            every { mockResponse.header("Content-Length") } returns contentBytes.size.toString()
-            every { mockBody.byteStream() } returns contentBytes.inputStream()
+            handler = { request -> contentResponse(request, contentBytes) }
 
             // When/Then: Exception is thrown for SHA-256 mismatch
             try {
@@ -336,14 +353,7 @@ class HttpFileDownloaderTest {
             // Given: Server returns error response
             val testConfig = createTestConfig("dummy")
 
-            val mockCall = mockk<okhttp3.Call>(relaxed = true)
-            val mockResponse = mockk<Response>(relaxed = true)
-
-            every { mockClient.newCall(any()) } returns mockCall
-            every { mockCall.execute() } returns mockResponse
-            every { mockResponse.isSuccessful } returns false
-            every { mockResponse.code } returns 404
-            every { mockResponse.message } returns "Not Found"
+            handler = { request -> response(request, code = 404, message = "Not Found") }
 
             // When/Then: Exception is thrown
             try {
@@ -373,17 +383,14 @@ class HttpFileDownloaderTest {
                     expectedSizeBytes = 100L,
                 )
 
-            val mockCall = mockk<okhttp3.Call>(relaxed = true)
-            val mockResponse = mockk<Response>(relaxed = true)
-            val mockBody = mockk<ResponseBody>(relaxed = true)
-
-            every { mockClient.newCall(any()) } returns mockCall
-            every { mockCall.execute() } returns mockResponse
-            every { mockResponse.isSuccessful } returns true
-            every { mockResponse.code } returns 200
-            every { mockResponse.body } returns mockBody
-            every { mockResponse.header("Content-Length") } returns "1"
-            every { mockBody.byteStream() } throws IOException("Empty response body")
+            handler = { request ->
+                response(
+                    request = request,
+                    code = 200,
+                    body = streamBody { throw IOException("Empty response body") },
+                    headers = mapOf("Content-Length" to "1"),
+                )
+            }
 
             // When/Then: IOException is thrown for empty body
             val exception =
@@ -411,34 +418,14 @@ class HttpFileDownloaderTest {
             val contentBytes = testContent.toByteArray(StandardCharsets.UTF_8)
             val testConfig = createTestConfig(testContent)
 
-            // First call returns 416
-            val mockCall416 = mockk<okhttp3.Call>(relaxed = true)
-            val mockResponse416 = mockk<Response>(relaxed = true)
-
-            every { mockClient.newCall(any()) } returns mockCall416
-            every { mockCall416.execute() } returns mockResponse416
-            every { mockResponse416.code } returns 416
-
-            // Need to capture both calls to handle the retry
-            val callSlot = slot<Request>()
-            every { mockClient.newCall(capture(callSlot)) } answers {
-                val mockCall = mockk<okhttp3.Call>(relaxed = true)
-                val mockResponse = mockk<Response>(relaxed = true)
-                val mockBody = mockk<ResponseBody>(relaxed = true)
-
-                if (callSlot.captured.header("Range") != null) {
-                    // First call with Range header - return 416
-                    every { mockCall.execute() } returns mockResponse416
+            // The transport branches on the real request's Range header:
+            // first call (with Range) gets 416; the retry (no Range) succeeds.
+            handler = { request ->
+                if (request.header("Range") != null) {
+                    response(request, code = 416, message = "Range Not Satisfiable")
                 } else {
-                    // Retry without Range - return success
-                    every { mockCall.execute() } returns mockResponse
-                    every { mockResponse.isSuccessful } returns true
-                    every { mockResponse.code } returns 200
-                    every { mockResponse.body } returns mockBody
-                    every { mockResponse.header("Content-Length") } returns contentBytes.size.toString()
-                    every { mockBody.byteStream() } returns contentBytes.inputStream()
+                    contentResponse(request, contentBytes)
                 }
-                mockCall
             }
 
             // When: Download file
@@ -468,34 +455,13 @@ class HttpFileDownloaderTest {
                     expectedSizeBytes = contentBytes.size.toLong(),
                 )
 
-            // First call returns 416
-            val mockCall416 = mockk<okhttp3.Call>(relaxed = true)
-            val mockResponse416 = mockk<Response>(relaxed = true)
-
-            every { mockClient.newCall(any()) } returns mockCall416
-            every { mockCall416.execute() } returns mockResponse416
-            every { mockResponse416.code } returns 416
-
-            // Need to capture both calls to handle the retry
-            val callSlot = slot<Request>()
-            every { mockClient.newCall(capture(callSlot)) } answers {
-                val mockCall = mockk<okhttp3.Call>(relaxed = true)
-                val mockResponse = mockk<Response>(relaxed = true)
-                val mockBody = mockk<ResponseBody>(relaxed = true)
-
-                if (callSlot.captured.header("Range") != null) {
-                    // First call with Range header - return 416
-                    every { mockCall.execute() } returns mockResponse416
+            // First call (with Range) gets 416; the retry (no Range) returns wrong content.
+            handler = { request ->
+                if (request.header("Range") != null) {
+                    response(request, code = 416, message = "Range Not Satisfiable")
                 } else {
-                    // Retry without Range - return success but with wrong content
-                    every { mockCall.execute() } returns mockResponse
-                    every { mockResponse.isSuccessful } returns true
-                    every { mockResponse.code } returns 200
-                    every { mockResponse.body } returns mockBody
-                    every { mockResponse.header("Content-Length") } returns contentBytes.size.toString()
-                    every { mockBody.byteStream() } returns contentBytes.inputStream()
+                    contentResponse(request, contentBytes)
                 }
-                mockCall
             }
 
             // When/Then: Exception is thrown for SHA-256 mismatch
@@ -532,17 +498,7 @@ class HttpFileDownloaderTest {
             var progressCalled = false
             var lastBytesDownloaded = 0L
 
-            val mockCall = mockk<okhttp3.Call>(relaxed = true)
-            val mockResponse = mockk<Response>(relaxed = true)
-            val mockBody = mockk<ResponseBody>(relaxed = true)
-
-            every { mockClient.newCall(any()) } returns mockCall
-            every { mockCall.execute() } returns mockResponse
-            every { mockResponse.isSuccessful } returns true
-            every { mockResponse.code } returns 200
-            every { mockResponse.body } returns mockBody
-            every { mockResponse.header("Content-Length") } returns contentBytes.size.toString()
-            every { mockBody.byteStream() } returns contentBytes.inputStream()
+            handler = { request -> contentResponse(request, contentBytes) }
 
             // When: Download with progress callback
             val result =
@@ -578,17 +534,7 @@ class HttpFileDownloaderTest {
             val contentBytes = testContent.toByteArray(StandardCharsets.UTF_8)
             val testConfig = createTestConfig(testContent)
 
-            val mockCall = mockk<okhttp3.Call>(relaxed = true)
-            val mockResponse = mockk<Response>(relaxed = true)
-            val mockBody = mockk<ResponseBody>(relaxed = true)
-
-            every { mockClient.newCall(any()) } returns mockCall
-            every { mockCall.execute() } returns mockResponse
-            every { mockResponse.isSuccessful } returns true
-            every { mockResponse.code } returns 200
-            every { mockResponse.body } returns mockBody
-            every { mockResponse.header("Content-Length") } returns contentBytes.size.toString()
-            every { mockBody.byteStream() } returns contentBytes.inputStream()
+            handler = { request -> contentResponse(request, contentBytes) }
 
             // When: Download file
             val result =
@@ -601,7 +547,6 @@ class HttpFileDownloaderTest {
                 )
 
             // Then: Temp file is deleted, target file exists
-            val tempFile = File(tempDir, "test-model.gguf")
             assertFalse(File(tempDir, "test-model.gguf.tmp").exists())
             assertTrue(File(result.filePath).exists())
         }
@@ -617,17 +562,7 @@ class HttpFileDownloaderTest {
             val contentBytes = testContent.toByteArray(StandardCharsets.UTF_8)
             val testConfig = createTestConfig(testContent)
 
-            val mockCall = mockk<okhttp3.Call>(relaxed = true)
-            val mockResponse = mockk<Response>(relaxed = true)
-            val mockBody = mockk<ResponseBody>(relaxed = true)
-
-            every { mockClient.newCall(any()) } returns mockCall
-            every { mockCall.execute() } returns mockResponse
-            every { mockResponse.isSuccessful } returns true
-            every { mockResponse.code } returns 200
-            every { mockResponse.body } returns mockBody
-            every { mockResponse.header("Content-Length") } returns contentBytes.size.toString()
-            every { mockBody.byteStream() } returns contentBytes.inputStream()
+            handler = { request -> contentResponse(request, contentBytes) }
 
             // When: Download file
             val result =
@@ -648,22 +583,12 @@ class HttpFileDownloaderTest {
     @Test
     fun downloadFile_logsDownloadStart() =
         kotlinx.coroutines.test.runTest {
-            // Given: Simple download - verify logger is called (we just check it doesn't throw)
+            // Given: Simple download - the logger is called internally (we just check it doesn't throw)
             val testContent = "test"
             val contentBytes = testContent.toByteArray(StandardCharsets.UTF_8)
             val testConfig = createTestConfig(testContent)
 
-            val mockCall = mockk<okhttp3.Call>(relaxed = true)
-            val mockResponse = mockk<Response>(relaxed = true)
-            val mockBody = mockk<ResponseBody>(relaxed = true)
-
-            every { mockClient.newCall(any()) } returns mockCall
-            every { mockCall.execute() } returns mockResponse
-            every { mockResponse.isSuccessful } returns true
-            every { mockResponse.code } returns 200
-            every { mockResponse.body } returns mockBody
-            every { mockResponse.header("Content-Length") } returns contentBytes.size.toString()
-            every { mockBody.byteStream() } returns contentBytes.inputStream()
+            handler = { request -> contentResponse(request, contentBytes) }
 
             // When: Download file - should complete without error (logger is used internally)
             val result =
@@ -690,17 +615,7 @@ class HttpFileDownloaderTest {
             val contentBytes = testContent.toByteArray(StandardCharsets.UTF_8)
             val testConfig = createTestConfig(testContent)
 
-            val mockCall = mockk<okhttp3.Call>(relaxed = true)
-            val mockResponse = mockk<Response>(relaxed = true)
-            val mockBody = mockk<ResponseBody>(relaxed = true)
-
-            every { mockClient.newCall(any()) } returns mockCall
-            every { mockCall.execute() } returns mockResponse
-            every { mockResponse.isSuccessful } returns true
-            every { mockResponse.code } returns 200
-            every { mockResponse.body } returns mockBody
-            every { mockResponse.header("Content-Length") } returns contentBytes.size.toString()
-            every { mockBody.byteStream() } returns contentBytes.inputStream()
+            handler = { request -> contentResponse(request, contentBytes) }
 
             // When/Then: Exception is thrown for non-existent directory
             try {
@@ -766,18 +681,9 @@ class HttpFileDownloaderTest {
             val testConfig = createTestConfig(testContent)
             val progressUpdates = mutableListOf<Pair<Long, Long>>()
 
-            val mockCall = mockk<okhttp3.Call>(relaxed = true)
-            val mockResponse = mockk<Response>(relaxed = true)
-            val mockBody = mockk<ResponseBody>(relaxed = true)
-
-            every { mockClient.newCall(any()) } returns mockCall
-            every { mockCall.execute() } returns mockResponse
-            every { mockResponse.isSuccessful } returns true
-            every { mockResponse.code } returns 200
-            every { mockResponse.body } returns mockBody
-            every { mockResponse.header("Content-Length") } returns null // No Content-Length
-            every { mockResponse.header("Content-Range") } returns null // No Content-Range
-            every { mockBody.byteStream() } returns contentBytes.inputStream()
+            handler = { request ->
+                response(request, code = 200, body = contentBytes.toResponseBody())
+            }
 
             // When: Download succeeds using the expected size from the model spec
             val result =
@@ -820,17 +726,7 @@ class HttpFileDownloaderTest {
                     expectedSizeBytes = 10000L, // Config says 10KB but actual is 4 bytes
                 )
 
-            val mockCall = mockk<okhttp3.Call>(relaxed = true)
-            val mockResponse = mockk<Response>(relaxed = true)
-            val mockBody = mockk<ResponseBody>(relaxed = true)
-
-            every { mockClient.newCall(any()) } returns mockCall
-            every { mockCall.execute() } returns mockResponse
-            every { mockResponse.isSuccessful } returns true
-            every { mockResponse.code } returns 200
-            every { mockResponse.body } returns mockBody
-            every { mockResponse.header("Content-Length") } returns contentBytes.size.toString() // Server says 4 bytes
-            every { mockBody.byteStream() } returns contentBytes.inputStream()
+            handler = { request -> contentResponse(request, contentBytes) } // Server says 4 bytes
 
             // When: Download with size mismatch
             // Then: Should fail because downloaded bytes don't match config size
@@ -856,9 +752,6 @@ class HttpFileDownloaderTest {
             // Use dummy content - actual content won't matter since IOException happens first
             val testConfig = createTestConfig("dummy")
 
-            val mockCall = mockk<okhttp3.Call>(relaxed = true)
-            val mockResponse = mockk<Response>(relaxed = true)
-            val mockBody = mockk<ResponseBody>(relaxed = true)
             val failingInputStream =
                 object : InputStream() {
                     private var readCount = 0
@@ -874,13 +767,14 @@ class HttpFileDownloaderTest {
                     override fun available(): Int = 0
                 }
 
-            every { mockClient.newCall(any()) } returns mockCall
-            every { mockCall.execute() } returns mockResponse
-            every { mockResponse.isSuccessful } returns true
-            every { mockResponse.code } returns 200
-            every { mockResponse.body } returns mockBody
-            every { mockResponse.header("Content-Length") } returns "1000"
-            every { mockBody.byteStream() } returns failingInputStream
+            handler = { request ->
+                response(
+                    request = request,
+                    code = 200,
+                    body = streamBody { failingInputStream },
+                    headers = mapOf("Content-Length" to "1000"),
+                )
+            }
 
             // When/Then: IOException is thrown
             try {
@@ -912,17 +806,7 @@ class HttpFileDownloaderTest {
             // Make it read-only to cause rename failure on some systems
             existingTarget.setReadOnly()
 
-            val mockCall = mockk<okhttp3.Call>(relaxed = true)
-            val mockResponse = mockk<Response>(relaxed = true)
-            val mockBody = mockk<ResponseBody>(relaxed = true)
-
-            every { mockClient.newCall(any()) } returns mockCall
-            every { mockCall.execute() } returns mockResponse
-            every { mockResponse.isSuccessful } returns true
-            every { mockResponse.code } returns 200
-            every { mockResponse.body } returns mockBody
-            every { mockResponse.header("Content-Length") } returns contentBytes.size.toString()
-            every { mockBody.byteStream() } returns contentBytes.inputStream()
+            handler = { request -> contentResponse(request, contentBytes) }
 
             // When: Download and rename fails
             // Note: On some systems this may succeed due to OS behavior
@@ -943,18 +827,16 @@ class HttpFileDownloaderTest {
     @Test
     fun getServerFileSize_handlesRedirect() =
         kotlinx.coroutines.test.runTest {
-            // Given: Server returns redirect (301/302) - OkHttp should follow redirects by default
-            val mockCall = mockk<okhttp3.Call>(relaxed = true)
-            val mockResponse = mockk<Response>(relaxed = true)
-
-            // First call gets redirect, second call succeeds
-            every { mockClient.newCall(any()) } returns mockCall
-            every { mockCall.execute() } returns mockResponse
-            // OkHttp with followRedirects=true (default) will handle this internally
-            // If redirects aren't followed, we'd get 301/302
-            every { mockResponse.isSuccessful } returns false
-            every { mockResponse.code } returns 301
-            every { mockResponse.header("Location") } returns "https://example.com/new-location"
+            // Given: Server returns redirect (301/302) - the fabricated response is
+            // returned by the application interceptor, so no redirect following occurs
+            handler = { request ->
+                response(
+                    request = request,
+                    code = 301,
+                    message = "Moved Permanently",
+                    headers = mapOf("Location" to "https://example.com/new-location"),
+                )
+            }
 
             // When: Get server file size with redirect
             val result = httpFileDownloader.getServerFileSize("https://example.com/model.gguf")
@@ -976,21 +858,20 @@ class HttpFileDownloaderTest {
                 .url("https://evil.example/model.gguf")
                 .build()
 
-        val mockCall = mockk<okhttp3.Call>(relaxed = true)
-        val mockResponse = mockk<Response>(relaxed = true)
-        val mockBody = mockk<ResponseBody>(relaxed = true)
-        val priorResponse = mockk<Response>(relaxed = true)
-
-        every { mockClient.newCall(any()) } returns mockCall
-        every { mockCall.execute() } returns mockResponse
-        every { mockResponse.priorResponse } returns priorResponse
-        every { priorResponse.isRedirect } returns true
-        every { mockResponse.request } returns redirectedRequest
-        every { mockResponse.isSuccessful } returns true
-        every { mockResponse.code } returns 200
-        every { mockResponse.body } returns mockBody
-        every { mockResponse.header("Content-Length") } returns contentBytes.size.toString()
-        every { mockBody.byteStream() } returns contentBytes.inputStream()
+        handler = { request ->
+            // Real redirect chain: a 302 prior response, final response bound to the
+            // redirected (untrusted) request.
+            val priorResponse =
+                response(request, code = 302, message = "Found")
+            response(
+                request = request,
+                code = 200,
+                body = contentBytes.toResponseBody(),
+                headers = mapOf("Content-Length" to contentBytes.size.toString()),
+                priorResponse = priorResponse,
+                requestOverride = redirectedRequest,
+            )
+        }
 
         assertThrows(SecurityException::class.java) {
             kotlinx.coroutines.test.runTest {
@@ -1015,17 +896,7 @@ class HttpFileDownloaderTest {
 
             val progressUpdates = mutableListOf<Pair<Long, Long>>()
 
-            val mockCall = mockk<okhttp3.Call>(relaxed = true)
-            val mockResponse = mockk<Response>(relaxed = true)
-            val mockBody = mockk<ResponseBody>(relaxed = true)
-
-            every { mockClient.newCall(any()) } returns mockCall
-            every { mockCall.execute() } returns mockResponse
-            every { mockResponse.isSuccessful } returns true
-            every { mockResponse.code } returns 200
-            every { mockResponse.body } returns mockBody
-            every { mockResponse.header("Content-Length") } returns contentBytes.size.toString()
-            every { mockBody.byteStream() } returns contentBytes.inputStream()
+            handler = { request -> contentResponse(request, contentBytes) }
 
             // When: Download with progress tracking
             val result =
@@ -1058,19 +929,15 @@ class HttpFileDownloaderTest {
             val contentBytes = partialContent.toByteArray(StandardCharsets.UTF_8)
             val testConfig = createTestConfig(partialContent) // Config says 4 bytes
 
-            val mockCall = mockk<okhttp3.Call>(relaxed = true)
-            val mockResponse = mockk<Response>(relaxed = true)
-            val mockBody = mockk<ResponseBody>(relaxed = true)
-
-            every { mockClient.newCall(any()) } returns mockCall
-            every { mockCall.execute() } returns mockResponse
-            every { mockResponse.isSuccessful } returns true
-            every { mockResponse.code } returns 206 // Partial content
-            every { mockResponse.body } returns mockBody
-            // Server says: we have bytes 0-3 out of 50 total
-            every { mockResponse.header("Content-Length") } returns contentBytes.size.toString()
-            every { mockResponse.header("Content-Range") } returns "bytes 0-3/50"
-            every { mockBody.byteStream() } returns partialContent.byteInputStream()
+            handler = { request ->
+                // Server says: we have bytes 0-3 out of 50 total
+                contentResponse(
+                    request,
+                    contentBytes,
+                    code = 206, // Partial content
+                    extraHeaders = mapOf("Content-Range" to "bytes 0-3/50"),
+                )
+            }
 
             // When: Download with resume
             try {
@@ -1086,22 +953,16 @@ class HttpFileDownloaderTest {
             }
 
             // The code should use actualTotalSize (50) from Content-Range for progress reporting
-            // This test verifies the header parsing works
-            val tagSlot = slot<String>()
-            val messageSlot = slot<String>()
-            every { mockLogger.info(capture(tagSlot), capture(messageSlot)) } returns Unit
+            // This test verifies the header parsing works (the original ended with two
+            // logger-capture stubbings and no assertion; they carried no behavior).
         }
 
     @Test
     fun downloadFile_respectsCancellation_duringDownload() =
         kotlinx.coroutines.test.runTest {
-            // Given: A mock response with a body that we can control the blocking of
+            // Given: A response with a body that we can control the blocking of
             val testContent = "long test content"
             val testConfig = createTestConfig(testContent)
-
-            val mockCall = mockk<okhttp3.Call>(relaxed = true)
-            val mockResponse = mockk<Response>(relaxed = true)
-            val mockBody = mockk<ResponseBody>(relaxed = true)
 
             val startRead = kotlinx.coroutines.CompletableDeferred<Unit>()
             val proceedRead = kotlinx.coroutines.CompletableDeferred<Unit>()
@@ -1127,13 +988,14 @@ class HttpFileDownloaderTest {
                     }
                 }
 
-            every { mockClient.newCall(any()) } returns mockCall
-            every { mockCall.execute() } returns mockResponse
-            every { mockResponse.isSuccessful } returns true
-            every { mockResponse.code } returns 200
-            every { mockResponse.body } returns mockBody
-            every { mockResponse.header("Content-Length") } returns "1000"
-            every { mockBody.byteStream() } returns blockingStream
+            handler = { request ->
+                response(
+                    request = request,
+                    code = 200,
+                    body = streamBody { blockingStream },
+                    headers = mapOf("Content-Length" to "1000"),
+                )
+            }
 
             // When: Download is started and then cancelled
             val job =

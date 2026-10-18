@@ -1,13 +1,16 @@
 package com.browntowndev.enclave.core.data.repository
 
+import android.content.Context
+import androidx.room.Room
+import androidx.test.core.app.ApplicationProvider
 import app.cash.turbine.test
 import com.browntowndev.enclave.core.data.local.ApiCredentialsDao
 import com.browntowndev.enclave.core.data.local.ApiCredentialsEntity
 import com.browntowndev.enclave.core.data.local.ApiModelConfigurationEntity
 import com.browntowndev.enclave.core.data.local.ApiModelConfigurationsDao
-import com.browntowndev.enclave.core.data.local.DefaultModelAssignmentView
 import com.browntowndev.enclave.core.data.local.DefaultModelEntity
 import com.browntowndev.enclave.core.data.local.DefaultModelsDao
+import com.browntowndev.enclave.core.data.local.EnclaveDatabase
 import com.browntowndev.enclave.core.data.local.LocalModelConfigurationEntity
 import com.browntowndev.enclave.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.enclave.core.data.local.LocalModelEntity
@@ -17,8 +20,6 @@ import com.browntowndev.enclave.core.data.local.MediaProviderEntity
 import com.browntowndev.enclave.core.data.local.TtsProviderDao
 import com.browntowndev.enclave.core.data.local.TtsProviderEntity
 import com.browntowndev.enclave.core.data.security.CryptoAtRestEncryptionService
-import com.browntowndev.enclave.core.data.security.LocalDataEncryptionService
-import com.browntowndev.enclave.core.data.sync.CloudSyncTrigger
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
@@ -29,44 +30,143 @@ import com.browntowndev.enclave.domain.model.config.TtsProviderId
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import io.mockk.coEvery
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.verify
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import javax.crypto.AEADBadTagException
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class DefaultModelRepositoryImplTest {
     private lateinit var repo: DefaultModelRepositoryImpl
-    private val defaultModelsDao = mockk<DefaultModelsDao>(relaxed = true)
-    private val localConfigsDao = mockk<LocalModelConfigurationsDao>()
-    private val localModelsDao = mockk<LocalModelsDao>()
-    private val apiConfigsDao = mockk<ApiModelConfigurationsDao>()
-    private val apiCredentialsDao = mockk<ApiCredentialsDao>()
-    private val ttsProviderDao = mockk<TtsProviderDao>()
-    private val mediaProviderDao = mockk<MediaProviderDao>()
-    private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
+    private lateinit var database: EnclaveDatabase
+    private lateinit var defaultModelsDao: DefaultModelsDao
+    private lateinit var localConfigsDao: LocalModelConfigurationsDao
+    private lateinit var localModelsDao: LocalModelsDao
+    private lateinit var apiConfigsDao: ApiModelConfigurationsDao
+    private lateinit var apiCredentialsDao: ApiCredentialsDao
+    private lateinit var ttsProviderDao: TtsProviderDao
+    private lateinit var mediaProviderDao: MediaProviderDao
+    private lateinit var syncTrigger: RecordingCloudSyncTrigger
     private val localEncryption = FakeLocalDataEncryptionService()
 
     @BeforeEach
     fun setup() {
-        repo =
-            DefaultModelRepositoryImpl(
-                syncTrigger = syncTrigger,
-                defaultModelsDao = defaultModelsDao,
-                localModelConfigurationsDao = localConfigsDao,
-                localModelsDao = localModelsDao,
-                apiModelConfigurationsDao = apiConfigsDao,
-                apiCredentialsDao = apiCredentialsDao,
-                ttsProviderDao = ttsProviderDao,
-                mediaProviderDao = mediaProviderDao,
-                localEncryption = localEncryption,
-            )
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        database =
+            Room
+                .inMemoryDatabaseBuilder(context, EnclaveDatabase::class.java)
+                .allowMainThreadQueries()
+                .build()
+        defaultModelsDao = database.defaultModelsDao()
+        localConfigsDao = database.localModelConfigurationsDao()
+        localModelsDao = database.localModelsDao()
+        apiConfigsDao = database.apiModelConfigurationsDao()
+        apiCredentialsDao = database.apiCredentialsDao()
+        ttsProviderDao = database.ttsProviderDao()
+        mediaProviderDao = database.mediaProviderDao()
+        syncTrigger = RecordingCloudSyncTrigger()
+        repo = buildRepository(localEncryption)
+    }
+
+    @AfterEach
+    fun tearDown() {
+        database.close()
+    }
+
+    private fun buildRepository(encryption: FakeLocalDataEncryptionService) =
+        DefaultModelRepositoryImpl(
+            syncTrigger = syncTrigger,
+            defaultModelsDao = defaultModelsDao,
+            localModelConfigurationsDao = localConfigsDao,
+            localModelsDao = localModelsDao,
+            apiModelConfigurationsDao = apiConfigsDao,
+            apiCredentialsDao = apiCredentialsDao,
+            ttsProviderDao = ttsProviderDao,
+            mediaProviderDao = mediaProviderDao,
+            localEncryption = encryption,
+        )
+
+    private suspend fun seedLocalModel(
+        modelId: LocalModelId,
+        displayName: String,
+        huggingFaceModelName: String = "bartowski/ai21labs_AI21-Jamba-Reasoning-3B-GGUF",
+    ) {
+        localModelsDao.upsert(
+            LocalModelEntity(
+                id = modelId,
+                modelFileFormat = ModelFileFormat.GGUF,
+                displayName = displayName,
+                huggingFaceModelName = huggingFaceModelName,
+                remoteFilename = "qwen.gguf",
+                localFilename = "qwen.gguf",
+                sha256 = "abc",
+                sizeInBytes = 100,
+            ),
+        )
+    }
+
+    private suspend fun seedLocalConfig(
+        configId: LocalModelConfigurationId,
+        modelId: LocalModelId,
+        storedDisplayName: String,
+    ) {
+        localConfigsDao.upsert(
+            LocalModelConfigurationEntity(
+                id = configId,
+                localModelId = modelId,
+                displayName = storedDisplayName,
+            ),
+        )
+    }
+
+    private suspend fun seedApiCredentials(
+        credId: ApiCredentialsId,
+        storedDisplayName: String,
+        provider: ApiProvider = ApiProvider.OPENAI,
+        alias: String = "key1",
+    ) {
+        apiCredentialsDao.insert(
+            ApiCredentialsEntity(
+                id = credId,
+                displayName = storedDisplayName,
+                provider = provider,
+                credentialAlias = alias,
+            ),
+        )
+    }
+
+    private suspend fun seedApiConfig(
+        configId: ApiModelConfigurationId,
+        credId: ApiCredentialsId,
+        modelId: String,
+        storedDisplayName: String,
+    ) {
+        apiConfigsDao.upsert(
+            ApiModelConfigurationEntity(
+                id = configId,
+                apiCredentialsId = credId,
+                modelId = modelId,
+                displayName = storedDisplayName,
+            ),
+        )
+    }
+
+    private suspend fun seedTtsProvider(entity: TtsProviderEntity) {
+        ttsProviderDao.upsertTtsProvider(entity)
+    }
+
+    private suspend fun seedMediaProvider(entity: MediaProviderEntity) {
+        mediaProviderDao.upsert(entity)
+    }
+
+    private suspend fun seedDefault(entity: DefaultModelEntity) {
+        defaultModelsDao.upsert(entity)
     }
 
     @Test
@@ -74,7 +174,9 @@ class DefaultModelRepositoryImplTest {
         runTest {
             val configId = LocalModelConfigurationId("test-local-config-1")
             val modelId = LocalModelId("10")
-            coEvery { defaultModelsDao.getDefault(ModelType.MAIN) } returns
+            seedLocalModel(modelId, displayName = "Jamba Reasoning 3B")
+            seedLocalConfig(configId, modelId, storedDisplayName = localEncryption.encryptString("Synthesis"))
+            seedDefault(
                 DefaultModelEntity(
                     modelType = ModelType.MAIN,
                     localConfigId = configId,
@@ -83,24 +185,8 @@ class DefaultModelRepositoryImplTest {
                     mediaProviderId = null,
                     updatedAt = 0L,
                     pendingSync = 0,
-                )
-            coEvery { localConfigsDao.getById(configId) } returns
-                LocalModelConfigurationEntity(
-                    id = configId,
-                    localModelId = modelId,
-                    displayName = localEncryption.encryptString("Synthesis"),
-                )
-            coEvery { localModelsDao.getById(modelId) } returns
-                LocalModelEntity(
-                    id = modelId,
-                    modelFileFormat = ModelFileFormat.GGUF,
-                    displayName = "Jamba Reasoning 3B",
-                    huggingFaceModelName = "bartowski/ai21labs_AI21-Jamba-Reasoning-3B-GGUF",
-                    remoteFilename = "qwen.gguf",
-                    localFilename = "qwen.gguf",
-                    sha256 = "abc",
-                    sizeInBytes = 100,
-                )
+                ),
+            )
 
             val result = repo.getDefault(ModelType.MAIN)
 
@@ -117,29 +203,15 @@ class DefaultModelRepositoryImplTest {
             val configId = LocalModelConfigurationId("test-local-config-1")
             val modelId = LocalModelId("10")
             val huggingFaceName = "Jackrong/Qwen3.5-2B-Claude-4.6-Opus-Reasoning-Distilled-GGUF"
-            coEvery { defaultModelsDao.getDefault(ModelType.DRAFT_TWO) } returns
+            seedLocalModel(modelId, displayName = "", huggingFaceModelName = huggingFaceName)
+            seedLocalConfig(configId, modelId, storedDisplayName = localEncryption.encryptString("Qwen 3.5 2B"))
+            seedDefault(
                 DefaultModelEntity(
                     modelType = ModelType.DRAFT_TWO,
                     localConfigId = configId,
                     apiConfigId = null,
-                )
-            coEvery { localConfigsDao.getById(configId) } returns
-                LocalModelConfigurationEntity(
-                    id = configId,
-                    localModelId = modelId,
-                    displayName = localEncryption.encryptString("Qwen 3.5 2B"),
-                )
-            coEvery { localModelsDao.getById(modelId) } returns
-                LocalModelEntity(
-                    id = modelId,
-                    modelFileFormat = ModelFileFormat.GGUF,
-                    displayName = "",
-                    huggingFaceModelName = huggingFaceName,
-                    remoteFilename = "qwen.gguf",
-                    localFilename = "qwen.gguf",
-                    sha256 = "abc",
-                    sizeInBytes = 100,
-                )
+                ),
+            )
 
             val result = repo.getDefault(ModelType.DRAFT_TWO)
 
@@ -151,7 +223,9 @@ class DefaultModelRepositoryImplTest {
         runTest {
             val configId = ApiModelConfigurationId("test-api-config-1")
             val credId = ApiCredentialsId("12")
-            coEvery { defaultModelsDao.getDefault(ModelType.VISION) } returns
+            seedApiCredentials(credId, storedDisplayName = localEncryption.encryptString("OpenAI Primary"))
+            seedApiConfig(configId, credId, modelId = "gpt-4o", storedDisplayName = localEncryption.encryptString("Default"))
+            seedDefault(
                 DefaultModelEntity(
                     modelType = ModelType.VISION,
                     localConfigId = null,
@@ -160,21 +234,8 @@ class DefaultModelRepositoryImplTest {
                     mediaProviderId = null,
                     updatedAt = 0L,
                     pendingSync = 0,
-                )
-            coEvery { apiConfigsDao.getById(configId) } returns
-                ApiModelConfigurationEntity(
-                    id = configId,
-                    apiCredentialsId = credId,
-                    modelId = "gpt-4o",
-                    displayName = localEncryption.encryptString("Default"),
-                )
-            coEvery { apiCredentialsDao.getById(credId) } returns
-                ApiCredentialsEntity(
-                    id = credId,
-                    displayName = localEncryption.encryptString("OpenAI Primary"),
-                    provider = ApiProvider.OPENAI,
-                    credentialAlias = "key1",
-                )
+                ),
+            )
 
             val result = repo.getDefault(ModelType.VISION)
 
@@ -190,7 +251,16 @@ class DefaultModelRepositoryImplTest {
     fun `get default with resolved display data for TTS model`() =
         runTest {
             val ttsId = TtsProviderId("tts-1")
-            coEvery { defaultModelsDao.getDefault(ModelType.TTS) } returns
+            seedTtsProvider(
+                TtsProviderEntity(
+                    id = ttsId.value,
+                    displayName = localEncryption.encryptString("My Grok TTS"),
+                    provider = ApiProvider.XAI,
+                    voiceName = localEncryption.encryptString("eve"),
+                    credentialAlias = "xai-key",
+                ),
+            )
+            seedDefault(
                 DefaultModelEntity(
                     modelType = ModelType.TTS,
                     localConfigId = null,
@@ -199,15 +269,8 @@ class DefaultModelRepositoryImplTest {
                     mediaProviderId = null,
                     updatedAt = 0L,
                     pendingSync = 0,
-                )
-            coEvery { ttsProviderDao.getTtsProvider(ttsId.value) } returns
-                TtsProviderEntity(
-                    id = ttsId.value,
-                    displayName = localEncryption.encryptString("My Grok TTS"),
-                    provider = ApiProvider.XAI,
-                    voiceName = localEncryption.encryptString("eve"),
-                    credentialAlias = "xai-key",
-                )
+                ),
+            )
 
             val result = repo.getDefault(ModelType.TTS)
 
@@ -221,17 +284,7 @@ class DefaultModelRepositoryImplTest {
     fun `get default with resolved display data for media model`() =
         runTest {
             val mediaId = MediaProviderId("media-1")
-            coEvery { defaultModelsDao.getDefault(ModelType.IMAGE_GENERATION) } returns
-                DefaultModelEntity(
-                    modelType = ModelType.IMAGE_GENERATION,
-                    localConfigId = null,
-                    apiConfigId = null,
-                    ttsProviderId = null,
-                    mediaProviderId = mediaId,
-                    updatedAt = 0L,
-                    pendingSync = 0,
-                )
-            coEvery { mediaProviderDao.getMediaProvider(mediaId.value) } returns
+            seedMediaProvider(
                 MediaProviderEntity(
                     id = mediaId.value,
                     displayName = localEncryption.encryptString("Imagen"),
@@ -240,7 +293,19 @@ class DefaultModelRepositoryImplTest {
                     modelName = localEncryption.encryptString("imagen-3"),
                     baseUrl = localEncryption.encryptString("https://api.google.com"),
                     credentialAlias = "google-key",
-                )
+                ),
+            )
+            seedDefault(
+                DefaultModelEntity(
+                    modelType = ModelType.IMAGE_GENERATION,
+                    localConfigId = null,
+                    apiConfigId = null,
+                    ttsProviderId = null,
+                    mediaProviderId = mediaId,
+                    updatedAt = 0L,
+                    pendingSync = 0,
+                ),
+            )
 
             val result = repo.getDefault(ModelType.IMAGE_GENERATION)
 
@@ -253,32 +318,17 @@ class DefaultModelRepositoryImplTest {
     @Test
     fun `SCN-REPO-DEFAULT-002 observeDefaults uses asset displayName from SQL view`() =
         runTest {
-            every { defaultModelsDao.observeAllWithDetails() } returns
-                flowOf(
-                    listOf(
-                        DefaultModelAssignmentView(
-                            modelType = ModelType.THINKING,
-                            localConfigId = LocalModelConfigurationId("cfg-thinking"),
-                            apiConfigId = null,
-                            localPresetName = localEncryption.encryptString("Thinking"),
-                            apiPresetName = null,
-                            apiModelId = null,
-                            localAssetName = "Gemma 4 E4B",
-                            apiAssetName = null,
-                            apiCredentialsId = null,
-                            apiProviderName = null,
-                            ttsProviderId = null,
-                            ttsAssetName = null,
-                            ttsProviderName = null,
-                            ttsVoiceName = null,
-                            mediaProviderId = null,
-                            mediaAssetName = null,
-                            mediaProviderName = null,
-                            mediaModelName = null,
-                            mediaCapability = null,
-                        ),
-                    ),
-                )
+            val configId = LocalModelConfigurationId("cfg-thinking")
+            val modelId = LocalModelId("model-thinking")
+            seedLocalModel(modelId, displayName = "Gemma 4 E4B")
+            seedLocalConfig(configId, modelId, storedDisplayName = localEncryption.encryptString("Thinking"))
+            seedDefault(
+                DefaultModelEntity(
+                    modelType = ModelType.THINKING,
+                    localConfigId = configId,
+                    apiConfigId = null,
+                ),
+            )
 
             repo.observeDefaults().test {
                 val thinking = awaitItem().single { it.modelType == ModelType.THINKING }
@@ -291,95 +341,66 @@ class DefaultModelRepositoryImplTest {
     @Test
     fun `observeDefaults decrypts assignment view labels from Room`() =
         runTest {
-            every { defaultModelsDao.observeAllWithDetails() } returns
-                flowOf(
-                    listOf(
-                        DefaultModelAssignmentView(
-                            modelType = ModelType.MAIN,
-                            localConfigId = LocalModelConfigurationId("local-cfg"),
-                            apiConfigId = null,
-                            localPresetName = localEncryption.encryptString("Precise"),
-                            apiPresetName = null,
-                            apiModelId = null,
-                            localAssetName = "Gemma 4 E4B",
-                            apiAssetName = null,
-                            apiCredentialsId = null,
-                            apiProviderName = null,
-                            ttsProviderId = null,
-                            ttsAssetName = null,
-                            ttsProviderName = null,
-                            ttsVoiceName = null,
-                            mediaProviderId = null,
-                            mediaAssetName = null,
-                            mediaProviderName = null,
-                            mediaModelName = null,
-                            mediaCapability = null,
-                        ),
-                        DefaultModelAssignmentView(
-                            modelType = ModelType.VISION,
-                            localConfigId = null,
-                            apiConfigId = ApiModelConfigurationId("api-cfg"),
-                            localPresetName = null,
-                            apiPresetName = localEncryption.encryptString("Default"),
-                            apiModelId = "grok-4-3",
-                            localAssetName = null,
-                            apiAssetName = localEncryption.encryptString("OpenAI Primary"),
-                            apiCredentialsId = ApiCredentialsId("12"),
-                            apiProviderName = ApiProvider.OPENAI,
-                            ttsProviderId = null,
-                            ttsAssetName = null,
-                            ttsProviderName = null,
-                            ttsVoiceName = null,
-                            mediaProviderId = null,
-                            mediaAssetName = null,
-                            mediaProviderName = null,
-                            mediaModelName = null,
-                            mediaCapability = null,
-                        ),
-                        DefaultModelAssignmentView(
-                            modelType = ModelType.TTS,
-                            localConfigId = null,
-                            apiConfigId = null,
-                            localPresetName = null,
-                            apiPresetName = null,
-                            apiModelId = null,
-                            localAssetName = null,
-                            apiAssetName = null,
-                            apiCredentialsId = null,
-                            apiProviderName = null,
-                            ttsProviderId = TtsProviderId("tts-1"),
-                            ttsAssetName = localEncryption.encryptString("My Grok TTS"),
-                            ttsProviderName = ApiProvider.XAI,
-                            ttsVoiceName = localEncryption.encryptString("eve"),
-                            mediaProviderId = null,
-                            mediaAssetName = null,
-                            mediaProviderName = null,
-                            mediaModelName = null,
-                            mediaCapability = null,
-                        ),
-                        DefaultModelAssignmentView(
-                            modelType = ModelType.IMAGE_GENERATION,
-                            localConfigId = null,
-                            apiConfigId = null,
-                            localPresetName = null,
-                            apiPresetName = null,
-                            apiModelId = null,
-                            localAssetName = null,
-                            apiAssetName = null,
-                            apiCredentialsId = null,
-                            apiProviderName = null,
-                            ttsProviderId = null,
-                            ttsAssetName = null,
-                            ttsProviderName = null,
-                            ttsVoiceName = null,
-                            mediaProviderId = MediaProviderId("media-1"),
-                            mediaAssetName = localEncryption.encryptString("Imagen"),
-                            mediaProviderName = ApiProvider.GOOGLE,
-                            mediaModelName = localEncryption.encryptString("imagen-3"),
-                            mediaCapability = MediaCapability.IMAGE,
-                        ),
-                    ),
-                )
+            // MAIN (local)
+            val mainModelId = LocalModelId("model-main")
+            val mainConfigId = LocalModelConfigurationId("local-cfg")
+            seedLocalModel(mainModelId, displayName = "Gemma 4 E4B")
+            seedLocalConfig(mainConfigId, mainModelId, storedDisplayName = localEncryption.encryptString("Precise"))
+            seedDefault(DefaultModelEntity(modelType = ModelType.MAIN, localConfigId = mainConfigId, apiConfigId = null))
+
+            // VISION (api)
+            val visionCredId = ApiCredentialsId("12")
+            val visionConfigId = ApiModelConfigurationId("api-cfg")
+            seedApiCredentials(visionCredId, storedDisplayName = localEncryption.encryptString("OpenAI Primary"))
+            seedApiConfig(
+                visionConfigId,
+                visionCredId,
+                modelId = "grok-4-3",
+                storedDisplayName = localEncryption.encryptString("Default"),
+            )
+            seedDefault(DefaultModelEntity(modelType = ModelType.VISION, localConfigId = null, apiConfigId = visionConfigId))
+
+            // TTS
+            val ttsId = TtsProviderId("tts-1")
+            seedTtsProvider(
+                TtsProviderEntity(
+                    id = ttsId.value,
+                    displayName = localEncryption.encryptString("My Grok TTS"),
+                    provider = ApiProvider.XAI,
+                    voiceName = localEncryption.encryptString("eve"),
+                    credentialAlias = "xai-key",
+                ),
+            )
+            seedDefault(
+                DefaultModelEntity(
+                    modelType = ModelType.TTS,
+                    localConfigId = null,
+                    apiConfigId = null,
+                    ttsProviderId = ttsId,
+                ),
+            )
+
+            // IMAGE_GENERATION (media)
+            val mediaId = MediaProviderId("media-1")
+            seedMediaProvider(
+                MediaProviderEntity(
+                    id = mediaId.value,
+                    displayName = localEncryption.encryptString("Imagen"),
+                    provider = ApiProvider.GOOGLE,
+                    capability = MediaCapability.IMAGE,
+                    modelName = localEncryption.encryptString("imagen-3"),
+                    baseUrl = localEncryption.encryptString("https://api.google.com"),
+                    credentialAlias = "google-key",
+                ),
+            )
+            seedDefault(
+                DefaultModelEntity(
+                    modelType = ModelType.IMAGE_GENERATION,
+                    localConfigId = null,
+                    apiConfigId = null,
+                    mediaProviderId = mediaId,
+                ),
+            )
 
             repo.observeDefaults().test {
                 val assignments = awaitItem().associateBy { it.modelType }
@@ -412,49 +433,20 @@ class DefaultModelRepositoryImplTest {
     @Test
     fun `observeDefaults survives decrypt failure without emitting crash`() =
         runTest {
-            val failingEncryption = mockk<LocalDataEncryptionService>()
-            every { failingEncryption.isEncrypted(any()) } answers {
-                firstArg<String>().startsWith(CryptoAtRestEncryptionService.ENVELOPE_PREFIX)
-            }
-            every { failingEncryption.decryptString(any(), any()) } throws AEADBadTagException()
-            val failingRepo =
-                DefaultModelRepositoryImpl(
-                    syncTrigger = syncTrigger,
-                    defaultModelsDao = defaultModelsDao,
-                    localModelConfigurationsDao = localConfigsDao,
-                    localModelsDao = localModelsDao,
-                    apiModelConfigurationsDao = apiConfigsDao,
-                    apiCredentialsDao = apiCredentialsDao,
-                    ttsProviderDao = ttsProviderDao,
-                    mediaProviderDao = mediaProviderDao,
-                    localEncryption = failingEncryption,
-                )
-            every { defaultModelsDao.observeAllWithDetails() } returns
-                flowOf(
-                    listOf(
-                        DefaultModelAssignmentView(
-                            modelType = ModelType.VISION,
-                            localConfigId = null,
-                            apiConfigId = ApiModelConfigurationId("api-cfg"),
-                            localPresetName = null,
-                            apiPresetName = "${CryptoAtRestEncryptionService.ENVELOPE_PREFIX}bad",
-                            apiModelId = "grok-vision",
-                            localAssetName = null,
-                            apiAssetName = null,
-                            apiCredentialsId = ApiCredentialsId("12"),
-                            apiProviderName = ApiProvider.OPENAI,
-                            ttsProviderId = null,
-                            ttsAssetName = null,
-                            ttsProviderName = null,
-                            ttsVoiceName = null,
-                            mediaProviderId = null,
-                            mediaAssetName = null,
-                            mediaProviderName = null,
-                            mediaModelName = null,
-                            mediaCapability = null,
-                        ),
-                    ),
-                )
+            val credId = ApiCredentialsId("12")
+            val configId = ApiModelConfigurationId("api-cfg")
+            seedApiCredentials(credId, storedDisplayName = "OpenAI Primary")
+            seedApiConfig(
+                configId,
+                credId,
+                modelId = "grok-vision",
+                storedDisplayName = "${CryptoAtRestEncryptionService.ENVELOPE_PREFIX}bad",
+            )
+            seedDefault(DefaultModelEntity(modelType = ModelType.VISION, localConfigId = null, apiConfigId = configId))
+
+            val failingEncryption = FakeLocalDataEncryptionService()
+            failingEncryption.forceDecryptFailure = true
+            val failingRepo = buildRepository(failingEncryption)
 
             failingRepo.observeDefaults().test {
                 val assignments = awaitItem()
@@ -467,34 +459,8 @@ class DefaultModelRepositoryImplTest {
     @Test
     fun `getDefault survives decrypt failure for media provider assignment`() =
         runTest {
-            val failingEncryption = mockk<LocalDataEncryptionService>()
-            every { failingEncryption.isEncrypted(any()) } answers {
-                firstArg<String>().startsWith(CryptoAtRestEncryptionService.ENVELOPE_PREFIX)
-            }
-            every { failingEncryption.decryptString(any(), any()) } throws AEADBadTagException()
-            val failingRepo =
-                DefaultModelRepositoryImpl(
-                    syncTrigger = syncTrigger,
-                    defaultModelsDao = defaultModelsDao,
-                    localModelConfigurationsDao = localConfigsDao,
-                    localModelsDao = localModelsDao,
-                    apiModelConfigurationsDao = apiConfigsDao,
-                    apiCredentialsDao = apiCredentialsDao,
-                    ttsProviderDao = ttsProviderDao,
-                    mediaProviderDao = mediaProviderDao,
-                    localEncryption = failingEncryption,
-                )
             val mediaId = MediaProviderId("media-1")
-            coEvery { defaultModelsDao.getDefault(ModelType.IMAGE_GENERATION) } returns
-                DefaultModelEntity(
-                    modelType = ModelType.IMAGE_GENERATION,
-                    localConfigId = null,
-                    apiConfigId = null,
-                    ttsProviderId = null,
-                    mediaProviderId = mediaId,
-                    pendingSync = 0,
-                )
-            coEvery { mediaProviderDao.getMediaProvider(mediaId.value) } returns
+            seedMediaProvider(
                 MediaProviderEntity(
                     id = mediaId.value,
                     displayName = "${CryptoAtRestEncryptionService.ENVELOPE_PREFIX}bad",
@@ -503,7 +469,22 @@ class DefaultModelRepositoryImplTest {
                     modelName = "model",
                     baseUrl = "url",
                     credentialAlias = "alias",
-                )
+                ),
+            )
+            seedDefault(
+                DefaultModelEntity(
+                    modelType = ModelType.IMAGE_GENERATION,
+                    localConfigId = null,
+                    apiConfigId = null,
+                    ttsProviderId = null,
+                    mediaProviderId = mediaId,
+                    pendingSync = 0,
+                ),
+            )
+
+            val failingEncryption = FakeLocalDataEncryptionService()
+            failingEncryption.forceDecryptFailure = true
+            val failingRepo = buildRepository(failingEncryption)
 
             val result = failingRepo.getDefault(ModelType.IMAGE_GENERATION)
 
@@ -516,10 +497,13 @@ class DefaultModelRepositoryImplTest {
     fun `setDefault calls triggerSync once`() =
         runTest {
             val configId = LocalModelConfigurationId("cfg-1")
+            val modelId = LocalModelId("model-1")
+            seedLocalModel(modelId, displayName = "Model")
+            seedLocalConfig(configId, modelId, storedDisplayName = "Config")
 
             repo.setDefault(ModelType.MAIN, localConfigId = configId)
 
-            verify(exactly = 1) { syncTrigger.trigger() }
+            assertEquals(1, syncTrigger.triggerCalls)
         }
 
     @Test
@@ -527,19 +511,19 @@ class DefaultModelRepositoryImplTest {
         runTest {
             repo.clearDefault(ModelType.FAST)
 
-            verify(exactly = 1) { syncTrigger.trigger() }
+            assertEquals(1, syncTrigger.triggerCalls)
         }
 
     @Test
     fun `setDefault upserts entity with pendingSync true`() =
         runTest {
+            val credId = ApiCredentialsId("9")
             val configId = ApiModelConfigurationId("api-cfg-1")
-            coEvery { defaultModelsDao.upsert(any()) } returns Unit
+            seedApiCredentials(credId, storedDisplayName = "Creds")
+            seedApiConfig(configId, credId, modelId = "gpt-4o", storedDisplayName = "Cfg")
 
             repo.setDefault(ModelType.VISION, apiConfigId = configId)
 
-            io.mockk.coVerify {
-                defaultModelsDao.upsert(match { it.pendingSync == 1 })
-            }
+            assertEquals(1, defaultModelsDao.getDefault(ModelType.VISION)?.pendingSync)
         }
 }

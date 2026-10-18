@@ -1,12 +1,5 @@
 package com.browntowndev.enclave.core.data.security
 
-import android.content.SharedPreferences
-import android.util.Base64
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.mockkStatic
-import io.mockk.unmockkAll
-import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -15,11 +8,20 @@ import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
+/**
+ * Runs under Robolectric so [android.util.Base64] resolves to the real
+ * shadow implementation instead of a static mock bridging to java.util.Base64.
+ * The real [CryptoManagerImpl] uses no Android Keystore — it is pure JCE —
+ * so no keystore shadow is required.
+ */
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class CryptoManagerImplTest {
     private lateinit var cryptoManager: CryptoManagerImpl
-    private lateinit var mockPrefs: SharedPreferences
-    private lateinit var mockEditor: SharedPreferences.Editor
 
     // Use a fixed salt for deterministic tests, but random for real usage
     private val testSalt = "test-salt-1234567890".toByteArray(Charsets.UTF_8)
@@ -27,32 +29,7 @@ class CryptoManagerImplTest {
 
     @BeforeEach
     fun setup() {
-        mockkStatic(Base64::class)
-        every { Base64.encodeToString(any(), any()) } answers {
-            java.util.Base64
-                .getEncoder()
-                .encodeToString(firstArg() as ByteArray)
-        }
-        every { Base64.decode(any<String>(), any()) } answers {
-            java.util.Base64
-                .getDecoder()
-                .decode(firstArg() as String)
-        }
-
-        mockPrefs = mockk()
-        mockEditor = mockk()
-        every { mockPrefs.edit() } returns mockEditor
-        every { mockEditor.putString(any(), any()) } returns mockEditor
-        every { mockEditor.remove(any()) } returns mockEditor
-        every { mockEditor.apply() } returns Unit
-        every { mockPrefs.getString(any(), any()) } returns null
-
         cryptoManager = CryptoManagerImpl()
-    }
-
-    @AfterEach
-    fun teardown() {
-        unmockkAll()
     }
 
     @Test

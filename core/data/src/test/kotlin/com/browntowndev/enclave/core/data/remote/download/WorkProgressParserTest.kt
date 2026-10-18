@@ -1,9 +1,12 @@
 package com.browntowndev.enclave.core.data.remote.download
 
-import android.util.Log
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
 import androidx.work.Constraints
+import androidx.work.Data
 import androidx.work.NetworkType
 import androidx.work.WorkInfo
+import androidx.work.workDataOf
 import com.browntowndev.enclave.core.data.download.DownloadFinalizeWorker
 import com.browntowndev.enclave.core.data.download.DownloadSessionManager
 import com.browntowndev.enclave.core.data.download.DownloadWorkKeys
@@ -15,40 +18,68 @@ import com.browntowndev.enclave.domain.model.download.DownloadStatus
 import com.browntowndev.enclave.domain.model.download.FileProgress
 import com.browntowndev.enclave.domain.model.download.FileStatus
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import io.mockk.MockKAnnotations
-import io.mockk.every
-import io.mockk.impl.annotations.MockK
-import io.mockk.mockk
-import io.mockk.mockkStatic
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
+import java.util.UUID
 
 /**
  * Unit tests for WorkProgressParser.
  * Tests parsing of file progress strings including sha256 extraction and role re-mapping.
+ *
+ * ENC-28: WorkInfo/Data are real instances; the session manager is the real
+ * [DownloadSessionManager] over a Robolectric context (a freshly created session
+ * is the non-stale one); android.util.Log is shadowed by Robolectric.
  */
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class WorkProgressParserTest {
-    @MockK
-    private lateinit var mockSessionManager: DownloadSessionManager
-
+    private lateinit var sessionManager: DownloadSessionManager
     private lateinit var testClock: TestClock
     private lateinit var parser: WorkProgressParser
 
     @BeforeEach
     fun setup() {
-        MockKAnnotations.init(this)
-        mockkStatic(Log::class)
-        every { Log.d(any<String>(), any<String>()) } returns 0
-        every { Log.w(any<String>(), any<String>()) } returns 0
-        every { Log.w(any<String>(), any<String>(), any<Throwable>()) } returns 0
-        every { Log.e(any<String>(), any<String>()) } returns 0
-
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        sessionManager = DownloadSessionManager(context)
         testClock = TestClock()
-        parser = WorkProgressParser(mockSessionManager, testClock)
+        parser = WorkProgressParser(sessionManager, testClock)
+    }
+
+    private fun workInfo(
+        state: WorkInfo.State,
+        tags: Set<String> = emptySet(),
+        outputData: Data = Data.EMPTY,
+        progress: Data = Data.EMPTY,
+        constraints: Constraints = Constraints.NONE,
+    ): WorkInfo = WorkInfo(UUID.randomUUID(), state, tags, outputData, progress, 0, 0, constraints)
+
+    private fun progressData(
+        overallProgress: Float,
+        modelsComplete: Int,
+        modelsTotal: Int,
+        speedMbps: Double,
+        etaSeconds: Long,
+        filesProgress: Array<String?>?,
+    ): Data {
+        val builder =
+            Data
+                .Builder()
+                .putFloat(DownloadKey.OVERALL_PROGRESS.key, overallProgress)
+                .putInt(DownloadKey.MODELS_COMPLETE.key, modelsComplete)
+                .putInt(DownloadKey.MODELS_TOTAL.key, modelsTotal)
+                .putDouble(DownloadKey.SPEED_MBPS.key, speedMbps)
+                .putLong(DownloadKey.ETA_SECONDS.key, etaSeconds)
+        if (filesProgress != null) {
+            builder.putStringArray(DownloadKey.FILES_PROGRESS.key, filesProgress)
+        }
+        return builder.build()
     }
 
     @Test
@@ -126,21 +157,21 @@ class WorkProgressParserTest {
 
         // And - WorkInfo with progress for "vision.litertlm" (carrying the sha256)
         val workInfo =
-            mockk<WorkInfo> {
-                every { state } returns WorkInfo.State.RUNNING
-                every { progress } returns
-                    mockk {
-                        every { getFloat(DownloadKey.OVERALL_PROGRESS.key, 0f) } returns 0.5f
-                        every { getInt(DownloadKey.MODELS_COMPLETE.key, 0) } returns 1
-                        every { getInt(DownloadKey.MODELS_TOTAL.key, 1) } returns 2
-                        every { getDouble(DownloadKey.SPEED_MBPS.key, 0.0) } returns 10.0
-                        every { getLong(DownloadKey.ETA_SECONDS.key, -1L) } returns 100L
-                        every { getStringArray(DownloadKey.FILES_PROGRESS.key) } returns
+            workInfo(
+                state = WorkInfo.State.RUNNING,
+                progress =
+                    progressData(
+                        overallProgress = 0.5f,
+                        modelsComplete = 1,
+                        modelsTotal = 2,
+                        speedMbps = 10.0,
+                        etaSeconds = 100L,
+                        filesProgress =
                             arrayOf(
                                 "vision.litertlm|50000000|100000000|DOWNLOADING|10.0|abc123sha",
-                            )
-                    }
-            }
+                            ),
+                    ),
+            )
 
         // When
         val result = parser.parse(workInfo, currentDownloads)
@@ -159,17 +190,13 @@ class WorkProgressParserTest {
 
     @Test
     fun `parseSucceeded returns ready status when work succeeds`() {
-        // Given: WorkInfo with SUCCEEDED state
+        // Given: WorkInfo with SUCCEEDED state, carrying the current (non-stale) session
+        val sessionId = sessionManager.createNewSession()
         val workInfo =
-            mockk<WorkInfo> {
-                every { state } returns WorkInfo.State.SUCCEEDED
-                every { outputData } returns
-                    mockk {
-                        every { getString(any()) } returns "current-session-id"
-                    }
-            }
-
-        every { mockSessionManager.isSessionStale("current-session-id") } returns false
+            workInfo(
+                state = WorkInfo.State.SUCCEEDED,
+                outputData = workDataOf(DownloadWorkKeys.KEY_SESSION_ID to sessionId),
+            )
 
         val currentDownloads =
             listOf(
@@ -194,18 +221,17 @@ class WorkProgressParserTest {
 
     @Test
     fun `parseFailed returns error with message`() {
-        // Given: WorkInfo with FAILED state
+        // Given: WorkInfo with FAILED state, carrying the current (non-stale) session
+        val sessionId = sessionManager.createNewSession()
         val workInfo =
-            mockk<WorkInfo> {
-                every { state } returns WorkInfo.State.FAILED
-                every { outputData } returns
-                    mockk {
-                        every { getString(any()) } returns "current-session-id"
-                        every { getString("error_message") } returns "Network error"
-                    }
-            }
-
-        every { mockSessionManager.isSessionStale("current-session-id") } returns false
+            workInfo(
+                state = WorkInfo.State.FAILED,
+                outputData =
+                    workDataOf(
+                        DownloadWorkKeys.KEY_SESSION_ID to sessionId,
+                        DownloadWorkKeys.KEY_ERROR_MESSAGE to "Network error",
+                    ),
+            )
 
         // When: Parse
         val result = parser.parse(workInfo, emptyList())
@@ -218,15 +244,15 @@ class WorkProgressParserTest {
 
     @Test
     fun `parse returns paused status for CANCELLED`() {
+        val sessionId = sessionManager.createNewSession()
         val workInfo =
-            mockk<WorkInfo> {
-                every { state } returns WorkInfo.State.CANCELLED
-                every { outputData } returns
-                    androidx.work.workDataOf(
-                        DownloadWorkKeys.KEY_SESSION_ID to "current-session-id",
-                    )
-            }
-        every { mockSessionManager.isSessionStale("current-session-id") } returns false
+            workInfo(
+                state = WorkInfo.State.CANCELLED,
+                outputData =
+                    workDataOf(
+                        DownloadWorkKeys.KEY_SESSION_ID to sessionId,
+                    ),
+            )
 
         val result = parser.parse(workInfo, emptyList())
 
@@ -239,12 +265,10 @@ class WorkProgressParserTest {
         // BLOCKED = chain prerequisite not satisfied (finalizer waiting on downloader).
         // This must NOT surface as WIFI_BLOCKED — it would incorrectly freeze the UI.
         val workInfo =
-            mockk<WorkInfo> {
-                every { state } returns WorkInfo.State.BLOCKED
-                every { tags } returns setOf(DownloadFinalizeWorker::class.java.name)
-                every { outputData } returns androidx.work.Data.EMPTY
-                every { progress } returns androidx.work.Data.EMPTY
-            }
+            workInfo(
+                state = WorkInfo.State.BLOCKED,
+                tags = setOf(DownloadFinalizeWorker::class.java.name),
+            )
 
         val result = parser.parse(workInfo, emptyList())
 
@@ -254,17 +278,15 @@ class WorkProgressParserTest {
     @Test
     fun `parse returns CHECKING for ENQUEUED downloader within debounce window`() {
         val workInfo =
-            mockk<WorkInfo> {
-                every { state } returns WorkInfo.State.ENQUEUED
-                every { tags } returns setOf(ModelDownloadWorker::class.java.name)
-                every { outputData } returns androidx.work.Data.EMPTY
-                every { progress } returns androidx.work.Data.EMPTY
-                every { constraints } returns
+            workInfo(
+                state = WorkInfo.State.ENQUEUED,
+                tags = setOf(ModelDownloadWorker::class.java.name),
+                constraints =
                     Constraints
                         .Builder()
                         .setRequiredNetworkType(NetworkType.UNMETERED)
-                        .build()
-            }
+                        .build(),
+            )
         testClock.setTime(1_000L)
 
         val result = parser.parse(workInfo, emptyList())
@@ -276,17 +298,15 @@ class WorkProgressParserTest {
     @Test
     fun `parse returns WIFI_BLOCKED for ENQUEUED downloader after debounce with UNMETERED constraint`() {
         val workInfo =
-            mockk<WorkInfo> {
-                every { state } returns WorkInfo.State.ENQUEUED
-                every { tags } returns setOf(ModelDownloadWorker::class.java.name)
-                every { outputData } returns androidx.work.Data.EMPTY
-                every { progress } returns androidx.work.Data.EMPTY
-                every { constraints } returns
+            workInfo(
+                state = WorkInfo.State.ENQUEUED,
+                tags = setOf(ModelDownloadWorker::class.java.name),
+                constraints =
                     Constraints
                         .Builder()
                         .setRequiredNetworkType(NetworkType.UNMETERED)
-                        .build()
-            }
+                        .build(),
+            )
         // First call sets firstEnqueuedTime = 0
         testClock.setTime(0L)
         parser.parse(workInfo, emptyList())
@@ -304,17 +324,15 @@ class WorkProgressParserTest {
     fun `parse returns CHECKING for ENQUEUED downloader after debounce but with CONNECTED constraint`() {
         // Constraint is CONNECTED (not UNMETERED), so WIFI_BLOCKED should never fire
         val workInfo =
-            mockk<WorkInfo> {
-                every { state } returns WorkInfo.State.ENQUEUED
-                every { tags } returns setOf(ModelDownloadWorker::class.java.name)
-                every { outputData } returns androidx.work.Data.EMPTY
-                every { progress } returns androidx.work.Data.EMPTY
-                every { constraints } returns
+            workInfo(
+                state = WorkInfo.State.ENQUEUED,
+                tags = setOf(ModelDownloadWorker::class.java.name),
+                constraints =
                     Constraints
                         .Builder()
                         .setRequiredNetworkType(NetworkType.CONNECTED)
-                        .build()
-            }
+                        .build(),
+            )
         testClock.setTime(0L)
         parser.parse(workInfo, emptyList())
         testClock.setTime(10_000L)
@@ -328,31 +346,29 @@ class WorkProgressParserTest {
     @Test
     fun `parse resets debounce timer when state transitions away from ENQUEUED`() {
         val enqueuedWorkInfo =
-            mockk<WorkInfo> {
-                every { state } returns WorkInfo.State.ENQUEUED
-                every { tags } returns setOf(ModelDownloadWorker::class.java.name)
-                every { outputData } returns androidx.work.Data.EMPTY
-                every { progress } returns androidx.work.Data.EMPTY
-                every { constraints } returns
+            workInfo(
+                state = WorkInfo.State.ENQUEUED,
+                tags = setOf(ModelDownloadWorker::class.java.name),
+                constraints =
                     Constraints
                         .Builder()
                         .setRequiredNetworkType(NetworkType.UNMETERED)
-                        .build()
-            }
+                        .build(),
+            )
         val runningWorkInfo =
-            mockk<WorkInfo> {
-                every { state } returns WorkInfo.State.RUNNING
-                every { outputData } returns androidx.work.Data.EMPTY
-                every { tags } returns setOf(ModelDownloadWorker::class.java.name)
-                every { progress } returns
-                    mockk {
-                        every { getFloat(any(), any()) } returns 0f
-                        every { getInt(any(), any()) } returns 0
-                        every { getDouble(any(), any()) } returns 0.0
-                        every { getLong(any(), any()) } returns -1L
-                        every { getStringArray(any()) } returns null
-                    }
-            }
+            workInfo(
+                state = WorkInfo.State.RUNNING,
+                tags = setOf(ModelDownloadWorker::class.java.name),
+                progress =
+                    progressData(
+                        overallProgress = 0f,
+                        modelsComplete = 0,
+                        modelsTotal = 0,
+                        speedMbps = 0.0,
+                        etaSeconds = -1L,
+                        filesProgress = null,
+                    ),
+            )
         testClock.setTime(0L)
         parser.parse(enqueuedWorkInfo, emptyList()) // sets firstEnqueuedTime = 0
 
@@ -371,23 +387,18 @@ class WorkProgressParserTest {
         // Given: WorkInfo in RUNNING state where FILES_PROGRESS key is not set
         // This happens when the worker reports aggregate progress without per-file data
         val workInfo =
-            mockk<WorkInfo> {
-                every { state } returns WorkInfo.State.RUNNING
-                every { progress } returns
-                    mockk {
-                        every { getFloat(DownloadKey.OVERALL_PROGRESS.key, 0f) } returns 0.3f
-                        every { getInt(DownloadKey.MODELS_COMPLETE.key, 0) } returns 0
-                        every { getInt(DownloadKey.MODELS_TOTAL.key, any()) } returns 1
-                        every { getDouble(DownloadKey.SPEED_MBPS.key, 0.0) } returns 5.0
-                        every { getLong(DownloadKey.ETA_SECONDS.key, -1L) } returns 60L
-                        // FILES_PROGRESS key not set — returns null
-                        every { getStringArray(DownloadKey.FILES_PROGRESS.key) } returns null
-                    }
-                every { outputData } returns
-                    mockk {
-                        every { getString(any()) } returns null
-                    }
-            }
+            workInfo(
+                state = WorkInfo.State.RUNNING,
+                progress =
+                    progressData(
+                        overallProgress = 0.3f,
+                        modelsComplete = 0,
+                        modelsTotal = 1,
+                        speedMbps = 5.0,
+                        etaSeconds = 60L,
+                        filesProgress = null,
+                    ),
+            )
 
         val currentDownloads =
             listOf(
@@ -416,25 +427,21 @@ class WorkProgressParserTest {
     fun `parseRunning with FILES_PROGRESS set returns parsed currentDownloads`() {
         // Given: WorkInfo in RUNNING state with FILES_PROGRESS set
         val workInfo =
-            mockk<WorkInfo> {
-                every { state } returns WorkInfo.State.RUNNING
-                every { progress } returns
-                    mockk {
-                        every { getFloat(DownloadKey.OVERALL_PROGRESS.key, 0f) } returns 0.5f
-                        every { getInt(DownloadKey.MODELS_COMPLETE.key, 0) } returns 1
-                        every { getInt(DownloadKey.MODELS_TOTAL.key, any()) } returns 1
-                        every { getDouble(DownloadKey.SPEED_MBPS.key, 0.0) } returns 12.0
-                        every { getLong(DownloadKey.ETA_SECONDS.key, -1L) } returns 120L
-                        every { getStringArray(DownloadKey.FILES_PROGRESS.key) } returns
+            workInfo(
+                state = WorkInfo.State.RUNNING,
+                progress =
+                    progressData(
+                        overallProgress = 0.5f,
+                        modelsComplete = 1,
+                        modelsTotal = 1,
+                        speedMbps = 12.0,
+                        etaSeconds = 120L,
+                        filesProgress =
                             arrayOf(
                                 "model.gguf|1000000|1000000|COMPLETE|0.0|sha1",
-                            )
-                    }
-                every { outputData } returns
-                    mockk {
-                        every { getString(any()) } returns null
-                    }
-            }
+                            ),
+                    ),
+            )
 
         val currentDownloads =
             listOf(
@@ -464,22 +471,21 @@ class WorkProgressParserTest {
     @Test
     fun `parseRunning with failed file returns error status and message`() {
         val workInfo =
-            mockk<WorkInfo> {
-                every { state } returns WorkInfo.State.RUNNING
-                every { progress } returns
-                    mockk {
-                        every { getFloat(DownloadKey.OVERALL_PROGRESS.key, 0f) } returns 0f
-                        every { getInt(DownloadKey.MODELS_COMPLETE.key, 0) } returns 0
-                        every { getInt(DownloadKey.MODELS_TOTAL.key, any()) } returns 1
-                        every { getDouble(DownloadKey.SPEED_MBPS.key, 0.0) } returns 0.0
-                        every { getLong(DownloadKey.ETA_SECONDS.key, -1L) } returns -1L
-                        every { getStringArray(DownloadKey.FILES_PROGRESS.key) } returns
+            workInfo(
+                state = WorkInfo.State.RUNNING,
+                progress =
+                    progressData(
+                        overallProgress = 0f,
+                        modelsComplete = 0,
+                        modelsTotal = 1,
+                        speedMbps = 0.0,
+                        etaSeconds = -1L,
+                        filesProgress =
                             arrayOf(
                                 "realvis_xl_v5_dmd2.gguf|0|3504485672|FAILED|0.0|sha-sdxl",
-                            )
-                    }
-                every { outputData } returns mockk { every { getString(any()) } returns null }
-            }
+                            ),
+                    ),
+            )
 
         val currentDownloads =
             listOf(
@@ -505,22 +511,18 @@ class WorkProgressParserTest {
     fun `parseRunning with empty FILES_PROGRESS returns empty currentDownloads`() {
         // Given: WorkInfo in RUNNING state with empty FILES_PROGRESS array
         val workInfo =
-            mockk<WorkInfo> {
-                every { state } returns WorkInfo.State.RUNNING
-                every { progress } returns
-                    mockk {
-                        every { getFloat(DownloadKey.OVERALL_PROGRESS.key, 0f) } returns 0f
-                        every { getInt(DownloadKey.MODELS_COMPLETE.key, 0) } returns 0
-                        every { getInt(DownloadKey.MODELS_TOTAL.key, any()) } returns 0
-                        every { getDouble(DownloadKey.SPEED_MBPS.key, 0.0) } returns 0.0
-                        every { getLong(DownloadKey.ETA_SECONDS.key, -1L) } returns -1L
-                        every { getStringArray(DownloadKey.FILES_PROGRESS.key) } returns emptyArray()
-                    }
-                every { outputData } returns
-                    mockk {
-                        every { getString(any()) } returns null
-                    }
-            }
+            workInfo(
+                state = WorkInfo.State.RUNNING,
+                progress =
+                    progressData(
+                        overallProgress = 0f,
+                        modelsComplete = 0,
+                        modelsTotal = 0,
+                        speedMbps = 0.0,
+                        etaSeconds = -1L,
+                        filesProgress = emptyArray(),
+                    ),
+            )
 
         // When: Parse
         val result = parser.parse(workInfo, emptyList())

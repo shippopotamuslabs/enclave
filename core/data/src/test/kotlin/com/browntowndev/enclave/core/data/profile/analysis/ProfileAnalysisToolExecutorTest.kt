@@ -1,16 +1,13 @@
 package com.browntowndev.enclave.core.data.profile.analysis
 
+import com.browntowndev.enclave.core.data.FakeProfileCorpusDao
+import com.browntowndev.enclave.core.data.FakeProfileFindingsDao
 import com.browntowndev.enclave.core.data.local.ProfileCorpusConversationEntity
-import com.browntowndev.enclave.core.data.local.ProfileCorpusDao
 import com.browntowndev.enclave.core.data.local.ProfileCorpusMessageEntity
-import com.browntowndev.enclave.core.data.local.ProfileFindingsDao
 import com.browntowndev.enclave.core.data.local.ProfileFindingsEntity
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ProfileAnalysisTools
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
@@ -22,8 +19,8 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class ProfileAnalysisToolExecutorTest {
-    private val corpusDao = mockk<ProfileCorpusDao>()
-    private val findingsDao = mockk<ProfileFindingsDao>()
+    private val corpusDao = FakeProfileCorpusDao()
+    private val findingsDao = FakeProfileFindingsDao()
     private lateinit var executor: ProfileAnalysisToolExecutor
 
     private val runId = "run-123"
@@ -64,7 +61,7 @@ class ProfileAnalysisToolExecutorTest {
     @Test
     fun `PP-90 list_conversations returns paginated metadata`() =
         runTest {
-            coEvery { corpusDao.getSelectedConversations(runId) } returns listOf(sampleConversation)
+            corpusDao.selectedConversationsResult = listOf(sampleConversation)
 
             val result =
                 executor.execute(
@@ -83,7 +80,7 @@ class ProfileAnalysisToolExecutorTest {
     fun `PP-91 list_conversations filters by min_score`() =
         runTest {
             val lowScore = sampleConversation.copy(id = "conv-low", signalScore = 0.05f)
-            coEvery { corpusDao.getSelectedConversations(runId) } returns listOf(sampleConversation, lowScore)
+            corpusDao.selectedConversationsResult = listOf(sampleConversation, lowScore)
 
             val result =
                 executor.execute(
@@ -108,8 +105,8 @@ class ProfileAnalysisToolExecutorTest {
     @Test
     fun `PP-92 read_conversation returns messages for valid id`() =
         runTest {
-            coEvery { corpusDao.getSelectedConversations(runId) } returns listOf(sampleConversation)
-            coEvery { corpusDao.getMessagesPage("conv-1", 15, 0) } returns
+            corpusDao.selectedConversationsResult = listOf(sampleConversation)
+            corpusDao.messagesPageResults[Triple("conv-1", 15, 0)] =
                 listOf(
                     ProfileCorpusMessageEntity(
                         conversationId = "conv-1",
@@ -136,7 +133,7 @@ class ProfileAnalysisToolExecutorTest {
     @Test
     fun `PP-93 read_conversation returns error for unknown id`() =
         runTest {
-            coEvery { corpusDao.getSelectedConversations(runId) } returns emptyList()
+            corpusDao.selectedConversationsResult = emptyList()
 
             val result =
                 executor.execute(
@@ -154,7 +151,7 @@ class ProfileAnalysisToolExecutorTest {
     @Test
     fun `PP-94 search_conversations returns matching results`() =
         runTest {
-            coEvery { corpusDao.searchSelectedConversations(runId, "%procrastinate%", 5) } returns listOf(sampleConversation)
+            corpusDao.searchSelectedResult = listOf(sampleConversation)
 
             val result =
                 executor.execute(
@@ -174,7 +171,6 @@ class ProfileAnalysisToolExecutorTest {
     @Test
     fun `PP-95 record_finding persists to findings dao`() =
         runTest {
-            coEvery { findingsDao.insert(any()) } returns 1L
 
             val result =
                 executor.execute(
@@ -186,13 +182,13 @@ class ProfileAnalysisToolExecutorTest {
 
             val json = Json.parseToJsonElement(result.resultJson).jsonObject
             assertEquals("recorded", json["status"]!!.jsonPrimitive.content)
-            coVerify { findingsDao.insert(match { it.corpusRunId == runId && it.category == "EVIDENCE" }) }
+            assertTrue(findingsDao.insertCalls.any { it.corpusRunId == runId && it.category == "EVIDENCE" })
         }
 
     @Test
     fun `PP-96 read_findings returns all findings without filter`() =
         runTest {
-            coEvery { findingsDao.getAll(runId) } returns
+            findingsDao.getAllResult =
                 listOf(
                     ProfileFindingsEntity(id = "f1", corpusRunId = runId, category = "EVIDENCE", content = "Finding A"),
                     ProfileFindingsEntity(id = "f2", corpusRunId = runId, category = "PATTERN", content = "Finding B"),
@@ -211,7 +207,7 @@ class ProfileAnalysisToolExecutorTest {
     @Test
     fun `PP-97 read_findings with category filter calls getByCategory`() =
         runTest {
-            coEvery { findingsDao.getByCategory(runId, "PATTERN") } returns
+            findingsDao.getByCategoryResults["PATTERN"] =
                 listOf(
                     ProfileFindingsEntity(id = "f2", corpusRunId = runId, category = "PATTERN", content = "Pattern found"),
                 )
@@ -223,7 +219,7 @@ class ProfileAnalysisToolExecutorTest {
 
             val json = Json.parseToJsonElement(result.resultJson).jsonObject
             assertEquals(1, json["findings"]!!.jsonArray.size)
-            coVerify { findingsDao.getByCategory(runId, "PATTERN") }
+            assertEquals(listOf(runId to "PATTERN"), findingsDao.getByCategoryCalls)
         }
 
     @Test
@@ -242,7 +238,7 @@ class ProfileAnalysisToolExecutorTest {
             val selected = sampleConversation.copy(id = "selected-conv", selectedForAnalysis = true)
             val unselected = sampleConversation.copy(id = "unselected-conv", selectedForAnalysis = false)
 
-            coEvery { corpusDao.getSelectedConversations(runId) } returns listOf(selected)
+            corpusDao.selectedConversationsResult = listOf(selected)
 
             // List tool should only return the selected one
             val listResult =

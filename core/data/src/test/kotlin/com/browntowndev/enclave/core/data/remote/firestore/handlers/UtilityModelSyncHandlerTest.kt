@@ -1,3 +1,7 @@
+@file:Suppress("ForbiddenMockKInTests")
+
+// MockK retained only for the Firebase Firestore SDK surface (DocumentSnapshot / FirebaseFirestore), which has no JVM fake.
+
 package com.browntowndev.enclave.core.data.remote.firestore.handlers
 
 import androidx.room.Room
@@ -5,16 +9,12 @@ import androidx.test.core.app.ApplicationProvider
 import com.browntowndev.enclave.core.data.local.EnclaveDatabase
 import com.browntowndev.enclave.core.data.local.UtilityModelEntity
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncContext
+import com.browntowndev.enclave.core.data.remote.firestore.testSyncContext
 import com.browntowndev.enclave.core.data.remote.testFirestoreSyncDaos
-import com.browntowndev.enclave.core.data.repository.FakeLocalDataEncryptionService
-import com.browntowndev.enclave.core.data.security.SensitivePersistenceSelfHealer
 import com.browntowndev.enclave.domain.model.config.UtilityModelId
 import com.browntowndev.enclave.domain.model.config.UtilityType
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
 import com.google.firebase.firestore.DocumentSnapshot
-import com.google.firebase.firestore.FirebaseFirestore
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
@@ -25,7 +25,6 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.robolectric.annotation.Config
 import tech.apter.junit.jupiter.robolectric.RobolectricExtension
-import java.util.concurrent.atomic.AtomicBoolean
 
 @ExtendWith(RobolectricExtension::class)
 @Config(sdk = [34])
@@ -163,21 +162,6 @@ class UtilityModelSyncHandlerTest {
             assertEquals("keep.bin", dao.getByUtilityType(UtilityType.WHISPER)?.localFilename)
         }
 
-    private fun createContext(database: EnclaveDatabase): FirestoreSyncContext {
-        val localEncryption = FakeLocalDataEncryptionService()
-        val loggingPort = mockk<LoggingPort>(relaxed = true)
-        return FirestoreSyncContext(
-            firestore = mockk<FirebaseFirestore>(relaxed = true),
-            daos = testFirestoreSyncDaos(utilityModelsDao = database.utilityModelsDao()),
-            localEncryption = localEncryption,
-            sensitiveSelfHealer = SensitivePersistenceSelfHealer(localEncryption, loggingPort),
-            firestoreSensitiveFieldRepairer = mockk(relaxed = true),
-            cryptoManager = mockk<CryptoManagerPort>(relaxed = true),
-            loggingPort = loggingPort,
-            apiKeyManager = mockk(relaxed = true),
-            embeddingCoordinator = mockk(relaxed = true),
-            userIdProvider = { "user-1" },
-            purgeInProgress = AtomicBoolean(false),
-        )
-    }
+    private fun createContext(database: EnclaveDatabase): FirestoreSyncContext =
+        testSyncContext(daos = testFirestoreSyncDaos(utilityModelsDao = database.utilityModelsDao()))
 }

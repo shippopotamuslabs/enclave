@@ -1,25 +1,19 @@
 package com.browntowndev.enclave.core.data.remote.firestore
 
-import com.browntowndev.enclave.core.data.remote.testFirestoreSyncDaos
-import com.browntowndev.enclave.core.data.repository.FakeLocalDataEncryptionService
-import com.browntowndev.enclave.core.data.security.SensitivePersistenceSelfHealer
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.core.testing.FakeCryptoManagerPort
 import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
-import com.google.firebase.firestore.FirebaseFirestore
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Test
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicReference
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
 /**
  * Coverage for the vault-unlock gate on `FirestoreListenerCoordinator.startListening()`
@@ -30,17 +24,20 @@ import java.util.concurrent.atomic.AtomicReference
  * to entity handlers, including `SearchToolSettingsSyncHandler`).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class FirestoreListenerCoordinatorSearchSettingsTest {
     @Test
     fun `S-LISTENER-001 listener does not apply search_tool_settings events while vault is locked`() =
         runTest {
             val testDispatcher = StandardTestDispatcher(testScheduler)
             val externalScope = TestScope(testDispatcher)
-            val cryptoManager = mockk<CryptoManagerPort>()
-            every { cryptoManager.hasCachedKey() } returns false
+            val cryptoManager = FakeCryptoManagerPort()
+            cryptoManager.hasCachedKeyValue = false
 
-            val feedClient = mockk<FirestoreSyncEventFeedClient>(relaxed = true)
-            val dispatcher = mockk<FirestoreSyncEventDispatcher>(relaxed = true)
+            val gateway = FakeFeedQueryGateway()
+            val feedClient = FirestoreSyncEventFeedClient(gateway = gateway)
+            val dispatcher = RecordingSyncEventDispatcher()
             val stateStore = FirestoreSyncStateStore()
 
             val coordinator =
@@ -59,7 +56,7 @@ class FirestoreListenerCoordinatorSearchSettingsTest {
             // Gate contract: when the vault is locked, attachLiveListener is never
             // called. This guarantees the search_tool_settings handler (and every
             // other handler downstream of the sync_events feed) is not invoked.
-            coVerify(exactly = 0) { feedClient.attachLiveListener(any(), any(), any()) }
+            assertEquals(0, gateway.listenCalls.size)
         }
 
     @Test
@@ -67,25 +64,15 @@ class FirestoreListenerCoordinatorSearchSettingsTest {
         runTest {
             val testDispatcher = StandardTestDispatcher(testScheduler)
             val externalScope = TestScope(testDispatcher)
-            val gateState = AtomicReference(false)
-            val cryptoManager = mockk<CryptoManagerPort>()
-            every { cryptoManager.hasCachedKey() } answers { gateState.get() }
+            // The first startListening() call must observe a locked vault; flipping
+            // this knob to true mirrors the unlock before the second start.
+            val cryptoManager = FakeCryptoManagerPort()
+            cryptoManager.hasCachedKeyValue = false
 
-            // The first startListening() call must observe a locked vault. The
-            // listener callback is captured into a local var so we can drive a
-            // synthetic event after unlocking the vault.
-            var listenerCallback: (suspend (List<FirestoreSyncEvent>) -> Unit)? = null
-            val capturedRegistration = mockk<FirestoreSyncEventListenerRegistration>(relaxed = true)
+            val gateway = FakeFeedQueryGateway()
+            val feedClient = FirestoreSyncEventFeedClient(gateway = gateway)
 
-            val feedClient = mockk<FirestoreSyncEventFeedClient>(relaxed = true)
-            coEvery {
-                feedClient.attachLiveListener(any(), any(), any())
-            } answers {
-                listenerCallback = thirdArg<suspend (List<FirestoreSyncEvent>) -> Unit>()
-                capturedRegistration
-            }
-
-            val dispatcher = mockk<FirestoreSyncEventDispatcher>(relaxed = true)
+            val dispatcher = RecordingSyncEventDispatcher()
             val stateStore = FirestoreSyncStateStore()
 
             val coordinator =
@@ -101,17 +88,17 @@ class FirestoreListenerCoordinatorSearchSettingsTest {
             coordinator.startListening()
             externalScope.advanceUntilIdle()
             advanceUntilIdle()
-            coVerify(exactly = 0) { feedClient.attachLiveListener(any(), any(), any()) }
+            assertEquals(0, gateway.listenCalls.size)
 
             // Unlock the vault and try again. The second startListening() call
             // observes hasCachedKey() == true and must attach the listener.
-            gateState.set(true)
+            cryptoManager.hasCachedKeyValue = true
             coordinator.startListening()
             externalScope.advanceUntilIdle()
             advanceUntilIdle()
             runCurrent()
 
-            val callback = listenerCallback
+            val callback = gateway.listenerCallbacks.singleOrNull()
             assertNotNull(callback, "after unlock, startListening must attach a listener")
 
             // Drive a synthetic live event for the search_tool_settings singleton.
@@ -137,7 +124,7 @@ class FirestoreListenerCoordinatorSearchSettingsTest {
             advanceUntilIdle()
 
             // The event must have been dispatched to the applier exactly once.
-            coVerify(exactly = 1) { dispatcher.apply("test-user-id", syntheticEvent) }
+            assertEquals(listOf("test-user-id" to syntheticEvent), dispatcher.applyCalls)
         }
 
     private fun buildCoordinator(
@@ -147,21 +134,10 @@ class FirestoreListenerCoordinatorSearchSettingsTest {
         dispatcher: FirestoreSyncEventDispatcher,
         stateStore: FirestoreSyncStateStore,
     ): FirestoreListenerCoordinator {
-        val localEncryption = FakeLocalDataEncryptionService()
-        val loggingPort = mockk<LoggingPort>(relaxed = true)
         val ctx =
-            FirestoreSyncContext(
-                firestore = mockk<FirebaseFirestore>(relaxed = true),
-                daos = testFirestoreSyncDaos(),
-                localEncryption = localEncryption,
-                sensitiveSelfHealer = SensitivePersistenceSelfHealer(localEncryption, loggingPort),
-                firestoreSensitiveFieldRepairer = mockk(relaxed = true),
+            testSyncContext(
                 cryptoManager = cryptoManager,
-                loggingPort = loggingPort,
-                apiKeyManager = mockk(relaxed = true),
-                embeddingCoordinator = mockk(relaxed = true),
-                userIdProvider = { "test-user-id" },
-                purgeInProgress = AtomicBoolean(false),
+                userId = "test-user-id",
             )
         return FirestoreListenerCoordinator(
             ctx = ctx,

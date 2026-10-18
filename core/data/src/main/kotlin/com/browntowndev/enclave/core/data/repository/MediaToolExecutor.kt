@@ -15,13 +15,13 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class MediaToolExecutor
+open class MediaToolExecutor
     @Inject
     constructor(
         private val generateMediaUseCase: GenerateMediaUseCase,
         private val loggingPort: LoggingPort,
     ) : ToolExecutorPort {
-        override suspend fun execute(request: ToolCallRequest): ToolExecutionResult =
+        open override suspend fun execute(request: ToolCallRequest): ToolExecutionResult =
             when (request.toolName) {
                 ToolDefinition.GENERATE_IMAGE.name,
                 ToolDefinition.GENERATE_VIDEO.name,

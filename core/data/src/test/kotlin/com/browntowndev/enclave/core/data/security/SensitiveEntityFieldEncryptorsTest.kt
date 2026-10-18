@@ -13,8 +13,7 @@ import com.browntowndev.enclave.domain.model.chat.MessageState
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import io.mockk.mockk
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -23,7 +22,7 @@ class SensitiveEntityFieldEncryptorsTest {
     private val healer =
         SensitivePersistenceSelfHealer(
             localEncryption = FakeLocalDataEncryptionService(),
-            loggingPort = mockk<LoggingPort>(relaxed = true),
+            loggingPort = FakeLoggingPort(),
         )
 
     @Test

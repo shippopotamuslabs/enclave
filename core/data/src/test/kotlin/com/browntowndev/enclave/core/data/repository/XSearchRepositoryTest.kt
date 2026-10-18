@@ -1,28 +1,46 @@
 package com.browntowndev.enclave.core.data.repository
 
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
 import com.browntowndev.enclave.core.data.security.ApiKeyManager
-import io.mockk.every
-import io.mockk.mockk
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import okhttp3.OkHttpClient
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
+import org.robolectric.annotation.Config as RoboConfig
 
+/**
+ * Translated from MockK (ENC-28): only the pure `mapResponse` mapping is
+ * exercised, so the repository is the real class wired over a real
+ * OkHttpClient and a real ApiKeyManager over cleared Robolectric prefs
+ * (its `get` returns null, as the former stub did). No HTTP call is made.
+ */
+@ExtendWith(RobolectricExtension::class)
+@RoboConfig(sdk = [34])
 class XSearchRepositoryTest {
-    private val apiKeyManager = mockk<ApiKeyManager>()
+    private lateinit var repository: XSearchRepository
 
-    private val repository =
-        XSearchRepository(
-            okHttpClient = mockk(),
-            apiKeyManager = apiKeyManager,
-            userTimelineFetcher = mockk(),
-        )
-
-    init {
-        every { apiKeyManager.get(ApiKeyManager.X_SEARCH_ALIAS) } returns null
+    @BeforeEach
+    fun setup() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val apiKeyManager: ApiKeyManager =
+            testApiKeyManager(context, CoroutineScope(SupervisorJob() + Dispatchers.Default), "x_search_test_prefs")
+        repository =
+            XSearchRepository(
+                okHttpClient = OkHttpClient(),
+                apiKeyManager = apiKeyManager,
+                userTimelineFetcher = XUserTimelineFetcher(OkHttpClient(), apiKeyManager),
+            )
     }
 
     private val json = Json { ignoreUnknownKeys = true }

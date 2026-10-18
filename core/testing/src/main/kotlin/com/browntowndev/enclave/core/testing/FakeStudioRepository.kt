@@ -236,7 +236,14 @@ class FakeStudioRepository : StudioRepositoryPort {
             ?: ephemeralState.value.firstOrNull { it.id == id }
     }
 
-    override suspend fun getMediaPendingDownload(): List<StudioMediaAsset> = pendingDownload
+    /** Number of [getMediaPendingDownload] calls so far (ENC-28). */
+    var getMediaPendingDownloadCallCount = 0
+        private set
+
+    override suspend fun getMediaPendingDownload(): List<StudioMediaAsset> {
+        getMediaPendingDownloadCallCount++
+        return pendingDownload
+    }
 
     override suspend fun materializeDownloadedMedia(id: String, bytes: ByteArray) {
         mediaBytes[id] = bytes

@@ -61,7 +61,7 @@ private data class GetContextError(
 )
 
 @Singleton
-class GetMessageContextToolExecutor
+open class GetMessageContextToolExecutor
     @Inject
     constructor(
         private val loggingPort: LoggingPort,
@@ -73,7 +73,7 @@ class GetMessageContextToolExecutor
             private const val MAX_CONTENT_LENGTH = 500
         }
 
-        override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
+        open override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
             require(request.toolName == ToolDefinition.GET_MESSAGE_CONTEXT.name) {
                 "Unsupported tool: ${request.toolName}"
             }

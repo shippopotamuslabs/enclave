@@ -1,29 +1,35 @@
 package com.browntowndev.enclave.core.data.sync
 
 import android.content.Context
+import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import androidx.work.Configuration
 import androidx.work.ListenableWorker
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.testing.TestListenableWorkerBuilder
-import com.browntowndev.enclave.core.data.local.DocumentDao
+import androidx.work.testing.WorkManagerTestInitHelper
 import com.browntowndev.enclave.core.data.local.DocumentEntity
-import com.browntowndev.enclave.core.data.local.EmbeddingDao
-import com.browntowndev.enclave.core.data.security.LocalDataEncryptionService
+import com.browntowndev.enclave.core.data.local.EnclaveDatabase
+import com.browntowndev.enclave.core.data.local.MessageDao
+import com.browntowndev.enclave.core.data.local.dao.message.MessageDaoPersist
+import com.browntowndev.enclave.core.data.repository.FakeLocalDataEncryptionService
+import com.browntowndev.enclave.core.testing.FakeEmbeddingEngine
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeMemoriesRepository
+import com.browntowndev.enclave.core.testing.FakeMessageRepository
+import com.browntowndev.enclave.domain.model.chat.ChatId
+import com.browntowndev.enclave.domain.model.chat.Content
+import com.browntowndev.enclave.domain.model.chat.Message
+import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.repository.MemoriesRepository
-import com.browntowndev.enclave.domain.port.repository.MessageRepository
-import com.google.common.util.concurrent.Futures
-import com.google.common.util.concurrent.ListenableFuture
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.just
-import io.mockk.mockk
-import io.mockk.runs
-import io.mockk.verify
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.robolectric.annotation.Config
@@ -32,19 +38,100 @@ import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 @ExtendWith(RobolectricExtension::class)
 @Config(sdk = [34])
 class EmbeddingRegenerationTddRedTest {
-    @Suppress("UNCHECKED_CAST")
-    private fun makeWorkerParams(): WorkerParameters {
-        val params = mockk<WorkerParameters>(relaxed = true)
-        val updater = mockk<androidx.work.ProgressUpdater>(relaxed = true)
-        every { params.progressUpdater } returns updater
-        every { updater.updateProgress(any(), any(), any()) } returns (Futures.immediateFuture(null) as ListenableFuture<Void>)
-        return params
+    private lateinit var context: Context
+    private lateinit var workManager: WorkManager
+    private lateinit var database: EnclaveDatabase
+
+    /** Scope driving worker-test coordinators; settled explicitly per test. */
+    private val workerCoordinatorScope = TestScope()
+    private val loggingPort = FakeLoggingPort()
+
+    @BeforeEach
+    fun setup() {
+        context = ApplicationProvider.getApplicationContext()
+        // Both executors synchronous (the DownloadWorkScheduler / TestDoubles house
+        // pattern): scheduled work stays ENQUEUED under the test driver, so
+        // unique-work scheduling is observable as WorkInfo state on the real
+        // WorkManager. A no-op main executor drops WorkManager's main-thread
+        // state/constraint posts and lets work start mid-test.
+        val config =
+            Configuration
+                .Builder()
+                .setTaskExecutor(androidx.work.impl.utils.SynchronousExecutor())
+                .setExecutor(androidx.work.impl.utils.SynchronousExecutor())
+                .build()
+        WorkManagerTestInitHelper.initializeTestWorkManager(context, config)
+        workManager = WorkManager.getInstance(context)
+        database =
+            Room
+                .inMemoryDatabaseBuilder(context, EnclaveDatabase::class.java)
+                .allowMainThreadQueries()
+                .build()
+    }
+
+    @AfterEach
+    fun tearDown() {
+        database.close()
+    }
+
+    private fun messageDao(): MessageDao =
+        MessageDao(
+            database.messageQueryDao(),
+            database.messageCommandDao(),
+            database.messageSyncCommandDao(),
+            MessageDaoPersist(database, database.messageCommandDao(), database.messageSyncCommandDao()),
+        )
+
+    private fun regenWorkCount(): Int = workManager.getWorkInfosForUniqueWork("enclave_embedding_regen").get().size
+
+    private fun newWorkerCoordinator(): EmbeddingRegenerationCoordinator =
+        EmbeddingRegenerationCoordinator(workManager, workerCoordinatorScope)
+
+    private fun settleCoordinator() = workerCoordinatorScope.testScheduler.advanceUntilIdle()
+
+    private fun buildWorker(
+        coordinator: EmbeddingRegenerationCoordinator,
+        messageRepository: FakeMessageRepository = FakeMessageRepository(),
+        embeddingEngine: EmbeddingEnginePort = FakeEmbeddingEngine(),
+        documentDao: FakeDocumentDao = FakeDocumentDao(),
+        progressManager: EmbeddingProgressManager = EmbeddingProgressManager(workManager, TestScope()),
+        params: WorkerParameters = realWorkerParameters(),
+    ): EmbeddingRegenerationWorker =
+        EmbeddingRegenerationWorker(
+            context,
+            params,
+            coordinator,
+            messageRepository,
+            FakeMemoriesRepository(),
+            messageDao(),
+            database.memoriesDao(),
+            documentDao,
+            FakeEmbeddingDao(),
+            embeddingEngine,
+            progressManager,
+            loggingPort,
+            FakeLocalDataEncryptionService(),
+        )
+
+    /** [EmbeddingProgressManager] subclass (ENC-28 open seam) recording direct progress calls. */
+    private class RecordingProgressManager(
+        workManager: WorkManager,
+        scope: CoroutineScope,
+    ) : EmbeddingProgressManager(workManager, scope) {
+        val updateProgressCalls = mutableListOf<Pair<Int, Int>>()
+
+        override fun updateProgress(
+            current: Int,
+            total: Int,
+        ) {
+            updateProgressCalls += current to total
+            super.updateProgress(current, total)
+        }
     }
 
     @Test
     fun `SCENARIO-09 Embedding regeneration coordinator debounces worker scheduling`() =
         runTest {
-            val workManager = mockk<androidx.work.WorkManager>(relaxed = true)
             val coordinator = EmbeddingRegenerationCoordinator(workManager, this)
 
             coordinator.enqueueMessage("m1")
@@ -55,23 +142,12 @@ class EmbeddingRegenerationTddRedTest {
 
             // 200ms has elapsed since the first enqueue. Delay for 499ms more.
             testScheduler.advanceTimeBy(499)
-            verify(exactly = 0) {
-                workManager.enqueueUniqueWork(
-                    "enclave_embedding_regen",
-                    any<androidx.work.ExistingWorkPolicy>(),
-                    any<androidx.work.OneTimeWorkRequest>(),
-                )
-            }
+            // No unique work scheduled yet: the 500ms debounce has not fired.
+            assertEquals(0, regenWorkCount())
 
             // Advance 2ms more to cross the 500ms debounce window from last enqueue.
             testScheduler.advanceTimeBy(2)
-            verify(exactly = 1) {
-                workManager.enqueueUniqueWork(
-                    "enclave_embedding_regen",
-                    any<androidx.work.ExistingWorkPolicy>(),
-                    any<androidx.work.OneTimeWorkRequest>(),
-                )
-            }
+            assertEquals(1, regenWorkCount())
 
             val pending = coordinator.consumePending()
             assertEquals(listOf("m1", "m2"), pending.messageIds)
@@ -82,20 +158,14 @@ class EmbeddingRegenerationTddRedTest {
     @Test
     fun `SCENARIO-10 Embedding coordinator retains failed pending work`() =
         runTest {
-            val workManager = mockk<androidx.work.WorkManager>(relaxed = true)
             val coordinator = EmbeddingRegenerationCoordinator(workManager, this)
 
             coordinator.enqueueMessage("m1")
             coordinator.enqueueDocument("d1")
             testScheduler.advanceTimeBy(501)
-            // First debounce fires → 1 enqueueUniqueWork call.
-            verify(exactly = 1) {
-                workManager.enqueueUniqueWork(
-                    "enclave_embedding_regen",
-                    any<androidx.work.ExistingWorkPolicy>(),
-                    any<androidx.work.OneTimeWorkRequest>(),
-                )
-            }
+            // First debounce fires → one unique work request scheduled.
+            assertEquals(1, regenWorkCount())
+            val firstWorkId = workManager.getWorkInfosForUniqueWork("enclave_embedding_regen").get().single().id
 
             // Simulate: worker consumes, processing fails → items re-queued via markFailed.
             val pending = coordinator.consumePending()
@@ -104,54 +174,40 @@ class EmbeddingRegenerationTddRedTest {
 
             coordinator.markFailed(pending) // m1 and d1 are back in the pending queue
 
-            // Worker finishes → hasPendingLocked() is true → triggerWorker() → new debounce started.
+            // The scheduled worker has finished on the WorkManager side (terminal
+            // state), then the coordinator is notified as production does.
+            workManager.cancelUniqueWork("enclave_embedding_regen")
             coordinator.onWorkerFinished()
 
-            // 499ms in — second debounce has not yet fired.
+            // 499ms in — second debounce has not yet fired, still one work record
+            // (the cancelled first request; nothing new scheduled yet).
             testScheduler.advanceTimeBy(499)
-            verify(exactly = 1) {
-                workManager.enqueueUniqueWork(
-                    "enclave_embedding_regen",
-                    any<androidx.work.ExistingWorkPolicy>(),
-                    any<androidx.work.OneTimeWorkRequest>(),
-                )
-            }
+            assertEquals(1, regenWorkCount())
 
-            // Cross the 500ms window → second debounce fires → second enqueueUniqueWork call.
+            // Cross the 500ms window → second debounce fires → a second request is
+            // scheduled. Against a real WorkManager the cancelled first request's
+            // WorkSpec row is deleted by this follow-up enqueue (EnqueueRunnable
+            // prune), so the record count stays 1 — the FakeWorkManager-era
+            // expectation of 2 records cannot occur. The second scheduling is
+            // asserted in its observable form: the single remaining record is
+            // ENQUEUED and has a different id than the first request.
             testScheduler.advanceTimeBy(2)
-            verify(exactly = 2) {
-                workManager.enqueueUniqueWork(
-                    "enclave_embedding_regen",
-                    any<androidx.work.ExistingWorkPolicy>(),
-                    any<androidx.work.OneTimeWorkRequest>(),
-                )
-            }
+            assertEquals(1, regenWorkCount())
+            val secondWork = workManager.getWorkInfosForUniqueWork("enclave_embedding_regen").get().single()
+            assertEquals(WorkInfo.State.ENQUEUED, secondWork.state)
+            assertTrue(secondWork.id != firstWorkId)
         }
 
     @Test
     fun `SCENARIO-11 Embedding worker propagates cancellation and retries recoverable failures`() =
         runTest {
-            val coordinator = mockk<EmbeddingRegenerationCoordinator>(relaxed = true)
-            val messageRepository = mockk<MessageRepository>(relaxed = true)
-            val memoriesRepository = mockk<MemoriesRepository>(relaxed = true)
-            val messageDao = mockk<com.browntowndev.enclave.core.data.local.MessageDao>(relaxed = true)
-            val memoriesDao = mockk<com.browntowndev.enclave.core.data.local.MemoriesDao>(relaxed = true)
-            val documentDao = mockk<com.browntowndev.enclave.core.data.local.DocumentDao>(relaxed = true)
-            val embeddingDao = mockk<com.browntowndev.enclave.core.data.local.EmbeddingDao>(relaxed = true)
-            val embeddingEngine = mockk<EmbeddingEnginePort>(relaxed = true)
-            val progressManager = mockk<EmbeddingProgressManager>(relaxed = true)
-            val loggingPort = mockk<LoggingPort>(relaxed = true)
-            val localEncryption = mockk<LocalDataEncryptionService>(relaxed = true)
+            val coordinator = newWorkerCoordinator()
+            val messageRepository = FakeMessageRepository()
+            // Recoverable database error: the read itself throws.
+            messageRepository.getMessageByIdFailure = RuntimeException("DB locked timeout")
+            coordinator.enqueueMessage("msg1")
+            settleCoordinator()
 
-            // Recoverable database error retry test:
-            coEvery { coordinator.consumePending() } returnsMany
-                listOf(
-                    PendingWork(messageIds = listOf("msg1"), memoryIds = emptyList(), documentIds = emptyList()),
-                    PendingWork(emptyList(), emptyList(), emptyList()),
-                )
-            coEvery { messageRepository.getMessageById(any()) } throws RuntimeException("DB locked timeout")
-
-            val context = ApplicationProvider.getApplicationContext<Context>()
             val worker =
                 TestListenableWorkerBuilder<EmbeddingRegenerationWorker>(context)
                     .setWorkerFactory(
@@ -160,20 +216,10 @@ class EmbeddingRegenerationTddRedTest {
                                 appContext: Context,
                                 workerClassName: String,
                                 workerParameters: WorkerParameters,
-                            ) = EmbeddingRegenerationWorker(
-                                appContext,
-                                workerParameters,
-                                coordinator,
-                                messageRepository,
-                                memoriesRepository,
-                                messageDao,
-                                memoriesDao,
-                                documentDao,
-                                embeddingDao,
-                                embeddingEngine,
-                                progressManager,
-                                loggingPort,
-                                localEncryption,
+                            ) = buildWorker(
+                                coordinator = coordinator,
+                                messageRepository = messageRepository,
+                                params = workerParameters,
                             )
                         },
                     ).build()
@@ -186,143 +232,81 @@ class EmbeddingRegenerationTddRedTest {
     @Test
     fun `SCENARIO-12 Embedding worker writes progress through WorkManager progress data`() =
         runTest {
-            val coordinator = mockk<EmbeddingRegenerationCoordinator>(relaxed = true)
-            val messageRepository = mockk<MessageRepository>(relaxed = true)
-            val memoriesRepository = mockk<MemoriesRepository>(relaxed = true)
-            val messageDao = mockk<com.browntowndev.enclave.core.data.local.MessageDao>(relaxed = true)
-            val memoriesDao = mockk<com.browntowndev.enclave.core.data.local.MemoriesDao>(relaxed = true)
-            val documentDao = mockk<com.browntowndev.enclave.core.data.local.DocumentDao>(relaxed = true)
-            val embeddingDao = mockk<com.browntowndev.enclave.core.data.local.EmbeddingDao>(relaxed = true)
-            val embeddingEngine = mockk<EmbeddingEnginePort>(relaxed = true)
-            val progressManager = mockk<EmbeddingProgressManager>(relaxed = true)
-            val loggingPort = mockk<LoggingPort>(relaxed = true)
-            val localEncryption = mockk<LocalDataEncryptionService>(relaxed = true)
+            val coordinator = newWorkerCoordinator()
+            val messageRepository = FakeMessageRepository()
+            messageRepository.seed(
+                listOf("m1", "m2", "m3", "m4").map { Message(MessageId(it), ChatId("chat1"), Content("hello")) },
+            )
+            val embeddingEngine = FakeEmbeddingEngine()
+            embeddingEngine.uniformEmbedding = floatArrayOf(0f)
+            listOf("m1", "m2", "m3", "m4").forEach { coordinator.enqueueMessage(it) }
+            settleCoordinator()
 
-            val params = mockk<WorkerParameters>(relaxed = true)
-            val progressUpdater = mockk<androidx.work.ProgressUpdater>(relaxed = true)
-            every { params.progressUpdater } returns progressUpdater
-            // CoroutineWorker.setProgress() calls progressUpdater.updateProgress(...).await().
-            // Must return a completed ListenableFuture — not a GMS Task — so await() resolves.
-            @Suppress("UNCHECKED_CAST")
-            every { progressUpdater.updateProgress(any(), any(), any()) } returns (Futures.immediateFuture(null) as ListenableFuture<Void>)
-
-            coEvery { coordinator.consumePending() } returnsMany
-                listOf(
-                    PendingWork(messageIds = listOf("m1", "m2", "m3", "m4"), memoryIds = emptyList(), documentIds = emptyList()),
-                    PendingWork(emptyList(), emptyList(), emptyList()),
-                )
-            val mockMsg = mockk<com.browntowndev.enclave.domain.model.chat.Message>(relaxed = true)
-            every { mockMsg.content.text } returns "hello"
-            coEvery { messageRepository.getMessageById(any()) } returns mockMsg
-            coEvery { embeddingEngine.getEmbedding(any()) } returns floatArrayOf(0f)
-            coEvery { messageRepository.saveEmbedding(any(), any()) } just runs
-
-            val context = mockk<android.content.Context>(relaxed = true)
+            // CoroutineWorker.setProgress() calls progressUpdater.updateProgress(...),
+            // which the recording updater captures with an already-completed future.
+            val progressUpdater = RecordingProgressUpdater()
+            val progressManager = RecordingProgressManager(workManager, TestScope())
             val worker =
-                EmbeddingRegenerationWorker(
-                    context,
-                    params,
-                    coordinator,
-                    messageRepository,
-                    memoriesRepository,
-                    messageDao,
-                    memoriesDao,
-                    documentDao,
-                    embeddingDao,
-                    embeddingEngine,
-                    progressManager,
-                    loggingPort,
-                    localEncryption,
+                buildWorker(
+                    coordinator = coordinator,
+                    messageRepository = messageRepository,
+                    embeddingEngine = embeddingEngine,
+                    progressManager = progressManager,
+                    params = realWorkerParameters(progressUpdater),
                 )
 
             worker.doWork()
 
-            coVerify {
-                progressUpdater.updateProgress(
-                    any(),
-                    any(),
-                    match { data ->
-                        data.getInt("current", -1) == 2 &&
-                            data.getInt("total", -1) == 4 &&
-                            data.getFloat("fraction", -1f) == 0.5f
-                    },
-                )
-            }
+            assertTrue(
+                progressUpdater.updates.any { data ->
+                    data.getInt("current", -1) == 2 &&
+                        data.getInt("total", -1) == 4 &&
+                        data.getFloat("fraction", -1f) == 0.5f
+                },
+            )
 
-            // Verify worker did not call updateProgress directly on EmbeddingProgressManager
-            verify(exactly = 0) { progressManager.updateProgress(any<Int>(), any<Int>()) }
+            // Worker did not call updateProgress directly on EmbeddingProgressManager
+            assertEquals(0, progressManager.updateProgressCalls.size)
         }
 
     @Test
     fun `SCENARIO-13 Embedding worker skips malformed documents without failing the worker`() =
         runTest {
-            val coordinator = mockk<EmbeddingRegenerationCoordinator>(relaxed = true)
-            val messageRepository = mockk<MessageRepository>(relaxed = true)
-            val memoriesRepository = mockk<MemoriesRepository>(relaxed = true)
-            val messageDao = mockk<com.browntowndev.enclave.core.data.local.MessageDao>(relaxed = true)
-            val memoriesDao = mockk<com.browntowndev.enclave.core.data.local.MemoriesDao>(relaxed = true)
-            val documentDao = mockk<DocumentDao>(relaxed = true)
-            val embeddingDao = mockk<EmbeddingDao>(relaxed = true)
-            val embeddingEngine = mockk<EmbeddingEnginePort>(relaxed = true)
-            val progressManager = mockk<EmbeddingProgressManager>(relaxed = true)
-            val loggingPort = mockk<LoggingPort>(relaxed = true)
-            val localEncryption = mockk<LocalDataEncryptionService>(relaxed = true)
-
-            coEvery { coordinator.consumePending() } returnsMany
-                listOf(
-                    PendingWork(messageIds = emptyList(), memoryIds = emptyList(), documentIds = listOf("doc1", "doc2", "doc3")),
-                    PendingWork(emptyList(), emptyList(), emptyList()),
-                )
-
-            val doc1 =
+            val coordinator = newWorkerCoordinator()
+            // Stored payloads pass through the fake encryption service unchanged:
+            // doc1/doc3 hold valid block JSON; doc2's payload is not valid JSON, so
+            // parsing it fails exactly where a decryption failure surfaced before.
+            val documentDao = FakeDocumentDao()
+            documentDao.documents["doc1"] =
                 DocumentEntity(
                     "doc1",
-                    com.browntowndev.enclave.domain.model.chat
-                        .MessageId("m1"),
-                    "json1",
+                    MessageId("m1"),
+                    """{"blocks": [{"type":"paragraph","text":"content1"}]}""",
                     "title1",
                 )
-            val doc2 =
+            documentDao.documents["doc2"] =
                 DocumentEntity(
                     "doc2",
-                    com.browntowndev.enclave.domain.model.chat
-                        .MessageId("m2"),
+                    MessageId("m2"),
                     "json2",
                     "title2",
                 )
-            val doc3 =
+            documentDao.documents["doc3"] =
                 DocumentEntity(
                     "doc3",
-                    com.browntowndev.enclave.domain.model.chat
-                        .MessageId("m3"),
-                    "json3",
+                    MessageId("m3"),
+                    """{"blocks": [{"type":"paragraph","text":"content3"}]}""",
                     "title3",
                 )
+            val embeddingEngine = FakeEmbeddingEngine()
+            listOf("doc1", "doc2", "doc3").forEach { coordinator.enqueueDocument(it) }
+            settleCoordinator()
 
-            coEvery { documentDao.getDocumentById("doc1") } returns doc1
-            coEvery { documentDao.getDocumentById("doc2") } returns doc2
-            coEvery { documentDao.getDocumentById("doc3") } returns doc3
-
-            every { localEncryption.decryptString("json1", any()) } returns """{"blocks": [{"type":"paragraph","text":"content1"}]}"""
-            every { localEncryption.decryptString("json3", any()) } returns """{"blocks": [{"type":"paragraph","text":"content3"}]}"""
-            every { localEncryption.decryptString("json2", any()) } throws RuntimeException("Decryption failed")
-
-            val context = mockk<android.content.Context>(relaxed = true)
             val worker =
-                EmbeddingRegenerationWorker(
-                    context,
-                    makeWorkerParams(),
-                    coordinator,
-                    messageRepository,
-                    memoriesRepository,
-                    messageDao,
-                    memoriesDao,
-                    documentDao,
-                    embeddingDao,
-                    embeddingEngine,
-                    progressManager,
-                    loggingPort,
-                    localEncryption,
+                buildWorker(
+                    coordinator = coordinator,
+                    embeddingEngine = embeddingEngine,
+                    documentDao = documentDao,
                 )
 
             val result = worker.doWork()
@@ -332,142 +316,61 @@ class EmbeddingRegenerationTddRedTest {
                     .success(),
                 result,
             )
-            verify(exactly = 1) { loggingPort.error(any(), match { it.contains("Failed to parse document JSON") }, any()) }
-            coVerify(exactly = 1) { embeddingEngine.getEmbedding("content1") }
-            coVerify(exactly = 1) { embeddingEngine.getEmbedding("content3") }
-            coVerify(exactly = 0) { embeddingEngine.getEmbedding("content2") }
+            assertEquals(
+                1,
+                loggingPort.errorCalls.count { it.message.contains("Failed to parse document JSON") },
+            )
+            assertEquals(1, embeddingEngine.queries.count { it == "content1" })
+            assertEquals(1, embeddingEngine.queries.count { it == "content3" })
+            assertEquals(0, embeddingEngine.queries.count { it == "content2" })
         }
 
     @Test
     fun `SCENARIO-14 Embedding worker serializes engine calls by default`() =
         runTest {
-            val coordinator = mockk<EmbeddingRegenerationCoordinator>(relaxed = true)
-            val messageRepository = mockk<MessageRepository>(relaxed = true)
-            val memoriesRepository = mockk<MemoriesRepository>(relaxed = true)
-            val messageDao = mockk<com.browntowndev.enclave.core.data.local.MessageDao>(relaxed = true)
-            val memoriesDao = mockk<com.browntowndev.enclave.core.data.local.MemoriesDao>(relaxed = true)
-            val documentDao = mockk<DocumentDao>(relaxed = true)
-            val embeddingDao = mockk<EmbeddingDao>(relaxed = true)
-            val embeddingEngine = mockk<EmbeddingEnginePort>(relaxed = true)
-            val progressManager = mockk<EmbeddingProgressManager>(relaxed = true)
-            val loggingPort = mockk<LoggingPort>(relaxed = true)
-            val localEncryption = mockk<LocalDataEncryptionService>(relaxed = true)
+            val coordinator = newWorkerCoordinator()
+            val messageRepository = FakeMessageRepository()
+            messageRepository.seed(
+                listOf("m1", "m2", "m3", "m4", "m5").map { Message(MessageId(it), ChatId("chat1"), Content("hello")) },
+            )
+            val embeddingEngine = ConcurrencyTrackingEmbeddingEngine(maxConcurrentEmbeddings = 1)
+            listOf("m1", "m2", "m3", "m4", "m5").forEach { coordinator.enqueueMessage(it) }
+            settleCoordinator()
 
-            every { embeddingEngine.maxConcurrentEmbeddings } returns 1
-
-            coEvery { coordinator.consumePending() } returnsMany
-                listOf(
-                    PendingWork(messageIds = listOf("m1", "m2", "m3", "m4", "m5"), memoryIds = emptyList(), documentIds = emptyList()),
-                    PendingWork(emptyList(), emptyList(), emptyList()),
-                )
-
-            val mockMsg = mockk<com.browntowndev.enclave.domain.model.chat.Message>(relaxed = true)
-            every { mockMsg.content.text } returns "hello"
-            coEvery { messageRepository.getMessageById(any()) } returns mockMsg
-
-            var activeCalls = 0
-            var maxConcurrentActiveCalls = 0
-            val lock = Any()
-
-            coEvery { embeddingEngine.getEmbedding(any()) } coAnswers {
-                synchronized(lock) {
-                    activeCalls++
-                    maxConcurrentActiveCalls = maxOf(maxConcurrentActiveCalls, activeCalls)
-                }
-                kotlinx.coroutines.delay(50)
-                synchronized(lock) {
-                    activeCalls--
-                }
-                floatArrayOf()
-            }
-
-            val context = mockk<android.content.Context>(relaxed = true)
             val worker =
-                EmbeddingRegenerationWorker(
-                    context,
-                    makeWorkerParams(),
-                    coordinator,
-                    messageRepository,
-                    memoriesRepository,
-                    messageDao,
-                    memoriesDao,
-                    documentDao,
-                    embeddingDao,
-                    embeddingEngine,
-                    progressManager,
-                    loggingPort,
-                    localEncryption,
+                buildWorker(
+                    coordinator = coordinator,
+                    messageRepository = messageRepository,
+                    embeddingEngine = embeddingEngine,
                 )
 
             worker.doWork()
 
-            assertEquals(1, maxConcurrentActiveCalls)
+            assertEquals(1, embeddingEngine.maxConcurrentActiveCalls)
         }
 
     @Test
     fun `SCENARIO-15 Embedding worker processes in parallel only when engine supports concurrent embeddings`() =
         runTest {
-            val coordinator = mockk<EmbeddingRegenerationCoordinator>(relaxed = true)
-            val messageRepository = mockk<MessageRepository>(relaxed = true)
-            val memoriesRepository = mockk<MemoriesRepository>(relaxed = true)
-            val messageDao = mockk<com.browntowndev.enclave.core.data.local.MessageDao>(relaxed = true)
-            val memoriesDao = mockk<com.browntowndev.enclave.core.data.local.MemoriesDao>(relaxed = true)
-            val documentDao = mockk<DocumentDao>(relaxed = true)
-            val embeddingDao = mockk<EmbeddingDao>(relaxed = true)
-            val embeddingEngine = mockk<EmbeddingEnginePort>(relaxed = true)
-            val progressManager = mockk<EmbeddingProgressManager>(relaxed = true)
-            val loggingPort = mockk<LoggingPort>(relaxed = true)
-            val localEncryption = mockk<LocalDataEncryptionService>(relaxed = true)
+            val coordinator = newWorkerCoordinator()
+            val messageRepository = FakeMessageRepository()
+            messageRepository.seed(
+                (1..10).map { Message(MessageId("m$it"), ChatId("chat1"), Content("hello")) },
+            )
+            val embeddingEngine = ConcurrencyTrackingEmbeddingEngine(maxConcurrentEmbeddings = 4)
+            (1..10).forEach { coordinator.enqueueMessage("m$it") }
+            settleCoordinator()
 
-            every { embeddingEngine.maxConcurrentEmbeddings } returns 4
-
-            coEvery { coordinator.consumePending() } returnsMany
-                listOf(
-                    PendingWork(messageIds = (1..10).map { "m$it" }, memoryIds = emptyList(), documentIds = emptyList()),
-                    PendingWork(emptyList(), emptyList(), emptyList()),
-                )
-
-            val mockMsg = mockk<com.browntowndev.enclave.domain.model.chat.Message>(relaxed = true)
-            every { mockMsg.content.text } returns "hello"
-            coEvery { messageRepository.getMessageById(any()) } returns mockMsg
-
-            var activeCalls = 0
-            var maxConcurrentActiveCalls = 0
-            val lock = Any()
-
-            coEvery { embeddingEngine.getEmbedding(any()) } coAnswers {
-                synchronized(lock) {
-                    activeCalls++
-                    maxConcurrentActiveCalls = maxOf(maxConcurrentActiveCalls, activeCalls)
-                }
-                kotlinx.coroutines.delay(50)
-                synchronized(lock) {
-                    activeCalls--
-                }
-                floatArrayOf()
-            }
-
-            val context = mockk<android.content.Context>(relaxed = true)
             val worker =
-                EmbeddingRegenerationWorker(
-                    context,
-                    makeWorkerParams(),
-                    coordinator,
-                    messageRepository,
-                    memoriesRepository,
-                    messageDao,
-                    memoriesDao,
-                    documentDao,
-                    embeddingDao,
-                    embeddingEngine,
-                    progressManager,
-                    loggingPort,
-                    localEncryption,
+                buildWorker(
+                    coordinator = coordinator,
+                    messageRepository = messageRepository,
+                    embeddingEngine = embeddingEngine,
                 )
 
             worker.doWork()
 
-            assertTrue(maxConcurrentActiveCalls > 1, "Should run concurrently")
-            assertTrue(maxConcurrentActiveCalls <= 4, "Should not exceed max concurrency of 4")
+            assertTrue(embeddingEngine.maxConcurrentActiveCalls > 1, "Should run concurrently")
+            assertTrue(embeddingEngine.maxConcurrentActiveCalls <= 4, "Should not exceed max concurrency of 4")
         }
 }

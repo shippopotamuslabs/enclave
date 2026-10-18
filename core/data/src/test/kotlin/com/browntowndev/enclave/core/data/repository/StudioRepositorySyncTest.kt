@@ -1,56 +1,71 @@
 package com.browntowndev.enclave.core.data.repository
 
 import android.content.Context
-import com.browntowndev.enclave.core.data.local.StudioAlbumDao
-import com.browntowndev.enclave.core.data.local.StudioMediaDao
+import androidx.test.core.app.ApplicationProvider
+import com.browntowndev.enclave.core.data.local.EnclaveDatabase
 import com.browntowndev.enclave.core.data.local.StudioMediaEntity
-import com.browntowndev.enclave.core.data.security.SensitiveRoomReadRepairApplier
-import com.browntowndev.enclave.core.data.sync.CloudSyncTrigger
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.port.repository.TransactionProvider
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import java.io.File
+import org.junit.jupiter.api.extension.ExtendWith
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
+import org.robolectric.annotation.Config as RoboConfig
 
+/**
+ * Translated from MockK to hand-written fakes (ENC-28): recording DAO
+ * fakes capture the rows the repository writes, the recording sync trigger
+ * counts its calls, and Context is the Robolectric application context.
+ * Incidental cleanup DAO / read-repair applier are the real implementations
+ * over an in-memory Room database.
+ */
+@ExtendWith(RobolectricExtension::class)
+@RoboConfig(sdk = [34])
 class StudioRepositorySyncTest {
-    private val studioMediaDao = mockk<StudioMediaDao>(relaxed = true)
-    private val studioAlbumDao = mockk<StudioAlbumDao>(relaxed = true)
-    private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
+    private lateinit var database: EnclaveDatabase
+    private val studioMediaDao = FakeStudioMediaDao()
+    private val studioAlbumDao = FakeStudioAlbumDao()
+    private lateinit var syncTrigger: RecordingCloudSyncTrigger
     private val transactionProvider = FakeTransactionProvider()
-    private val context = mockk<Context>(relaxed = true)
-    private val healer = testSensitiveSelfHealer(FakeLocalDataEncryptionService())
-    private val readRepairApplier = mockk<SensitiveRoomReadRepairApplier>(relaxed = true)
-    private val activeGenerationPersistence = mockk<ActiveStudioGenerationPersistence>(relaxed = true)
+    private lateinit var context: Context
+    private val healer = testSensitiveSelfHealer(FakeLocalDataEncryptionService(), FakeLoggingPort())
+    private lateinit var activeGenerationPersistence: ActiveStudioGenerationPersistence
 
     private lateinit var repository: StudioRepositoryImpl
 
     @BeforeEach
     fun setup() {
-        every { context.filesDir } returns File("/tmp")
-        coEvery { activeGenerationPersistence.load() } returns null
+        syncTrigger = RecordingCloudSyncTrigger()
+        database = createInMemoryEnclaveDatabase()
+        context = ApplicationProvider.getApplicationContext()
+        activeGenerationPersistence = ActiveStudioGenerationPersistence(InMemoryPreferencesDataStore())
 
         repository =
             StudioRepositoryImpl(
                 studioMediaDao = studioMediaDao,
                 studioAlbumDao = studioAlbumDao,
                 transactionProvider = transactionProvider,
-                cleanupDao = mockk(relaxed = true),
+                cleanupDao = database.cleanupDao(),
                 syncTrigger = syncTrigger,
                 healer = healer,
-                readRepairApplier = readRepairApplier,
+                readRepairApplier = database.realReadRepairApplier(),
                 activeGenerationPersistence = activeGenerationPersistence,
                 context = context,
             )
     }
 
+    @AfterEach
+    fun tearDown() {
+        database.close()
+    }
+
     @Test
     fun `saveMedia sets pendingSync to 1 and triggers sync`() =
         runTest {
-            coEvery { studioMediaDao.getMediaById(any()) } returns
+            studioMediaDao.getMediaByIdOverride =
                 StudioMediaEntity(
                     id = "id",
                     prompt = "PCENC:v1:aes-gcm:prompt",
@@ -61,10 +76,8 @@ class StudioRepositorySyncTest {
 
             repository.saveMedia("uri", "prompt", "IMAGE", albumId = null)
 
-            coVerify {
-                studioMediaDao.insertMedia(match { it.pendingSync == 1 })
-                syncTrigger.trigger()
-            }
+            assertEquals(1, studioMediaDao.insertCalls.single().pendingSync)
+            assertEquals(1, syncTrigger.triggerCalls)
         }
 
     @Test
@@ -72,10 +85,8 @@ class StudioRepositorySyncTest {
         runTest {
             repository.createAlbum("New Album")
 
-            coVerify {
-                studioAlbumDao.insertAlbum(match { it.pendingSync == 1 })
-                syncTrigger.trigger()
-            }
+            assertEquals(1, studioAlbumDao.insertCalls.single().pendingSync)
+            assertEquals(1, syncTrigger.triggerCalls)
         }
 
     @Test
@@ -83,10 +94,8 @@ class StudioRepositorySyncTest {
         runTest {
             repository.moveMediaToAlbum(listOf("media-1"), "album-1")
 
-            coVerify {
-                studioMediaDao.updateMediaAlbum(any(), any(), any())
-                syncTrigger.trigger()
-            }
+            assertEquals(1, studioMediaDao.updateMediaAlbumCalls.size)
+            assertEquals(1, syncTrigger.triggerCalls)
         }
 
     @Test
@@ -94,10 +103,8 @@ class StudioRepositorySyncTest {
         runTest {
             repository.deleteMedia("media-1")
 
-            coVerify {
-                studioMediaDao.softDeleteById("media-1", any())
-                syncTrigger.trigger()
-            }
+            assertEquals(listOf("media-1"), studioMediaDao.softDeleteCalls.map { it.first })
+            assertEquals(1, syncTrigger.triggerCalls)
         }
 
     @Test
@@ -105,9 +112,7 @@ class StudioRepositorySyncTest {
         runTest {
             repository.deleteAlbum("album-1")
 
-            coVerify {
-                syncTrigger.trigger()
-            }
+            assertEquals(1, syncTrigger.triggerCalls)
         }
 
     private class FakeTransactionProvider : TransactionProvider {

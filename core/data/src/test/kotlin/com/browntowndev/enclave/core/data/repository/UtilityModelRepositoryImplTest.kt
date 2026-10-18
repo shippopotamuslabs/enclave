@@ -4,14 +4,11 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.browntowndev.enclave.core.data.local.EnclaveDatabase
 import com.browntowndev.enclave.core.data.local.UtilityModelEntity
-import com.browntowndev.enclave.core.data.sync.CloudSyncTrigger
 import com.browntowndev.enclave.domain.model.config.UtilityModelId
 import com.browntowndev.enclave.domain.model.config.UtilityModelMetadata
 import com.browntowndev.enclave.domain.model.config.UtilityType
 import com.browntowndev.enclave.domain.model.download.DownloadSource
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
-import io.mockk.coVerify
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -26,11 +23,12 @@ import org.robolectric.annotation.Config as RoboConfig
 @RoboConfig(sdk = [34])
 class UtilityModelRepositoryImplTest {
     private lateinit var database: EnclaveDatabase
-    private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
+    private lateinit var syncTrigger: RecordingCloudSyncTrigger
     private lateinit var repository: UtilityModelRepositoryImpl
 
     @BeforeEach
     fun setup() {
+        syncTrigger = RecordingCloudSyncTrigger()
         database =
             Room
                 .inMemoryDatabaseBuilder(
@@ -72,7 +70,7 @@ class UtilityModelRepositoryImplTest {
             val row = database.utilityModelsDao().getByUtilityType(UtilityType.ONNX_MODEL)
             assertEquals("onnx-sha", row?.sha256)
             assertEquals(1, row?.pendingSync)
-            coVerify(exactly = 1) { syncTrigger.trigger() }
+            assertEquals(1, syncTrigger.triggerCalls)
         }
 
     @Test
