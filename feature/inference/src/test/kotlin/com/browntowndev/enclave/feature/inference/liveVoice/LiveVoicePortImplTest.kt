@@ -5,13 +5,11 @@ import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.LiveVoiceToolset
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
-import io.mockk.every
-import io.mockk.mockk
+import com.browntowndev.enclave.feature.inference.RecordingWebSocket
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import okhttp3.WebSocket
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -98,14 +96,8 @@ class LiveVoicePortImplTest {
     fun lvToolMut006_portMustForwardToolsToSessionUpdate() =
         runTest {
             val tools = listOf(ToolDefinition.WEB_SEARCH)
-            val sentMessages = mutableListOf<String>()
-            val webSocket =
-                mockk<WebSocket> {
-                    every { send(any<String>()) } answers {
-                        sentMessages.add(firstArg())
-                        true
-                    }
-                }
+            val webSocket = RecordingWebSocket()
+            val sentMessages = webSocket.sentTexts
             val result = port.openSession(asset(ApiProvider.OPENAI), "key", tools = tools)
 
             assertTrue(result.isSuccess)

@@ -1,21 +1,23 @@
 package com.browntowndev.enclave.feature.inference.tts.media
 
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import io.mockk.mockk
+import com.google.genai.Client
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class GoogleMediaStreamServiceTest {
-    private val logger: LoggingPort = mockk(relaxed = true)
+    private val logger: LoggingPort = FakeLoggingPort()
     private lateinit var service: GoogleMediaStreamService
 
     @BeforeEach
     fun setUp() {
         service =
             GoogleMediaStreamService(
-                modelsApiProvider = { mockk(relaxed = true) },
+                // Never invoked by these tests; built lazily only if a stream is opened.
+                modelsApiProvider = { Client.builder().apiKey("test").build().models },
                 logger = logger,
             )
     }

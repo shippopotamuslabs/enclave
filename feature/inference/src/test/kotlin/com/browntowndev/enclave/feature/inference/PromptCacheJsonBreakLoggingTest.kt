@@ -1,3 +1,6 @@
+@file:Suppress("ForbiddenMockKInTests")
+
+// MockK retained only for the OpenAI Java SDK surface (third-party SDK boundary).
 package com.browntowndev.enclave.feature.inference
 
 import com.browntowndev.enclave.domain.model.chat.ChatId
@@ -6,29 +9,23 @@ import com.browntowndev.enclave.domain.model.inference.AgentLoopMessage
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.InferenceEvent
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.util.FakeToolStreamGatePort
 import com.browntowndev.enclave.feature.inference.openai.StreamedOpenAiResponse
 import com.openai.client.OpenAIClient
 import com.openai.models.chat.completions.ChatCompletionCreateParams
-import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class PromptCacheJsonBreakLoggingTest {
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
+    private val loggingPort = FakeLoggingPort()
     private val client = mockk<OpenAIClient>(relaxed = true)
 
     @Test
     fun deepSeekSecondTurn_emitsPromptCacheJsonBreak() =
         runTest {
-            val logMessages = mutableListOf<String>()
-            every { loggingPort.debug(any(), any()) } answers {
-                logMessages.add(secondArg())
-            }
-
             val service =
                 object : DeepSeekInferenceServiceImpl(
                     client = client,
@@ -91,6 +88,7 @@ class PromptCacheJsonBreakLoggingTest {
                 options = options,
             )
 
+            val logMessages = loggingPort.debugCalls.map { it.second }
             assertTrue(logMessages.any { it.startsWith("PROMPT_CACHE ") })
             assertTrue(logMessages.any { it.startsWith("PROMPT_CACHE_JSON_BREAK ") })
         }

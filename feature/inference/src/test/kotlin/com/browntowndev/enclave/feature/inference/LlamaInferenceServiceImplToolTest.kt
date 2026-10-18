@@ -1,10 +1,14 @@
 package com.browntowndev.enclave.feature.inference
 
 import android.content.Context
-import android.util.Log
+import androidx.test.core.app.ApplicationProvider
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
+import com.browntowndev.enclave.core.testing.FakeLocalModelRepository
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.enclave.domain.model.config.LocalModelAsset
+import com.browntowndev.enclave.domain.model.config.LocalModelConfiguration
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.config.LocalModelMetadata
@@ -19,24 +23,17 @@ import com.browntowndev.enclave.domain.model.inference.ToolEnvelopeBatch
 import com.browntowndev.enclave.domain.model.inference.ToolEnvelopeFailure
 import com.browntowndev.enclave.domain.model.inference.ToolEnvelopeFailureReason
 import com.browntowndev.enclave.domain.model.inference.ToolEnvelopeField
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
-import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.enclave.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.browntowndev.enclave.domain.util.FakeToolEnvelopeParserPort
 import com.browntowndev.enclave.domain.util.FakeToolStreamGatePort
-import com.browntowndev.enclave.feature.inference.llama.LlamaChatSessionManager
-import io.mockk.coEvery
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.mockkStatic
-import io.mockk.unmockkStatic
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
-import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import java.io.File
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -49,33 +46,24 @@ import kotlin.test.assertTrue
  * LI-01 and LI-05 verify single-envelope and no-envelope paths.
  */
 @Suppress("LongMethod")
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class LlamaInferenceServiceImplToolTest {
-    private lateinit var sessionManager: LlamaChatSessionManager
-    private lateinit var loggingPort: LoggingPort
-    private lateinit var localModelRepository: LocalModelRepositoryPort
-    private lateinit var activeModelProvider: ActiveModelProviderPort
+    private val sessionManager = FakeLlamaChatSessionManager()
+    private val loggingPort = FakeLoggingPort()
+    private val localModelRepository = FakeLocalModelRepository()
+    private val activeModelProvider = FakeActiveModelProvider()
     private lateinit var context: Context
     private lateinit var fakePort: FakeToolEnvelopeParserPort
 
+    private val engineFake: FakeLlamaEnginePort get() = sessionManager.engineFake
+
     @BeforeEach
     fun setup() {
-        mockkStatic(Log::class)
-        every { Log.i(any(), any()) } returns 0
-        every { Log.w(any(), any<String>()) } returns 0
-        every { Log.w(any(), any<String>(), any()) } returns 0
-        every { Log.e(any(), any<String>(), any()) } returns 0
-        every { Log.d(any(), any()) } returns 0
-
-        sessionManager = mockk(relaxed = true)
-        loggingPort = mockk(relaxed = true)
-        localModelRepository = mockk()
-        activeModelProvider = mockk()
-        context = mockk(relaxed = true)
+        context = ApplicationProvider.getApplicationContext()
         fakePort = FakeToolEnvelopeParserPort()
 
-        every { context.getExternalFilesDir(null) } returns File("/tmp")
-
-        coEvery { activeModelProvider.getActiveConfiguration(ModelType.FAST) } returns
+        activeModelProvider.configuration =
             ActiveModelConfiguration(
                 id = LocalModelConfigurationId("7"),
                 isLocal = true,
@@ -92,29 +80,37 @@ class LlamaInferenceServiceImplToolTest {
                 contextWindow = 4096,
                 thinkingEnabled = false,
             )
-        coEvery { localModelRepository.getAssetByConfigId(LocalModelConfigurationId("7")) } returns
-            LocalModelAsset(
-                metadata =
-                    LocalModelMetadata(
-                        id = LocalModelId("99"),
-                        huggingFaceModelName = "test/llama",
-                        remoteFileName = "model.gguf",
-                        localFileName = "model.gguf",
-                        sha256 = "abc123",
-                        sizeInBytes = 1024L,
-                        modelFileFormat = ModelFileFormat.GGUF,
-                    ),
-                configurations = emptyList(),
+        runBlocking {
+            val asset =
+                LocalModelAsset(
+                    metadata =
+                        LocalModelMetadata(
+                            id = LocalModelId("99"),
+                            huggingFaceModelName = "test/llama",
+                            remoteFileName = "model.gguf",
+                            localFileName = "model.gguf",
+                            sha256 = "abc123",
+                            sizeInBytes = 1024L,
+                            modelFileFormat = ModelFileFormat.GGUF,
+                        ),
+                    configurations = emptyList(),
+                )
+            localModelRepository.upsertLocalAsset(asset)
+            localModelRepository.upsertLocalConfiguration(
+                LocalModelConfiguration(
+                    id = LocalModelConfigurationId("7"),
+                    localModelId = asset.metadata.id,
+                    displayName = "Test Model",
+                    maxTokens = 512,
+                    contextWindow = 4096,
+                    temperature = 0.7,
+                    topP = 0.9,
+                    topK = 40,
+                    repetitionPenalty = 1.1,
+                    systemPrompt = "System",
+                ),
             )
-        coEvery { sessionManager.initializeEngine(any()) } returns Unit
-        coEvery { sessionManager.setHistory(any()) } returns Unit
-        coEvery { sessionManager.startNewConversation() } returns Unit
-        coEvery { sessionManager.clearConversation() } returns Unit
-    }
-
-    @AfterEach
-    fun tearDown() {
-        unmockkStatic(Log::class)
+        }
     }
 
     private fun createService(): LlamaInferenceServiceImpl =
@@ -131,7 +127,7 @@ class LlamaInferenceServiceImplToolTest {
         )
 
     private fun stubGeneration(fullText: String) {
-        every { sessionManager.streamAssistantResponseWithOptions(any()) } returns
+        engineFake.generateWithOptionsResult =
             flowOf(
                 GenerationEvent.Completed(fullText),
             )

@@ -1,3 +1,6 @@
+// MockK is used only for Anthropic Java SDK types (com.anthropic.*), a third-party SDK boundary.
+@file:Suppress("ForbiddenMockKInTests")
+
 package com.browntowndev.enclave.feature.inference
 
 import com.anthropic.client.AnthropicClient
@@ -9,8 +12,8 @@ import com.anthropic.services.blocking.MessageService
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.AgentLoopMessage
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.util.FakeToolEnvelopeParserPort
 import com.browntowndev.enclave.domain.util.FakeToolStreamGatePort
 import io.mockk.every
@@ -26,7 +29,7 @@ import java.io.File
 import java.util.stream.Stream
 
 class AnthropicInferenceServiceImplCachePrefixTest {
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
+    private val loggingPort = FakeLoggingPort()
 
     @Test
     @DisplayName("S-ANTH-01 live tail suffix wire shape Turn 1")

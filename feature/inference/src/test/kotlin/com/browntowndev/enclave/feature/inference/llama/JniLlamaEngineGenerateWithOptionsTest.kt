@@ -4,7 +4,6 @@ import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.LlamaModelConfig
 import com.browntowndev.enclave.domain.model.inference.LlamaSamplingConfig
-import io.mockk.*
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -14,6 +13,69 @@ import org.junit.jupiter.api.Test
 import com.browntowndev.enclave.domain.model.chat.ChatMessage as DomainChatMessage
 
 class JniLlamaEngineGenerateWithOptionsTest {
+    /**
+     * Recording subclass fake for the owned [JniLlamaEngine]: captures every
+     * `startCompletion` invocation instead of crossing into native code, and
+     * completes the generation synchronously through the supplied callback.
+     */
+    private class RecordingJniLlamaEngine : JniLlamaEngine() {
+        data class CompletionCall(
+            val roles: List<String>,
+            val contents: List<String>,
+            val imagePaths: List<String>,
+            val temperature: Float,
+            val topK: Int,
+            val topP: Float,
+            val minP: Float,
+            val maxTokens: Int,
+            val repeatPenalty: Float,
+            val penaltyFreq: Float,
+            val penaltyPresent: Float,
+            val reasoningBudget: Int,
+            val continuation: Boolean,
+            val prevMessageCount: Int,
+        )
+
+        val completionCalls = mutableListOf<CompletionCall>()
+
+        override fun startCompletion(
+            roles: Array<String>,
+            contents: Array<String>,
+            imagePaths: Array<String>,
+            temperature: Float,
+            topK: Int,
+            topP: Float,
+            minP: Float,
+            maxTokens: Int,
+            repeatPenalty: Float,
+            penaltyFreq: Float,
+            penaltyPresent: Float,
+            reasoningBudget: Int,
+            callback: NativeTokenCallback,
+            continuation: Boolean,
+            prevMessageCount: Int,
+        ) {
+            completionCalls +=
+                CompletionCall(
+                    roles = roles.toList(),
+                    contents = contents.toList(),
+                    imagePaths = imagePaths.toList(),
+                    temperature = temperature,
+                    topK = topK,
+                    topP = topP,
+                    minP = minP,
+                    maxTokens = maxTokens,
+                    repeatPenalty = repeatPenalty,
+                    penaltyFreq = penaltyFreq,
+                    penaltyPresent = penaltyPresent,
+                    reasoningBudget = reasoningBudget,
+                    continuation = continuation,
+                    prevMessageCount = prevMessageCount,
+                )
+            callback.onComplete(10, 20, 8)
+        }
+    }
+
     @Nested
     inner class DefenseScenario5 {
         @Test
@@ -22,8 +84,8 @@ class JniLlamaEngineGenerateWithOptionsTest {
             assertTrue(method != null, "JniLlamaEngine must have generateWithOptions(GenerationOptions) method")
         }
 
-        private fun setupEngineWithMocks(): JniLlamaEngine {
-            val engine = spyk(JniLlamaEngine())
+        private fun setupEngineWithMocks(): RecordingJniLlamaEngine {
+            val engine = RecordingJniLlamaEngine()
 
             engine.modelLifecycle.loaded.set(true)
             engine.modelLifecycle.currentConfig =
@@ -45,27 +107,6 @@ class JniLlamaEngineGenerateWithOptionsTest {
                         ),
                 )
 
-            every {
-                engine.startCompletion(
-                    any(),
-                    any(),
-                    any(),
-                    any(),
-                    any(),
-                    any(),
-                    any(),
-                    any(),
-                    any(),
-                    any(),
-                    any(),
-                    any(),
-                    any(),
-                )
-            } answers {
-                val callback = arg<NativeTokenCallback>(12)
-                callback.onComplete(10, 20, 8)
-            }
-
             return engine
         }
 
@@ -76,26 +117,13 @@ class JniLlamaEngineGenerateWithOptionsTest {
                 try {
                     engine.generateWithOptions(GenerationOptions(reasoningBudget = 0)).toList()
                 } catch (e: Exception) {
-                    // Expected: exception swallowed — only verifying mock interaction
+                    // Expected: exception swallowed — only verifying the recorded interaction
                 }
 
-                verify {
-                    engine.startCompletion(
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        eq(0.05f), // penaltyFreq
-                        eq(0.05f), // penaltyPresent
-                        eq(0), // reasoningBudget
-                        any(),
-                    )
-                }
+                val call = engine.completionCalls.single()
+                assertEquals(0.05f, call.penaltyFreq)
+                assertEquals(0.05f, call.penaltyPresent)
+                assertEquals(0, call.reasoningBudget)
             }
 
         @Test
@@ -105,26 +133,13 @@ class JniLlamaEngineGenerateWithOptionsTest {
                 try {
                     engine.generateWithOptions(GenerationOptions(reasoningBudget = 2048)).toList()
                 } catch (e: Exception) {
-                    // Expected: exception swallowed — only verifying mock interaction
+                    // Expected: exception swallowed — only verifying the recorded interaction
                 }
 
-                verify {
-                    engine.startCompletion(
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        eq(0.0f), // penaltyFreq
-                        eq(0.0f), // penaltyPresent
-                        eq(2048), // reasoningBudget
-                        any(),
-                    )
-                }
+                val call = engine.completionCalls.single()
+                assertEquals(0.0f, call.penaltyFreq)
+                assertEquals(0.0f, call.penaltyPresent)
+                assertEquals(2048, call.reasoningBudget)
             }
 
         @Test
@@ -134,26 +149,11 @@ class JniLlamaEngineGenerateWithOptionsTest {
                 try {
                     engine.generateWithOptions(GenerationOptions(reasoningBudget = 0, temperature = 0.5f)).toList()
                 } catch (e: Exception) {
-                    // Expected: exception swallowed — only verifying mock interaction
+                    // Expected: exception swallowed — only verifying the recorded interaction
                 }
 
-                verify {
-                    engine.startCompletion(
-                        any(),
-                        any(),
-                        any(),
-                        eq(0.5f), // temperature
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                    )
-                }
+                val call = engine.completionCalls.single()
+                assertEquals(0.5f, call.temperature)
             }
 
         @Test
@@ -163,7 +163,6 @@ class JniLlamaEngineGenerateWithOptionsTest {
                 engine.startConversation("Base system prompt")
                 engine.appendMessage(DomainChatMessage(role = Role.USER, content = "User question"))
 
-                val slot = slot<Array<String>>()
                 try {
                     engine
                         .generateWithOptions(
@@ -173,32 +172,15 @@ class JniLlamaEngineGenerateWithOptionsTest {
                             ),
                         ).toList()
                 } catch (e: Exception) {
-                    // Expected: exception swallowed — only verifying mock interaction
+                    // Expected: exception swallowed — only verifying the recorded interaction
                 }
 
-                verify {
-                    engine.startCompletion(
-                        any(),
-                        capture(slot),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                    )
-                }
-
+                val contents = engine.completionCalls.single().contents
                 assertEquals(
                     "Use tools when needed.\n<tool_call>{\"name\":\"web_search\",\"arguments\":{\"query\":\"...\"}}</tool_call>",
-                    slot.captured.first(),
+                    contents.first(),
                 )
-                assertEquals("User question", slot.captured[1])
+                assertEquals("User question", contents[1])
             }
 
         @Test
@@ -207,9 +189,6 @@ class JniLlamaEngineGenerateWithOptionsTest {
                 val engine = setupEngineWithMocks()
                 engine.startConversation("Base system prompt")
                 engine.appendMessage(DomainChatMessage(role = Role.USER, content = "Describe this image"))
-
-                val contentsSlot = slot<Array<String>>()
-                val imagePathsSlot = slot<Array<String>>()
 
                 try {
                     engine
@@ -220,29 +199,12 @@ class JniLlamaEngineGenerateWithOptionsTest {
                             ),
                         ).toList()
                 } catch (_: Exception) {
-                    // Expected: exception swallowed — only verifying mock interaction
+                    // Expected: exception swallowed — only verifying the recorded interaction
                 }
 
-                verify {
-                    engine.startCompletion(
-                        any(),
-                        capture(contentsSlot),
-                        capture(imagePathsSlot),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                        any(),
-                    )
-                }
-
-                assertTrue(contentsSlot.captured.last().startsWith("<__media__><__media__>Describe this image"))
-                assertEquals(listOf("file:///tmp/cat.jpg", "file:///tmp/dog.jpg"), imagePathsSlot.captured.toList())
+                val call = engine.completionCalls.single()
+                assertTrue(call.contents.last().startsWith("<__media__><__media__>Describe this image"))
+                assertEquals(listOf("file:///tmp/cat.jpg", "file:///tmp/dog.jpg"), call.imagePaths)
             }
     }
 }

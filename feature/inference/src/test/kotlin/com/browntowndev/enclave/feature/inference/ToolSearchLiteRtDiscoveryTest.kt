@@ -1,6 +1,8 @@
+// MockK is used only for LiteRT-LM SDK types (com.google.ai.edge.litertlm.*), a third-party SDK boundary.
+@file:Suppress("ForbiddenMockKInTests")
+
 package com.browntowndev.enclave.feature.inference
 
-import android.util.Log
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.inference.ModelType
@@ -9,7 +11,7 @@ import com.browntowndev.enclave.domain.model.inference.ToolCatalogEntry
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.model.inference.ToolDisclosureMode
 import com.browntowndev.enclave.domain.port.inference.Bm25OnlyEmbeddingEnginePort
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
 import com.browntowndev.enclave.domain.usecase.chat.SearchToolsHostCoordinator
 import com.browntowndev.enclave.domain.usecase.chat.ToolCallStrategy
@@ -22,12 +24,9 @@ import com.browntowndev.enclave.feature.inference.conversation.LiteRtTurnSnapsho
 import com.browntowndev.enclave.feature.inference.conversation.LiteRtToolContext
 import com.browntowndev.enclave.feature.inference.conversation.NoopAgentPolicyPort
 import com.browntowndev.enclave.feature.inference.conversation.SystemPromptTemplates
-import io.mockk.every
 import io.mockk.mockk
-import io.mockk.mockkStatic
-import io.mockk.unmockkStatic
+import io.mockk.verify
 import kotlinx.coroutines.test.runTest
-import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
@@ -35,7 +34,7 @@ import org.junit.jupiter.api.Test
 import java.util.concurrent.atomic.AtomicInteger
 
 class ToolSearchLiteRtDiscoveryTest {
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
+    private val loggingPort = FakeLoggingPort()
     private val executorCalls = AtomicInteger(0)
     private lateinit var signatureCache: ConversationSignatureCache
     private lateinit var toolLoop: LiteRtToolCallLoop
@@ -43,12 +42,6 @@ class ToolSearchLiteRtDiscoveryTest {
 
     @BeforeEach
     fun setUp() {
-        mockkStatic(Log::class)
-        every { Log.d(any<String>(), any<String>()) } returns 0
-        every { Log.i(any<String>(), any<String>()) } returns 0
-        every { Log.w(any<String>(), any<String>()) } returns 0
-        every { Log.e(any<String>(), any<String>(), any<Throwable>()) } returns 0
-
         executorCalls.set(0)
         val countingExecutor =
             object : ToolExecutorPort {
@@ -82,11 +75,6 @@ class ToolSearchLiteRtDiscoveryTest {
                         embeddingEngine = Bm25OnlyEmbeddingEnginePort,
                     ),
             )
-    }
-
-    @AfterEach
-    fun tearDown() {
-        unmockkStatic(Log::class)
     }
 
     @Test
@@ -208,7 +196,7 @@ class ToolSearchLiteRtDiscoveryTest {
             )
 
             assertEquals(conversation, signatureCache.conversation)
-            io.mockk.verify(exactly = 0) { conversation.close() }
+            verify(exactly = 0) { conversation.close() }
             org.junit.jupiter.api.Assertions.assertNull(signatureCache.currentSignature)
         }
 

@@ -7,12 +7,12 @@ import kotlinx.coroutines.*
 import java.util.Base64
 import javax.inject.Inject
 
-class OpenAiImageGenerationAdapter
+open class OpenAiImageGenerationAdapter
     @Inject
     constructor(
         private val clientProvider: OpenAiClientProviderPort,
     ) {
-        suspend fun generateImage(
+        open suspend fun generateImage(
             prompt: String,
             apiKey: String,
             modelId: String,

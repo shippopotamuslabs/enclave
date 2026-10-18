@@ -1,19 +1,30 @@
 package com.browntowndev.enclave.feature.inference
 
-import io.mockk.mockk
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
+import com.browntowndev.enclave.core.testing.FakeEmbeddingEngine
+import com.browntowndev.enclave.core.testing.FakeLocalModelRepository
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeToolExecutor
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class ListMethodsTest {
     @Test
     fun listMethods() {
         val manager =
             ConversationManagerImpl(
-                context = mockk(relaxed = true),
-                localModelRepository = mockk(relaxed = true),
-                activeModelProvider = mockk(relaxed = true),
-                loggingPort = mockk(relaxed = true),
-                toolExecutor = mockk(relaxed = true),
-            embeddingEnginePort = mockk(relaxed = true),
+                context = ApplicationProvider.getApplicationContext<Context>(),
+                localModelRepository = FakeLocalModelRepository(),
+                activeModelProvider = FakeActiveModelProvider(),
+                loggingPort = FakeLoggingPort(),
+                toolExecutor = FakeToolExecutor(),
+                embeddingEnginePort = FakeEmbeddingEngine(),
             )
 
         manager.javaClass.getDeclaredClasses().forEach { innerClass ->

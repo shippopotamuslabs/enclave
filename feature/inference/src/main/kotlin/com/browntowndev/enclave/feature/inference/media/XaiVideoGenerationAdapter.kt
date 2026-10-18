@@ -20,14 +20,14 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.Base64
 import javax.inject.Inject
 
-class XaiVideoGenerationAdapter(
+open class XaiVideoGenerationAdapter(
     private val okHttpClient: OkHttpClient,
     private val pollDelayMillis: Long,
 ) {
     @Inject
     constructor(okHttpClient: OkHttpClient) : this(okHttpClient, DEFAULT_POLL_DELAY_MILLIS)
 
-    suspend fun generateVideo(
+    open suspend fun generateVideo(
         prompt: String,
         apiKey: String,
         modelId: String,

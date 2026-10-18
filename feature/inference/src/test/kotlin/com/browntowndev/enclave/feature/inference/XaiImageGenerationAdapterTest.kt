@@ -1,3 +1,6 @@
+@file:Suppress("ForbiddenMockKInTests")
+
+// MockK is retained only for the third-party OpenAI SDK surface and okhttp3; the owned client-provider port uses a fake.
 package com.browntowndev.enclave.feature.inference
 
 import com.browntowndev.enclave.domain.model.media.AspectRatio
@@ -24,8 +27,8 @@ import org.junit.jupiter.api.Test
 import java.util.Base64
 
 class XaiImageGenerationAdapterTest {
-    private val clientProvider = mockk<OpenAiClientProviderPort>()
     private val client = mockk<OpenAIClient>()
+    private val clientProvider = FakeOpenAiClientProviderPort().also { it.client = client }
     private val imageService = mockk<ImageService>()
     private val okHttpClient = mockk<okhttp3.OkHttpClient>()
     private val adapter = XaiImageGenerationAdapter(clientProvider, okHttpClient)
@@ -34,7 +37,6 @@ class XaiImageGenerationAdapterTest {
     fun generateImage_usesXaiSpecificImageFields_withoutOpenAiSize() =
         runTest {
             val paramsSlot = slot<ImageGenerateParams>()
-            every { clientProvider.getClient("key", "https://api.x.ai/v1") } returns client
             every { client.images() } returns imageService
             every { imageService.generate(capture(paramsSlot)) } returns successfulImageResponse()
 
@@ -68,7 +70,6 @@ class XaiImageGenerationAdapterTest {
     fun generateImage_mapsUnsupportedDomainAspectRatios_toNearestXaiRatio() =
         runTest {
             val paramsSlot = slot<ImageGenerateParams>()
-            every { clientProvider.getClient("key", "https://custom.x.ai/v1") } returns client
             every { client.images() } returns imageService
             every { imageService.generate(capture(paramsSlot)) } returns successfulImageResponse()
 
@@ -94,7 +95,6 @@ class XaiImageGenerationAdapterTest {
     @Test
     fun generateImage_decodesAllReturnedImages() =
         runTest {
-            every { clientProvider.getClient("key", "https://api.x.ai/v1") } returns client
             every { client.images() } returns imageService
             every { imageService.generate(any<ImageGenerateParams>()) } returns
                 successfulImageResponse(
@@ -119,7 +119,6 @@ class XaiImageGenerationAdapterTest {
     @Test
     fun generateImage_passedModerationFalse_returnsModerationFailure() =
         runTest {
-            every { clientProvider.getClient("key", "https://api.x.ai/v1") } returns client
             every { client.images() } returns imageService
             every { imageService.generate(any<ImageGenerateParams>()) } returns
                 ImagesResponse
@@ -147,7 +146,6 @@ class XaiImageGenerationAdapterTest {
             val badRequest = mockk<BadRequestException>()
             every { badRequest.statusCode() } returns 400
             every { badRequest.message } returns "Request rejected due to content moderation policy"
-            every { clientProvider.getClient("key", "https://api.x.ai/v1") } returns client
             every { client.images() } returns imageService
             every { imageService.generate(any<ImageGenerateParams>()) } throws badRequest
 
@@ -171,7 +169,6 @@ class XaiImageGenerationAdapterTest {
             val badRequest = mockk<BadRequestException>()
             every { badRequest.statusCode() } returns 400
             every { badRequest.message } returns apiKeyErrorMessage
-            every { clientProvider.getClient("key", "https://api.x.ai/v1") } returns client
             every { client.images() } returns imageService
             every { imageService.generate(any<ImageGenerateParams>()) } throws badRequest
 

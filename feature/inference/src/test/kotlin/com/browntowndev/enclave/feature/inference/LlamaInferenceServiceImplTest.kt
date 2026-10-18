@@ -1,11 +1,15 @@
 package com.browntowndev.enclave.feature.inference
 
 import android.content.Context
-import android.util.Log
+import androidx.test.core.app.ApplicationProvider
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
+import com.browntowndev.enclave.core.testing.FakeLocalModelRepository
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.model.chat.ChatMessage
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.enclave.domain.model.config.LocalModelAsset
+import com.browntowndev.enclave.domain.model.config.LocalModelConfiguration
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.config.LocalModelMetadata
@@ -16,56 +20,38 @@ import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.inference.InferenceEvent
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
-import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.enclave.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.browntowndev.enclave.domain.util.FakeToolEnvelopeParserPort
 import com.browntowndev.enclave.domain.util.FakeToolStreamGatePort
-import com.browntowndev.enclave.feature.inference.llama.LlamaChatSessionManager
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.mockkStatic
-import io.mockk.slot
-import io.mockk.unmockkStatic
-import io.mockk.verify
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
-import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import java.io.File
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class LlamaInferenceServiceImplTest {
-    private lateinit var sessionManager: LlamaChatSessionManager
-    private lateinit var loggingPort: LoggingPort
-    private lateinit var localModelRepository: LocalModelRepositoryPort
-    private lateinit var activeModelProvider: ActiveModelProviderPort
+    private val sessionManager = FakeLlamaChatSessionManager()
+    private val loggingPort = FakeLoggingPort()
+    private val localModelRepository = FakeLocalModelRepository()
+    private val activeModelProvider = FakeActiveModelProvider()
     private lateinit var context: Context
+
+    private val engineFake: FakeLlamaEnginePort get() = sessionManager.engineFake
 
     @BeforeEach
     fun setup() {
-        mockkStatic(Log::class)
-        every { Log.i(any(), any()) } returns 0
-        every { Log.w(any(), any<String>()) } returns 0
-        every { Log.w(any(), any<String>(), any()) } returns 0
-        every { Log.e(any(), any<String>(), any()) } returns 0
+        context = ApplicationProvider.getApplicationContext()
 
-        sessionManager = mockk(relaxed = true)
-        loggingPort = mockk(relaxed = true)
-        localModelRepository = mockk()
-        activeModelProvider = mockk()
-        context = mockk(relaxed = true)
-
-        every { context.getExternalFilesDir(null) } returns File("/tmp")
-
-        coEvery { activeModelProvider.getActiveConfiguration(ModelType.FAST) } returns
+        activeModelProvider.configuration =
             ActiveModelConfiguration(
                 id = LocalModelConfigurationId("7"),
                 isLocal = true,
@@ -82,7 +68,7 @@ class LlamaInferenceServiceImplTest {
                 contextWindow = 4096,
                 thinkingEnabled = false,
             )
-        coEvery { localModelRepository.getAssetByConfigId(LocalModelConfigurationId("7")) } returns
+        registerAsset(
             LocalModelAsset(
                 metadata =
                     LocalModelMetadata(
@@ -95,22 +81,15 @@ class LlamaInferenceServiceImplTest {
                         modelFileFormat = ModelFileFormat.GGUF,
                     ),
                 configurations = emptyList(),
-            )
-        coEvery { sessionManager.initializeEngine(any()) } returns Unit
-        coEvery { sessionManager.setHistory(any()) } returns Unit
-        coEvery { sessionManager.startNewConversation() } returns Unit
-        coEvery { sessionManager.clearConversation() } returns Unit
-    }
-
-    @AfterEach
-    fun tearDown() {
-        unmockkStatic(Log::class)
+            ),
+            configId = "7",
+        )
     }
 
     @Test
     fun `sendPrompt forwards imageUris to llama generation options`() =
         runTest {
-            coEvery { activeModelProvider.getActiveConfiguration(ModelType.VISION) } returns
+            activeModelProvider.configurationsByType[ModelType.VISION] =
                 ActiveModelConfiguration(
                     id = LocalModelConfigurationId("9"),
                     isLocal = true,
@@ -127,7 +106,7 @@ class LlamaInferenceServiceImplTest {
                     contextWindow = 4096,
                     thinkingEnabled = false,
                 )
-            coEvery { localModelRepository.getAssetByConfigId(LocalModelConfigurationId("9")) } returns
+            registerAsset(
                 LocalModelAsset(
                     metadata =
                         LocalModelMetadata(
@@ -142,14 +121,14 @@ class LlamaInferenceServiceImplTest {
                             mmprojLocalFileName = "mmproj.gguf",
                         ),
                     configurations = emptyList(),
-                )
-            coEvery { sessionManager.sendUserMessage(any()) } returns Unit
-            every { sessionManager.streamAssistantResponseWithOptions(any()) } returns
+                ),
+                configId = "9",
+            )
+            engineFake.generateWithOptionsResult =
                 flowOf(
                     GenerationEvent.Completed("Detailed image description"),
                 )
 
-            val optionsSlot = slot<GenerationOptions>()
             val service = createService(ModelType.VISION)
 
             service
@@ -165,14 +144,14 @@ class LlamaInferenceServiceImplTest {
                     closeConversation = false,
                 ).toList()
 
-            verify { sessionManager.streamAssistantResponseWithOptions(capture(optionsSlot)) }
-            assertEquals(listOf("file:///tmp/cat.jpg"), optionsSlot.captured.imageUris)
+            val call = engineFake.generateWithOptionsCalls.single()
+            assertEquals(listOf("file:///tmp/cat.jpg"), call.options.imageUris)
         }
 
     @Test
     fun `sendPrompt returns typed error when vision capable gguf model is missing mmproj`() =
         runTest {
-            coEvery { activeModelProvider.getActiveConfiguration(ModelType.VISION) } returns
+            activeModelProvider.configurationsByType[ModelType.VISION] =
                 ActiveModelConfiguration(
                     id = LocalModelConfigurationId("9"),
                     isLocal = true,
@@ -189,7 +168,7 @@ class LlamaInferenceServiceImplTest {
                     contextWindow = 4096,
                     thinkingEnabled = false,
                 )
-            coEvery { localModelRepository.getAssetByConfigId(LocalModelConfigurationId("9")) } returns
+            registerAsset(
                 LocalModelAsset(
                     metadata =
                         LocalModelMetadata(
@@ -203,7 +182,9 @@ class LlamaInferenceServiceImplTest {
                             isMultimodal = true,
                         ),
                     configurations = emptyList(),
-                )
+                ),
+                configId = "9",
+            )
 
             val service = createService(ModelType.VISION)
             val events =
@@ -228,7 +209,7 @@ class LlamaInferenceServiceImplTest {
     @Test
     fun `completeSingleTurn emits engine loading before processing on cold load`() =
         runTest {
-            every { sessionManager.streamAssistantResponseWithOptions(any()) } returns
+            engineFake.generateWithOptionsResult =
                 flowOf(
                     GenerationEvent.Completed("Assistant text"),
                 )
@@ -259,7 +240,7 @@ class LlamaInferenceServiceImplTest {
     @Test
     fun `completeSingleTurn streams visible response tokens incrementally`() =
         runTest {
-            every { sessionManager.streamAssistantResponseWithOptions(any()) } returns
+            engineFake.generateWithOptionsResult =
                 flow {
                     emit(GenerationEvent.Token("<think>reasoning</think>"))
                     emit(GenerationEvent.Token("Hello"))
@@ -297,11 +278,10 @@ class LlamaInferenceServiceImplTest {
     @Test
     fun `completeSingleTurn maps agent tool budget sidecar to system role not assistant`() =
         runTest {
-            every { sessionManager.streamAssistantResponseWithOptions(any()) } returns
+            engineFake.generateWithOptionsResult =
                 flowOf(
                     GenerationEvent.Completed("Assistant text"),
                 )
-            val capturedHistories = mutableListOf<List<ChatMessage>>()
             val service = createService(ModelType.FAST)
             val budgetContent =
                 "<system_context>\nTool budget: 3/50 used (47 remaining). Tools enabled.\n</system_context>"
@@ -325,8 +305,8 @@ class LlamaInferenceServiceImplTest {
                 options = GenerationOptions(reasoningBudget = 0, modelType = ModelType.FAST),
             )
 
-            coVerify(atLeast = 1) { sessionManager.setHistory(capture(capturedHistories)) }
-            val history = capturedHistories.last()
+            assertTrue(engineFake.setHistoryCalls.isNotEmpty())
+            val history = engineFake.setHistoryCalls.last()
             assertEquals(2, history.size)
             assertEquals(Role.USER, history[0].role)
             assertEquals(Role.SYSTEM, history[1].role)
@@ -337,11 +317,10 @@ class LlamaInferenceServiceImplTest {
     @Test
     fun `completeSingleTurn rebuilds session history from Rust messages`() =
         runTest {
-            every { sessionManager.streamAssistantResponseWithOptions(any()) } returns
+            engineFake.generateWithOptionsResult =
                 flowOf(
                     GenerationEvent.Completed("Assistant text"),
                 )
-            val capturedHistories = mutableListOf<List<ChatMessage>>()
             val service = createService(ModelType.FAST)
 
             val result =
@@ -359,13 +338,13 @@ class LlamaInferenceServiceImplTest {
                     options = GenerationOptions(reasoningBudget = 0, modelType = ModelType.FAST),
                 )
 
-            coVerify(atLeast = 1) { sessionManager.setHistory(capture(capturedHistories)) }
+            assertTrue(engineFake.setHistoryCalls.isNotEmpty())
             assertEquals(
                 listOf(
                     ChatMessage(Role.USER, "Question"),
                     ChatMessage(Role.ASSISTANT, "Prior answer"),
                 ),
-                capturedHistories.last(),
+                engineFake.setHistoryCalls.last(),
             )
             assertEquals(AgentFinishReason.Stop, result.finishReason)
             assertEquals("Assistant text", result.assistantText)
@@ -374,15 +353,7 @@ class LlamaInferenceServiceImplTest {
     @Test
     fun `completeSingleTurn enables continuation only for a valid append-only transcript`() =
         runTest {
-            val continuations = mutableListOf<Boolean>()
-            val prevMessageCounts = mutableListOf<Int>()
-            every {
-                sessionManager.streamAssistantResponseWithOptions(
-                    any(),
-                    capture(continuations),
-                    capture(prevMessageCounts),
-                )
-            } returns flowOf(GenerationEvent.Completed("Assistant text"))
+            engineFake.generateWithOptionsResult = flowOf(GenerationEvent.Completed("Assistant text"))
             val service = createService(ModelType.FAST)
             val baseOptions = GenerationOptions(reasoningBudget = 0, modelType = ModelType.FAST, transcriptRevision = 1L)
             val transcripts =
@@ -410,24 +381,18 @@ class LlamaInferenceServiceImplTest {
                 baseOptions.copy(reasoningBudget = 1, transcriptRevision = 2L),
             )
 
-            assertEquals(listOf(false, true, false, false, true, false, false, false), continuations)
-            assertEquals(listOf(0, 2, 0, 0, 5, 0, 0, 0), prevMessageCounts)
+            val calls = engineFake.generateWithOptionsCalls
+            assertEquals(
+                listOf(false, true, false, false, true, false, false, false),
+                calls.map { it.continuation },
+            )
+            assertEquals(listOf(0, 2, 0, 0, 5, 0, 0, 0), calls.map { it.prevMessageCount })
         }
 
     @Test
     fun `completeSingleTurn preserves injected sidecars in the continuation prefix`() =
         runTest {
-            val capturedHistories = mutableListOf<List<ChatMessage>>()
-            val continuations = mutableListOf<Boolean>()
-            val prevMessageCounts = mutableListOf<Int>()
-            coEvery { sessionManager.setHistory(capture(capturedHistories)) } returns Unit
-            every {
-                sessionManager.streamAssistantResponseWithOptions(
-                    any(),
-                    capture(continuations),
-                    capture(prevMessageCounts),
-                )
-            } returns flowOf(GenerationEvent.Completed("Assistant text"))
+            engineFake.generateWithOptionsResult = flowOf(GenerationEvent.Completed("Assistant text"))
             val service = createService(ModelType.FAST)
             val options = GenerationOptions(reasoningBudget = 0, modelType = ModelType.FAST, transcriptRevision = 7L)
             val firstTurn = listOf(AgentLoopMessage(id = "u1", role = Role.USER, content = "First question"))
@@ -439,35 +404,29 @@ class LlamaInferenceServiceImplTest {
             service.completeTurnForTest(firstTurn, "Stable system", options, contextSidecars = "ledger one")
             service.completeTurnForTest(secondTurn, "Stable system", options, contextSidecars = "ledger two")
 
-            assertEquals(listOf(false, true), continuations)
-            assertEquals(listOf(0, 2), prevMessageCounts)
+            val calls = engineFake.generateWithOptionsCalls
+            assertEquals(listOf(false, true), calls.map { it.continuation })
+            assertEquals(listOf(0, 2), calls.map { it.prevMessageCount })
             assertEquals(
                 listOf(
                     ChatMessage(Role.USER, "[context]\nledger one\n[/context]\n\nFirst question"),
                     ChatMessage(Role.ASSISTANT, "First answer"),
                     ChatMessage(Role.USER, "[context]\nledger two\n[/context]\n\nSecond question"),
                 ),
-                capturedHistories.last(),
+                engineFake.setHistoryCalls.last(),
             )
         }
 
     @Test
     fun `completeSingleTurn invalidates continuation after generation error`() =
         runTest {
-            val continuations = mutableListOf<Boolean>()
-            val prevMessageCounts = mutableListOf<Int>()
-            every {
-                sessionManager.streamAssistantResponseWithOptions(
-                    any(),
-                    capture(continuations),
-                    capture(prevMessageCounts),
-                )
-            } returnsMany
+            engineFake.generateWithOptionsResults.addAll(
                 listOf(
                     flowOf(GenerationEvent.Completed("First answer")),
                     flowOf(GenerationEvent.Error(IllegalStateException("decode failed"))),
                     flowOf(GenerationEvent.Completed("Recovered answer")),
-                )
+                ),
+            )
             val service = createService(ModelType.FAST)
             val options = GenerationOptions(reasoningBudget = 0, modelType = ModelType.FAST, transcriptRevision = 9L)
             val firstTurn = listOf(AgentLoopMessage(id = "u1", role = Role.USER, content = "First"))
@@ -479,16 +438,16 @@ class LlamaInferenceServiceImplTest {
             service.completeTurnForTest(thirdTurn, "System", options)
 
             assertTrue(failed.isFailure)
-            assertEquals(listOf(false, true, false), continuations)
-            assertEquals(listOf(0, 2, 0), prevMessageCounts)
+            val calls = engineFake.generateWithOptionsCalls
+            assertEquals(listOf(false, true, false), calls.map { it.continuation })
+            assertEquals(listOf(0, 2, 0), calls.map { it.prevMessageCount })
         }
 
     @Test
     fun `completeSingleTurn maps all AgentLoopRowKind variants correctly to DomainChatMessage`() =
         runTest {
-            every { sessionManager.streamAssistantResponseWithOptions(any()) } returns
+            engineFake.generateWithOptionsResult =
                 flowOf(GenerationEvent.Completed("Assistant text"))
-            val capturedHistories = mutableListOf<List<ChatMessage>>()
             val service = createService(ModelType.FAST)
 
             val sessionMessages = listOf(
@@ -528,8 +487,8 @@ class LlamaInferenceServiceImplTest {
                 options = GenerationOptions(reasoningBudget = 0, modelType = ModelType.FAST),
             )
 
-            coVerify(atLeast = 1) { sessionManager.setHistory(capture(capturedHistories)) }
-            val history = capturedHistories.last()
+            assertTrue(engineFake.setHistoryCalls.isNotEmpty())
+            val history = engineFake.setHistoryCalls.last()
 
             assertEquals(7, history.size)
 
@@ -578,6 +537,29 @@ class LlamaInferenceServiceImplTest {
             onThinkingToken = {},
             options = options,
         )
+    }
+
+    private fun registerAsset(
+        asset: LocalModelAsset,
+        configId: String,
+    ) {
+        runBlocking {
+            localModelRepository.upsertLocalAsset(asset)
+            localModelRepository.upsertLocalConfiguration(
+                LocalModelConfiguration(
+                    id = LocalModelConfigurationId(configId),
+                    localModelId = asset.metadata.id,
+                    displayName = "Test Model",
+                    maxTokens = 512,
+                    contextWindow = 4096,
+                    temperature = 0.7,
+                    topP = 0.9,
+                    topK = 40,
+                    repetitionPenalty = 1.1,
+                    systemPrompt = "System",
+                ),
+            )
+        }
     }
 
     private fun createService(modelType: ModelType = ModelType.FAST): LlamaInferenceServiceImpl =

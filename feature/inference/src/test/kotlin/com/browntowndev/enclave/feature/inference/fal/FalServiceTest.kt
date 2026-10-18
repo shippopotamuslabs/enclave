@@ -1,3 +1,6 @@
+@file:Suppress("ForbiddenMockKInTests")
+
+// MockK is retained only for the third-party okhttp3 Call/OkHttpClient boundary; FalService itself is the class under test.
 package com.browntowndev.enclave.feature.inference.fal
 
 import io.mockk.every

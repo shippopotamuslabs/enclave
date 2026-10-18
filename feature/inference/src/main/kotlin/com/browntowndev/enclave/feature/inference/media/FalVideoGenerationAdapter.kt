@@ -17,7 +17,7 @@ import kotlinx.serialization.json.put
 import java.util.Base64
 import javax.inject.Inject
 
-class FalVideoGenerationAdapter(
+open class FalVideoGenerationAdapter(
     private val falService: FalService,
     private val outputSchemaResolver: FalOutputSchemaResolver,
     private val pollDelayMillis: Long,
@@ -28,7 +28,7 @@ class FalVideoGenerationAdapter(
         outputSchemaResolver: FalOutputSchemaResolver,
     ) : this(falService, outputSchemaResolver, DEFAULT_POLL_DELAY_MILLIS)
 
-    suspend fun generateVideo(
+    open suspend fun generateVideo(
         prompt: String,
         apiKey: String,
         modelId: String,

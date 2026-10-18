@@ -1,8 +1,9 @@
 package com.browntowndev.enclave.feature.inference.tts.media
 
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.feature.inference.FakeOpenAiClientProviderPort
 import com.browntowndev.enclave.feature.inference.OpenAiClientProviderPort
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -10,8 +11,8 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class OpenAiMediaStreamServiceTest {
-    private val clientProvider: OpenAiClientProviderPort = mockk()
-    private val logger: LoggingPort = mockk(relaxed = true)
+    private val clientProvider: OpenAiClientProviderPort = FakeOpenAiClientProviderPort()
+    private val logger: LoggingPort = FakeLoggingPort()
     private lateinit var service: OpenAiMediaStreamService
 
     @BeforeEach

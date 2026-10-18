@@ -1,3 +1,6 @@
+// MockK is used only for Anthropic Java SDK types (com.anthropic.*), a third-party SDK boundary.
+@file:Suppress("ForbiddenMockKInTests")
+
 package com.browntowndev.enclave.feature.inference
 
 import com.anthropic.client.AnthropicClient
@@ -15,7 +18,7 @@ import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolStreamGateFinish
 import com.browntowndev.enclave.domain.model.inference.ToolStreamGateHandle
 import com.browntowndev.enclave.domain.model.inference.ToolStreamGatePushResult
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.port.inference.ToolStreamGatePort
 import com.browntowndev.enclave.domain.util.FakeToolEnvelopeParserPort
 import io.mockk.every
@@ -35,7 +38,7 @@ import kotlin.io.path.readText
  * centralized-leaked-tool-call-recovery — CL-MD-02, CL-K-05.
  */
 class LeakedToolRecoveryMutationTest {
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
+    private val loggingPort = FakeLoggingPort()
 
     @Test
     fun cl_md_02_tool_stream_gate_session_absent_in_inference() {

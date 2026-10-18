@@ -1,10 +1,11 @@
+@file:Suppress("ForbiddenMockKInTests") // MockK only for the raw google-genai SDK Client handed through the owned provider port.
+
 package com.browntowndev.enclave.feature.inference
 
 import com.browntowndev.enclave.domain.model.media.MusicGenerationSettings
 import com.browntowndev.enclave.feature.inference.media.GoogleMusicGenerationAdapter
 import com.google.genai.Client
 import com.google.genai.types.*
-import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
@@ -16,7 +17,7 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class GoogleMusicGenerationAdapterTest {
-    private val clientProvider = mockk<GoogleGenAiClientProviderPort>()
+    private val clientProvider = FakeGoogleGenAiClientProviderPort()
     private val client = mockk<Client>()
 
     @Test
@@ -56,7 +57,7 @@ class GoogleMusicGenerationAdapterTest {
                                 ),
                             ).build()
                 }
-            every { clientProvider.getClient("key", null) } returns client
+            clientProvider.client = client
 
             val result =
                 adapter.generateMusic(
@@ -113,7 +114,7 @@ class GoogleMusicGenerationAdapterTest {
                             ).build()
                     }
                 }
-            every { clientProvider.getClient("key", null) } returns client
+            clientProvider.client = client
 
             val result =
                 adapter.generateMusic(
@@ -154,7 +155,7 @@ class GoogleMusicGenerationAdapterTest {
                                 ),
                             ).build()
                 }
-            every { clientProvider.getClient("key", null) } returns client
+            clientProvider.client = client
 
             val result =
                 adapter.generateMusic(

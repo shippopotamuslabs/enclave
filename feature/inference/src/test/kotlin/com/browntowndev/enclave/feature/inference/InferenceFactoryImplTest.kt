@@ -1,8 +1,18 @@
+@file:Suppress("ForbiddenMockKInTests") // OpenAIClient/AnthropicClient/genai Client are third-party SDK types; MockK is used only for them.
+
 package com.browntowndev.enclave.feature.inference
 
 import android.content.Context
-import android.content.pm.ApplicationInfo
+import androidx.test.core.app.ApplicationProvider
 import com.anthropic.client.AnthropicClient
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
+import com.browntowndev.enclave.core.testing.FakeApiKeyProvider
+import com.browntowndev.enclave.core.testing.FakeApiModelRepository
+import com.browntowndev.enclave.core.testing.FakeEmbeddingEngine
+import com.browntowndev.enclave.core.testing.FakeLocalModelRepository
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeTelemetryEventPort
+import com.browntowndev.enclave.core.testing.FakeToolExecutor
 import com.browntowndev.enclave.domain.model.config.ApiCredentials
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.config.ApiModelConfiguration
@@ -15,82 +25,64 @@ import com.browntowndev.enclave.domain.model.error.InferenceIOException
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.device.DeviceMemoryProbePort
-import com.browntowndev.enclave.domain.port.inference.AgentLoopPort
 import com.browntowndev.enclave.domain.port.inference.CompactionSummarizerPort
 import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.enclave.domain.port.inference.NoopToolSearchEmbeddingCachePort
 import com.browntowndev.enclave.domain.usecase.chat.InMemoryMonotonicToolActivationStore
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
-import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
-import com.browntowndev.enclave.domain.port.repository.ApiModelRepositoryPort
-import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
-import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
-import com.browntowndev.enclave.domain.port.security.ApiKeyProviderPort
-import com.browntowndev.enclave.domain.usecase.chat.ProcessThinkingTokensUseCase
-import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
+import com.browntowndev.enclave.domain.usecase.inference.InferenceType
 import com.browntowndev.enclave.domain.util.FakeToolEnvelopeParserPort
 import com.browntowndev.enclave.domain.util.FakeToolStreamGatePort
 import com.browntowndev.enclave.feature.inference.llama.LlamaChatSessionManager
 import com.google.genai.Client
 import com.openai.client.OpenAIClient
-import io.mockk.coEvery
-import io.mockk.every
 import io.mockk.mockk
-import io.mockk.verify
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotSame
 import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import java.io.File
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 import javax.inject.Provider
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class InferenceFactoryImplTest {
-    private val context = mockk<Context>(relaxed = true)
-    private val defaultModelRepository = mockk<DefaultModelRepositoryPort>()
-    private val localModelRepository = mockk<LocalModelRepositoryPort>(relaxed = true)
-    private val activeModelProvider = mockk<ActiveModelProviderPort>(relaxed = true)
-    private val apiModelRepository = mockk<ApiModelRepositoryPort>()
-    private val apiKeyProvider = mockk<ApiKeyProviderPort>()
-    private val processThinkingTokens = mockk<ProcessThinkingTokensUseCase>(relaxed = true)
-    private val llamaSessionManager = mockk<LlamaChatSessionManager>(relaxed = true)
-    private val conversationProvider = providerOf(mockk<ConversationManager>(relaxed = true))
-    private val openAiClientProvider = mockk<OpenAiClientProviderPort>(relaxed = true)
-    private val anthropicClientProvider = mockk<AnthropicClientProviderPort>(relaxed = true)
-    private val googleGenAiClientProvider = mockk<GoogleGenAiClientProviderPort>()
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
-    private val inferenceLockManager = mockk<InferenceLockManager>()
-    private val agentLoopPort = mockk<AgentLoopPort>(relaxed = true)
-    private val toolExecutor = mockk<ToolExecutorPort>()
+    private val defaultModelRepository = FakeFailingDefaultModelRepository()
+    private val localModelRepository = FakeLocalModelRepository()
+    private val activeModelProvider = FakeActiveModelProvider()
+    private val apiModelRepository = FakeApiModelRepository()
+    private val apiKeyProvider = FakeApiKeyProvider()
+    private val processThinkingTokens = FakeProcessThinkingTokensUseCase()
+    private val llamaSessionManager = LlamaChatSessionManager(FakeLlamaEnginePort())
+    private val conversationProvider: Provider<ConversationManager> = providerOf(FakeConversationManager())
+    private val openAiClientProvider = FakeOpenAiClientProviderPort()
+    private val anthropicClientProvider = FakeAnthropicClientProviderPort()
+    private val googleGenAiClientProvider = FakeGoogleGenAiClientProviderPort()
+    private val loggingPort = FakeLoggingPort()
+    private val inferenceLockManager = FakeInferenceLockManager()
+    private val agentLoopPort = FakeAgentLoopPort()
+    private val toolExecutor = FakeToolExecutor()
     private val openAiClient = mockk<OpenAIClient>(relaxed = true)
     private val anthropicClient = mockk<AnthropicClient>(relaxed = true)
     private val googleClient = mockk<Client>(relaxed = true)
-    private val embeddingEnginePort = mockk<EmbeddingEnginePort>(relaxed = true)
+    private val embeddingEnginePort: EmbeddingEnginePort = FakeEmbeddingEngine()
 
     private lateinit var factory: InferenceFactoryImpl
 
     @BeforeEach
     fun setUp() {
-        val applicationInfo = mockk<ApplicationInfo>(relaxed = true)
-        every { context.packageName } returns "com.browntowndev.enclave"
-        every { context.packageManager } returns mockk(relaxed = true)
-        every { context.applicationInfo } returns applicationInfo
-        every { context.getExternalFilesDir(null) } returns File("/tmp")
-        every { applicationInfo.loadLabel(any()) } returns "Enclave"
-        every { inferenceLockManager.acquireLock(any()) } returns true
-        every { inferenceLockManager.releaseLock(any()) } returns Unit
-        every { inferenceLockManager.isInferenceBlocked } returns MutableStateFlow(false)
-        every { openAiClientProvider.getClient(any(), any(), any(), any(), any()) } returns openAiClient
-        every { anthropicClientProvider.getClient(any(), any()) } returns anthropicClient
-        every { googleGenAiClientProvider.getClient(any(), any(), any(), any()) } returns googleClient
+        openAiClientProvider.client = openAiClient
+        anthropicClientProvider.client = anthropicClient
+        googleGenAiClientProvider.client = googleClient
 
         factory =
             InferenceFactoryImpl(
-                context = context,
+                context = ApplicationProvider.getApplicationContext<Context>(),
                 defaultModelRepository = defaultModelRepository,
                 localModelRepository = localModelRepository,
                 activeModelProvider = activeModelProvider,
@@ -104,13 +96,13 @@ class InferenceFactoryImplTest {
                 googleGenAiClientProvider = googleGenAiClientProvider,
                 loggingPort = loggingPort,
                 inferenceLockManager = inferenceLockManager,
-                toolExecutionEventPort = mockk(relaxed = true),
+                toolExecutionEventPort = FakeToolExecutionEventPort(),
                 agentLoopPort = agentLoopPort,
                 toolExecutorPort = toolExecutor,
                 toolEnvelopeParserPort = FakeToolEnvelopeParserPort(),
                 toolStreamGatePort = FakeToolStreamGatePort(),
                 telemetrySupport = testInferenceTelemetrySupport(),
-                telemetryEventPort = mockk(relaxed = true),
+                telemetryEventPort = FakeTelemetryEventPort(),
                 embeddingEnginePort = embeddingEnginePort,
                 monotonicToolActivation = InMemoryMonotonicToolActivationStore(),
                 toolSearchEmbeddingCache = NoopToolSearchEmbeddingCachePort,
@@ -158,10 +150,10 @@ class InferenceFactoryImplTest {
                     configurations = emptyList(),
                 )
 
-            coEvery { defaultModelRepository.getDefault(ModelType.FAST) } returns assignmentFast
-            coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns assignmentThinking
-            coEvery { localModelRepository.getAssetByConfigId(LocalModelConfigurationId("config-fast")) } returns assetFast
-            coEvery { localModelRepository.getAssetByConfigId(LocalModelConfigurationId("config-thinking")) } returns assetThinking
+            defaultModelRepository.seed(assignmentFast)
+            defaultModelRepository.seed(assignmentThinking)
+            localModelRepository.seedAssetForConfig(LocalModelConfigurationId("config-fast"), assetFast)
+            localModelRepository.seedAssetForConfig(LocalModelConfigurationId("config-thinking"), assetThinking)
 
             val first = factory.withInferenceService(ModelType.FAST) { it }
             val second = factory.withInferenceService(ModelType.THINKING) { it }
@@ -206,10 +198,10 @@ class InferenceFactoryImplTest {
                     configurations = emptyList(),
                 )
 
-            coEvery { defaultModelRepository.getDefault(ModelType.FAST) } returns assignmentFast
-            coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns assignmentThinking
-            coEvery { localModelRepository.getAssetByConfigId(LocalModelConfigurationId("config-1")) } returns asset1
-            coEvery { localModelRepository.getAssetByConfigId(LocalModelConfigurationId("config-2")) } returns asset2
+            defaultModelRepository.seed(assignmentFast)
+            defaultModelRepository.seed(assignmentThinking)
+            localModelRepository.seedAssetForConfig(LocalModelConfigurationId("config-1"), asset1)
+            localModelRepository.seedAssetForConfig(LocalModelConfigurationId("config-2"), asset2)
 
             val first = factory.withInferenceService(ModelType.FAST) { it }
             val second = factory.withInferenceService(ModelType.THINKING) { it }
@@ -229,14 +221,15 @@ class InferenceFactoryImplTest {
                 )
             val credentials = apiCredentials()
 
-            coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns assignment
-            coEvery { apiModelRepository.getConfigurationById(ApiModelConfigurationId("7")) } answers { config }
-            coEvery { apiModelRepository.getCredentialsById(ApiCredentialsId("11")) } returns credentials
-            coEvery { apiKeyProvider.getApiKey("alias") } returns "secret"
+            defaultModelRepository.seed(assignment)
+            apiModelRepository.seedConfigurations(listOf(config))
+            apiModelRepository.seedCredentials(listOf(credentials))
+            apiKeyProvider.saveApiKey("alias", "secret")
 
             val first = factory.withInferenceService(ModelType.THINKING) { it }
 
             config = config.copy(modelId = "gpt-5")
+            apiModelRepository.seedConfigurations(listOf(config))
             val second = factory.withInferenceService(ModelType.THINKING) { it }
 
             assertNotSame(first, second)
@@ -255,14 +248,15 @@ class InferenceFactoryImplTest {
             val credentials = apiCredentials()
             var apiKey = "secret-a"
 
-            coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns assignment
-            coEvery { apiModelRepository.getConfigurationById(ApiModelConfigurationId("7")) } returns config
-            coEvery { apiModelRepository.getCredentialsById(ApiCredentialsId("11")) } returns credentials
-            coEvery { apiKeyProvider.getApiKey("alias") } answers { apiKey }
+            defaultModelRepository.seed(assignment)
+            apiModelRepository.seedConfigurations(listOf(config))
+            apiModelRepository.seedCredentials(listOf(credentials))
+            apiKeyProvider.saveApiKey("alias", apiKey)
 
             val first = factory.withInferenceService(ModelType.THINKING) { it }
 
             apiKey = "secret-b"
+            apiKeyProvider.saveApiKey("alias", apiKey)
             val second = factory.withInferenceService(ModelType.THINKING) { it }
 
             assertNotSame(first, second)
@@ -281,10 +275,10 @@ class InferenceFactoryImplTest {
                 )
             val credentials = apiCredentials(provider = ApiProvider.OPENROUTER)
 
-            coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns assignment
-            coEvery { apiModelRepository.getConfigurationById(ApiModelConfigurationId("9")) } answers { config }
-            coEvery { apiModelRepository.getCredentialsById(ApiCredentialsId("11")) } returns credentials
-            coEvery { apiKeyProvider.getApiKey("alias") } returns "secret"
+            defaultModelRepository.seed(assignment)
+            apiModelRepository.seedConfigurations(listOf(config))
+            apiModelRepository.seedCredentials(listOf(credentials))
+            apiKeyProvider.saveApiKey("alias", "secret")
 
             val first = factory.withInferenceService(ModelType.THINKING) { it }
 
@@ -292,6 +286,7 @@ class InferenceFactoryImplTest {
                 config.copy(
                     openRouterRouting = OpenRouterRoutingConfiguration(preferredProvider = "deepinfra"),
                 )
+            apiModelRepository.seedConfigurations(listOf(config))
             val second = factory.withInferenceService(ModelType.THINKING) { it }
 
             assertNotSame(first, second)
@@ -327,16 +322,16 @@ class InferenceFactoryImplTest {
             val credentials = apiCredentials()
 
             // First load local model
-            coEvery { defaultModelRepository.getDefault(ModelType.FAST) } returns localAssignment
-            coEvery { localModelRepository.getAssetByConfigId(LocalModelConfigurationId("config-1")) } returns asset
+            defaultModelRepository.seed(localAssignment)
+            localModelRepository.seedAssetForConfig(LocalModelConfigurationId("config-1"), asset)
 
             val localService = factory.withInferenceService(ModelType.FAST) { it }
 
             // Then switch FAST to API model
-            coEvery { defaultModelRepository.getDefault(ModelType.FAST) } returns apiAssignment
-            coEvery { apiModelRepository.getConfigurationById(ApiModelConfigurationId("7")) } returns config
-            coEvery { apiModelRepository.getCredentialsById(ApiCredentialsId("11")) } returns credentials
-            coEvery { apiKeyProvider.getApiKey("alias") } returns "secret"
+            defaultModelRepository.seed(apiAssignment)
+            apiModelRepository.seedConfigurations(listOf(config))
+            apiModelRepository.seedCredentials(listOf(credentials))
+            apiKeyProvider.saveApiKey("alias", "secret")
 
             val apiService = factory.withInferenceService(ModelType.FAST) { it }
 
@@ -392,10 +387,10 @@ class InferenceFactoryImplTest {
             val credentials = apiCredentials()
 
             // Load local model for both FAST and THINKING
-            coEvery { defaultModelRepository.getDefault(ModelType.FAST) } returns localAssignmentFast
-            coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns localAssignmentThinking
-            coEvery { localModelRepository.getAssetByConfigId(LocalModelConfigurationId("config-fast")) } returns assetFast
-            coEvery { localModelRepository.getAssetByConfigId(LocalModelConfigurationId("config-thinking")) } returns assetThinking
+            defaultModelRepository.seed(localAssignmentFast)
+            defaultModelRepository.seed(localAssignmentThinking)
+            localModelRepository.seedAssetForConfig(LocalModelConfigurationId("config-fast"), assetFast)
+            localModelRepository.seedAssetForConfig(LocalModelConfigurationId("config-thinking"), assetThinking)
 
             val localServiceFast = factory.withInferenceService(ModelType.FAST) { it }
             val localServiceThinking = factory.withInferenceService(ModelType.THINKING) { it }
@@ -403,10 +398,10 @@ class InferenceFactoryImplTest {
             assertEquals(localServiceFast, localServiceThinking) // They share the same instance
 
             // Switch THINKING to API model
-            coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns apiAssignmentThinking
-            coEvery { apiModelRepository.getConfigurationById(ApiModelConfigurationId("7")) } returns config
-            coEvery { apiModelRepository.getCredentialsById(ApiCredentialsId("11")) } returns credentials
-            coEvery { apiKeyProvider.getApiKey("alias") } returns "secret"
+            defaultModelRepository.seed(apiAssignmentThinking)
+            apiModelRepository.seedConfigurations(listOf(config))
+            apiModelRepository.seedCredentials(listOf(credentials))
+            apiKeyProvider.saveApiKey("alias", "secret")
 
             val apiServiceThinking = factory.withInferenceService(ModelType.THINKING) { it }
 
@@ -428,19 +423,19 @@ class InferenceFactoryImplTest {
                 )
             val credentials = apiCredentials()
 
-            coEvery { defaultModelRepository.getDefault(ModelType.FAST) } returns
+            defaultModelRepository.seed(
                 DefaultModelAssignment(
                     modelType = ModelType.FAST,
                     apiConfigId = ApiModelConfigurationId("7"),
-                )
-            coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns
+                ))
+            defaultModelRepository.seed(
                 DefaultModelAssignment(
                     modelType = ModelType.THINKING,
                     apiConfigId = ApiModelConfigurationId("7"),
-                )
-            coEvery { apiModelRepository.getConfigurationById(ApiModelConfigurationId("7")) } returns config
-            coEvery { apiModelRepository.getCredentialsById(ApiCredentialsId("11")) } returns credentials
-            coEvery { apiKeyProvider.getApiKey("alias") } returns "secret"
+                ))
+            apiModelRepository.seedConfigurations(listOf(config))
+            apiModelRepository.seedCredentials(listOf(credentials))
+            apiKeyProvider.saveApiKey("alias", "secret")
 
             val fastService = factory.withInferenceService(ModelType.FAST) { it }
             val thinkingService = factory.withInferenceService(ModelType.THINKING) { it }
@@ -460,10 +455,10 @@ class InferenceFactoryImplTest {
                 )
             val credentials = apiCredentials(provider = ApiProvider.OPENROUTER)
 
-            coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns assignment
-            coEvery { apiModelRepository.getConfigurationById(ApiModelConfigurationId("9")) } returns config
-            coEvery { apiModelRepository.getCredentialsById(ApiCredentialsId("11")) } returns credentials
-            coEvery { apiKeyProvider.getApiKey("alias") } returns "secret"
+            defaultModelRepository.seed(assignment)
+            apiModelRepository.seedConfigurations(listOf(config))
+            apiModelRepository.seedCredentials(listOf(credentials))
+            apiKeyProvider.saveApiKey("alias", "secret")
 
             val service = factory.withInferenceService(ModelType.THINKING) { it }
 
@@ -485,21 +480,17 @@ class InferenceFactoryImplTest {
                 )
             val credentials = apiCredentials(provider = ApiProvider.OPENROUTER)
 
-            coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns assignment
-            coEvery { apiModelRepository.getConfigurationById(ApiModelConfigurationId("9")) } returns config
-            coEvery { apiModelRepository.getCredentialsById(ApiCredentialsId("11")) } returns credentials
-            coEvery { apiKeyProvider.getApiKey("alias") } returns "secret"
+            defaultModelRepository.seed(assignment)
+            apiModelRepository.seedConfigurations(listOf(config))
+            apiModelRepository.seedCredentials(listOf(credentials))
+            apiKeyProvider.saveApiKey("alias", "secret")
 
             val service = factory.withInferenceService(ModelType.THINKING) { it }
 
             assertTrue(service is RustLoopInferenceService)
-            verify {
-                openAiClientProvider.getClient(
-                    apiKey = "secret",
-                    baseUrl = ApiProvider.OPENROUTER.defaultBaseUrl(),
-                    headers = any(),
-                )
-            }
+            val request = openAiClientProvider.getClientRequests.last()
+            assertEquals("secret", request.apiKey)
+            assertEquals(ApiProvider.OPENROUTER.defaultBaseUrl(), request.baseUrl)
         }
 
     @Test
@@ -520,21 +511,18 @@ class InferenceFactoryImplTest {
                     id = ApiCredentialsId("12"),
                 )
 
-            coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns assignment
-            coEvery { apiModelRepository.getConfigurationById(ApiModelConfigurationId("10")) } returns config
-            coEvery { apiModelRepository.getCredentialsById(ApiCredentialsId("12")) } returns credentials
-            coEvery { apiKeyProvider.getApiKey("alias") } returns "secret"
+            defaultModelRepository.seed(assignment)
+            apiModelRepository.seedConfigurations(listOf(config))
+            apiModelRepository.seedCredentials(listOf(credentials))
+            apiKeyProvider.saveApiKey("alias", "secret")
 
             val service = factory.withInferenceService(ModelType.THINKING) { it }
 
             assertTrue(service is RustLoopInferenceService)
-            verify {
-                anthropicClientProvider.getClient(
-                    apiKey = "secret",
-                    baseUrl = null,
-                    headers = emptyMap(),
-                )
-            }
+            val request = anthropicClientProvider.getClientRequests.last()
+            assertEquals("secret", request.apiKey)
+            assertEquals(null, request.baseUrl)
+            assertEquals(emptyMap<String, String>(), request.headers)
         }
 
     @Test
@@ -555,21 +543,18 @@ class InferenceFactoryImplTest {
                     id = ApiCredentialsId("12"),
                 )
 
-            coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns assignment
-            coEvery { apiModelRepository.getConfigurationById(ApiModelConfigurationId("13")) } returns config
-            coEvery { apiModelRepository.getCredentialsById(ApiCredentialsId("12")) } returns credentials
-            coEvery { apiKeyProvider.getApiKey("alias") } returns "secret"
+            defaultModelRepository.seed(assignment)
+            apiModelRepository.seedConfigurations(listOf(config))
+            apiModelRepository.seedCredentials(listOf(credentials))
+            apiKeyProvider.saveApiKey("alias", "secret")
 
             val service = factory.withInferenceService(ModelType.THINKING) { it }
 
             assertTrue(service is RustLoopInferenceService)
-            verify {
-                googleGenAiClientProvider.getClient(
-                    apiKey = "secret",
-                    baseUrl = ApiProvider.GOOGLE.defaultBaseUrl(),
-                    headers = emptyMap(),
-                )
-            }
+            val request = googleGenAiClientProvider.getClientRequests.last()
+            assertEquals("secret", request.apiKey)
+            assertEquals(ApiProvider.GOOGLE.defaultBaseUrl(), request.baseUrl)
+            assertEquals(emptyMap<String, String>(), request.headers)
         }
 
     @Test
@@ -595,16 +580,15 @@ class InferenceFactoryImplTest {
         runTest {
             val configId = ApiModelConfigurationId("fal-raw-config")
             val credsId = ApiCredentialsId("fal-raw-creds")
-            coEvery { apiModelRepository.getConfigurationById(configId) } returns
+            apiModelRepository.seedConfigurations(listOf(
                 apiModelConfiguration(
                     id = configId,
                     apiCredentialsId = credsId,
                     modelId = "fal-ai/flux-pro/kontext",
                     displayName = "FAL preset",
-                )
-            coEvery { apiModelRepository.getCredentialsById(credsId) } returns
-                apiCredentials(id = credsId, provider = ApiProvider.FAL)
-            coEvery { apiKeyProvider.getApiKey("alias") } returns "secret"
+                )))
+            apiModelRepository.seedCredentials(listOf(apiCredentials(id = credsId, provider = ApiProvider.FAL)))
+            apiKeyProvider.saveApiKey("alias", "secret")
 
             val thrown =
                 runCatching {
@@ -627,22 +611,18 @@ class InferenceFactoryImplTest {
                 )
             val credentials = apiCredentials(provider = ApiProvider.OPENROUTER, baseUrl = null)
 
-            coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns assignment
-            coEvery { apiModelRepository.getConfigurationById(ApiModelConfigurationId("9")) } returns config
-            coEvery { apiModelRepository.getCredentialsById(ApiCredentialsId("11")) } returns credentials
-            coEvery { apiKeyProvider.getApiKey("alias") } returns "secret"
+            defaultModelRepository.seed(assignment)
+            apiModelRepository.seedConfigurations(listOf(config))
+            apiModelRepository.seedCredentials(listOf(credentials))
+            apiKeyProvider.saveApiKey("alias", "secret")
 
             val service = factory.withInferenceService(ModelType.THINKING) { it }
 
             assertTrue(service is RustLoopInferenceService)
             // Verify the client provider was called with the resolved base URL
-            io.mockk.verify {
-                openAiClientProvider.getClient(
-                    apiKey = "secret",
-                    baseUrl = "https://openrouter.ai/api/v1",
-                    headers = any(),
-                )
-            }
+            val request = openAiClientProvider.getClientRequests.last()
+            assertEquals("secret", request.apiKey)
+            assertEquals("https://openrouter.ai/api/v1", request.baseUrl)
         }
 
     @Test
@@ -650,20 +630,20 @@ class InferenceFactoryImplTest {
         runTest {
             val configId = ApiModelConfigurationId("deepseek-config")
             val credsId = ApiCredentialsId("deepseek-creds")
-            coEvery { apiModelRepository.getConfigurationById(configId) } returns
+            apiModelRepository.seedConfigurations(listOf(
                 apiModelConfiguration(
                     id = configId,
                     apiCredentialsId = credsId,
                     modelId = "deepseek-chat",
                     displayName = "DeepSeek preset",
-                )
-            coEvery { apiModelRepository.getCredentialsById(credsId) } returns
+                )))
+            apiModelRepository.seedCredentials(listOf(
                 apiCredentials(
                     id = credsId,
                     provider = ApiProvider.DEEPSEEK,
                     baseUrl = null,
-                )
-            coEvery { apiKeyProvider.getApiKey("alias") } returns "ds-secret"
+                )))
+            apiKeyProvider.saveApiKey("alias", "ds-secret")
 
             val service = factory.withRawApiServiceForConfig(configId) { it }
 
@@ -675,30 +655,26 @@ class InferenceFactoryImplTest {
         runTest {
             val configId = ApiModelConfigurationId("deepseek-config-2")
             val credsId = ApiCredentialsId("deepseek-creds-2")
-            coEvery { apiModelRepository.getConfigurationById(configId) } returns
+            apiModelRepository.seedConfigurations(listOf(
                 apiModelConfiguration(
                     id = configId,
                     apiCredentialsId = credsId,
                     modelId = "deepseek-chat",
                     displayName = "DeepSeek preset",
-                )
-            coEvery { apiModelRepository.getCredentialsById(credsId) } returns
+                )))
+            apiModelRepository.seedCredentials(listOf(
                 apiCredentials(
                     id = credsId,
                     provider = ApiProvider.DEEPSEEK,
                     baseUrl = "   ",
-                )
-            coEvery { apiKeyProvider.getApiKey("alias") } returns "ds-secret"
+                )))
+            apiKeyProvider.saveApiKey("alias", "ds-secret")
 
             factory.withRawApiServiceForConfig(configId) { it }
 
-            verify {
-                openAiClientProvider.getClient(
-                    apiKey = "ds-secret",
-                    baseUrl = "https://api.deepseek.com",
-                    headers = any(),
-                )
-            }
+            val request = openAiClientProvider.getClientRequests.last()
+            assertEquals("ds-secret", request.apiKey)
+            assertEquals("https://api.deepseek.com", request.baseUrl)
         }
 
     @Test
@@ -713,21 +689,17 @@ class InferenceFactoryImplTest {
                 )
             val credentials = apiCredentials(provider = ApiProvider.ZAI, baseUrl = null)
 
-            coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns assignment
-            coEvery { apiModelRepository.getConfigurationById(ApiModelConfigurationId("zai-config")) } returns config
-            coEvery { apiModelRepository.getCredentialsById(ApiCredentialsId("11")) } returns credentials
-            coEvery { apiKeyProvider.getApiKey("alias") } returns "secret"
+            defaultModelRepository.seed(assignment)
+            apiModelRepository.seedConfigurations(listOf(config))
+            apiModelRepository.seedCredentials(listOf(credentials))
+            apiKeyProvider.saveApiKey("alias", "secret")
 
             val service = factory.withInferenceService(ModelType.THINKING) { it }
 
             assertTrue(service is RustLoopInferenceService)
-            verify {
-                openAiClientProvider.getClient(
-                    apiKey = "secret",
-                    baseUrl = "https://api.z.ai/api/paas/v4",
-                    headers = any(),
-                )
-            }
+            val request = openAiClientProvider.getClientRequests.last()
+            assertEquals("secret", request.apiKey)
+            assertEquals("https://api.z.ai/api/paas/v4", request.baseUrl)
         }
 
     @Test
@@ -742,22 +714,18 @@ class InferenceFactoryImplTest {
                 )
             val credentials = apiCredentials(provider = ApiProvider.XAI, baseUrl = "   ")
 
-            coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns assignment
-            coEvery { apiModelRepository.getConfigurationById(ApiModelConfigurationId("9")) } returns config
-            coEvery { apiModelRepository.getCredentialsById(ApiCredentialsId("11")) } returns credentials
-            coEvery { apiKeyProvider.getApiKey("alias") } returns "secret"
+            defaultModelRepository.seed(assignment)
+            apiModelRepository.seedConfigurations(listOf(config))
+            apiModelRepository.seedCredentials(listOf(credentials))
+            apiKeyProvider.saveApiKey("alias", "secret")
 
             val service = factory.withInferenceService(ModelType.THINKING) { it }
 
             assertTrue(service is RustLoopInferenceService)
             // Verify the client provider was called with the resolved base URL
-            io.mockk.verify {
-                openAiClientProvider.getClient(
-                    apiKey = "secret",
-                    baseUrl = "https://api.x.ai/v1",
-                    headers = any(),
-                )
-            }
+            val request = openAiClientProvider.getClientRequests.last()
+            assertEquals("secret", request.apiKey)
+            assertEquals("https://api.x.ai/v1", request.baseUrl)
         }
 
     @Test
@@ -773,22 +741,18 @@ class InferenceFactoryImplTest {
                 )
             val credentials = apiCredentials(provider = ApiProvider.OPENROUTER, baseUrl = customUrl)
 
-            coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns assignment
-            coEvery { apiModelRepository.getConfigurationById(ApiModelConfigurationId("9")) } returns config
-            coEvery { apiModelRepository.getCredentialsById(ApiCredentialsId("11")) } returns credentials
-            coEvery { apiKeyProvider.getApiKey("alias") } returns "secret"
+            defaultModelRepository.seed(assignment)
+            apiModelRepository.seedConfigurations(listOf(config))
+            apiModelRepository.seedCredentials(listOf(credentials))
+            apiKeyProvider.saveApiKey("alias", "secret")
 
             val service = factory.withInferenceService(ModelType.THINKING) { it }
 
             assertTrue(service is RustLoopInferenceService)
             // Verify the client provider was called with the custom base URL
-            io.mockk.verify {
-                openAiClientProvider.getClient(
-                    apiKey = "secret",
-                    baseUrl = customUrl,
-                    headers = any(),
-                )
-            }
+            val request = openAiClientProvider.getClientRequests.last()
+            assertEquals("secret", request.apiKey)
+            assertEquals(customUrl, request.baseUrl)
         }
 
     @Test
@@ -803,28 +767,29 @@ class InferenceFactoryImplTest {
                     displayName = "Vision preset",
                 )
 
-            coEvery { defaultModelRepository.getDefault(ModelType.VISION) } returns assignment
-            coEvery { apiModelRepository.getConfigurationById(ApiModelConfigurationId("vision-config")) } returns config
-            coEvery { apiModelRepository.getCredentialsById(ApiCredentialsId("vision-creds")) } returns
-                apiCredentials(
-                    provider = ApiProvider.OPENAI,
-                    id = ApiCredentialsId("vision-creds"),
-                )
-            coEvery { apiKeyProvider.getApiKey("alias") } returns "secret"
+            defaultModelRepository.seed(assignment)
+            apiModelRepository.seedConfigurations(listOf(config))
+            apiModelRepository.seedCredentials(
+                listOf(
+                    apiCredentials(
+                        provider = ApiProvider.OPENAI,
+                        id = ApiCredentialsId("vision-creds"),
+                    ),
+                ),
+            )
+            apiKeyProvider.saveApiKey("alias", "secret")
 
             val service = factory.withInferenceService(ModelType.VISION) { it }
 
             assertTrue(service is RustLoopInferenceService)
-            verify { inferenceLockManager.acquireLock(com.browntowndev.enclave.domain.usecase.inference.InferenceType.BYOK) }
-            verify(
-                exactly = 0,
-            ) { inferenceLockManager.acquireLock(com.browntowndev.enclave.domain.usecase.inference.InferenceType.ON_DEVICE) }
+            assertTrue(inferenceLockManager.acquiredTypes.contains(InferenceType.BYOK))
+            assertFalse(inferenceLockManager.acquiredTypes.contains(InferenceType.ON_DEVICE))
         }
 
     @Test
     fun `withInferenceService maps IOException from default model lookup to InferenceIOException`() =
         runTest {
-            coEvery { defaultModelRepository.getDefault(any()) } throws java.io.IOException("io fail")
+            defaultModelRepository.getDefaultFailure = java.io.IOException("io fail")
 
             val thrown =
                 runCatching {
@@ -871,19 +836,20 @@ class InferenceFactoryImplTest {
         apiCredentialsId: ApiCredentialsId,
         modelId: String,
     ): com.browntowndev.enclave.domain.port.inference.LlmInferencePort {
-        coEvery { defaultModelRepository.getDefault(modelType) } returns
+        defaultModelRepository.seed(
             DefaultModelAssignment(
                 modelType = modelType,
                 apiConfigId = apiConfigId,
-            )
-        coEvery { apiModelRepository.getConfigurationById(apiConfigId) } returns
+            ),
+        )
+        apiModelRepository.seedConfigurations(listOf(
             apiModelConfiguration(
                 id = apiConfigId,
                 apiCredentialsId = apiCredentialsId,
                 modelId = modelId,
                 displayName = "${provider.name} preset",
-            )
-        coEvery { apiModelRepository.getCredentialsById(apiCredentialsId) } returns
+            )))
+        apiModelRepository.seedCredentials(listOf(
             apiCredentials(
                 id = apiCredentialsId,
                 provider = provider,
@@ -892,8 +858,8 @@ class InferenceFactoryImplTest {
                         ApiProvider.OPENAI -> "https://api.openai.com/v1"
                         else -> provider.defaultBaseUrl()
                     },
-            )
-        coEvery { apiKeyProvider.getApiKey("alias") } returns "secret"
+            )))
+        apiKeyProvider.saveApiKey("alias", "secret")
         return factory.withInferenceService(modelType) { it }
     }
 

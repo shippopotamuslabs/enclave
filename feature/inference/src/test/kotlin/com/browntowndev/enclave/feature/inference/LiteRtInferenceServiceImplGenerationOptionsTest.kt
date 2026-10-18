@@ -2,19 +2,10 @@ package com.browntowndev.enclave.feature.inference
 
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.port.inference.ToolExecutionEventPort
 import com.browntowndev.enclave.domain.usecase.chat.ProcessThinkingTokensUseCase
-import io.mockk.MockKAnnotations
-import io.mockk.coEvery
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.mockkStatic
-import io.mockk.slot
-import io.mockk.unmockkStatic
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
-import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
@@ -24,37 +15,24 @@ import org.junit.jupiter.api.Test
  * Tests for [LiteRtInferenceServiceImpl.sendPrompt] with `GenerationOptions` overload.
  */
 class LiteRtInferenceServiceImplGenerationOptionsTest {
-    private lateinit var mockConversationManager: ConversationManager
-    private lateinit var mockConversation: LiteRtConversation
+    private lateinit var conversationManager: FakeConversationManager
+    private lateinit var conversation: FakeLiteRtConversation
     private lateinit var processThinkingTokens: ProcessThinkingTokensUseCase
-    private val toolExecutionEventPort = mockk<ToolExecutionEventPort>(relaxed = true)
 
     @BeforeEach
     fun setup() {
-        MockKAnnotations.init(this)
-        mockkStatic(android.util.Log::class)
-        every { android.util.Log.d(any<String>(), any<String>()) } returns 0
-        every { android.util.Log.e(any<String>(), any<String>()) } returns 0
-
-        mockConversationManager = mockk(relaxed = true)
-        mockConversation = mockk(relaxed = true)
+        conversation = FakeLiteRtConversation()
+        conversationManager =
+            FakeConversationManager().also { it.conversation = conversation }
         processThinkingTokens = ProcessThinkingTokensUseCase()
-
-        coEvery { mockConversationManager.getConversation(any(), any(), any()) } returns mockConversation
-    }
-
-    @AfterEach
-    fun tearDown() {
-        unmockkStatic(android.util.Log::class)
     }
 
     @Test
     fun `sendPrompt with GenerationOptions accepts call`() =
         runTest {
-            val responses = flowOf(ConversationResponse(text = "response"))
-            every { mockConversation.sendMessageAsync(any(), any()) } returns responses
+            conversation.responseFlow = flowOf(ConversationResponse(text = "response"))
 
-            val service = LiteRtInferenceServiceImpl(mockConversationManager, processThinkingTokens, mockk(relaxed = true), ModelType.FAST)
+            val service = LiteRtInferenceServiceImpl(conversationManager, processThinkingTokens, FakeToolExecutionEventPort(), ModelType.FAST)
             val options = GenerationOptions(reasoningBudget = 2048)
             // Actually collect the flow to exercise the implementation
             val events = service.sendPrompt("hello", options, closeConversation = false).toList()
@@ -69,14 +47,12 @@ class LiteRtInferenceServiceImplGenerationOptionsTest {
                     reasoningBudget = 0,
                     imageUris = listOf("file:///tmp/test-image.jpg"),
                 )
-            val optionSlot = slot<GenerationOptions>()
-            val responses = flowOf(ConversationResponse(text = "response"))
-            every { mockConversation.sendMessageAsync(any(), capture(optionSlot)) } returns responses
+            conversation.responseFlow = flowOf(ConversationResponse(text = "response"))
 
             val service =
-                LiteRtInferenceServiceImpl(mockConversationManager, processThinkingTokens, mockk(relaxed = true), ModelType.VISION)
+                LiteRtInferenceServiceImpl(conversationManager, processThinkingTokens, FakeToolExecutionEventPort(), ModelType.VISION)
             service.sendPrompt("describe", options, closeConversation = false).toList()
 
-            assertEquals(listOf("file:///tmp/test-image.jpg"), optionSlot.captured.imageUris)
+            assertEquals(listOf("file:///tmp/test-image.jpg"), conversation.sendMessageCalls.single().second?.imageUris)
         }
 }

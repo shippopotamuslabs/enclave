@@ -1,5 +1,9 @@
+@file:Suppress("ForbiddenMockKInTests")
+
+// MockK retained only for the OpenAI Java SDK surface (third-party SDK boundary).
 package com.browntowndev.enclave.feature.inference
 
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.Role
@@ -27,7 +31,7 @@ import java.util.Optional
  * flag passed through [toChatCompletionTool] when [completeSingleTurn] builds its request.
  */
 class StrictToolSchemaFlagTest {
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
+    private val loggingPort = FakeLoggingPort()
     private val client = mockk<OpenAIClient>()
 
     // ── FSIE-03 ──────────────────────────────────────────────────────────────────

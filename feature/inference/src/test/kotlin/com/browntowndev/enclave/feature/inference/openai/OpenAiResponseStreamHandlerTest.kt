@@ -1,3 +1,6 @@
+@file:Suppress("ForbiddenMockKInTests")
+
+// MockK retained only for the OpenAI Java SDK surface (third-party SDK boundary).
 package com.browntowndev.enclave.feature.inference.openai
 
 import com.browntowndev.enclave.domain.model.chat.ChatId
@@ -5,7 +8,7 @@ import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
 import com.browntowndev.enclave.domain.port.inference.InferenceEvent
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseCompletedEvent
 import com.openai.models.responses.ResponseErrorEvent
@@ -25,7 +28,6 @@ import com.openai.models.responses.ResponseTextDoneEvent
 import com.openai.models.responses.ResponseUsage
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import java.util.Optional
 import kotlin.test.Test
@@ -37,7 +39,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class OpenAiResponseStreamHandlerTest {
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
+    private val loggingPort = FakeLoggingPort()
     private val emittedEvents = mutableListOf<InferenceEvent>()
     private val emitEvent: suspend (InferenceEvent) -> Unit = { emittedEvents.add(it) }
 
@@ -461,7 +463,7 @@ class OpenAiResponseStreamHandlerTest {
             assertEquals(1_000, streamed.inputTokens)
             assertEquals(200, streamed.outputTokens)
             assertEquals(400, streamed.cacheReadInputTokens)
-            verify { loggingPort.debug("TestHandler", any()) }
+            assertTrue(loggingPort.debugCalls.any { it.first == "TestHandler" })
         }
 
     @Test
@@ -520,7 +522,7 @@ class OpenAiResponseStreamHandlerTest {
             val result = handler.handleEvent(event, state)
 
             assertEquals(state, result)
-            verify { loggingPort.warning("TestHandler", any()) }
+            assertTrue(loggingPort.warningCalls.any { it.first == "TestHandler" })
         }
 
     @Test
@@ -549,8 +551,8 @@ class OpenAiResponseStreamHandlerTest {
 
             handler.handleEvent(event, state)
 
-            verify(exactly = 0) { loggingPort.debug(any(), any()) }
-            verify(exactly = 0) { loggingPort.warning(any(), any()) }
+            assertTrue(loggingPort.debugCalls.isEmpty())
+            assertTrue(loggingPort.warningCalls.isEmpty())
             assertTrue(emittedEvents.isEmpty())
         }
 
@@ -564,7 +566,11 @@ class OpenAiResponseStreamHandlerTest {
 
             handler.handleEvent(event, state)
 
-            verify { loggingPort.warning("TestHandler", match { it.contains("unrecognized event") }) }
+            assertTrue(
+                loggingPort.warningCalls.any {
+                    it.first == "TestHandler" && it.second.contains("unrecognized event")
+                },
+            )
         }
 
     // ── handleEvent: tool calls ──────────────────────────────────────────────
@@ -637,8 +643,8 @@ class OpenAiResponseStreamHandlerTest {
 
             handler.handleEvent(event, state)
 
-            verify(exactly = 0) { loggingPort.debug(any(), any()) }
-            verify(exactly = 0) { loggingPort.warning(any(), any()) }
+            assertTrue(loggingPort.debugCalls.isEmpty())
+            assertTrue(loggingPort.warningCalls.isEmpty())
             assertTrue(emittedEvents.isEmpty())
         }
 

@@ -2,12 +2,11 @@ package com.browntowndev.enclave.feature.inference
 
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.AgentLoopMessage
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.feature.inference.appendonly.FrozenSidecarSnapshot
 import com.browntowndev.enclave.feature.inference.appendonly.ResolvedSidecar
 import com.openai.models.responses.ResponseInputImage
 import com.openai.models.responses.ResponseInputItem
-import io.mockk.mockk
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -16,7 +15,7 @@ import org.junit.jupiter.api.Test
 import java.io.File
 
 class SidecarResponsesEmbedTest {
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
+    private val loggingPort = FakeLoggingPort()
 
     private fun mapSession(messages: List<AgentLoopMessage>): List<ResponseWireSegment> =
         AgentLoopOpenAiResponseMapper.mapSession(

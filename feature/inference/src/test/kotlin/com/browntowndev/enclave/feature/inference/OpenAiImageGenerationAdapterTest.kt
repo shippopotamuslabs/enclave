@@ -1,3 +1,6 @@
+@file:Suppress("ForbiddenMockKInTests")
+
+// MockK is retained only for the third-party OpenAI SDK surface (OpenAIClient/ImageService); the owned client-provider port uses a fake.
 package com.browntowndev.enclave.feature.inference
 
 import com.browntowndev.enclave.domain.model.media.AspectRatio
@@ -19,8 +22,8 @@ import java.util.Base64
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class OpenAiImageGenerationAdapterTest {
-    private val clientProvider = mockk<OpenAiClientProviderPort>()
     private val client = mockk<OpenAIClient>()
+    private val clientProvider = FakeOpenAiClientProviderPort().also { it.client = client }
     private val imageService = mockk<ImageService>()
     private val adapter = OpenAiImageGenerationAdapter(clientProvider)
 
@@ -28,7 +31,6 @@ class OpenAiImageGenerationAdapterTest {
     fun generateImage_passesNativeCount() =
         runTest {
             val paramsSlot = slot<ImageGenerateParams>()
-            every { clientProvider.getClient("key", null) } returns client
             every { client.images() } returns imageService
             every { imageService.generate(capture(paramsSlot)) } returns
                 successfulImageResponse(
@@ -55,7 +57,6 @@ class OpenAiImageGenerationAdapterTest {
     fun generateImage_usesCorrectModernMappings() =
         runTest {
             val paramsSlot = slot<ImageGenerateParams>()
-            every { clientProvider.getClient("key", null) } returns client
             every { client.images() } returns imageService
             every { imageService.generate(capture(paramsSlot)) } returns successfulImageResponse("image".toByteArray())
 

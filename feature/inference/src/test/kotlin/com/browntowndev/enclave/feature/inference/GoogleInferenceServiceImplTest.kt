@@ -1,36 +1,47 @@
 package com.browntowndev.enclave.feature.inference
 
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeTelemetryEventPort
+import com.browntowndev.enclave.domain.model.chat.ChatId
+import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.AgentLoopMessage
 import com.browntowndev.enclave.domain.model.inference.GenerationOptions
 import com.browntowndev.enclave.domain.model.inference.InferenceNetworkException
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.domain.model.telemetry.TelemetryClientBuild
+import com.browntowndev.enclave.domain.model.telemetry.TelemetryCostSource
+import com.browntowndev.enclave.domain.model.telemetry.TelemetryCostStatus
+import com.browntowndev.enclave.domain.model.telemetry.TelemetryProviderKey
+import com.browntowndev.enclave.domain.model.telemetry.TelemetrySourceKind
+import com.browntowndev.enclave.domain.model.telemetry.TurnTelemetry
+import com.browntowndev.enclave.domain.model.telemetry.TurnTelemetryId
 import com.browntowndev.enclave.domain.util.FakeToolEnvelopeParserPort
 import com.browntowndev.enclave.domain.util.FakeToolStreamGatePort
-import com.google.genai.types.Content
-import io.mockk.coEvery
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.slot
-import com.browntowndev.enclave.domain.port.telemetry.TelemetryEventPort
 import com.browntowndev.enclave.feature.inference.telemetry.InferenceTelemetrySupport
+import com.google.genai.types.Content
+import com.google.genai.types.Part
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class GoogleInferenceServiceImplTest {
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
+    private val loggingPort = FakeLoggingPort()
 
     @Test
     fun `completeSingleTurn maps raw_tool_calls to model function call parts`() =
         runTest {
-            val sdkClient = mockk<GoogleGenAiSdkClient>()
-            val contentsSlot = slot<List<Content>>()
-            coEvery {
-                sdkClient.generateContentStream(any(), capture(contentsSlot), any(), any(), any())
-            } returns
+            val sdkClient = FakeGoogleGenAiSdkClient()
+            sdkClient.streamResult =
                 GoogleSdkResult(
                     emittedAny = true,
                     functionCall = null,
@@ -69,22 +80,20 @@ class GoogleInferenceServiceImplTest {
                 options = GenerationOptions(reasoningBudget = 0),
             )
 
-            assertEquals(2, contentsSlot.captured.size)
-            val assistantContent = contentsSlot.captured[0]
+            val capturedContents = sdkClient.lastGenerateContents!!
+            assertEquals(2, capturedContents.size)
+            val assistantContent = capturedContents[0]
             assertEquals("model", assistantContent.role().orElse(null))
             val parts = assistantContent.parts().orElse(emptyList())
             assertTrue(parts.any { it.functionCall().isPresent })
-            assertEquals("user", contentsSlot.captured[1].role().orElse(null))
+            assertEquals("user", capturedContents[1].role().orElse(null))
         }
 
     @Test
     fun `completeSingleTurn maps agent tool budget sidecar to user infrastructure not model`() =
         runTest {
-            val sdkClient = mockk<GoogleGenAiSdkClient>()
-            val contentsSlot = slot<List<Content>>()
-            coEvery {
-                sdkClient.generateContentStream(any(), capture(contentsSlot), any(), any(), any())
-            } returns
+            val sdkClient = FakeGoogleGenAiSdkClient()
+            sdkClient.streamResult =
                 GoogleSdkResult(
                     emittedAny = true,
                     functionCall = null,
@@ -124,11 +133,12 @@ class GoogleInferenceServiceImplTest {
                 options = GenerationOptions(reasoningBudget = 0),
             )
 
-            assertEquals(2, contentsSlot.captured.size)
-            assertEquals("user", contentsSlot.captured[0].role().orElse(null))
-            assertEquals("user", contentsSlot.captured[1].role().orElse(null))
+            val capturedContents = sdkClient.lastGenerateContents!!
+            assertEquals(2, capturedContents.size)
+            assertEquals("user", capturedContents[0].role().orElse(null))
+            assertEquals("user", capturedContents[1].role().orElse(null))
             val budgetWireText =
-                contentsSlot.captured[1]
+                capturedContents[1]
                     .parts()
                     .orElse(emptyList())
                     .single()
@@ -141,11 +151,8 @@ class GoogleInferenceServiceImplTest {
     @Test
     fun `completeSingleTurn maps call_id metadata to function response part`() =
         runTest {
-            val sdkClient = mockk<GoogleGenAiSdkClient>()
-            val contentsSlot = slot<List<Content>>()
-            coEvery {
-                sdkClient.generateContentStream(any(), capture(contentsSlot), any(), any(), any())
-            } returns
+            val sdkClient = FakeGoogleGenAiSdkClient()
+            sdkClient.streamResult =
                 GoogleSdkResult(
                     emittedAny = true,
                     functionCall = null,
@@ -183,8 +190,9 @@ class GoogleInferenceServiceImplTest {
                 options = GenerationOptions(reasoningBudget = 0),
             )
 
-            assertEquals(2, contentsSlot.captured.size)
-            val toolResultContent = contentsSlot.captured[0]
+            val capturedContents = sdkClient.lastGenerateContents!!
+            assertEquals(2, capturedContents.size)
+            val toolResultContent = capturedContents[0]
             assertEquals("user", toolResultContent.role().orElse(null))
             val parts = toolResultContent.parts().orElse(emptyList())
             assertTrue(parts.any { it.functionResponse().isPresent })
@@ -193,10 +201,8 @@ class GoogleInferenceServiceImplTest {
     @Test
     fun `completeSingleTurn throws InferenceNetworkException when SDK client throws IOException`() =
         runTest {
-            val sdkClient = mockk<GoogleGenAiSdkClient>()
-            coEvery {
-                sdkClient.generateContentStream(any(), any(), any(), any(), any())
-            } throws java.io.IOException("Gemini API server down")
+            val sdkClient = FakeGoogleGenAiSdkClient()
+            sdkClient.streamFailure = java.io.IOException("Gemini API server down")
 
             val service =
                 GoogleInferenceServiceImpl(
@@ -209,7 +215,7 @@ class GoogleInferenceServiceImplTest {
                 )
 
             val exception =
-                org.junit.jupiter.api.assertThrows<InferenceNetworkException> {
+                assertThrows<InferenceNetworkException> {
                     service.completeSingleTurn(
                         sessionMessages = listOf(AgentLoopMessage(id = "user-live", role = Role.USER, content = "Hello")),
                         systemPrompt = "",
@@ -230,31 +236,13 @@ class GoogleInferenceServiceImplTest {
     @Test
     fun `completeSingleTurn plumbs telemetry tokens and outcome execution token counts`() =
         runTest {
-            val sdkClient = mockk<GoogleGenAiSdkClient>()
-            val telemetrySupport = mockk<InferenceTelemetrySupport>()
-            val telemetryEventPort = mockk<TelemetryEventPort>(relaxed = true)
-            val captureContext = mockk<InferenceTelemetrySupport.CaptureContext>()
+            val sdkClient = FakeGoogleGenAiSdkClient()
+            val telemetrySupport = fakeTelemetrySupport()
+            val telemetryEventPort = FakeTelemetryEventPort()
+            val captureContext = captureContext()
+            telemetrySupport.captureContextResult = captureContext
 
-            every { telemetrySupport.captureContext(any()) } returns captureContext
-            every {
-                telemetrySupport.openAiTurnTelemetry(
-                    context = any(),
-                    providerLabel = any(),
-                    modelId = any(),
-                    modelLabel = any(),
-                    timing = any(),
-                    inputTokens = any(),
-                    outputTokens = any(),
-                    reasoningTokens = any(),
-                    cacheReadInputTokens = any(),
-                    costUsd = null,
-                    savedPricing = any(),
-                )
-            } returns mockk(relaxed = true)
-
-            coEvery {
-                sdkClient.generateContentStream(any(), any(), any(), any(), any())
-            } returns
+            sdkClient.streamResult =
                 GoogleSdkResult(
                     emittedAny = true,
                     functionCall = null,
@@ -288,70 +276,49 @@ class GoogleInferenceServiceImplTest {
                 onThinkingToken = {},
                 options = GenerationOptions(
                     reasoningBudget = 0,
-                    assistantMessageId = com.browntowndev.enclave.domain.model.chat.MessageId("msg_1"),
-                    chatId = com.browntowndev.enclave.domain.model.chat.ChatId("chat_1"),
+                    assistantMessageId = MessageId("msg_1"),
+                    chatId = ChatId("chat_1"),
                 ),
             )
 
-            io.mockk.verify {
-                telemetrySupport.openAiTurnTelemetry(
-                    context = captureContext,
-                    providerLabel = "Google",
-                    modelId = "gemini-2.5-flash",
-                    modelLabel = "gemini-2.5-flash",
-                    timing = any(),
-                    inputTokens = 15,
-                    outputTokens = 25,
-                    reasoningTokens = 8,
-                    cacheReadInputTokens = 5,
-                    costUsd = null,
-                    savedPricing = null,
-                )
-            }
+            val telemetryCall = telemetrySupport.openAiCalls.single()
+            assertEquals(captureContext, telemetryCall.context)
+            assertEquals("Google", telemetryCall.providerLabel)
+            assertEquals("gemini-2.5-flash", telemetryCall.modelId)
+            assertEquals("gemini-2.5-flash", telemetryCall.modelLabel)
+            assertEquals(15, telemetryCall.inputTokens)
+            assertEquals(25, telemetryCall.outputTokens)
+            assertEquals(8, telemetryCall.reasoningTokens)
+            assertEquals(5, telemetryCall.cacheReadInputTokens)
+            assertEquals(null, telemetryCall.costUsd)
+            assertEquals(null, telemetryCall.savedPricing)
 
-            io.mockk.coVerify {
-                telemetryEventPort.emitInferenceOutcome(
-                    match {
-                        it.tokenCount == 25
-                    }
-                )
-            }
+            assertEquals(25, telemetryEventPort.emittedInferenceOutcomes.single().tokenCount)
         }
 
     @Test
     fun `completeSingleTurn falls back to outputTokenEstimate when completionTokens is null`() =
         runTest {
-            val sdkClient = mockk<GoogleGenAiSdkClient>()
-            val telemetrySupport = mockk<InferenceTelemetrySupport>()
-            val telemetryEventPort = mockk<TelemetryEventPort>(relaxed = true)
-            val captureContext = mockk<InferenceTelemetrySupport.CaptureContext>()
+            val sdkClient = FakeGoogleGenAiSdkClient()
+            val telemetrySupport = fakeTelemetrySupport()
+            val telemetryEventPort = FakeTelemetryEventPort()
+            val captureContext = captureContext()
+            telemetrySupport.captureContextResult = captureContext
 
-            every { telemetrySupport.captureContext(any()) } returns captureContext
-            every {
-                telemetrySupport.openAiTurnTelemetry(
-                    context = any(),
-                    providerLabel = any(),
-                    modelId = any(),
-                    modelLabel = any(),
-                    timing = any(),
-                    inputTokens = any(),
-                    outputTokens = any(),
-                    reasoningTokens = any(),
-                    cacheReadInputTokens = any(),
-                    costUsd = null,
-                    savedPricing = any(),
-                )
-            } returns mockk(relaxed = true)
+            val assistantContent =
+                Content
+                    .builder()
+                    .parts(
+                        listOf(
+                            Part
+                                .builder()
+                                .text("Hello world")
+                                .thought(false)
+                                .build(),
+                        ),
+                    ).build()
 
-            val textPart = mockk<com.google.genai.types.Part>()
-            every { textPart.thought() } returns java.util.Optional.of(false)
-            every { textPart.text() } returns java.util.Optional.of("Hello world")
-            val assistantContent = mockk<com.google.genai.types.Content>()
-            every { assistantContent.parts() } returns java.util.Optional.of(listOf(textPart))
-
-            coEvery {
-                sdkClient.generateContentStream(any(), any(), any(), any(), any())
-            } returns
+            sdkClient.streamResult =
                 GoogleSdkResult(
                     emittedAny = true,
                     functionCall = null,
@@ -385,36 +352,73 @@ class GoogleInferenceServiceImplTest {
                 onThinkingToken = {},
                 options = GenerationOptions(
                     reasoningBudget = 0,
-                    assistantMessageId = com.browntowndev.enclave.domain.model.chat.MessageId("msg_1"),
-                    chatId = com.browntowndev.enclave.domain.model.chat.ChatId("chat_1"),
+                    assistantMessageId = MessageId("msg_1"),
+                    chatId = ChatId("chat_1"),
                 ),
             )
 
             // "Hello world" is 11 characters. 11 / 4 = 2.
             val expectedEstimate = 2
 
-            io.mockk.verify {
-                telemetrySupport.openAiTurnTelemetry(
-                    context = captureContext,
-                    providerLabel = "Google",
-                    modelId = "gemini-2.5-flash",
-                    modelLabel = "gemini-2.5-flash",
-                    timing = any(),
-                    inputTokens = null,
-                    outputTokens = null,
-                    reasoningTokens = null,
-                    cacheReadInputTokens = null,
-                    costUsd = null,
-                    savedPricing = null,
-                )
-            }
+            val telemetryCall = telemetrySupport.openAiCalls.single()
+            assertEquals(captureContext, telemetryCall.context)
+            assertEquals("Google", telemetryCall.providerLabel)
+            assertEquals("gemini-2.5-flash", telemetryCall.modelId)
+            assertEquals("gemini-2.5-flash", telemetryCall.modelLabel)
+            assertEquals(null, telemetryCall.inputTokens)
+            assertEquals(null, telemetryCall.outputTokens)
+            assertEquals(null, telemetryCall.reasoningTokens)
+            assertEquals(null, telemetryCall.cacheReadInputTokens)
+            assertEquals(null, telemetryCall.costUsd)
+            assertEquals(null, telemetryCall.savedPricing)
 
-            io.mockk.coVerify {
-                telemetryEventPort.emitInferenceOutcome(
-                    match {
-                        it.tokenCount == expectedEstimate
-                    }
-                )
-            }
+            assertEquals(expectedEstimate, telemetryEventPort.emittedInferenceOutcomes.single().tokenCount)
         }
+
+    private fun captureContext(): InferenceTelemetrySupport.CaptureContext =
+        InferenceTelemetrySupport.CaptureContext(
+            messageId = MessageId("msg_1"),
+            chatId = ChatId("chat_1"),
+            sequenceIndex = 0,
+            clientBuild =
+                TelemetryClientBuild(
+                    appVersionName = "test",
+                    appVersionCode = 1L,
+                    telemetrySchemaVersion = 1,
+                ),
+        )
+
+    private fun fakeTelemetrySupport(): FakeInferenceTelemetrySupport {
+        val telemetrySupport =
+            FakeInferenceTelemetrySupport(ApplicationProvider.getApplicationContext<Context>())
+        telemetrySupport.openAiTelemetryBuilder = { call ->
+            val cc = call.context
+            TurnTelemetry(
+                id = TurnTelemetryId("test"),
+                messageId = cc.messageId,
+                chatId = cc.chatId,
+                sequenceIndex = cc.sequenceIndex,
+                providerKey = TelemetryProviderKey.GOOGLE,
+                providerLabel = call.providerLabel,
+                modelId = call.modelId,
+                modelLabel = call.modelLabel,
+                sourceKind = TelemetrySourceKind.REMOTE,
+                requestStartedAtMs = 0L,
+                firstOutputTokenAtMs = null,
+                completedAtMs = 1L,
+                inputTokens = call.inputTokens,
+                outputTokens = call.outputTokens,
+                reasoningTokens = call.reasoningTokens,
+                cachedInputTokens = null,
+                cacheReadInputTokens = call.cacheReadInputTokens,
+                cacheWriteInputTokens = call.cacheWriteInputTokens,
+                cacheCreationInputTokens = null,
+                costUsd = call.costUsd,
+                costStatus = TelemetryCostStatus.UNAVAILABLE,
+                costSource = TelemetryCostSource.NOT_AVAILABLE,
+                clientBuild = cc.clientBuild,
+            )
+        }
+        return telemetrySupport
+    }
 }

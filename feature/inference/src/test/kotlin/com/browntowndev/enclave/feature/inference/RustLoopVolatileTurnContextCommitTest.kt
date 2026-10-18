@@ -27,10 +27,9 @@ import com.browntowndev.enclave.domain.usecase.inference.ResolveCompactionSummar
 import com.browntowndev.enclave.domain.util.FakeToolStreamGatePort
 import com.browntowndev.enclave.domain.util.JTokkitTokenCounter
 import com.browntowndev.enclave.feature.inference.openai.StreamedOpenAiResponse
-import com.openai.client.OpenAIClient
 import com.openai.models.chat.completions.ChatCompletionCreateParams
-import io.mockk.coEvery
-import io.mockk.mockk
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
+import com.openai.client.okhttp.OpenAIOkHttpClient
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
@@ -547,8 +546,8 @@ class RustLoopVolatileTurnContextCommitTest {
         inner: RustCompatibleInferenceService = CapturingRustCompatibleService(),
         committedInferencePrompts: CommittedInferencePromptPort = NoopCommittedInferencePromptPort,
     ): RustLoopInferenceService {
-        val activeModelProvider = mockk<com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort>()
-        coEvery { activeModelProvider.getActiveConfiguration(any()) } returns null
+        // Default configuration is null, so getActiveConfiguration returns null for any type.
+        val activeModelProvider = FakeActiveModelProvider()
         val resolveCompactionSummaryModel = ResolveCompactionSummaryModelUseCase(activeModelProvider, JTokkitTokenCounter)
 
         return RustLoopInferenceService(
@@ -641,7 +640,7 @@ class RustLoopVolatileTurnContextCommitTest {
         val capturedParams = mutableListOf<ChatCompletionCreateParams>()
         val service =
             object : BaseOpenAiSdkInferenceService(
-                client = mockk<OpenAIClient>(),
+                client = OpenAIOkHttpClient.builder().apiKey("test").build(),
                 modelId = "grok-4.3",
                 provider = "XAI",
                 modelType = ModelType.FAST,

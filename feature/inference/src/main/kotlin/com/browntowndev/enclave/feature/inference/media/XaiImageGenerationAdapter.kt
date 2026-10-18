@@ -19,13 +19,13 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.Base64
 import javax.inject.Inject
 
-class XaiImageGenerationAdapter
+open class XaiImageGenerationAdapter
     @Inject
     constructor(
         private val clientProvider: OpenAiClientProviderPort,
         private val okHttpClient: OkHttpClient,
     ) {
-        suspend fun generateImage(
+        open suspend fun generateImage(
             prompt: String,
             apiKey: String,
             modelId: String,

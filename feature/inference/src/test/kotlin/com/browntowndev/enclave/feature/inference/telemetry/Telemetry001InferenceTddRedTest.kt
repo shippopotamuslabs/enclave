@@ -1,3 +1,7 @@
+// MockK is used only for Anthropic/OpenAI Java SDK clients (com.anthropic.*, com.openai.*) and the
+// Firebase Crashlytics static facade (com.google.firebase.crashlytics.*), third-party SDK boundaries.
+@file:Suppress("ForbiddenMockKInTests")
+
 package com.browntowndev.enclave.feature.inference.telemetry
 
 import android.util.Log
@@ -25,6 +29,11 @@ import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
 import com.browntowndev.enclave.domain.model.inference.ToolExecutionResult
 import com.browntowndev.enclave.domain.model.telemetry.TelemetrySeverity
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
+import com.browntowndev.enclave.core.testing.FakeAutomaticErrorTrackingGate
+import com.browntowndev.enclave.core.testing.FakeInferenceFactory
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeTelemetryEventPort
 import com.browntowndev.enclave.domain.port.inference.AgentLoopEvent
 import com.browntowndev.enclave.domain.port.inference.AgentLoopPort
 import com.browntowndev.enclave.domain.port.inference.InferenceEvent
@@ -34,13 +43,14 @@ import com.browntowndev.enclave.domain.port.inference.ToolStreamGatePort
 import com.browntowndev.enclave.domain.port.telemetry.AutomaticErrorTrackingGate
 import com.browntowndev.enclave.domain.port.telemetry.TelemetryEventPort
 import com.browntowndev.enclave.domain.usecase.chat.RollingSummarizer
+import com.browntowndev.enclave.domain.usecase.inference.ResolveCompactionSummaryModelUseCase
 import com.browntowndev.enclave.domain.util.FakeToolEnvelopeParserPort
 import com.browntowndev.enclave.domain.util.FakeToolStreamGatePort
 import com.browntowndev.enclave.domain.util.JTokkitTokenCounter
 import com.browntowndev.enclave.feature.inference.AndroidLoggingAdapter
 import com.browntowndev.enclave.feature.inference.AnthropicInferenceServiceImpl
 import com.browntowndev.enclave.feature.inference.BaseOpenAiSdkInferenceService
-import com.browntowndev.enclave.feature.inference.GoogleGenAiSdkClient
+import com.browntowndev.enclave.feature.inference.FakeGoogleGenAiSdkClient
 import com.browntowndev.enclave.feature.inference.GoogleInferenceServiceImpl
 import com.browntowndev.enclave.feature.inference.GoogleSdkResult
 import com.browntowndev.enclave.feature.inference.RustCompatibleInferenceService
@@ -50,8 +60,6 @@ import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.openai.client.OpenAIClient
 import com.openai.models.chat.completions.ChatCompletionCreateParams
 import com.openai.models.responses.ResponseCreateParams
-import io.mockk.coEvery
-import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
@@ -66,7 +74,13 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowLog
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 import java.io.IOException
 import java.util.Optional
 import java.util.stream.Stream
@@ -76,8 +90,10 @@ import kotlin.test.assertFailsWith
 /**
  * TELEMETRY-001 TDD Red — inference layer scenarios TEL-037..TEL-044, TEL-050..TEL-053, TEL-062.
  */
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class Telemetry001InferenceTddRedTest {
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
+    private val loggingPort = FakeLoggingPort()
 
     @AfterEach
     fun tearDown() {
@@ -87,7 +103,7 @@ class Telemetry001InferenceTddRedTest {
     @Test
     fun `TEL-037 AnthropicInferenceServiceImpl emits InferenceOutcome on success`() =
         runTest {
-            val telemetryPort = mockk<TelemetryEventPort>(relaxed = true)
+            val telemetryPort = FakeTelemetryEventPort()
             val service = createAnthropicService(telemetryPort)
             service.completeSingleTurn(
                 sessionMessages = listOf(AgentLoopMessage(id = "u1", role = Role.USER, content = "hi")),
@@ -99,21 +115,16 @@ class Telemetry001InferenceTddRedTest {
                 onThinkingToken = {},
                 options = GenerationOptions(reasoningBudget = 0),
             )
-            coVerify {
-                telemetryPort.emitInferenceOutcome(
-                    match {
-                        it.success &&
-                            it.provider == "Anthropic" &&
-                            it.severity == TelemetrySeverity.INFO
-                    },
-                )
-            }
+            val outcome = telemetryPort.emittedInferenceOutcomes.single()
+            assertTrue(outcome.success)
+            assertEquals("Anthropic", outcome.provider)
+            assertEquals(TelemetrySeverity.INFO, outcome.severity)
         }
 
     @Test
     fun `TEL-038 AnthropicInferenceServiceImpl emits InferenceOutcome on failure`() =
         runTest {
-            val telemetryPort = mockk<TelemetryEventPort>(relaxed = true)
+            val telemetryPort = FakeTelemetryEventPort()
             val client = mockk<AnthropicClient>()
             val messageService = mockk<MessageService>()
             every { client.messages() } returns messageService
@@ -140,25 +151,19 @@ class Telemetry001InferenceTddRedTest {
                     options = GenerationOptions(reasoningBudget = 0),
                 )
             }
-            coVerify {
-                telemetryPort.emitInferenceOutcome(
-                    match {
-                        !it.success &&
-                            it.errorMessage == "Connection refused" &&
-                            it.severity == TelemetrySeverity.ERROR
-                    },
-                )
-            }
+            val outcome = telemetryPort.emittedInferenceOutcomes.single()
+            assertTrue(!outcome.success)
+            assertEquals("Connection refused", outcome.errorMessage)
+            assertEquals(TelemetrySeverity.ERROR, outcome.severity)
         }
 
     @Test
     fun `TEL-039 GoogleInferenceServiceImpl emits InferenceOutcome on success`() =
         runTest {
-            val telemetryPort = mockk<TelemetryEventPort>(relaxed = true)
-            val sdkClient = mockk<GoogleGenAiSdkClient>()
-            coEvery {
-                sdkClient.generateContentStream(any(), any(), any(), any(), any())
-            } returns GoogleSdkResult(emittedAny = true, functionCall = null, assistantContent = null, finishReason = "STOP")
+            val telemetryPort = FakeTelemetryEventPort()
+            val sdkClient = FakeGoogleGenAiSdkClient()
+            sdkClient.streamResult =
+                GoogleSdkResult(emittedAny = true, functionCall = null, assistantContent = null, finishReason = "STOP")
             val service =
                 GoogleInferenceServiceImpl(
                     sdkClient = sdkClient,
@@ -179,25 +184,18 @@ class Telemetry001InferenceTddRedTest {
                 onThinkingToken = {},
                 options = GenerationOptions(reasoningBudget = 0),
             )
-            coVerify {
-                telemetryPort.emitInferenceOutcome(
-                    match {
-                        it.success &&
-                            it.provider == "Google" &&
-                            it.severity == TelemetrySeverity.INFO
-                    },
-                )
-            }
+            val outcome = telemetryPort.emittedInferenceOutcomes.single()
+            assertTrue(outcome.success)
+            assertEquals("Google", outcome.provider)
+            assertEquals(TelemetrySeverity.INFO, outcome.severity)
         }
 
     @Test
     fun `TEL-040 GoogleInferenceServiceImpl emits InferenceOutcome on failure`() =
         runTest {
-            val telemetryPort = mockk<TelemetryEventPort>(relaxed = true)
-            val sdkClient = mockk<GoogleGenAiSdkClient>()
-            coEvery {
-                sdkClient.generateContentStream(any(), any(), any(), any(), any())
-            } throws IOException("Timeout")
+            val telemetryPort = FakeTelemetryEventPort()
+            val sdkClient = FakeGoogleGenAiSdkClient()
+            sdkClient.streamFailure = IOException("Timeout")
             val service =
                 GoogleInferenceServiceImpl(
                     sdkClient = sdkClient,
@@ -220,21 +218,16 @@ class Telemetry001InferenceTddRedTest {
                     options = GenerationOptions(reasoningBudget = 0),
                 )
             }
-            coVerify {
-                telemetryPort.emitInferenceOutcome(
-                    match {
-                        !it.success &&
-                            it.errorMessage == "Timeout" &&
-                            it.severity == TelemetrySeverity.ERROR
-                    },
-                )
-            }
+            val outcome = telemetryPort.emittedInferenceOutcomes.single()
+            assertTrue(!outcome.success)
+            assertEquals("Timeout", outcome.errorMessage)
+            assertEquals(TelemetrySeverity.ERROR, outcome.severity)
         }
 
     @Test
     fun `TEL-041 BaseOpenAiSdkInferenceService emits InferenceOutcome on success`() =
         runTest {
-            val telemetryPort = mockk<TelemetryEventPort>(relaxed = true)
+            val telemetryPort = FakeTelemetryEventPort()
             val service =
                 TestOpenAiService(
                     client = mockk(relaxed = true),
@@ -251,21 +244,16 @@ class Telemetry001InferenceTddRedTest {
                 onThinkingToken = {},
                 options = GenerationOptions(reasoningBudget = 0),
             )
-            coVerify {
-                telemetryPort.emitInferenceOutcome(
-                    match {
-                        it.success &&
-                            it.provider == "OpenAI" &&
-                            it.severity == TelemetrySeverity.INFO
-                    },
-                )
-            }
+            val outcome = telemetryPort.emittedInferenceOutcomes.single()
+            assertTrue(outcome.success)
+            assertEquals("OpenAI", outcome.provider)
+            assertEquals(TelemetrySeverity.INFO, outcome.severity)
         }
 
     @Test
     fun `TEL-042 BaseOpenAiSdkInferenceService emits InferenceOutcome on failure`() =
         runTest {
-            val telemetryPort = mockk<TelemetryEventPort>(relaxed = true)
+            val telemetryPort = FakeTelemetryEventPort()
             val service =
                 TestOpenAiService(
                     client = mockk(relaxed = true),
@@ -285,49 +273,40 @@ class Telemetry001InferenceTddRedTest {
                     options = GenerationOptions(reasoningBudget = 0),
                 )
             }
-            coVerify {
-                telemetryPort.emitInferenceOutcome(
-                    match {
-                        !it.success &&
-                            it.errorMessage == "Rate limited" &&
-                            it.severity == TelemetrySeverity.ERROR
-                    },
-                )
-            }
+            val outcome = telemetryPort.emittedInferenceOutcomes.single()
+            assertTrue(!outcome.success)
+            assertEquals("Rate limited", outcome.errorMessage)
+            assertEquals(TelemetrySeverity.ERROR, outcome.severity)
         }
 
     @Test
     fun `TEL-043 RustLoopInferenceService emits InferenceOutcome on success`() =
         runTest {
-            val telemetryPort = mockk<TelemetryEventPort>(relaxed = true)
+            val telemetryPort = FakeTelemetryEventPort()
             val port =
                 CapturingAgentLoopPort { host ->
                     send(AgentLoopEvent.Finished)
                 }
             val service = createRustLoopService(telemetryPort, port)
             service.sendPrompt("hello").toList()
-            coVerify {
-                telemetryPort.emitInferenceOutcome(
-                    match { it.success && it.severity == TelemetrySeverity.INFO },
-                )
-            }
+            val outcome = telemetryPort.emittedInferenceOutcomes.single()
+            assertTrue(outcome.success)
+            assertEquals(TelemetrySeverity.INFO, outcome.severity)
         }
 
     @Test
     fun `TEL-044 RustLoopInferenceService emits InferenceOutcome on failure`() =
         runTest {
-            val telemetryPort = mockk<TelemetryEventPort>(relaxed = true)
+            val telemetryPort = FakeTelemetryEventPort()
             val port =
                 CapturingAgentLoopPort { _ ->
                     send(AgentLoopEvent.Failed("loop failed"))
                 }
             val service = createRustLoopService(telemetryPort, port)
             service.sendPrompt("hello").toList()
-            coVerify {
-                telemetryPort.emitInferenceOutcome(
-                    match { !it.success && it.severity == TelemetrySeverity.ERROR },
-                )
-            }
+            val outcome = telemetryPort.emittedInferenceOutcomes.single()
+            assertTrue(!outcome.success)
+            assertEquals(TelemetrySeverity.ERROR, outcome.severity)
         }
 
     @Test
@@ -354,13 +333,15 @@ class Telemetry001InferenceTddRedTest {
     @Test
     fun `TEL-052 AndroidLoggingAdapter error handles Crashlytics failure gracefully`() {
         mockkStatic(FirebaseCrashlytics::class)
-        mockkStatic(Log::class)
         every { FirebaseCrashlytics.getInstance() } throws RuntimeException("Not initialized")
-        every { Log.e(any(), any(), any()) } returns 0
         val adapter = AndroidLoggingAdapter(enabledErrorTrackingGate())
         val throwable = RuntimeException("Test")
         adapter.error("TestTag", "Test message", throwable)
-        verify { Log.e("TestTag", "Test message", throwable) }
+        // android.util.Log is shadowed by Robolectric; assert the recorded log instead of a static mock.
+        val logItem = ShadowLog.getLogsForTag("TestTag").single()
+        assertEquals(Log.ERROR, logItem.type)
+        assertEquals("Test message", logItem.msg)
+        assertEquals(throwable, logItem.throwable)
     }
 
     @Test
@@ -380,7 +361,7 @@ class Telemetry001InferenceTddRedTest {
     @Test
     fun `TEL-062 Telemetry wrappers rethrow CancellationException`() =
         runTest {
-            val telemetryPort = mockk<TelemetryEventPort>(relaxed = true)
+            val telemetryPort = FakeTelemetryEventPort()
             val client = mockk<AnthropicClient>()
             val messageService = mockk<MessageService>()
             every { client.messages() } returns messageService
@@ -414,7 +395,7 @@ class Telemetry001InferenceTddRedTest {
             assertFailsWith<CancellationException> {
                 job.await()
             }
-            coVerify(exactly = 0) { telemetryPort.emitInferenceOutcome(any()) }
+            assertTrue(telemetryPort.emittedInferenceOutcomes.isEmpty())
         }
 
     private fun createAnthropicService(telemetryPort: TelemetryEventPort): AnthropicInferenceServiceImpl {
@@ -528,9 +509,10 @@ class Telemetry001InferenceTddRedTest {
             loggingPort = loggingPort,
             provider = "OPENAI",
             modelType = ModelType.MAIN,
-            inferenceFactoryProvider = Provider { mockk(relaxed = true) },
+            inferenceFactoryProvider = Provider { FakeInferenceFactory() },
             rollingSummarizer = RollingSummarizer(loggingPort, JTokkitTokenCounter),
-            resolveCompactionSummaryModel = mockk(relaxed = true),
+            resolveCompactionSummaryModel =
+                ResolveCompactionSummaryModelUseCase(FakeActiveModelProvider(), JTokkitTokenCounter),
             telemetryEventPort = telemetryPort,
             embeddingEnginePort = com.browntowndev.enclave.domain.port.inference.Bm25OnlyEmbeddingEnginePort,
         )
@@ -603,7 +585,5 @@ class Telemetry001InferenceTddRedTest {
     }
 
     private fun enabledErrorTrackingGate(): AutomaticErrorTrackingGate =
-        mockk {
-            every { isAutomaticErrorTrackingEnabled() } returns true
-        }
+        FakeAutomaticErrorTrackingGate(enabled = true)
 }
