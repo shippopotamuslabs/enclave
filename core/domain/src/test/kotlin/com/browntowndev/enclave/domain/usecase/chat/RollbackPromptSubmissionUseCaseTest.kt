@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.domain.usecase.chat
 
+import com.browntowndev.enclave.core.testing.FakeTransactionProvider
 import com.browntowndev.enclave.domain.model.chat.Chat
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.Content
@@ -7,12 +8,8 @@ import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.MessageState
 import com.browntowndev.enclave.domain.model.chat.Role
-import com.browntowndev.enclave.domain.port.repository.TransactionProvider
 import com.browntowndev.enclave.domain.usecase.FakeChatRepository
 import com.browntowndev.enclave.domain.usecase.FakeMessageRepository
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -28,11 +25,7 @@ class RollbackPromptSubmissionUseCaseTest {
             val chatId = ChatId("chat-rb-existing")
             val messageRepository = FakeMessageRepository()
             val chatRepository = FakeChatRepository()
-            val transactionProvider = mockk<TransactionProvider>()
-            coEvery { transactionProvider.runInTransaction<Any>(any()) } coAnswers {
-                val block = firstArg<suspend () -> Any>()
-                block()
-            }
+            val transactionProvider = FakeTransactionProvider()
             messageRepository.saveMessage(
                 Message(
                     id = MessageId("user-rb-1"),
@@ -73,11 +66,7 @@ class RollbackPromptSubmissionUseCaseTest {
             val assistantMessageId = MessageId("asst-rb-1")
             val messageRepository = FakeMessageRepository()
             val chatRepository = FakeChatRepository()
-            val transactionProvider = mockk<TransactionProvider>()
-            coEvery { transactionProvider.runInTransaction<Any>(any()) } coAnswers {
-                val block = firstArg<suspend () -> Any>()
-                block()
-            }
+            val transactionProvider = FakeTransactionProvider()
             chatRepository.createChat(
                 Chat(id = chatId, name = "New", created = Date(), lastModified = Date()),
             )
@@ -110,6 +99,6 @@ class RollbackPromptSubmissionUseCaseTest {
 
             assertTrue(messageRepository.activeMessagesForChat(chatId).isEmpty())
             assertEquals(setOf(chatId.value), chatRepository.deletedChatIds)
-            coVerify(exactly = 1) { transactionProvider.runInTransaction<Any>(any()) }
+            assertEquals(1, transactionProvider.runInTransactionCallCount)
         }
 }

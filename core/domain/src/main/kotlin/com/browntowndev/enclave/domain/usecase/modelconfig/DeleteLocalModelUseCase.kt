@@ -22,7 +22,7 @@ import javax.inject.Inject
  * - If model has a config that is a default, require reassignment BEFORE deletion
  * - User can reassign to a config from a DIFFERENT local model OR an API model config
  */
-class DeleteLocalModelUseCase
+open class DeleteLocalModelUseCase
     @Inject
     constructor(
         private val localModelRepository: LocalModelRepositoryPort,
@@ -44,7 +44,7 @@ class DeleteLocalModelUseCase
          * @param replacementMediaProviderId Replacement media provider for slots such as IMAGE_GENERATION, or null
          * @return Result.success(Unit) on success, Result.failure if it's the last model or error occurs
          */
-        suspend operator fun invoke(
+        open suspend operator fun invoke(
             modelId: LocalModelId,
             replacementLocalConfigId: LocalModelConfigurationId? = null,
             replacementApiConfigId: ApiModelConfigurationId? = null,

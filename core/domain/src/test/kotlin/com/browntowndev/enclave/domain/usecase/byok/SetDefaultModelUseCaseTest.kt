@@ -1,5 +1,12 @@
 package com.browntowndev.enclave.domain.usecase.byok
 
+import com.browntowndev.enclave.core.testing.FakeApiModelRepository
+import com.browntowndev.enclave.core.testing.FakeGpuCapability
+import com.browntowndev.enclave.core.testing.FakeLocalImageGenerationCapability
+import com.browntowndev.enclave.core.testing.FakeLocalModelRepository
+import com.browntowndev.enclave.core.testing.FakeModelConfigFetcher
+import com.browntowndev.enclave.core.testing.FakeModelPackVerifierPort
+import com.browntowndev.enclave.core.testing.FakeUtilityModelFile
 import com.browntowndev.enclave.domain.model.config.ApiCredentials
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.config.ApiModelConfiguration
@@ -16,22 +23,17 @@ import com.browntowndev.enclave.domain.model.download.ModelPackTestFixtures
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
+import com.browntowndev.enclave.domain.model.media.LocalImageGenTriState
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilities
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelRegistry
-
-import com.browntowndev.enclave.domain.port.media.GpuCapabilityPort
 import com.browntowndev.enclave.domain.port.media.LOCAL_IMAGE_GENERATION_UNSUPPORTED_MESSAGE
-import com.browntowndev.enclave.domain.port.media.LocalImageGenerationCapabilityPort
-import com.browntowndev.enclave.domain.port.repository.ApiModelRepositoryPort
-import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.enclave.domain.usecase.FakeDefaultModelRepository
 import com.browntowndev.enclave.domain.usecase.download.ResolveModelCatalogUseCase
 import com.browntowndev.enclave.domain.usecase.download.VerifyModelPackCompletenessUseCase
 import com.browntowndev.enclave.domain.usecase.media.LocalStableDiffusionTargetResolver
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.verify
+import com.browntowndev.enclave.domain.usecase.media.SelectLocalImageGenerationBackendUseCase
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
@@ -43,35 +45,37 @@ import kotlin.test.assertFailsWith
 
 class SetDefaultModelUseCaseTest {
     private lateinit var repository: FakeDefaultModelRepository
-    private lateinit var apiModelRepository: ApiModelRepositoryPort
-    private lateinit var localModelRepository: LocalModelRepositoryPort
-    private lateinit var verifyModelPackCompleteness: VerifyModelPackCompletenessUseCase
-    private lateinit var resolveModelCatalog: ResolveModelCatalogUseCase
-    private lateinit var gpuCapabilityPort: GpuCapabilityPort
-    private lateinit var capabilityPort: LocalImageGenerationCapabilityPort
-    private lateinit var localStableDiffusionTargetResolver: LocalStableDiffusionTargetResolver
+    private lateinit var apiModelRepository: FakeApiModelRepository
+    private lateinit var localModelRepository: FakeLocalModelRepository
+    private lateinit var modelPackVerifier: FakeModelPackVerifierPort
+    private lateinit var gpuCapabilityPort: FakeGpuCapability
+    private lateinit var capabilityPort: FakeLocalImageGenerationCapability
+    private lateinit var localStableDiffusionTargetResolver: FakeLocalStableDiffusionTargetResolver
     private lateinit var useCase: SetDefaultModelUseCase
 
     @BeforeEach
     fun setUp() {
         repository = FakeDefaultModelRepository()
-        apiModelRepository = mockk(relaxed = true)
-        localModelRepository = mockk(relaxed = true)
-        verifyModelPackCompleteness = mockk()
-        resolveModelCatalog = mockk()
-        gpuCapabilityPort = mockk()
-        capabilityPort = mockk()
-        localStableDiffusionTargetResolver = mockk()
-        coEvery { resolveModelCatalog() } returns Result.success(ModelPackTestFixtures.parsedCatalog())
-        every { gpuCapabilityPort.isLocalImageGenerationSupported() } returns true
-        every { capabilityPort.getCapabilities() } returns
-            com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilities(
-                npuAvailable = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
-                sd15NpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
-                sd15CpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.NO,
-                sdxlNpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.NO,
-                recommendedBackend = com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind.QNN_NPU,
-                recommendedModelId = com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId.SD15_QNN,
+        apiModelRepository = FakeApiModelRepository()
+        localModelRepository = FakeLocalModelRepository()
+        modelPackVerifier = FakeModelPackVerifierPort()
+        gpuCapabilityPort = FakeGpuCapability()
+        capabilityPort = FakeLocalImageGenerationCapability()
+        localStableDiffusionTargetResolver = FakeLocalStableDiffusionTargetResolver()
+        val modelConfigFetcher =
+            FakeModelConfigFetcher().apply {
+                persistedCatalogResult = Result.success(ModelPackTestFixtures.parsedCatalog())
+            }
+        val resolveModelCatalog = ResolveModelCatalogUseCase(modelConfigFetcher)
+        gpuCapabilityPort.localImageGenerationSupported = true
+        capabilityPort.capabilities =
+            LocalImageGenerationCapabilities(
+                npuAvailable = LocalImageGenTriState.YES,
+                sd15NpuSupported = LocalImageGenTriState.YES,
+                sd15CpuSupported = LocalImageGenTriState.NO,
+                sdxlNpuSupported = LocalImageGenTriState.NO,
+                recommendedBackend = LocalImageGenerationBackendKind.QNN_NPU,
+                recommendedModelId = LocalImageGenerationModelId.SD15_QNN,
                 diagnostics = emptyList(),
             )
         useCase =
@@ -79,7 +83,7 @@ class SetDefaultModelUseCaseTest {
                 repository,
                 apiModelRepository,
                 localModelRepository,
-                verifyModelPackCompleteness,
+                VerifyModelPackCompletenessUseCase(modelPackVerifier, resolveModelCatalog),
                 resolveModelCatalog,
                 gpuCapabilityPort,
                 capabilityPort,
@@ -174,17 +178,17 @@ class SetDefaultModelUseCaseTest {
     fun mpk010_localImageGenerationAssignAllowedWhenPackComplete() =
         runTest {
             val configId = LocalModelConfigurationId(ModelPackTestFixtures.SD15_CONFIG_ID)
-            coEvery { localModelRepository.getAssetByConfigId(configId) } returns
-                localAsset(configId, LocalImageGenerationModelRegistry.SD15_QNN_SHA256)
-            coEvery { verifyModelPackCompleteness(ModelPackTestFixtures.PACK_ID) } returns
-                Result.success(
-                    ModelPackCompleteness(
-                        packId = ModelPackTestFixtures.PACK_ID,
-                        installedCount = 1,
-                        totalCount = 1,
-                        isComplete = true,
-                        members = emptyList(),
-                    ),
+            localModelRepository.seedAssetForConfig(
+                configId,
+                localAsset(configId, LocalImageGenerationModelRegistry.SD15_QNN_SHA256),
+            )
+            modelPackVerifier.completenessByPackId[ModelPackTestFixtures.PACK_ID] =
+                ModelPackCompleteness(
+                    packId = ModelPackTestFixtures.PACK_ID,
+                    installedCount = 1,
+                    totalCount = 1,
+                    isComplete = true,
+                    members = emptyList(),
                 )
 
             useCase(ModelType.IMAGE_GENERATION, localConfigId = configId, apiConfigId = null)
@@ -197,17 +201,17 @@ class SetDefaultModelUseCaseTest {
     fun mpk016_partialAssignBlockedWithExactMessage() =
         runTest {
             val configId = LocalModelConfigurationId(ModelPackTestFixtures.SD15_CONFIG_ID)
-            coEvery { localModelRepository.getAssetByConfigId(configId) } returns
-                localAsset(configId, LocalImageGenerationModelRegistry.SD15_QNN_SHA256)
-            coEvery { verifyModelPackCompleteness(ModelPackTestFixtures.PACK_ID) } returns
-                Result.success(
-                    ModelPackCompleteness(
-                        packId = ModelPackTestFixtures.PACK_ID,
-                        installedCount = 0,
-                        totalCount = 1,
-                        isComplete = false,
-                        members = emptyList(),
-                    ),
+            localModelRepository.seedAssetForConfig(
+                configId,
+                localAsset(configId, LocalImageGenerationModelRegistry.SD15_QNN_SHA256),
+            )
+            modelPackVerifier.completenessByPackId[ModelPackTestFixtures.PACK_ID] =
+                ModelPackCompleteness(
+                    packId = ModelPackTestFixtures.PACK_ID,
+                    installedCount = 0,
+                    totalCount = 1,
+                    isComplete = false,
+                    members = emptyList(),
                 )
 
             val error =
@@ -224,17 +228,17 @@ class SetDefaultModelUseCaseTest {
     fun mpk018_assignDoesNotAutoQueueDownloads() =
         runTest {
             val configId = LocalModelConfigurationId(ModelPackTestFixtures.SD15_CONFIG_ID)
-            coEvery { localModelRepository.getAssetByConfigId(configId) } returns
-                localAsset(configId, LocalImageGenerationModelRegistry.SD15_QNN_SHA256)
-            coEvery { verifyModelPackCompleteness(ModelPackTestFixtures.PACK_ID) } returns
-                Result.success(
-                    ModelPackCompleteness(
-                        packId = ModelPackTestFixtures.PACK_ID,
-                        installedCount = 0,
-                        totalCount = 1,
-                        isComplete = false,
-                        members = emptyList(),
-                    ),
+            localModelRepository.seedAssetForConfig(
+                configId,
+                localAsset(configId, LocalImageGenerationModelRegistry.SD15_QNN_SHA256),
+            )
+            modelPackVerifier.completenessByPackId[ModelPackTestFixtures.PACK_ID] =
+                ModelPackCompleteness(
+                    packId = ModelPackTestFixtures.PACK_ID,
+                    installedCount = 0,
+                    totalCount = 1,
+                    isComplete = false,
+                    members = emptyList(),
                 )
 
             assertFailsWith<IllegalArgumentException> {
@@ -245,10 +249,12 @@ class SetDefaultModelUseCaseTest {
     @Test
     fun `IMAGE_GENERATION local assign blocked when on-device feature disabled`() =
         runTest {
-            every { gpuCapabilityPort.isLocalImageGenerationSupported() } returns false
+            gpuCapabilityPort.localImageGenerationSupported = false
             val configId = LocalModelConfigurationId(ModelPackTestFixtures.SD15_CONFIG_ID)
-            coEvery { localModelRepository.getAssetByConfigId(configId) } returns
-                localAsset(configId, LocalImageGenerationModelRegistry.SD15_QNN_SHA256)
+            localModelRepository.seedAssetForConfig(
+                configId,
+                localAsset(configId, LocalImageGenerationModelRegistry.SD15_QNN_SHA256),
+            )
 
             val error =
                 assertFailsWith<IllegalArgumentException> {
@@ -263,8 +269,10 @@ class SetDefaultModelUseCaseTest {
     fun `IMAGE_GENERATION slot rejects ordinary local chat model`() =
         runTest {
             val configId = LocalModelConfigurationId("chat-config")
-            coEvery { localModelRepository.getAssetByConfigId(configId) } returns
-                localAsset(configId, "ordinary-chat-model-sha")
+            localModelRepository.seedAssetForConfig(
+                configId,
+                localAsset(configId, "ordinary-chat-model-sha"),
+            )
 
             val error =
                 assertFailsWith<IllegalArgumentException> {
@@ -279,21 +287,27 @@ class SetDefaultModelUseCaseTest {
         runTest {
             val configId = ApiModelConfigurationId("config-1")
             val credId = ApiCredentialsId("cred-1")
-            coEvery { apiModelRepository.getConfigurationById(configId) } returns
-                ApiModelConfiguration(
-                    id = configId,
-                    apiCredentialsId = credId,
-                    modelId = "gpt-4o",
-                    isMultimodal = false,
-                    displayName = "Text Only",
-                )
-            coEvery { apiModelRepository.getCredentialsById(credId) } returns
-                ApiCredentials(
-                    id = credId,
-                    displayName = "OpenAI",
-                    provider = ApiProvider.OPENAI,
-                    credentialAlias = "openai",
-                )
+            apiModelRepository.seedConfigurations(
+                listOf(
+                    ApiModelConfiguration(
+                        id = configId,
+                        apiCredentialsId = credId,
+                        modelId = "gpt-4o",
+                        isMultimodal = false,
+                        displayName = "Text Only",
+                    ),
+                ),
+            )
+            apiModelRepository.seedCredentials(
+                listOf(
+                    ApiCredentials(
+                        id = credId,
+                        displayName = "OpenAI",
+                        provider = ApiProvider.OPENAI,
+                        credentialAlias = "openai",
+                    ),
+                ),
+            )
 
             val error =
                 assertFailsWith<IllegalArgumentException> {
@@ -319,20 +333,26 @@ class SetDefaultModelUseCaseTest {
         runTest {
             val configId = ApiModelConfigurationId("config-fal")
             val credId = ApiCredentialsId("cred-fal")
-            coEvery { apiModelRepository.getConfigurationById(configId) } returns
-                ApiModelConfiguration(
-                    id = configId,
-                    apiCredentialsId = credId,
-                    modelId = "fal-ai/flux",
-                    displayName = "FAL Flux",
-                )
-            coEvery { apiModelRepository.getCredentialsById(credId) } returns
-                ApiCredentials(
-                    id = credId,
-                    displayName = "FAL",
-                    provider = ApiProvider.FAL,
-                    credentialAlias = "fal-alias",
-                )
+            apiModelRepository.seedConfigurations(
+                listOf(
+                    ApiModelConfiguration(
+                        id = configId,
+                        apiCredentialsId = credId,
+                        modelId = "fal-ai/flux",
+                        displayName = "FAL Flux",
+                    ),
+                ),
+            )
+            apiModelRepository.seedCredentials(
+                listOf(
+                    ApiCredentials(
+                        id = credId,
+                        displayName = "FAL",
+                        provider = ApiProvider.FAL,
+                        credentialAlias = "fal-alias",
+                    ),
+                ),
+            )
 
             val error =
                 assertFailsWith<IllegalArgumentException> {
@@ -347,20 +367,26 @@ class SetDefaultModelUseCaseTest {
         runTest {
             val configId = ApiModelConfigurationId("config-fal-2")
             val credId = ApiCredentialsId("cred-fal-2")
-            coEvery { apiModelRepository.getConfigurationById(configId) } returns
-                ApiModelConfiguration(
-                    id = configId,
-                    apiCredentialsId = credId,
-                    modelId = "fal-ai/flux",
-                    displayName = "FAL Flux",
-                )
-            coEvery { apiModelRepository.getCredentialsById(credId) } returns
-                ApiCredentials(
-                    id = credId,
-                    displayName = "FAL",
-                    provider = ApiProvider.FAL,
-                    credentialAlias = "fal-alias-2",
-                )
+            apiModelRepository.seedConfigurations(
+                listOf(
+                    ApiModelConfiguration(
+                        id = configId,
+                        apiCredentialsId = credId,
+                        modelId = "fal-ai/flux",
+                        displayName = "FAL Flux",
+                    ),
+                ),
+            )
+            apiModelRepository.seedCredentials(
+                listOf(
+                    ApiCredentials(
+                        id = credId,
+                        displayName = "FAL",
+                        provider = ApiProvider.FAL,
+                        credentialAlias = "fal-alias-2",
+                    ),
+                ),
+            )
 
             val error =
                 assertFailsWith<IllegalArgumentException> {
@@ -375,20 +401,26 @@ class SetDefaultModelUseCaseTest {
         runTest {
             val configId = ApiModelConfigurationId("config-anthropic")
             val credId = ApiCredentialsId("cred-anthropic")
-            coEvery { apiModelRepository.getConfigurationById(configId) } returns
-                ApiModelConfiguration(
-                    id = configId,
-                    apiCredentialsId = credId,
-                    modelId = "claude-opus-4-8",
-                    displayName = "Claude",
-                )
-            coEvery { apiModelRepository.getCredentialsById(credId) } returns
-                ApiCredentials(
-                    id = credId,
-                    displayName = "Anthropic",
-                    provider = ApiProvider.ANTHROPIC,
-                    credentialAlias = "anthropic-alias",
-                )
+            apiModelRepository.seedConfigurations(
+                listOf(
+                    ApiModelConfiguration(
+                        id = configId,
+                        apiCredentialsId = credId,
+                        modelId = "claude-opus-4-8",
+                        displayName = "Claude",
+                    ),
+                ),
+            )
+            apiModelRepository.seedCredentials(
+                listOf(
+                    ApiCredentials(
+                        id = credId,
+                        displayName = "Anthropic",
+                        provider = ApiProvider.ANTHROPIC,
+                        credentialAlias = "anthropic-alias",
+                    ),
+                ),
+            )
 
             useCase(ModelType.MAIN, localConfigId = null, apiConfigId = configId)
 
@@ -401,21 +433,27 @@ class SetDefaultModelUseCaseTest {
         runTest {
             val configId = ApiModelConfigurationId("config-fal-vision")
             val credId = ApiCredentialsId("cred-fal-vision")
-            coEvery { apiModelRepository.getConfigurationById(configId) } returns
-                ApiModelConfiguration(
-                    id = configId,
-                    apiCredentialsId = credId,
-                    modelId = "fal-ai/flux-pro",
-                    isMultimodal = true,
-                    displayName = "FAL Flux",
-                )
-            coEvery { apiModelRepository.getCredentialsById(credId) } returns
-                ApiCredentials(
-                    id = credId,
-                    displayName = "FAL",
-                    provider = ApiProvider.FAL,
-                    credentialAlias = "fal-vision",
-                )
+            apiModelRepository.seedConfigurations(
+                listOf(
+                    ApiModelConfiguration(
+                        id = configId,
+                        apiCredentialsId = credId,
+                        modelId = "fal-ai/flux-pro",
+                        isMultimodal = true,
+                        displayName = "FAL Flux",
+                    ),
+                ),
+            )
+            apiModelRepository.seedCredentials(
+                listOf(
+                    ApiCredentials(
+                        id = credId,
+                        displayName = "FAL",
+                        provider = ApiProvider.FAL,
+                        credentialAlias = "fal-vision",
+                    ),
+                ),
+            )
 
             val error =
                 assertFailsWith<IllegalArgumentException> {
@@ -462,20 +500,22 @@ class SetDefaultModelUseCaseTest {
     fun `SET-003 direct Gen2 SDXL assignment throws exact IllegalArgumentException`() =
         runTest {
             val configId = LocalModelConfigurationId("sdxl-local-config")
-            coEvery { localModelRepository.getAssetByConfigId(configId) } returns
-                localAsset(configId, "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83")
+            localModelRepository.seedAssetForConfig(
+                configId,
+                localAsset(configId, "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83"),
+            )
 
-            every { capabilityPort.getCapabilities() } returns
-                com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilities(
-                    npuAvailable = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
-                    sd15NpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
-                    sd15CpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.NO,
-                    sdxlNpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.NO,
-                    recommendedBackend = com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind.QNN_NPU,
-                    recommendedModelId = com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId.SD15_QNN,
+            capabilityPort.capabilities =
+                LocalImageGenerationCapabilities(
+                    npuAvailable = LocalImageGenTriState.YES,
+                    sd15NpuSupported = LocalImageGenTriState.YES,
+                    sd15CpuSupported = LocalImageGenTriState.NO,
+                    sdxlNpuSupported = LocalImageGenTriState.NO,
+                    recommendedBackend = LocalImageGenerationBackendKind.QNN_NPU,
+                    recommendedModelId = LocalImageGenerationModelId.SD15_QNN,
                     diagnostics = emptyList(),
                     disabledReasonsByModelId = mapOf(
-                        com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId.SDXL_QNN to "Requires Snapdragon 8 Gen 3+ with QNN."
+                        LocalImageGenerationModelId.SDXL_QNN to "Requires Snapdragon 8 Gen 3+ with QNN."
                     )
                 )
 
@@ -491,64 +531,64 @@ class SetDefaultModelUseCaseTest {
     fun `SET-004 direct Gen3 SDXL assignment succeeds when pack complete`() =
         runTest {
             val configId = LocalModelConfigurationId("sdxl-local-config")
-            coEvery { localModelRepository.getAssetByConfigId(configId) } returns
-                localAsset(configId, "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83")
+            localModelRepository.seedAssetForConfig(
+                configId,
+                localAsset(configId, "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83"),
+            )
 
-            every { capabilityPort.getCapabilities() } returns
-                com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilities(
-                    npuAvailable = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
-                    sd15NpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
-                    sd15CpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.NO,
-                    sdxlNpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
-                    recommendedBackend = com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind.QNN_NPU,
-                    recommendedModelId = com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId.SDXL_QNN,
+            capabilityPort.capabilities =
+                LocalImageGenerationCapabilities(
+                    npuAvailable = LocalImageGenTriState.YES,
+                    sd15NpuSupported = LocalImageGenTriState.YES,
+                    sd15CpuSupported = LocalImageGenTriState.NO,
+                    sdxlNpuSupported = LocalImageGenTriState.YES,
+                    recommendedBackend = LocalImageGenerationBackendKind.QNN_NPU,
+                    recommendedModelId = LocalImageGenerationModelId.SDXL_QNN,
                     diagnostics = emptyList(),
                 )
 
-            coEvery { verifyModelPackCompleteness("sdxl-t2i") } returns
-                Result.success(
-                    ModelPackCompleteness(
-                        packId = "sdxl-t2i",
-                        installedCount = 1,
-                        totalCount = 1,
-                        isComplete = true,
-                        members = emptyList(),
-                    ),
+            modelPackVerifier.completenessByPackId["sdxl-t2i"] =
+                ModelPackCompleteness(
+                    packId = "sdxl-t2i",
+                    installedCount = 1,
+                    totalCount = 1,
+                    isComplete = true,
+                    members = emptyList(),
                 )
 
             useCase(ModelType.IMAGE_GENERATION, localConfigId = configId, apiConfigId = null)
 
             assertEquals(configId, repository.getDefault(ModelType.IMAGE_GENERATION)?.localConfigId)
-            verify { capabilityPort.getCapabilities() }
+            assertTrue(capabilityPort.getCapabilitiesCallCount >= 1)
         }
 
     @Test
     fun `SET-005 incomplete SDXL assignment throws existing pack incomplete message`() =
         runTest {
             val configId = LocalModelConfigurationId("sdxl-local-config")
-            coEvery { localModelRepository.getAssetByConfigId(configId) } returns
-                localAsset(configId, "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83")
+            localModelRepository.seedAssetForConfig(
+                configId,
+                localAsset(configId, "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83"),
+            )
 
-            every { capabilityPort.getCapabilities() } returns
-                com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilities(
-                    npuAvailable = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
-                    sd15NpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
-                    sd15CpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.NO,
-                    sdxlNpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
-                    recommendedBackend = com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind.QNN_NPU,
-                    recommendedModelId = com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId.SDXL_QNN,
+            capabilityPort.capabilities =
+                LocalImageGenerationCapabilities(
+                    npuAvailable = LocalImageGenTriState.YES,
+                    sd15NpuSupported = LocalImageGenTriState.YES,
+                    sd15CpuSupported = LocalImageGenTriState.NO,
+                    sdxlNpuSupported = LocalImageGenTriState.YES,
+                    recommendedBackend = LocalImageGenerationBackendKind.QNN_NPU,
+                    recommendedModelId = LocalImageGenerationModelId.SDXL_QNN,
                     diagnostics = emptyList(),
                 )
 
-            coEvery { verifyModelPackCompleteness("sdxl-t2i") } returns
-                Result.success(
-                    ModelPackCompleteness(
-                        packId = "sdxl-t2i",
-                        installedCount = 0,
-                        totalCount = 1,
-                        isComplete = false,
-                        members = emptyList(),
-                    ),
+            modelPackVerifier.completenessByPackId["sdxl-t2i"] =
+                ModelPackCompleteness(
+                    packId = "sdxl-t2i",
+                    installedCount = 0,
+                    totalCount = 1,
+                    isComplete = false,
+                    members = emptyList(),
                 )
 
             val error =
@@ -568,29 +608,29 @@ class SetDefaultModelUseCaseTest {
             val configId = LocalModelConfigurationId("sdxl-local-config")
             val modelDir = kotlin.io.path.createTempDirectory().toFile()
             java.io.File(modelDir, "vae_encoder.bin").writeText("encoder")
-            coEvery { localModelRepository.getAssetByConfigId(configId) } returns
-                localAsset(configId, "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83")
-            every { capabilityPort.getCapabilities() } returns
-                com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilities(
-                    npuAvailable = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
-                    sd15NpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
-                    sd15CpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.NO,
-                    sdxlNpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
-                    recommendedBackend = com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind.QNN_NPU,
-                    recommendedModelId = com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId.SDXL_QNN,
+            localModelRepository.seedAssetForConfig(
+                configId,
+                localAsset(configId, "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83"),
+            )
+            capabilityPort.capabilities =
+                LocalImageGenerationCapabilities(
+                    npuAvailable = LocalImageGenTriState.YES,
+                    sd15NpuSupported = LocalImageGenTriState.YES,
+                    sd15CpuSupported = LocalImageGenTriState.NO,
+                    sdxlNpuSupported = LocalImageGenTriState.YES,
+                    recommendedBackend = LocalImageGenerationBackendKind.QNN_NPU,
+                    recommendedModelId = LocalImageGenerationModelId.SDXL_QNN,
                     diagnostics = emptyList(),
                 )
-            coEvery { verifyModelPackCompleteness("sdxl-t2i") } returns
-                Result.success(
-                    ModelPackCompleteness(
-                        packId = "sdxl-t2i",
-                        installedCount = 1,
-                        totalCount = 1,
-                        isComplete = true,
-                        members = emptyList(),
-                    ),
+            modelPackVerifier.completenessByPackId["sdxl-t2i"] =
+                ModelPackCompleteness(
+                    packId = "sdxl-t2i",
+                    installedCount = 1,
+                    totalCount = 1,
+                    isComplete = true,
+                    members = emptyList(),
                 )
-            coEvery { localStableDiffusionTargetResolver.resolveLaunchDir(configId) } returns modelDir.absolutePath
+            localStableDiffusionTargetResolver.launchDir = modelDir.absolutePath
 
             useCase(ModelType.IMAGE_EDIT, localConfigId = configId, apiConfigId = null)
 
@@ -602,29 +642,29 @@ class SetDefaultModelUseCaseTest {
         runTest {
             val configId = LocalModelConfigurationId("sdxl-local-config")
             val modelDir = kotlin.io.path.createTempDirectory().toFile()
-            coEvery { localModelRepository.getAssetByConfigId(configId) } returns
-                localAsset(configId, "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83")
-            every { capabilityPort.getCapabilities() } returns
-                com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilities(
-                    npuAvailable = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
-                    sd15NpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
-                    sd15CpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.NO,
-                    sdxlNpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
-                    recommendedBackend = com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind.QNN_NPU,
-                    recommendedModelId = com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId.SDXL_QNN,
+            localModelRepository.seedAssetForConfig(
+                configId,
+                localAsset(configId, "5250591bc45e58490c2fd3c0e0e7d4d166ba1aa6f443d5ebdb962c95a9e99f83"),
+            )
+            capabilityPort.capabilities =
+                LocalImageGenerationCapabilities(
+                    npuAvailable = LocalImageGenTriState.YES,
+                    sd15NpuSupported = LocalImageGenTriState.YES,
+                    sd15CpuSupported = LocalImageGenTriState.NO,
+                    sdxlNpuSupported = LocalImageGenTriState.YES,
+                    recommendedBackend = LocalImageGenerationBackendKind.QNN_NPU,
+                    recommendedModelId = LocalImageGenerationModelId.SDXL_QNN,
                     diagnostics = emptyList(),
                 )
-            coEvery { verifyModelPackCompleteness("sdxl-t2i") } returns
-                Result.success(
-                    ModelPackCompleteness(
-                        packId = "sdxl-t2i",
-                        installedCount = 1,
-                        totalCount = 1,
-                        isComplete = true,
-                        members = emptyList(),
-                    ),
+            modelPackVerifier.completenessByPackId["sdxl-t2i"] =
+                ModelPackCompleteness(
+                    packId = "sdxl-t2i",
+                    installedCount = 1,
+                    totalCount = 1,
+                    isComplete = true,
+                    members = emptyList(),
                 )
-            coEvery { localStableDiffusionTargetResolver.resolveLaunchDir(configId) } returns modelDir.absolutePath
+            localStableDiffusionTargetResolver.launchDir = modelDir.absolutePath
 
             val error =
                 assertFailsWith<IllegalArgumentException> {
@@ -638,22 +678,24 @@ class SetDefaultModelUseCaseTest {
     fun `SET-008 direct Gen2 Juggernaut assignment throws exact IllegalArgumentException`() =
         runTest {
             val configId = LocalModelConfigurationId(ModelPackTestFixtures.JUGGERNAUT_CONFIG_ID)
-            coEvery { localModelRepository.getAssetByConfigId(configId) } returns
-                localAsset(configId, ModelPackTestFixtures.JUGGERNAUT_DIFFUSION_SHA)
+            localModelRepository.seedAssetForConfig(
+                configId,
+                localAsset(configId, ModelPackTestFixtures.JUGGERNAUT_DIFFUSION_SHA),
+            )
 
-            every { capabilityPort.getCapabilities() } returns
-                com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilities(
-                    npuAvailable = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
-                    sd15NpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
-                    sd15CpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.NO,
-                    sdxlNpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.NO,
-                    juggernautXlNpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.NO,
-                    recommendedBackend = com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind.QNN_NPU,
-                    recommendedModelId = com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId.SD15_QNN,
+            capabilityPort.capabilities =
+                LocalImageGenerationCapabilities(
+                    npuAvailable = LocalImageGenTriState.YES,
+                    sd15NpuSupported = LocalImageGenTriState.YES,
+                    sd15CpuSupported = LocalImageGenTriState.NO,
+                    sdxlNpuSupported = LocalImageGenTriState.NO,
+                    juggernautXlNpuSupported = LocalImageGenTriState.NO,
+                    recommendedBackend = LocalImageGenerationBackendKind.QNN_NPU,
+                    recommendedModelId = LocalImageGenerationModelId.SD15_QNN,
                     diagnostics = emptyList(),
                     disabledReasonsByModelId =
                         mapOf(
-                            com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId.JUGGERNAUT_XL_QNN to
+                            LocalImageGenerationModelId.JUGGERNAUT_XL_QNN to
                                 "Requires Snapdragon 8 Gen 3+ with QNN.",
                         ),
                 )
@@ -672,32 +714,32 @@ class SetDefaultModelUseCaseTest {
             val configId = LocalModelConfigurationId(ModelPackTestFixtures.JUGGERNAUT_CONFIG_ID)
             val modelDir = kotlin.io.path.createTempDirectory().toFile()
             java.io.File(modelDir, "vae_encoder.bin").writeText("encoder")
-            coEvery { localModelRepository.getAssetByConfigId(configId) } returns
-                localAsset(configId, ModelPackTestFixtures.JUGGERNAUT_DIFFUSION_SHA)
+            localModelRepository.seedAssetForConfig(
+                configId,
+                localAsset(configId, ModelPackTestFixtures.JUGGERNAUT_DIFFUSION_SHA),
+            )
 
-            every { capabilityPort.getCapabilities() } returns
-                com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilities(
-                    npuAvailable = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
-                    sd15NpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
-                    sd15CpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.NO,
-                    sdxlNpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
-                    juggernautXlNpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
-                    recommendedBackend = com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind.QNN_NPU,
-                    recommendedModelId = com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId.SD15_QNN,
+            capabilityPort.capabilities =
+                LocalImageGenerationCapabilities(
+                    npuAvailable = LocalImageGenTriState.YES,
+                    sd15NpuSupported = LocalImageGenTriState.YES,
+                    sd15CpuSupported = LocalImageGenTriState.NO,
+                    sdxlNpuSupported = LocalImageGenTriState.YES,
+                    juggernautXlNpuSupported = LocalImageGenTriState.YES,
+                    recommendedBackend = LocalImageGenerationBackendKind.QNN_NPU,
+                    recommendedModelId = LocalImageGenerationModelId.SD15_QNN,
                     diagnostics = emptyList(),
                 )
 
-            coEvery { verifyModelPackCompleteness(ModelPackTestFixtures.JUGGERNAUT_PACK_ID) } returns
-                Result.success(
-                    ModelPackCompleteness(
-                        packId = ModelPackTestFixtures.JUGGERNAUT_PACK_ID,
-                        installedCount = 2,
-                        totalCount = 2,
-                        isComplete = true,
-                        members = emptyList(),
-                    ),
+            modelPackVerifier.completenessByPackId[ModelPackTestFixtures.JUGGERNAUT_PACK_ID] =
+                ModelPackCompleteness(
+                    packId = ModelPackTestFixtures.JUGGERNAUT_PACK_ID,
+                    installedCount = 2,
+                    totalCount = 2,
+                    isComplete = true,
+                    members = emptyList(),
                 )
-            coEvery { localStableDiffusionTargetResolver.resolveLaunchDir(configId) } returns modelDir.absolutePath
+            localStableDiffusionTargetResolver.launchDir = modelDir.absolutePath
 
             useCase(ModelType.IMAGE_EDIT, localConfigId = configId, apiConfigId = null)
 
@@ -709,32 +751,32 @@ class SetDefaultModelUseCaseTest {
         runTest {
             val configId = LocalModelConfigurationId(ModelPackTestFixtures.JUGGERNAUT_CONFIG_ID)
             val modelDir = kotlin.io.path.createTempDirectory().toFile()
-            coEvery { localModelRepository.getAssetByConfigId(configId) } returns
-                localAsset(configId, ModelPackTestFixtures.JUGGERNAUT_DIFFUSION_SHA)
+            localModelRepository.seedAssetForConfig(
+                configId,
+                localAsset(configId, ModelPackTestFixtures.JUGGERNAUT_DIFFUSION_SHA),
+            )
 
-            every { capabilityPort.getCapabilities() } returns
-                com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilities(
-                    npuAvailable = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
-                    sd15NpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
-                    sd15CpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.NO,
-                    sdxlNpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
-                    juggernautXlNpuSupported = com.browntowndev.enclave.domain.model.media.LocalImageGenTriState.YES,
-                    recommendedBackend = com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind.QNN_NPU,
-                    recommendedModelId = com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId.SD15_QNN,
+            capabilityPort.capabilities =
+                LocalImageGenerationCapabilities(
+                    npuAvailable = LocalImageGenTriState.YES,
+                    sd15NpuSupported = LocalImageGenTriState.YES,
+                    sd15CpuSupported = LocalImageGenTriState.NO,
+                    sdxlNpuSupported = LocalImageGenTriState.YES,
+                    juggernautXlNpuSupported = LocalImageGenTriState.YES,
+                    recommendedBackend = LocalImageGenerationBackendKind.QNN_NPU,
+                    recommendedModelId = LocalImageGenerationModelId.SD15_QNN,
                     diagnostics = emptyList(),
                 )
 
-            coEvery { verifyModelPackCompleteness(ModelPackTestFixtures.JUGGERNAUT_PACK_ID) } returns
-                Result.success(
-                    ModelPackCompleteness(
-                        packId = ModelPackTestFixtures.JUGGERNAUT_PACK_ID,
-                        installedCount = 2,
-                        totalCount = 2,
-                        isComplete = true,
-                        members = emptyList(),
-                    ),
+            modelPackVerifier.completenessByPackId[ModelPackTestFixtures.JUGGERNAUT_PACK_ID] =
+                ModelPackCompleteness(
+                    packId = ModelPackTestFixtures.JUGGERNAUT_PACK_ID,
+                    installedCount = 2,
+                    totalCount = 2,
+                    isComplete = true,
+                    members = emptyList(),
                 )
-            coEvery { localStableDiffusionTargetResolver.resolveLaunchDir(configId) } returns modelDir.absolutePath
+            localStableDiffusionTargetResolver.launchDir = modelDir.absolutePath
 
             val error =
                 assertFailsWith<IllegalArgumentException> {
@@ -743,4 +785,19 @@ class SetDefaultModelUseCaseTest {
 
             assertEquals(SetDefaultModelUseCaseImpl.IMG2IMG_ENCODER_MISSING_MESSAGE, error.message)
         }
+
+    /** Returns a preset launch directory instead of resolving one from disk state. */
+    private class FakeLocalStableDiffusionTargetResolver :
+        LocalStableDiffusionTargetResolver(
+            FakeLocalModelRepository(),
+            FakeUtilityModelFile(),
+            FakeGpuCapability(),
+            FakeLocalImageGenerationCapability(),
+            SelectLocalImageGenerationBackendUseCase(),
+        ) {
+        var launchDir: String? = null
+
+        override suspend fun resolveLaunchDir(localConfigId: LocalModelConfigurationId): String =
+            launchDir ?: error("launchDir not set")
+    }
 }

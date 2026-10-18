@@ -1,10 +1,8 @@
 package com.browntowndev.enclave.domain.usecase.chat
 
+import com.browntowndev.enclave.core.testing.FakeEmbeddingEngine
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
-import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
-import io.mockk.coEvery
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
@@ -18,7 +16,7 @@ class SearchToolsHostCoordinatorTest {
     @Test
     fun executeFromArguments_resolves_search_and_updates_registry() =
         runTest {
-            val embeddingEngine = mockk<EmbeddingEnginePort>(relaxed = true)
+            val embeddingEngine = FakeEmbeddingEngine()
             val coordinator = SearchToolsHostCoordinator(embeddingEngine)
             val registry = ToolSessionActivationRegistry()
             registry.seedTurn(listOf(ToolDefinition.SEARCH_TOOLS.name))
@@ -45,8 +43,8 @@ class SearchToolsHostCoordinatorTest {
     @Test
     fun execute_persists_activations_to_monotonic_when_chat_id_set() =
         runTest {
-            val embeddingEngine = mockk<EmbeddingEnginePort>()
-            coEvery { embeddingEngine.getEmbedding("document writing") } returns
+            val embeddingEngine = FakeEmbeddingEngine()
+            embeddingEngine.embeddingsByText["document writing"] =
                 ToolSearchTestFixtures.queryEmbeddingDocumentWriting()
             val monotonic = InMemoryMonotonicToolActivationStore()
             val registry =

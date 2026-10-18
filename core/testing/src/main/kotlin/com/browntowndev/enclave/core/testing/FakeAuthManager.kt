@@ -27,5 +27,10 @@ class FakeAuthManager(
         return signInResult
     }
 
-    override suspend fun signOut(): Result<Unit> = signOutResult
+    var signOutCallCount = 0
+
+    override suspend fun signOut(): Result<Unit> {
+        signOutCallCount++
+        return signOutResult
+    }
 }

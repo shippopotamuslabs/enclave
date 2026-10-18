@@ -72,8 +72,12 @@ class FakeChatRepository(
         }
     }
 
+    /** When set, [togglePinStatus] records the call then throws this (ENC-28). */
+    var togglePinFailure: Throwable? = null
+
     override suspend fun togglePinStatus(chatId: ChatId) {
         togglePinCalls += chatId
+        togglePinFailure?.let { throw it }
         val chat = chatsState.value.firstOrNull { it.id == chatId }
             ?: throw IllegalArgumentException("Chat not found")
         chatsState.value = chatsState.value.map {
@@ -84,8 +88,12 @@ class FakeChatRepository(
     /** Recorded getMessagesForChat chat ids (ENC-28). */
     val getMessagesForChatCalls = mutableListOf<ChatId>()
 
+    /** Optional per-chat flow overrides for [getMessagesForChat] (ENC-28); absent = state-backed. */
+    val messagesForChatOverrides = mutableMapOf<ChatId, Flow<List<Message>>>()
+
     override fun getMessagesForChat(chatId: ChatId): Flow<List<Message>> {
         getMessagesForChatCalls += chatId
+        messagesForChatOverrides[chatId]?.let { return it }
         return messagesState.map { all -> all.filter { it.chatId == chatId } }
     }
 
@@ -137,9 +145,12 @@ class FakeChatRepository(
         updateMessage(messageId) { it.copy(modelType = modelType) }
     }
 
+    /** When set, [createChat] returns this id instead of the chat's own id. */
+    var createChatResultOverride: ChatId? = null
+
     override suspend fun createChat(chat: Chat, scheduleCloudSync: Boolean): ChatId {
         chatsState.value = chatsState.value + chat
-        return chat.id
+        return createChatResultOverride ?: chat.id
     }
 
     override suspend fun saveAssistantMessage(messageId: MessageId, content: String, thinkingData: ThinkingData?) {
@@ -152,13 +163,28 @@ class FakeChatRepository(
         }
     }
 
+    /** One recorded [createAssistantMessage] invocation (ENC-28). */
+    data class CreateAssistantMessageCall(
+        val chatId: ChatId,
+        val userMessageId: MessageId,
+        val modelType: ModelType,
+        val pipelineStep: PipelineStep?,
+    )
+
+    /** Every [createAssistantMessage] call, in call order (ENC-28). */
+    val createAssistantMessageCalls = mutableListOf<CreateAssistantMessageCall>()
+
+    /** Optional deterministic ids for [createAssistantMessage], keyed by model type (ENC-28). */
+    val assistantMessageIdsByModelType = mutableMapOf<ModelType, MessageId>()
+
     override suspend fun createAssistantMessage(
         chatId: ChatId,
         userMessageId: MessageId,
         modelType: ModelType,
         pipelineStep: PipelineStep?,
     ): MessageId {
-        val id = MessageId(UUID.randomUUID().toString())
+        createAssistantMessageCalls += CreateAssistantMessageCall(chatId, userMessageId, modelType, pipelineStep)
+        val id = assistantMessageIdsByModelType[modelType] ?: MessageId(UUID.randomUUID().toString())
         messagesState.value = messagesState.value +
             Message(
                 id = id,
@@ -172,7 +198,11 @@ class FakeChatRepository(
         return id
     }
 
+    /** Every [persistWebSearchSources] call, recorded for assertions (ENC-28). */
+    val persistWebSearchSourcesCalls = mutableListOf<Pair<MessageId, List<WebSearchSource>>>()
+
     override suspend fun persistWebSearchSources(messageId: MessageId, sources: List<WebSearchSource>) {
+        persistWebSearchSourcesCalls += messageId to sources
         updateMessage(messageId) {
             it.copy(content = it.content.copy(webSearchSources = sources), webSearchSources = sources)
         }
@@ -187,6 +217,21 @@ class FakeChatRepository(
     )
 
     val persistAllMessageDataCalls = mutableListOf<PersistedMessageData>()
+
+    /** [WebSearchSource]s of each [persistAllMessageData] call, parallel to [persistAllMessageDataCalls] (ENC-28). */
+    val persistAllMessageDataSources = mutableListOf<List<WebSearchSource>>()
+
+    /** Transcript segments of each [persistAllMessageData] call, parallel to [persistAllMessageDataCalls] (ENC-28). */
+    val persistAllMessageDataSegments = mutableListOf<List<MessageTranscriptSegment>>()
+
+    /** Telemetry row lists passed to [persistAllMessageData], in call order (ENC-28). */
+    val persistAllMessageDataTelemetryCalls = mutableListOf<List<TurnTelemetry>>()
+
+    /** Model types of each [persistAllMessageData] call, parallel to [persistAllMessageDataCalls] (ENC-28). */
+    val persistAllMessageDataModelTypes = mutableListOf<ModelType>()
+
+    /** Thinking-raw values of each [persistAllMessageData] call, parallel to [persistAllMessageDataCalls] (ENC-28). */
+    val persistAllMessageDataThinkingRaw = mutableListOf<String?>()
 
     override suspend fun persistAllMessageData(
         messageId: MessageId,
@@ -208,6 +253,11 @@ class FakeChatRepository(
         telemetry: List<TurnTelemetry>,
     ) {
         persistAllMessageDataCalls += PersistedMessageData(messageId, content, messageState)
+        persistAllMessageDataSources += webSearchSources
+        persistAllMessageDataSegments += transcriptSegments
+        persistAllMessageDataTelemetryCalls += telemetry
+        persistAllMessageDataModelTypes += modelType
+        persistAllMessageDataThinkingRaw += thinkingRaw
         updateMessage(messageId) {
             it.copy(
                 content = Content(
@@ -271,7 +321,12 @@ class FakeChatRepository(
     override suspend fun getChatsByIds(ids: List<ChatId>): Map<ChatId, Chat> =
         chatsState.value.filter { it.id in ids }.associateBy { it.id }
 
-    override suspend fun markWebSearchSourcesExtracted(urls: List<String>) = Unit
+    /** Every [markWebSearchSourcesExtracted] call, recorded for assertions (ENC-28). */
+    val markWebSearchSourcesExtractedCalls = mutableListOf<List<String>>()
+
+    override suspend fun markWebSearchSourcesExtracted(urls: List<String>) {
+        markWebSearchSourcesExtractedCalls += urls
+    }
 
     override suspend fun markWebSearchSourceExtracted(url: String) = Unit
 }

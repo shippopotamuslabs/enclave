@@ -12,8 +12,16 @@ class FakeEmbeddingEngine(
 ) : EmbeddingEnginePort {
     val queries = mutableListOf<String>()
 
+    /** Optional per-text scripted embeddings; a text present here wins over the derived vector. */
+    val embeddingsByText = mutableMapOf<String, FloatArray>()
+
+    /** When set, [getEmbedding] returns this vector for every text without a per-text entry (ENC-28). */
+    var uniformEmbedding: FloatArray? = null
+
     override suspend fun getEmbedding(text: String): FloatArray {
         queries += text
+        embeddingsByText[text]?.let { return it }
+        uniformEmbedding?.let { return it }
         val seed = text.hashCode()
         return FloatArray(dimensions) { i -> ((seed shr (i % 16)) and BYTE_MASK) / BYTE_RANGE }
     }

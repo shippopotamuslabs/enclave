@@ -9,9 +9,8 @@ import com.browntowndev.enclave.domain.model.config.UtilityType
 import com.browntowndev.enclave.domain.model.download.DownloadSource
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.usecase.FakeUtilityModelRepository
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -21,7 +20,7 @@ import org.junit.jupiter.api.assertThrows
 
 class SyncUtilityModelRegistryUseCaseTest {
     private val repository = FakeUtilityModelRepository()
-    private val logger = mockk<LoggingPort>(relaxed = true)
+    private val logger = FakeLoggingPort()
     private val useCase = SyncUtilityModelRegistryUseCase(repository, logger)
 
     @Test

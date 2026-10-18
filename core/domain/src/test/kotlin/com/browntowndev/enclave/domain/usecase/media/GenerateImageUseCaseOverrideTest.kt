@@ -1,16 +1,24 @@
 package com.browntowndev.enclave.domain.usecase.media
 
+import com.browntowndev.enclave.core.testing.FakeGpuCapability
+import com.browntowndev.enclave.core.testing.FakeImageGenerationPort
+import com.browntowndev.enclave.core.testing.FakeLocalImageGenerationCapability
+import com.browntowndev.enclave.core.testing.FakeLocalModelRepository
+import com.browntowndev.enclave.core.testing.FakeMediaProviderRepository
+import com.browntowndev.enclave.core.testing.FakeUtilityModelFile
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
+import com.browntowndev.enclave.domain.model.media.ImageGenerationTarget
+import com.browntowndev.enclave.domain.model.media.LocalImageGenTriState
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationBackendKind
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilities
+import com.browntowndev.enclave.domain.model.media.LocalImageGenerationModelId
+import com.browntowndev.enclave.domain.model.media.ProviderCapabilities
 import com.browntowndev.enclave.domain.model.media.StudioModelOverride
-import com.browntowndev.enclave.domain.port.media.ImageGenerationPort
-import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
 import com.browntowndev.enclave.domain.usecase.media.test.FakeDefaultModelRepositoryWithCalls
-import io.mockk.coEvery
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -23,9 +31,9 @@ import org.junit.jupiter.api.Test
 class GenerateImageUseCaseOverrideTest {
     private val defaultModelRepository = FakeDefaultModelRepositoryWithCalls()
     private val resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase()
-    private val mediaProviderRepository = mockk<MediaProviderRepositoryPort>(relaxed = true)
-    private val localStableDiffusionTargetResolver = mockk<LocalStableDiffusionTargetResolver>(relaxed = true)
-    private val imageGenerationPort = mockk<ImageGenerationPort>(relaxed = true)
+    private val mediaProviderRepository = FakeMediaProviderRepository()
+    private val localStableDiffusionTargetResolver = FakeLocalStableDiffusionTargetResolver()
+    private val imageGenerationPort = FakeImageGenerationPort()
 
     private lateinit var useCase: GenerateImageUseCase
 
@@ -40,9 +48,7 @@ class GenerateImageUseCaseOverrideTest {
                 mediaProviderRepository = mediaProviderRepository,
                 localStableDiffusionTargetResolver = localStableDiffusionTargetResolver,
             )
-        coEvery {
-            imageGenerationPort.generateImage(any(), any(), any(), any())
-        } returns Result.success(listOf(byteArrayOf(1)))
+        imageGenerationPort.result = Result.success(listOf(byteArrayOf(1)))
         useCase =
             GenerateImageUseCase(
                 resolveMediaModelTypeUseCase = resolveMediaModelTypeUseCase,
@@ -111,5 +117,51 @@ class GenerateImageUseCaseOverrideTest {
                 assertFalse(defaultModelRepository.getDefaultCalls.contains(ModelType.IMAGE_GENERATION))
                 assertFalse(defaultModelRepository.getDefaultCalls.contains(ModelType.IMAGE_EDIT))
             }
+    }
+
+    /**
+     * Subclass fake of the (open) [LocalStableDiffusionTargetResolver]: returns a canned
+     * real [ImageGenerationTarget.LocalStableDiffusion] without touching on-disk state.
+     */
+    private class FakeLocalStableDiffusionTargetResolver :
+        LocalStableDiffusionTargetResolver(
+            localModelRepository = FakeLocalModelRepository(),
+            utilityModelFilePort = FakeUtilityModelFile(),
+            gpuCapabilityPort = FakeGpuCapability(),
+            capabilityPort = FakeLocalImageGenerationCapability(),
+            selectBackend = SelectLocalImageGenerationBackendUseCase(),
+        ) {
+        val resolveCalls = mutableListOf<LocalModelConfigurationId>()
+
+        override suspend fun resolve(localConfigId: LocalModelConfigurationId): ImageGenerationTarget.LocalStableDiffusion {
+            resolveCalls += localConfigId
+            return ImageGenerationTarget.LocalStableDiffusion(
+                localConfigId = localConfigId,
+                displayName = "Fake SD",
+                modelId = LocalImageGenerationModelId.SD15_QNN,
+                modelDir = "/fake/sd15-qnn",
+                catalogSha256 = "fake-sha",
+                selectedBackend = LocalImageGenerationBackendKind.QNN_NPU,
+                capabilities =
+                    ProviderCapabilities(
+                        supportedAspectRatios = emptyList(),
+                        supportedImageQualities = emptyList(),
+                        supportedVideoQualities = emptyList(),
+                        supportedVideoResolutions = emptyList(),
+                        supportedVideoDurations = emptyList(),
+                        supportsVideo = false,
+                    ),
+                deviceCapabilities =
+                    LocalImageGenerationCapabilities(
+                        npuAvailable = LocalImageGenTriState.YES,
+                        sd15NpuSupported = LocalImageGenTriState.YES,
+                        sd15CpuSupported = LocalImageGenTriState.NO,
+                        sdxlNpuSupported = LocalImageGenTriState.NO,
+                        recommendedBackend = LocalImageGenerationBackendKind.QNN_NPU,
+                        recommendedModelId = LocalImageGenerationModelId.SD15_QNN,
+                        diagnostics = emptyList(),
+                    ),
+            )
+        }
     }
 }

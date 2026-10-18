@@ -85,16 +85,31 @@ class FakeMessageRepository(
     ): Map<MessageId, List<MessageVisionAnalysis>> =
         userMessageIds.mapNotNull { id -> visionAnalyses[id]?.let { id to it } }.toMap()
 
+    /** Value returned by [resolveLatestImageBearingUserMessage] (ENC-28). */
+    var resolvedImageTarget: ResolvedImageTarget? = null
+
     override suspend fun resolveLatestImageBearingUserMessage(
         chatId: ChatId,
         currentUserMessageId: MessageId,
-    ): ResolvedImageTarget? = null
+    ): ResolvedImageTarget? = resolvedImageTarget
+
+    /** Recorded [searchMessagesInChat] invocation (ENC-28). */
+    data class SearchInChatCall(
+        val chatId: ChatId,
+        val queryVector: FloatArray,
+    )
+
+    /** Every [searchMessagesInChat] invocation, in call order (ENC-28). */
+    val searchMessagesInChatCalls = mutableListOf<SearchInChatCall>()
 
     override suspend fun searchMessagesInChat(
         chatId: ChatId,
         queryVector: FloatArray,
         limit: Int,
-    ): List<Message> = messagesState.value.filter { it.chatId == chatId }.take(limit)
+    ): List<Message> {
+        searchMessagesInChatCalls += SearchInChatCall(chatId, queryVector)
+        return messagesState.value.filter { it.chatId == chatId }.take(limit)
+    }
 
     override suspend fun searchMessagesAcrossChats(
         queryVector: FloatArray,

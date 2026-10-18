@@ -1,11 +1,8 @@
 package com.browntowndev.enclave.domain.usecase.chat
 
+import com.browntowndev.enclave.core.testing.FakeEmbeddingEngine
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.model.inference.ToolSearchThresholds
-import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
@@ -22,7 +19,7 @@ class ToolSearchResolverTest {
     @Test
     fun `TSD-04 resolver BM25 ranks append_blocks for name-like query without embedding`() =
         runTest {
-            val embeddingEngine = mockk<EmbeddingEnginePort>(relaxed = true)
+            val embeddingEngine = FakeEmbeddingEngine()
             val result =
                 resolver.resolve(
                     query = "append_blocks",
@@ -40,15 +37,15 @@ class ToolSearchResolverTest {
                 { assertEquals("ok", json["status"]?.jsonPrimitive?.content) },
                 { assertEquals("append_blocks", matches.first().jsonObject["name"]?.jsonPrimitive?.content) },
                 { assertEquals("bm25", matches.first().jsonObject["match_method"]?.jsonPrimitive?.content) },
-                { coVerify(exactly = 0) { embeddingEngine.getEmbedding(any()) } },
+                { assertTrue(embeddingEngine.queries.isEmpty()) },
             )
         }
 
     @Test
     fun `TSD-07 embedding fallback activates when BM25 returns no hits`() =
         runTest {
-            val embeddingEngine = mockk<EmbeddingEnginePort>()
-            coEvery { embeddingEngine.getEmbedding("document writing") } returns
+            val embeddingEngine = FakeEmbeddingEngine()
+            embeddingEngine.embeddingsByText["document writing"] =
                 ToolSearchTestFixtures.queryEmbeddingDocumentWriting()
 
             val result =
@@ -65,7 +62,7 @@ class ToolSearchResolverTest {
             val matches = json["matches"]?.jsonArray.orEmpty()
 
             assertAll(
-                { coVerify(exactly = 1) { embeddingEngine.getEmbedding("document writing") } },
+                { assertEquals(listOf("document writing"), embeddingEngine.queries) },
                 { assertEquals("append_blocks", matches.first().jsonObject["name"]?.jsonPrimitive?.content) },
                 { assertEquals("embedding", matches.first().jsonObject["match_method"]?.jsonPrimitive?.content) },
                 { assertEquals(listOf("append_blocks"), result.activatedToolNames) },
@@ -75,7 +72,7 @@ class ToolSearchResolverTest {
     @Test
     fun `TSD-09 search_tools populates activatedToolNames for deferred tool`() =
         runTest {
-            val embeddingEngine = mockk<EmbeddingEnginePort>(relaxed = true)
+            val embeddingEngine = FakeEmbeddingEngine()
             val result =
                 resolver.resolve(
                     query = "append_blocks",
@@ -108,7 +105,7 @@ class ToolSearchResolverTest {
     @Test
     fun `TSD-10 success payload exposes ranked compact matches`() =
         runTest {
-            val embeddingEngine = mockk<EmbeddingEnginePort>(relaxed = true)
+            val embeddingEngine = FakeEmbeddingEngine()
             val result =
                 resolver.resolve(
                     query = "append_blocks",
@@ -135,7 +132,7 @@ class ToolSearchResolverTest {
     @Test
     fun `TSD-15 already active tool is reported not re-activated`() =
         runTest {
-            val embeddingEngine = mockk<EmbeddingEnginePort>(relaxed = true)
+            val embeddingEngine = FakeEmbeddingEngine()
             val result =
                 resolver.resolve(
                     query = "append_blocks",
@@ -169,7 +166,7 @@ class ToolSearchResolverTest {
     @Test
     fun `TSD-17 empty query returns exact error payload`() =
         runTest {
-            val embeddingEngine = mockk<EmbeddingEnginePort>(relaxed = true)
+            val embeddingEngine = FakeEmbeddingEngine()
             val result =
                 resolver.resolve(
                     query = "   ",
@@ -191,15 +188,15 @@ class ToolSearchResolverTest {
                     )
                 },
                 { assertEquals(emptyList<String>(), result.activatedToolNames) },
-                { coVerify(exactly = 0) { embeddingEngine.getEmbedding(any()) } },
+                { assertTrue(embeddingEngine.queries.isEmpty()) },
             )
         }
 
     @Test
     fun `TSD-18 no matches returns ok with empty arrays`() =
         runTest {
-            val embeddingEngine = mockk<EmbeddingEnginePort>()
-            coEvery { embeddingEngine.getEmbedding("unrelated quantum") } returns
+            val embeddingEngine = FakeEmbeddingEngine()
+            embeddingEngine.embeddingsByText["unrelated quantum"] =
                 ToolSearchTestFixtures.queryEmbeddingUnrelatedQuantum()
 
             val result =
@@ -225,8 +222,8 @@ class ToolSearchResolverTest {
     @Test
     fun `TSD-19 sub-threshold embedding does not activate`() =
         runTest {
-            val embeddingEngine = mockk<EmbeddingEnginePort>()
-            coEvery { embeddingEngine.getEmbedding("unrelated quantum") } returns
+            val embeddingEngine = FakeEmbeddingEngine()
+            embeddingEngine.embeddingsByText["unrelated quantum"] =
                 ToolSearchTestFixtures.queryEmbeddingUnrelatedQuantum()
 
             val result =
@@ -241,7 +238,7 @@ class ToolSearchResolverTest {
                 )
 
             assertAll(
-                { coVerify(exactly = 1) { embeddingEngine.getEmbedding("unrelated quantum") } },
+                { assertEquals(listOf("unrelated quantum"), embeddingEngine.queries) },
                 { assertEquals(emptyList<String>(), result.activatedToolNames) },
                 {
                     assertEquals(
@@ -259,8 +256,8 @@ class ToolSearchResolverTest {
     @Test
     fun `TSD-08 embedding fallback runs when top BM25 score is below tau_bm25`() =
         runTest {
-            val embeddingEngine = mockk<EmbeddingEnginePort>()
-            coEvery { embeddingEngine.getEmbedding("doc") } returns
+            val embeddingEngine = FakeEmbeddingEngine()
+            embeddingEngine.embeddingsByText["doc"] =
                 ToolSearchTestFixtures.queryEmbeddingDocumentWriting()
 
             val result =
@@ -276,7 +273,7 @@ class ToolSearchResolverTest {
             val json = Json.parseToJsonElement(result.resultJson).jsonObject
 
             assertAll(
-                { coVerify(exactly = 1) { embeddingEngine.getEmbedding("doc") } },
+                { assertEquals(listOf("doc"), embeddingEngine.queries) },
                 {
                     assertEquals(
                         "embedding",
@@ -289,9 +286,8 @@ class ToolSearchResolverTest {
     @Test
     fun `TSD-25 limit parameter caps matches and activations`() =
         runTest {
-            val embeddingEngine = mockk<EmbeddingEnginePort>()
-            coEvery { embeddingEngine.getEmbedding(any()) } returns
-                ToolSearchTestFixtures.genericTestEmbedding()
+            val embeddingEngine = FakeEmbeddingEngine()
+            embeddingEngine.uniformEmbedding = ToolSearchTestFixtures.genericTestEmbedding()
             val result =
                 resolver.resolve(
                     query = "search",
@@ -313,7 +309,7 @@ class ToolSearchResolverTest {
     @Test
     fun `TSD-24 duplicate activation names dedupe in first-seen order`() =
         runTest {
-            val embeddingEngine = mockk<EmbeddingEnginePort>(relaxed = true)
+            val embeddingEngine = FakeEmbeddingEngine()
             val result =
                 resolver.resolve(
                     query = "append_blocks append_blocks",
@@ -331,8 +327,8 @@ class ToolSearchResolverTest {
     @Test
     fun `LiteRT strategy excludes tools without native providers`() =
         runTest {
-            val embeddingEngine = mockk<EmbeddingEnginePort>()
-            coEvery { embeddingEngine.getEmbedding(any()) } returns
+            val embeddingEngine = FakeEmbeddingEngine()
+            embeddingEngine.uniformEmbedding =
                 ToolSearchTestFixtures.controlledEmbeddingMap()["read_context_reference"]!!
             val result =
                 resolver.resolve(
@@ -355,7 +351,7 @@ class ToolSearchResolverTest {
     @Test
     fun `MUT-04 embedding fallback skipped when BM25 top score meets threshold`() =
         runTest {
-            val embeddingEngine = mockk<EmbeddingEnginePort>(relaxed = true)
+            val embeddingEngine = FakeEmbeddingEngine()
             val result =
                 resolver.resolve(
                     query = "append_blocks",
@@ -379,7 +375,7 @@ class ToolSearchResolverTest {
 
             assertAll(
                 { assertTrue(topScore >= ToolSearchThresholds.TAU_BM25) },
-                { coVerify(exactly = 0) { embeddingEngine.getEmbedding(any()) } },
+                { assertTrue(embeddingEngine.queries.isEmpty()) },
                 {
                     assertEquals(
                         "bm25",

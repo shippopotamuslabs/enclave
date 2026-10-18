@@ -1,5 +1,7 @@
 package com.browntowndev.enclave.domain.usecase.share
 
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeShareRepository
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.Content
 import com.browntowndev.enclave.domain.model.chat.Message
@@ -8,13 +10,18 @@ import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.share.ShareOption
 import com.browntowndev.enclave.domain.model.share.SharedChat
 import com.browntowndev.enclave.domain.model.share.SharedMessage
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.repository.ShareRepositoryPort
 import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.mockk
-import io.mockk.verify
+import com.browntowndev.enclave.domain.usecase.chat.CreateAssistantPlaceholderUseCase
+import com.browntowndev.enclave.domain.usecase.chat.GenerateChatResponseUseCase
+import com.browntowndev.enclave.domain.usecase.chat.GenerateChatTitleUseCase
+import com.browntowndev.enclave.domain.usecase.chat.GetChatCapablePresetsUseCase
+import com.browntowndev.enclave.domain.usecase.chat.GetChatUseCase
+import com.browntowndev.enclave.domain.usecase.chat.ListenToSpeechUseCase
+import com.browntowndev.enclave.domain.usecase.chat.MergeDbMessagesWithOptimisticUseCase
+import com.browntowndev.enclave.domain.usecase.chat.MergeMessagesUseCase
+import com.browntowndev.enclave.domain.usecase.chat.ProcessFileAttachmentUseCase
+import com.browntowndev.enclave.domain.usecase.chat.SubmitPromptUseCase
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
@@ -23,17 +30,44 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
+/**
+ * [ChatUseCases] fake (ENC-28): only [getChat] is functional (backed by [chatFlow]);
+ * the use-case properties are unused by ShareChatUseCase and throw if touched.
+ */
+private class FakeChatUseCases : ChatUseCases {
+    var chatFlow: Flow<List<Message>> = flowOf(emptyList())
+    val getChatCalls = mutableListOf<ChatId>()
+
+    override suspend fun getChat(chatId: ChatId): Flow<List<Message>> {
+        getChatCalls += chatId
+        return chatFlow
+    }
+
+    private fun unused(): Nothing = throw UnsupportedOperationException("not used in tests")
+
+    override val createAssistantPlaceholderUseCase: CreateAssistantPlaceholderUseCase get() = unused()
+    override val submitPromptUseCase: SubmitPromptUseCase get() = unused()
+    override val mergeDbMessagesWithOptimisticUseCase: MergeDbMessagesWithOptimisticUseCase get() = unused()
+    override val generateChatResponseUseCase: GenerateChatResponseUseCase get() = unused()
+    override val getChatCapablePresetsUseCase: GetChatCapablePresetsUseCase get() = unused()
+    override val generateChatTitleUseCase: GenerateChatTitleUseCase get() = unused()
+    override val getChatUseCase: GetChatUseCase get() = unused()
+    override val listenToSpeechUseCase: ListenToSpeechUseCase get() = unused()
+    override val mergeMessagesUseCase: MergeMessagesUseCase get() = unused()
+    override val processFileAttachmentUseCase: ProcessFileAttachmentUseCase get() = unused()
+}
+
 class ShareChatUseCaseTest {
-    private lateinit var shareRepository: ShareRepositoryPort
-    private lateinit var chatUseCases: ChatUseCases
-    private lateinit var loggingPort: LoggingPort
+    private lateinit var shareRepository: FakeShareRepository
+    private lateinit var chatUseCases: FakeChatUseCases
+    private lateinit var loggingPort: FakeLoggingPort
     private lateinit var shareChatUseCase: ShareChatUseCase
 
     @BeforeEach
     fun setUp() {
-        shareRepository = mockk()
-        chatUseCases = mockk()
-        loggingPort = mockk(relaxed = true)
+        shareRepository = FakeShareRepository()
+        chatUseCases = FakeChatUseCases()
+        loggingPort = FakeLoggingPort()
         shareChatUseCase = ShareChatUseCase(shareRepository, chatUseCases, loggingPort)
     }
 
@@ -49,11 +83,11 @@ class ShareChatUseCaseTest {
             val assistantMessage = createMessage("msg-2", chatId, Role.ASSISTANT, "Assistant response")
             val otherMessage = createMessage("msg-3", chatId, Role.USER, "Other message")
 
-            coEvery { chatUseCases.getChat(chatId) } returns flowOf(listOf(userMessage, assistantMessage, otherMessage))
+            chatUseCases.chatFlow = flowOf(listOf(userMessage, assistantMessage, otherMessage))
 
             val sharedMessages = listOf(mapToShared(userMessage), mapToShared(assistantMessage))
             val sharedChat = SharedChat("share-1", sharedMessages, createdAt = 0, expiresAt = 0, shareUrl = "url")
-            coEvery { shareRepository.shareChat(listOf(userMessage, assistantMessage), chatId) } returns sharedChat
+            shareRepository.shareChatResult = sharedChat
 
             // When
             val result = shareChatUseCase(option)
@@ -61,6 +95,7 @@ class ShareChatUseCaseTest {
             // Then
             assertTrue(result.isSuccess)
             assertEquals(sharedChat, result.getOrNull())
+            assertEquals(listOf(listOf(userMessage, assistantMessage) to chatId), shareRepository.shareChatCalls)
         }
 
     @Test
@@ -76,7 +111,7 @@ class ShareChatUseCaseTest {
                     createMessage("msg-2", chatId, Role.ASSISTANT, "Msg 2"),
                 )
 
-            coEvery { chatUseCases.getChat(chatId) } returns flowOf(messages)
+            chatUseCases.chatFlow = flowOf(messages)
 
             val sharedChat =
                 SharedChat(
@@ -86,7 +121,7 @@ class ShareChatUseCaseTest {
                     expiresAt = 0,
                     shareUrl = "url",
                 )
-            coEvery { shareRepository.shareChat(messages, chatId) } returns sharedChat
+            shareRepository.shareChatResult = sharedChat
 
             // When
             val result = shareChatUseCase(option)
@@ -104,8 +139,8 @@ class ShareChatUseCaseTest {
             val option = ShareOption.FullConversation(chatId)
             val messages = listOf(createMessage("msg-1", chatId, Role.USER, "Msg 1"))
 
-            coEvery { chatUseCases.getChat(chatId) } returns flowOf(messages)
-            coEvery { shareRepository.shareChat(any(), any()) } throws Exception("encryptedPayload and iv must be provided.")
+            chatUseCases.chatFlow = flowOf(messages)
+            shareRepository.shareChatFailure = Exception("encryptedPayload and iv must be provided.")
 
             // When
             val result = shareChatUseCase(option)
@@ -113,7 +148,11 @@ class ShareChatUseCaseTest {
             // Then
             assertTrue(result.isFailure)
             assertEquals(ShareFailureMapper.DEFAULT_SHARE_MESSAGE, result.exceptionOrNull()?.message)
-            verify { loggingPort.error("ShareChatUseCase", "Failed to share chat", any()) }
+            assertTrue(
+                loggingPort.errorCalls.any {
+                    it.tag == "ShareChatUseCase" && it.message == "Failed to share chat" && it.throwable != null
+                },
+            )
         }
 
     @Test
@@ -125,7 +164,7 @@ class ShareChatUseCaseTest {
             val messages = listOf(createMessage("msg-1", chatId, Role.USER, "Msg 1"))
 
             // Flow that emits empty list first, then the populated list
-            coEvery { chatUseCases.getChat(chatId) } returns
+            chatUseCases.chatFlow =
                 flow {
                     emit(emptyList())
                     emit(messages)
@@ -139,7 +178,7 @@ class ShareChatUseCaseTest {
                     expiresAt = 0,
                     shareUrl = "url",
                 )
-            coEvery { shareRepository.shareChat(messages, chatId) } returns sharedChat
+            shareRepository.shareChatResult = sharedChat
 
             // When
             val result = shareChatUseCase(option)
@@ -155,14 +194,14 @@ class ShareChatUseCaseTest {
             val chatId = ChatId("chat-1")
             val option = ShareOption.FullConversation(chatId)
             val messages = listOf(createMessage("msg-1", chatId, Role.USER, "Msg 1"))
-            coEvery { chatUseCases.getChat(chatId) } returns flowOf(messages)
+            chatUseCases.chatFlow = flowOf(messages)
             val sharedChat = SharedChat("share-1", messages.map(::mapToShared), createdAt = 0, expiresAt = 0, shareUrl = "url")
-            coEvery { shareRepository.shareChat(messages, chatId) } returns sharedChat
+            shareRepository.shareChatResult = sharedChat
 
             val result = shareChatUseCase(option)
 
             assertTrue(result.isSuccess)
-            coVerify { shareRepository.shareChat(messages, chatId) }
+            assertEquals(listOf(messages to chatId), shareRepository.shareChatCalls)
         }
 
     @Test
@@ -173,40 +212,40 @@ class ShareChatUseCaseTest {
             val option = ShareOption.SingleTurn(chatId, assistantMessageId)
             val userMessage = createMessage("msg-1", chatId, Role.USER, "User message")
             val assistantMessage = createMessage("msg-2", chatId, Role.ASSISTANT, "Assistant response")
-            coEvery { chatUseCases.getChat(chatId) } returns flowOf(listOf(userMessage, assistantMessage))
+            chatUseCases.chatFlow = flowOf(listOf(userMessage, assistantMessage))
             val sharedChat = SharedChat("share-1", emptyList(), createdAt = 0, expiresAt = 0, shareUrl = "url")
-            coEvery { shareRepository.shareChat(listOf(userMessage, assistantMessage), chatId) } returns sharedChat
+            shareRepository.shareChatResult = sharedChat
 
             val result = shareChatUseCase(option)
 
             assertTrue(result.isSuccess)
-            coVerify { shareRepository.shareChat(listOf(userMessage, assistantMessage), chatId) }
+            assertEquals(listOf(listOf(userMessage, assistantMessage) to chatId), shareRepository.shareChatCalls)
         }
 
     @Test
     fun `getSharedChat should pass explicit decryption key to repository`() =
         runTest {
             val sharedChat = SharedChat("share-1", emptyList(), createdAt = 0, expiresAt = 0, shareUrl = "")
-            coEvery { shareRepository.getSharedChat("share-1", "one-time-key") } returns sharedChat
+            shareRepository.getSharedChatResult = sharedChat
 
             val result = shareChatUseCase.getSharedChat("share-1", "one-time-key")
 
             assertTrue(result.isSuccess)
             assertEquals(sharedChat, result.getOrNull())
-            coVerify { shareRepository.getSharedChat("share-1", "one-time-key") }
+            assertEquals(listOf("share-1" to "one-time-key"), shareRepository.getSharedChatCalls)
         }
 
     @Test
     fun `getSharedChat should parse decryption key from shared url`() =
         runTest {
             val sharedChat = SharedChat("share-1", emptyList(), createdAt = 0, expiresAt = 0, shareUrl = "")
-            coEvery { shareRepository.getSharedChat("share-1", "abc-123") } returns sharedChat
+            shareRepository.getSharedChatResult = sharedChat
 
             val result = shareChatUseCase.getSharedChat("https://enclave-app.com/share/share-1?key=abc-123")
 
             assertTrue(result.isSuccess)
             assertEquals(sharedChat, result.getOrNull())
-            coVerify { shareRepository.getSharedChat("share-1", "abc-123") }
+            assertEquals(listOf("share-1" to "abc-123"), shareRepository.getSharedChatCalls)
         }
 
     private fun createMessage(

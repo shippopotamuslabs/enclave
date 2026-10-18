@@ -1,11 +1,18 @@
 package com.browntowndev.enclave.domain.usecase.settings
 
+import com.browntowndev.enclave.core.testing.FakeApiModelRepository
+import com.browntowndev.enclave.core.testing.FakeDefaultModelRepository
+import com.browntowndev.enclave.core.testing.FakeLocalImageGenerationCapability
+import com.browntowndev.enclave.core.testing.FakeLocalModelRepository
+import com.browntowndev.enclave.core.testing.FakeMediaProviderRepository
+import com.browntowndev.enclave.core.testing.FakeTtsProviderRepository
 import com.browntowndev.enclave.domain.model.config.ApiCredentials
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.config.ApiModelAsset
 import com.browntowndev.enclave.domain.model.config.ApiModelConfiguration
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
+import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderId
 import com.browntowndev.enclave.domain.model.config.LocalModelAsset
 import com.browntowndev.enclave.domain.model.config.LocalModelConfiguration
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
@@ -18,46 +25,51 @@ import com.browntowndev.enclave.domain.model.config.TtsProviderAsset
 import com.browntowndev.enclave.domain.model.config.TtsProviderId
 import com.browntowndev.enclave.domain.model.download.ModelPackTestFixtures
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
+import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.media.LocalImageGenTriState
-import com.browntowndev.enclave.domain.port.media.LocalImageGenerationCapabilityPort
-import com.browntowndev.enclave.domain.usecase.byok.GetApiModelAssetsUseCase
-import com.browntowndev.enclave.domain.usecase.byok.GetDefaultModelsUseCase
+import com.browntowndev.enclave.domain.usecase.byok.GetApiModelAssetsUseCaseImpl
+import com.browntowndev.enclave.domain.usecase.byok.GetDefaultModelsUseCaseImpl
 import com.browntowndev.enclave.domain.usecase.byok.SetDefaultModelUseCase
 import com.browntowndev.enclave.domain.usecase.media.GetMediaProvidersUseCase
-import com.browntowndev.enclave.domain.usecase.modelconfig.GetLocalModelAssetsUseCase
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
-import org.junit.jupiter.api.BeforeEach
-import kotlinx.coroutines.flow.flowOf
+import com.browntowndev.enclave.domain.usecase.modelconfig.GetLocalModelAssetsUseCaseImpl
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
-class AutoAssignLocalModelsUseCaseTest {
-    private val getLocalModelAssetsUseCase = mockk<GetLocalModelAssetsUseCase>()
-    private val getDefaultModelsUseCase = mockk<GetDefaultModelsUseCase>()
-    private val setDefaultModelUseCase = mockk<SetDefaultModelUseCase>(relaxed = true)
-    private val getApiModelAssetsUseCase = mockk<GetApiModelAssetsUseCase>()
-    private val getTtsProvidersUseCase = mockk<GetTtsProvidersUseCase>()
-    private val getMediaProvidersUseCase = mockk<GetMediaProvidersUseCase>()
-    private val capabilityPort = mockk<LocalImageGenerationCapabilityPort>()
+/** Recording [SetDefaultModelUseCase] fake: captures every assignment call verbatim. */
+private class RecordingSetDefaultModelUseCase : SetDefaultModelUseCase {
+    data class Call(
+        val modelType: ModelType,
+        val localConfigId: LocalModelConfigurationId?,
+        val apiConfigId: ApiModelConfigurationId?,
+        val ttsProviderId: TtsProviderId?,
+        val mediaProviderId: MediaProviderId?,
+        val liveVoiceProviderId: LiveVoiceProviderId?,
+    )
 
-    private val useCase =
-        AutoAssignLocalModelsUseCase(
-            getLocalModelAssetsUseCase,
-            getDefaultModelsUseCase,
-            setDefaultModelUseCase,
-            getApiModelAssetsUseCase,
-            getTtsProvidersUseCase,
-            getMediaProvidersUseCase,
-            capabilityPort,
-        )
+    val calls = mutableListOf<Call>()
+
+    override suspend fun invoke(
+        modelType: ModelType,
+        localConfigId: LocalModelConfigurationId?,
+        apiConfigId: ApiModelConfigurationId?,
+        ttsProviderId: TtsProviderId?,
+        mediaProviderId: MediaProviderId?,
+        liveVoiceProviderId: LiveVoiceProviderId?,
+    ) {
+        calls += Call(modelType, localConfigId, apiConfigId, ttsProviderId, mediaProviderId, liveVoiceProviderId)
+    }
+}
+
+class AutoAssignLocalModelsUseCaseTest {
+    private val capabilityPort = FakeLocalImageGenerationCapability()
+    private val setDefaultModelUseCase = RecordingSetDefaultModelUseCase()
 
     @BeforeEach
     fun setupCapabilities() {
-        every { capabilityPort.getCapabilities() } returns
+        capabilityPort.capabilities =
             com.browntowndev.enclave.domain.model.media.LocalImageGenerationCapabilities(
                 npuAvailable = LocalImageGenTriState.YES,
                 sd15NpuSupported = LocalImageGenTriState.YES,
@@ -72,10 +84,73 @@ class AutoAssignLocalModelsUseCaseTest {
             )
     }
 
+    private fun buildUseCase(
+        localAssets: List<LocalModelAsset> = emptyList(),
+        apiAssets: List<ApiModelAsset> = emptyList(),
+        ttsProviders: List<TtsProviderAsset> = emptyList(),
+        mediaProviders: List<MediaProviderAsset> = emptyList(),
+        existingAssignments: List<DefaultModelAssignment> = emptyList(),
+    ): AutoAssignLocalModelsUseCase {
+        val localModelRepository = FakeLocalModelRepository()
+        localModelRepository.setAssets(localAssets)
+        val defaultModelRepository = FakeDefaultModelRepository()
+        existingAssignments.forEach { defaultModelRepository.seed(it) }
+        val apiModelRepository = FakeApiModelRepository()
+        apiModelRepository.seedCredentials(apiAssets.map { it.credentials })
+        apiModelRepository.seedConfigurations(apiAssets.flatMap { it.configurations })
+        return AutoAssignLocalModelsUseCase(
+            GetLocalModelAssetsUseCaseImpl(localModelRepository),
+            GetDefaultModelsUseCaseImpl(defaultModelRepository),
+            setDefaultModelUseCase,
+            GetApiModelAssetsUseCaseImpl(apiModelRepository),
+            GetTtsProvidersUseCase(FakeTtsProviderRepository(ttsProviders)),
+            GetMediaProvidersUseCase(FakeMediaProviderRepository(mediaProviders)),
+            capabilityPort,
+        )
+    }
+
+    private fun assertAssigned(
+        modelType: ModelType,
+        localConfigId: LocalModelConfigurationId? = null,
+        apiConfigId: ApiModelConfigurationId? = null,
+        ttsProviderId: TtsProviderId? = null,
+        mediaProviderId: MediaProviderId? = null,
+    ) {
+        val expected =
+            RecordingSetDefaultModelUseCase.Call(
+                modelType = modelType,
+                localConfigId = localConfigId,
+                apiConfigId = apiConfigId,
+                ttsProviderId = ttsProviderId,
+                mediaProviderId = mediaProviderId,
+                liveVoiceProviderId = null,
+            )
+        assertTrue(
+            expected in setDefaultModelUseCase.calls,
+            "Expected setDefaultModel call $expected; recorded: ${setDefaultModelUseCase.calls}",
+        )
+    }
+
+    private fun assertNotAssigned(modelType: ModelType) {
+        assertTrue(
+            setDefaultModelUseCase.calls.none { it.modelType == modelType },
+            "Expected no setDefaultModel call for $modelType; recorded: ${setDefaultModelUseCase.calls}",
+        )
+    }
+
     private val localConfigId = LocalModelConfigurationId("local-config-1")
     private val localAsset =
         LocalModelAsset(
-            metadata = mockk<LocalModelMetadata>(),
+            metadata =
+                LocalModelMetadata(
+                    id = LocalModelId("local-1"),
+                    huggingFaceModelName = "local",
+                    remoteFileName = "remote",
+                    localFileName = "local",
+                    sha256 = "sha",
+                    sizeInBytes = 100,
+                    modelFileFormat = ModelFileFormat.GGUF,
+                ),
             configurations =
                 listOf(
                     LocalModelConfiguration(
@@ -162,113 +237,63 @@ class AutoAssignLocalModelsUseCaseTest {
     @Test
     fun `text slots without assignment get first local config`() =
         runTest {
-            coEvery { getDefaultModelsUseCase() } returns flowOf(emptyList())
-            coEvery { getLocalModelAssetsUseCase() } returns flowOf(listOf(localAsset))
-            coEvery { getApiModelAssetsUseCase() } returns flowOf(emptyList())
-            coEvery { getTtsProvidersUseCase() } returns flowOf(emptyList())
-            coEvery { getMediaProvidersUseCase() } returns flowOf(emptyList())
+            val useCase = buildUseCase(localAssets = listOf(localAsset))
 
             useCase()
 
             val textSlots =
                 ModelType.entries.filter { it.isTextModel && it != ModelType.VISION }
             textSlots.forEach { slot ->
-                coVerify {
-                    setDefaultModelUseCase(
-                        modelType = slot,
-                        localConfigId = localConfigId,
-                        apiConfigId = null,
-                        ttsProviderId = null,
-                        mediaProviderId = null,
-                    )
-                }
+                assertAssigned(modelType = slot, localConfigId = localConfigId)
             }
         }
 
     @Test
     fun `text slots fall back to API config when no local exists`() =
         runTest {
-            coEvery { getDefaultModelsUseCase() } returns flowOf(emptyList())
-            coEvery { getLocalModelAssetsUseCase() } returns flowOf(emptyList())
-            coEvery { getApiModelAssetsUseCase() } returns flowOf(listOf(apiAsset))
-            coEvery { getTtsProvidersUseCase() } returns flowOf(emptyList())
-            coEvery { getMediaProvidersUseCase() } returns flowOf(emptyList())
+            val useCase = buildUseCase(apiAssets = listOf(apiAsset))
 
             useCase()
 
             val textSlots =
                 ModelType.entries.filter { it.isTextModel && it != ModelType.VISION }
             textSlots.forEach { slot ->
-                coVerify {
-                    setDefaultModelUseCase(
-                        modelType = slot,
-                        localConfigId = null,
-                        apiConfigId = apiConfigId,
-                        ttsProviderId = null,
-                        mediaProviderId = null,
-                    )
-                }
+                assertAssigned(modelType = slot, apiConfigId = apiConfigId)
             }
         }
 
     @Test
     fun `SCN-USECASE-AUTO-001 Auto Assign Vision Uses Multimodal Preset`() =
         runTest {
-            coEvery { getDefaultModelsUseCase() } returns flowOf(emptyList())
-            coEvery { getLocalModelAssetsUseCase() } returns flowOf(emptyList())
-            coEvery { getApiModelAssetsUseCase() } returns flowOf(listOf(apiAsset, multimodalAsset))
-            coEvery { getTtsProvidersUseCase() } returns flowOf(emptyList())
-            coEvery { getMediaProvidersUseCase() } returns flowOf(emptyList())
+            val useCase = buildUseCase(apiAssets = listOf(apiAsset, multimodalAsset))
 
             useCase()
 
-            coVerify {
-                setDefaultModelUseCase(
-                    modelType = ModelType.VISION,
-                    localConfigId = null,
-                    apiConfigId = multimodalConfigId,
-                    ttsProviderId = null,
-                    mediaProviderId = null,
-                )
-            }
+            assertAssigned(modelType = ModelType.VISION, apiConfigId = multimodalConfigId)
         }
 
     @Test
     fun `vision slot not assigned when no multimodal API available`() =
         runTest {
-            coEvery { getDefaultModelsUseCase() } returns flowOf(emptyList())
-            coEvery { getLocalModelAssetsUseCase() } returns flowOf(listOf(localAsset))
-            coEvery { getApiModelAssetsUseCase() } returns flowOf(listOf(apiAsset))
-            coEvery { getTtsProvidersUseCase() } returns flowOf(emptyList())
-            coEvery { getMediaProvidersUseCase() } returns flowOf(emptyList())
+            val useCase =
+                buildUseCase(
+                    localAssets = listOf(localAsset),
+                    apiAssets = listOf(apiAsset),
+                )
 
             useCase()
 
-            coVerify(exactly = 0) {
-                setDefaultModelUseCase(modelType = ModelType.VISION, any(), any(), any(), any())
-            }
+            assertNotAssigned(ModelType.VISION)
         }
 
     @Test
     fun `tts slot assigned to first tts provider`() =
         runTest {
-            coEvery { getDefaultModelsUseCase() } returns flowOf(emptyList())
-            coEvery { getLocalModelAssetsUseCase() } returns flowOf(emptyList())
-            coEvery { getApiModelAssetsUseCase() } returns flowOf(emptyList())
-            coEvery { getTtsProvidersUseCase() } returns flowOf(listOf(ttsProvider))
-            coEvery { getMediaProvidersUseCase() } returns flowOf(emptyList())
+            val useCase = buildUseCase(ttsProviders = listOf(ttsProvider))
 
             useCase()
 
-            coVerify {
-                setDefaultModelUseCase(
-                    modelType = ModelType.TTS,
-                    localConfigId = null,
-                    apiConfigId = null,
-                    ttsProviderId = ttsProvider.id,
-                    mediaProviderId = null,
-                )
-            }
+            assertAssigned(modelType = ModelType.TTS, ttsProviderId = ttsProvider.id)
         }
 
     @Test
@@ -277,21 +302,15 @@ class AutoAssignLocalModelsUseCaseTest {
             val image = mediaProvider("media-img", MediaCapability.IMAGE)
             val video = mediaProvider("media-vid", MediaCapability.VIDEO)
             val music = mediaProvider("media-mus", MediaCapability.MUSIC)
-            coEvery { getDefaultModelsUseCase() } returns flowOf(emptyList())
-            coEvery { getLocalModelAssetsUseCase() } returns flowOf(emptyList())
-            coEvery { getApiModelAssetsUseCase() } returns flowOf(emptyList())
-            coEvery { getTtsProvidersUseCase() } returns flowOf(emptyList())
-            coEvery { getMediaProvidersUseCase() } returns flowOf(listOf(image, video, music))
+            val useCase = buildUseCase(mediaProviders = listOf(image, video, music))
 
             useCase()
 
-            coVerify {
-                setDefaultModelUseCase(ModelType.IMAGE_GENERATION, null, null, null, image.id)
-                setDefaultModelUseCase(ModelType.IMAGE_EDIT, null, null, null, image.id)
-                setDefaultModelUseCase(ModelType.VIDEO_GENERATION, null, null, null, video.id)
-                setDefaultModelUseCase(ModelType.IMAGE_TO_VIDEO, null, null, null, video.id)
-                setDefaultModelUseCase(ModelType.MUSIC_GENERATION, null, null, null, music.id)
-            }
+            assertAssigned(modelType = ModelType.IMAGE_GENERATION, mediaProviderId = image.id)
+            assertAssigned(modelType = ModelType.IMAGE_EDIT, mediaProviderId = image.id)
+            assertAssigned(modelType = ModelType.VIDEO_GENERATION, mediaProviderId = video.id)
+            assertAssigned(modelType = ModelType.IMAGE_TO_VIDEO, mediaProviderId = video.id)
+            assertAssigned(modelType = ModelType.MUSIC_GENERATION, mediaProviderId = music.id)
         }
 
     @Test
@@ -300,43 +319,31 @@ class AutoAssignLocalModelsUseCaseTest {
             val bonsaiAsset = ModelPackTestFixtures.diffusionAsset()
             val bonsaiConfigId = LocalModelConfigurationId(ModelPackTestFixtures.SD15_CONFIG_ID)
             val image = mediaProvider("media-img", MediaCapability.IMAGE)
-            coEvery { getDefaultModelsUseCase() } returns flowOf(emptyList())
-            coEvery { getLocalModelAssetsUseCase() } returns flowOf(listOf(bonsaiAsset))
-            coEvery { getApiModelAssetsUseCase() } returns flowOf(emptyList())
-            coEvery { getTtsProvidersUseCase() } returns flowOf(emptyList())
-            coEvery { getMediaProvidersUseCase() } returns flowOf(listOf(image))
+            val useCase =
+                buildUseCase(
+                    localAssets = listOf(bonsaiAsset),
+                    mediaProviders = listOf(image),
+                )
 
             useCase()
 
-            coVerify {
-                setDefaultModelUseCase(
-                    modelType = ModelType.IMAGE_GENERATION,
-                    localConfigId = bonsaiConfigId,
-                    apiConfigId = null,
-                    ttsProviderId = null,
-                    mediaProviderId = null,
-                )
-            }
-            coVerify {
-                setDefaultModelUseCase(ModelType.IMAGE_EDIT, null, null, null, image.id)
-            }
+            assertAssigned(modelType = ModelType.IMAGE_GENERATION, localConfigId = bonsaiConfigId)
+            assertAssigned(modelType = ModelType.IMAGE_EDIT, mediaProviderId = image.id)
         }
 
     @Test
     fun `image generation slot falls back to media provider when no local image config`() =
         runTest {
             val image = mediaProvider("media-img", MediaCapability.IMAGE)
-            coEvery { getDefaultModelsUseCase() } returns flowOf(emptyList())
-            coEvery { getLocalModelAssetsUseCase() } returns flowOf(listOf(localAsset))
-            coEvery { getApiModelAssetsUseCase() } returns flowOf(emptyList())
-            coEvery { getTtsProvidersUseCase() } returns flowOf(emptyList())
-            coEvery { getMediaProvidersUseCase() } returns flowOf(listOf(image))
+            val useCase =
+                buildUseCase(
+                    localAssets = listOf(localAsset),
+                    mediaProviders = listOf(image),
+                )
 
             useCase()
 
-            coVerify {
-                setDefaultModelUseCase(ModelType.IMAGE_GENERATION, null, null, null, image.id)
-            }
+            assertAssigned(modelType = ModelType.IMAGE_GENERATION, mediaProviderId = image.id)
         }
 
     @Test
@@ -347,17 +354,15 @@ class AutoAssignLocalModelsUseCaseTest {
                     modelType = ModelType.MAIN,
                     localConfigId = localConfigId,
                 )
-            coEvery { getDefaultModelsUseCase() } returns flowOf(listOf(existing))
-            coEvery { getLocalModelAssetsUseCase() } returns flowOf(listOf(localAsset))
-            coEvery { getApiModelAssetsUseCase() } returns flowOf(emptyList())
-            coEvery { getTtsProvidersUseCase() } returns flowOf(emptyList())
-            coEvery { getMediaProvidersUseCase() } returns flowOf(emptyList())
+            val useCase =
+                buildUseCase(
+                    localAssets = listOf(localAsset),
+                    existingAssignments = listOf(existing),
+                )
 
             useCase()
 
-            coVerify(exactly = 0) {
-                setDefaultModelUseCase(modelType = ModelType.MAIN, any(), any(), any(), any())
-            }
+            assertNotAssigned(ModelType.MAIN)
         }
 
     @Test
@@ -369,23 +374,15 @@ class AutoAssignLocalModelsUseCaseTest {
                     modelType = ModelType.MAIN,
                     localConfigId = danglingLocal,
                 )
-            coEvery { getDefaultModelsUseCase() } returns flowOf(listOf(existing))
-            coEvery { getLocalModelAssetsUseCase() } returns flowOf(listOf(localAsset))
-            coEvery { getApiModelAssetsUseCase() } returns flowOf(emptyList())
-            coEvery { getTtsProvidersUseCase() } returns flowOf(emptyList())
-            coEvery { getMediaProvidersUseCase() } returns flowOf(emptyList())
+            val useCase =
+                buildUseCase(
+                    localAssets = listOf(localAsset),
+                    existingAssignments = listOf(existing),
+                )
 
             useCase()
 
-            coVerify {
-                setDefaultModelUseCase(
-                    modelType = ModelType.MAIN,
-                    localConfigId = localConfigId,
-                    apiConfigId = null,
-                    ttsProviderId = null,
-                    mediaProviderId = null,
-                )
-            }
+            assertAssigned(modelType = ModelType.MAIN, localConfigId = localConfigId)
         }
 
     @Test
@@ -393,36 +390,20 @@ class AutoAssignLocalModelsUseCaseTest {
         runTest {
             val juggernautConfigId = LocalModelConfigurationId(ModelPackTestFixtures.JUGGERNAUT_CONFIG_ID)
             val juggernautAsset = ModelPackTestFixtures.juggernautDiffusionAsset()
-            coEvery { getDefaultModelsUseCase() } returns flowOf(emptyList())
-            coEvery { getLocalModelAssetsUseCase() } returns flowOf(listOf(juggernautAsset))
-            coEvery { getApiModelAssetsUseCase() } returns flowOf(emptyList())
-            coEvery { getTtsProvidersUseCase() } returns flowOf(emptyList())
-            coEvery { getMediaProvidersUseCase() } returns flowOf(emptyList())
+            val useCase = buildUseCase(localAssets = listOf(juggernautAsset))
 
             useCase()
 
-            coVerify {
-                setDefaultModelUseCase(
-                    modelType = ModelType.IMAGE_EDIT,
-                    localConfigId = juggernautConfigId,
-                    apiConfigId = null,
-                    ttsProviderId = null,
-                    mediaProviderId = null,
-                )
-            }
+            assertAssigned(modelType = ModelType.IMAGE_EDIT, localConfigId = juggernautConfigId)
         }
 
     @Test
     fun `does nothing when no models or providers exist`() =
         runTest {
-            coEvery { getDefaultModelsUseCase() } returns flowOf(emptyList())
-            coEvery { getLocalModelAssetsUseCase() } returns flowOf(emptyList())
-            coEvery { getApiModelAssetsUseCase() } returns flowOf(emptyList())
-            coEvery { getTtsProvidersUseCase() } returns flowOf(emptyList())
-            coEvery { getMediaProvidersUseCase() } returns flowOf(emptyList())
+            val useCase = buildUseCase()
 
             useCase()
 
-            coVerify(exactly = 0) { setDefaultModelUseCase(any(), any(), any(), any(), any()) }
+            assertTrue(setDefaultModelUseCase.calls.isEmpty())
         }
 }

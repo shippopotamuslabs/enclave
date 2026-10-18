@@ -1,21 +1,18 @@
 package com.browntowndev.enclave.domain.usecase.byok
 
+import com.browntowndev.enclave.core.testing.FakeApiKeyProvider
+import com.browntowndev.enclave.core.testing.FakeApiModelCatalogPort
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
-import com.browntowndev.enclave.domain.port.repository.ApiModelCatalogPort
 import com.browntowndev.enclave.domain.port.repository.ApiModelCatalogResult
-import com.browntowndev.enclave.domain.port.security.ApiKeyProviderPort
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 class FetchApiProviderModelsUseCaseTest {
-    private val apiModelCatalog = mockk<ApiModelCatalogPort>()
-    private val apiKeyProvider = mockk<ApiKeyProviderPort>()
+    private val apiModelCatalog = FakeApiModelCatalogPort()
+    private val apiKeyProvider = FakeApiKeyProvider()
     private val useCase =
         FetchApiProviderModelsUseCaseImpl(
             apiModelCatalog = apiModelCatalog,
@@ -25,9 +22,8 @@ class FetchApiProviderModelsUseCaseTest {
     @Test
     fun `uses in-memory api key when present`() =
         runTest {
-            coEvery {
-                apiModelCatalog.fetchModels(ApiProvider.OPENAI, "live-key", null)
-            } returns ApiModelCatalogResult(listOf(DiscoveredApiModel(id = "gpt-5")))
+            apiModelCatalog.modelsResult =
+                ApiModelCatalogResult(listOf(DiscoveredApiModel(id = "gpt-5")))
 
             val catalog =
                 useCase(
@@ -38,18 +34,18 @@ class FetchApiProviderModelsUseCaseTest {
                 )
 
             assertEquals(listOf(DiscoveredApiModel(id = "gpt-5")), catalog.models)
-            coVerify(exactly = 1) {
-                apiModelCatalog.fetchModels(ApiProvider.OPENAI, "live-key", null)
-            }
+            assertEquals(
+                listOf(FakeApiModelCatalogPort.FetchModelsCall(ApiProvider.OPENAI, "live-key", null)),
+                apiModelCatalog.fetchModelsCalls,
+            )
         }
 
     @Test
     fun `falls back to stored api key when current key is blank`() =
         runTest {
-            coEvery { apiKeyProvider.getApiKey("saved-alias") } returns "stored-key"
-            coEvery {
-                apiModelCatalog.fetchModels(ApiProvider.XAI, "stored-key", "https://api.x.ai/v1")
-            } returns ApiModelCatalogResult(listOf(DiscoveredApiModel(id = "grok-4.20-multi-agent")))
+            apiKeyProvider.saveApiKey("saved-alias", "stored-key")
+            apiModelCatalog.modelsResult =
+                ApiModelCatalogResult(listOf(DiscoveredApiModel(id = "grok-4.20-multi-agent")))
 
             val catalog =
                 useCase(
@@ -60,17 +56,23 @@ class FetchApiProviderModelsUseCaseTest {
                 )
 
             assertEquals(listOf(DiscoveredApiModel(id = "grok-4.20-multi-agent")), catalog.models)
-            coVerify(exactly = 1) {
-                apiModelCatalog.fetchModels(ApiProvider.XAI, "stored-key", "https://api.x.ai/v1")
-            }
+            assertEquals(
+                listOf(
+                    FakeApiModelCatalogPort.FetchModelsCall(
+                        ApiProvider.XAI,
+                        "stored-key",
+                        "https://api.x.ai/v1",
+                    ),
+                ),
+                apiModelCatalog.fetchModelsCalls,
+            )
         }
 
     @Test
     fun `supports openrouter discovery with default base url`() =
         runTest {
-            coEvery {
-                apiModelCatalog.fetchModels(ApiProvider.OPENROUTER, "router-key", "https://openrouter.ai/api/v1")
-            } returns ApiModelCatalogResult(listOf(DiscoveredApiModel(id = "openai/gpt-5.2")))
+            apiModelCatalog.modelsResult =
+                ApiModelCatalogResult(listOf(DiscoveredApiModel(id = "openai/gpt-5.2")))
 
             val catalog =
                 useCase(
@@ -81,17 +83,23 @@ class FetchApiProviderModelsUseCaseTest {
                 )
 
             assertEquals(listOf(DiscoveredApiModel(id = "openai/gpt-5.2")), catalog.models)
-            coVerify(exactly = 1) {
-                apiModelCatalog.fetchModels(ApiProvider.OPENROUTER, "router-key", "https://openrouter.ai/api/v1")
-            }
+            assertEquals(
+                listOf(
+                    FakeApiModelCatalogPort.FetchModelsCall(
+                        ApiProvider.OPENROUTER,
+                        "router-key",
+                        "https://openrouter.ai/api/v1",
+                    ),
+                ),
+                apiModelCatalog.fetchModelsCalls,
+            )
         }
 
     @Test
     fun `supports anthropic discovery with default base url`() =
         runTest {
-            coEvery {
-                apiModelCatalog.fetchModels(ApiProvider.ANTHROPIC, "anthropic-key", null)
-            } returns ApiModelCatalogResult(listOf(DiscoveredApiModel(id = "claude-sonnet-4-20250514")))
+            apiModelCatalog.modelsResult =
+                ApiModelCatalogResult(listOf(DiscoveredApiModel(id = "claude-sonnet-4-20250514")))
 
             val catalog =
                 useCase(
@@ -102,15 +110,16 @@ class FetchApiProviderModelsUseCaseTest {
                 )
 
             assertEquals(listOf(DiscoveredApiModel(id = "claude-sonnet-4-20250514")), catalog.models)
-            coVerify(exactly = 1) {
-                apiModelCatalog.fetchModels(ApiProvider.ANTHROPIC, "anthropic-key", null)
-            }
+            assertEquals(
+                listOf(FakeApiModelCatalogPort.FetchModelsCall(ApiProvider.ANTHROPIC, "anthropic-key", null)),
+                apiModelCatalog.fetchModelsCalls,
+            )
         }
 
     @Test
     fun `fails when no api key is available`() =
         runTest {
-            coEvery { apiKeyProvider.getApiKey(any()) } returns null
+            // No key stored for the alias, so getApiKey returns null.
 
             assertFailsWith<IllegalArgumentException> {
                 useCase(

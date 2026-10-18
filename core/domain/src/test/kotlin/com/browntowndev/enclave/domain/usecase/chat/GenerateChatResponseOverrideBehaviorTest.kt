@@ -1,26 +1,25 @@
 package com.browntowndev.enclave.domain.usecase.chat
 
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
+import com.browntowndev.enclave.core.testing.FakeChatInferenceExecutorPort
+import com.browntowndev.enclave.core.testing.FakeChatRepository
+import com.browntowndev.enclave.core.testing.FakeEmbeddingEngine
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeMessageRepository
+import com.browntowndev.enclave.core.testing.FakeSettingsRepository
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.ChatModelOverride
 import com.browntowndev.enclave.domain.model.chat.ChatResponseMode
+import com.browntowndev.enclave.domain.model.chat.Content
+import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.port.inference.ChatInferenceExecutorPort
-import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.enclave.domain.port.repository.ExtractedUrlTrackerPort
-import com.browntowndev.enclave.domain.port.repository.MessageRepository
-import com.browntowndev.enclave.domain.port.repository.SettingsData
-import com.browntowndev.enclave.domain.port.repository.SettingsRepository
 import com.browntowndev.enclave.domain.usecase.FakeInferenceLockManager
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.slot
-import kotlinx.coroutines.flow.flowOf
+import com.browntowndev.enclave.domain.usecase.FakePipelineExecutor
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -44,6 +43,18 @@ class GenerateChatResponseOverrideBehaviorTest {
             override fun clear() {}
         }
 
+    private fun fakeMessageRepository(): FakeMessageRepository =
+        FakeMessageRepository(
+            initial =
+                listOf(
+                    Message(
+                        id = MessageId("1"),
+                        chatId = ChatId("3"),
+                        content = Content(text = "Hello"),
+                    ),
+                ),
+        )
+
     @Nested
     @DisplayName("MD01 — API override resolves explicit config, never FAST slot")
     inner class ApiOverride {
@@ -55,40 +66,24 @@ class GenerateChatResponseOverrideBehaviorTest {
                 val overrideConfig = activeApiConfig(name = "Grok Beta", id = ApiModelConfigurationId("api-grok-beta"))
 
                 val activeModelProvider =
-                    mockk<ActiveModelProviderPort>()
-                coEvery { activeModelProvider.getActiveConfiguration(ModelType.FAST) } returns fastSlotConfig
-                coEvery { activeModelProvider.getActiveConfiguration(ModelType.VISION) } returns null
-                coEvery {
-                    activeModelProvider.getActiveConfigurationByOverride(any())
-                } returns overrideConfig
-
-                val messageRepository =
-                    mockk<MessageRepository> {
-                        coEvery { getMessageById(any()) } returns mockk(relaxed = true)
-                    }
-                val settingsRepository =
-                    mockk<SettingsRepository> {
-                        every { settingsFlow } returns flowOf(SettingsData())
+                    FakeActiveModelProvider(configuration = fastSlotConfig).apply {
+                        configurationsByType[ModelType.VISION] = null
+                        overrideConfiguration = overrideConfig
+                        hasOverrideConfiguration = true
                     }
 
-                val executor = mockk<ChatInferenceExecutorPort>(relaxed = true)
-                val resolvedConfigSlot = slot<ActiveModelConfiguration>()
-                every { executor.executeWithOverride(any(), any(), any(), any(), any(), any(), capture(resolvedConfigSlot), any()) } returns flowOf()
+                val executor = FakeChatInferenceExecutorPort()
 
                 val useCase =
                     GenerateChatResponseUseCase(
-                        pipelineExecutor = mockk(relaxed = true) {
-                            every { executePipeline(any(), any(), any(), any(), any()) } returns flowOf()
-                        },
-                        chatRepository = mockk(relaxed = true),
-                        messageRepository = messageRepository,
-                        loggingPort = mockk(relaxed = true),
+                        pipelineExecutor = FakePipelineExecutor(),
+                        chatRepository = FakeChatRepository(),
+                        messageRepository = fakeMessageRepository(),
+                        loggingPort = FakeLoggingPort(),
                         activeModelProvider = activeModelProvider,
                         extractedUrlTracker = noOpTracker,
                         chatInferenceExecutor = executor,
-                        embeddingEngine = mockk(relaxed = true) {
-                            coEvery { getEmbedding(any()) } returns floatArrayOf()
-                        },
+                        embeddingEngine = FakeEmbeddingEngine(),
                         inferenceLockManager = FakeInferenceLockManager(),
                     )
 
@@ -108,16 +103,13 @@ class GenerateChatResponseOverrideBehaviorTest {
                 ).toList()
 
                 // The executor must receive the resolved OVERRIDE config, not the FAST slot.
-                assertEquals("Grok Beta", resolvedConfigSlot.captured.name)
-                assertEquals(ApiModelConfigurationId("api-grok-beta"), resolvedConfigSlot.captured.id)
+                val resolvedConfig = executor.executeWithOverrideConfigurations.single()
+                assertEquals("Grok Beta", resolvedConfig.name)
+                assertEquals(ApiModelConfigurationId("api-grok-beta"), resolvedConfig.id)
 
                 // Resolution must go through the override seam, never the FAST slot.
-                coVerify(exactly = 0) {
-                    activeModelProvider.getActiveConfiguration(ModelType.FAST)
-                }
-                coVerify(atLeast = 1) {
-                    activeModelProvider.getActiveConfigurationByOverride(override)
-                }
+                assertEquals(0, activeModelProvider.requestedModelTypes.count { it == ModelType.FAST })
+                assertTrue(activeModelProvider.requestedOverrides.contains(override))
             }
     }
 
@@ -135,40 +127,24 @@ class GenerateChatResponseOverrideBehaviorTest {
                 )
 
                 val activeModelProvider =
-                    mockk<ActiveModelProviderPort>()
-                coEvery { activeModelProvider.getActiveConfiguration(ModelType.FAST) } returns fastSlotConfig
-                coEvery { activeModelProvider.getActiveConfiguration(ModelType.VISION) } returns null
-                coEvery {
-                    activeModelProvider.getActiveConfigurationByOverride(any())
-                } returns overrideConfig
-
-                val messageRepository =
-                    mockk<MessageRepository> {
-                        coEvery { getMessageById(any()) } returns mockk(relaxed = true)
-                    }
-                val settingsRepository =
-                    mockk<SettingsRepository> {
-                        every { settingsFlow } returns flowOf(SettingsData())
+                    FakeActiveModelProvider(configuration = fastSlotConfig).apply {
+                        configurationsByType[ModelType.VISION] = null
+                        overrideConfiguration = overrideConfig
+                        hasOverrideConfiguration = true
                     }
 
-                val executor = mockk<ChatInferenceExecutorPort>(relaxed = true)
-                val resolvedConfigSlot = slot<ActiveModelConfiguration>()
-                every { executor.executeWithOverride(any(), any(), any(), any(), any(), any(), capture(resolvedConfigSlot), any()) } returns flowOf()
+                val executor = FakeChatInferenceExecutorPort()
 
                 val useCase =
                     GenerateChatResponseUseCase(
-                        pipelineExecutor = mockk(relaxed = true) {
-                            every { executePipeline(any(), any(), any(), any(), any()) } returns flowOf()
-                        },
-                        chatRepository = mockk(relaxed = true),
-                        messageRepository = messageRepository,
-                        loggingPort = mockk(relaxed = true),
+                        pipelineExecutor = FakePipelineExecutor(),
+                        chatRepository = FakeChatRepository(),
+                        messageRepository = fakeMessageRepository(),
+                        loggingPort = FakeLoggingPort(),
                         activeModelProvider = activeModelProvider,
                         extractedUrlTracker = noOpTracker,
                         chatInferenceExecutor = executor,
-                        embeddingEngine = mockk(relaxed = true) {
-                            coEvery { getEmbedding(any()) } returns floatArrayOf()
-                        },
+                        embeddingEngine = FakeEmbeddingEngine(),
                         inferenceLockManager = FakeInferenceLockManager(),
                     )
 
@@ -188,17 +164,14 @@ class GenerateChatResponseOverrideBehaviorTest {
                 ).toList()
 
                 // The executor must receive the resolved OVERRIDE config, not the FAST slot.
-                assertEquals("Qwen Override", resolvedConfigSlot.captured.name)
-                assertEquals(LocalModelConfigurationId("local-qwen-preset"), resolvedConfigSlot.captured.id)
-                assertTrue(resolvedConfigSlot.captured.isLocal)
+                val resolvedConfig = executor.executeWithOverrideConfigurations.single()
+                assertEquals("Qwen Override", resolvedConfig.name)
+                assertEquals(LocalModelConfigurationId("local-qwen-preset"), resolvedConfig.id)
+                assertTrue(resolvedConfig.isLocal)
 
                 // Resolution must go through the override seam, never the FAST slot.
-                coVerify(exactly = 0) {
-                    activeModelProvider.getActiveConfiguration(ModelType.FAST)
-                }
-                coVerify(atLeast = 1) {
-                    activeModelProvider.getActiveConfigurationByOverride(override)
-                }
+                assertEquals(0, activeModelProvider.requestedModelTypes.count { it == ModelType.FAST })
+                assertTrue(activeModelProvider.requestedOverrides.contains(override))
             }
     }
 

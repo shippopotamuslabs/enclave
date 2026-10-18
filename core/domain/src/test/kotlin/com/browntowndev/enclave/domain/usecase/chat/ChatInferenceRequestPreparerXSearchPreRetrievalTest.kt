@@ -1,24 +1,26 @@
 package com.browntowndev.enclave.domain.usecase.chat
 
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
+import com.browntowndev.enclave.core.testing.FakeDefaultModelRepository
+import com.browntowndev.enclave.core.testing.FakeEmbeddingEngine
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeMediaProviderRepository
+import com.browntowndev.enclave.core.testing.FakeMemoriesRepository
+import com.browntowndev.enclave.core.testing.FakeMessageRepository
+import com.browntowndev.enclave.core.testing.FakeSearchIntentClassifier
+import com.browntowndev.enclave.core.testing.FakeSettingsRepository
+import com.browntowndev.enclave.core.testing.FakeToolExecutor
 import com.browntowndev.enclave.domain.model.chat.ChatId
+import com.browntowndev.enclave.domain.model.chat.Content
+import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolExecutionResult
-import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
-import com.browntowndev.enclave.domain.port.inference.SearchIntentClassifierPort
-import com.browntowndev.enclave.domain.port.inference.ToolExecutorPort
-import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
-import com.browntowndev.enclave.domain.port.repository.MemoriesRepository
-import com.browntowndev.enclave.domain.port.repository.MessageRepository
 import com.browntowndev.enclave.domain.port.repository.SettingsData
-import com.browntowndev.enclave.domain.port.repository.SettingsRepository
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
-import kotlinx.coroutines.flow.flowOf
+import com.browntowndev.enclave.domain.usecase.media.GetProviderCapabilitiesUseCase
+import com.browntowndev.enclave.domain.usecase.media.MediaToolDefinitionFactory
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
@@ -26,14 +28,14 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class ChatInferenceRequestPreparerXSearchPreRetrievalTest {
-    private val activeModelProvider = mockk<ActiveModelProviderPort>()
-    private val settingsRepository = mockk<SettingsRepository>()
-    private val messageRepository = mockk<MessageRepository>()
-    private val memoriesRepository = mockk<MemoriesRepository>()
-    private val embeddingEnginePort = mockk<EmbeddingEnginePort>()
+    private lateinit var activeModelProvider: FakeActiveModelProvider
+    private lateinit var settingsRepository: FakeSettingsRepository
+    private lateinit var messageRepository: FakeMessageRepository
+    private lateinit var memoriesRepository: FakeMemoriesRepository
+    private lateinit var embeddingEnginePort: FakeEmbeddingEngine
     private val promptComposer = SearchToolPromptComposer()
-    private val searchIntentClassifier = mockk<SearchIntentClassifierPort>()
-    private val toolExecutor = mockk<ToolExecutorPort>()
+    private lateinit var searchIntentClassifier: FakeSearchIntentClassifier
+    private lateinit var toolExecutor: FakeToolExecutor
 
     private val fastConfig =
         ActiveModelConfiguration(
@@ -59,23 +61,52 @@ class ChatInferenceRequestPreparerXSearchPreRetrievalTest {
         xApiKeyPresent: Boolean = true,
         requiresSearch: Boolean = false,
     ) {
-        coEvery { activeModelProvider.getActiveConfiguration(any()) } returns fastConfig
-        every { settingsRepository.settingsFlow } returns
-            flowOf(
-                SettingsData(
-                    xSearchEnabled = xSearchEnabled,
-                    xApiKeyPresent = xApiKeyPresent,
-                ),
+        activeModelProvider = FakeActiveModelProvider(configuration = fastConfig)
+        settingsRepository =
+            FakeSettingsRepository(
+                initial =
+                    SettingsData(
+                        xSearchEnabled = xSearchEnabled,
+                        xApiKeyPresent = xApiKeyPresent,
+                    ),
             )
-        coEvery { messageRepository.getMessageById(any()) } returns mockk(relaxed = true)
-        coEvery { messageRepository.resolveLatestImageBearingUserMessage(any(), any()) } returns null
-        coEvery { memoriesRepository.getCoreMemories() } returns emptyList()
-        coEvery { memoriesRepository.searchMemories(any(), any(), any(), any()) } returns emptyList()
-        coEvery { embeddingEnginePort.getEmbedding(any()) } returns floatArrayOf(0.1f, 0.2f)
-
-        every { searchIntentClassifier.requiresSearch(any(), any()) } returns requiresSearch
-        every { searchIntentClassifier.getSearchIntentProbability(any()) } returns if (requiresSearch) 0.9f else 0.1f
+        messageRepository =
+            FakeMessageRepository(
+                initial =
+                    listOf(
+                        Message(
+                            id = MessageId("user"),
+                            chatId = ChatId("chat"),
+                            content = Content(text = ""),
+                        ),
+                    ),
+            )
+        memoriesRepository = FakeMemoriesRepository()
+        embeddingEnginePort = FakeEmbeddingEngine()
+        searchIntentClassifier =
+            FakeSearchIntentClassifier().apply {
+                requiresSearchResult = requiresSearch
+                probability = if (requiresSearch) 0.9f else 0.1f
+            }
+        toolExecutor = FakeToolExecutor()
     }
+
+    private fun buildPreparer(): ChatInferenceRequestPreparer =
+        ChatInferenceRequestPreparer(
+            activeModelProvider = activeModelProvider,
+            settingsRepository = settingsRepository,
+            messageRepository = messageRepository,
+            memoriesRepository = memoriesRepository,
+            embeddingEnginePort = embeddingEnginePort,
+            promptComposer = promptComposer,
+            defaultModelRepository = FakeDefaultModelRepository(),
+            mediaProviderRepository = FakeMediaProviderRepository(),
+            mediaToolDefinitionFactory = MediaToolDefinitionFactory(GetProviderCapabilitiesUseCase()),
+            getProviderCapabilitiesUseCase = GetProviderCapabilitiesUseCase(),
+            loggingPort = FakeLoggingPort(),
+            searchIntentClassifier = searchIntentClassifier,
+            toolExecutor = toolExecutor,
+        )
 
     @Test
     fun `XPRE-01 Parseable X status URL triggers deterministic thread retrieval, bypassing classifier`() =
@@ -83,28 +114,14 @@ class ChatInferenceRequestPreparerXSearchPreRetrievalTest {
             setupCommonMocks(xSearchEnabled = true, xApiKeyPresent = true, requiresSearch = false)
 
             val mockThreadResponse = """{"requested_post":{"id":"2058763478853456162","text":"Target post","user_name":"Harshith"},"ancestor_posts":[],"data":[{"id":"2058763478853456162","text":"Target post","user_name":"Harshith"}],"anchor_tweet_id":"2058763478853456162"}"""
-            coEvery { toolExecutor.execute(any()) } returns
+            toolExecutor.behavior = { request ->
                 ToolExecutionResult(
                     toolName = "x_get_thread",
                     resultJson = mockThreadResponse,
                 )
+            }
 
-            val preparer =
-                ChatInferenceRequestPreparer(
-                    activeModelProvider = activeModelProvider,
-                    settingsRepository = settingsRepository,
-                    messageRepository = messageRepository,
-                    memoriesRepository = memoriesRepository,
-                    embeddingEnginePort = embeddingEnginePort,
-                    promptComposer = promptComposer,
-                    defaultModelRepository = mockk(relaxed = true),
-                    mediaProviderRepository = mockk(relaxed = true),
-                    mediaToolDefinitionFactory = mockk(relaxed = true),
-                    getProviderCapabilitiesUseCase = mockk(relaxed = true),
-                    loggingPort = mockk(relaxed = true),
-                    searchIntentClassifier = searchIntentClassifier,
-                    toolExecutor = toolExecutor,
-                )
+            val preparer = buildPreparer()
 
             val result =
                 preparer(
@@ -115,14 +132,9 @@ class ChatInferenceRequestPreparerXSearchPreRetrievalTest {
                     modelType = ModelType.FAST,
                 )
 
-            coVerify(exactly = 1) {
-                toolExecutor.execute(
-                    withArg {
-                        assertEquals("x_get_thread", it.toolName)
-                        assertTrue(it.argumentsJson.contains("https://x.com/HarshithLucky3/status/2058763478853456162?s=20"))
-                    },
-                )
-            }
+            val executed = toolExecutor.executedRequests.single()
+            assertEquals("x_get_thread", executed.toolName)
+            assertTrue(executed.argumentsJson.contains("https://x.com/HarshithLucky3/status/2058763478853456162?s=20"))
             assertEquals(mockThreadResponse, result.preRetrievalXResultJson)
         }
 
@@ -131,28 +143,14 @@ class ChatInferenceRequestPreparerXSearchPreRetrievalTest {
         runTest {
             setupCommonMocks(xSearchEnabled = true, xApiKeyPresent = true, requiresSearch = false)
 
-            coEvery { toolExecutor.execute(any()) } returns
+            toolExecutor.behavior = { request ->
                 ToolExecutionResult(
                     toolName = "x_get_thread",
                     resultJson = "{}",
                 )
+            }
 
-            val preparer =
-                ChatInferenceRequestPreparer(
-                    activeModelProvider = activeModelProvider,
-                    settingsRepository = settingsRepository,
-                    messageRepository = messageRepository,
-                    memoriesRepository = memoriesRepository,
-                    embeddingEnginePort = embeddingEnginePort,
-                    promptComposer = promptComposer,
-                    defaultModelRepository = mockk(relaxed = true),
-                    mediaProviderRepository = mockk(relaxed = true),
-                    mediaToolDefinitionFactory = mockk(relaxed = true),
-                    getProviderCapabilitiesUseCase = mockk(relaxed = true),
-                    loggingPort = mockk(relaxed = true),
-                    searchIntentClassifier = searchIntentClassifier,
-                    toolExecutor = toolExecutor,
-                )
+            val preparer = buildPreparer()
 
             preparer(
                 prompt = "Check this: https://twitter.com/user/status/987654321",
@@ -162,14 +160,9 @@ class ChatInferenceRequestPreparerXSearchPreRetrievalTest {
                 modelType = ModelType.FAST,
             )
 
-            coVerify(exactly = 1) {
-                toolExecutor.execute(
-                    withArg {
-                        assertEquals("x_get_thread", it.toolName)
-                        assertTrue(it.argumentsJson.contains("https://twitter.com/user/status/987654321"))
-                    },
-                )
-            }
+            val executed = toolExecutor.executedRequests.single()
+            assertEquals("x_get_thread", executed.toolName)
+            assertTrue(executed.argumentsJson.contains("https://twitter.com/user/status/987654321"))
         }
 
     @Test
@@ -178,28 +171,14 @@ class ChatInferenceRequestPreparerXSearchPreRetrievalTest {
             setupCommonMocks(xSearchEnabled = true, xApiKeyPresent = true, requiresSearch = true)
 
             val mockSearchResponse = """[{"id":"1","text":"AI News"}]"""
-            coEvery { toolExecutor.execute(any()) } returns
+            toolExecutor.behavior = { request ->
                 ToolExecutionResult(
                     toolName = "search_x_recent",
                     resultJson = mockSearchResponse,
                 )
+            }
 
-            val preparer =
-                ChatInferenceRequestPreparer(
-                    activeModelProvider = activeModelProvider,
-                    settingsRepository = settingsRepository,
-                    messageRepository = messageRepository,
-                    memoriesRepository = memoriesRepository,
-                    embeddingEnginePort = embeddingEnginePort,
-                    promptComposer = promptComposer,
-                    defaultModelRepository = mockk(relaxed = true),
-                    mediaProviderRepository = mockk(relaxed = true),
-                    mediaToolDefinitionFactory = mockk(relaxed = true),
-                    getProviderCapabilitiesUseCase = mockk(relaxed = true),
-                    loggingPort = mockk(relaxed = true),
-                    searchIntentClassifier = searchIntentClassifier,
-                    toolExecutor = toolExecutor,
-                )
+            val preparer = buildPreparer()
 
             val result =
                 preparer(
@@ -210,16 +189,11 @@ class ChatInferenceRequestPreparerXSearchPreRetrievalTest {
                     modelType = ModelType.FAST,
                 )
 
-            coVerify(exactly = 1) {
-                toolExecutor.execute(
-                    withArg {
-                        assertEquals("search_x_recent", it.toolName)
-                        // We shape keywords from: "Find latest breaking news on #AI and OpenAI @sama"
-                        // Check if query is shaped correctly
-                        assertTrue(it.argumentsJson.contains("news") || it.argumentsJson.contains("breaking"))
-                    },
-                )
-            }
+            val executed = toolExecutor.executedRequests.single()
+            assertEquals("search_x_recent", executed.toolName)
+            // We shape keywords from: "Find latest breaking news on #AI and OpenAI @sama"
+            // Check if query is shaped correctly
+            assertTrue(executed.argumentsJson.contains("news") || executed.argumentsJson.contains("breaking"))
             assertEquals(mockSearchResponse, result.preRetrievalXResultJson)
         }
 
@@ -228,22 +202,7 @@ class ChatInferenceRequestPreparerXSearchPreRetrievalTest {
         runTest {
             setupCommonMocks(xSearchEnabled = false, xApiKeyPresent = true, requiresSearch = false)
 
-            val preparer =
-                ChatInferenceRequestPreparer(
-                    activeModelProvider = activeModelProvider,
-                    settingsRepository = settingsRepository,
-                    messageRepository = messageRepository,
-                    memoriesRepository = memoriesRepository,
-                    embeddingEnginePort = embeddingEnginePort,
-                    promptComposer = promptComposer,
-                    defaultModelRepository = mockk(relaxed = true),
-                    mediaProviderRepository = mockk(relaxed = true),
-                    mediaToolDefinitionFactory = mockk(relaxed = true),
-                    getProviderCapabilitiesUseCase = mockk(relaxed = true),
-                    loggingPort = mockk(relaxed = true),
-                    searchIntentClassifier = searchIntentClassifier,
-                    toolExecutor = toolExecutor,
-                )
+            val preparer = buildPreparer()
 
             val result =
                 preparer(
@@ -254,7 +213,7 @@ class ChatInferenceRequestPreparerXSearchPreRetrievalTest {
                     modelType = ModelType.FAST,
                 )
 
-            coVerify(exactly = 0) { toolExecutor.execute(any()) }
+            assertTrue(toolExecutor.executedRequests.isEmpty())
             assertNull(result.preRetrievalXResultJson)
         }
 
@@ -263,22 +222,7 @@ class ChatInferenceRequestPreparerXSearchPreRetrievalTest {
         runTest {
             setupCommonMocks(xSearchEnabled = true, xApiKeyPresent = true, requiresSearch = false)
 
-            val preparer =
-                ChatInferenceRequestPreparer(
-                    activeModelProvider = activeModelProvider,
-                    settingsRepository = settingsRepository,
-                    messageRepository = messageRepository,
-                    memoriesRepository = memoriesRepository,
-                    embeddingEnginePort = embeddingEnginePort,
-                    promptComposer = promptComposer,
-                    defaultModelRepository = mockk(relaxed = true),
-                    mediaProviderRepository = mockk(relaxed = true),
-                    mediaToolDefinitionFactory = mockk(relaxed = true),
-                    getProviderCapabilitiesUseCase = mockk(relaxed = true),
-                    loggingPort = mockk(relaxed = true),
-                    searchIntentClassifier = searchIntentClassifier,
-                    toolExecutor = toolExecutor,
-                )
+            val preparer = buildPreparer()
 
             val result =
                 preparer(
@@ -289,7 +233,7 @@ class ChatInferenceRequestPreparerXSearchPreRetrievalTest {
                     modelType = ModelType.FAST,
                 )
 
-            coVerify(exactly = 0) { toolExecutor.execute(any()) }
+            assertTrue(toolExecutor.executedRequests.isEmpty())
             assertNull(result.preRetrievalXResultJson)
         }
 
@@ -312,28 +256,14 @@ class ChatInferenceRequestPreparerXSearchPreRetrievalTest {
         runTest {
             setupCommonMocks(xSearchEnabled = true, xApiKeyPresent = true, requiresSearch = true)
 
-            coEvery { toolExecutor.execute(any()) } returns
+            toolExecutor.behavior = { request ->
                 ToolExecutionResult(
                     toolName = "search_x_recent",
                     resultJson = "[]",
                 )
+            }
 
-            val preparer =
-                ChatInferenceRequestPreparer(
-                    activeModelProvider = activeModelProvider,
-                    settingsRepository = settingsRepository,
-                    messageRepository = messageRepository,
-                    memoriesRepository = memoriesRepository,
-                    embeddingEnginePort = embeddingEnginePort,
-                    promptComposer = promptComposer,
-                    defaultModelRepository = mockk(relaxed = true),
-                    mediaProviderRepository = mockk(relaxed = true),
-                    mediaToolDefinitionFactory = mockk(relaxed = true),
-                    getProviderCapabilitiesUseCase = mockk(relaxed = true),
-                    loggingPort = mockk(relaxed = true),
-                    searchIntentClassifier = searchIntentClassifier,
-                    toolExecutor = toolExecutor,
-                )
+            val preparer = buildPreparer()
 
             preparer(
                 prompt = "Check out the profile https://x.com/OpenAI and search for AI news",
@@ -344,21 +274,9 @@ class ChatInferenceRequestPreparerXSearchPreRetrievalTest {
             )
 
             // Should not execute thread fetch
-            coVerify(exactly = 0) {
-                toolExecutor.execute(
-                    withArg {
-                        assertEquals("x_get_thread", it.toolName)
-                    },
-                )
-            }
+            assertTrue(toolExecutor.executedRequests.none { it.toolName == "x_get_thread" })
 
             // Should execute search fallback
-            coVerify(exactly = 1) {
-                toolExecutor.execute(
-                    withArg {
-                        assertEquals("search_x_recent", it.toolName)
-                    },
-                )
-            }
+            assertEquals(1, toolExecutor.executedRequests.count { it.toolName == "search_x_recent" })
         }
 }

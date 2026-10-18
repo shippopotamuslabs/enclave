@@ -31,7 +31,7 @@ import javax.inject.Inject
  * are filled from the first available candidate, preferring local configs over API for
  * text slots. Slots with no viable candidate are left as-is.
  */
-class AutoAssignLocalModelsUseCase
+open class AutoAssignLocalModelsUseCase
     @Inject
     constructor(
         private val getLocalModelAssetsUseCase: GetLocalModelAssetsUseCase,
@@ -42,7 +42,7 @@ class AutoAssignLocalModelsUseCase
         private val getMediaProvidersUseCase: GetMediaProvidersUseCase,
         private val capabilityPort: LocalImageGenerationCapabilityPort,
     ) {
-        suspend operator fun invoke() {
+        open suspend operator fun invoke() {
             val currentAssignments = getDefaultModelsUseCase().first().associateBy { it.modelType }
             val localAssets = getLocalModelAssetsUseCase().first()
             val apiAssets = getApiModelAssetsUseCase().first()

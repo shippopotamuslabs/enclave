@@ -1,19 +1,16 @@
 package com.browntowndev.enclave.domain.usecase.byok
 
+import com.browntowndev.enclave.core.testing.FakeApiKeyProvider
+import com.browntowndev.enclave.core.testing.FakeApiModelCatalogPort
 import com.browntowndev.enclave.domain.model.config.OpenRouterModelEndpoint
-import com.browntowndev.enclave.domain.port.repository.ApiModelCatalogPort
-import com.browntowndev.enclave.domain.port.security.ApiKeyProviderPort
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class FetchOpenRouterModelEndpointsUseCaseTest {
-    private val apiKeyProviderPort = mockk<ApiKeyProviderPort>()
-    private val apiModelCatalogPort = mockk<ApiModelCatalogPort>()
+    private val apiKeyProviderPort = FakeApiKeyProvider()
+    private val apiModelCatalogPort = FakeApiModelCatalogPort()
     private lateinit var useCase: FetchOpenRouterModelEndpointsUseCase
 
     @BeforeEach
@@ -45,14 +42,8 @@ class FetchOpenRouterModelEndpointsUseCaseTest {
                     ),
                 )
 
-            coEvery { apiKeyProviderPort.getApiKey("alias-or") } returns "secret-api-key"
-            coEvery {
-                apiModelCatalogPort.fetchModelEndpoints(
-                    modelId = "meta-llama/llama-3.3-70b-instruct",
-                    apiKey = "secret-api-key",
-                    baseUrl = null,
-                )
-            } returns mockEndpoints
+            apiKeyProviderPort.saveApiKey("alias-or", "secret-api-key")
+            apiModelCatalogPort.endpointsResult = mockEndpoints
 
             val result =
                 useCase(
@@ -63,13 +54,16 @@ class FetchOpenRouterModelEndpointsUseCaseTest {
                 )
 
             assertEquals(mockEndpoints, result)
-            coVerify(exactly = 1) { apiKeyProviderPort.getApiKey("alias-or") }
-            coVerify(exactly = 1) {
-                apiModelCatalogPort.fetchModelEndpoints(
-                    modelId = "meta-llama/llama-3.3-70b-instruct",
-                    apiKey = "secret-api-key",
-                    baseUrl = null,
-                )
-            }
+            assertEquals(listOf("alias-or"), apiKeyProviderPort.getApiKeyCalls)
+            assertEquals(
+                listOf(
+                    FakeApiModelCatalogPort.FetchModelEndpointsCall(
+                        modelId = "meta-llama/llama-3.3-70b-instruct",
+                        apiKey = "secret-api-key",
+                        baseUrl = null,
+                    ),
+                ),
+                apiModelCatalogPort.fetchModelEndpointsCalls,
+            )
         }
 }

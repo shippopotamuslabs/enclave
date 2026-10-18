@@ -1,46 +1,38 @@
 package com.browntowndev.enclave.domain.usecase.settings
 
-import com.browntowndev.enclave.domain.port.repository.SettingsRepository
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.mockk
+import com.browntowndev.enclave.core.testing.FakeSettingsRepository
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class UpdateAllowMemoriesUseCaseTest {
-    private lateinit var settingsRepository: SettingsRepository
+    private lateinit var settingsRepository: FakeSettingsRepository
     private lateinit var useCase: UpdateAllowMemoriesUseCase
 
     @BeforeEach
     fun setup() {
-        settingsRepository = mockk()
+        settingsRepository = FakeSettingsRepository()
         useCase = UpdateAllowMemoriesUseCase(settingsRepository)
     }
 
     @Test
     fun `invoke with true calls updateAllowMemories with true`() =
         runTest {
-            // Arrange
-            coEvery { settingsRepository.updateAllowMemories(true) } returns Unit
-
             // Act
             useCase(true)
 
             // Assert
-            coVerify(exactly = 1) { settingsRepository.updateAllowMemories(true) }
+            assertEquals(listOf(true), settingsRepository.allowMemoriesUpdates)
         }
 
     @Test
     fun `invoke with false calls updateAllowMemories with false`() =
         runTest {
-            // Arrange
-            coEvery { settingsRepository.updateAllowMemories(false) } returns Unit
-
             // Act
             useCase(false)
 
             // Assert
-            coVerify(exactly = 1) { settingsRepository.updateAllowMemories(false) }
+            assertEquals(listOf(false), settingsRepository.allowMemoriesUpdates)
         }
 }

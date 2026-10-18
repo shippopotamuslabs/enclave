@@ -10,15 +10,22 @@ import com.browntowndev.enclave.domain.model.config.OpenRouterRoutingConfigurati
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.enclave.domain.usecase.byok.SaveApiModelConfigurationUseCase
-import io.mockk.coEvery
-import io.mockk.mockk
-import io.mockk.slot
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
+/** Recording [SaveApiModelConfigurationUseCase] fake: captures each configuration and echoes its id. */
+private class RecordingSaveApiModelConfigurationUseCase : SaveApiModelConfigurationUseCase {
+    val savedConfigurations = mutableListOf<ApiModelConfiguration>()
+
+    override suspend fun invoke(configuration: ApiModelConfiguration): Result<ApiModelConfigurationId> {
+        savedConfigurations += configuration
+        return Result.success(configuration.id)
+    }
+}
+
 class SaveApiPresetUseCaseTest {
-    private val saveApiModelConfigurationUseCase = mockk<SaveApiModelConfigurationUseCase>()
+    private val saveApiModelConfigurationUseCase = RecordingSaveApiModelConfigurationUseCase()
     private val saveApiPresetUseCase = SaveApiPresetUseCase(saveApiModelConfigurationUseCase)
 
     @Test
@@ -30,9 +37,6 @@ class SaveApiPresetUseCaseTest {
                     displayName = "Creative",
                 )
 
-            val configSlot = slot<ApiModelConfiguration>()
-            coEvery { saveApiModelConfigurationUseCase(capture(configSlot)) } returns Result.success(draft.id)
-
             saveApiPresetUseCase(
                 provider = ApiProvider.OPENAI,
                 parentCredentialsId = ApiCredentialsId("parent-cred-1"),
@@ -40,7 +44,7 @@ class SaveApiPresetUseCaseTest {
                 draft = draft,
             ).getOrThrow()
 
-            assertEquals("gpt-4o", configSlot.captured.modelId)
+            assertEquals("gpt-4o", saveApiModelConfigurationUseCase.savedConfigurations.single().modelId)
         }
 
     @Test
@@ -58,9 +62,6 @@ class SaveApiPresetUseCaseTest {
                         ),
                 )
 
-            val configSlot = slot<ApiModelConfiguration>()
-            coEvery { saveApiModelConfigurationUseCase(capture(configSlot)) } returns Result.success(draft.id)
-
             saveApiPresetUseCase(
                 provider = ApiProvider.XAI,
                 parentCredentialsId = ApiCredentialsId("parent-cred-1"),
@@ -68,9 +69,10 @@ class SaveApiPresetUseCaseTest {
                 draft = draft,
             ).getOrThrow()
 
-            assertEquals(1.25, configSlot.captured.pricing.promptUsdPerMillion)
-            assertEquals(2.5, configSlot.captured.pricing.completionUsdPerMillion)
-            assertEquals(0.2, configSlot.captured.pricing.cachedPromptUsdPerMillion)
+            val config = saveApiModelConfigurationUseCase.savedConfigurations.single()
+            assertEquals(1.25, config.pricing.promptUsdPerMillion)
+            assertEquals(2.5, config.pricing.completionUsdPerMillion)
+            assertEquals(0.2, config.pricing.cachedPromptUsdPerMillion)
         }
 
     @Test
@@ -83,9 +85,6 @@ class SaveApiPresetUseCaseTest {
                     displayName = "Vision",
                 )
 
-            val configSlot = slot<ApiModelConfiguration>()
-            coEvery { saveApiModelConfigurationUseCase(capture(configSlot)) } returns Result.success(draft.id)
-
             saveApiPresetUseCase(
                 provider = ApiProvider.OPENAI,
                 parentCredentialsId = ApiCredentialsId("parent-cred-1"),
@@ -93,7 +92,7 @@ class SaveApiPresetUseCaseTest {
                 draft = draft,
             ).getOrThrow()
 
-            assertEquals(true, configSlot.captured.isMultimodal)
+            assertEquals(true, saveApiModelConfigurationUseCase.savedConfigurations.single().isMultimodal)
         }
 
     @Test
@@ -132,9 +131,6 @@ class SaveApiPresetUseCaseTest {
                         ),
                 )
 
-            val configSlot = slot<ApiModelConfiguration>()
-            coEvery { saveApiModelConfigurationUseCase(capture(configSlot)) } returns Result.success(draft.id)
-
             val result =
                 saveApiPresetUseCase(
                     provider = ApiProvider.OPENROUTER,
@@ -144,7 +140,7 @@ class SaveApiPresetUseCaseTest {
                 ).getOrThrow()
 
             assertEquals(draft.id, result)
-            val config = configSlot.captured
+            val config = saveApiModelConfigurationUseCase.savedConfigurations.single()
             assertEquals(draft.id, config.id)
             assertEquals(draft.credentialsId, config.apiCredentialsId)
             assertEquals(draft.displayName, config.displayName)
@@ -183,9 +179,6 @@ class SaveApiPresetUseCaseTest {
                         ),
                 )
 
-            val configSlot = slot<ApiModelConfiguration>()
-            coEvery { saveApiModelConfigurationUseCase(capture(configSlot)) } returns Result.success(draft.id)
-
             saveApiPresetUseCase(
                 provider = ApiProvider.OPENROUTER,
                 parentCredentialsId = ApiCredentialsId("parent-cred-1"),
@@ -193,7 +186,7 @@ class SaveApiPresetUseCaseTest {
                 draft = draft,
             ).getOrThrow()
 
-            val routing = configSlot.captured.openRouterRouting
+            val routing = saveApiModelConfigurationUseCase.savedConfigurations.single().openRouterRouting
             assertEquals("alibaba", routing.preferredProvider)
             assertEquals(false, routing.allowFallbacks)
             assertEquals(OpenRouterProviderSort.LATENCY, routing.providerSort)
@@ -225,9 +218,6 @@ class SaveApiPresetUseCaseTest {
 
             val defaultReasoningEffort = ApiReasoningEffort.MEDIUM
 
-            val configSlot = slot<ApiModelConfiguration>()
-            coEvery { saveApiModelConfigurationUseCase(capture(configSlot)) } returns Result.success(draft.id)
-
             saveApiPresetUseCase(
                 provider = ApiProvider.OPENAI,
                 parentCredentialsId = parentCredentialsId,
@@ -235,7 +225,7 @@ class SaveApiPresetUseCaseTest {
                 draft = draft,
             ).getOrThrow()
 
-            val config = configSlot.captured
+            val config = saveApiModelConfigurationUseCase.savedConfigurations.single()
             assertEquals(parentCredentialsId, config.apiCredentialsId)
             assertEquals(4096, config.maxTokens)
             assertEquals(4096, config.contextWindow)
@@ -255,9 +245,6 @@ class SaveApiPresetUseCaseTest {
                         ),
                 )
 
-            val configSlot = slot<ApiModelConfiguration>()
-            coEvery { saveApiModelConfigurationUseCase(capture(configSlot)) } returns Result.success(draft.id)
-
             saveApiPresetUseCase(
                 provider = ApiProvider.ANTHROPIC, // Not OpenRouter
                 parentCredentialsId = ApiCredentialsId("cred"),
@@ -265,7 +252,7 @@ class SaveApiPresetUseCaseTest {
                 draft = draft,
             )
 
-            val config = configSlot.captured
+            val config = saveApiModelConfigurationUseCase.savedConfigurations.single()
             assertEquals(OpenRouterRoutingConfiguration(), config.openRouterRouting) // Should be default
         }
 
@@ -285,9 +272,6 @@ class SaveApiPresetUseCaseTest {
                     presencePenaltyDisabled = true,
                 )
 
-            val configSlot = slot<ApiModelConfiguration>()
-            coEvery { saveApiModelConfigurationUseCase(capture(configSlot)) } returns Result.success(draft.id)
-
             saveApiPresetUseCase(
                 provider = ApiProvider.OPENAI,
                 parentCredentialsId = ApiCredentialsId("parent-cred-1"),
@@ -295,7 +279,7 @@ class SaveApiPresetUseCaseTest {
                 draft = draft,
             ).getOrThrow()
 
-            val config = configSlot.captured
+            val config = saveApiModelConfigurationUseCase.savedConfigurations.single()
             assertEquals(true, config.maxTokensDisabled)
             assertEquals(true, config.temperatureDisabled)
             assertEquals(true, config.topPDisabled)
@@ -321,9 +305,6 @@ class SaveApiPresetUseCaseTest {
                         ),
                 )
 
-            val configSlot = slot<ApiModelConfiguration>()
-            coEvery { saveApiModelConfigurationUseCase(capture(configSlot)) } returns Result.success(draft.id)
-
             saveApiPresetUseCase(
                 provider = ApiProvider.OPENAI,
                 parentCredentialsId = ApiCredentialsId("cred"),
@@ -331,7 +312,7 @@ class SaveApiPresetUseCaseTest {
                 draft = draft,
             )
 
-            val config = configSlot.captured
+            val config = saveApiModelConfigurationUseCase.savedConfigurations.single()
             assertEquals(
                 mapOf("Valid" to "Header", "Valid2" to "Header2"),
                 config.customHeaders,

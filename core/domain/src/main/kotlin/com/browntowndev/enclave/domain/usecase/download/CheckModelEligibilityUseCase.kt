@@ -12,7 +12,7 @@ import javax.inject.Inject
  * If a file is missing, invalid (hash mismatch), or partially downloaded, it needs to be downloaded.
  * This removes the fragile database diffing logic that previously caused bugs with BYOK models.
  */
-class CheckModelEligibilityUseCase
+open class CheckModelEligibilityUseCase
     @Inject
     constructor(
         private val logger: LoggingPort,
@@ -28,7 +28,7 @@ class CheckModelEligibilityUseCase
          * @param scanResult Result of scanning the filesystem for existing model files
          * @return List of LocalModelAsset that need downloading (not already available)
          */
-        fun check(
+        open fun check(
             newModels: Map<ModelType, LocalModelAsset>,
             utilityAssets: List<LocalModelAsset> = emptyList(),
             scanResult: ModelScanResult,

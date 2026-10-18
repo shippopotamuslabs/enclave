@@ -1,24 +1,45 @@
 package com.browntowndev.enclave.domain.usecase.security
 
+import com.browntowndev.enclave.core.testing.FakeApiKeyProvider
+import com.browntowndev.enclave.core.testing.FakeApiModelRepository
+import com.browntowndev.enclave.core.testing.FakeCloudSyncPort
+import com.browntowndev.enclave.core.testing.FakeCryptoManagerPort
+import com.browntowndev.enclave.core.testing.FakeVaultMetadataPort
 import com.browntowndev.enclave.domain.model.security.VaultMetadata
-import com.browntowndev.enclave.domain.port.repository.CloudSyncPort
-import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
-import com.browntowndev.enclave.domain.port.security.VaultMetadataPort
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
+/** Recording [UnlockVaultUseCase] fake (ENC-28): captures (password, salt, wrappedDek) per call. */
+private class FakeUnlockVaultUseCase(
+    cryptoManager: FakeCryptoManagerPort,
+) : UnlockVaultUseCase(cryptoManager, FakeApiModelRepository(), FakeApiKeyProvider()) {
+    data class UnlockCall(
+        val password: String,
+        val salt: ByteArray,
+        val wrappedDek: ByteArray,
+    )
+
+    val calls = mutableListOf<UnlockCall>()
+    var result: Result<Unit> = Result.success(Unit)
+
+    override suspend fun invoke(
+        password: String,
+        salt: ByteArray,
+        wrappedDek: ByteArray,
+    ): Result<Unit> {
+        calls += UnlockCall(password, salt, wrappedDek)
+        return result
+    }
+}
+
 class UnlockVaultFromStoredMetadataUseCaseTest {
-    private val unlockVaultUseCase = mockk<UnlockVaultUseCase>()
-    private val cryptoManager = mockk<CryptoManagerPort>()
-    private val vaultMetadataPort = mockk<VaultMetadataPort>()
-    private val cloudSyncPort = mockk<CloudSyncPort>()
+    private val cryptoManager = FakeCryptoManagerPort()
+    private val unlockVaultUseCase = FakeUnlockVaultUseCase(cryptoManager)
+    private val vaultMetadataPort = FakeVaultMetadataPort()
+    private val cloudSyncPort = FakeCloudSyncPort()
 
     private lateinit var useCase: UnlockVaultFromStoredMetadataUseCase
 
@@ -38,17 +59,26 @@ class UnlockVaultFromStoredMetadataUseCaseTest {
         runTest {
             val salt = ByteArray(16) { 0x11 }
             val wrapped = ByteArray(32) { 0x22 }
-            coEvery { vaultMetadataPort.getVaultSalt() } returns "salt-b64"
-            coEvery { vaultMetadataPort.getWrappedDek() } returns "wrapped-b64"
-            every { cryptoManager.decodeBase64("salt-b64") } returns salt
-            every { cryptoManager.decodeBase64("wrapped-b64") } returns wrapped
-            coEvery { unlockVaultUseCase("pw", salt, wrapped) } returns Result.success(Unit)
+            vaultMetadataPort.salt = "salt-b64"
+            vaultMetadataPort.wrappedDek = "wrapped-b64"
+            cryptoManager.decodeBase64Override = { encoded ->
+                when (encoded) {
+                    "salt-b64" -> salt
+                    "wrapped-b64" -> wrapped
+                    else -> error("Unexpected base64 input: $encoded")
+                }
+            }
+            unlockVaultUseCase.result = Result.success(Unit)
 
             val result = useCase("pw")
 
             assertTrue(result.isSuccess)
-            coVerify(exactly = 1) { unlockVaultUseCase("pw", salt, wrapped) }
-            coVerify(exactly = 0) { cloudSyncPort.fetchVaultMetadata() }
+            assertEquals(1, unlockVaultUseCase.calls.size)
+            val call = unlockVaultUseCase.calls.single()
+            assertEquals("pw", call.password)
+            assertTrue(salt.contentEquals(call.salt))
+            assertTrue(wrapped.contentEquals(call.wrappedDek))
+            assertEquals(0, cloudSyncPort.count("fetchVaultMetadata"))
         }
 
     @Test
@@ -56,9 +86,9 @@ class UnlockVaultFromStoredMetadataUseCaseTest {
         runTest {
             val salt = ByteArray(16) { 0x11 }
             val wrapped = ByteArray(32) { 0x22 }
-            coEvery { vaultMetadataPort.getVaultSalt() } returns null
-            coEvery { vaultMetadataPort.getWrappedDek() } returns null
-            coEvery { cloudSyncPort.fetchVaultMetadata() } returns
+            vaultMetadataPort.salt = null
+            vaultMetadataPort.wrappedDek = null
+            cloudSyncPort.fetchVaultMetadataResult =
                 Result.success(
                     VaultMetadata(
                         salt = "cloud-salt",
@@ -66,26 +96,28 @@ class UnlockVaultFromStoredMetadataUseCaseTest {
                         wrappedDek = "cloud-wrapped",
                     ),
                 )
-            every { cryptoManager.decodeBase64("cloud-salt") } returns salt
-            every { cryptoManager.decodeBase64("cloud-wrapped") } returns wrapped
-            coEvery { unlockVaultUseCase("pw", salt, wrapped) } returns Result.success(Unit)
-            coEvery { vaultMetadataPort.saveVaultSalt("cloud-salt") } returns Unit
-            coEvery { vaultMetadataPort.saveWrappedDek("cloud-wrapped") } returns Unit
-            coEvery { vaultMetadataPort.saveVaultVerificationData("verification-b64") } returns Unit
+            cryptoManager.decodeBase64Override = { encoded ->
+                when (encoded) {
+                    "cloud-salt" -> salt
+                    "cloud-wrapped" -> wrapped
+                    else -> error("Unexpected base64 input: $encoded")
+                }
+            }
+            unlockVaultUseCase.result = Result.success(Unit)
 
             val result = useCase("pw")
 
             assertTrue(result.isSuccess)
-            coVerify(exactly = 1) { vaultMetadataPort.saveVaultSalt("cloud-salt") }
-            coVerify(exactly = 1) { vaultMetadataPort.saveWrappedDek("cloud-wrapped") }
+            assertEquals(listOf("cloud-salt"), vaultMetadataPort.savedSalts)
+            assertEquals(listOf("cloud-wrapped"), vaultMetadataPort.savedWrappedDeks)
         }
 
     @Test
     fun `SC-ARCH-01-03 cloud metadata missing returns failure`() =
         runTest {
-            coEvery { vaultMetadataPort.getVaultSalt() } returns null
-            coEvery { vaultMetadataPort.getWrappedDek() } returns null
-            coEvery { cloudSyncPort.fetchVaultMetadata() } returns Result.success(null)
+            vaultMetadataPort.salt = null
+            vaultMetadataPort.wrappedDek = null
+            cloudSyncPort.fetchVaultMetadataResult = Result.success(null)
 
             val result = useCase("pw")
 

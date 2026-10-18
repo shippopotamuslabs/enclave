@@ -1,24 +1,25 @@
 package com.browntowndev.enclave.domain.usecase.media
 
+import com.browntowndev.enclave.core.testing.FakeDefaultModelRepository
+import com.browntowndev.enclave.core.testing.FakeMediaProviderRepository
+import com.browntowndev.enclave.core.testing.FakeMusicGenerationPort
+import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
+import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.config.MediaProviderAsset
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
+import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.media.MusicGenerationSettings
-import com.browntowndev.enclave.domain.port.media.MusicGenerationPort
-import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
-import com.browntowndev.enclave.domain.port.repository.MediaProviderRepositoryPort
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class GenerateMusicUseCaseTest {
-    private val defaultModelRepository = mockk<DefaultModelRepositoryPort>()
-    private val mediaProviderRepository = mockk<MediaProviderRepositoryPort>()
-    private val musicGenerationPort = mockk<MusicGenerationPort>()
+    private val defaultModelRepository = FakeDefaultModelRepository()
+    private val mediaProviderRepository = FakeMediaProviderRepository()
+    private val musicGenerationPort = FakeMusicGenerationPort()
     private lateinit var useCase: GenerateMusicUseCase
 
     @BeforeEach
@@ -36,35 +37,37 @@ class GenerateMusicUseCaseTest {
         runBlocking {
             // Given
             val settings = MusicGenerationSettings()
-            val provider = mockk<MediaProviderAsset>()
+            val provider =
+                MediaProviderAsset(
+                    id = MediaProviderId("music-provider-1"),
+                    displayName = "Music Provider",
+                    provider = ApiProvider.FAL,
+                    capability = MediaCapability.MUSIC,
+                    credentialAlias = "fal",
+                )
 
-            coEvery { defaultModelRepository.getDefault(ModelType.MUSIC_GENERATION) } returns
-                mockk {
-                    coEvery { mediaProviderId } returns MediaProviderId("music-provider-1")
-                }
-            coEvery { mediaProviderRepository.getMediaProvider(MediaProviderId("music-provider-1")) } returns provider
-            coEvery { musicGenerationPort.generateMusic(any(), any(), any()) } returns Result.success(ByteArray(0))
+            defaultModelRepository.seed(
+                DefaultModelAssignment(
+                    modelType = ModelType.MUSIC_GENERATION,
+                    mediaProviderId = MediaProviderId("music-provider-1"),
+                ),
+            )
+            mediaProviderRepository.emitProviders(listOf(provider))
+            musicGenerationPort.result = Result.success(ByteArray(0))
 
             // When
             val result = useCase("ambient soundscape", settings)
 
             // Then
             assertTrue(result.isSuccess)
-            coVerify {
-                musicGenerationPort.generateMusic(
-                    prompt = "ambient soundscape",
-                    provider = provider,
-                    settings = settings,
-                )
-            }
+            assertEquals(listOf("ambient soundscape"), musicGenerationPort.calls)
+            assertEquals(listOf(provider), musicGenerationPort.providerCalls)
+            assertEquals(listOf(settings), musicGenerationPort.settingsCalls)
         }
 
     @Test
     fun `invoke fails when no default music model assigned`() =
         runBlocking {
-            // Given
-            coEvery { defaultModelRepository.getDefault(ModelType.MUSIC_GENERATION) } returns null
-
             // When
             val result = useCase("prompt", MusicGenerationSettings())
 
@@ -77,10 +80,12 @@ class GenerateMusicUseCaseTest {
     fun `invoke fails when no media provider assigned`() =
         runBlocking {
             // Given
-            coEvery { defaultModelRepository.getDefault(ModelType.MUSIC_GENERATION) } returns
-                mockk {
-                    coEvery { mediaProviderId } returns null
-                }
+            defaultModelRepository.seed(
+                DefaultModelAssignment(
+                    modelType = ModelType.MUSIC_GENERATION,
+                    mediaProviderId = null,
+                ),
+            )
 
             // When
             val result = useCase("prompt", MusicGenerationSettings())
@@ -94,11 +99,12 @@ class GenerateMusicUseCaseTest {
     fun `invoke fails when provider not found`() =
         runBlocking {
             // Given
-            coEvery { defaultModelRepository.getDefault(ModelType.MUSIC_GENERATION) } returns
-                mockk {
-                    coEvery { mediaProviderId } returns MediaProviderId("missing-provider")
-                }
-            coEvery { mediaProviderRepository.getMediaProvider(MediaProviderId("missing-provider")) } returns null
+            defaultModelRepository.seed(
+                DefaultModelAssignment(
+                    modelType = ModelType.MUSIC_GENERATION,
+                    mediaProviderId = MediaProviderId("missing-provider"),
+                ),
+            )
 
             // When
             val result = useCase("prompt", MusicGenerationSettings())

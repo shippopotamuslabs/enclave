@@ -1,12 +1,11 @@
 package com.browntowndev.enclave.domain.usecase.download
 
+import com.browntowndev.enclave.core.testing.FakeModelConfigFetcher
+import com.browntowndev.enclave.core.testing.FakeModelPackVerifierPort
 import com.browntowndev.enclave.domain.model.download.ModelPackCompleteness
 import com.browntowndev.enclave.domain.model.download.ModelPackMemberStatus
 import com.browntowndev.enclave.domain.model.download.ModelPackRole
 import com.browntowndev.enclave.domain.model.download.ModelPackTestFixtures
-import com.browntowndev.enclave.domain.port.download.ModelPackVerifierPort
-import io.mockk.coEvery
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -16,14 +15,16 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 
 class VerifyModelPackCompletenessUseCaseTest {
-    private lateinit var modelPackVerifier: ModelPackVerifierPort
+    private lateinit var modelPackVerifier: FakeModelPackVerifierPort
+    private lateinit var modelConfigFetcher: FakeModelConfigFetcher
     private lateinit var resolveModelCatalog: ResolveModelCatalogUseCase
     private lateinit var useCase: VerifyModelPackCompletenessUseCase
 
     @BeforeEach
     fun setup() {
-        modelPackVerifier = mockk()
-        resolveModelCatalog = mockk()
+        modelPackVerifier = FakeModelPackVerifierPort()
+        modelConfigFetcher = FakeModelConfigFetcher()
+        resolveModelCatalog = ResolveModelCatalogUseCase(modelConfigFetcher)
         useCase = VerifyModelPackCompletenessUseCase(modelPackVerifier, resolveModelCatalog)
     }
 
@@ -42,10 +43,8 @@ class VerifyModelPackCompletenessUseCaseTest {
                             memberStatus(ModelPackTestFixtures.DIFFUSION_FILE, true),
                         ),
                 )
-            coEvery { resolveModelCatalog() } returns Result.success(ModelPackTestFixtures.parsedCatalog())
-            coEvery {
-                modelPackVerifier.verifyPackById(any(), ModelPackTestFixtures.PACK_ID)
-            } returns completeness
+            modelConfigFetcher.persistedCatalogResult = Result.success(ModelPackTestFixtures.parsedCatalog())
+            modelPackVerifier.completeness = completeness
 
             val result = useCase(ModelPackTestFixtures.PACK_ID).getOrThrow()
 
@@ -69,10 +68,8 @@ class VerifyModelPackCompletenessUseCaseTest {
                             memberStatus(ModelPackTestFixtures.DIFFUSION_FILE, false),
                         ),
                 )
-            coEvery { resolveModelCatalog() } returns Result.success(ModelPackTestFixtures.parsedCatalog())
-            coEvery {
-                modelPackVerifier.verifyPackById(any(), ModelPackTestFixtures.PACK_ID)
-            } returns completeness
+            modelConfigFetcher.persistedCatalogResult = Result.success(ModelPackTestFixtures.parsedCatalog())
+            modelPackVerifier.completeness = completeness
 
             val result = useCase(ModelPackTestFixtures.PACK_ID).getOrThrow()
 

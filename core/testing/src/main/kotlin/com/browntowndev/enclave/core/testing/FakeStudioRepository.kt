@@ -45,6 +45,12 @@ class FakeStudioRepository : StudioRepositoryPort {
     /** Uri returned by cacheEphemeralMedia. */
     var cacheEphemeralUri: String = "cache://ephemeral"
 
+    /** Scripted cacheEphemeralMedia URIs consumed one per call before [cacheEphemeralUri] (ENC-28). */
+    val cacheEphemeralUris = ArrayDeque<String>()
+
+    /** Byte payloads passed to cacheEphemeralMedia, in call order (ENC-28). */
+    val cacheEphemeralMediaBytesCalls = mutableListOf<ByteArray>()
+
     var pendingDownload: List<StudioMediaAsset> = emptyList()
     val mediaBytes = mutableMapOf<String, ByteArray>()
 
@@ -205,7 +211,8 @@ class FakeStudioRepository : StudioRepositoryPort {
 
     override suspend fun cacheEphemeralMedia(bytes: ByteArray, mediaType: String): String {
         cacheEphemeralMediaCalls += mediaType
-        return cacheEphemeralUri
+        cacheEphemeralMediaBytesCalls += bytes
+        return if (cacheEphemeralUris.isNotEmpty()) cacheEphemeralUris.removeFirst() else cacheEphemeralUri
     }
 
     override suspend fun clearEphemeralCache() {

@@ -1,10 +1,8 @@
 package com.browntowndev.enclave.domain.util
 
-import com.browntowndev.enclave.domain.port.inference.SearchIntentClassifierPort
+import com.browntowndev.enclave.core.testing.FakeSearchIntentClassifier
 import com.browntowndev.enclave.domain.port.repository.SettingsData
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.verify
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -12,8 +10,8 @@ import org.junit.jupiter.api.Test
 class ToolIntentActivationPolicyTest {
     @Test
     fun `IGTA-08 ToolIntentActivationPolicy skips classifier on pure docgen`() {
-        val classifier = mockk<SearchIntentClassifierPort>()
-        every { classifier.requiresSearch(any(), any()) } returns true
+        val classifier = FakeSearchIntentClassifier()
+        classifier.requiresSearchResult = true
 
         val decision =
             ToolIntentActivationPolicy.resolve(
@@ -31,12 +29,12 @@ class ToolIntentActivationPolicyTest {
 
         assertFalse(decision.runWebPreRetrieval)
         assertFalse(decision.activateSearchX)
-        verify(exactly = 0) { classifier.requiresSearch(any(), any()) }
+        assertEquals(0, classifier.requiresSearchCallCount)
     }
 
     @Test
     fun `IGTA-12 null embedding disables search path`() {
-        val classifier = mockk<SearchIntentClassifierPort>(relaxed = true)
+        val classifier = FakeSearchIntentClassifier()
 
         val decision =
             ToolIntentActivationPolicy.resolve(
@@ -58,8 +56,8 @@ class ToolIntentActivationPolicyTest {
 
     @Test
     fun `IGTA-07 low classifier probability does not activate X`() {
-        val classifier = mockk<SearchIntentClassifierPort>()
-        every { classifier.requiresSearch(any(), any()) } returns false
+        val classifier = FakeSearchIntentClassifier()
+        classifier.requiresSearchResult = false
 
         val decision =
             ToolIntentActivationPolicy.resolve(
@@ -81,7 +79,7 @@ class ToolIntentActivationPolicyTest {
 
     @Test
     fun `MUT-03 classifier not invoked without configured web search skill`() {
-        val classifier = mockk<SearchIntentClassifierPort>(relaxed = true)
+        val classifier = FakeSearchIntentClassifier()
 
         val decision =
             ToolIntentActivationPolicy.resolve(
@@ -98,13 +96,13 @@ class ToolIntentActivationPolicyTest {
             )
 
         assertFalse(decision.runWebPreRetrieval)
-        verify(exactly = 0) { classifier.requiresSearch(any(), any()) }
+        assertEquals(0, classifier.requiresSearchCallCount)
     }
 
     @Test
     fun `IGTA-05b combined prompt activates research path when classifier positive`() {
-        val classifier = mockk<SearchIntentClassifierPort>()
-        every { classifier.requiresSearch(any(), any()) } returns true
+        val classifier = FakeSearchIntentClassifier()
+        classifier.requiresSearchResult = true
 
         val decision =
             ToolIntentActivationPolicy.resolve(

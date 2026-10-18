@@ -27,6 +27,12 @@ class FakeLocalModelRepository : LocalModelRepositoryPort {
 
     private val assignments = mutableMapOf<ModelType, LocalModelAsset>()
     private val assets = mutableListOf<LocalModelAsset>()
+
+    /** Recorded save/delete calls for assertions (ENC-28). */
+    val savedConfigurations = mutableListOf<LocalModelConfiguration>()
+    val savedMetadata = mutableListOf<LocalModelMetadata>()
+    val deletedConfigurationIds = mutableListOf<LocalModelConfigurationId>()
+    val deletedMetadataIds = mutableListOf<LocalModelId>()
     private val softDeleted = mutableListOf<LocalModelAsset>()
     private val configsById = mutableMapOf<LocalModelConfigurationId, Pair<LocalModelAsset, LocalModelConfiguration>>()
     private var nextAssetId = 1
@@ -74,16 +80,23 @@ class FakeLocalModelRepository : LocalModelRepositoryPort {
         configsById.clear()
     }
 
-    override suspend fun saveLocalModelMetadata(metadata: LocalModelMetadata): LocalModelId = metadata.id
+    override suspend fun saveLocalModelMetadata(metadata: LocalModelMetadata): LocalModelId {
+        savedMetadata += metadata
+        return metadata.id
+    }
 
     override suspend fun deleteLocalModelMetadata(id: LocalModelId) {
+        deletedMetadataIds += id
     }
 
     @OptIn(ExperimentalUuidApi::class)
-    override suspend fun saveConfiguration(config: LocalModelConfiguration): LocalModelConfigurationId =
-        if (config.id.value.isNotEmpty()) config.id else LocalModelConfigurationId(Uuid.random().toString())
+    override suspend fun saveConfiguration(config: LocalModelConfiguration): LocalModelConfigurationId {
+        savedConfigurations += config
+        return if (config.id.value.isNotEmpty()) config.id else LocalModelConfigurationId(Uuid.random().toString())
+    }
 
     override suspend fun deleteConfiguration(id: LocalModelConfigurationId) {
+        deletedConfigurationIds += id
         configsById.remove(id)
     }
 

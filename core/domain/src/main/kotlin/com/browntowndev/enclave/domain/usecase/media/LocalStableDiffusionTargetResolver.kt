@@ -19,7 +19,7 @@ import javax.inject.Inject
  * Resolves a local stable-diffusion assignment into a concrete on-disk launch directory and
  * [ImageGenerationTarget.LocalStableDiffusion].
  */
-class LocalStableDiffusionTargetResolver
+open class LocalStableDiffusionTargetResolver
     @Inject
     constructor(
         private val localModelRepository: LocalModelRepositoryPort,
@@ -28,7 +28,7 @@ class LocalStableDiffusionTargetResolver
         private val capabilityPort: LocalImageGenerationCapabilityPort,
         private val selectBackend: SelectLocalImageGenerationBackendUseCase,
     ) {
-        suspend fun resolve(localConfigId: LocalModelConfigurationId): ImageGenerationTarget.LocalStableDiffusion {
+        open suspend fun resolve(localConfigId: LocalModelConfigurationId): ImageGenerationTarget.LocalStableDiffusion {
             check(gpuCapabilityPort.isLocalImageGenerationSupported()) {
                 LOCAL_IMAGE_GENERATION_UNSUPPORTED_MESSAGE
             }
@@ -85,7 +85,7 @@ class LocalStableDiffusionTargetResolver
             )
         }
 
-        suspend fun resolveLaunchDir(localConfigId: LocalModelConfigurationId): String =
+        open suspend fun resolveLaunchDir(localConfigId: LocalModelConfigurationId): String =
             resolve(localConfigId).modelDir
 
         private fun LocalModelAsset.displayLabel(): String =

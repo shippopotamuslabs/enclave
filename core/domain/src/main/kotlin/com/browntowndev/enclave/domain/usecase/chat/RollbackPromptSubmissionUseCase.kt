@@ -7,14 +7,14 @@ import com.browntowndev.enclave.domain.port.repository.MessageRepository
 import com.browntowndev.enclave.domain.port.repository.TransactionProvider
 import javax.inject.Inject
 
-class RollbackPromptSubmissionUseCase
+open class RollbackPromptSubmissionUseCase
     @Inject
     constructor(
         private val messageRepository: MessageRepository,
         private val chatRepository: ChatRepository,
         private val transactionProvider: TransactionProvider,
     ) {
-        suspend operator fun invoke(
+        open suspend operator fun invoke(
             chatId: ChatId,
             userMessageId: MessageId,
             assistantMessageId: MessageId,

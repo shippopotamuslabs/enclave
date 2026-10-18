@@ -1,19 +1,23 @@
 package com.browntowndev.enclave.domain.usecase.media
 
+import com.browntowndev.enclave.core.testing.FakeDefaultModelRepository
+import com.browntowndev.enclave.core.testing.FakeGpuCapability
+import com.browntowndev.enclave.core.testing.FakeImageGenerationPort
+import com.browntowndev.enclave.core.testing.FakeLocalImageGenerationCapability
+import com.browntowndev.enclave.core.testing.FakeLocalModelRepository
+import com.browntowndev.enclave.core.testing.FakeMediaProviderRepository
+import com.browntowndev.enclave.core.testing.FakeMusicGenerationPort
+import com.browntowndev.enclave.core.testing.FakeStudioRepository
+import com.browntowndev.enclave.core.testing.FakeUtilityModelFile
+import com.browntowndev.enclave.core.testing.FakeVideoGenerationPort
 import com.browntowndev.enclave.domain.model.config.MediaCapability
 import com.browntowndev.enclave.domain.model.config.MediaProviderId
-import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.media.ImageGenerationSettings
 import com.browntowndev.enclave.domain.model.media.ImageGenerationTarget
 import com.browntowndev.enclave.domain.model.media.MediaGenerationOrigin
 import com.browntowndev.enclave.domain.model.media.MediaGenerationRequest
 import com.browntowndev.enclave.domain.model.media.StudioModelOverride
-import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.enclave.domain.util.Clock
-import io.mockk.coEvery
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.slot
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
@@ -21,34 +25,56 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 
 class GenerateMediaUseCaseOverrideTest {
-    private val generateImageUseCase = mockk<GenerateImageUseCase>()
-    private val generateVideoUseCase = mockk<GenerateVideoUseCase>()
-    private val generateMusicUseCase = mockk<GenerateMusicUseCase>()
-    private val resolveMediaModelTypeUseCase = mockk<ResolveMediaModelTypeUseCase>()
-    private val resolveAssignedImageGenerationTargetUseCase = mockk<ResolveAssignedImageGenerationTargetUseCase>()
-    private val studioRepository = mockk<StudioRepositoryPort>(relaxed = true)
+    private val defaultModelRepository = FakeDefaultModelRepository()
+    private val mediaProviderRepository = FakeMediaProviderRepository()
+    private val imageGenerationPort = FakeImageGenerationPort()
+    private val studioRepository = FakeStudioRepository()
     private val clock = FakeClock()
-    private val overrideSlot = slot<StudioModelOverride?>()
 
     private lateinit var useCase: GenerateMediaUseCase
 
     @BeforeEach
     fun setUp() {
         clock.now = 0L
-        every { resolveMediaModelTypeUseCase(any(), any()) } returns ModelType.IMAGE_GENERATION
-        coEvery { resolveAssignedImageGenerationTargetUseCase(any()) } returns
-            Result.success(
-                ImageGenerationTarget.Remote(
-                    providerAssetId = MediaProviderId("remote"),
-                    providerDisplayName = "Remote",
-                ),
+        studioRepository.cacheEphemeralUri = "file:///cache/a"
+        val resolveMediaModelTypeUseCase = ResolveMediaModelTypeUseCase()
+        val resolveAssignedImageGenerationTargetUseCase =
+            ResolveAssignedImageGenerationTargetUseCase(
+                defaultModelRepository = defaultModelRepository,
+                mediaProviderRepository = mediaProviderRepository,
+                localStableDiffusionTargetResolver =
+                    LocalStableDiffusionTargetResolver(
+                        localModelRepository = FakeLocalModelRepository(),
+                        utilityModelFilePort = FakeUtilityModelFile(),
+                        gpuCapabilityPort = FakeGpuCapability(),
+                        capabilityPort = FakeLocalImageGenerationCapability(),
+                        selectBackend = SelectLocalImageGenerationBackendUseCase(),
+                    ),
             )
-        coEvery { studioRepository.cacheEphemeralMedia(any(), any()) } returns "file:///cache/a"
         useCase =
             GenerateMediaUseCase(
-                generateImageUseCase = generateImageUseCase,
-                generateVideoUseCase = generateVideoUseCase,
-                generateMusicUseCase = generateMusicUseCase,
+                generateImageUseCase =
+                    GenerateImageUseCase(
+                        resolveMediaModelTypeUseCase = resolveMediaModelTypeUseCase,
+                        resolveAssignedImageGenerationTargetUseCase = resolveAssignedImageGenerationTargetUseCase,
+                        imageGenerationPort = imageGenerationPort,
+                    ),
+                generateVideoUseCase =
+                    GenerateVideoUseCase(
+                        resolveMediaModelTypeUseCase = resolveMediaModelTypeUseCase,
+                        resolveAssignedMediaProviderUseCase =
+                            ResolveAssignedMediaProviderUseCase(
+                                defaultModelRepository = defaultModelRepository,
+                                mediaProviderRepository = mediaProviderRepository,
+                            ),
+                        videoGenerationPort = FakeVideoGenerationPort(),
+                    ),
+                generateMusicUseCase =
+                    GenerateMusicUseCase(
+                        defaultModelRepository = defaultModelRepository,
+                        mediaProviderRepository = mediaProviderRepository,
+                        musicGenerationPort = FakeMusicGenerationPort(),
+                    ),
                 resolveMediaModelTypeUseCase = resolveMediaModelTypeUseCase,
                 resolveAssignedImageGenerationTargetUseCase = resolveAssignedImageGenerationTargetUseCase,
                 studioRepository = studioRepository,
@@ -62,14 +88,7 @@ class GenerateMediaUseCaseOverrideTest {
         runTest {
             val override = StudioModelOverride.MediaProvider(MediaProviderId("fal-1"), "Fal Aura")
             val settings = ImageGenerationSettings(generationCount = 1)
-            coEvery {
-                generateImageUseCase(
-                    prompt = any(),
-                    settings = any(),
-                    onProgress = any(),
-                    override = captureNullable(overrideSlot),
-                )
-            } returns Result.success(listOf(byteArrayOf(1)))
+            imageGenerationPort.result = Result.success(listOf(byteArrayOf(1)))
 
             useCase(
                 MediaGenerationRequest(
@@ -81,7 +100,17 @@ class GenerateMediaUseCaseOverrideTest {
                 ),
             )
 
-            assertEquals(override, overrideSlot.captured)
+            // The override surfaces at the port boundary as the Remote target built from it:
+            // GenerateImageUseCase received the override and resolved through it.
+            assertEquals(
+                listOf(
+                    ImageGenerationTarget.Remote(
+                        providerAssetId = MediaProviderId("fal-1"),
+                        providerDisplayName = "Fal Aura",
+                    ),
+                ),
+                imageGenerationPort.targets,
+            )
         }
 
     private class FakeClock : Clock {
