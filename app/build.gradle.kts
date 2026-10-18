@@ -167,7 +167,9 @@ dependencies {
     // Using custom llama-android (llama.cpp with KleidiAI)
     // Native libraries are built automatically via build-kleidiai.sh
     implementation(project(":llama-android"))
-    implementation(project(":whisper-android"))
+    // whisper-android is an external library (own repo), substituted by the
+    // composite build in settings.gradle.kts during development (ENC-53).
+    implementation(libs.whisper.android)
     implementation(project(":core:domain"))
     implementation(project(":core:data"))
     implementation(project(":core:agent"))
