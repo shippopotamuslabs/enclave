@@ -1,12 +1,13 @@
 package com.browntowndev.enclave.core.data.repository
 
+import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
+import androidx.test.core.app.ApplicationProvider
 import com.browntowndev.enclave.core.data.security.ApiKeyManager
 import com.browntowndev.enclave.core.data.sync.SearchToolSettingsSyncQueue
 import com.browntowndev.enclave.domain.model.settings.SearchProvider
-import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
@@ -20,9 +21,12 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.io.TempDir
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 import java.io.File
 import java.util.UUID
+import org.robolectric.annotation.Config as RoboConfig
 
 /**
  * Coverage for the search-tool-settings sync seam on `SettingsRepositoryImpl`. Each
@@ -33,6 +37,8 @@ import java.util.UUID
  * Uses a real `SearchToolSettingsSyncQueue` and a real `DataStore<Preferences>` backed
  * by a `@TempDir` file, mirroring the pattern in `SettingsRepositoryImplTest`.
  */
+@ExtendWith(RobolectricExtension::class)
+@RoboConfig(sdk = [34])
 class SettingsRepositoryImplSyncTest {
     @TempDir
     lateinit var tempDir: File
@@ -65,7 +71,12 @@ class SettingsRepositoryImplSyncTest {
 
     private fun newRepository(
         queue: SearchToolSettingsSyncQueue,
-        apiKeyManager: ApiKeyManager = mockk(relaxed = true),
+        apiKeyManager: ApiKeyManager =
+            testApiKeyManager(
+                ApplicationProvider.getApplicationContext<Context>(),
+                dataStoreScope,
+                "settings_sync_test_prefs",
+            ),
     ): SettingsRepositoryImpl =
         SettingsRepositoryImpl(
             dataStore = dataStore,

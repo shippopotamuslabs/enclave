@@ -8,7 +8,7 @@ import com.google.firebase.firestore.Query
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.tasks.await
 
-internal class FirestoreSyncEntityReconciler(
+internal open class FirestoreSyncEntityReconciler(
     private val firestore: FirebaseFirestore,
     private val ctx: FirestoreSyncContext,
     private val adapterLookup: Map<String, EntitySyncAdapter<*>>,
@@ -21,7 +21,7 @@ internal class FirestoreSyncEntityReconciler(
         val tombstonesApplied: Int,
     )
 
-    suspend fun reconcileFromCloudEntitySources(userId: String): ReconcileResult {
+    open suspend fun reconcileFromCloudEntitySources(userId: String): ReconcileResult {
         var upsertsApplied = 0
         for (collectionPath in FirestoreSyncCollectionOrder.reconciliationOrder.filter { it in adapterLookup }) {
             upsertsApplied += upsertCollection(userId, collectionPath)

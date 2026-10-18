@@ -4,10 +4,10 @@ import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.tasks.await
 
-internal class FirestoreSyncFeedMetaClient(
+internal open class FirestoreSyncFeedMetaClient(
     private val firestore: FirebaseFirestore,
 ) {
-    suspend fun readFeedStatus(userId: String): FirestoreSyncFeedStatus? {
+    open suspend fun readFeedStatus(userId: String): FirestoreSyncFeedStatus? {
         val snapshot =
             firestore
                 .document("users/$userId/sync_meta/state")
@@ -36,7 +36,7 @@ internal class FirestoreSyncFeedMetaClient(
         return snapshot.exists()
     }
 
-    suspend fun awaitSyncEvent(
+    open suspend fun awaitSyncEvent(
         userId: String,
         sequence: Long,
         attempts: Int = GAP_VERIFY_ATTEMPTS,

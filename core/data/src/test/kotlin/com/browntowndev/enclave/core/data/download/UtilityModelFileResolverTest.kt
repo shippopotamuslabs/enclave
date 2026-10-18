@@ -1,6 +1,8 @@
 package com.browntowndev.enclave.core.data.download
 
 import android.content.Context
+import android.content.ContextWrapper
+import androidx.test.core.app.ApplicationProvider
 import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.config.LocalModelMetadata
 import com.browntowndev.enclave.domain.model.config.UtilityModelId
@@ -11,18 +13,21 @@ import com.browntowndev.enclave.domain.model.download.ModelConfig
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationPaths
 import com.browntowndev.enclave.domain.port.repository.UtilityModelRepositoryPort
-import io.mockk.coEvery
-import io.mockk.every
-import io.mockk.mockk
+import com.browntowndev.enclave.domain.usecase.FakeUtilityModelRepository
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.io.TempDir
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 import java.io.File
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class UtilityModelFileResolverTest {
     @TempDir
     lateinit var tempDir: File
@@ -48,10 +53,7 @@ class UtilityModelFileResolverTest {
     @DisplayName("SCN-RESOLVE-002")
     fun scnResolve002_returnsNullWhenRoomRowMissing() =
         runTest {
-            val repository =
-                mockk<UtilityModelRepositoryPort> {
-                    coEvery { getByUtilityType(UtilityType.WHISPER) } returns null
-                }
+            val repository = FakeUtilityModelRepository()
             val resolver = resolver(repository)
 
             val path = resolver.resolveUtilityModelPath(UtilityType.WHISPER)
@@ -112,11 +114,9 @@ class UtilityModelFileResolverTest {
             val modelsDir = File(tempDir, ModelConfig.MODELS_DIR).apply { mkdirs() }
             File(modelsDir, "model.onnx").writeBytes(ByteArray(100))
             File(modelsDir, "ggml-base.en.bin").writeBytes(FOUR_ZERO_BYTES)
-            val repository =
-                mockk<UtilityModelRepositoryPort> {
-                    coEvery { getByUtilityType(UtilityType.ONNX_MODEL) } returns onnxMetadata()
-                    coEvery { getByUtilityType(UtilityType.WHISPER) } returns whisperMetadata(sizeInBytes = 4L, sha256 = FOUR_ZERO_SHA256)
-                }
+            val repository = FakeUtilityModelRepository()
+            repository.upsert(onnxMetadata())
+            repository.upsert(whisperMetadata(sizeInBytes = 4L, sha256 = FOUR_ZERO_SHA256))
             val resolver = resolver(repository)
 
             val path = resolver.resolveUtilityModelPath(UtilityType.WHISPER)
@@ -275,22 +275,26 @@ class UtilityModelFileResolverTest {
         modelFileFormat = ModelFileFormat.GGUF,
     )
 
-    private fun fakeContext(): Context =
-        mockk {
-            every { getExternalFilesDir(null) } returns tempDir
+    /** Robolectric context whose external files dir is the @TempDir sandbox (ENC-28). */
+    private fun fakeContext(): Context {
+        val appContext = ApplicationProvider.getApplicationContext<Context>()
+        return object : ContextWrapper(appContext) {
+            override fun getExternalFilesDir(type: String?): File = tempDir
         }
+    }
 
-    private fun resolver(repository: UtilityModelRepositoryPort = mockk(relaxed = true)): UtilityModelFileResolver =
+    private fun resolver(repository: UtilityModelRepositoryPort = FakeUtilityModelRepository()): UtilityModelFileResolver =
         UtilityModelFileResolver(
             context = fakeContext(),
             utilityModelRepository = repository,
             hashingPort = HashingService(),
         )
 
-    private fun repositoryReturning(metadata: UtilityModelMetadata): UtilityModelRepositoryPort =
-        mockk {
-            coEvery { getByUtilityType(metadata.utilityType) } returns metadata
-        }
+    private suspend fun repositoryReturning(metadata: UtilityModelMetadata): UtilityModelRepositoryPort {
+        val repository = FakeUtilityModelRepository()
+        repository.upsert(metadata)
+        return repository
+    }
 
     private fun whisperMetadata(
         sizeInBytes: Long,

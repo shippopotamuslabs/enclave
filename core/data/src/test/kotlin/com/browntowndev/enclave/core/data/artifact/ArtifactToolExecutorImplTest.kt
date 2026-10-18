@@ -10,12 +10,10 @@ import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
-import com.browntowndev.enclave.domain.port.docgen.DocumentValidationPort
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.slot
+import com.browntowndev.enclave.core.data.FakeDocumentDao
+import com.browntowndev.enclave.core.data.FakeEmbeddingDao
+import com.browntowndev.enclave.core.testing.FakeDocumentValidationPort
+import com.browntowndev.enclave.core.testing.FakeEmbeddingEngine
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -26,24 +24,17 @@ import java.nio.charset.StandardCharsets
 class ArtifactToolExecutorImplTest {
     private val enc = CryptoAtRestEncryptionService.ENVELOPE_PREFIX
 
-    private val documentValidation =
-        mockk<DocumentValidationPort> {
-            every { validate(any()) } returns Result.success(Unit)
-            every { validateStartArtifactArgs(any()) } returns Result.success(Unit)
-            every { validateAppendBlocksArgs(any()) } returns Result.success(Unit)
-        }
+    private val documentValidation = FakeDocumentValidationPort()
 
     @Test
     fun `execute returns success for start_artifact with title only`() =
         runTest {
-            val docDao = mockk<DocumentDao>()
-            val capturedDocument = slot<DocumentEntity>()
-            coEvery { docDao.insertDocument(capture(capturedDocument)) } returns Unit
+            val docDao = FakeDocumentDao()
             val cut =
                 ArtifactToolExecutor(
                     documentDao = docDao,
-                    embeddingDao = mockk(relaxed = true),
-                    embeddingEngine = mockk(relaxed = true),
+                    embeddingDao = FakeEmbeddingDao(),
+                    embeddingEngine = FakeEmbeddingEngine(),
                     documentValidation = documentValidation,
                     localEncryption = FakeLocalDataEncryptionService(),
                     externalScope = TestScope(),
@@ -62,26 +53,23 @@ class ArtifactToolExecutorImplTest {
             assertTrue(result.resultJson.contains("\"status\":\"success\""))
             assertTrue(result.resultJson.contains("\"artifactId\""))
             assertTrue(result.resultJson.contains("isComplete"))
-            assertEquals("${enc}Report", capturedDocument.captured.title)
-            assertTrue(capturedDocument.captured.json.startsWith(enc))
-            assertEquals(0, capturedDocument.captured.pendingSync)
+            val capturedDocument = docDao.insertedDocuments.single()
+            assertEquals("${enc}Report", capturedDocument.title)
+            assertTrue(capturedDocument.json.startsWith(enc))
+            assertEquals(0, capturedDocument.pendingSync)
         }
 
     @Test
     fun `execute rejects start_artifact with unknown keys such as targetFormat`() =
         runTest {
-            val validation =
-                mockk<DocumentValidationPort> {
-                    every { validate(any()) } returns Result.success(Unit)
-                    every { validateAppendBlocksArgs(any()) } returns Result.success(Unit)
-                    every { validateStartArtifactArgs(any()) } returns
-                        Result.failure(IllegalArgumentException("unknown field targetFormat"))
-                }
+            val validation = FakeDocumentValidationPort()
+            validation.validateStartArtifactArgsResult =
+                Result.failure(IllegalArgumentException("unknown field targetFormat"))
             val cut =
                 ArtifactToolExecutor(
-                    documentDao = mockk(relaxed = true),
-                    embeddingDao = mockk(relaxed = true),
-                    embeddingEngine = mockk(relaxed = true),
+                    documentDao = FakeDocumentDao(),
+                    embeddingDao = FakeEmbeddingDao(),
+                    embeddingEngine = FakeEmbeddingEngine(),
                     documentValidation = validation,
                     localEncryption = FakeLocalDataEncryptionService(),
                     externalScope = TestScope(),
@@ -103,11 +91,9 @@ class ArtifactToolExecutorImplTest {
     @Test
     fun `appendBlocks returns schema violation and skips persist when validation fails`() =
         runTest {
-            val docDao = mockk<DocumentDao>()
-            val validation = mockk<DocumentValidationPort>()
-            every { validation.validateAppendBlocksArgs(any()) } returns Result.success(Unit)
-            every { validation.validateStartArtifactArgs(any()) } returns Result.success(Unit)
-            coEvery { docDao.getDocumentById("aid") } returns
+            val docDao = FakeDocumentDao()
+            val validation = FakeDocumentValidationPort()
+            docDao.documentsById["aid"] =
                 DocumentEntity(
                     id = "aid",
                     messageId = MessageId("assistant-123"),
@@ -116,7 +102,7 @@ class ArtifactToolExecutorImplTest {
                     targetFormat = MimeType.PDF,
                     json = """$enc{"version":"1.0","metadata":{"title":"T"},"blocks":[]}""",
                 )
-            every { validation.validate(any()) } returns
+            validation.validateResult =
                 Result.failure(
                     IllegalArgumentException("heading block missing required field \"level\""),
                 )
@@ -124,8 +110,8 @@ class ArtifactToolExecutorImplTest {
             val cut =
                 ArtifactToolExecutor(
                     documentDao = docDao,
-                    embeddingDao = mockk(relaxed = true),
-                    embeddingEngine = mockk(relaxed = true),
+                    embeddingDao = FakeEmbeddingDao(),
+                    embeddingEngine = FakeEmbeddingEngine(),
                     documentValidation = validation,
                     localEncryption = FakeLocalDataEncryptionService(),
                     externalScope = TestScope(),
@@ -145,15 +131,14 @@ class ArtifactToolExecutorImplTest {
             assertTrue(result.resultJson.contains("DOCUMENT_SCHEMA_VIOLATION"))
             assertTrue(result.resultJson.contains("validationDetails"))
             assertTrue(result.resultJson.contains("heading block missing"))
-            coVerify(exactly = 0) { docDao.updateDocument(any()) }
+            assertTrue(docDao.updatedDocuments.isEmpty())
         }
 
     @Test
     fun `appendBlocks incomplete includes isComplete reminder in message`() =
         runTest {
-            val docDao = mockk<DocumentDao>()
-            val updatedDocument = slot<DocumentEntity>()
-            coEvery { docDao.getDocumentById("aid") } returns
+            val docDao = FakeDocumentDao()
+            docDao.documentsById["aid"] =
                 DocumentEntity(
                     id = "aid",
                     messageId = MessageId("assistant-123"),
@@ -162,13 +147,11 @@ class ArtifactToolExecutorImplTest {
                     targetFormat = MimeType.PDF,
                     json = """$enc{"version":"1.0","metadata":{"title":"T"},"blocks":[]}""",
                 )
-            coEvery { docDao.updateDocument(capture(updatedDocument)) } returns Unit
-
             val cut =
                 ArtifactToolExecutor(
                     documentDao = docDao,
-                    embeddingDao = mockk(relaxed = true),
-                    embeddingEngine = mockk(relaxed = true),
+                    embeddingDao = FakeEmbeddingDao(),
+                    embeddingEngine = FakeEmbeddingEngine(),
                     documentValidation = documentValidation,
                     localEncryption = FakeLocalDataEncryptionService(),
                     externalScope = TestScope(),
@@ -197,16 +180,16 @@ class ArtifactToolExecutorImplTest {
                 result.resultJson.contains("same call"),
                 "must instruct final blocks + isComplete in the same call",
             )
-            assertEquals(0, updatedDocument.captured.pendingSync)
-            assertTrue(updatedDocument.captured.json.startsWith(enc))
+            val updatedDocument = docDao.updatedDocuments.single()
+            assertEquals(0, updatedDocument.pendingSync)
+            assertTrue(updatedDocument.json.startsWith(enc))
         }
 
     @Test
     fun `appendBlocks complete marks encrypted document pending sync`() =
         runTest {
-            val docDao = mockk<DocumentDao>()
-            val updatedDocument = slot<DocumentEntity>()
-            coEvery { docDao.getDocumentById("aid") } returns
+            val docDao = FakeDocumentDao()
+            docDao.documentsById["aid"] =
                 DocumentEntity(
                     id = "aid",
                     messageId = MessageId("assistant-123"),
@@ -215,13 +198,11 @@ class ArtifactToolExecutorImplTest {
                     targetFormat = MimeType.PDF,
                     json = """$enc{"version":"1.0","metadata":{"title":"T"},"blocks":[]}""",
                 )
-            coEvery { docDao.updateDocument(capture(updatedDocument)) } returns Unit
-
             val cut =
                 ArtifactToolExecutor(
                     documentDao = docDao,
-                    embeddingDao = mockk(relaxed = true),
-                    embeddingEngine = mockk(relaxed = true),
+                    embeddingDao = FakeEmbeddingDao(),
+                    embeddingEngine = FakeEmbeddingEngine(),
                     documentValidation = documentValidation,
                     localEncryption = FakeLocalDataEncryptionService(),
                     externalScope = TestScope(),
@@ -240,15 +221,16 @@ class ArtifactToolExecutorImplTest {
                 )
             val result = cut.execute(request)
             assertTrue(result.resultJson.contains("\"isComplete\":true"))
-            assertEquals(1, updatedDocument.captured.pendingSync)
-            assertTrue(updatedDocument.captured.json.startsWith(enc))
+            val updatedDocument = docDao.updatedDocuments.single()
+            assertEquals(1, updatedDocument.pendingSync)
+            assertTrue(updatedDocument.json.startsWith(enc))
         }
 
     @Test
     fun `FAAL-RC-04 canonicalized append_blocks args pass docgen validation`() =
         runTest {
-            val docDao = mockk<DocumentDao>()
-            coEvery { docDao.getDocumentById("art-exec-1") } returns
+            val docDao = FakeDocumentDao()
+            docDao.documentsById["art-exec-1"] =
                 DocumentEntity(
                     id = "art-exec-1",
                     messageId = MessageId("assistant-123"),
@@ -257,13 +239,11 @@ class ArtifactToolExecutorImplTest {
                     targetFormat = MimeType.PDF,
                     json = """$enc{"version":"1.0","metadata":{"title":"T"},"blocks":[]}""",
                 )
-            coEvery { docDao.updateDocument(any()) } returns Unit
-
             val cut =
                 ArtifactToolExecutor(
                     documentDao = docDao,
-                    embeddingDao = mockk(relaxed = true),
-                    embeddingEngine = mockk(relaxed = true),
+                    embeddingDao = FakeEmbeddingDao(),
+                    embeddingEngine = FakeEmbeddingEngine(),
                     documentValidation = documentValidation,
                     localEncryption = FakeLocalDataEncryptionService(),
                     externalScope = TestScope(),
@@ -288,14 +268,13 @@ class ArtifactToolExecutorImplTest {
     @Test
     fun `document json encryption uses DocumentEntity json AAD binding`() =
         runTest {
-            val docDao = mockk<DocumentDao>()
-            coEvery { docDao.insertDocument(any()) } returns Unit
+            val docDao = FakeDocumentDao()
             val encSvc = FakeLocalDataEncryptionService()
             val cut =
                 ArtifactToolExecutor(
                     documentDao = docDao,
-                    embeddingDao = mockk(relaxed = true),
-                    embeddingEngine = mockk(relaxed = true),
+                    embeddingDao = FakeEmbeddingDao(),
+                    embeddingEngine = FakeEmbeddingEngine(),
                     documentValidation = documentValidation,
                     localEncryption = encSvc,
                     externalScope = TestScope(),

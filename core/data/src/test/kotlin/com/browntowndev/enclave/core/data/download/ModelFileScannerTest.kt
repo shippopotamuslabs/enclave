@@ -1,7 +1,10 @@
 package com.browntowndev.enclave.core.data.download
 
 import android.content.Context
-import android.util.Log
+import android.content.ContextWrapper
+import androidx.test.core.app.ApplicationProvider
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
+import com.browntowndev.enclave.core.testing.FakeLocalModelRepository
 import com.browntowndev.enclave.domain.model.config.LocalModelAsset
 import com.browntowndev.enclave.domain.model.config.LocalModelConfiguration
 import com.browntowndev.enclave.domain.model.config.LocalModelId
@@ -12,21 +15,20 @@ import com.browntowndev.enclave.domain.model.download.ModelConfig
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.media.LocalImageGenerationPaths
-import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
-import com.browntowndev.enclave.domain.port.repository.LocalModelRepositoryPort
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.mockkStatic
-import io.mockk.unmockkStatic
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.io.TempDir
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 import java.io.File
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class ModelFileScannerTest {
     @TempDir
     lateinit var tempDir: File
@@ -37,14 +39,13 @@ class ModelFileScannerTest {
 
     @BeforeEach
     fun setup() {
-        mockkStatic(Log::class)
-        every { Log.d(any<String>(), any<String>()) } returns 0
-        every { Log.i(any<String>(), any<String>()) } returns 0
-        every { Log.w(any<String>(), any<String>()) } returns 0
-        every { Log.e(any<String>(), any<String>()) } returns 0
-
-        context = mockk()
-        every { context.getExternalFilesDir(null) } returns tempDir
+        // Robolectric context whose external files dir is the @TempDir sandbox;
+        // android.util.Log is shadowed by Robolectric (no static mocking needed).
+        val appContext = ApplicationProvider.getApplicationContext<Context>()
+        context =
+            object : ContextWrapper(appContext) {
+                override fun getExternalFilesDir(type: String?): File = tempDir
+            }
 
         modelsDir = File(tempDir, ModelConfig.MODELS_DIR)
         modelsDir.deleteRecursively()
@@ -53,15 +54,14 @@ class ModelFileScannerTest {
         scanner =
             ModelFileScanner(
                 context = context,
-                localModelRepository = mockk<LocalModelRepositoryPort>(relaxed = true),
-                activeModelProvider = mockk<ActiveModelProviderPort>(relaxed = true),
+                localModelRepository = FakeLocalModelRepository(),
+                activeModelProvider = FakeActiveModelProvider(),
             )
     }
 
     @AfterEach
     fun tearDown() {
         modelsDir.deleteRecursively()
-        unmockkStatic(Log::class)
     }
 
     @Test

@@ -71,9 +71,16 @@ class FakeCloudSyncPort : CloudSyncPort {
         return Result.success(Unit)
     }
 
+    /** Result returned by [syncPendingChanges] (ENC-28); defaults to the historical success. */
+    var syncPendingResult: Result<Unit> = Result.success(Unit)
+
+    /** When set, [syncPendingChanges] throws it instead of returning (ENC-28). */
+    var syncPendingThrowable: Throwable? = null
+
     override suspend fun syncPendingChanges(): Result<Unit> {
         record("syncPending")
-        return Result.success(Unit)
+        syncPendingThrowable?.let { throw it }
+        return syncPendingResult
     }
 
     override suspend fun syncRemoteChangesFromCloud(): Result<CloudSyncEventReplayResult> {

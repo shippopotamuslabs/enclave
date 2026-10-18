@@ -1,12 +1,13 @@
 package com.browntowndev.enclave.core.data.repository
 
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
 import com.browntowndev.enclave.core.data.security.ApiKeyManager
-import io.mockk.every
-import io.mockk.mockk
-import okhttp3.Call
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
-import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -14,17 +15,39 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class ExaSearchRepositoryTest {
-    private val okHttpClient = mockk<OkHttpClient>()
-    private val apiKeyManager = mockk<ApiKeyManager>()
+    private val testScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private lateinit var apiKeyManager: ApiKeyManager
     private lateinit var repository: ExaSearchRepository
 
     @BeforeEach
     fun setup() {
-        repository = ExaSearchRepository(okHttpClient, apiKeyManager)
-        every { apiKeyManager.get(ApiKeyManager.EXA_SEARCH_ALIAS) } returns "exa-key"
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        apiKeyManager = testApiKeyManager(context, testScope, "exa_search_test_prefs")
+        apiKeyManager.save(ApiKeyManager.EXA_SEARCH_ALIAS, "exa-key")
+        repository = ExaSearchRepository(okHttpClientReturning(""), apiKeyManager)
     }
+
+    /** Real OkHttpClient whose interceptor short-circuits every call with [body]. */
+    private fun okHttpClientReturning(body: String): OkHttpClient =
+        OkHttpClient
+            .Builder()
+            .addInterceptor { chain ->
+                Response
+                    .Builder()
+                    .request(chain.request())
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(200)
+                    .message("OK")
+                    .body(body.toResponseBody())
+                    .build()
+            }.build()
 
     @Test
     fun `search posts Exa request and maps response`() {
@@ -42,17 +65,7 @@ class ExaSearchRepositoryTest {
             }
             """.trimIndent()
 
-        val call = mockk<Call>()
-        every { okHttpClient.newCall(any()) } returns call
-        every { call.execute() } returns
-            Response
-                .Builder()
-                .request(Request.Builder().url("https://api.exa.ai/search").build())
-                .protocol(Protocol.HTTP_1_1)
-                .code(200)
-                .message("OK")
-                .body(jsonResponse.toResponseBody())
-                .build()
+        repository = ExaSearchRepository(okHttpClientReturning(jsonResponse), apiKeyManager)
 
         val result = repository.search("test query")
 
@@ -64,7 +77,7 @@ class ExaSearchRepositoryTest {
 
     @Test
     fun `search throws when Exa key is missing`() {
-        every { apiKeyManager.get(ApiKeyManager.EXA_SEARCH_ALIAS) } returns null
+        apiKeyManager.delete(ApiKeyManager.EXA_SEARCH_ALIAS)
 
         val error =
             assertThrows<IllegalStateException> {
@@ -87,17 +100,7 @@ class ExaSearchRepositoryTest {
             }
             """.trimIndent()
 
-        val call = mockk<Call>()
-        every { okHttpClient.newCall(any()) } returns call
-        every { call.execute() } returns
-            Response
-                .Builder()
-                .request(Request.Builder().url("https://api.exa.ai/contents").build())
-                .protocol(Protocol.HTTP_1_1)
-                .code(200)
-                .message("OK")
-                .body(jsonResponse.toResponseBody())
-                .build()
+        repository = ExaSearchRepository(okHttpClientReturning(jsonResponse), apiKeyManager)
 
         val result = repository.extract(listOf("https://exa.ai/page"))
 

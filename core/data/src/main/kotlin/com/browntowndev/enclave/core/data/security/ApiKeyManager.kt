@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-class ApiKeyManager
+open class ApiKeyManager
     @VisibleForTesting
     internal constructor(
         private val prefsProvider: () -> SharedPreferences,
@@ -71,7 +71,7 @@ class ApiKeyManager
             markPendingSync(normalizedAlias)
         }
 
-        fun get(credentialAlias: String): String? = normalizedAlias(credentialAlias)?.let { prefs.getString(it, null) }
+        open fun get(credentialAlias: String): String? = normalizedAlias(credentialAlias)?.let { prefs.getString(it, null) }
 
         fun has(credentialAlias: String): Boolean = !get(credentialAlias).isNullOrBlank()
 
@@ -133,18 +133,18 @@ class ApiKeyManager
             }
         }
 
-        suspend fun getClaimedSyncAliases(): Set<String> = dataStore.data.first()[CLAIMED_SYNC_KEY] ?: emptySet()
+        open suspend fun getClaimedSyncAliases(): Set<String> = dataStore.data.first()[CLAIMED_SYNC_KEY] ?: emptySet()
 
-        suspend fun getClaimedDeleteAliases(): Set<String> = dataStore.data.first()[CLAIMED_DELETE_KEY] ?: emptySet()
+        open suspend fun getClaimedDeleteAliases(): Set<String> = dataStore.data.first()[CLAIMED_DELETE_KEY] ?: emptySet()
 
-        suspend fun clearClaimedSync(aliases: Collection<String>) {
+        open suspend fun clearClaimedSync(aliases: Collection<String>) {
             dataStore.edit { preferences ->
                 val current = preferences[CLAIMED_SYNC_KEY] ?: emptySet()
                 preferences[CLAIMED_SYNC_KEY] = current - aliases.toSet()
             }
         }
 
-        suspend fun clearClaimedDelete(aliases: Collection<String>) {
+        open suspend fun clearClaimedDelete(aliases: Collection<String>) {
             dataStore.edit { preferences ->
                 val current = preferences[CLAIMED_DELETE_KEY] ?: emptySet()
                 preferences[CLAIMED_DELETE_KEY] = current - aliases.toSet()

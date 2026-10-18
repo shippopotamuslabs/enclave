@@ -1,5 +1,8 @@
 package com.browntowndev.enclave.core.data.repository
 
+import com.browntowndev.enclave.core.testing.FakeEmbeddingEngine
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeMessageRepository
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.Content
 import com.browntowndev.enclave.domain.model.chat.Message
@@ -8,11 +11,6 @@ import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
-import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.repository.MessageRepository
-import io.mockk.coEvery
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.int
@@ -24,22 +22,24 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
+/**
+ * Translated from MockK to `:core:testing` fakes (ENC-28): the message
+ * repository fake serves its seeded messages, and the embedding engine fake
+ * returns a fixed vector for every query.
+ */
 class SearchChatToolExecutorTest {
-    private lateinit var loggingPort: LoggingPort
-    private lateinit var messageRepository: MessageRepository
-    private lateinit var embeddingEngine: EmbeddingEnginePort
+    private lateinit var messageRepository: FakeMessageRepository
     private lateinit var executor: SearchChatToolExecutor
     private val embeddingVector = floatArrayOf(0.1f, 0.2f, 0.3f)
 
     @BeforeEach
     fun setup() {
-        loggingPort = mockk(relaxed = true)
-        messageRepository = mockk()
-        embeddingEngine = mockk()
-        coEvery { embeddingEngine.getEmbedding(any()) } returns embeddingVector
+        messageRepository = FakeMessageRepository()
+        val embeddingEngine = FakeEmbeddingEngine()
+        embeddingEngine.uniformEmbedding = embeddingVector
         executor =
             SearchChatToolExecutor(
-                loggingPort = loggingPort,
+                loggingPort = FakeLoggingPort(),
                 messageRepository = messageRepository,
                 embeddingEngine = embeddingEngine,
             )
@@ -75,7 +75,7 @@ class SearchChatToolExecutorTest {
                         createdAt = 2000L,
                     ),
                 )
-            coEvery { messageRepository.searchMessagesInChat(ChatId("chat-1"), embeddingVector) } returns messages
+            messageRepository.seed(messages)
 
             val result = executor.execute(baseRequest())
 
@@ -142,7 +142,7 @@ class SearchChatToolExecutorTest {
                         createdAt = 1000L,
                     ),
                 )
-            coEvery { messageRepository.searchMessagesInChat(any(), any()) } returns messages
+            messageRepository.seed(messages)
 
             val result = executor.execute(baseRequest())
             val json = Json.parseToJsonElement(result.resultJson).jsonObject
@@ -158,7 +158,7 @@ class SearchChatToolExecutorTest {
     @Test
     fun `execute returns empty results when no messages match`() =
         runTest {
-            coEvery { messageRepository.searchMessagesInChat(any(), any()) } returns emptyList()
+            messageRepository.seed(emptyList())
 
             val result = executor.execute(baseRequest())
             val json = Json.parseToJsonElement(result.resultJson).jsonObject

@@ -1,29 +1,32 @@
+@file:Suppress("ForbiddenMockKInTests")
+
+// MockK retained only for the Firebase Firestore SDK surface (DocumentSnapshot), which has no JVM fake.
+
 package com.browntowndev.enclave.core.data.remote.firestore.handlers
 
 import com.browntowndev.enclave.core.data.local.MessageDao
 import com.browntowndev.enclave.core.data.local.MessageEntity
 import com.browntowndev.enclave.core.data.local.dao.message.MessageWithFiles
+import com.browntowndev.enclave.core.data.remote.firestore.FakeEnclaveDatabase
+import com.browntowndev.enclave.core.data.remote.firestore.FakeMessageDaoBundle
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncContext
+import com.browntowndev.enclave.core.data.remote.firestore.testSyncContext
 import com.browntowndev.enclave.core.data.remote.testFirestoreSyncDaos
-import com.browntowndev.enclave.core.data.repository.FakeLocalDataEncryptionService
-import com.browntowndev.enclave.core.data.security.SensitivePersistenceSelfHealer
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.MessageState
 import com.browntowndev.enclave.domain.model.chat.Role
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
-import com.google.firebase.firestore.FirebaseFirestore
-import io.mockk.coEvery
-import io.mockk.coVerify
+import com.google.firebase.firestore.DocumentSnapshot
 import io.mockk.mockk
-import io.mockk.slot
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
-import java.util.concurrent.atomic.AtomicBoolean
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
 /**
  * Regression tests for the stale same-device echo overwrite bug.
@@ -45,10 +48,12 @@ import java.util.concurrent.atomic.AtomicBoolean
  * A same-device echo whose `updatedAt` is strictly older than the local row must be treated as
  * stale. The local row must not be overwritten — preserving the COMPLETE state and `pendingSync=1`.
  */
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class MessageSyncHandlerTest {
-    private val messageDao = mockk<MessageDao>(relaxed = true)
+    private val messageDaoBundle = FakeMessageDaoBundle(FakeEnclaveDatabase())
+    private val messageDao: MessageDao = messageDaoBundle.messageDao
     private lateinit var handler: MessageSyncHandler
-    private val upsertedSlot = slot<MessageEntity>()
 
     companion object {
         private const val T1 = 1_000L // upload timestamp
@@ -87,7 +92,7 @@ class MessageSyncHandlerTest {
                         ),
                     files = emptyList(),
                 )
-            coEvery { messageDao.getMessageById(MSG_ID) } returns localComplete
+            messageDaoBundle.stubMessageById(localComplete)
 
             // Stale echo from Firestore: PROCESSING (clamped to COMPLETE by mapper), updatedAt=T1
             val staleEchoEntity =
@@ -106,10 +111,10 @@ class MessageSyncHandlerTest {
                 )
 
             // overwrite=true simulates same-device echo while local pendingSync=1
-            handler.upsertLocal(staleEchoEntity, mockk(relaxed = true), overwrite = true)
+            handler.upsertLocal(staleEchoEntity, mockk<DocumentSnapshot>(relaxed = true), overwrite = true)
 
             // The local row must NOT be overwritten — upsert should never be called
-            coVerify(exactly = 0) { messageDao.upsert(any()) }
+            assertTrue(messageDaoBundle.upsertedMessages.isEmpty())
         }
 
     @Test
@@ -133,7 +138,7 @@ class MessageSyncHandlerTest {
                         ),
                     files = emptyList(),
                 )
-            coEvery { messageDao.getMessageById(MSG_ID) } returns localComplete
+            messageDaoBundle.stubMessageById(localComplete)
 
             val staleEcho =
                 MessageWithFiles(
@@ -150,10 +155,10 @@ class MessageSyncHandlerTest {
                     files = emptyList(),
                 )
 
-            handler.upsertLocal(staleEcho, mockk(relaxed = true), overwrite = true)
+            handler.upsertLocal(staleEcho, mockk<DocumentSnapshot>(relaxed = true), overwrite = true)
 
             // Confirm pendingSync was never reset to 0 via an upsert
-            coVerify(exactly = 0) { messageDao.upsert(match { it.pendingSync == 0 }) }
+            assertTrue(messageDaoBundle.upsertedMessages.none { it.pendingSync == 0 })
         }
 
     // -----------------------------------------------------------------------
@@ -189,7 +194,7 @@ class MessageSyncHandlerTest {
                         ),
                     files = emptyList(),
                 )
-            coEvery { messageDao.getMessageById(MSG_ID) } returns localProcessing
+            messageDaoBundle.stubMessageById(localProcessing)
 
             // Listener echo: mapper has clamped messageState to COMPLETE, same updatedAt
             val clampedEcho =
@@ -207,10 +212,10 @@ class MessageSyncHandlerTest {
                     files = emptyList(),
                 )
 
-            handler.upsertLocal(clampedEcho, mockk(relaxed = true), overwrite = true)
+            handler.upsertLocal(clampedEcho, mockk<DocumentSnapshot>(relaxed = true), overwrite = true)
 
             // Local placeholder must not be touched while it is mid-generation.
-            coVerify(exactly = 0) { messageDao.upsert(any()) }
+            assertTrue(messageDaoBundle.upsertedMessages.isEmpty())
         }
 
     // -----------------------------------------------------------------------
@@ -238,9 +243,7 @@ class MessageSyncHandlerTest {
                         ),
                     files = emptyList(),
                 )
-            coEvery { messageDao.getMessageById(MSG_ID) } returns localDirty
-            coEvery { messageDao.upsert(capture(upsertedSlot)) } returns 0
-
+            messageDaoBundle.stubMessageById(localDirty)
             val echoEntity =
                 MessageWithFiles(
                     message =
@@ -256,11 +259,11 @@ class MessageSyncHandlerTest {
                     files = emptyList(),
                 )
 
-            handler.upsertLocal(echoEntity, mockk(relaxed = true), overwrite = true)
+            handler.upsertLocal(echoEntity, mockk<DocumentSnapshot>(relaxed = true), overwrite = true)
 
-            coVerify(exactly = 1) { messageDao.upsert(any()) }
-            assertEquals(0, upsertedSlot.captured.pendingSync)
-            assertEquals(MessageState.COMPLETE, upsertedSlot.captured.messageState)
+            assertEquals(1, messageDaoBundle.upsertedMessages.size)
+            assertEquals(0, messageDaoBundle.upsertedMessages.single().pendingSync)
+            assertEquals(MessageState.COMPLETE, messageDaoBundle.upsertedMessages.single().messageState)
         }
 
     // -----------------------------------------------------------------------
@@ -271,9 +274,7 @@ class MessageSyncHandlerTest {
     @DisplayName("upsertLocal with no existing row always inserts the entity")
     fun upsertLocal_noExistingRow_alwaysInserts() =
         runTest {
-            coEvery { messageDao.getMessageById(MSG_ID) } returns null
-            coEvery { messageDao.upsert(capture(upsertedSlot)) } returns 0
-
+            messageDaoBundle.stubMessageById(null)
             val incoming =
                 MessageWithFiles(
                     message =
@@ -289,9 +290,9 @@ class MessageSyncHandlerTest {
                     files = emptyList(),
                 )
 
-            handler.upsertLocal(incoming, mockk(relaxed = true), overwrite = false)
+            handler.upsertLocal(incoming, mockk<DocumentSnapshot>(relaxed = true), overwrite = false)
 
-            coVerify(exactly = 1) { messageDao.upsert(any()) }
+            assertEquals(1, messageDaoBundle.upsertedMessages.size)
         }
 
     // -----------------------------------------------------------------------
@@ -316,9 +317,7 @@ class MessageSyncHandlerTest {
                         ),
                     files = emptyList(),
                 )
-            coEvery { messageDao.getMessageById(MSG_ID) } returns localOld
-            coEvery { messageDao.upsert(capture(upsertedSlot)) } returns 0
-
+            messageDaoBundle.stubMessageById(localOld)
             val newerRemote =
                 MessageWithFiles(
                     message =
@@ -334,31 +333,16 @@ class MessageSyncHandlerTest {
                     files = emptyList(),
                 )
 
-            handler.upsertLocal(newerRemote, mockk(relaxed = true), overwrite = false)
+            handler.upsertLocal(newerRemote, mockk<DocumentSnapshot>(relaxed = true), overwrite = false)
 
-            coVerify(exactly = 1) { messageDao.upsert(any()) }
-            assertEquals("newer content from other device", upsertedSlot.captured.content)
+            assertEquals(1, messageDaoBundle.upsertedMessages.size)
+            assertEquals("newer content from other device", messageDaoBundle.upsertedMessages.single().content)
         }
 
     // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
 
-    private fun createContext(messageDao: MessageDao): FirestoreSyncContext {
-        val localEncryption = FakeLocalDataEncryptionService()
-        val loggingPort = mockk<LoggingPort>(relaxed = true)
-        return FirestoreSyncContext(
-            firestore = mockk<FirebaseFirestore>(relaxed = true),
-            daos = testFirestoreSyncDaos(messageDao = messageDao),
-            localEncryption = localEncryption,
-            sensitiveSelfHealer = SensitivePersistenceSelfHealer(localEncryption, loggingPort),
-            firestoreSensitiveFieldRepairer = mockk(relaxed = true),
-            cryptoManager = mockk<CryptoManagerPort>(relaxed = true),
-            loggingPort = loggingPort,
-            apiKeyManager = mockk(relaxed = true),
-            embeddingCoordinator = mockk(relaxed = true),
-            userIdProvider = { "user-1" },
-            purgeInProgress = AtomicBoolean(false),
-        )
-    }
+    private fun createContext(messageDao: MessageDao): FirestoreSyncContext =
+        testSyncContext(daos = testFirestoreSyncDaos(messageDao = messageDao))
 }

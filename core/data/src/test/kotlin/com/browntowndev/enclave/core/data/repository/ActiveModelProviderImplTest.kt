@@ -1,9 +1,13 @@
 package com.browntowndev.enclave.core.data.repository
 
+import android.content.Context
+import androidx.room.Room
+import androidx.test.core.app.ApplicationProvider
 import com.browntowndev.enclave.core.data.local.ApiCredentialsDao
 import com.browntowndev.enclave.core.data.local.ApiCredentialsEntity
 import com.browntowndev.enclave.core.data.local.ApiModelConfigurationEntity
 import com.browntowndev.enclave.core.data.local.ApiModelConfigurationsDao
+import com.browntowndev.enclave.core.data.local.EnclaveDatabase
 import com.browntowndev.enclave.core.data.local.LocalModelConfigurationEntity
 import com.browntowndev.enclave.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.enclave.core.data.local.LocalModelEntity
@@ -12,47 +16,64 @@ import com.browntowndev.enclave.core.data.local.MediaProviderDao
 import com.browntowndev.enclave.core.data.local.MediaProviderEntity
 import com.browntowndev.enclave.core.data.local.TtsProviderDao
 import com.browntowndev.enclave.core.data.local.TtsProviderEntity
+import com.browntowndev.enclave.core.testing.FakeDefaultModelRepository
 import com.browntowndev.enclave.domain.model.chat.ChatModelOverride
 import com.browntowndev.enclave.domain.model.config.ActiveModelConfiguration
-import com.browntowndev.enclave.domain.model.config.MediaCapability
-import com.browntowndev.enclave.domain.model.config.MediaProviderId
-import com.browntowndev.enclave.domain.model.config.TtsProviderId
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.DefaultModelAssignment
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelId
+import com.browntowndev.enclave.domain.model.config.MediaCapability
+import com.browntowndev.enclave.domain.model.config.MediaProviderId
+import com.browntowndev.enclave.domain.model.config.TtsProviderId
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
-import com.browntowndev.enclave.domain.port.repository.DefaultModelRepositoryPort
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 import java.nio.file.Files
 import java.nio.file.Paths
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class ActiveModelProviderImplTest {
-    private val defaultModelRepository = mockk<DefaultModelRepositoryPort>()
-    private val localModelsDao = mockk<LocalModelsDao>(relaxed = true)
-    private val localConfigsDao = mockk<LocalModelConfigurationsDao>(relaxed = true)
-    private val apiCredentialsDao = mockk<ApiCredentialsDao>(relaxed = true)
-    private val apiConfigsDao = mockk<ApiModelConfigurationsDao>(relaxed = true)
-    private val mediaProviderDao = mockk<MediaProviderDao>(relaxed = true)
-    private val ttsProviderDao = mockk<TtsProviderDao>(relaxed = true)
+    private lateinit var database: EnclaveDatabase
+    private val defaultModelRepository = FakeDefaultModelRepository()
+    private lateinit var localModelsDao: LocalModelsDao
+    private lateinit var localConfigsDao: LocalModelConfigurationsDao
+    private lateinit var apiCredentialsDao: ApiCredentialsDao
+    private lateinit var apiConfigsDao: ApiModelConfigurationsDao
+    private lateinit var mediaProviderDao: MediaProviderDao
+    private lateinit var ttsProviderDao: TtsProviderDao
     private val localEncryption = FakeLocalDataEncryptionService()
 
     private lateinit var repository: ActiveModelProviderImpl
 
     @BeforeEach
     fun setUp() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        database =
+            Room
+                .inMemoryDatabaseBuilder(context, EnclaveDatabase::class.java)
+                .allowMainThreadQueries()
+                .build()
+        localModelsDao = database.localModelsDao()
+        localConfigsDao = database.localModelConfigurationsDao()
+        apiCredentialsDao = database.apiCredentialsDao()
+        apiConfigsDao = database.apiModelConfigurationsDao()
+        mediaProviderDao = database.mediaProviderDao()
+        ttsProviderDao = database.ttsProviderDao()
         repository =
             ActiveModelProviderImpl(
                 defaultModelRepository = defaultModelRepository,
@@ -66,24 +87,23 @@ class ActiveModelProviderImplTest {
             )
     }
 
+    @AfterEach
+    fun tearDown() {
+        database.close()
+    }
+
     @Test
     fun `SCN-ACTIVE-001 active model provider uses asset displayName for local config`() =
         runTest {
             val configId = LocalModelConfigurationId("cfg-fast")
             val modelId = LocalModelId("model-1")
-            coEvery { defaultModelRepository.getDefault(ModelType.FAST) } returns
+            defaultModelRepository.seed(
                 DefaultModelAssignment(
                     modelType = ModelType.FAST,
                     localConfigId = configId,
-                )
-            coEvery { localConfigsDao.getById(configId) } returns
-                LocalModelConfigurationEntity(
-                    id = configId,
-                    localModelId = modelId,
-                    displayName = localEncryption.encryptString("Fast"),
-                    reasoningBudget = 1536,
-                )
-            coEvery { localModelsDao.getById(modelId) } returns
+                ),
+            )
+            localModelsDao.upsert(
                 LocalModelEntity(
                     id = modelId,
                     modelFileFormat = ModelFileFormat.LITERTLM,
@@ -93,7 +113,16 @@ class ActiveModelProviderImplTest {
                     localFilename = "gemma-4-E4B-it.litertlm",
                     sha256 = "gemma-sha",
                     sizeInBytes = 42L,
-                )
+                ),
+            )
+            localConfigsDao.upsert(
+                LocalModelConfigurationEntity(
+                    id = configId,
+                    localModelId = modelId,
+                    displayName = localEncryption.encryptString("Fast"),
+                    reasoningBudget = 1536,
+                ),
+            )
 
             val result = repository.getActiveConfiguration(ModelType.FAST)
 
@@ -141,12 +170,22 @@ class ActiveModelProviderImplTest {
     private suspend fun activeApiConfigurationFromPreset(modelType: ModelType = ModelType.VISION): ActiveModelConfiguration {
         val configId = ApiModelConfigurationId("cfg-9")
         val credentialsId = ApiCredentialsId("creds-1")
-        coEvery { defaultModelRepository.getDefault(modelType) } returns
+        defaultModelRepository.seed(
             DefaultModelAssignment(
                 modelType = modelType,
                 apiConfigId = configId,
-            )
-        coEvery { apiConfigsDao.getById(configId) } returns
+            ),
+        )
+        apiCredentialsDao.insert(
+            ApiCredentialsEntity(
+                id = credentialsId,
+                displayName = localEncryption.encryptString("OpenAI Primary"),
+                provider = ApiProvider.OPENAI,
+                baseUrl = localEncryption.encryptString("https://api.openai.com/v1"),
+                credentialAlias = "openai-key",
+            ),
+        )
+        apiConfigsDao.upsert(
             ApiModelConfigurationEntity(
                 id = configId,
                 apiCredentialsId = credentialsId,
@@ -154,15 +193,8 @@ class ActiveModelProviderImplTest {
                 modelId = "gpt-4o",
                 isMultimodal = true,
                 systemPrompt = localEncryption.encryptString("Be helpful"),
-            )
-        coEvery { apiCredentialsDao.getById(credentialsId) } returns
-            ApiCredentialsEntity(
-                id = credentialsId,
-                displayName = localEncryption.encryptString("OpenAI Primary"),
-                provider = ApiProvider.OPENAI,
-                baseUrl = localEncryption.encryptString("https://api.openai.com/v1"),
-                credentialAlias = "openai-key",
-            )
+            ),
+        )
 
         return requireNotNull(repository.getActiveConfiguration(modelType))
     }
@@ -170,8 +202,6 @@ class ActiveModelProviderImplTest {
     @Test
     fun `getActiveConfiguration returns null when no default assignment`() =
         runTest {
-            coEvery { defaultModelRepository.getDefault(ModelType.MAIN) } returns null
-
             val result = repository.getActiveConfiguration(ModelType.MAIN)
 
             assertNull(result)
@@ -183,19 +213,13 @@ class ActiveModelProviderImplTest {
             localEncryption.forceDecryptFailure = true
             val configId = LocalModelConfigurationId("local-config-1")
             val modelId = LocalModelId("model-1")
-            coEvery { defaultModelRepository.getDefault(ModelType.MAIN) } returns
+            defaultModelRepository.seed(
                 DefaultModelAssignment(
                     modelType = ModelType.MAIN,
                     localConfigId = configId,
-                )
-            coEvery { localConfigsDao.getById(configId) } returns
-                LocalModelConfigurationEntity(
-                    id = configId,
-                    localModelId = modelId,
-                    displayName = localEncryption.encryptString("Balanced"),
-                    systemPrompt = localEncryption.encryptString("Use brief answers"),
-                )
-            coEvery { localModelsDao.getById(modelId) } returns
+                ),
+            )
+            localModelsDao.upsert(
                 LocalModelEntity(
                     id = modelId,
                     modelFileFormat = ModelFileFormat.GGUF,
@@ -205,7 +229,16 @@ class ActiveModelProviderImplTest {
                     localFilename = "qwen.gguf",
                     sha256 = "abc123",
                     sizeInBytes = 42L,
-                )
+                ),
+            )
+            localConfigsDao.upsert(
+                LocalModelConfigurationEntity(
+                    id = configId,
+                    localModelId = modelId,
+                    displayName = localEncryption.encryptString("Balanced"),
+                    systemPrompt = localEncryption.encryptString("Use brief answers"),
+                ),
+            )
 
             val result = repository.getActiveConfiguration(ModelType.MAIN)
 
@@ -260,7 +293,7 @@ class ActiveModelProviderImplTest {
 
             // TDD Red: should resolve from explicit config id, not FAST slot
             assertEquals("Grok Beta", result?.name)
-            coVerify(exactly = 0) { defaultModelRepository.getDefault(any()) }
+            assertTrue(defaultModelRepository.getDefaultCalls.isEmpty())
         }
 
     @Test
@@ -268,12 +301,13 @@ class ActiveModelProviderImplTest {
     fun getActiveConfigurationMediaProvider() =
         runTest {
             val mediaProviderId = MediaProviderId("media-1")
-            coEvery { defaultModelRepository.getDefault(ModelType.IMAGE_GENERATION) } returns
+            defaultModelRepository.seed(
                 DefaultModelAssignment(
                     modelType = ModelType.IMAGE_GENERATION,
                     mediaProviderId = mediaProviderId,
-                )
-            coEvery { mediaProviderDao.getMediaProvider("media-1") } returns
+                ),
+            )
+            mediaProviderDao.upsert(
                 MediaProviderEntity(
                     id = "media-1",
                     displayName = localEncryption.encryptString("DALL-E 3"),
@@ -281,7 +315,8 @@ class ActiveModelProviderImplTest {
                     capability = MediaCapability.IMAGE,
                     modelName = localEncryption.encryptString("dall-e-3"),
                     credentialAlias = "openai-creds",
-                )
+                ),
+            )
 
             val result = repository.getActiveConfiguration(ModelType.IMAGE_GENERATION)
 
@@ -296,19 +331,21 @@ class ActiveModelProviderImplTest {
     fun getActiveConfigurationTtsProvider() =
         runTest {
             val ttsProviderId = TtsProviderId("tts-1")
-            coEvery { defaultModelRepository.getDefault(ModelType.TTS) } returns
+            defaultModelRepository.seed(
                 DefaultModelAssignment(
                     modelType = ModelType.TTS,
                     ttsProviderId = ttsProviderId,
-                )
-            coEvery { ttsProviderDao.getTtsProvider("tts-1") } returns
+                ),
+            )
+            ttsProviderDao.upsertTtsProvider(
                 TtsProviderEntity(
                     id = "tts-1",
                     displayName = localEncryption.encryptString("TTS Voice"),
                     provider = ApiProvider.OPENAI,
                     voiceName = localEncryption.encryptString("alloy"),
                     credentialAlias = "openai-creds",
-                )
+                ),
+            )
 
             val result = repository.getActiveConfiguration(ModelType.TTS)
 

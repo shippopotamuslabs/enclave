@@ -1,17 +1,14 @@
+@file:Suppress("ForbiddenMockKInTests")
+
+// MockK retained only for the Firebase Firestore SDK surface (FirebaseFirestore / WriteBatch / DocumentSnapshot), which has no JVM fake.
+
 package com.browntowndev.enclave.core.data.remote.firestore
 
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
-import com.browntowndev.enclave.core.data.remote.FirestoreSensitiveFieldRepairer
 import com.browntowndev.enclave.core.data.remote.firestore.handlers.SearchToolSettingsSyncHandler
-import com.browntowndev.enclave.core.data.remote.testFirestoreSyncDaos
-import com.browntowndev.enclave.core.data.repository.FakeLocalDataEncryptionService
 import com.browntowndev.enclave.core.data.repository.SettingsRepositoryImpl
-import com.browntowndev.enclave.core.data.security.ApiKeyManager
-import com.browntowndev.enclave.core.data.security.SensitivePersistenceSelfHealer
 import com.browntowndev.enclave.core.data.sync.SearchToolSettingsSyncQueue
 import com.browntowndev.enclave.domain.model.settings.SearchProvider
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.firestore.CollectionReference
 import com.google.firebase.firestore.DocumentReference
@@ -29,13 +26,17 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Path
-import java.util.concurrent.atomic.AtomicBoolean
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
 /**
  * Pipeline coverage for the new `SearchToolSettingsSyncHandler` riding the
  * `FirestorePendingSyncEngine`. The test captures the writes the engine dispatches
  * and asserts the path, payload shape, and post-write queue state.
  */
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class SearchToolSettingsPipelineTest {
     @TempDir
     lateinit var tempDir: Path
@@ -58,7 +59,7 @@ class SearchToolSettingsPipelineTest {
             val repository =
                 SettingsRepositoryImpl(
                     dataStore = settingsDataStore,
-                    apiKeyManager = mockk<ApiKeyManager>(relaxed = true),
+                    apiKeyManager = testApiKeyManager(),
                     searchToolSettingsSyncQueue = queue,
                 )
             repository.updateSearchProvider(SearchProvider.EXA)
@@ -125,7 +126,7 @@ class SearchToolSettingsPipelineTest {
             val repository =
                 SettingsRepositoryImpl(
                     dataStore = settingsDataStore,
-                    apiKeyManager = mockk<ApiKeyManager>(relaxed = true),
+                    apiKeyManager = testApiKeyManager(),
                     searchToolSettingsSyncQueue = queue,
                 )
             repository.updateSearchEnabled(true)
@@ -189,7 +190,7 @@ class SearchToolSettingsPipelineTest {
             val repository =
                 SettingsRepositoryImpl(
                     dataStore = settingsDataStore,
-                    apiKeyManager = mockk<ApiKeyManager>(relaxed = true),
+                    apiKeyManager = testApiKeyManager(),
                     searchToolSettingsSyncQueue = queue,
                 )
             // Sanity: local default for searchEnabled is false, queue is not pending.
@@ -303,8 +304,6 @@ class SearchToolSettingsPipelineTest {
         settingsRepository: SettingsRepositoryImpl,
         captured: CapturedBatchWrites,
     ): FirestoreSyncContext {
-        val localEncryption = FakeLocalDataEncryptionService()
-        val loggingPort = mockk<LoggingPort>(relaxed = true)
         val firestore = mockk<FirebaseFirestore>(relaxed = true)
         val batch = mockk<WriteBatch>(relaxed = true)
         val documentPathSlot = slot<String>()
@@ -325,20 +324,12 @@ class SearchToolSettingsPipelineTest {
             captured.documentPaths += documentPathSlot.captured
             mockk<DocumentReference>(relaxed = true)
         }
-        val repairer = mockk<FirestoreSensitiveFieldRepairer>()
-        every { repairer.repairOutbound(any(), any(), any()) } answers { thirdArg() }
-        return FirestoreSyncContext(
+        // Identity outbound repair (the fake's default), matching the previous stub.
+        val repairer = FakeFirestoreSensitiveFieldRepairer()
+        return testSyncContext(
             firestore = firestore,
-            daos = testFirestoreSyncDaos(),
-            localEncryption = localEncryption,
-            sensitiveSelfHealer = SensitivePersistenceSelfHealer(localEncryption, loggingPort),
-            firestoreSensitiveFieldRepairer = repairer,
-            cryptoManager = mockk<CryptoManagerPort>(relaxed = true),
-            loggingPort = loggingPort,
-            apiKeyManager = mockk(relaxed = true),
-            embeddingCoordinator = mockk(relaxed = true),
-            userIdProvider = { "test-user-id" },
-            purgeInProgress = AtomicBoolean(false),
+            repairer = repairer,
+            userId = "test-user-id",
             searchToolSettingsSyncQueue = queue,
             settingsRepository = settingsRepository,
         )

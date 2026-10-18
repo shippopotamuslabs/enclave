@@ -14,7 +14,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class XUserTweetsToolExecutor
+open class XUserTweetsToolExecutor
     @Inject
     constructor(
         private val loggingPort: LoggingPort,
@@ -28,7 +28,7 @@ class XUserTweetsToolExecutor
             private val json = Json { ignoreUnknownKeys = true }
         }
 
-        override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
+        open override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
             requireSupportedTool(request.toolName)
             val settings = settingsRepository.settingsFlow.first()
             if (!settings.xSearchEnabled) {

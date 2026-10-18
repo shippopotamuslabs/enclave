@@ -1,14 +1,12 @@
 package com.browntowndev.enclave.core.data.repository
 
+import com.browntowndev.enclave.core.testing.FakeEmbeddingEngine
+import com.browntowndev.enclave.core.testing.FakeMemoriesRepository
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
 import com.browntowndev.enclave.domain.model.memory.Memory
 import com.browntowndev.enclave.domain.model.memory.MemoryCategory
-import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
-import com.browntowndev.enclave.domain.port.repository.MemoriesRepository
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.mockk
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
@@ -21,14 +19,14 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 
 class ManageMemoriesToolExecutorTest {
-    private lateinit var memoriesRepository: MemoriesRepository
-    private lateinit var embeddingEnginePort: EmbeddingEnginePort
+    private lateinit var memoriesRepository: FakeMemoriesRepository
+    private lateinit var embeddingEnginePort: FakeEmbeddingEngine
     private lateinit var executor: ManageMemoriesToolExecutor
 
     @BeforeEach
     fun setup() {
-        memoriesRepository = mockk()
-        embeddingEnginePort = mockk()
+        memoriesRepository = FakeMemoriesRepository()
+        embeddingEnginePort = FakeEmbeddingEngine()
         executor =
             ManageMemoriesToolExecutor(
                 memoriesRepository = memoriesRepository,
@@ -67,8 +65,6 @@ class ManageMemoriesToolExecutorTest {
         runTest {
             val content = "User likes coffee"
             val category = "PREFERENCES"
-            val memory = Memory(id = "mem-1", content = content, category = MemoryCategory.PREFERENCES)
-            coEvery { memoriesRepository.insertMemory(MemoryCategory.PREFERENCES, content) } returns memory
 
             val request = createRequest(action = "save", content = content, category = category)
             val result = executor.execute(request)
@@ -76,8 +72,9 @@ class ManageMemoriesToolExecutorTest {
             assertEquals("manage_memories", result.toolName)
             val json = Json.parseToJsonElement(result.resultJson).jsonObject
             assertEquals("success", json["status"]!!.jsonPrimitive.content)
-            assertEquals("mem-1", json["id"]!!.jsonPrimitive.content)
-            coVerify { memoriesRepository.insertMemory(MemoryCategory.PREFERENCES, content) }
+            val stored = memoriesRepository.getAllMemoriesFlow().first().single()
+            assertEquals(stored.id, json["id"]!!.jsonPrimitive.content)
+            assertEquals(listOf(MemoryCategory.PREFERENCES to content), memoriesRepository.insertCalls)
         }
 
     @Test
@@ -86,14 +83,13 @@ class ManageMemoriesToolExecutorTest {
         runTest {
             val content = "User likes tea"
             val id = "mem-1"
-            coEvery { memoriesRepository.updateMemory(id, content) } returns Unit
 
             val request = createRequest(action = "update", content = content, id = id)
             val result = executor.execute(request)
 
             val json = Json.parseToJsonElement(result.resultJson).jsonObject
             assertEquals("success", json["status"]!!.jsonPrimitive.content)
-            coVerify { memoriesRepository.updateMemory(id, content) }
+            assertEquals(listOf(Triple(id, content, null)), memoriesRepository.updateCalls)
         }
 
     @Test
@@ -101,14 +97,13 @@ class ManageMemoriesToolExecutorTest {
     fun testDeleteAction() =
         runTest {
             val id = "mem-1"
-            coEvery { memoriesRepository.deleteMemory(id) } returns Unit
 
             val request = createRequest(action = "delete", id = id)
             val result = executor.execute(request)
 
             val json = Json.parseToJsonElement(result.resultJson).jsonObject
             assertEquals("success", json["status"]!!.jsonPrimitive.content)
-            coVerify { memoriesRepository.deleteMemory(id) }
+            assertEquals(listOf(id), memoriesRepository.deleteCalls)
         }
 
     @Test
@@ -117,13 +112,11 @@ class ManageMemoriesToolExecutorTest {
         runTest {
             val query = "find something"
             val request = createRequest(action = "search", content = query)
-            val vector = floatArrayOf(0.1f, 0.2f)
-            val memories =
+            memoriesRepository.seed(
                 listOf(
                     Memory(id = "m1", category = MemoryCategory.FACTS, content = "Found it"),
-                )
-            coEvery { embeddingEnginePort.getEmbedding(query) } returns vector
-            coEvery { memoriesRepository.searchMemories(vector) } returns memories
+                ),
+            )
 
             val result = executor.execute(request)
 
@@ -139,7 +132,7 @@ class ManageMemoriesToolExecutorTest {
     @DisplayName("When exception occurs, then returns error status")
     fun testExceptionHandling() =
         runTest {
-            coEvery { memoriesRepository.deleteMemory(any()) } throws RuntimeException("Delete failed")
+            memoriesRepository.deleteFailure = RuntimeException("Delete failed")
 
             val request = createRequest(action = "delete", id = "mem-1")
             val result = executor.execute(request)

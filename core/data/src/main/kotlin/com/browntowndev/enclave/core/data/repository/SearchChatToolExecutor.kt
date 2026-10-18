@@ -33,7 +33,7 @@ private data class SearchChatResult(
 )
 
 @Singleton
-class SearchChatToolExecutor
+open class SearchChatToolExecutor
     @Inject
     constructor(
         private val loggingPort: LoggingPort,
@@ -46,7 +46,7 @@ class SearchChatToolExecutor
             private const val MAX_CONTENT_LENGTH = 500
         }
 
-        override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
+        open override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
             require(request.toolName == ToolDefinition.SEARCH_CHAT.name) {
                 "Unsupported tool: ${request.toolName}"
             }

@@ -2,27 +2,26 @@ package com.browntowndev.enclave.core.data.remote.firestore.handlers
 
 import com.browntowndev.enclave.core.data.local.ChatDao
 import com.browntowndev.enclave.core.data.local.ChatEntity
+import com.browntowndev.enclave.core.data.remote.firestore.FakeChatDao
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncContext
+import com.browntowndev.enclave.core.data.remote.firestore.testSyncContext
 import com.browntowndev.enclave.core.data.remote.testFirestoreSyncDaos
-import com.browntowndev.enclave.core.data.repository.FakeLocalDataEncryptionService
-import com.browntowndev.enclave.core.data.security.SensitivePersistenceSelfHealer
 import com.browntowndev.enclave.domain.model.chat.ChatId
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
-import com.google.firebase.firestore.FirebaseFirestore
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import java.util.Date
-import java.util.concurrent.atomic.AtomicBoolean
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class ChatSyncHandlerTest {
-    private val chatDao = mockk<ChatDao>(relaxed = true)
+    private val chatDao = FakeChatDao()
     private lateinit var handler: ChatSyncHandler
 
     @BeforeEach
@@ -69,11 +68,10 @@ class ChatSyncHandlerTest {
                     deleted = false,
                     pendingSync = 0,
                 )
-            coEvery { chatDao.markSynced(any()) } returns Unit
 
             handler.markSynced(listOf(chat))
 
-            coVerify { chatDao.markSynced(listOf(ChatId("chat-abc"))) }
+            assertEquals(listOf(listOf(ChatId("chat-abc"))), chatDao.markSyncedCalls)
         }
 
     @Test
@@ -95,24 +93,9 @@ class ChatSyncHandlerTest {
             val result = handler.repairForSync(chat)
 
             assertEquals(chat, result)
-            coVerify(exactly = 0) { chatDao.upsert(any()) }
+            assertTrue(chatDao.upsertedChats.isEmpty())
         }
 
-    private fun createContext(chatDao: ChatDao): FirestoreSyncContext {
-        val localEncryption = FakeLocalDataEncryptionService()
-        val loggingPort = mockk<LoggingPort>(relaxed = true)
-        return FirestoreSyncContext(
-            firestore = mockk<FirebaseFirestore>(relaxed = true),
-            daos = testFirestoreSyncDaos(chatDao = chatDao),
-            localEncryption = localEncryption,
-            sensitiveSelfHealer = SensitivePersistenceSelfHealer(localEncryption, loggingPort),
-            firestoreSensitiveFieldRepairer = mockk(relaxed = true),
-            cryptoManager = mockk<CryptoManagerPort>(relaxed = true),
-            loggingPort = loggingPort,
-            apiKeyManager = mockk(relaxed = true),
-            embeddingCoordinator = mockk(relaxed = true),
-            userIdProvider = { "user-1" },
-            purgeInProgress = AtomicBoolean(false),
-        )
-    }
+    private fun createContext(chatDao: ChatDao): FirestoreSyncContext =
+        testSyncContext(daos = testFirestoreSyncDaos(chatDao = chatDao))
 }

@@ -1,37 +1,61 @@
 package com.browntowndev.enclave.core.data.repository
 
+import android.content.Context
+import androidx.room.Room
+import androidx.test.core.app.ApplicationProvider
 import com.browntowndev.enclave.core.data.local.ApiCredentialsDao
 import com.browntowndev.enclave.core.data.local.ApiCredentialsEntity
 import com.browntowndev.enclave.core.data.local.ApiModelConfigurationsDao
+import com.browntowndev.enclave.core.data.local.EnclaveDatabase
 import com.browntowndev.enclave.core.data.security.ApiKeyManager
-import com.browntowndev.enclave.core.data.security.SensitiveRoomReadRepairApplier
-import com.browntowndev.enclave.core.data.sync.CloudSyncTrigger
+import com.browntowndev.enclave.core.testing.FakeCryptoManagerPort
 import com.browntowndev.enclave.domain.model.config.ApiCredentials
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.config.ApiModelConfiguration
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
-import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class ApiModelRepositorySyncTest {
-    private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
-    private val apiCredentialsDao = mockk<ApiCredentialsDao>(relaxed = true)
-    private val apiModelConfigurationsDao = mockk<ApiModelConfigurationsDao>(relaxed = true)
-    private val apiKeyManager = mockk<ApiKeyManager>(relaxed = true)
-    private val cryptoManager = mockk<CryptoManagerPort>(relaxed = true)
-    private val readRepairApplier = mockk<SensitiveRoomReadRepairApplier>(relaxed = true)
+    private lateinit var database: EnclaveDatabase
+    private lateinit var syncTrigger: RecordingCloudSyncTrigger
+    private lateinit var apiCredentialsDao: ApiCredentialsDao
+    private lateinit var apiModelConfigurationsDao: ApiModelConfigurationsDao
+    private lateinit var apiKeyManager: ApiKeyManager
+    private val cryptoManager = FakeCryptoManagerPort()
 
     private lateinit var repository: ApiModelRepositoryImpl
 
     @BeforeEach
     fun setup() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        database =
+            Room
+                .inMemoryDatabaseBuilder(context, EnclaveDatabase::class.java)
+                .allowMainThreadQueries()
+                .build()
+        syncTrigger = RecordingCloudSyncTrigger()
+        apiCredentialsDao = database.apiCredentialsDao()
+        apiModelConfigurationsDao = database.apiModelConfigurationsDao()
+        apiKeyManager =
+            testApiKeyManager(
+                context,
+                CoroutineScope(SupervisorJob() + Dispatchers.Default),
+                "api_model_repository_sync_test_prefs",
+            )
         repository =
             ApiModelRepositoryImpl(
                 syncTrigger = syncTrigger,
@@ -40,8 +64,13 @@ class ApiModelRepositorySyncTest {
                 apiKeyManager = apiKeyManager,
                 cryptoManager = cryptoManager,
                 healer = testSensitiveSelfHealer(FakeLocalDataEncryptionService()),
-                readRepairApplier = readRepairApplier,
+                readRepairApplier = database.realReadRepairApplier(),
             )
+    }
+
+    @AfterEach
+    fun tearDown() {
+        database.close()
     }
 
     @Test
@@ -55,27 +84,28 @@ class ApiModelRepositorySyncTest {
                     credentialAlias = "alias",
                 )
 
-            every { cryptoManager.hasCachedKey() } returns true
-            every { cryptoManager.encrypt("key") } returns Result.success(byteArrayOf(1, 2, 3))
-            coEvery { apiCredentialsDao.getById(any()) } returns
-                ApiCredentialsEntity(
-                    id = ApiCredentialsId("saved"),
-                    displayName = "Test",
-                    provider = ApiProvider.OPENAI,
-                    credentialAlias = "alias",
-                )
+            cryptoManager.hasCachedKeyValue = true
+            cryptoManager.encryptResult = Result.success(byteArrayOf(1, 2, 3))
 
-            repository.saveCredentials(credentials, "key", null)
+            val savedId = repository.saveCredentials(credentials, "key", null)
 
-            coVerify {
-                apiCredentialsDao.insert(match { it.pendingSync == 1 })
-                syncTrigger.trigger()
-            }
+            val stored = apiCredentialsDao.getById(savedId)
+            assertEquals(1, stored?.pendingSync)
+            assertEquals(1, syncTrigger.triggerCalls)
         }
 
     @Test
     fun `saveConfiguration sets pendingSync to 1 and triggers sync`() =
         runTest {
+            // Parent credentials row required by the configuration table's foreign key.
+            apiCredentialsDao.insert(
+                ApiCredentialsEntity(
+                    id = ApiCredentialsId("cred-id"),
+                    displayName = "Creds",
+                    provider = ApiProvider.OPENAI,
+                    credentialAlias = "cred-alias",
+                ),
+            )
             val config =
                 ApiModelConfiguration(
                     id = ApiModelConfigurationId(""),
@@ -84,23 +114,28 @@ class ApiModelRepositorySyncTest {
                     displayName = "Config",
                 )
 
-            repository.saveConfiguration(config)
+            val savedId = repository.saveConfiguration(config)
 
-            coVerify {
-                apiModelConfigurationsDao.upsert(match { it.pendingSync == 1 })
-                syncTrigger.trigger()
-            }
+            val stored = apiModelConfigurationsDao.getById(savedId)
+            assertEquals(1, stored?.pendingSync)
+            assertEquals(1, syncTrigger.triggerCalls)
         }
 
     @Test
     fun `deleteCredentials triggers sync`() =
         runTest {
-            coEvery { apiCredentialsDao.getById(any()) } returns mockk(relaxed = true)
+            apiCredentialsDao.insert(
+                ApiCredentialsEntity(
+                    id = ApiCredentialsId("id"),
+                    displayName = "Test",
+                    provider = ApiProvider.OPENAI,
+                    credentialAlias = "alias",
+                ),
+            )
 
             repository.deleteCredentials(ApiCredentialsId("id"))
 
-            coVerify {
-                syncTrigger.trigger()
-            }
+            assertEquals(1, syncTrigger.triggerCalls)
+            assertNull(apiCredentialsDao.getById(ApiCredentialsId("id")))
         }
 }

@@ -10,7 +10,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class CloudSyncTrigger
+open class CloudSyncTrigger
     @Inject
     constructor(
         private val workManager: WorkManager,
@@ -20,14 +20,14 @@ class CloudSyncTrigger
             private const val TAG = "CloudSyncTrigger"
         }
 
-        fun trigger() {
+        open fun trigger() {
             triggerMetadata()
             triggerMedia()
             triggerMediaDownload()
             triggerFiles()
         }
 
-        fun triggerMetadata() {
+        open fun triggerMetadata() {
             loggingPort.debug(TAG, "Enqueuing enclave_sync (APPEND_OR_REPLACE)")
             workManager.enqueueUniqueWork(
                 "enclave_sync",
@@ -42,7 +42,7 @@ class CloudSyncTrigger
             )
         }
 
-        fun triggerMedia() {
+        open fun triggerMedia() {
             loggingPort.debug(TAG, "Enqueuing enclave_media_sync (REPLACE)")
             workManager.enqueueUniqueWork(
                 "enclave_media_sync",
@@ -57,7 +57,7 @@ class CloudSyncTrigger
             )
         }
 
-        fun triggerMediaDownload() {
+        open fun triggerMediaDownload() {
             loggingPort.debug(TAG, "Enqueuing enclave_media_download (KEEP)")
             workManager.enqueueUniqueWork(
                 "enclave_media_download",
@@ -72,7 +72,7 @@ class CloudSyncTrigger
             )
         }
 
-        fun triggerFiles() {
+        open fun triggerFiles() {
             loggingPort.debug(TAG, "Enqueuing enclave_file_sync (REPLACE)")
             workManager.enqueueUniqueWork(
                 "enclave_file_sync",
@@ -87,19 +87,19 @@ class CloudSyncTrigger
             )
         }
 
-        fun triggerCloudChatsPurge() {
+        open fun triggerCloudChatsPurge() {
             enqueuePurge(CloudPurgeWorker.TYPE_CHATS)
         }
 
-        fun triggerCloudMediaPurge() {
+        open fun triggerCloudMediaPurge() {
             enqueuePurge(CloudPurgeWorker.TYPE_MEDIA)
         }
 
-        fun triggerCloudMemoriesPurge() {
+        open fun triggerCloudMemoriesPurge() {
             enqueuePurge(CloudPurgeWorker.TYPE_MEMORIES)
         }
 
-        fun triggerCloudArtifactsPurge() {
+        open fun triggerCloudArtifactsPurge() {
             enqueuePurge(CloudPurgeWorker.TYPE_ARTIFACTS)
         }
 

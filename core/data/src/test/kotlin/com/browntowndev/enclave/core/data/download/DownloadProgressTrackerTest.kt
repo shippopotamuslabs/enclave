@@ -4,8 +4,6 @@ import com.browntowndev.enclave.domain.model.download.DownloadFileSpec
 import com.browntowndev.enclave.domain.model.download.DownloadKey
 import com.browntowndev.enclave.domain.model.download.FileStatus
 import com.browntowndev.enclave.domain.port.download.DownloadSpeedTrackerPort
-import io.mockk.every
-import io.mockk.mockk
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -18,15 +16,36 @@ class DownloadProgressTrackerTest {
         const val TEST_SESSION_ID = "test-session"
     }
 
-    private lateinit var mockSpeedTracker: DownloadSpeedTrackerPort
+    /** Hand-written [DownloadSpeedTrackerPort] fake (ENC-28) with per-file scripted speeds. */
+    private class FakeDownloadSpeedTracker : DownloadSpeedTrackerPort {
+        var defaultSpeedAndEta: Pair<Double, Long> = Pair(1.0, 60L)
+        val speedsByFile = mutableMapOf<String, Pair<Double, Long>>()
+
+        override fun calculateSpeedAndEta(
+            filename: String,
+            bytesDownloaded: Long,
+            totalSize: Long,
+        ): Pair<Double, Long> = speedsByFile[filename] ?: defaultSpeedAndEta
+
+        override fun calculateAggregateSpeedAndEta(
+            totalBytesDownloaded: Long,
+            totalSize: Long,
+        ): Pair<Double, Long> = defaultSpeedAndEta
+
+        override fun formatEta(seconds: Long): String = "1 min"
+
+        override fun clear(filename: String) = Unit
+
+        override fun clearAll() = Unit
+    }
+
+    private lateinit var speedTracker: FakeDownloadSpeedTracker
     private lateinit var tracker: DownloadProgressTracker
 
     @BeforeEach
     fun setup() {
-        mockSpeedTracker = mockk(relaxed = true)
-        every { mockSpeedTracker.calculateSpeedAndEta(any(), any(), any()) } returns Pair(1.0, 60L)
-        every { mockSpeedTracker.formatEta(any()) } returns "1 min"
-        tracker = DownloadProgressTracker(mockSpeedTracker)
+        speedTracker = FakeDownloadSpeedTracker()
+        tracker = DownloadProgressTracker(speedTracker)
     }
 
     @Test
@@ -170,9 +189,9 @@ class DownloadProgressTrackerTest {
             ),
         )
 
-        // Mock different speeds for each file
-        every { mockSpeedTracker.calculateSpeedAndEta("file1.litertlm", any(), any()) } returns Pair(4.0, 100L)
-        every { mockSpeedTracker.calculateSpeedAndEta("file2.litertlm", any(), any()) } returns Pair(6.0, 150L)
+        // Script different speeds for each file
+        speedTracker.speedsByFile["file1.litertlm"] = Pair(4.0, 100L)
+        speedTracker.speedsByFile["file2.litertlm"] = Pair(6.0, 150L)
 
         tracker.updateFileState(TEST_SESSION_ID, "sha256_file1") { it.copy(status = FileStatus.DOWNLOADING, bytesDownloaded = 500L) }
         tracker.updateFileState(TEST_SESSION_ID, "sha256_file2") { it.copy(status = FileStatus.DOWNLOADING, bytesDownloaded = 500L) }

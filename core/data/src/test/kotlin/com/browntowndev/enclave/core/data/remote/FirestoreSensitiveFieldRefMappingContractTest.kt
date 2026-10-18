@@ -1,3 +1,6 @@
+@file:Suppress("ForbiddenMockKInTests")
+// MockK is used only for com.google.firebase.firestore.FirebaseFirestore, a Firebase SDK class with no hand-writable fake (ENC-28).
+
 package com.browntowndev.enclave.core.data.remote
 
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncAdapterRegistry
@@ -7,8 +10,15 @@ import com.browntowndev.enclave.core.data.remote.testFirestoreSyncDaos
 import com.browntowndev.enclave.core.data.repository.FakeLocalDataEncryptionService
 import com.browntowndev.enclave.core.data.security.SensitivePersistenceSelfHealer
 import com.browntowndev.enclave.core.data.security.StaticSensitiveFieldCatalog
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
+import com.browntowndev.enclave.core.data.FakeApiKeyManager
+import androidx.test.core.app.ApplicationProvider
+import com.browntowndev.enclave.core.data.testWorkManager
+import com.browntowndev.enclave.core.data.sync.EmbeddingRegenerationCoordinator
+import com.browntowndev.enclave.core.testing.FakeCryptoManagerPort
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import com.google.firebase.firestore.FirebaseFirestore
 import io.mockk.mockk
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -16,6 +26,9 @@ import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -23,6 +36,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  * [FirestoreSyncDependencyGraph], and [FirestoreSyncAdapterRegistry] must agree on
  * Firestore collection paths and Room entity owners.
  */
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class FirestoreSensitiveFieldRefMappingContractTest {
     private val catalog = StaticSensitiveFieldCatalog()
 
@@ -78,17 +93,26 @@ class FirestoreSensitiveFieldRefMappingContractTest {
 
     private fun createMinimalContext(): FirestoreSyncContext {
         val localEncryption = FakeLocalDataEncryptionService()
-        val loggingPort = mockk<LoggingPort>(relaxed = true)
+        val loggingPort = FakeLoggingPort()
+        val healer = SensitivePersistenceSelfHealer(localEncryption, loggingPort)
         return FirestoreSyncContext(
             firestore = mockk<FirebaseFirestore>(relaxed = true),
             daos = testFirestoreSyncDaos(),
             localEncryption = localEncryption,
-            sensitiveSelfHealer = SensitivePersistenceSelfHealer(localEncryption, loggingPort),
-            firestoreSensitiveFieldRepairer = mockk(relaxed = true),
-            cryptoManager = mockk<CryptoManagerPort>(relaxed = true),
+            sensitiveSelfHealer = healer,
+            firestoreSensitiveFieldRepairer =
+                FirestoreSensitiveFieldRepairer(
+                    catalog = StaticSensitiveFieldCatalog(),
+                    healer = healer,
+                ),
+            cryptoManager = FakeCryptoManagerPort(),
             loggingPort = loggingPort,
-            apiKeyManager = mockk(relaxed = true),
-            embeddingCoordinator = mockk(relaxed = true),
+            apiKeyManager = FakeApiKeyManager(),
+            embeddingCoordinator =
+                EmbeddingRegenerationCoordinator(
+                    testWorkManager(ApplicationProvider.getApplicationContext()),
+                    CoroutineScope(SupervisorJob() + Dispatchers.Default),
+                ),
             userIdProvider = { "alice" },
             purgeInProgress = AtomicBoolean(false),
         )

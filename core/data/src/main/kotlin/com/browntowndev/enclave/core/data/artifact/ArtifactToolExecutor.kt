@@ -52,7 +52,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class ArtifactToolExecutor
+open class ArtifactToolExecutor
     @Inject
     constructor(
         private val documentDao: DocumentDao,
@@ -69,7 +69,7 @@ class ArtifactToolExecutor
                 encodeDefaults = true
             }
 
-        override suspend fun execute(request: ToolCallRequest): ToolExecutionResult =
+        open override suspend fun execute(request: ToolCallRequest): ToolExecutionResult =
             when (request.toolName) {
                 ToolDefinition.START_ARTIFACT.name -> {
                     documentValidation.validateStartArtifactArgs(request.argumentsJson).onFailure { cause ->

@@ -1,6 +1,5 @@
 package com.browntowndev.enclave.core.data.download
 
-import android.util.Log
 import androidx.test.core.app.ApplicationProvider
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.RemoteModelAsset
@@ -12,16 +11,11 @@ import com.browntowndev.enclave.domain.model.download.ModelPackTestFixtures
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.port.download.ModelUrlProviderPort
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.mockkStatic
-import io.mockk.unmockkStatic
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
-import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -35,35 +29,52 @@ import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 @ExtendWith(RobolectricExtension::class)
 @Config(sdk = [34])
 class ModelConfigFetcherImplTest {
-    private lateinit var mockOkHttpClient: OkHttpClient
-    private lateinit var mockModelUrlProvider: ModelUrlProviderPort
+    /** Body the fake transport returns for the next calls; null means "no canned body". */
+    private var cannedBody: String? = null
+
+    /** When set, the fake transport throws this instead of returning [cannedBody]. */
+    private var cannedFailure: java.io.IOException? = null
+
     private lateinit var fetcher: ModelConfigFetcherImpl
+
+    /** Hand-written [ModelUrlProviderPort] fake: only the config URL is exercised here. */
+    private class FakeModelUrlProvider : ModelUrlProviderPort {
+        override fun getConfigUrl(): String = "https://config.example.com/model_config.json"
+
+        override fun getTrustedDomainsUrl(): String = "https://config.example.com/trusted_domains.json"
+
+        override fun getModelDownloadUrl(spec: com.browntowndev.enclave.domain.model.download.DownloadFileSpec): String =
+            "https://config.example.com/${spec.remoteFileName}"
+    }
 
     @BeforeEach
     fun setup() {
-        mockkStatic(Log::class)
-        every { Log.d(any<String>(), any<String>()) } returns 0
-        every { Log.i(any<String>(), any<String>()) } returns 0
-        every { Log.w(any<String>(), any<String>()) } returns 0
-        every { Log.e(any<String>(), any<String>()) } returns 0
-        every { Log.e(any<String>(), any<String>(), any<Throwable>()) } returns 0
+        cannedBody = null
+        cannedFailure = null
 
-        mockOkHttpClient = mockk()
-        mockModelUrlProvider = mockk()
-
-        every { mockModelUrlProvider.getConfigUrl() } returns "https://config.example.com/model_config.json"
+        // Real OkHttpClient whose transport is an application interceptor that
+        // fabricates the canned response (or throws the canned failure) — no network.
+        val okHttpClient =
+            OkHttpClient
+                .Builder()
+                .addInterceptor { chain ->
+                    cannedFailure?.let { throw it }
+                    Response
+                        .Builder()
+                        .request(chain.request())
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(200)
+                        .message("OK")
+                        .body((cannedBody ?: "").toResponseBody())
+                        .build()
+                }.build()
 
         fetcher =
             ModelConfigFetcherImpl(
                 ApplicationProvider.getApplicationContext(),
-                mockOkHttpClient,
-                mockModelUrlProvider,
+                okHttpClient,
+                FakeModelUrlProvider(),
             )
-    }
-
-    @AfterEach
-    fun teardown() {
-        unmockkStatic(Log::class)
     }
 
     @Test
@@ -401,19 +412,7 @@ class ModelConfigFetcherImplTest {
                 }
                 """.trimIndent()
 
-            val mockCall = mockk<okhttp3.Call>()
-            val response =
-                Response
-                    .Builder()
-                    .request(mockk())
-                    .protocol(Protocol.HTTP_1_1)
-                    .code(200)
-                    .message("OK")
-                    .body(json.toResponseBody())
-                    .build()
-
-            every { mockOkHttpClient.newCall(any()) } returns mockCall
-            every { mockCall.execute() } returns response
+            mockConfigResponse(json)
 
             // When
             val result = fetcher.fetchRemoteConfig()
@@ -463,19 +462,7 @@ class ModelConfigFetcherImplTest {
                 }
                 """.trimIndent()
 
-            val mockCall = mockk<okhttp3.Call>()
-            val response =
-                Response
-                    .Builder()
-                    .request(mockk())
-                    .protocol(Protocol.HTTP_1_1)
-                    .code(200)
-                    .message("OK")
-                    .body(json.toResponseBody())
-                    .build()
-
-            every { mockOkHttpClient.newCall(any()) } returns mockCall
-            every { mockCall.execute() } returns response
+            mockConfigResponse(json)
 
             // When
             val result = fetcher.fetchRemoteConfig()
@@ -542,19 +529,7 @@ class ModelConfigFetcherImplTest {
                 }
                 """.trimIndent()
 
-            val mockCall = mockk<okhttp3.Call>()
-            val response =
-                Response
-                    .Builder()
-                    .request(mockk())
-                    .protocol(Protocol.HTTP_1_1)
-                    .code(200)
-                    .message("OK")
-                    .body(json.toResponseBody())
-                    .build()
-
-            every { mockOkHttpClient.newCall(any()) } returns mockCall
-            every { mockCall.execute() } returns response
+            mockConfigResponse(json)
 
             val result = fetcher.fetchRemoteConfig()
 
@@ -585,19 +560,7 @@ class ModelConfigFetcherImplTest {
                 }
                 """.trimIndent()
 
-            val mockCall = mockk<okhttp3.Call>()
-            val response =
-                Response
-                    .Builder()
-                    .request(mockk())
-                    .protocol(Protocol.HTTP_1_1)
-                    .code(200)
-                    .message("OK")
-                    .body(json.toResponseBody())
-                    .build()
-
-            every { mockOkHttpClient.newCall(any()) } returns mockCall
-            every { mockCall.execute() } returns response
+            mockConfigResponse(json)
 
             val result = fetcher.fetchRemoteConfig()
 
@@ -679,19 +642,7 @@ class ModelConfigFetcherImplTest {
                 }
                 """.trimIndent()
 
-            val mockCall = mockk<okhttp3.Call>()
-            val response =
-                Response
-                    .Builder()
-                    .request(mockk())
-                    .protocol(Protocol.HTTP_1_1)
-                    .code(200)
-                    .message("OK")
-                    .body(json.toResponseBody())
-                    .build()
-
-            every { mockOkHttpClient.newCall(any()) } returns mockCall
-            every { mockCall.execute() } returns response
+            mockConfigResponse(json)
 
             // When
             val result = fetcher.fetchRemoteConfig()
@@ -764,9 +715,7 @@ class ModelConfigFetcherImplTest {
             mockConfigResponse(sd15PackConfigJson())
             fetcher.fetchParsedCatalog().getOrThrow()
 
-            val mockCall = mockk<okhttp3.Call>()
-            every { mockOkHttpClient.newCall(any()) } returns mockCall
-            every { mockCall.execute() } throws java.io.IOException("offline")
+            cannedFailure = java.io.IOException("offline")
 
             val result = fetcher.fetchParsedCatalog()
 
@@ -788,15 +737,8 @@ class ModelConfigFetcherImplTest {
             mockConfigResponse(sd15PackConfigJson())
             fetcher.fetchParsedCatalog().getOrThrow()
 
-            val offlineFetcher =
-                ModelConfigFetcherImpl(
-                    ApplicationProvider.getApplicationContext(),
-                    mockOkHttpClient,
-                    mockModelUrlProvider,
-                )
-            val mockCall = mockk<okhttp3.Call>()
-            every { mockOkHttpClient.newCall(any()) } returns mockCall
-            every { mockCall.execute() } throws java.io.IOException("offline")
+            val offlineFetcher = fetcher
+            cannedFailure = java.io.IOException("offline")
 
             val result = offlineFetcher.getPersistedParsedCatalog()
 
@@ -856,19 +798,7 @@ class ModelConfigFetcherImplTest {
                 ).first { it.exists() }
             val body = configFile.readText()
 
-            val mockCall = mockk<okhttp3.Call>()
-            val response =
-                Response
-                    .Builder()
-                    .request(mockk())
-                    .protocol(Protocol.HTTP_1_1)
-                    .code(200)
-                    .message("OK")
-                    .body(body.toResponseBody())
-                    .build()
-
-            every { mockOkHttpClient.newCall(any()) } returns mockCall
-            every { mockCall.execute() } returns response
+            mockConfigResponse(body)
 
             val result = fetcher.fetchRemoteConfig()
 
@@ -967,19 +897,8 @@ class ModelConfigFetcherImplTest {
         }
 
     private fun mockConfigResponse(json: String) {
-        val mockCall = mockk<okhttp3.Call>()
-        val response =
-            Response
-                .Builder()
-                .request(mockk())
-                .protocol(Protocol.HTTP_1_1)
-                .code(200)
-                .message("OK")
-                .body(json.toResponseBody())
-                .build()
-
-        every { mockOkHttpClient.newCall(any()) } returns mockCall
-        every { mockCall.execute() } returns response
+        cannedBody = json
+        cannedFailure = null
     }
 
     private fun sd15PackConfigJson(

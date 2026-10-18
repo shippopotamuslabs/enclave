@@ -12,8 +12,6 @@ import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.Role
 import com.browntowndev.enclave.domain.model.config.ApiCredentialsId
 import com.browntowndev.enclave.domain.model.inference.ApiProvider
-import io.mockk.coEvery
-import io.mockk.spyk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -301,9 +299,26 @@ class SensitiveRoomReadRepairApplierTest {
                 )
             database.messageDao().upsert(message)
 
-            // Spy the MessageDao and make it throw on update
-            val spiedMessageDao = spyk(database.messageDao())
-            coEvery { spiedMessageDao.update(any()) } throws RuntimeException("Database write failure")
+            // Real MessageDao whose command delegate throws on update (write failure)
+            val realCommands = database.messageCommandDao()
+            val throwingCommands =
+                object : com.browntowndev.enclave.core.data.local.dao.message.MessageCommandDao by realCommands {
+                    override suspend fun update(messageEntity: MessageEntity) {
+                        throw RuntimeException("Database write failure")
+                    }
+                }
+            val spiedMessageDao =
+                com.browntowndev.enclave.core.data.local.dao.message.MessageDao(
+                    query = database.messageQueryDao(),
+                    command = throwingCommands,
+                    syncCommand = database.messageSyncCommandDao(),
+                    persist =
+                        com.browntowndev.enclave.core.data.local.dao.message.MessageDaoPersist(
+                            database = database,
+                            commands = throwingCommands,
+                            syncCommands = database.messageSyncCommandDao(),
+                        ),
+                )
 
             val errorApplier =
                 SensitiveRoomReadRepairApplier(

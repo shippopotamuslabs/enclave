@@ -1,16 +1,13 @@
 package com.browntowndev.enclave.core.data.repository
 
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.model.media.GeneratedMediaAsset
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.usecase.media.GenerateImageUseCase
-import com.browntowndev.enclave.domain.usecase.media.GenerateMediaUseCase
-import io.mockk.coEvery
-import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -18,9 +15,14 @@ import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
+/**
+ * Translated from MockK to a hand-written subclass fake (ENC-28):
+ * [FakeGenerateMediaUseCase] overrides the open use-case invoke with canned
+ * results/failures, and the logging port is the `:core:testing` fake.
+ */
 class MediaToolExecutorTest {
-    private val generateMediaUseCase = mockk<GenerateMediaUseCase>()
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
+    private val generateMediaUseCase = FakeGenerateMediaUseCase()
+    private val loggingPort = FakeLoggingPort()
 
     private val executor =
         MediaToolExecutor(
@@ -32,7 +34,7 @@ class MediaToolExecutorTest {
     fun `S-CHAT-01 Image tool success JSON contains success true and success message`() =
         runTest {
             val request = imageToolRequest("""{"prompt":"a sunset","count":1}""")
-            coEvery { generateMediaUseCase(any()) } returns
+            generateMediaUseCase.result =
                 Result.success(
                     listOf(
                         GeneratedMediaAsset(
@@ -56,7 +58,7 @@ class MediaToolExecutorTest {
     fun `S-CHAT-02 Image tool failure JSON contains success false and provider error text`() =
         runTest {
             val request = imageToolRequest("""{"prompt":"a sunset","count":1}""")
-            coEvery { generateMediaUseCase(any()) } returns
+            generateMediaUseCase.result =
                 Result.failure(IllegalStateException("No image generation provider assigned"))
 
             val result = executor.execute(request)
@@ -69,7 +71,7 @@ class MediaToolExecutorTest {
     fun `S-CHAT-03 Success JSON includes asset_ids value with prefix chat_media_`() =
         runTest {
             val request = imageToolRequest("""{"prompt":"a sunset","count":1}""")
-            coEvery { generateMediaUseCase(any()) } returns
+            generateMediaUseCase.result =
                 Result.success(
                     listOf(
                         GeneratedMediaAsset(
@@ -121,8 +123,7 @@ class MediaToolExecutorTest {
     fun `Image tool IOException failure JSON contains success false and Network error prefix`() =
         runTest {
             val request = imageToolRequest("""{"prompt":"a sunset","count":1}""")
-            coEvery { generateMediaUseCase(any()) } returns
-                Result.failure(java.io.IOException("Service Unavailable"))
+            generateMediaUseCase.result = Result.failure(java.io.IOException("Service Unavailable"))
 
             val result = executor.execute(request)
 
@@ -134,7 +135,7 @@ class MediaToolExecutorTest {
     fun `Image tool direct IOException throwing failure JSON contains success false and Network error prefix`() =
         runTest {
             val request = imageToolRequest("""{"prompt":"a sunset","count":1}""")
-            coEvery { generateMediaUseCase(any()) } throws java.io.IOException("Gateway timeout")
+            generateMediaUseCase.failure = java.io.IOException("Gateway timeout")
 
             val result = executor.execute(request)
 

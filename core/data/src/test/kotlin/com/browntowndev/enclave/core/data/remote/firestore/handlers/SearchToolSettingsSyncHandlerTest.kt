@@ -1,3 +1,7 @@
+@file:Suppress("ForbiddenMockKInTests")
+
+// MockK retained only for the Firebase Firestore SDK surface (DocumentSnapshot), which has no JVM fake.
+
 package com.browntowndev.enclave.core.data.remote.firestore.handlers
 
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
@@ -5,20 +9,16 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncContext
-import com.browntowndev.enclave.core.data.remote.testFirestoreSyncDaos
-import com.browntowndev.enclave.core.data.repository.FakeLocalDataEncryptionService
+import com.browntowndev.enclave.core.data.remote.firestore.testApiKeyManager
+import com.browntowndev.enclave.core.data.remote.firestore.testSyncContext
 import com.browntowndev.enclave.core.data.repository.SearchToolSettingsRecord
 import com.browntowndev.enclave.core.data.repository.SettingsRepositoryImpl
 import com.browntowndev.enclave.core.data.security.ApiKeyManager
-import com.browntowndev.enclave.core.data.security.SensitivePersistenceSelfHealer
 import com.browntowndev.enclave.core.data.sync.SearchToolSettingsSyncQueue
 import com.browntowndev.enclave.domain.model.settings.SearchProvider
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
 import com.google.firebase.firestore.CollectionReference
 import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.DocumentSnapshot
-import com.google.firebase.firestore.FirebaseFirestore
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
@@ -31,7 +31,9 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Path
-import java.util.concurrent.atomic.AtomicBoolean
+import org.junit.jupiter.api.extension.ExtendWith
+import org.robolectric.annotation.Config
+import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 
 /**
  * Coverage for `SearchToolSettingsSyncHandler` against the contract in
@@ -39,6 +41,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  * asserts the behavioural contract — round-trip payload shape, remote-apply seam, and
  * the local-pending-edit-wins policy.
  */
+@ExtendWith(RobolectricExtension::class)
+@Config(sdk = [34])
 class SearchToolSettingsSyncHandlerTest {
     @TempDir
     lateinit var tempDir: Path
@@ -540,12 +544,12 @@ class SearchToolSettingsSyncHandlerTest {
         initialXSearchEnabled: Boolean = false,
         initialTavilyKeyPresent: Boolean = false,
     ): SettingsRepositoryImpl {
-        val apiKeyManager =
-            mockk<ApiKeyManager>(relaxed = true) {
-                every { has(ApiKeyManager.TAVILY_SEARCH_ALIAS) } returns initialTavilyKeyPresent
-                every { has(ApiKeyManager.EXA_SEARCH_ALIAS) } returns false
-                every { has(ApiKeyManager.X_SEARCH_ALIAS) } returns false
-            }
+        // Real ApiKeyManager over in-memory prefs: `has` mirrors the seeded keys,
+        // matching the stubbed alias surface (TAVILY seeded only when requested).
+        val apiKeyManager = testApiKeyManager()
+        if (initialTavilyKeyPresent) {
+            apiKeyManager.save(ApiKeyManager.TAVILY_SEARCH_ALIAS, "test-tavily-key")
+        }
         // Seed the initial state in the DataStore so the test reads the desired starting
         // values from `settingsFlow` without having to call the public mutators (which
         // would also enqueue a pending-sync write through the queue). We must use the
@@ -569,25 +573,12 @@ class SearchToolSettingsSyncHandlerTest {
     private fun createContext(
         queue: SearchToolSettingsSyncQueue,
         settingsRepository: SettingsRepositoryImpl? = null,
-    ): FirestoreSyncContext {
-        val localEncryption = FakeLocalDataEncryptionService()
-        val loggingPort = mockk<LoggingPort>(relaxed = true)
-        return FirestoreSyncContext(
-            firestore = mockk<FirebaseFirestore>(relaxed = true),
-            daos = testFirestoreSyncDaos(),
-            localEncryption = localEncryption,
-            sensitiveSelfHealer = SensitivePersistenceSelfHealer(localEncryption, loggingPort),
-            firestoreSensitiveFieldRepairer = mockk(relaxed = true),
-            cryptoManager = mockk<CryptoManagerPort>(relaxed = true),
-            loggingPort = loggingPort,
-            apiKeyManager = mockk(relaxed = true),
-            embeddingCoordinator = mockk(relaxed = true),
-            userIdProvider = { "test-user-id" },
-            purgeInProgress = AtomicBoolean(false),
+    ): FirestoreSyncContext =
+        testSyncContext(
+            userId = "test-user-id",
             searchToolSettingsSyncQueue = queue,
             settingsRepository = settingsRepository,
         )
-    }
 
     private fun mockSearchToolSettingsDocument(
         entityId: String,

@@ -14,7 +14,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class XMentionSearchToolExecutor
+open class XMentionSearchToolExecutor
     @Inject
     constructor(
         private val loggingPort: LoggingPort,
@@ -26,7 +26,7 @@ class XMentionSearchToolExecutor
             private val json = Json { ignoreUnknownKeys = true }
         }
 
-        override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
+        open override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
             requireSupportedTool(request.toolName)
             val settings = settingsRepository.settingsFlow.first()
             if (!settings.xSearchEnabled) {

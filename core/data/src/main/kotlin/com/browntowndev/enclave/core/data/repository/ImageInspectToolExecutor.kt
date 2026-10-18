@@ -36,7 +36,7 @@ private data class ImageInspectError(
 )
 
 @Singleton
-class ImageInspectToolExecutor
+open class ImageInspectToolExecutor
     @Inject
     constructor(
         private val loggingPort: LoggingPort,
@@ -47,7 +47,7 @@ class ImageInspectToolExecutor
             private const val TAG = "ImageInspectTool"
         }
 
-        override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
+        open override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
             requireSupportedTool(request.toolName)
             val params = request.parameters as AttachedImageInspectParams
             val question = params.question
