@@ -40,13 +40,20 @@ class FakeUiSelectionRepository(
     override val selectedStudioMediaType: Flow<MediaCapability> = studioMediaTypeState
 
     val setStudioMediaTypeCalls = mutableListOf<MediaCapability>()
+    val setChatModeCalls = mutableListOf<Mode>()
 
     /** Test driver: sets the persisted studio media type selection directly. */
     fun emitSelectedStudioMediaType(type: MediaCapability) {
         studioMediaTypeState.value = type
     }
 
+    /** Test driver: sets the persisted chat mode selection directly. */
+    fun emitSelectedChatMode(mode: Mode) {
+        chatModeState.value = mode
+    }
+
     override suspend fun setChatMode(mode: Mode) {
+        setChatModeCalls += mode
         chatModeState.value = mode
     }
 
@@ -94,9 +101,17 @@ class FakeTtsPlaybackController : TtsPlaybackControllerPort {
         stopCount++
     }
 
-    override fun pause() = Unit
+    var pauseCount = 0
 
-    override fun resume() = Unit
+    override fun pause() {
+        pauseCount++
+    }
+
+    var resumeCount = 0
+
+    override fun resume() {
+        resumeCount++
+    }
 }
 
 /** Recording [LocalImageGenerationCancelPort] fake (ENC-28). */

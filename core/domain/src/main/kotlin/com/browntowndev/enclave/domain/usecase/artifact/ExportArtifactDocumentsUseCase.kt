@@ -35,14 +35,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
-class ExportArtifactDocumentsUseCase
+open class ExportArtifactDocumentsUseCase
     @Inject
     constructor(
         private val documentGeneratorPort: DocumentGeneratorPort,
         private val shareMediaPort: ShareMediaPort,
         private val saveBinaryToDownloadsPort: SaveBinaryToDownloadsPort,
     ) {
-        suspend operator fun invoke(command: ExportArtifactDocumentsCommand): Result<ArtifactExportOutcome> =
+        open suspend operator fun invoke(command: ExportArtifactDocumentsCommand): Result<ArtifactExportOutcome> =
             try {
                 val base = sanitizeBaseFileName(command.baseTitle)
                 val json = command.documentJson

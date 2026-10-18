@@ -16,7 +16,7 @@ import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
-class PersistVoiceTurnUseCase
+open class PersistVoiceTurnUseCase
     @Inject
     constructor(
         private val createUserMessageUseCase: CreateUserMessageUseCase,
@@ -24,7 +24,7 @@ class PersistVoiceTurnUseCase
         private val chatRepository: ChatRepository,
         private val generateChatTitleUseCase: GenerateChatTitleUseCase,
     ) {
-        suspend operator fun invoke(
+        open suspend operator fun invoke(
             chatId: ChatId?,
             userText: String,
             assistantText: String,

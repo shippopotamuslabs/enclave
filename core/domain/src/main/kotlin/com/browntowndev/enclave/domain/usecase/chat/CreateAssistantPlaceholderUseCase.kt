@@ -9,14 +9,14 @@ import com.browntowndev.enclave.domain.port.repository.ChatRepository
 import com.browntowndev.enclave.domain.port.repository.MessageRepository
 import javax.inject.Inject
 
-class CreateAssistantPlaceholderUseCase
+open class CreateAssistantPlaceholderUseCase
     @Inject
     constructor(
         private val messageRepository: MessageRepository,
         @Suppress("UnusedPrivateProperty")
         private val chatRepository: ChatRepository,
     ) {
-        suspend operator fun invoke(
+        open suspend operator fun invoke(
             chatId: ChatId,
             userMessageCreatedAtMillis: Long,
             assistantMessageId: MessageId,

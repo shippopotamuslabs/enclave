@@ -1,43 +1,34 @@
 package com.browntowndev.enclave.feature.chat
 
 import androidx.lifecycle.SavedStateHandle
+import com.browntowndev.enclave.core.testing.FakeChatRepository
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeViewModelErrorHandler
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
-import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.ChatResponseMode
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.MessageState
-import com.browntowndev.enclave.domain.port.repository.SettingsData
 import com.browntowndev.enclave.domain.usecase.chat.ChatTurnTiming
-import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
-import com.browntowndev.enclave.domain.usecase.inference.CancelInferenceUseCase
-import com.browntowndev.enclave.domain.usecase.inference.ModeratePromptUseCase
-import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.enclave.feature.chat.delegates.InferenceOrchestrator
 import com.browntowndev.enclave.feature.inference.ActiveChatTurnStore
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.verify
-import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.awaitCancellation
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.RegisterExtension
-import kotlin.coroutines.CoroutineContext
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class InferenceOrchestratorStopTest {
@@ -47,10 +38,10 @@ class InferenceOrchestratorStopTest {
     @JvmField
     val mainDispatcherRule = MainDispatcherRule(testDispatcher)
 
-    private lateinit var chatUseCases: ChatUseCases
-    private lateinit var settingsUseCases: SettingsUseCases
-    private lateinit var cancelInferenceUseCase: CancelInferenceUseCase
-    private lateinit var chatRepository: com.browntowndev.enclave.domain.port.repository.ChatRepository
+    private lateinit var chatUseCases: FakeChatUseCases
+    private lateinit var settingsUseCases: FakeChatSettingsUseCases
+    private lateinit var cancelInferenceUseCase: FakeCancelInferenceUseCase
+    private lateinit var chatRepository: FakeChatRepository
     private lateinit var turnStore: ActiveChatTurnStore
     private lateinit var orchestrator: InferenceOrchestrator
     private lateinit var applicationScope: CoroutineScope
@@ -58,16 +49,13 @@ class InferenceOrchestratorStopTest {
     @BeforeEach
     fun setUp() {
         applicationScope = CoroutineScope(SupervisorJob() + testDispatcher)
-        chatUseCases = mockk(relaxed = true)
-        settingsUseCases = mockk()
-        cancelInferenceUseCase = mockk(relaxed = true)
-        chatRepository = mockk(relaxed = true)
+        chatUseCases = FakeChatUseCases()
+        settingsUseCases = FakeChatSettingsUseCases()
+        cancelInferenceUseCase = FakeCancelInferenceUseCase()
+        chatRepository = FakeChatRepository()
         turnStore = ActiveChatTurnStore()
-        every { settingsUseCases.getSettings() } returns MutableStateFlow(SettingsData())
 
-        val errorHandler = mockk<ViewModelErrorHandler>()
-        every { errorHandler.coroutineExceptionHandler(any(), any(), any()) } returns
-            CoroutineExceptionHandler { _: CoroutineContext, _ -> }
+        val errorHandler = FakeViewModelErrorHandler()
 
         orchestrator =
             InferenceOrchestrator(
@@ -78,9 +66,9 @@ class InferenceOrchestratorStopTest {
                 chatRepository = chatRepository,
                 errorHandler = errorHandler,
                 savedStateHandle = SavedStateHandle(),
-                pipelineExecutor = mockk(relaxed = true),
-                moderatePromptUseCase = mockk<ModeratePromptUseCase>(relaxed = true),
-                loggingPort = mockk(relaxed = true),
+                pipelineExecutor = FakePipelineExecutorPort(),
+                moderatePromptUseCase = FakeModeratePromptUseCase(),
+                loggingPort = FakeLoggingPort(),
                 applicationScope = applicationScope,
             )
 
@@ -89,16 +77,7 @@ class InferenceOrchestratorStopTest {
             userMessageId = MessageId("user-stop-1"),
             chatId = ChatId("chat-stop-1"),
         )
-        coEvery {
-            chatUseCases.generateChatResponse(
-                prompt = any(),
-                userMessageId = any(),
-                assistantMessageId = any(),
-                chatId = any(),
-                    responseMode = any(),
-                backgroundInferenceEnabled = any(),
-            )
-        } returns
+        chatUseCases.generateChatResponseUseCase.flow =
             flow {
                 awaitCancellation()
             }
@@ -157,19 +136,17 @@ class InferenceOrchestratorStopTest {
             )
             advanceUntilIdle()
 
-            verify(exactly = 2) { cancelInferenceUseCase() }
-            coVerify {
-                chatRepository.updateMessageContent(
-                    turnKey.assistantMessageId,
-                    "Partial answer",
-                )
-            }
-            coVerify {
-                chatRepository.updateMessageState(
-                    turnKey.assistantMessageId,
-                    MessageState.COMPLETE,
-                )
-            }
+            assertEquals(2, cancelInferenceUseCase.callCount)
+            assertTrue(
+                chatRepository.updateMessageContentCalls.contains(
+                    turnKey.assistantMessageId to "Partial answer",
+                ),
+            )
+            assertTrue(
+                chatRepository.updateMessageStateCalls.contains(
+                    turnKey.assistantMessageId to MessageState.COMPLETE,
+                ),
+            )
             assertNull(turnStore.getSnapshot(turnKey))
             assertNull(orchestrator.requestedTurnKey.value)
         }

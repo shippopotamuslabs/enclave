@@ -1,27 +1,15 @@
 package com.browntowndev.enclave.feature.chat
 
 import androidx.lifecycle.SavedStateHandle
+import com.browntowndev.enclave.core.testing.FakeActiveChatTurnSnapshotPort
+import com.browntowndev.enclave.core.testing.FakeActiveModelProvider
+import com.browntowndev.enclave.core.testing.FakeChatRepository
+import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.core.testing.FakeStudioRepository
+import com.browntowndev.enclave.core.testing.FakeTtsPlaybackController
+import com.browntowndev.enclave.core.testing.FakeViewModelErrorHandler
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
-import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.chat.ChatId
-import com.browntowndev.enclave.domain.port.inference.ActiveChatTurnSnapshotPort
-import com.browntowndev.enclave.domain.port.inference.LoggingPort
-import com.browntowndev.enclave.domain.port.inference.ToolExecutionEventPort
-import com.browntowndev.enclave.domain.port.media.TtsPlaybackControllerPort
-import com.browntowndev.enclave.domain.port.repository.ActiveModelProviderPort
-import com.browntowndev.enclave.domain.port.repository.SettingsData
-import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
-import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
-import com.browntowndev.enclave.domain.usecase.chat.GetModelDisplayNameUseCase
-import com.browntowndev.enclave.domain.usecase.chat.StageImageAttachmentUseCase
-import com.browntowndev.enclave.domain.usecase.inference.CancelInferenceUseCase
-import com.browntowndev.enclave.domain.usecase.inference.InferenceLockManager
-import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
-import com.browntowndev.enclave.domain.usecase.share.ShareChatUseCase
-import io.mockk.every
-import io.mockk.mockk
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.flowOf
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -29,44 +17,37 @@ import org.junit.jupiter.api.extension.ExtendWith
 
 @ExtendWith(MainDispatcherRule::class)
 class ChatViewModelNavigationTest {
-    private lateinit var settingsUseCases: SettingsUseCases
-    private lateinit var chatUseCases: ChatUseCases
-    private lateinit var stageImageAttachmentUseCase: StageImageAttachmentUseCase
-    private lateinit var cancelInferenceUseCase: CancelInferenceUseCase
-    private lateinit var inferenceLockManager: InferenceLockManager
-    private lateinit var modelDisplayNamesUseCase: GetModelDisplayNameUseCase
-    private lateinit var activeModelProvider: ActiveModelProviderPort
-    private lateinit var toolExecutionEventPort: ToolExecutionEventPort
-    private lateinit var errorHandler: ViewModelErrorHandler
-    private lateinit var loggingPort: LoggingPort
-    private lateinit var activeChatTurnSnapshotPort: ActiveChatTurnSnapshotPort
-    private lateinit var playbackController: TtsPlaybackControllerPort
-    private lateinit var studioRepository: StudioRepositoryPort
-    private lateinit var shareChatUseCase: ShareChatUseCase
+    private lateinit var settingsUseCases: FakeChatSettingsUseCases
+    private lateinit var chatUseCases: FakeChatUseCases
+    private lateinit var stageImageAttachmentUseCase: FakeStageImageAttachmentUseCase
+    private lateinit var cancelInferenceUseCase: FakeCancelInferenceUseCase
+    private lateinit var inferenceLockManager: FakeInferenceLockManager
+    private lateinit var modelDisplayNamesUseCase: FakeGetModelDisplayNameUseCase
+    private lateinit var activeModelProvider: FakeActiveModelProvider
+    private lateinit var toolExecutionEventPort: FakeToolExecutionEventPort
+    private lateinit var errorHandler: FakeViewModelErrorHandler
+    private lateinit var loggingPort: FakeLoggingPort
+    private lateinit var activeChatTurnSnapshotPort: FakeActiveChatTurnSnapshotPort
+    private lateinit var playbackController: FakeTtsPlaybackController
+    private lateinit var studioRepository: FakeStudioRepository
+    private lateinit var shareChatUseCase: FakeShareChatUseCase
 
     @BeforeEach
     fun setup() {
-        settingsUseCases = mockk(relaxed = true)
-        chatUseCases = mockk(relaxed = true)
-        stageImageAttachmentUseCase = mockk(relaxed = true)
-        cancelInferenceUseCase = mockk(relaxed = true)
-        inferenceLockManager = mockk(relaxed = true)
-        modelDisplayNamesUseCase = mockk(relaxed = true)
-        activeModelProvider = mockk(relaxed = true)
-        toolExecutionEventPort = mockk(relaxed = true)
-        errorHandler = mockk(relaxed = true)
-        loggingPort = mockk(relaxed = true)
-        activeChatTurnSnapshotPort = mockk(relaxed = true)
-        playbackController = mockk(relaxed = true)
-        studioRepository = mockk(relaxed = true)
-        shareChatUseCase = mockk(relaxed = true)
-
-        every { settingsUseCases.getSettings() } returns flowOf(SettingsData())
-        every { settingsUseCases.assignments.getDefaultModels() } returns flowOf(emptyList())
-        every { toolExecutionEventPort.events } returns MutableSharedFlow()
-        every { activeChatTurnSnapshotPort.observe(any()) } returns flowOf(null)
-        every { studioRepository.observeEphemeralMedia() } returns flowOf(emptyList())
-        every { studioRepository.observeAllMedia() } returns flowOf(emptyList())
+        settingsUseCases = FakeChatSettingsUseCases()
+        chatUseCases = FakeChatUseCases()
+        stageImageAttachmentUseCase = FakeStageImageAttachmentUseCase()
+        cancelInferenceUseCase = FakeCancelInferenceUseCase()
+        inferenceLockManager = FakeInferenceLockManager()
+        modelDisplayNamesUseCase = FakeGetModelDisplayNameUseCase()
+        activeModelProvider = FakeActiveModelProvider()
+        toolExecutionEventPort = FakeToolExecutionEventPort()
+        errorHandler = FakeViewModelErrorHandler()
+        loggingPort = FakeLoggingPort()
+        activeChatTurnSnapshotPort = FakeActiveChatTurnSnapshotPort()
+        playbackController = FakeTtsPlaybackController()
+        studioRepository = FakeStudioRepository()
+        shareChatUseCase = FakeShareChatUseCase()
     }
 
     private fun createViewModel(chatId: String?): ChatViewModel {
@@ -89,8 +70,8 @@ class ChatViewModelNavigationTest {
             playbackController = playbackController,
             studioRepository = studioRepository,
             shareChatUseCase = shareChatUseCase,
-            chatRepository = mockk(relaxed = true),
-            exportArtifactDocumentsUseCase = mockk(relaxed = true),
+            chatRepository = FakeChatRepository(),
+            exportArtifactDocumentsUseCase = FakeExportArtifactDocumentsUseCase(),
             stageImageAttachmentUseCase = stageImageAttachmentUseCase,
         )
     }

@@ -1,19 +1,12 @@
 package com.browntowndev.enclave.feature.chat
 
-import app.cash.turbine.test
-import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
+import com.browntowndev.enclave.core.testing.FakeViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.chat.ChatModelOverride
 import com.browntowndev.enclave.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
-import com.browntowndev.enclave.domain.usecase.chat.ChatUseCases
-import com.browntowndev.enclave.domain.usecase.chat.StageImageAttachmentUseCase
 import com.browntowndev.enclave.feature.chat.delegates.ChatInputCoordinator
-import io.mockk.mockk
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
@@ -26,9 +19,9 @@ class ChatInputCoordinatorOverrideTest {
     fun setUp() {
         coordinator =
             ChatInputCoordinator(
-                stageImageAttachmentUseCase = mockk(relaxed = true),
-                chatUseCases = mockk(relaxed = true),
-                errorHandler = mockk(relaxed = true),
+                stageImageAttachmentUseCase = FakeStageImageAttachmentUseCase(),
+                chatUseCases = FakeChatUseCases(),
+                errorHandler = FakeViewModelErrorHandler(),
             )
     }
 

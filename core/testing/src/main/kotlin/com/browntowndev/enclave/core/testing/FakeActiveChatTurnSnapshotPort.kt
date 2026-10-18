@@ -16,7 +16,11 @@ class FakeActiveChatTurnSnapshotPort : ActiveChatTurnSnapshotPort {
     val publishes = mutableListOf<Pair<ActiveChatTurnKey, AccumulatedMessages>>()
     val clearedKeys = mutableListOf<ActiveChatTurnKey>()
 
-    override fun observe(key: ActiveChatTurnKey): Flow<AccumulatedMessages?> = snapshots.map { it[key] }
+    /** When set, [observe] returns this flow instead of the StateFlow-backed snapshots (ENC-28). */
+    var observeFlowOverride: Flow<AccumulatedMessages?>? = null
+
+    override fun observe(key: ActiveChatTurnKey): Flow<AccumulatedMessages?> =
+        observeFlowOverride ?: snapshots.map { it[key] }
 
     override suspend fun publish(key: ActiveChatTurnKey, snapshot: AccumulatedMessages) {
         publishes += key to snapshot

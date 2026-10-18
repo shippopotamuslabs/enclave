@@ -8,7 +8,7 @@ import javax.inject.Inject
 /**
  * Use case for processing file attachments.
  */
-class ProcessFileAttachmentUseCase
+open class ProcessFileAttachmentUseCase
     @Inject
     constructor(
         private val fileAttachmentPort: FileAttachmentPort,
@@ -19,7 +19,7 @@ class ProcessFileAttachmentUseCase
          * @param uri The URI of the file to process.
          * @return [FileAttachmentMetadata] containing the file name and content.
          */
-        suspend operator fun invoke(uri: String): FileAttachmentMetadata {
+        open suspend operator fun invoke(uri: String): FileAttachmentMetadata {
             val metadata = fileAttachmentPort.readFileContent(uri)
             val mimeType = metadata.mimeType ?: return metadata
 

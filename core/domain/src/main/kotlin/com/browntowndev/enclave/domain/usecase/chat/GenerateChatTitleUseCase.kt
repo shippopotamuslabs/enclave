@@ -14,7 +14,7 @@ import javax.inject.Inject
  * it. If the generator returns `null` or low-quality output, the existing title is kept
  * (no-op) — there is no user-facing failure path.
  */
-class GenerateChatTitleUseCase
+open class GenerateChatTitleUseCase
     @Inject
     constructor(
         private val titleGenerator: ChatTitleGeneratorPort,
@@ -25,7 +25,7 @@ class GenerateChatTitleUseCase
          * @param chatId The chat whose title should be upgraded.
          * @param prompt The first user message text.
          */
-        suspend operator fun invoke(
+        open suspend operator fun invoke(
             chatId: ChatId,
             prompt: String,
         ) {

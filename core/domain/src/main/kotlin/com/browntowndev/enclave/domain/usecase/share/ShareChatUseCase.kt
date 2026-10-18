@@ -12,7 +12,7 @@ import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 import javax.inject.Inject
 
-class ShareChatUseCase
+open class ShareChatUseCase
     @Inject
     constructor(
         private val shareRepository: ShareRepositoryPort,
@@ -23,7 +23,7 @@ class ShareChatUseCase
             private const val TAG = "ShareChatUseCase"
         }
 
-        suspend operator fun invoke(option: ShareOption): Result<SharedChat> =
+        open suspend operator fun invoke(option: ShareOption): Result<SharedChat> =
             try {
                 Result.success(shareChat(option))
             } catch (e: Exception) {
@@ -31,7 +31,7 @@ class ShareChatUseCase
                 Result.failure(Exception(ShareFailureMapper.userMessageFor(e), e))
             }
 
-        suspend fun getSharedChat(
+        open suspend fun getSharedChat(
             shareReference: String,
             decryptionKey: String? = null,
         ): Result<SharedChat?> =
