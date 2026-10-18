@@ -7,3 +7,6 @@
 [submodule "third_party/agent_core"]
 	path = third_party/agent_core
 	url = https://gitlab.com/browntown.development-group/agent_core.git
+[submodule "third_party/whisper-android"]
+	path = third_party/whisper-android
+	url = https://gitlab.com/browntown.development-group/whisper-android.git
