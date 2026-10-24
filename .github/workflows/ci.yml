@@ -288,7 +288,7 @@ jobs:
       matrix:
         include:
           - leg: app
-            tasks: ":app:testDebugUnitTest"
+            tasks: ":app:testNormalDebugUnitTest"
           - leg: core-domain
             tasks: ":core:domain:testDebugUnitTest"
           - leg: core-data
