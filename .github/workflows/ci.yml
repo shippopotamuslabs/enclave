@@ -1,0 +1,846 @@
+# Enclave CI — GitHub Actions port of .gitlab-ci.yml.
+#
+# Gate model (Sean's CI philosophy, applied org-wide 2026-10-24 after the
+# Stratum port proved it):
+#   - pull_request pipelines are the fast, change-relevant test gate.
+#   - push pipelines on main build only (no re-testing).
+#   - the nightly schedule runs the full suite as the safety net.
+#   - assemble jobs never gate PRs: they run on main pushes, nightly, and
+#     on manual dispatch. PRs stay compile-verified by the unit-test legs;
+#     a release-only break surfaces on main within minutes of merge.
+#
+# Enclave scope (AGENTS.md §3.6, ENC-3): NO Google Play, ever. No Play,
+# bundle, or Test Lab lanes exist in this file. The signed release APK is
+# a manual, main-only workflow_dispatch job whose artifact Sean sideloads
+# himself; it is never uploaded anywhere else.
+#
+# Required repo secrets (Settings -> Secrets and variables -> Actions):
+#   GOOGLE_SERVICES_JSON    contents of app/google-services.json
+#   KEYSTORE_BASE64         base64-encoded enclave_keystore.jks
+#   RELEASE_STORE_PASSWORD  \
+#   RELEASE_KEY_ALIAS        > read by app/build.gradle.kts via
+#   RELEASE_KEY_PASSWORD    /  local.properties (written by the jobs below)
+#   TENSOR_APP_ID           \
+#   TENSOR_APP_PRIVATE_KEY   > GitHub App credentials used to mint the
+#                           /  token that clones the private submodule
+#                              repos (see .github/actions/fetch-submodules)
+#
+# GitLab `workflow:rules` equivalence:
+#   - merge_request_event && target == default branch -> pull_request: [main]
+#   - push to default branch                           -> push: [main]
+#   - schedule                                         -> schedule: cron below
+#   - manual jobs (assemble-release)                   -> workflow_dispatch
+name: CI
+
+"on":
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    # GitLab nightly was ~03:00 local; Actions cron is UTC-only with no
+    # DST tracking. 07:00 UTC = 03:00 EDT (Mar-Nov) / 02:00 EST (winter).
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+    inputs:
+      force_screenshot_tests:
+        description: "Run screenshot-tests even if no UI paths changed (GitLab manual fallback)"
+        type: boolean
+        default: false
+      record_screenshots:
+        description: "Run screenshot-record (updateDebugScreenshotTest) and upload the new goldens as an artifact"
+        type: boolean
+        default: false
+      force_rust_checks:
+        description: "Run rust-agent-core even if the Rust paths did not change"
+        type: boolean
+        default: false
+      force_agent_assemble:
+        description: "Run core-agent-assemble even if the agent paths did not change"
+        type: boolean
+        default: false
+
+# GitLab `default: interruptible: true` -> cancel superseded PR/push runs.
+# Schedule runs are never cancelled (nightly jobs set interruptible: false
+# in GitLab, ENC-15); the event is part of the group so a push can never
+# cancel a nightly run either.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+
+permissions:
+  contents: read
+
+env:
+  # Same pattern as the GitLab cache stanza: GRADLE_USER_HOME stays
+  # in-tree so the cache step below captures it.
+  GRADLE_USER_HOME: ${{ github.workspace }}/.ci-gradle-home
+  ANDROID_USER_HOME: ${{ github.workspace }}/../ci-home/android-home
+  GRADLE_OPTS: "-Dorg.gradle.caching=true"
+
+jobs:
+  # ---------------------------------------------------------------------
+  # Path-filter detection (replaces GitLab per-job `changes:` rules).
+  # Runs on PR/dispatch only; filtered jobs treat a skipped `changes`
+  # job via the !cancelled() pattern in their `if:` conditions.
+  # ---------------------------------------------------------------------
+  changes:
+    name: changes
+    # dorny/paths-filter lists the PR's files through the API on
+    # pull_request events; fresh repos default GITHUB_TOKEN too narrow.
+    # Grant exactly what the job needs.
+    permissions:
+      contents: read
+      pull-requests: read
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    outputs:
+      ui: ${{ steps.filter.outputs.ui }}
+      rust: ${{ steps.filter.outputs.rust }}
+      agent_assemble: ${{ steps.filter.outputs.agent_assemble }}
+      functions: ${{ steps.filter.outputs.functions }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            ui:
+              - 'core/ui/**/*'
+              - 'feature/**/src/main/**/*'
+              - 'app/src/main/**/*'
+              - '.github/workflows/ci.yml'
+            rust:
+              - 'third_party/agent_core/**/*'
+              - 'scripts/check-tool-catalog-sync.sh'
+              - 'scripts/check-catalog-schema-parity.py'
+              - 'core/domain/src/main/kotlin/com/browntowndev/enclave/domain/model/inference/ToolDefinition.kt'
+              - 'core/domain/src/main/kotlin/com/browntowndev/enclave/domain/model/inference/**/*Params*.kt'
+            agent_assemble:
+              - 'third_party/agent_core/**/*'
+              - 'core/agent/**/*'
+              - 'scripts/build-agent-bindings.sh'
+            functions:
+              - 'functions/**/*'
+
+  # ---------------------------------------------------------------------
+  # Shared Gradle job prelude (repeated per job; Actions has no YAML
+  # anchors/extends):
+  #   checkout -> app token -> fetch-submodules -> android-setup -> cache
+  # The GitLab `.gradle-base` before_script only injected
+  # google-services.json because the Katana workspace persisted submodule
+  # checkouts between runs; GitHub-hosted runners are ephemeral, so the
+  # submodule fetch is explicit (see .github/actions/fetch-submodules).
+  # ---------------------------------------------------------------------
+
+  # GitLab: static-analysis (stage check) ran `detekt lintDebug` in one
+  # invocation. Split into detekt + lint jobs that run in PARALLEL; the
+  # static-analysis job below aggregates them so the check keeps its
+  # name. ktlint was already its own GitLab job and stays standalone.
+  detekt:
+    name: detekt
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.event_name == 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ secrets.TENSOR_APP_ID }}
+          private-key: ${{ secrets.TENSOR_APP_PRIVATE_KEY }}
+          owner: shippopotamuslabs
+          repositories: "whisper-android,agent_core"
+      - uses: ./.github/actions/fetch-submodules
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+      - uses: ./.github/actions/android-setup
+        with:
+          google-services-json: ${{ secrets.GOOGLE_SERVICES_JSON }}
+      - name: Restore Gradle dependency cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .ci-gradle-home/caches/modules-2
+            .ci-gradle-home/wrapper
+          key: ${{ runner.os }}-gradle-deps-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-deps-
+      - name: detekt
+        run: ./gradlew detekt
+      - name: Upload detekt reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: detekt-reports
+          path: "**/build/reports/detekt/"
+          if-no-files-found: ignore
+          retention-days: 7
+
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.event_name == 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ secrets.TENSOR_APP_ID }}
+          private-key: ${{ secrets.TENSOR_APP_PRIVATE_KEY }}
+          owner: shippopotamuslabs
+          repositories: "whisper-android,agent_core"
+      - uses: ./.github/actions/fetch-submodules
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+      - uses: ./.github/actions/android-setup
+        with:
+          google-services-json: ${{ secrets.GOOGLE_SERVICES_JSON }}
+      - name: Restore Gradle dependency cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .ci-gradle-home/caches/modules-2
+            .ci-gradle-home/wrapper
+          key: ${{ runner.os }}-gradle-deps-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-deps-
+      - name: lint
+        run: ./gradlew lintDebug
+      - name: Upload lint reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-reports
+          path: "**/build/reports/lint-results-debug*"
+          if-no-files-found: ignore
+          retention-days: 7
+
+  ktlint:
+    name: ktlint
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.event_name == 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ secrets.TENSOR_APP_ID }}
+          private-key: ${{ secrets.TENSOR_APP_PRIVATE_KEY }}
+          owner: shippopotamuslabs
+          repositories: "whisper-android,agent_core"
+      - uses: ./.github/actions/fetch-submodules
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+      - uses: ./.github/actions/android-setup
+        with:
+          google-services-json: ${{ secrets.GOOGLE_SERVICES_JSON }}
+      - name: Restore Gradle dependency cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .ci-gradle-home/caches/modules-2
+            .ci-gradle-home/wrapper
+          key: ${{ runner.os }}-gradle-deps-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-deps-
+      - name: ktlint
+        run: ./gradlew ktlintCheck
+      - name: Upload ktlint reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ktlint-reports
+          path: "**/build/reports/ktlint/"
+          if-no-files-found: ignore
+          retention-days: 7
+
+  static-analysis:
+    name: static-analysis
+    runs-on: ubuntu-latest
+    needs: [detekt, lint]
+    if: always() && (github.event_name == 'pull_request' || github.event_name == 'schedule')
+    steps:
+      - name: Verify detekt + lint passed
+        run: |
+          echo "detekt: ${{ needs.detekt.result }} / lint: ${{ needs.lint.result }}"
+          test "${{ needs.detekt.result }}" = "success" && test "${{ needs.lint.result }}" = "success"
+
+
+  # GitLab: unit-tests (stage test) ran the root `testDebugUnitTest`,
+  # which fans out to every Android module. Split into per-area matrix
+  # legs that run in PARALLEL; the unit-tests job below aggregates them
+  # so the check keeps its name. fail-fast is off so one red leg never
+  # hides the others' results. The nightly-unit-tests GitLab job ran the
+  # identical command on schedule; here the legs themselves run on
+  # schedule, which is the same re-verify.
+  # :detekt-rules:test joins core-misc (JVM module; the GitLab root
+  # invocation silently skipped it) — additive, matches the Stratum port.
+  unit-test-legs:
+    name: unit-tests (${{ matrix.leg }})
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.event_name == 'schedule'
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - leg: app
+            tasks: ":app:testNormalDebugUnitTest"
+          - leg: core-domain
+            tasks: ":core:domain:testDebugUnitTest"
+          - leg: core-data
+            tasks: ":core:data:testDebugUnitTest"
+          - leg: core-ui
+            tasks: ":core:ui:testDebugUnitTest"
+          - leg: core-misc
+            tasks: ":core:testing:testDebugUnitTest :core:docgen:testDebugUnitTest :core:agent:testDebugUnitTest :detekt-rules:test"
+          - leg: features-a
+            tasks: ":feature:chat:testDebugUnitTest :feature:download:testDebugUnitTest :feature:history:testDebugUnitTest :feature:settings:testDebugUnitTest"
+          - leg: features-b
+            tasks: ":feature:inference:testDebugUnitTest :feature:chat-inference-service:testDebugUnitTest :feature:moa-pipeline-worker:testDebugUnitTest :feature:onboarding:testDebugUnitTest"
+          - leg: features-c
+            tasks: ":feature:studio:testDebugUnitTest :feature:studio-generation-service:testDebugUnitTest"
+          - leg: native
+            tasks: ":llama-android:testDebugUnitTest :local-image-gen-android:testDebugUnitTest"
+            ndk: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ secrets.TENSOR_APP_ID }}
+          private-key: ${{ secrets.TENSOR_APP_PRIVATE_KEY }}
+          owner: shippopotamuslabs
+          repositories: "whisper-android,agent_core"
+      - uses: ./.github/actions/fetch-submodules
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+      - uses: ./.github/actions/android-setup
+        with:
+          google-services-json: ${{ secrets.GOOGLE_SERVICES_JSON }}
+      - name: Restore Gradle dependency cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .ci-gradle-home/caches/modules-2
+            .ci-gradle-home/wrapper
+          key: ${{ runner.os }}-gradle-deps-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-deps-
+      # Only the native leg configures modules with externalNativeBuild;
+      # gradle.properties pins NDK 27.0.11718014 globally and
+      # llama-android overrides to 28.2.13676358.
+      - name: Install pinned NDKs + CMake (native leg only)
+        if: matrix.ndk
+        run: |
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
+          sdkmanager "ndk;27.0.11718014" "ndk;28.2.13676358" "cmake;3.22.1"
+      # CI-only test configuration, kept in the workflow so no module build
+      # file carries CI concerns:
+      # - 3g test heap: the Robolectric-heavy suites (core-data, inference)
+      #   OOM-killed their test executors at the default heap in the first
+      #   clean-environment runs of this port.
+      # - Quarantine (ENC-216): three :core:agent contract-test classes do a
+      #   real UniFFI round-trip and die at class init on the x86_64 runner
+      #   (the checked-in native lib is arm64). Excluded here until ENC-216
+      #   gives them a host native library; remove the excludes with it.
+      - name: Write CI test init script
+        run: |
+          cat > "$RUNNER_TEMP/ci-test-init.gradle" <<'GRADLE_EOF'
+          allprojects { project ->
+              project.tasks.withType(org.gradle.api.tasks.testing.Test).configureEach { testTask ->
+                  testTask.maxHeapSize = "3g"
+                  if (project.path == ":core:agent") {
+                      testTask.exclude(
+                          "com/browntowndev/enclave/core/agent/RustAgentEngineAdapterActiveSessionContractTest.class",
+                          "com/browntowndev/enclave/core/agent/RustToolEnvelopeParserContractTest.class",
+                          "com/browntowndev/enclave/core/agent/RustToolStreamGateContractTest.class"
+                      )
+                  }
+              }
+          }
+          GRADLE_EOF
+      - name: Unit tests (${{ matrix.leg }})
+        run: ./gradlew -I "$RUNNER_TEMP/ci-test-init.gradle" ${{ matrix.tasks }}
+      - name: Publish test results
+        if: always()
+        uses: mikepenz/action-junit-report@v5
+        with:
+          report_paths: "**/build/test-results/**/TEST-*.xml"
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-reports-${{ matrix.leg }}
+          path: "**/build/reports/tests/"
+          if-no-files-found: ignore
+          retention-days: 7
+
+  unit-tests:
+    name: unit-tests
+    runs-on: ubuntu-latest
+    needs: [unit-test-legs]
+    if: always() && (github.event_name == 'pull_request' || github.event_name == 'schedule')
+    steps:
+      - name: Verify all unit-test legs passed
+        run: |
+          echo "unit-test legs: ${{ needs.unit-test-legs.result }}"
+          test "${{ needs.unit-test-legs.result }}" = "success"
+
+  # GitLab: screenshot-tests (stage test, ENC-19/ENC-23) — MR-only,
+  # changes-gated on UI paths; only :core:ui carries screenshotTest
+  # source sets, so unlike Stratum there is nothing to split: a single
+  # job runs the root validate task, exactly like GitLab. Schedule runs
+  # it unconditionally (nightly safety net, per the gate model).
+  screenshot-tests:
+    name: screenshot-tests
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: >-
+      ${{ !cancelled() && (
+        github.event_name == 'schedule' ||
+        (github.event_name == 'pull_request' && needs.changes.outputs.ui == 'true') ||
+        (github.event_name == 'workflow_dispatch' && inputs.force_screenshot_tests)
+      ) }}
+    # GitLab's manual fallback run had allow_failure: true.
+    continue-on-error: ${{ github.event_name == 'workflow_dispatch' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ secrets.TENSOR_APP_ID }}
+          private-key: ${{ secrets.TENSOR_APP_PRIVATE_KEY }}
+          owner: shippopotamuslabs
+          repositories: "whisper-android,agent_core"
+      - uses: ./.github/actions/fetch-submodules
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+      - uses: ./.github/actions/android-setup
+        with:
+          google-services-json: ${{ secrets.GOOGLE_SERVICES_JSON }}
+      - name: Restore Gradle dependency cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .ci-gradle-home/caches/modules-2
+            .ci-gradle-home/wrapper
+          key: ${{ runner.os }}-gradle-deps-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-deps-
+      - name: Validate screenshot goldens
+        run: ./gradlew validateDebugScreenshotTest
+      - name: Upload screenshot results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshot-test-results
+          path: "**/build/outputs/screenshotTest-results/"
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # GitLab: screenshot-record — manual-only inside an MR pipeline.
+  # Actions equivalent: a workflow_dispatch run with record_screenshots.
+  # The re-recorded goldens come back as an artifact for review; they
+  # are never auto-committed.
+  screenshot-record:
+    name: screenshot-record
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && inputs.record_screenshots
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ secrets.TENSOR_APP_ID }}
+          private-key: ${{ secrets.TENSOR_APP_PRIVATE_KEY }}
+          owner: shippopotamuslabs
+          repositories: "whisper-android,agent_core"
+      - uses: ./.github/actions/fetch-submodules
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+      - uses: ./.github/actions/android-setup
+        with:
+          google-services-json: ${{ secrets.GOOGLE_SERVICES_JSON }}
+      - name: Restore Gradle dependency cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .ci-gradle-home/caches/modules-2
+            .ci-gradle-home/wrapper
+          key: ${{ runner.os }}-gradle-deps-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-deps-
+      - name: Re-record screenshot goldens
+        run: ./gradlew updateDebugScreenshotTest
+      - name: Upload re-recorded goldens
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshot-goldens
+          path: "**/src/screenshotTestDebug/reference/**"
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # GitLab: rust-agent-core (stage check, image rust:1.84-bookworm) —
+  # cargo test for third_party/agent_core plus the Kotlin<->Rust tool
+  # catalog parity checks (ENC-16 gating preserved).
+  rust-agent-core:
+    name: rust-agent-core
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: >-
+      ${{ !cancelled() && (
+        github.event_name == 'schedule' ||
+        (github.event_name == 'pull_request' && needs.changes.outputs.rust == 'true') ||
+        (github.event_name == 'workflow_dispatch' && inputs.force_rust_checks)
+      ) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ secrets.TENSOR_APP_ID }}
+          private-key: ${{ secrets.TENSOR_APP_PRIVATE_KEY }}
+          owner: shippopotamuslabs
+          repositories: "whisper-android,agent_core"
+      - uses: ./.github/actions/fetch-submodules
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          whisper-android: "false"
+          agent-core: "true"
+      - name: Install Rust 1.84 (GitLab image pin)
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.84"
+      - name: Install parity-check tools
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq jq python3
+      - name: agent_core unit tests
+        working-directory: third_party/agent_core
+        run: cargo test
+      - name: Tool catalog parity checks
+        run: |
+          chmod +x scripts/check-tool-catalog-sync.sh scripts/check-catalog-schema-parity.py
+          ./scripts/check-tool-catalog-sync.sh
+          python3 scripts/check-catalog-schema-parity.py
+
+  # GitLab: core-agent-assemble (stage check) — NDK cross-compile of the
+  # Rust agent core + :core:agent assemble smoke, changes-gated.
+  # scripts/build-agent-bindings.sh hardcodes NDK 27.0.11718014 and the
+  # aarch64-linux-android target; both are installed explicitly here
+  # (the GitLab docker image bundled them).
+  core-agent-assemble:
+    name: core-agent-assemble
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: >-
+      ${{ !cancelled() && (
+        github.event_name == 'schedule' ||
+        (github.event_name == 'pull_request' && needs.changes.outputs.agent_assemble == 'true') ||
+        (github.event_name == 'workflow_dispatch' && inputs.force_agent_assemble)
+      ) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ secrets.TENSOR_APP_ID }}
+          private-key: ${{ secrets.TENSOR_APP_PRIVATE_KEY }}
+          owner: shippopotamuslabs
+          repositories: "whisper-android,agent_core"
+      - uses: ./.github/actions/fetch-submodules
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          agent-core: "true"
+      - uses: ./.github/actions/android-setup
+        with:
+          google-services-json: ${{ secrets.GOOGLE_SERVICES_JSON }}
+      - name: Restore Gradle dependency cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .ci-gradle-home/caches/modules-2
+            .ci-gradle-home/wrapper
+          key: ${{ runner.os }}-gradle-deps-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-deps-
+      - name: Install Rust 1.84 + Android target
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.84"
+          targets: "aarch64-linux-android"
+      - name: Install NDK 27.0.11718014 (bindings script pin)
+        run: |
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
+          sdkmanager "ndk;27.0.11718014"
+      - name: Build agent bindings and assemble :core:agent
+        run: |
+          chmod +x scripts/build-agent-bindings.sh
+          ./scripts/build-agent-bindings.sh
+          ./gradlew :core:agent:assembleDebug
+
+  # GitLab: functions-tests (stage test, image node:20) — changes-gated
+  # on MRs. Node version follows functions/package.json engines (22);
+  # the GitLab image pin (20) predates the engines bump. `npm test`
+  # builds first (its script runs tsc), exactly as on GitLab.
+  functions-tests:
+    name: functions-tests
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: >-
+      ${{ !cancelled() && (
+        github.event_name == 'schedule' ||
+        (github.event_name == 'pull_request' && needs.changes.outputs.functions == 'true')
+      ) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+      - name: Test functions
+        working-directory: functions
+        run: |
+          npm ci
+          npm test
+
+
+  # ---------------------------------------------------------------------
+  # Assemble jobs — never on PRs (gate-model retier, see header). They
+  # run on main pushes (post-merge confidence), nightly, and dispatch.
+  # ---------------------------------------------------------------------
+
+  # GitLab: assemble-debug (stage build) — debug APK artifact, 1 day.
+  assemble-debug:
+    name: assemble-debug
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ secrets.TENSOR_APP_ID }}
+          private-key: ${{ secrets.TENSOR_APP_PRIVATE_KEY }}
+          owner: shippopotamuslabs
+          repositories: "whisper-android,agent_core"
+      - uses: ./.github/actions/fetch-submodules
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+      - uses: ./.github/actions/android-setup
+        with:
+          google-services-json: ${{ secrets.GOOGLE_SERVICES_JSON }}
+      - name: Restore Gradle dependency cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .ci-gradle-home/caches/modules-2
+            .ci-gradle-home/wrapper
+          key: ${{ runner.os }}-gradle-deps-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-deps-
+      - name: Install pinned NDKs + CMake
+        run: |
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
+          sdkmanager "ndk;27.0.11718014" "ndk;28.2.13676358" "cmake;3.22.1"
+      - name: Assemble debug
+        run: ./gradlew assembleDebug
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: ignore
+          retention-days: 1
+
+  # GitLab: assemble-release-gate (stage build) — proves the release
+  # variant compiles/links, signed with an ephemeral in-job keystore so
+  # MR-era pipelines never needed production secrets. The keystore and
+  # local.properties die with the runner (GitLab's after_script cleanup
+  # is implicit here).
+  assemble-release-gate:
+    name: assemble-release-gate
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ secrets.TENSOR_APP_ID }}
+          private-key: ${{ secrets.TENSOR_APP_PRIVATE_KEY }}
+          owner: shippopotamuslabs
+          repositories: "whisper-android,agent_core"
+      - uses: ./.github/actions/fetch-submodules
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+      - uses: ./.github/actions/android-setup
+        with:
+          google-services-json: ${{ secrets.GOOGLE_SERVICES_JSON }}
+      - name: Restore Gradle dependency cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .ci-gradle-home/caches/modules-2
+            .ci-gradle-home/wrapper
+          key: ${{ runner.os }}-gradle-deps-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-deps-
+      - name: Install pinned NDKs + CMake
+        run: |
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
+          sdkmanager "ndk;27.0.11718014" "ndk;28.2.13676358" "cmake;3.22.1"
+      - name: Ephemeral CI keystore (GitLab parity)
+        run: |
+          mkdir -p .keystore
+          keytool -genkeypair -keystore .keystore/enclave_keystore.jks -storepass ci-ephemeral -keypass ci-ephemeral -alias ci -keyalg RSA -keysize 2048 -validity 365 -dname "CN=CI Ephemeral"
+          printf 'RELEASE_STORE_PASSWORD=ci-ephemeral\nRELEASE_KEY_ALIAS=ci\nRELEASE_KEY_PASSWORD=ci-ephemeral\n' > local.properties
+      - name: Assemble release (ephemeral signing)
+        run: ./gradlew assembleRelease
+
+  # GitLab: assemble-release (stage package) — signed release APK,
+  # MANUAL on main only, for personal sideload. Never uploaded anywhere;
+  # there is no Play pipeline (AGENTS.md §3.6). Actions has no manual
+  # job inside a push run, so this lives in workflow_dispatch runs from
+  # main, mirroring the Stratum port's deploy-internal placement.
+  assemble-release:
+    name: assemble-release
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ secrets.TENSOR_APP_ID }}
+          private-key: ${{ secrets.TENSOR_APP_PRIVATE_KEY }}
+          owner: shippopotamuslabs
+          repositories: "whisper-android,agent_core"
+      - uses: ./.github/actions/fetch-submodules
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+      - uses: ./.github/actions/android-setup
+        with:
+          google-services-json: ${{ secrets.GOOGLE_SERVICES_JSON }}
+      - name: Restore Gradle dependency cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .ci-gradle-home/caches/modules-2
+            .ci-gradle-home/wrapper
+          key: ${{ runner.os }}-gradle-deps-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-deps-
+      - name: Install pinned NDKs + CMake
+        run: |
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
+          sdkmanager "ndk;27.0.11718014" "ndk;28.2.13676358" "cmake;3.22.1"
+      - name: Materialize release keystore + local.properties (strict)
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: |
+          test -n "$KEYSTORE_BASE64" || (echo "Missing KEYSTORE_BASE64 secret" && exit 1)
+          test -n "$RELEASE_STORE_PASSWORD" || (echo "Missing RELEASE_STORE_PASSWORD secret" && exit 1)
+          test -n "$RELEASE_KEY_ALIAS" || (echo "Missing RELEASE_KEY_ALIAS secret" && exit 1)
+          test -n "$RELEASE_KEY_PASSWORD" || (echo "Missing RELEASE_KEY_PASSWORD secret" && exit 1)
+          mkdir -p .keystore
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > .keystore/enclave_keystore.jks
+          printf 'RELEASE_STORE_PASSWORD=%s\nRELEASE_KEY_ALIAS=%s\nRELEASE_KEY_PASSWORD=%s\n' \
+            "$RELEASE_STORE_PASSWORD" "$RELEASE_KEY_ALIAS" "$RELEASE_KEY_PASSWORD" > local.properties
+      - name: Assemble signed release APK
+        run: ./gradlew assembleRelease
+      - name: Upload signed release APK (sideload artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: enclave-release-apk
+          path: app/build/outputs/apk/release/*.apk
+          retention-days: 30
+
+  # GitLab: nightly-emulator-tests (stage nightly; schedule only,
+  # allow_failure, ENC-15). RUNNER NOTE: this job needs /dev/kvm.
+  # ubuntu-latest exposes KVM after the udev step below; the job fails
+  # fast with a clear message when KVM is unavailable, as on GitLab.
+  nightly-emulator-tests:
+    name: nightly-emulator-tests
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    continue-on-error: true
+    timeout-minutes: 120
+    env:
+      ANDROID_AVD_HOME: ${{ github.workspace }}/../ci-home/android-home/avd
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ secrets.TENSOR_APP_ID }}
+          private-key: ${{ secrets.TENSOR_APP_PRIVATE_KEY }}
+          owner: shippopotamuslabs
+          repositories: "whisper-android,agent_core"
+      - uses: ./.github/actions/fetch-submodules
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+      - uses: ./.github/actions/android-setup
+        with:
+          google-services-json: ${{ secrets.GOOGLE_SERVICES_JSON }}
+      - name: Restore Gradle dependency cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .ci-gradle-home/caches/modules-2
+            .ci-gradle-home/wrapper
+          key: ${{ runner.os }}-gradle-deps-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-deps-
+      - name: Enable KVM (GitHub-hosted runners only)
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Create AVD
+        run: |
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
+          sdkmanager "platform-tools" "platforms;android-35" "system-images;android-35;google_apis;x86_64" "emulator"
+          echo "no" | avdmanager create avd -n ci-test -k "system-images;android-35;google_apis;x86_64" --device "pixel_7" --force
+          test -f "$ANDROID_AVD_HOME/ci-test.ini" || (echo "AVD 'ci-test' was not created under $ANDROID_AVD_HOME" && exit 1)
+      - name: Boot emulator and run device tests
+        run: |
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
+          test -c /dev/kvm || (echo "ERROR: /dev/kvm is not available on this runner; the nightly emulator job requires a KVM-capable runner (ENC-15)."; ls -la /dev/kvm* 2>/dev/null || true; exit 1)
+          "$ANDROID_HOME/emulator/emulator" -avd ci-test -no-window -gpu swiftshader_indirect -no-audio -no-snapshot -wipe-data &
+          timeout 1200 bash -c 'adb wait-for-device; while [[ -z $(adb shell getprop sys.boot_completed | tr -d "\r") ]]; do sleep 5; done'
+          ./gradlew :app:connectedDebugAndroidTest :core:data:connectedDebugAndroidTest
+      - name: Publish test results
+        if: always()
+        uses: mikepenz/action-junit-report@v5
+        with:
+          report_paths: "**/build/outputs/androidTest-results/connected/*.xml"
+      - name: Upload device test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: emulator-test-reports
+          path: |
+            **/build/reports/androidTests/
+            **/build/outputs/androidTest-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # ---------------------------------------------------------------------
+  # Forge review: not included, same as the Stratum port. GitHub
+  # validates every `uses:` reusable-workflow reference at parse time,
+  # even on jobs gated off by `if:` — a placeholder ref fails the whole
+  # run before any job executes. The forge-review job returns once
+  # shippopotamuslabs/forge-reviewer hosts the reusable workflow (T-7).
+  #
+  # OSV scanning: Enclave's GitLab pipeline had no scanning jobs, so
+  # none are ported.
+  # ---------------------------------------------------------------------

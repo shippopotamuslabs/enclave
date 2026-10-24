@@ -1,0 +1,58 @@
+# Composite equivalent of the GitLab `.gradle-base` before_script:
+# Java toolchain, google-services.json materialization, SDK licenses,
+# and the preview-channel platform the app compiles against.
+#
+# Secret handling differs from GitLab on purpose: GitLab "File" variables
+# arrive as a PATH in $GOOGLE_SERVICES_JSON; a GitHub secret is the file
+# CONTENT, passed in by the caller as an input (composite actions cannot
+# read the `secrets` context directly).
+name: android-setup
+description: Shared Android job setup (port of .gradle-base before_script)
+
+inputs:
+  google-services-json:
+    description: Contents of app/google-services.json (pass secrets.GOOGLE_SERVICES_JSON)
+    required: true
+  java-version:
+    description: JDK for Gradle (daemon JVM per gradle/gradle-daemon-jvm.properties)
+    required: false
+    default: "21"
+
+runs:
+  using: composite
+  steps:
+    - name: Set up JDK
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: ${{ inputs.java-version }}
+
+    - name: Materialize app/google-services.json
+      shell: bash
+      env:
+        GOOGLE_SERVICES_JSON: ${{ inputs.google-services-json }}
+      run: |
+        test -n "$GOOGLE_SERVICES_JSON" || (echo "Missing GOOGLE_SERVICES_JSON secret — see header of .gitlab-ci.yml" && exit 1)
+        printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
+        chmod +x gradlew
+
+    # GitHub-hosted runners ship the Android SDK with ANDROID_HOME set, so
+    # the GitLab docker image's bundled SDK is replaced by the runner's;
+    # the license + preview-platform steps install what Enclave pins.
+    - name: Accept SDK licenses and install compile platform
+      shell: bash
+      run: |
+        # Actions runs bash with -eo pipefail: a `yes |` feeder dying of
+        # SIGPIPE would poison the pipeline status, so drop pipefail here
+        # and judge sdkmanager by the install result below instead.
+        set +o pipefail
+        export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+        command -v sdkmanager || (echo "sdkmanager not found under $ANDROID_HOME" && exit 1)
+        # Best-effort license acceptance (output kept out of the log); the
+        # install fails loudly if a license is genuinely missing.
+        yes | sdkmanager --licenses > /dev/null 2>&1 || true
+        # The app compiles against 37, published as android-37.0 on the
+        # preview channel (3); fall back to the default channel in case it
+        # has graduated. Output is NOT silenced — a failed install must
+        # say why in the log.
+        sdkmanager --channel=3 "platforms;android-37.0" || sdkmanager "platforms;android-37.0"
