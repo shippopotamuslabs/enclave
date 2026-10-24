@@ -14,8 +14,22 @@ Enclave is an Android app that runs AI models on the phone itself. Chat, dictati
 - Document generation, extraction, and validation through a second Rust core.
 - Accounts and sync for anyone who wants them. Firebase Auth handles sign-in, Firestore holds synced data in encrypted form (see the vault below), and TypeScript functions in `functions/` run the server side. Crash reports go to Crashlytics. The inference contract in `contracts/INFERENCE_RULES.md` sets on-device inference as the default and treats cloud model providers as opt-in, with the user supplying their own API keys.
 - Zero-knowledge encryption, built around a vault password you set. The password derives the key that unwraps the app's data encryption key. The derived key lives in memory only and is never stored anywhere: the phone stores the wrapped key (optionally bound to biometrics through Android Keystore), and the cloud stores a derivation salt and ciphertext. Data encrypts with AES-GCM on the device before it syncs, and local data encrypts at rest the same way, so Firestore holds ciphertext it cannot read. Sync runs only while the vault is unlocked. Lose the vault password and the synced data stays unreadable, by design.
-- Bring your own key (BYOK) for cloud models. Eight providers wire in: Anthropic, OpenAI, OpenRouter, xAI, Google, Z.ai, and DeepSeek for chat, and fal.ai for media. You paste a provider key in Settings; the app fetches that provider's model list, and you assign default models per job. OpenAI, Google, and xAI keys also carry realtime voice.
+- Bring your own key (BYOK) for cloud models. Eight providers wire in. You paste a provider key in Settings; the app fetches that provider's model list, and you assign default models per job.
+
 - Studio media generation through the same keys. Image and video jobs dispatch to cloud providers (fal.ai carries image and video models; Google carries Veo video) or to the on-device image backends, per assignment. Generated assets land in the app's media library.
+
+The eight BYOK providers, by what each one carries:
+
+| Provider | Chat | Media generation | Realtime voice |
+| --- | :---: | :---: | :---: |
+| Anthropic | Yes |  |  |
+| OpenAI | Yes |  | Yes |
+| OpenRouter | Yes |  |  |
+| xAI | Yes |  | Yes |
+| Google | Yes | Yes (Veo video) | Yes |
+| Z.ai | Yes |  |  |
+| DeepSeek | Yes |  |  |
+| fal.ai |  | Yes (image and video) |  |
 
 ## Status and distribution
 
@@ -31,17 +45,21 @@ The build has 20 Gradle modules plus one composite build. Dependencies point inw
 
 Module map, by layer:
 
-- App shell: `:app` (applicationId `com.browntowndev.enclave`), with two distribution flavors, `normal` and `playStore`.
-- Core: `:core:domain`, `:core:data` (Room), `:core:ui`, `:core:testing`, `:core:agent`, `:core:docgen`, `:detekt-rules` (custom detekt rules).
-- Features: `:feature:chat`, `:feature:inference`, `:feature:chat-inference-service`, `:feature:studio`, `:feature:studio-generation-service`, `:feature:moa-pipeline-worker`, `:feature:download`, `:feature:history`, `:feature:settings`, `:feature:onboarding`.
-- Native: `:llama-android` (llama.cpp JNI bridge), `:local-image-gen-android` (QNN and MNN image generation engines).
-- Composite build: `third_party/whisper-android`, substituted for the published Maven coordinates during development.
+| Layer | Modules | Notes |
+| --- | --- | --- |
+| App shell | `:app` | applicationId `com.browntowndev.enclave`, with two distribution flavors, `normal` and `playStore` |
+| Core | `:core:domain`, `:core:data`, `:core:ui`, `:core:testing`, `:core:agent`, `:core:docgen`, `:detekt-rules` | `:core:data` carries the Room database. `:detekt-rules` carries custom detekt rules |
+| Features | `:feature:chat`, `:feature:inference`, `:feature:chat-inference-service`, `:feature:studio`, `:feature:studio-generation-service`, `:feature:moa-pipeline-worker`, `:feature:download`, `:feature:history`, `:feature:settings`, `:feature:onboarding` | One module per feature area, including the three foreground-service modules |
+| Native | `:llama-android`, `:local-image-gen-android` | llama.cpp JNI bridge, and the QNN and MNN image generation engines |
+| Composite build | `third_party/whisper-android` | Substituted for the published Maven coordinates during development |
 
 Three Rust codebases sit under the Kotlin:
 
-- `agent_core` holds the agent loop: the turn state machine, context compaction at 80 percent full (Micro, then FIFO, then ArtifactSquash, then an LLM summary), tool-call repair with fuzzy name matching, guardrails, and session accounting. The plan in `plans/FEAT-agent-core-rust/` states the goal plainly: one agent loop implementation, Android first, with plain Rust traits exposed so a desktop host can run the same loop later.
-- `docgen_core` handles document generation, extraction, and schema validation. `:core:docgen` wraps it.
-- `classifier_core` classifies search intent from an embedding vector. Its source lives in this repo at `third_party/classifier_core`.
+| Crate | Job |
+| --- | --- |
+| `agent_core` | The agent loop: the turn state machine, context compaction at 80 percent full (Micro, then FIFO, then ArtifactSquash, then an LLM summary), tool-call repair with fuzzy name matching, guardrails, and session accounting. The plan in `plans/FEAT-agent-core-rust/` states the goal plainly: one agent loop implementation, Android first, with plain Rust traits exposed so a desktop host can run the same loop later |
+| `docgen_core` | Document generation, extraction, and schema validation. `:core:docgen` wraps it |
+| `classifier_core` | Classifies search intent from an embedding vector. Its source lives in this repo at `third_party/classifier_core` |
 
 Kotlin reaches the Rust through UniFFI-generated bindings. The generated Kotlin bindings and the compiled libraries for `agent_core` and `classifier_core` are checked into `:core:agent`, so a normal app build never runs Cargo. The binding policy is written down in `core/agent/README.md`.
 
@@ -61,6 +79,13 @@ Long work runs outside the UI. Foreground services carry the chat inference sess
 Gradle comes from the wrapper (Gradle 9.8.1, Android Gradle Plugin 9.4.1, Kotlin 2.3.21). Rust is not required to build the app. Regenerating the UniFFI bindings takes a Rust toolchain (the crates set rust-version 1.78, edition 2021) and NDK 27.0.11718014. That workflow sits at the end of this document.
 
 ### The Qualcomm SDK, for Studio image generation
+
+Studio image generation has two on-device backends, picked by a domain use case:
+
+| Backend | Hardware | Models | What it needs |
+| --- | --- | --- | --- |
+| QNN NPU | Qualcomm Hexagon NPU | SD 1.5; SDXL on Snapdragon Gen 3 and up | The QAIRT SDK and its runtime libraries (below) |
+| MNN CPU | Any supported phone CPU | SD 1.5 | A model package in app-private storage. No vendor SDK |
 
 The primary diffusion engine in `:local-image-gen-android` runs on Qualcomm QNN hardware, and its SDK comes from Qualcomm under a Qualcomm account. The app builds and runs with the SDK absent; the engine compiles with its QNN path dark, and the MNN CPU backend plus any BYOK cloud providers still serve Studio generation. The MNN backend needs model packages only, no vendor SDK. To give the QNN engine its runtime:
 
@@ -125,15 +150,17 @@ Skip this section unless you changed a Rust crate's public UniFFI types. The che
 
 ## Repository layout
 
-- `app/` holds the application module and the manifest that declares the foreground services.
-- `core/` holds the domain, data, UI, testing, agent bridge, and docgen bridge modules, plus the custom detekt rules.
-- `feature/` holds one module per feature area, including the three service modules.
-- `llama-android/` and `local-image-gen-android/` hold the two native inference engines and their JNI bridges.
-- `third_party/` holds the Rust crates and the submodule pointers: `agent_core`, `classifier_core`, `docgen_core`, `whisper-android`, `whisper.cpp`.
-- `contracts/` holds the binding architecture, data, inference, UI, style, testing, and voice rules.
-- `functions/` holds the TypeScript Firebase functions, with `firebase.json` and the Firestore and Storage rules beside it at the root.
-- `scripts/` holds the binding generators, the image and classifier tooling, and the QNN sync scripts.
-- `docs/` and `plans/` hold design documents and feature plans, including the Rust agent core plan and the threat and retention notes in `docs/profile_threat_model_retention.md`.
+| Path | Holds |
+| --- | --- |
+| `app/` | The application module and the manifest that declares the foreground services |
+| `core/` | The domain, data, UI, testing, agent bridge, and docgen bridge modules, plus the custom detekt rules |
+| `feature/` | One module per feature area, including the three service modules |
+| `llama-android/`, `local-image-gen-android/` | The two native inference engines and their JNI bridges |
+| `third_party/` | The Rust crates and the submodule pointers: `agent_core`, `classifier_core`, `docgen_core`, `whisper-android`, `whisper.cpp` |
+| `contracts/` | The binding architecture, data, inference, UI, style, testing, and voice rules |
+| `functions/` | The TypeScript Firebase functions, with `firebase.json` and the Firestore and Storage rules beside it at the root |
+| `scripts/` | The binding generators, the image and classifier tooling, and the QNN sync scripts |
+| `docs/`, `plans/` | Design documents and feature plans, including the Rust agent core plan and the threat and retention notes in `docs/profile_threat_model_retention.md` |
 
 ## License
 
