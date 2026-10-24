@@ -1,0 +1,72 @@
+# Materialize the third_party submodules CI actually consumes.
+#
+# Why not `actions/checkout` with submodules: the repo's .gitmodules still
+# points at the pre-migration GitLab URLs, and the pinned gitlink SHAs are
+# pre-rewrite SHAs that do not exist in the GitHub mirrors (the migration
+# rewrote timestamps, so every rewritten commit has a new SHA). The clones
+# below check out the tree-identical equivalents in the rewritten history:
+#
+#   whisper-android  GitLab pin c6cd0387 -> GitHub 32682cbc (same tree)
+#   agent_core       GitLab pin cae979a7 -> unresolvable even in the
+#                    original mirror; uses the rewritten main tip
+#                    fe065b73 until the pin is repaired in-repo.
+#
+# whisper.cpp needs no workaround: its .gitmodules URL is the public
+# upstream (ggml-org/whisper.cpp) and its pin survived unchanged.
+#
+# third_party/docgen_core is deliberately NOT fetched: no Gradle build
+# input or CI job consumes it (only a detekt exclude glob names it).
+#
+# The token input is a GitHub App installation token minted by the caller
+# (actions/create-github-app-token) from the TENSOR_APP_ID /
+# TENSOR_APP_PRIVATE_KEY repo secrets; the sibling repos are private, so
+# anonymous clones fail. Once the repos flip public, the token can be
+# dropped and the clones fall back to plain https.
+name: fetch-submodules
+description: Fetch whisper-android / agent_core / whisper.cpp at CI-usable pins
+
+inputs:
+  token:
+    description: Token for the private sibling repos (pass the create-github-app-token output; empty = anonymous)
+    required: false
+    default: ""
+  whisper-android:
+    description: Fetch third_party/whisper-android (+ whisper.cpp pins)
+    required: false
+    default: "true"
+  agent-core:
+    description: Fetch third_party/agent_core
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: whisper.cpp (public upstream, pin unchanged by the migration)
+      if: inputs.whisper-android == 'true'
+      shell: bash
+      run: git submodule update --init third_party/whisper.cpp
+
+    - name: whisper-android (GitHub, tree-identical equivalent of the GitLab pin)
+      if: inputs.whisper-android == 'true'
+      shell: bash
+      env:
+        SUBMODULE_TOKEN: ${{ inputs.token }}
+      run: |
+        rm -rf third_party/whisper-android
+        if [ -n "$SUBMODULE_TOKEN" ]; then AUTH="x-access-token:${SUBMODULE_TOKEN}@"; else AUTH=""; fi
+        git clone --quiet "https://${AUTH}github.com/shippopotamuslabs/whisper-android.git" third_party/whisper-android
+        git -C third_party/whisper-android checkout --quiet 32682cbcc71b206970fb964b5000d75361465ad5
+        # whisper-android carries its own whisper.cpp submodule (public).
+        git -C third_party/whisper-android submodule update --init third_party/whisper.cpp
+
+    - name: agent_core (GitHub, rewritten main tip — original pin unresolvable)
+      if: inputs.agent-core == 'true'
+      shell: bash
+      env:
+        SUBMODULE_TOKEN: ${{ inputs.token }}
+      run: |
+        rm -rf third_party/agent_core
+        if [ -n "$SUBMODULE_TOKEN" ]; then AUTH="x-access-token:${SUBMODULE_TOKEN}@"; else AUTH=""; fi
+        git clone --quiet "https://${AUTH}github.com/shippopotamuslabs/agent_core.git" third_party/agent_core
+        git -C third_party/agent_core checkout --quiet fe065b73259b9354e5ad63d2bb615623cea5a0ab
