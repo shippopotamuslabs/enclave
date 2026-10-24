@@ -35,7 +35,7 @@ The eight BYOK providers, by what each one carries:
 
 There is no Play Store listing for Enclave, and there will not be one. This repo is the distribution channel. You build the APK from source and install it on your own phone.
 
-A desktop companion is in progress on the `feat/desktop` branch. It is a Rust workspace: an Iced app in four crates (presentation, domain, data, inference) that runs the same `agent_core` loop as the phone. It is unfinished. Local inference is the first problem being worked on and does not run yet. The design shares chats and data with the phone across devices, through the same vault-encrypted sync described above.
+A desktop companion is in progress in `desktop/`. It is a Rust workspace: an Iced app in four crates (presentation, domain, data, inference) that runs the same `agent_core` loop as the phone. It is unfinished. Local inference is the first problem being worked on and does not run yet. The design shares chats and data with the phone across devices, through the same vault-encrypted sync described above.
 
 The build files say version 1.0, versionCode 1. One developer builds and maintains the app, and work is active.
 
