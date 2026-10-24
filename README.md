@@ -1,18 +1,20 @@
 # Enclave
 
-Enclave is an Android app that runs AI models on the phone itself. Chat, dictation, image generation, and an agent runtime, with the model files stored on the device and the inference done locally. Sean Brown builds it under Shippopotamus Labs. The source is public because the app is the portfolio piece and because anyone who wants it can build it.
+Enclave is an Android app that runs AI models on the phone itself. Chat, dictation, image generation, and an agent runtime, with the model files stored on the device and the inference done locally. Cloud providers plug in through your own API keys when you want them: chat, image generation, and video generation at eight providers. Sean Brown builds it under Shippopotamus Labs. The source is public because the app is the portfolio piece and because anyone who wants it can build it.
 
 ## What it does
 
 - Chat with models that run on the device. The download feature pulls GGUF model files from Hugging Face, checks each file against a recorded SHA-256 hash, and stores it on the phone. The catalog lives in `model_config.json` at the repo root.
 - Two inference engines. LiteRT-LM serves the models it supports. A llama.cpp build with Arm KleidiAI kernels serves GGUF models and picks NEON or SVE code paths for the CPU it finds.
 - Dictation through Whisper. The app records audio and transcribes it on the device through whisper.cpp, wired in through the whisper-android library.
-- Image generation in the Studio screens. A diffusion engine written for Qualcomm QNN hardware does the work in a foreground service, so a long generation keeps running with the screen off.
+- Image generation in the Studio screens. Two on-device backends do the work: a diffusion engine written for Qualcomm QNN hardware, and an MNN CPU pipeline (CLIP, UNet, and VAE) that runs on any supported phone. Generation runs in a foreground service, so a long job keeps running with the screen off.
 - Multi-model pipelines. A Mixture-of-Agents worker runs several models against one prompt in stages, with a foreground inference service reporting progress.
 - An agent loop with tool calls, written in Rust. It repairs malformed tool calls, compacts context when a session fills up, and keeps session accounting in one implementation.
 - Text-to-speech playback through a media foreground service.
 - Document generation, extraction, and validation through a second Rust core.
 - Accounts and sync for anyone who wants them. Firebase Auth handles sign-in, Firestore holds synced data, and TypeScript functions in `functions/` run the server side. Crash reports go to Crashlytics. The inference contract in `contracts/INFERENCE_RULES.md` sets on-device inference as the default and treats cloud model providers as opt-in, with the user supplying their own API keys.
+- Bring your own key (BYOK) for cloud models. Eight providers wire in: Anthropic, OpenAI, OpenRouter, xAI, Google, Z.ai, and DeepSeek for chat, and fal.ai for media. You paste a provider key in Settings; the app fetches that provider's model list, and you assign default models per job. OpenAI, Google, and xAI keys also carry realtime voice.
+- Studio media generation through the same keys. Image and video jobs dispatch to cloud providers (fal.ai carries image and video models; Google carries Veo video) or to the on-device image backends, per assignment. Generated assets land in the app's media library.
 
 ## Status and distribution
 
@@ -31,7 +33,7 @@ Module map, by layer:
 - App shell: `:app` (applicationId `com.browntowndev.enclave`), with two distribution flavors, `normal` and `playStore`.
 - Core: `:core:domain`, `:core:data` (Room), `:core:ui`, `:core:testing`, `:core:agent`, `:core:docgen`, `:detekt-rules` (custom detekt rules).
 - Features: `:feature:chat`, `:feature:inference`, `:feature:chat-inference-service`, `:feature:studio`, `:feature:studio-generation-service`, `:feature:moa-pipeline-worker`, `:feature:download`, `:feature:history`, `:feature:settings`, `:feature:onboarding`.
-- Native: `:llama-android` (llama.cpp JNI bridge), `:local-image-gen-android` (QNN diffusion engine).
+- Native: `:llama-android` (llama.cpp JNI bridge), `:local-image-gen-android` (QNN and MNN image generation engines).
 - Composite build: `third_party/whisper-android`, substituted for the published Maven coordinates during development.
 
 Three Rust codebases sit under the Kotlin:
@@ -59,7 +61,7 @@ Gradle comes from the wrapper (Gradle 9.8.1, Android Gradle Plugin 9.4.1, Kotlin
 
 ### The Qualcomm SDK, for Studio image generation
 
-The diffusion engine in `:local-image-gen-android` runs on Qualcomm QNN hardware, and its SDK comes from Qualcomm under a Qualcomm account. The app builds and runs with the SDK absent; the engine compiles with its QNN path dark and Studio generation has no runtime behind it. To give the engine its runtime:
+The primary diffusion engine in `:local-image-gen-android` runs on Qualcomm QNN hardware, and its SDK comes from Qualcomm under a Qualcomm account. The app builds and runs with the SDK absent; the engine compiles with its QNN path dark, and the MNN CPU backend plus any BYOK cloud providers still serve Studio generation. The MNN backend needs model packages only, no vendor SDK. To give the QNN engine its runtime:
 
 1. Create a free account (a Qualcomm ID) at developer.qualcomm.com, and accept the Qualcomm AI Engine Direct license agreement when the site offers it. Downloads stay closed until the license is accepted.
 2. Download the Qualcomm AI Runtime (QAIRT) SDK through the Qualcomm Package Manager or the Qualcomm software center. The build files name version **2.47.0.260601**. A default Linux install extracts to `/opt/qcom/aistack/qairt/2.47.0.260601`.
@@ -91,7 +93,7 @@ This repo builds the author's phone builds today. A public cold clone hits gaps 
 - `.gitmodules` lists GitLab URLs for three submodules: `third_party/agent_core`, `third_party/docgen_core`, and `third_party/whisper-android`. Those GitLab projects are private, so a public clone cannot fetch them. The whisper-android composite build is wired into `settings.gradle.kts` without a condition, and `:app` depends on its artifacts, so Gradle needs that submodule in place. All three projects also live in the `shippopotamuslabs` GitHub org, and the docgen_core and whisper-android pins have tree-identical commits there. The agent_core pin names a commit that exists in neither the GitLab history nor the GitHub one. Repointing `.gitmodules` at GitHub and repairing the pins is tracked work.
 - `third_party/llama.cpp` and `third_party/kleidiai-1.22.0` are absent from the repo and are not submodules. `:llama-android` skips its CMake build when llama.cpp is missing, and its own build file calls that case expected in CI. The same build file registers a packaging check that requires both llama JNI libraries, and neither library is checked in. As the files stand, a cold clone needs the llama.cpp and KleidiAI trees placed by hand before that check can pass.
 - `build-kleidiai.sh` builds the SVE and NEON llama variants into `llama-android/src/main/jniLibs/`. Its header calls the script optional for development builds. It reads the SDK location from `ANDROID_HOME` or `local.properties` and wants the same NDK version the module pins.
-- The diffusion engine in `:local-image-gen-android` reads `QNN_SDK_ROOT`, or `qnn.sdk.dir` in `local.properties`, and falls back to a hardcoded path from the author's machine. The QNN runtime libraries the engine loads at runtime sit in `src/main/assets/qnnlibs/`, which holds only a `.gitkeep` in this repo. The Qualcomm SDK section above covers the account, the download, and the sync script that fills the directory.
+- The diffusion engine in `:local-image-gen-android` reads `QNN_SDK_ROOT`, or `qnn.sdk.dir` in `local.properties`, and falls back to a hardcoded path from the author's machine. The QNN runtime libraries the engine loads at runtime sit in `src/main/assets/qnnlibs/`, which holds only a `.gitkeep` in this repo. The Qualcomm SDK section above covers the account, the download, and the sync script that fills the directory. The MNN CPU backend carries no SDK dependency; it needs its model package in app-private storage.
 - `:core:docgen` ships its UniFFI bindings as source, and its native library rides along in no form. `scripts/build-docgen-bindings.sh` writes `libdocgen_core.so` into `core/docgen/src/main/jniLibs/arm64-v8a/`, and the global `*.so` ignore rule covers that path, so the author's tree has the library and a clone never receives it. Docgen calls in a build from this tree fail at load time.
 - `vulkan_sdk.sh` at the repo root is an empty file.
 - `.github/workflows/` holds a CodeQL workflow whose Analyze job currently fails, and a GitHub Actions port of the old GitLab pipeline waiting in a pull request. `app/build.gradle.kts` also applies the Google Services and Crashlytics plugins with no condition on the file existing, so the `google-services.json` step above is mandatory today.
