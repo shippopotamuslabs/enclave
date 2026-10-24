@@ -11,7 +11,7 @@ Scenario IDs are stable. Never reuse a retired ID.
 ## Scenario ID Index
 
 | ID | Category | Description |
-|---|---|---|
+| --- | --- | --- |
 | S1 | Smoke | `generate_pdf` returns non-empty bytes starting with `%PDF` |
 | S2 | Smoke | All Block types in one document produce no error |
 | S3 | Smoke | Round-trip: JSON → PDF → `extract_text` recovers heading text |
@@ -64,8 +64,8 @@ Scenario IDs are stable. Never reuse a retired ID.
 | G37 | Generator | Square brackets `[` `]` in plain heading text are escaped to `\[` `\]` |
 | G38 | Generator | Plain paragraph text starting with `= ` is escaped to `\= ` |
 | G39 | Generator | `Math { latex: "\\frac{1}{2}" }` → emits Typst comment + `#raw` fallback (does not produce a compile error) |
-| G40 | Generator | Code block whose body contains ```` ``` ```` is preserved (function form is fence-safe) |
-| G41 | Generator | `Code { show_line_numbers: true }` → output contains `"  1 |"` prefix on first line |
+| G40 | Generator | Code block whose body contains triple-backtick runs is preserved (function form is fence-safe) |
+| G41 | Generator | `Code { show_line_numbers: true }` → output contains padded line-number prefix on first line |
 | G42 | Generator | Title equal to first H1 block text → only one `= Title` emission |
 | G43 | Generator | Empty `metadata.title` and empty blocks → no panic, returns preamble + nothing |
 | E1 | Error | Invalid JSON returns `DocGenError::SerializationError` |
@@ -209,7 +209,7 @@ fn test_typst_pdf_extract_text_contains_heading() {
 
 ---
 
-### S4 — No markdown asterisk literals in extracted text
+### S4 — No Markdown asterisk literals in extracted text
 
 ```rust
 // File: src/lib.rs  mod: typst_pdf_tests
@@ -1223,7 +1223,7 @@ fn test_typst_pdf_latex_only_math_falls_back_cleanly() {
         ],
     };
     let json = serde_json::to_string(&doc).unwrap();
-    // Generator detects backslash-alpha → emits comment + raw fallback.
+    // Generator detects LaTeX commands and emits comment + raw fallback.
     // Pipeline must succeed (no GenerationError).
     let bytes = generate_pdf(json).expect("LaTeX fallback must produce valid PDF");
     assert_eq!(&bytes[0..4], b"%PDF");
@@ -1259,7 +1259,7 @@ fn trim(s: &str) -> &str { &s[..s.len().min(600)] }
 The following mutations must each cause at least one test to fail (confirming test suite strength):
 
 | Mutation | Scenario(s) that catch it |
-|---|---|
+| --- | --- |
 | Change `#pagebreak()` to `#page-break()` | G12, M2 |
 | Change `#line(length: 100%)` to `#line(length: 50%)` | G13 |
 | Change `+ item` to `- item` for ordered lists | G9 |
@@ -1270,7 +1270,7 @@ The following mutations must each cause at least one test to fail (confirming te
 | Emit `#outline(depth: 5)` regardless of `max_depth` | G14, G15 |
 | Emit `#outline(depth: 3)` regardless of `max_depth` | G15 |
 | Remove `\#` escaping for `#` in headings | G23 |
-| Remove `\[` / `\]` escaping in headings | G23, G37 |
+| Remove backslash-bracket escaping in headings | G23, G37 |
 | Skip line-start `=` escape in plain text | G38 |
 | Change Warning fill to `#C6F6D5` (Tip color) | G17 |
 | Remove the 8 MB stack spawn; use `std::thread::spawn` | E3 (40-level deep list) |
@@ -1283,7 +1283,7 @@ The following mutations must each cause at least one test to fail (confirming te
 | Drop autolink handling | G34 |
 | Drop hard-line-break handling | G35 |
 | Treat MD backslash escape as literal `\` keep `*bold*` | G36 |
-| Emit raw fenced ` ```rust ` instead of `#raw(...)` | G7, G8, G40 |
+| Emit raw fenced code markup instead of `#raw(...)` | G7, G8, G40 |
 | Pass `\frac{1}{2}` to Typst math unmodified | G39, E4 |
 | Skip line-number precompute when `show_line_numbers: true` | G41 |
 | Emit metadata title even when first block is matching H1 | G42 |
@@ -1300,7 +1300,7 @@ The following mutations must each cause at least one test to fail (confirming te
 These tests from the current `src/lib.rs` check internal lopdf content-stream structure. They are implementation-specific to the lopdf pipeline and **must be deleted** in Task 4.1:
 
 | Test name | Reason for retirement |
-|---|---|
+| --- | --- |
 | `pdf_code_block_layout_tests::test_code_bg_rect_contains_text_baseline` | Inspects lopdf `re`/`Tm` operations |
 | `pdf_code_block_layout_tests::test_code_bg_rect_extends_below_baseline_by_at_least_descender` | Same |
 | `pdf_code_block_layout_tests::test_paragraph_after_code_block_ascenders_clear_rect_bottom` | Same |
@@ -1311,7 +1311,7 @@ These tests from the current `src/lib.rs` check internal lopdf content-stream st
 ## Tests to Preserve Unchanged
 
 | Test name | Status |
-|---|---|
+| --- | --- |
 | `tests::test_generate_pdf` | Passes: still checks `bytes[0..4] == b"%PDF"` |
 | `tests::test_pdf_paginates_long_content` | Passes: uses lopdf page count; still valid |
 | `tests::test_generate_pdf_extract_has_no_markdown_asterisks` | Passes if `md_to_typst_inline` correct |

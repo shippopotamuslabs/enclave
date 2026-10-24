@@ -8,7 +8,7 @@
 ## Constraints (non-negotiable)
 
 | Constraint | Detail |
-|---|---|
+| --- | --- |
 | On-device only | No network calls, no package registry access, no system font discovery |
 | Targets | `aarch64-linux-android`, `armv7-linux-androideabi`, `x86_64-linux-android`, plus standard desktop targets |
 | Stack | Android default thread stack is 512 KB — Typst needs ≥ 8 MB; use `std::thread::Builder::stack_size` |
@@ -21,7 +21,7 @@
 ## File Map
 
 | File | Action | Responsibility |
-|---|---|---|
+| --- | --- | --- |
 | `Cargo.toml` | Modify | Add `typst`, `typst-pdf`, `time` dependencies |
 | `assets/fonts/` | Create (directory) | Hold the 6 bundled `.ttf` font files |
 | `src/typst_world.rs` | Create | `PocketCrewWorld` struct implementing `typst::World`; embeds fonts and serves image bytes via `file()` |
@@ -76,7 +76,7 @@ Do **not** add `typst-render`, `typst-svg`, `typst-html`, or `typst-kit`. The `t
 ### Phase 1 — World implementation (TDD)
 
 **Task 1.1 — Write failing tests for `PocketCrewWorld`**
-In a new `src/typst_world.rs`, add a `#[cfg(test)]` module containing the W1–W7 scenarios from `test_spec.md`. Run `cargo test typst_world` — all must fail (file doesn't exist).
+In a new `src/typst_world.rs`, add a `#[cfg(test)]` module containing the W1–W7 scenarios from `test_spec.md`. Run `cargo test typst_world` — all must fail (file does not exist).
 
 **Task 1.2 — Implement `PocketCrewWorld`**
 Create `src/typst_world.rs` with:
@@ -182,16 +182,16 @@ Emit the preamble (verbatim, before any block content):
 **Title rendering rule** (avoids duplicating a leading H1):
 - Let `first_h1 = blocks.first().and_then(|b| if let Block::Heading { level: 1, text, .. } = b { Some(text) } else { None })`.
 - If `first_h1 == Some(&metadata.title)`, skip metadata title emission (the block itself renders it).
-- Otherwise emit `= {escape_typst(&metadata.title)}` followed by blank line.
+- Otherwise, emit `= {escape_typst(&metadata.title)}` followed by blank line.
 - If `metadata.author` is present, emit `_By {escape_typst(author)}_` followed by blank line.
 
 **Task 2.3 — Implement Block → Typst markup for all variants**
 
 | Block variant | Typst output |
-|---|---|
+| --- | --- |
 | `Heading { level, text, anchor }` | `"=".repeat(level)` + ` ` + `escape_typst(text)`; if `anchor` is `Some(a)`, append ` <{a}>` (Typst label). Blank line after. |
 | `Paragraph { text, align }` | Inline markdown converted via `md_to_typst_inline(text)`. If `align == Some(Center)` or `Some(Right)`, wrap in `#align(center)[...]` / `#align(right)[...]`. Omit the wrapper for `None` and `Some(Left)` (left is default; redundant emit produces noise). Blank line after. |
-| `Code { language, text, show_line_numbers, caption, .. }` | Use the **function form** `#raw(block: true, lang: "{lang}", "{rust-escaped-text}")` — never fenced markup. This avoids the closing-fence problem when content contains triple backticks. The text is escaped using `text.replace('\\', "\\\\").replace('"', "\\\"")` and wrapped in double quotes. If `show_line_numbers` is true: precompute the numbered text in Rust (`format!("{:>3} | {}\n", i+1, line)` per line) and emit that as the raw body instead of the original. If `caption` is `Some`, emit `#figure(caption: [{escape_typst(caption)}])[ ... ]` wrapping the raw call. Blank line after. |
+| `Code { language, text, show_line_numbers, caption, .. }` | Use the **function form** `#raw(block: true, lang: "{lang}", "{rust-escaped-text}")` — never fenced markup. This avoids the closing-fence problem when content contains triple backticks. The text is escaped using `text.replace('\\', "\\\\").replace('"', "\\\"")` and wrapped in double quotes. If `show_line_numbers` is true: precompute the numbered text in Rust (padded index plus separator plus line body per row) and emit that as the raw body instead of the original. If `caption` is `Some`, emit `#figure(caption: [{escape_typst(caption)}])[ ... ]` wrapping the raw call. Blank line after. |
 | `List { ordered, items, start }` | For ordered with `start.is_some() && start != Some(1)`: emit the function form `#enum(start: {N}, [item1], [item2], ...)`. Otherwise use lightweight markup: `+ text` for ordered, `- text` for unordered. Nested children indent by two spaces per depth. For items with `checked: Some(true)`, prefix the item text with `#sym.checkmark.heavy + " "`; for `Some(false)`, prefix with `[☐] `. For `None`, no prefix. |
 | `Table { header, rows, alignments, caption }` | `#table(columns: N, align: (a1, a2, ...), table.header([H1], [H2], ...), [R1C1], [R1C2], ...)`. Map `Alignment::Left → left`, `Center → center`, `Right → right` as bare Typst identifiers. If `alignments` is `None`, emit `align: left` (single value applies to all columns). Wrap the whole thing in `#figure(caption: [...])[ ... ]` if `caption` is `Some`. |
 | `Image { src, alt, data_base64, mime, width_pt, height_pt, align }` | If `data_base64` is `Some`: decode base64 in Rust to `Vec<u8>`, allocate a fresh `FileId::new(None, VirtualPath::new(&format!("/img_{n}.{ext}")))` (where `ext` comes from `mime` mapped to "png"/"jpg"/etc, defaulting to "bin"), store `(FileId, Bytes::new(decoded))` in the `files` map of `GeneratedSource`, and emit `#image("/img_{n}.{ext}", width: {w}pt, height: {h}pt)`. Omit `width:`/`height:` when `None`. If `data_base64` is `None`: emit alt text as italic paragraph `_{escape_typst(alt.unwrap_or_default())}_` (or empty paragraph if `alt` is `None`). Counter `n` is generator-local. |
@@ -229,7 +229,7 @@ fn escape_typst_inline(text: &str) -> String { /* inline body inside [ ... ] con
 
 Both escape: `#`, `<`, `>`, `@`, `_`, `*`, `$`, `\`, `` ` ``, `[`, `]` — each prefixed with `\`.
 
-`escape_typst` additionally escapes line-start markup tokens to prevent unintended block parsing: after splitting on `\n`, if a line starts with any of `=`, `-`, `+`, `/` followed by space or end-of-line, prefix the first character with `\`. `escape_typst_inline` skips this line-start step because inline content blocks don't initiate block-level parsing.
+`escape_typst` additionally escapes line-start markup tokens to prevent unintended block parsing: after splitting on `\n`, if a line starts with any of `=`, `-`, `+`, `/` followed by space or end-of-line, prefix the first character with `\`. `escape_typst_inline` skips this line-start step because inline content blocks do not initiate block-level parsing.
 
 **Task 2.6 — Verify Phase 2 tests pass**
 `cargo test typst_gen` must be all green.
