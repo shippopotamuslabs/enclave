@@ -20,7 +20,7 @@ local.properties
 .aider*
 /.proxyai
 /.keystore
-/.idea
+.idea/
 app/release/app-release.aab
 /.kotlin
 **/.kotlin/
