@@ -1,0 +1,3 @@
+<component name="DependencyValidationManager">
+  <scope name="agent-core-uniffi-bridge" pattern="file:third_party/agent_core/src/lib.rs||file:third_party/agent_core/src/budget.rs||file:third_party/agent_core/src/engine/mod.rs||file:third_party/agent_core/src/ffi/**||file:third_party/agent_core/tests/finish_boundary_test.rs" />
+</component>
