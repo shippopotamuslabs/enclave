@@ -8,7 +8,7 @@ rust-version = "1.78"
 crate-type = ["cdylib", "staticlib", "rlib"]
 
 [dependencies]
-uniffi = { version = "0.29.0", default-features = true, features = ["cli"] }
+uniffi = { version = "0.31.2", default-features = true, features = ["cli"] }
 
 [[bin]]
 name = "uniffi-bindgen"

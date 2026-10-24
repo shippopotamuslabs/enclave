@@ -1,0 +1,3 @@
+<component name="DependencyValidationManager">
+  <scope name="rust-plans-markdown" pattern="file[*.md]:*plans*" />
+</component>

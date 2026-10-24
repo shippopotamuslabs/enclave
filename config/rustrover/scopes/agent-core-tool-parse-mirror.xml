@@ -1,0 +1,3 @@
+<component name="DependencyValidationManager">
+  <scope name="agent-core-tool-parse-mirror" pattern="file:third_party/agent_core/src/tool_parse/result.rs||file:third_party/agent_core/src/ffi/types.rs" />
+</component>
