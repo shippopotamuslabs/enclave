@@ -63,6 +63,8 @@ Three Rust codebases sit under the Kotlin:
 | `docgen_core` | Document generation, extraction, and schema validation. `:core:docgen` wraps it |
 | `classifier_core` | Classifies search intent from an embedding vector. Its source lives in this repo at `third_party/classifier_core` |
 
+A fourth Rust codebase sits beside the Android app: the desktop companion in `desktop/`, a four-crate Cargo workspace (presentation, domain, data, inference) under the root `Cargo.toml`. It consumes `agent_core` directly, with no UniFFI boundary in between. See Status and distribution for its state.
+
 Kotlin reaches the Rust through UniFFI-generated bindings. The generated Kotlin bindings and the compiled libraries for `agent_core` and `classifier_core` are checked into `:core:agent`, so a normal app build never runs Cargo. The binding policy is written down in `core/agent/README.md`.
 
 Long work runs outside the UI. Foreground services carry the chat inference session, the Mixture-of-Agents pipeline, Studio generation, and TTS playback, and WorkManager carries resumable background state between the services and the screens. Android gives a dataSync foreground service a 6-hour cumulative budget, so the workers checkpoint and resume.
@@ -157,6 +159,7 @@ Skip this section unless you changed a Rust crate's public UniFFI types. The che
 | `app/` | The application module and the manifest that declares the foreground services |
 | `core/` | The domain, data, UI, testing, agent bridge, and docgen bridge modules, plus the custom detekt rules |
 | `feature/` | One module per feature area, including the three service modules |
+| `desktop/` | The Rust desktop companion: four crates (presentation, domain, data, inference) in the Cargo workspace rooted at the repo's `Cargo.toml`. Unfinished; local inference does not run yet |
 | `llama-android/`, `local-image-gen-android/` | The two native inference engines and their JNI bridges |
 | `third_party/` | The Rust crates and the submodule pointers: `agent_core`, `classifier_core`, `docgen_core`, `whisper-android`, `whisper.cpp` |
 | `contracts/` | The binding architecture, data, inference, UI, style, testing, and voice rules |
