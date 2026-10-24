@@ -338,8 +338,33 @@ jobs:
         run: |
           export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
           sdkmanager "ndk;27.0.11718014" "ndk;28.2.13676358" "cmake;3.22.1"
+      # CI-only test configuration, kept in the workflow so no module build
+      # file carries CI concerns:
+      # - 3g test heap: the Robolectric-heavy suites (core-data, inference)
+      #   OOM-killed their test executors at the default heap in the first
+      #   clean-environment runs of this port.
+      # - Quarantine (ENC-216): three :core:agent contract-test classes do a
+      #   real UniFFI round-trip and die at class init on the x86_64 runner
+      #   (the checked-in native lib is arm64). Excluded here until ENC-216
+      #   gives them a host native library; remove the excludes with it.
+      - name: Write CI test init script
+        run: |
+          cat > "$RUNNER_TEMP/ci-test-init.gradle" <<'GRADLE_EOF'
+          allprojects { project ->
+              project.tasks.withType(org.gradle.api.tasks.testing.Test).configureEach { testTask ->
+                  testTask.maxHeapSize = "3g"
+                  if (project.path == ":core:agent") {
+                      testTask.exclude(
+                          "com/browntowndev/enclave/core/agent/RustAgentEngineAdapterActiveSessionContractTest.class",
+                          "com/browntowndev/enclave/core/agent/RustToolEnvelopeParserContractTest.class",
+                          "com/browntowndev/enclave/core/agent/RustToolStreamGateContractTest.class"
+                      )
+                  }
+              }
+          }
+          GRADLE_EOF
       - name: Unit tests (${{ matrix.leg }})
-        run: ./gradlew ${{ matrix.tasks }}
+        run: ./gradlew -I "$RUNNER_TEMP/ci-test-init.gradle" ${{ matrix.tasks }}
       - name: Publish test results
         if: always()
         uses: mikepenz/action-junit-report@v5
