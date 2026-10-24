@@ -3,10 +3,10 @@
 	url = https://github.com/ggml-org/whisper.cpp
 [submodule "third_party/docgen_core"]
 	path = third_party/docgen_core
-	url = https://gitlab.com/browntown.development-group/docgen_core.git
+	url = ../docgen_core
 [submodule "third_party/agent_core"]
 	path = third_party/agent_core
-	url = https://gitlab.com/browntown.development-group/agent_core.git
+	url = ../agent_core
 [submodule "third_party/whisper-android"]
 	path = third_party/whisper-android
-	url = https://gitlab.com/browntown.development-group/whisper-android.git
+	url = ../whisper-android
