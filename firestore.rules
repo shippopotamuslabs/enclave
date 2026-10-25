@@ -121,6 +121,12 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Stripe customer-to-uid mapping: server-only via the Admin SDK. Clients
+    // may neither read nor write; the webhook maintains these docs.
+    match /stripe_customers/{customerId} {
+      allow read, write: if false;
+    }
+
     // Write-only moderation reports for false positives/negatives.
     match /moderation/{reportId} {
       allow create: if request.auth != null
