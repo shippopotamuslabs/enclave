@@ -180,3 +180,9 @@ bonsai-*.gguf
 bonsai-unpacked/
 
 .local-models/
+
+# AI-tool working directories and agent state (local only, never tracked)
+.agents/
+.grok/
+skills-lock.json
+plans/
