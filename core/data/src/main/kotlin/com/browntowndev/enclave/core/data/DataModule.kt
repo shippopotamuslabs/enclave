@@ -366,25 +366,46 @@ object DataModule {
         @ApplicationContext context: Context,
     ): WorkManager = WorkManager.getInstance(context)
 
+    // ENC-212: every Firebase handle goes through FirebaseAvailability first so a
+    // dark build (no google-services.json) constructs signed-out/no-op handles
+    // instead of throwing IllegalStateException during Hilt graph construction.
     @Provides
     @Singleton
-    fun provideFirebaseAuth(): FirebaseAuth = FirebaseAuth.getInstance()
+    fun provideFirebaseAuth(
+        @ApplicationContext context: Context,
+    ): FirebaseAuth {
+        FirebaseAvailability.ensureFirebaseApp(context)
+        return FirebaseAuth.getInstance()
+    }
 
     @Provides
     @Singleton
-    fun provideFirebaseFirestore(): FirebaseFirestore = FirebaseFirestore.getInstance()
+    fun provideFirebaseFirestore(
+        @ApplicationContext context: Context,
+    ): FirebaseFirestore {
+        FirebaseAvailability.ensureFirebaseApp(context)
+        return FirebaseFirestore.getInstance()
+    }
 
     @Provides
     @Singleton
-    fun provideFirebaseFunctions(): com.google.firebase.functions.FirebaseFunctions =
-        com.google.firebase.functions.FirebaseFunctions
+    fun provideFirebaseFunctions(
+        @ApplicationContext context: Context,
+    ): com.google.firebase.functions.FirebaseFunctions {
+        FirebaseAvailability.ensureFirebaseApp(context)
+        return com.google.firebase.functions.FirebaseFunctions
             .getInstance("us-central1")
+    }
 
     @Provides
     @Singleton
-    fun provideFirebaseStorage(): com.google.firebase.storage.FirebaseStorage =
-        com.google.firebase.storage.FirebaseStorage
+    fun provideFirebaseStorage(
+        @ApplicationContext context: Context,
+    ): com.google.firebase.storage.FirebaseStorage {
+        FirebaseAvailability.ensureFirebaseApp(context)
+        return com.google.firebase.storage.FirebaseStorage
             .getInstance()
+    }
 
     @Provides
     @Singleton
