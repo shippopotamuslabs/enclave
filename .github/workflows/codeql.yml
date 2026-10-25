@@ -27,6 +27,12 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        # settings.gradle.kts wires third_party/whisper-android in as a
+        # composite build unconditionally; without submodules the build
+        # fails at configuration ("Project with path ':whisper-android'
+        # not found in build ':whisper-android'").
+        submodules: recursive
 
     - name: Set up JDK 17
       uses: actions/setup-java@v4
@@ -58,9 +64,12 @@ jobs:
     - name: Build with Gradle
       # We use assembleDebug to ensure all Kotlin/Java code is compiled
       # --no-daemon and --no-build-cache are important so CodeQL can trace the full build
+      # verifyLlamaJniPackaging is excluded: it checks for the llama JNI
+      # libraries (ENC-210), which are committed/built outside this
+      # workflow; packaging verification stays with the CI assemble jobs.
       run: |
         chmod +x gradlew
-        ./gradlew clean assembleDebug --no-daemon --no-build-cache --parallel -Pandroid.builder.sdk.download=true
+        ./gradlew clean assembleDebug -x verifyLlamaJniPackaging --no-daemon --no-build-cache --parallel -Pandroid.builder.sdk.download=true
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v4
