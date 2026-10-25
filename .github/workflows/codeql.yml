@@ -27,6 +27,12 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        # settings.gradle.kts wires third_party/whisper-android in as a
+        # composite build unconditionally; without submodules the build
+        # fails at configuration ("Project with path ':whisper-android'
+        # not found in build ':whisper-android'").
+        submodules: recursive
 
     - name: Set up JDK 17
       uses: actions/setup-java@v4
@@ -50,12 +56,24 @@ jobs:
     - name: Accept Android SDK Licenses
       run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
+    - name: Fetch stb_image.h
+      # image_io.cpp includes stb_image.h unconditionally and the engine's
+      # thirdparty dir is gitignored; ENC-225 moves this fetch into
+      # scripts/fetch-native-deps.sh once that script lands on main.
+      run: |
+        mkdir -p local-image-gen-android/src/main/cpp/engine/thirdparty/stb
+        curl -fL -o local-image-gen-android/src/main/cpp/engine/thirdparty/stb/stb_image.h \
+          https://raw.githubusercontent.com/nothings/stb/003501f6d7a8668ce8b6d875e34dd97ad0d5d5b5/stb_image.h
+
     - name: Build with Gradle
       # We use assembleDebug to ensure all Kotlin/Java code is compiled
       # --no-daemon and --no-build-cache are important so CodeQL can trace the full build
+      # verifyLlamaJniPackaging is excluded: it checks for the llama JNI
+      # libraries (ENC-210), which are committed/built outside this
+      # workflow; packaging verification stays with the CI assemble jobs.
       run: |
         chmod +x gradlew
-        ./gradlew clean assembleDebug --no-daemon --no-build-cache --parallel -Pandroid.builder.sdk.download=true
+        ./gradlew clean assembleDebug -x verifyLlamaJniPackaging --no-daemon --no-build-cache --parallel -Pandroid.builder.sdk.download=true
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v4
