@@ -112,7 +112,7 @@ The primary diffusion engine in `:local-image-gen-android` runs on Qualcomm QNN 
    scripts/fetch-native-deps.sh
    ```
 
-   The script downloads llama.cpp at tag `b8241` plus the tracked I8MM runtime patch in `llama-android/patches/`, and KleidiAI at `v1.22.0`, into `third_party/`. Neither tree is a submodule or a commit. The SVE llama library ships in the repo at `llama-android/src/main/jniLibs/arm64-v8a/libllama-jni-sve.so`; the NEON library is built by CMake from the fetched trees on every build.
+   The script downloads llama.cpp at tag `b8241` plus the tracked I8MM runtime patch in `llama-android/patches/`, and KleidiAI at `v1.22.0`, into `third_party/`. Neither tree is a submodule or a commit. The SVE llama library ships in the repo at `llama-android/src/main/jniLibs/arm64-v8a/libllama-jni-sve.so`; the NEON library is built by CMake from the fetched trees on every build. The script also fetches `stb_image.h` (pinned, v2.30) into `local-image-gen-android/src/main/cpp/engine/thirdparty/stb/` — the diffusion engine's one hard dependency in that gitignored directory. The optional deps that live there (MNN, tokenizers-cpp, xtensor) stay manual checkouts; without them the engine builds with those runners stubbed.
 
 4. Build the debug APK:
 

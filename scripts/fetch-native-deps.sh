@@ -63,6 +63,25 @@ fi
 
 fetch_tree "$KLEIDIAI_TARBALL" "$KLEIDIAI_DIR" "$KLEIDIAI_STAMP" "kleidiai $KLEIDIAI_COMMIT"
 
+# stb_image.h is a hard dependency of the diffusion engine: image_io.cpp
+# includes it unconditionally, and engine/CMakeLists.txt puts
+# engine/thirdparty/stb on the include path when the directory exists.
+# The rest of engine/thirdparty (MNN, tokenizers-cpp, xtensor) stays a
+# manual checkout: those deps are optional (the build degrades with
+# warnings and stubs without them) and their pins are recorded nowhere.
+STB_COMMIT="003501f6d7a8668ce8b6d875e34dd97ad0d5d5b5"
+STB_DIR="$ROOT/local-image-gen-android/src/main/cpp/engine/thirdparty/stb"
+if [[ -f "$STB_DIR/stb_image.h" ]]; then
+    echo "OK (already present): $STB_DIR/stb_image.h"
+else
+    echo "Fetching stb_image.h (nothings/stb @ $STB_COMMIT, v2.30)"
+    mkdir -p "$STB_DIR"
+    curl -fL --retry 3 -o "$STB_DIR/stb_image.h" \
+        "https://raw.githubusercontent.com/nothings/stb/${STB_COMMIT}/stb_image.h"
+    echo "Installed: $STB_DIR/stb_image.h"
+fi
+
 echo "Native source trees ready:"
 echo "  $LLAMA_DIR"
 echo "  $KLEIDIAI_DIR"
+echo "  $STB_DIR/stb_image.h"
