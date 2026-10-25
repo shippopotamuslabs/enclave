@@ -6,9 +6,18 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.ksp)
     alias(libs.plugins.hilt)
-    alias(libs.plugins.google.services)
-    alias(libs.plugins.firebase.crashlytics)
+    alias(libs.plugins.google.services) apply false
+    alias(libs.plugins.firebase.crashlytics) apply false
     alias(libs.plugins.apter.robolectric.junit5)
+}
+
+// ENC-212: apply the Google Services and Crashlytics plugins only when the
+// config file is present. A bare clone has no app/google-services.json and
+// builds with Firebase dark; CI writes the file from the GOOGLE_SERVICES_JSON
+// secret first, so CI builds apply both plugins exactly as before.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+    apply(plugin = "com.google.firebase.crashlytics")
 }
 
 // 1. Load properties
