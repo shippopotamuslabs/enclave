@@ -6,6 +6,28 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == uid;
     }
 
+    // Entitlement (subscription) state: a server-written Stripe mirror plus a
+    // manual override. Reads go through get()/exists() guards so missing docs
+    // deny safely. This helper gates nothing yet; it is shared groundwork for
+    // premium-feature checks in later chunks.
+    function isOverrideEntitled(uid) {
+      return exists(/databases/$(database)/documents/users/$(uid)/entitlement/override)
+        && 'freeAccess' in get(/databases/$(database)/documents/users/$(uid)/entitlement/override).data
+        && get(/databases/$(database)/documents/users/$(uid)/entitlement/override).data.freeAccess == true;
+    }
+
+    function isStripeEntitled(uid) {
+      return exists(/databases/$(database)/documents/users/$(uid)/entitlement/stripe)
+        && 'active' in get(/databases/$(database)/documents/users/$(uid)/entitlement/stripe).data
+        && get(/databases/$(database)/documents/users/$(uid)/entitlement/stripe).data.active == true
+        && ((!('expiryTimeMillis' in get(/databases/$(database)/documents/users/$(uid)/entitlement/stripe).data)
+          || get(/databases/$(database)/documents/users/$(uid)/entitlement/stripe).data.expiryTimeMillis > request.time.toMillis()));
+    }
+
+    function isEntitled(uid) {
+      return isOwner(uid) && (isOverrideEntitled(uid) || isStripeEntitled(uid));
+    }
+
     function isServerOwnedSyncCollection(collection) {
       return collection == 'sync_events'
         || collection == 'sync_meta'
@@ -76,6 +98,13 @@ service cloud.firestore {
       }
 
       match /sync_meta/{doc} {
+        allow read: if isOwner(uid);
+        allow write: if false;
+      }
+
+      // Entitlement state (Stripe mirror + manual override): owners may read
+      // their own docs; all client writes are server-only via the Admin SDK.
+      match /entitlement/{docId} {
         allow read: if isOwner(uid);
         allow write: if false;
       }
