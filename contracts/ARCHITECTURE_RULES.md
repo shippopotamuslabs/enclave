@@ -13,15 +13,9 @@ All code generation must prioritize 2026 OS constraints:
 
 **Clean Architecture Supremacy Rule (ZERO TOLERANCE – HIGHEST PRIORITY)**
 
-This project follows Clean Architecture / ports-and-adapters. Dependencies point
-inward toward `:core:domain`; implementation modules adapt framework, storage,
-network, native, and UI concerns around those domain ports.
-
-**The agent MUST NEVER:**
-- Write, propose, or allow any code that violates the dependency rule.
-- Leak Android, Compose, Hilt, Room, WorkManager, LiteRT, or any framework/SDK types through `:core:domain` public APIs.
-- Bypass module boundaries, forbidden imports, or layer responsibilities.
-- Use any other architectural pattern (MVVM-only, monolithic, etc.).
+Canon: `contracts/gospel/ARCHITECTURE-GOSPEL.md` §0. The full rule — Clean
+Architecture / ports-and-adapters, dependencies inward toward `:core:domain`,
+and the MUST NEVER list — lives in the gospel. This contract no longer embeds it.
 
 **Violation = immediate contract breach.**  
 Reply with exactly: "Contract violation detected in [file]. Request explicit 'Contract Waiver' from user."  
@@ -32,6 +26,12 @@ All rules below are non-negotiable implementations of Clean Architecture.
 ---
 
 ## Strict Boundaries Expansion
+
+The Clean Architecture and presentation rows of this table are canon —
+`contracts/gospel/ARCHITECTURE-GOSPEL.md` (Strict Boundaries). The table below is
+Enclave's expansion of that canon: its platform rows (WorkManager, byte-offset
+resumption) and the exact module-graph rule are local.
+
 | Always | Never |
 |--------|-------|
 | Route background progress via `WorkManager.setProgress`. | Use singleton callbacks or static listeners for background-to-UI updates. |
@@ -54,6 +54,9 @@ Primary modules: `:app`, `:core:domain`, `:core:data`, `:core:ui`, `:core:testin
 `:detekt-rules` (JVM-only static analysis; tracked in ENC-10, not an app runtime dependency).
 
 ### 1.1 Dependency Direction (Strict)
+
+The dependency-direction principle is canon: `contracts/gospel/ARCHITECTURE-GOSPEL.md` §1.
+Enclave's exact module graph:
 
 ```text
 :app                 → :core:domain, :core:data, :core:ui, :core:agent, :core:docgen, :feature:*
@@ -79,6 +82,9 @@ No reverse dependencies into `:core:domain` are allowed.
 
 ### 1.2 Forbidden Imports
 
+The forbidden-import principles are canon: `contracts/gospel/ARCHITECTURE-GOSPEL.md` §2.
+Enclave's module table:
+
 | Module | Must NOT import |
 |--------|----------------|
 | `:core:domain` | App, feature, data, UI, native bridge modules, Android UI/framework types in public APIs, Compose, Hilt, Room, LiteRT |
@@ -92,6 +98,9 @@ wired by `:app`.
 
 ## 2. Layer Responsibilities
 
+Layer responsibilities are canon: `contracts/gospel/ARCHITECTURE-GOSPEL.md` §3
+(see also its §3.1, domain model policy). Enclave's layer map:
+
 - **`:core:domain`** — Domain models, ports, use cases, and test fixtures. Keep domain APIs free of Android/UI/storage/native implementation types.
 - **`:core:data`** — Implements persistence, Room, repositories, network/Firebase integration, WorkManager, and entity/domain mapping. No Compose UI.
 - **`:feature:inference`** — Implements model/provider inference abstractions from domain. No Compose UI.
@@ -104,25 +113,17 @@ wired by `:app`.
 
 
 ### 3.1 UI State
-- Immutable `data class`. All updates via `copy()`.
-- No mutable fields. No Android types inside UI state.
-- One `StateFlow<UiState>` per ViewModel.
+Canon: `contracts/gospel/ARCHITECTURE-GOSPEL.md` §4.1 (UI State).
 
 ### 3.2 One-Shot Events
-- Use `Channel<Event>(Channel.BUFFERED)` exposed as `Flow<Event>` via `receiveAsFlow()`.
-- Consumed in `LaunchedEffect(Unit)` at the screen level.
+Canon: `contracts/gospel/ARCHITECTURE-GOSPEL.md` §4.2 (One-Shot Events).
 
 ### 3.3 Model Mapping
-- Domain models MUST NOT be passed directly to composables. ViewModel maps domain → presentation.
-- Presentation models (`*UiState`, `*UiEvent`, drafts) MUST NOT embed domain types; map at the ViewModel/mapper boundary.
-- No repository calls inside composables.
+Canon: `contracts/gospel/ARCHITECTURE-GOSPEL.md` §4.3 (Model Mapping).
 
 ### 3.4 ViewModel Dependencies & Flow Composition (ENC-2)
-- **ViewModels depend on use cases, not repository or port interfaces.** A ViewModel constructor injects `*UseCase` classes from `:core:domain`; it must not inject a `*Repository`/`*Port` interface or any `:core:data` type directly. Repository/service ports are consumed by use cases.
-- **Feature-layer mappers must not accept use-case parameters.** Mappers are pure domain/ephemeral → presentation transforms; ViewModels invoke use cases and pass derived values into mappers.
-- **Use cases own multi-source `Flow` composition.** When a screen needs more than one repository, add a domain interactor that combines the streams into one domain read model; the ViewModel observes that single use case — it must not write its own multi-source `combine` over repositories.
-- **Only transient/presentation state lives in the ViewModel** (unsaved drafts, reveal-errors flags, one-shot events). Durable facts are read through use cases.
-- **Write paths go through use cases too** — never `repository.save(...)` from a ViewModel.
+Canon: `contracts/gospel/ARCHITECTURE-GOSPEL.md` §4.4 (ViewModel Dependencies & Flow Composition).
+
 - Enforced by Detekt `enclave` rules `ForbiddenRepositoryInViewModel`, `ForbiddenPortInViewModel`, `ForbiddenDomainTypeInComposable`, `ForbiddenDomainTypeInUiState`, `ForbiddenUseCaseInFeatureMapper` (ENC-10). `./gradlew detekt` must pass at `maxIssues: 0`; do not add suppressions to hide layering debt — file an ENC sub-issue instead.
 
 ### 3.5 Linear Ticketing
@@ -132,19 +133,9 @@ All implementation work follows `AGENTS.md` §3.7 (Linear team `ENC`, chunk-base
 
 ## 4. Navigation & Scaffold Architecture
 
-Each screen owns its own `Scaffold`, `TopAppBar`, and `ViewModel`. There is no global/root `Scaffold`.
-
-```kotlin
-// ChatRoute.kt — wires ViewModel to Screen
-@Composable
-fun ChatRoute(onNavigateToHistory: () -> Unit) {
-    val viewModel: ChatViewModel = hiltViewModel()
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    ChatScreen(uiState = uiState, onNavigateToHistory = onNavigateToHistory)
-}
-```
-- **No `DynamicTopBar`.** Each screen composes its own TopAppBar.
-- **No `paddingValues` threading.** Each Scaffold consumes its own inner padding locally.
+Canon: `contracts/gospel/ARCHITECTURE-GOSPEL.md` §5 (Navigation & Scaffold Architecture).
+Each screen owns its own `Scaffold`, `TopAppBar`, and `ViewModel`. There is no
+global/root `Scaffold`, no `DynamicTopBar`, and no `paddingValues` threading.
 
 ---
 
@@ -178,21 +169,13 @@ fun ChatScreen(uiState: ChatUiState, onNavigateToHistory: () -> Unit) {
 
 ## 6. Accessibility
 
-- All interactive elements must have `contentDescription` + appropriate semantic `role`.
-- Use `sp` units for text. System font scaling must be respected.
-- TalkBack must work flawlessly across all custom components.
+Canon: `contracts/gospel/ARCHITECTURE-GOSPEL.md` §6 (Accessibility).
 
 ---
 
 ## 7. Preview Requirements
 
-Every composable file MUST include previews for:
-- Light + Dark themes
-- Empty state (where applicable)
-- Populated / long content
-- Loading / thinking state (where applicable)
-
-*Constraint:* Preview composables must NOT reference Hilt or real ViewModels. Use fake presentation models.
+Canon: `contracts/gospel/ARCHITECTURE-GOSPEL.md` §7 (Preview Requirements).
 
 ---
 
