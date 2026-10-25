@@ -66,6 +66,7 @@ golden-test-examples/
 *.so
 !core/agent/src/main/jniLibs/**/*.so
 !core/docgen/src/main/jniLibs/**/*.so
+!llama-android/src/main/jniLibs/**/*.so
 
 # Python (classifier training, eval scripts, tooling)
 .venv/
