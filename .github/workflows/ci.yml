@@ -15,7 +15,8 @@
 # himself; it is never uploaded anywhere else.
 #
 # Required repo secrets (Settings -> Secrets and variables -> Actions):
-#   GOOGLE_SERVICES_JSON    contents of app/google-services.json
+#   (app/google-services.json is committed in the repo — ENC-224; no
+#   GOOGLE_SERVICES_JSON secret is used or wanted by these workflows.)
 #   KEYSTORE_BASE64         base64-encoded enclave_keystore.jks
 #   RELEASE_STORE_PASSWORD  \
 #   RELEASE_KEY_ALIAS        > read by app/build.gradle.kts via
@@ -154,8 +155,6 @@ jobs:
         with:
           token: ${{ steps.app-token.outputs.token }}
       - uses: ./.github/actions/android-setup
-        with:
-          google-services-json: ${{ secrets.GOOGLE_SERVICES_JSON }}
       - name: Restore Gradle dependency cache
         uses: actions/cache@v4
         with:
@@ -193,8 +192,6 @@ jobs:
         with:
           token: ${{ steps.app-token.outputs.token }}
       - uses: ./.github/actions/android-setup
-        with:
-          google-services-json: ${{ secrets.GOOGLE_SERVICES_JSON }}
       - name: Restore Gradle dependency cache
         uses: actions/cache@v4
         with:
@@ -232,8 +229,6 @@ jobs:
         with:
           token: ${{ steps.app-token.outputs.token }}
       - uses: ./.github/actions/android-setup
-        with:
-          google-services-json: ${{ secrets.GOOGLE_SERVICES_JSON }}
       - name: Restore Gradle dependency cache
         uses: actions/cache@v4
         with:
@@ -319,8 +314,6 @@ jobs:
         with:
           token: ${{ steps.app-token.outputs.token }}
       - uses: ./.github/actions/android-setup
-        with:
-          google-services-json: ${{ secrets.GOOGLE_SERVICES_JSON }}
       - name: Restore Gradle dependency cache
         uses: actions/cache@v4
         with:
@@ -420,8 +413,6 @@ jobs:
         with:
           token: ${{ steps.app-token.outputs.token }}
       - uses: ./.github/actions/android-setup
-        with:
-          google-services-json: ${{ secrets.GOOGLE_SERVICES_JSON }}
       - name: Restore Gradle dependency cache
         uses: actions/cache@v4
         with:
@@ -464,8 +455,6 @@ jobs:
         with:
           token: ${{ steps.app-token.outputs.token }}
       - uses: ./.github/actions/android-setup
-        with:
-          google-services-json: ${{ secrets.GOOGLE_SERVICES_JSON }}
       - name: Restore Gradle dependency cache
         uses: actions/cache@v4
         with:
@@ -557,8 +546,6 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
           agent-core: "true"
       - uses: ./.github/actions/android-setup
-        with:
-          google-services-json: ${{ secrets.GOOGLE_SERVICES_JSON }}
       - name: Restore Gradle dependency cache
         uses: actions/cache@v4
         with:
@@ -633,8 +620,6 @@ jobs:
         with:
           token: ${{ steps.app-token.outputs.token }}
       - uses: ./.github/actions/android-setup
-        with:
-          google-services-json: ${{ secrets.GOOGLE_SERVICES_JSON }}
       - name: Restore Gradle dependency cache
         uses: actions/cache@v4
         with:
@@ -680,8 +665,6 @@ jobs:
         with:
           token: ${{ steps.app-token.outputs.token }}
       - uses: ./.github/actions/android-setup
-        with:
-          google-services-json: ${{ secrets.GOOGLE_SERVICES_JSON }}
       - name: Restore Gradle dependency cache
         uses: actions/cache@v4
         with:
@@ -725,8 +708,6 @@ jobs:
         with:
           token: ${{ steps.app-token.outputs.token }}
       - uses: ./.github/actions/android-setup
-        with:
-          google-services-json: ${{ secrets.GOOGLE_SERVICES_JSON }}
       - name: Restore Gradle dependency cache
         uses: actions/cache@v4
         with:
@@ -789,8 +770,6 @@ jobs:
         with:
           token: ${{ steps.app-token.outputs.token }}
       - uses: ./.github/actions/android-setup
-        with:
-          google-services-json: ${{ secrets.GOOGLE_SERVICES_JSON }}
       - name: Restore Gradle dependency cache
         uses: actions/cache@v4
         with:
