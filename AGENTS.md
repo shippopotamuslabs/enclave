@@ -318,3 +318,35 @@ After any file edit is accepted or tool result returns:
 - End every response with exactly one of:
   - `TASK_STATUS: COMPLETE — Phase objectives achieved.`
   - `TASK_STATUS: PARTIAL — Completed: [list]. Remaining: [list]. Continuing.`
+
+## PR titles and commit messages
+
+PR titles follow Conventional Commits, because squash merging makes the
+PR title the commit subject on main - and Forge's ticket cascade reads
+titles when linking a PR to its ticket.
+
+Format:
+
+    type(scope): imperative subject (KEY-123)
+
+- type - feat, fix, polish, chore, docs, refactor, test, ci, build,
+  perf, style. Types mirror the Linear type labels (feature -> feat,
+  bug -> fix).
+- scope - the area the change touches, lowercase: a module, layer, or
+  surface.
+- subject - imperative mood, lowercase, no trailing period:
+  "add linear progression", not "adds" or "added".
+- (KEY-123) - the Linear ticket key in parentheses at the end, when
+  the work has a ticket. Branch names stay the primary ticket link
+  (name the branch after the key); the title key is the backup the
+  cascade reads second.
+
+Examples:
+
+    feat(docgen): ship libdocgen_core.so with the repo (ENC-213)
+    chore(ci): make google-services.json optional for a cold clone (ENC-212)
+
+A CI check (pr-title) enforces the shape on every PR. Individual
+commit messages on a branch are NOT linted - write them for the
+humans and agents reading the branch, and let the PR title carry
+the standard.
