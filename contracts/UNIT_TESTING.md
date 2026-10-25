@@ -2,9 +2,17 @@
 
 This contract defines the mandatory standards for unit testing in the Enclave project. It prioritizes **Fakes over Mocks**, **JUnit 5**, and **Robolectric** for high-fidelity JVM testing.
 
+The shared standards are canon in `contracts/gospel/UNIT-TESTING-GOSPEL.md` (git
+submodule, gospels repo pinned at tag `v1`). This contract keeps Enclave's
+instantiations: its `:core:testing` fakes, worked examples, golden references,
+and gates.
+
 ---
 
 ## 1. Core Principles (ALWAYS / NEVER)
+
+Canon: `contracts/gospel/UNIT-TESTING-GOSPEL.md` §1. Enclave's table (it carries Enclave-only rows: owned ports, Detekt rules):
+
 
 | Rule | Description |
 | :--- | :--- |
@@ -24,6 +32,9 @@ This contract defines the mandatory standards for unit testing in the Enclave pr
 
 ## 2. Technical Stack
 
+Canon: `contracts/gospel/UNIT-TESTING-GOSPEL.md` §2. Enclave's stack:
+
+
 - **JUnit 5:** The engine for all local unit tests.
 - **`:core:testing`:** Shared hand-written fakes (`Fake<Port>` per domain port, with `seed`/`setShouldFail`/`clear` toggles), `MainDispatcherRule`, fixtures. A new domain port must ship its fake in the same MR. Feature-local fakes only when single-use.
 - **MockK:** Use only when a Fake is impractical (third-party SDK boundaries, static Android APIs). Requires `@file:Suppress("ForbiddenMockKInTests")` with a one-line justification comment. Never for Enclave-owned ports, never `verify` in ViewModel tests.
@@ -34,6 +45,9 @@ This contract defines the mandatory standards for unit testing in the Enclave pr
 ---
 
 ## 3. Pattern Examples
+
+Pattern shapes are canon in `contracts/gospel/UNIT-TESTING-GOSPEL.md` §3. The worked examples below are Enclave's and stay local.
+
 
 ### 3.1 ViewModel Testing (JUnit 5 + Turbine + Fakes)
 
@@ -141,6 +155,9 @@ construction; never bridge real-dispatcher work with a `delay()` poll.
 
 ## 4. Golden Test References
 
+Approach is canon in `contracts/gospel/UNIT-TESTING-GOSPEL.md` §4. Enclave's reference files:
+
+
 Refer to the following files in `golden-test-examples/` for validated implementation patterns:
 
 - **Repository Fakes/Tests:** `golden-test-examples/data/OfflineFirstUserDataRepositoryTest.kt`
@@ -152,10 +169,10 @@ Refer to the following files in `golden-test-examples/` for validated implementa
 
 ## 5. Implementation Mandate
 
-Any sub-agent or architect creating new features **MUST** include a matching unit test file in the `src/test` directory of the modified module, following these standards. Run the narrowest affected test task during iteration (for example, `./gradlew :feature:chat:testDebugUnitTest --tests "*ChatViewModelTest*"`), then broaden to `./gradlew testDebugUnitTest` for merge-sized or cross-module changes.
+Canon: `contracts/gospel/UNIT-TESTING-GOSPEL.md` §5 (Implementation Mandate).
 
 ### 5.1 Self-check (anti reward-hacking)
-After writing a test, break the production code under test (wrong return value, skipped persistence). The test **must fail**. If it still passes, the test is invalid — rewrite it before marking work complete.
+Canon: `contracts/gospel/UNIT-TESTING-GOSPEL.md` §5.1.
 
 ### 5.2 Screenshot & preview tests (ENC-4/ENC-19)
 - Shared `:core:ui` components carry `@Preview` covering **Tonal + Neo × Light + Dark** and Compose screenshot goldens (`validateDebugScreenshotTest`) once ENC-19 wiring lands; re-record only via the documented `screenshot-record` flow and review every regenerated PNG.
