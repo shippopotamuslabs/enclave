@@ -172,4 +172,4 @@ Skip this section unless you changed a Rust crate's public UniFFI types. The che
 
 ## License
 
-ISC. The full text is in `LICENSE` at the repo root.
+0BSD license. Do whatever you want with the code. Just don't expect it to work or sue me.
