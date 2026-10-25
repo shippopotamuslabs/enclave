@@ -106,13 +106,21 @@ The primary diffusion engine in `:local-image-gen-android` runs on Qualcomm QNN 
 
    Deleting `app/google-services.json` picks the other build shape: the build skips both plugins and still produces an APK, and the app runs with Firebase dark. On-device chat, dictation, image generation, and BYOK providers work. Sign-in stays signed out, Firestore sync stays off, Crashlytics sends nothing, and Analytics sends nothing. A file from your own Firebase project, with the package name `com.browntowndev.enclave`, also works in its place.
 
-3. Build the debug APK:
+3. Fetch the pinned native source trees for the llama build:
+
+   ```
+   scripts/fetch-native-deps.sh
+   ```
+
+   The script downloads llama.cpp at tag `b8241` plus the tracked I8MM runtime patch in `llama-android/patches/`, and KleidiAI at `v1.22.0`, into `third_party/`. Neither tree is a submodule or a commit. The SVE llama library ships in the repo at `llama-android/src/main/jniLibs/arm64-v8a/libllama-jni-sve.so`; the NEON library is built by CMake from the fetched trees on every build.
+
+4. Build the debug APK:
 
    ```
    ./gradlew :app:assembleNormalDebug
    ```
 
-4. The APK lands at `app/build/outputs/apk/normal/debug/app-normal-debug.apk`. Install it with `adb install -r` and that path, or copy it to the phone and open it there. Android may ask you to allow installs from your file manager or from adb.
+5. The APK lands at `app/build/outputs/apk/normal/debug/app-normal-debug.apk`. Install it with `adb install -r` and that path, or copy it to the phone and open it there. Android may ask you to allow installs from your file manager or from adb.
 
 Debug builds sign with the standard debug key, so they install anywhere. Release builds sign with a keystore that stays off this repo (`.keystore/` is gitignored, and the passwords sit in the author's `local.properties`), so the release variant stops at signing for anyone else. The sideload path is the debug build.
 
@@ -123,7 +131,7 @@ On first launch the app offers model downloads. Sizes run large. The first entry
 This repo builds the author's phone builds today. A public cold clone hits gaps that the author's working tree papers over. They are listed here so nobody has to discover them from stack traces.
 
 - `.gitmodules` lists pre-move URLs for three submodules: `third_party/agent_core`, `third_party/docgen_core`, and `third_party/whisper-android`. Those URLs point at private projects on the old host, so a public clone cannot fetch them. The whisper-android composite build is wired into `settings.gradle.kts` without a condition, and `:app` depends on its artifacts, so Gradle needs that submodule in place. All three projects also live in the `shippopotamuslabs` GitHub org, and the docgen_core and whisper-android pins have tree-identical commits there. The agent_core pin names a commit that exists in neither the pre-move history nor the GitHub one. Repointing `.gitmodules` at GitHub and repairing the pins is tracked work.
-- `third_party/llama.cpp` and `third_party/kleidiai-1.22.0` are absent from the repo and are not submodules. `:llama-android` skips its CMake build when llama.cpp is missing, and its own build file calls that case expected in CI. The same build file registers a packaging check that requires both llama JNI libraries, and neither library is checked in. As the files stand, a cold clone needs the llama.cpp and KleidiAI trees placed by hand before that check can pass.
+- `third_party/llama.cpp` and `third_party/kleidiai-1.22.0` are absent from the repo and are not submodules. `scripts/fetch-native-deps.sh` fetches both at pinned revisions (llama.cpp `b8241`, KleidiAI `v1.22.0`) and applies the tracked I8MM runtime patch from `llama-android/patches/`. `:llama-android` skips its CMake build when llama.cpp is missing, and its build file registers a packaging check that requires both llama JNI libraries: the NEON library comes from the CMake build, and the SVE library is checked in at `llama-android/src/main/jniLibs/arm64-v8a/libllama-jni-sve.so`. A clone that ran the fetch script passes the check.
 - `build-kleidiai.sh` builds the SVE and NEON llama variants into `llama-android/src/main/jniLibs/`. Its header calls the script optional for development builds. It reads the SDK location from `ANDROID_HOME` or `local.properties` and wants the same NDK version the module pins.
 - The diffusion engine in `:local-image-gen-android` reads `QNN_SDK_ROOT`, or `qnn.sdk.dir` in `local.properties`, and falls back to a hardcoded path from the author's machine. The QNN runtime libraries the engine loads at runtime sit in `src/main/assets/qnnlibs/`, which holds only a `.gitkeep` in this repo. The Qualcomm SDK section above covers the account, the download, and the sync script that fills the directory. The MNN CPU backend carries no SDK dependency; it needs its model package in app-private storage.
 - `:core:docgen` ships its UniFFI bindings as source, and the compiled library is checked in at `core/docgen/src/main/jniLibs/arm64-v8a/libdocgen_core.so`, so a clone receives it and docgen calls load at runtime. `scripts/build-docgen-bindings.sh` rebuilds the library from `third_party/docgen_core`.
