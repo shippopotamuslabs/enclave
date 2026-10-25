@@ -1,6 +1,7 @@
 package com.browntowndev.enclave.feature.inference.media
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
 import android.media.AudioFormat
@@ -28,6 +29,10 @@ class RealtimeAudioCaptureImpl
     constructor(
         @param:ApplicationContext private val context: Context,
     ) : RealtimeAudioCapturePort {
+        // RECORD_AUDIO is enforced at the top of this flow: checkSelfPermission must
+        // return PERMISSION_GRANTED before AudioRecord.Builder.build() runs, and a
+        // SecurityException from build() is also caught. Lint cannot see the check.
+        @SuppressLint("MissingPermission")
         override fun captureEvents(sampleRate: Int): Flow<RealtimeCaptureEvent> =
             flow {
                 require(sampleRate > 0) { "Sample rate must be positive: $sampleRate" }
