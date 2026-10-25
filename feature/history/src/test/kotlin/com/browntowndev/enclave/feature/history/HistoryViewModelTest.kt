@@ -451,6 +451,9 @@ class HistoryViewModelTest {
                         set(Calendar.MINUTE, 0)
                         set(Calendar.SECOND, 0)
                         set(Calendar.MILLISECOND, 0)
+                        // Pin the year (as the class fixture does) so the date is
+                        // never "today" and always lands in the older-dates branch.
+                        set(Calendar.YEAR, 2024)
                     }.time
             val testChat = createTestChat(ChatId("1"), "Test", oct24Date, pinned = false)
             fakeChatRepository.seedChats(emptyList())
