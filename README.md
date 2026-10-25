@@ -102,10 +102,9 @@ The primary diffusion engine in `:local-image-gen-android` runs on Qualcomm QNN 
 
 1. Clone the repo and look at the submodules before you run Gradle. The cold clone section below lists what `.gitmodules` still points at and which native trees are absent. Read it first; it will save you a confusing configuration error.
 
-2. Pick a build shape. The file `app/google-services.json` decides it, and the build reads the file at configuration time.
+2. The repo commits `app/google-services.json` (the author's Firebase project, `enclave-497101`), so a clone builds against that backend with no setup. The file is not a secret: it names a project and holds an Android API key that is app-restricted in Google Cloud Console, and the Firestore and Storage rules are the real gate. The build reads the file at configuration time and applies the Google Services and Crashlytics plugins when it is present, so sign-in, Firestore sync, Crashlytics, and Analytics reach the backend the file names.
 
-   - No file at `app/google-services.json`: the build skips the Google Services and Crashlytics plugins and still produces an APK. The app runs with Firebase dark. On-device chat, dictation, image generation, and BYOK providers work. Sign-in stays signed out, Firestore sync stays off, Crashlytics sends nothing, and Analytics sends nothing.
-   - A file at `app/google-services.json`: put a file from your own Firebase project there, with the package name `com.browntowndev.enclave`. The build applies both plugins. Sign-in, Firestore sync, Crashlytics, and Analytics reach the backend that file names, and reach nothing if the project behind it is empty.
+   Deleting `app/google-services.json` picks the other build shape: the build skips both plugins and still produces an APK, and the app runs with Firebase dark. On-device chat, dictation, image generation, and BYOK providers work. Sign-in stays signed out, Firestore sync stays off, Crashlytics sends nothing, and Analytics sends nothing. A file from your own Firebase project, with the package name `com.browntowndev.enclave`, also works in its place.
 
 3. Build the debug APK:
 
@@ -129,7 +128,7 @@ This repo builds the author's phone builds today. A public cold clone hits gaps 
 - The diffusion engine in `:local-image-gen-android` reads `QNN_SDK_ROOT`, or `qnn.sdk.dir` in `local.properties`, and falls back to a hardcoded path from the author's machine. The QNN runtime libraries the engine loads at runtime sit in `src/main/assets/qnnlibs/`, which holds only a `.gitkeep` in this repo. The Qualcomm SDK section above covers the account, the download, and the sync script that fills the directory. The MNN CPU backend carries no SDK dependency; it needs its model package in app-private storage.
 - `:core:docgen` ships its UniFFI bindings as source, and the compiled library is checked in at `core/docgen/src/main/jniLibs/arm64-v8a/libdocgen_core.so`, so a clone receives it and docgen calls load at runtime. `scripts/build-docgen-bindings.sh` rebuilds the library from `third_party/docgen_core`.
 - `vulkan_sdk.sh` at the repo root is an empty file.
-- `.github/workflows/` holds a CodeQL workflow whose Analyze job currently fails, and a GitHub Actions pipeline waiting in a pull request. `app/build.gradle.kts` applies the Google Services and Crashlytics plugins only when `app/google-services.json` exists, so a clone with no file builds with Firebase dark. CI writes the file from the `GOOGLE_SERVICES_JSON` secret before it builds.
+- `.github/workflows/` holds a CodeQL workflow whose Analyze job currently fails, and a GitHub Actions pipeline waiting in a pull request. `app/build.gradle.kts` applies the Google Services and Crashlytics plugins only when `app/google-services.json` exists, so a clone that deletes the file builds with Firebase dark. The file itself is committed in the repo, and CI builds against the committed copy.
 
 ## Tests
 

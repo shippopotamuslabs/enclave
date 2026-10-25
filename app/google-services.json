@@ -1,0 +1,55 @@
+{
+  "project_info": {
+    "project_number": "849232019603",
+    "project_id": "enclave-497101",
+    "storage_bucket": "enclave-497101.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:849232019603:android:40ac07e781c25320420d66",
+        "android_client_info": {
+          "package_name": "com.browntowndev.enclave"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "849232019603-n2kv8aqjg94aj9gohp00qe8t2gf874cr.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.browntowndev.enclave",
+            "certificate_hash": "7e63c4aabcecab67a08eca37982d0d7f93e04d0a"
+          }
+        },
+        {
+          "client_id": "849232019603-ubm006oij7agcq0ur1nbg2qijjlvar5v.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.browntowndev.enclave",
+            "certificate_hash": "ac81dae3e7f41793a1391d5e2aebc0ffcc6acbb9"
+          }
+        },
+        {
+          "client_id": "849232019603-4qgn6i99kfmg8ukr5gkmv7ltclj5knjp.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCrTotih02yt2GKTTLkw2e9P45E_4P6SOo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "849232019603-4qgn6i99kfmg8ukr5gkmv7ltclj5knjp.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

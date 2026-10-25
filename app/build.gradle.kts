@@ -12,9 +12,9 @@ plugins {
 }
 
 // ENC-212: apply the Google Services and Crashlytics plugins only when the
-// config file is present. A bare clone has no app/google-services.json and
-// builds with Firebase dark; CI writes the file from the GOOGLE_SERVICES_JSON
-// secret first, so CI builds apply both plugins exactly as before.
+// config file is present. The file is committed in the repo (ENC-224, the
+// Stratum STR-204 shape), so normal clones and CI apply both plugins; a
+// clone that deletes app/google-services.json builds with Firebase dark.
 if (file("google-services.json").exists()) {
     apply(plugin = "com.google.gms.google-services")
     apply(plugin = "com.google.firebase.crashlytics")
