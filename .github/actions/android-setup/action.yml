@@ -1,18 +1,15 @@
 # Composite equivalent of the GitLab `.gradle-base` before_script:
-# Java toolchain, google-services.json materialization, SDK licenses,
-# and the preview-channel platform the app compiles against.
+# Java toolchain, SDK licenses, and the preview-channel platform the
+# app compiles against.
 #
-# Secret handling differs from GitLab on purpose: GitLab "File" variables
-# arrive as a PATH in $GOOGLE_SERVICES_JSON; a GitHub secret is the file
-# CONTENT, passed in by the caller as an input (composite actions cannot
-# read the `secrets` context directly).
+# app/google-services.json is committed in the repo (ENC-224, the Stratum
+# STR-204 shape), so no secret materializes it here anymore. The old
+# GOOGLE_SERVICES_JSON secret held a wrong-package file and clobbering the
+# committed file with it broke :app:processNormalDebugGoogleServices.
 name: android-setup
 description: Shared Android job setup (port of .gradle-base before_script)
 
 inputs:
-  google-services-json:
-    description: Contents of app/google-services.json (pass secrets.GOOGLE_SERVICES_JSON)
-    required: true
   java-version:
     description: JDK for Gradle (daemon JVM per gradle/gradle-daemon-jvm.properties)
     required: false
@@ -27,13 +24,10 @@ runs:
         distribution: temurin
         java-version: ${{ inputs.java-version }}
 
-    - name: Materialize app/google-services.json
+    - name: Verify committed app/google-services.json
       shell: bash
-      env:
-        GOOGLE_SERVICES_JSON: ${{ inputs.google-services-json }}
       run: |
-        test -n "$GOOGLE_SERVICES_JSON" || (echo "Missing GOOGLE_SERVICES_JSON secret — see header of .gitlab-ci.yml" && exit 1)
-        printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
+        test -f app/google-services.json || (echo "app/google-services.json is committed in the repo (ENC-224) and is missing from this checkout" && exit 1)
         chmod +x gradlew
 
     # GitHub-hosted runners ship the Android SDK with ANDROID_HOME set, so
