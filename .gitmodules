@@ -10,3 +10,6 @@
 [submodule "third_party/whisper-android"]
 	path = third_party/whisper-android
 	url = ../whisper-android
+[submodule "contracts/gospel"]
+	path = contracts/gospel
+	url = https://github.com/shippopotamuslabs/gospels.git
