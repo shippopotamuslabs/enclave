@@ -10,6 +10,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.LocalResources
+import androidx.compose.ui.res.stringResource
 
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -32,6 +34,9 @@ fun ChatRoute(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val resources = LocalResources.current
+    val shareChooserTitle = stringResource(R.string.chat_share_chooser_title)
+    val moderationReportAction = stringResource(R.string.chat_moderation_report_action)
     val chatIdFromNavigation = navigationChatId?.let { ChatId(it) } ?: viewModel.initialChatId
 
     LaunchedEffect(chatIdFromNavigation) {
@@ -48,7 +53,7 @@ fun ChatRoute(
                             putExtra(Intent.EXTRA_TEXT, event.shareUrl)
                         }
                     context.startActivity(
-                        Intent.createChooser(intent, context.getString(R.string.chat_share_chooser_title)),
+                        Intent.createChooser(intent, shareChooserTitle),
                     )
                 }
                 is ShareUiEvent.ImportedChat -> onNavigateToImportedChat(event.chatId.value)
@@ -64,17 +69,17 @@ fun ChatRoute(
 
     LaunchedEffect(Unit) {
         viewModel.chatErrorMessages.collect { messageRes ->
-            onShowSnackbar(context.getString(messageRes), null, null)
+            onShowSnackbar(resources.getString(messageRes), null, null)
         }
     }
 
     LaunchedEffect(Unit) {
         viewModel.moderationMessages.collect { messageRes ->
-            val message = context.getString(messageRes)
+            val message = resources.getString(messageRes)
             val isPromptRejected = messageRes == R.string.chat_moderation_prompt_rejected
             val actionLabel =
                 if (isPromptRejected) {
-                    context.getString(R.string.chat_moderation_report_action)
+                    moderationReportAction
                 } else {
                     null
                 }
