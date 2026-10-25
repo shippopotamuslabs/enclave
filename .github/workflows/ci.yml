@@ -633,6 +633,8 @@ jobs:
         run: |
           export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
           sdkmanager "ndk;27.0.11718014" "ndk;28.2.13676358" "cmake;3.22.1"
+      - name: Fetch pinned native deps (llama.cpp + KleidiAI + stb_image.h)
+        run: ./scripts/fetch-native-deps.sh
       - name: Assemble debug
         run: ./gradlew assembleDebug
       - name: Upload debug APK
@@ -678,6 +680,8 @@ jobs:
         run: |
           export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
           sdkmanager "ndk;27.0.11718014" "ndk;28.2.13676358" "cmake;3.22.1"
+      - name: Fetch pinned native deps (llama.cpp + KleidiAI + stb_image.h)
+        run: ./scripts/fetch-native-deps.sh
       - name: Ephemeral CI keystore (GitLab parity)
         run: |
           mkdir -p .keystore

@@ -1,0 +1,35 @@
+diff --git a/ggml/src/ggml-cpu/ggml-cpu.c b/ggml/src/ggml-cpu/ggml-cpu.c
+index dc2b5ffaa..2252de093 100644
+--- a/ggml/src/ggml-cpu/ggml-cpu.c
++++ b/ggml/src/ggml-cpu/ggml-cpu.c
+@@ -38,6 +38,13 @@
+ #include <syscall.h>
+ #endif
+ 
++#if defined(__aarch64__) && (defined(__ANDROID__) || defined(__linux__))
++#include <sys/auxv.h>
++#ifndef HWCAP2_I8MM
++#define HWCAP2_I8MM (1 << 13)
++#endif
++#endif
++
+ #ifdef GGML_USE_OPENMP
+ #include <omp.h>
+ #endif
+@@ -3652,7 +3659,16 @@ int ggml_cpu_has_sve(void) {
+ 
+ int ggml_cpu_has_matmul_int8(void) {
+ #if defined(__ARM_ARCH) && defined(__ARM_FEATURE_MATMUL_INT8)
++#if defined(__aarch64__) && (defined(__ANDROID__) || defined(__linux__))
++    static int cached = -1;
++    if (cached < 0) {
++        const unsigned long hwcap2 = getauxval(AT_HWCAP2);
++        cached = (hwcap2 & HWCAP2_I8MM) ? 1 : 0;
++    }
++    return cached;
++#else
+     return 1;
++#endif
+ #else
+     return 0;
+ #endif
