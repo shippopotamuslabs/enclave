@@ -124,7 +124,7 @@ This repo builds the author's phone builds today. A public cold clone hits gaps 
 - `third_party/llama.cpp` and `third_party/kleidiai-1.22.0` are absent from the repo and are not submodules. `:llama-android` skips its CMake build when llama.cpp is missing, and its own build file calls that case expected in CI. The same build file registers a packaging check that requires both llama JNI libraries, and neither library is checked in. As the files stand, a cold clone needs the llama.cpp and KleidiAI trees placed by hand before that check can pass.
 - `build-kleidiai.sh` builds the SVE and NEON llama variants into `llama-android/src/main/jniLibs/`. Its header calls the script optional for development builds. It reads the SDK location from `ANDROID_HOME` or `local.properties` and wants the same NDK version the module pins.
 - The diffusion engine in `:local-image-gen-android` reads `QNN_SDK_ROOT`, or `qnn.sdk.dir` in `local.properties`, and falls back to a hardcoded path from the author's machine. The QNN runtime libraries the engine loads at runtime sit in `src/main/assets/qnnlibs/`, which holds only a `.gitkeep` in this repo. The Qualcomm SDK section above covers the account, the download, and the sync script that fills the directory. The MNN CPU backend carries no SDK dependency; it needs its model package in app-private storage.
-- `:core:docgen` ships its UniFFI bindings as source, and its native library rides along in no form. `scripts/build-docgen-bindings.sh` writes `libdocgen_core.so` into `core/docgen/src/main/jniLibs/arm64-v8a/`, and the global `*.so` ignore rule covers that path, so the author's tree has the library and a clone never receives it. Docgen calls in a build from this tree fail at load time.
+- `:core:docgen` ships its UniFFI bindings as source, and the compiled library is checked in at `core/docgen/src/main/jniLibs/arm64-v8a/libdocgen_core.so`, so a clone receives it and docgen calls load at runtime. `scripts/build-docgen-bindings.sh` rebuilds the library from `third_party/docgen_core`.
 - `vulkan_sdk.sh` at the repo root is an empty file.
 - `.github/workflows/` holds a CodeQL workflow whose Analyze job currently fails, and a GitHub Actions pipeline waiting in a pull request. `app/build.gradle.kts` also applies the Google Services and Crashlytics plugins with no condition on the file existing, so the `google-services.json` step above is mandatory today.
 
@@ -147,7 +147,7 @@ Instrumented tests exist in `:app`, and the app build file disables the `connect
 Skip this section unless you changed a Rust crate's public UniFFI types. The checked-in bindings cover normal development.
 
 - `scripts/build-agent-bindings.sh` regenerates the `agent_core` bindings and library.
-- `scripts/build-docgen-bindings.sh` does the same for `docgen_core`.
+- `scripts/build-docgen-bindings.sh` does the same for `docgen_core`. The compiled library is checked into `core/docgen/src/main/jniLibs/arm64-v8a/`, so a clone builds `:core:docgen` without running Cargo. Run the script after changing docgen_core's UniFFI types, and commit the library with the generated bindings.
 - `scripts/build-classifier-bindings.sh` does the same for `classifier_core`.
 
 `core/agent/README.md` gives the requirements and the order of operations: NDK 27.0.11718014, `sdk.dir` set, `cargo test` in the crate, then the module build, with the Rust source change, the generated Kotlin, and the generated libraries committed together.
