@@ -26,8 +26,10 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.RegisterExtension
+import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
+import java.util.Locale
 import java.util.TimeZone
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -441,18 +443,28 @@ class HistoryViewModelTest {
     @Test
     fun `C3 date format for older dates`() =
         runTest(testDispatcher) {
-            val oct24Date =
+            // 30 days back at 2:00 PM always lands in the same-year
+            // older-dates branch, whatever today is. A fixed calendar date
+            // cannot do that: it is "today" once a year, "yesterday" the day
+            // after, and a different year's date formats without the time.
+            // Early January would cross into the previous year, so there the
+            // fixture swings 60 days forward instead and stays in-year.
+            val currentYear = Calendar.getInstance().get(Calendar.YEAR)
+            val olderDate =
                 Calendar
                     .getInstance()
                     .apply {
-                        set(Calendar.MONTH, Calendar.OCTOBER)
-                        set(Calendar.DAY_OF_MONTH, 24)
+                        add(Calendar.DAY_OF_YEAR, -30)
                         set(Calendar.HOUR_OF_DAY, 14)
                         set(Calendar.MINUTE, 0)
                         set(Calendar.SECOND, 0)
                         set(Calendar.MILLISECOND, 0)
+                        if (get(Calendar.YEAR) != currentYear) {
+                            add(Calendar.DAY_OF_YEAR, 60)
+                        }
                     }.time
-            val testChat = createTestChat(ChatId("1"), "Test", oct24Date, pinned = false)
+            val expected = SimpleDateFormat("MMM d, h:mm a", Locale.getDefault()).format(olderDate)
+            val testChat = createTestChat(ChatId("1"), "Test", olderDate, pinned = false)
             fakeChatRepository.seedChats(emptyList())
 
             viewModel = createViewModel()
@@ -462,7 +474,7 @@ class HistoryViewModelTest {
             advanceUntilIdle()
 
             val state = viewModel.uiState.value
-            assertEquals("Oct 24, 2:00 PM", state.otherChats.first().lastMessageDateTime)
+            assertEquals(expected, state.otherChats.first().lastMessageDateTime)
         }
 
     @Test
