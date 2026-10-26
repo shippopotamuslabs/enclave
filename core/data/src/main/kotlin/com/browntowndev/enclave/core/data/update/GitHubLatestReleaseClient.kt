@@ -53,16 +53,15 @@ class GitHubLatestReleaseClient
          * The file name is concatenated onto [DOWNLOAD_BASE_URL], so it must be
          * a plain `.apk` file name — never a path, URL, or traversal payload.
          */
-        private fun isValidApkFileName(name: String): Boolean {
-            if (name.isBlank()) return false
-            if (!name.endsWith(".apk", ignoreCase = true)) return false
-            if (name.startsWith(".")) return false
-            if ('/' in name || '\\' in name) return false
-            if (".." in name) return false
-            if ("://" in name) return false
-            if (name.any { it.isWhitespace() || it.isISOControl() }) return false
-            return true
-        }
+        private fun isValidApkFileName(name: String): Boolean =
+            name.isNotBlank() &&
+                name.endsWith(".apk", ignoreCase = true) &&
+                !name.startsWith(".") &&
+                '/' !in name &&
+                '\\' !in name &&
+                ".." !in name &&
+                "://" !in name &&
+                name.none { it.isWhitespace() || it.isISOControl() }
 
         private fun fetchAndParse(): LatestRelease? {
             val request =
