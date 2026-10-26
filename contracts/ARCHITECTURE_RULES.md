@@ -55,8 +55,7 @@ Primary modules: `:app`, `:core:domain`, `:core:data`, `:core:ui`, `:core:testin
 
 ### 1.1 Dependency Direction (Strict)
 
-The dependency-direction principle is canon: `contracts/gospel/ARCHITECTURE-GOSPEL.md` §1.
-Enclave's exact module graph:
+The dependency-direction principle is canon: `contracts/gospel/ARCHITECTURE-GOSPEL.md` §1. The gospel module template (§6) owns the canonical layering — outbound ports live in the application layer (§4) and `:core:data` is a legacy label for the infrastructure modules, not a canonical peer layer. Enclave's exact module graph (the local instantiation):
 
 ```text
 :app                 → :core:domain, :core:data, :core:ui, :core:agent, :core:docgen, :feature:*
@@ -99,10 +98,10 @@ wired by `:app`.
 ## 2. Layer Responsibilities
 
 Layer responsibilities are canon: `contracts/gospel/ARCHITECTURE-GOSPEL.md` §3
-(see also its §3.1, domain model policy). Enclave's layer map:
+(see also its §3.1, domain model policy), read with §4 (Port Ownership). Enclave's layer map:
 
-- **`:core:domain`** — Domain models, ports, use cases, and test fixtures. Keep domain APIs free of Android/UI/storage/native implementation types.
-- **`:core:data`** — Implements persistence, Room, repositories, network/Firebase integration, WorkManager, and entity/domain mapping. No Compose UI.
+- **`:core:domain`** — Domain models, `*Port` interfaces, use cases, and test fixtures. (Canon vocabulary, gospel §4: outbound ports are application-layer `*Port` interfaces; Enclave's port interfaces currently live in this module.) Keep domain APIs free of Android/UI/storage/native implementation types.
+- **`:core:data`** — Infrastructure: implements the `*Port` interfaces (implementation classes may carry the `*Repository` name, gospel §4), Room persistence, network/Firebase integration, WorkManager, and entity/domain mapping. No Compose UI.
 - **`:feature:inference`** — Implements model/provider inference abstractions from domain. No Compose UI.
 - **`:core:ui` and `:feature:*`** — Compose UI and presentation logic. ViewModels map domain to presentation models.
 - **`:app`** — Application shell, navigation wiring, DI composition, app resources, and platform entrypoints.
@@ -113,16 +112,16 @@ Layer responsibilities are canon: `contracts/gospel/ARCHITECTURE-GOSPEL.md` §3
 
 
 ### 3.1 UI State
-Canon: `contracts/gospel/ARCHITECTURE-GOSPEL.md` §4.1 (UI State).
+Canon: `contracts/gospel/ARCHITECTURE-GOSPEL.md` §12.1 (UI State).
 
 ### 3.2 One-Shot Events
-Canon: `contracts/gospel/ARCHITECTURE-GOSPEL.md` §4.2 (One-Shot Events).
+Canon: `contracts/gospel/ARCHITECTURE-GOSPEL.md` §12.2 (One-Shot Events).
 
 ### 3.3 Model Mapping
-Canon: `contracts/gospel/ARCHITECTURE-GOSPEL.md` §4.3 (Model Mapping).
+Canon: `contracts/gospel/ARCHITECTURE-GOSPEL.md` §12.3 (Model Mapping).
 
 ### 3.4 ViewModel Dependencies & Flow Composition (ENC-2)
-Canon: `contracts/gospel/ARCHITECTURE-GOSPEL.md` §4.4 (ViewModel Dependencies & Flow Composition).
+Canon: `contracts/gospel/ARCHITECTURE-GOSPEL.md` §12.4 (Driving-Adapter Dependencies & Flow Composition).
 
 - Enforced by Detekt `enclave` rules `ForbiddenRepositoryInViewModel`, `ForbiddenPortInViewModel`, `ForbiddenDomainTypeInComposable`, `ForbiddenDomainTypeInUiState`, `ForbiddenUseCaseInFeatureMapper` (ENC-10). `./gradlew detekt` must pass at `maxIssues: 0`; do not add suppressions to hide layering debt — file an ENC sub-issue instead.
 
@@ -133,9 +132,7 @@ All implementation work follows `AGENTS.md` §3.7 (Linear team `ENC`, chunk-base
 
 ## 4. Navigation & Scaffold Architecture
 
-Canon: `contracts/gospel/ARCHITECTURE-GOSPEL.md` §5 (Navigation & Scaffold Architecture).
-Each screen owns its own `Scaffold`, `TopAppBar`, and `ViewModel`. There is no
-global/root `Scaffold`, no `DynamicTopBar`, and no `paddingValues` threading.
+Canon: `contracts/gospel/ARCHITECTURE-GOSPEL.md` §13 (Navigation & Scaffold Architecture).
 
 ---
 
@@ -169,13 +166,13 @@ fun ChatScreen(uiState: ChatUiState, onNavigateToHistory: () -> Unit) {
 
 ## 6. Accessibility
 
-Canon: `contracts/gospel/ARCHITECTURE-GOSPEL.md` §6 (Accessibility).
+Canon: `contracts/gospel/ARCHITECTURE-GOSPEL.md` §14 (Accessibility & Previews).
 
 ---
 
 ## 7. Preview Requirements
 
-Canon: `contracts/gospel/ARCHITECTURE-GOSPEL.md` §7 (Preview Requirements).
+Canon: `contracts/gospel/ARCHITECTURE-GOSPEL.md` §14 (Accessibility & Previews).
 
 ---
 

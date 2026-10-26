@@ -15,13 +15,13 @@ Every task maps to one or more binding contracts in `/contracts/`. Read the rele
 
 | Task type | Contract to read |
 |-----------|-----------------|
-| Module structure, dependency direction, layer responsibilities, navigation, Scaffold, IME handling, `WorkManager`, background tasks | `ARCHITECTURE_RULES.md` |
-| Kotlin style, naming, Compose stability, modifier conventions, state hoisting, Flow/coroutines, testing conventions, test coverage mandate | `CODE_STYLE_RULES.md` |
+| Module structure, dependency direction, layer responsibilities, navigation, Scaffold | `contracts/gospel/ARCHITECTURE-GOSPEL.md`; Enclave module graph, IME pattern, platform anchor: `ARCHITECTURE_RULES.md` |
+| Kotlin style, naming, Compose stability, modifiers, state hoisting, Flow/coroutines | `contracts/gospel/CODE-STYLE-GOSPEL.md`; Enclave naming examples, Detekt rows, validation: `CODE_STYLE_RULES.md` |
 | Room database, entities, DAOs, repository pattern, entity↔domain mapping, threading | `DATA_LAYER_RULES.md` |
 | LiteRT inference, model loading, KV cache, thermal/memory watchdog, thinking pipeline, safety layer | `INFERENCE_RULES.md` |
-| Colors, typography, Compose component structure, `InputBar`, `MessageList`, `ChatTopBar`, `HistoryScreen` | `UI_DESIGN_SPEC.md` |
+| Colors, typography, cross-app component system | `contracts/gospel/PALETTE.md`, `contracts/gospel/PALETTE-LIGHT.md`, `contracts/gospel/COMPOSE-GOSPEL.md`, `contracts/gospel/BUTTON-SHAPE-GOSPEL.md`, `contracts/gospel/GLASS-BARS-GOSPEL.md`; Enclave families, locked chat/input specs, §8.4 register: `UI_DESIGN_SPEC.md` |
 | Adding or editing any user-facing copy: labels, setting descriptions, buttons, empty states, errors, notifications, onboarding, dialog text | `contracts/gospel/WUMBO-GOSPEL.md` |
-| JUnit 5, Fakes vs Mocks, Robolectric, Turbine, State-based assertions, Test coverage | `UNIT_TESTING.md` |
+| JUnit 5, fakes vs mocks, Robolectric, Turbine, state-based assertions, coverage | `contracts/gospel/TESTING-GOSPEL.md`; Enclave fakes, worked examples, golden refs, gates: `UNIT_TESTING.md` |
 
 ### Desktop Application Contracts
 
@@ -70,12 +70,7 @@ Rust/Cargo/UniFFI/Iced, CMake/Android NDK, and npm/TypeScript for Firebase funct
 
 ### 3.1 Android Clean Architecture — Zero Tolerance (Android Only)
 
-- `:core:domain` contains domain models, ports, use cases, and test fixtures. Keep framework dependencies out of domain APIs.
-- Dependency direction is inward toward `:core:domain`. Data, inference, UI, app, and feature modules may depend on domain; domain must not depend on app, feature, data, UI, or native bridge modules.
-- Domain models are **never** passed directly to composables. ViewModels map domain → presentation. Presentation models (`*UiState`, `*UiEvent`, drafts) must not embed domain types.
-- No `NavController` passed into composables. Navigation via pure callbacks hoisted to the route level.
-- **ViewModels depend on use cases only** — never on `*Repository`/`*Port` interfaces or `:core:data` classes. Multi-source `Flow` composition lives in a domain interactor/use case; feature mappers take no use-case parameters; write paths go through use cases. Enforced by the `enclave` Detekt rule set (ENC-2) and `contracts/ARCHITECTURE_RULES.md` §3.4.
-- Feature UI uses the neutral spec-driven component API and semantic theme tokens from `:core:ui` — no raw `MaterialTheme`/Material 3 chrome or hex literals in `:feature:*`/`:app` UI (ENC-1/ENC-2, `contracts/UI_DESIGN_SPEC.md`).
+Canon: `contracts/gospel/ARCHITECTURE-GOSPEL.md` §0 and §12.4 — dependencies inward to `:core:domain`, domain models never reach composables, no `NavController` in composables, ViewModels depend on use cases only. Enclave enforcement: the `enclave` Detekt rule set (ENC-2); local graph and §3.4-equivalent: `contracts/ARCHITECTURE_RULES.md`. Feature UI: neutral spec-driven components + semantic tokens from `:core:ui` (ENC-1/ENC-2, `contracts/UI_DESIGN_SPEC.md` §§1.4/8.4).
 
 **Violation response:** Reply with exactly: `"Contract violation detected in [file]. Request explicit 'Contract Waiver' from user."` Then stop. Do not generate code.
 
@@ -97,7 +92,7 @@ For every Kotlin, XML, or Gradle code block generated:
 ### 3.3 Test Coverage — Mandatory
 
 Whenever production code is added or modified (new classes, public functions, logic in `:core:domain`, `:core:data`, `:feature:inference`, ViewModels, repositories, mappers, use cases, or desktop screens and native crates):
-- **Android**: Write or extend unit tests in the matching `src/test/kotlin` source set using JUnit 5 + Turbine (for Flow) + **fakes from `:core:testing`** for Enclave-owned ports. MockK is allowed only for third-party SDK boundaries with an explicit `@Suppress` and one-line justification. Never `verify`/`coVerify` in ViewModel tests — assert on `UiState` (see `contracts/UNIT_TESTING.md`, ENC-4).
+- **Android**: Canon: `contracts/gospel/TESTING-GOSPEL.md` §6 and `contracts/gospel/CODE-STYLE-GOSPEL.md` §8.1. Enclave instantiation, fakes catalogue and gates: `contracts/UNIT_TESTING.md`. Local exceptions kept here: MockK only at third-party SDK boundaries with `@Suppress` + one-line justification; never `verify`/`coVerify` in ViewModel tests; theme/preview-matrix changes are not styling-exempt (`contracts/UI_DESIGN_SPEC.md` §5.3).
 - **Desktop/Rust**: Write or extend cargo tests. Run using `cargo test --workspace`.
 - Tests must pass before `TASK_STATUS: COMPLETE`.
 - Trivial styling-only or preview-only changes are exempt (theme/preview matrix changes are not exempt — see `contracts/UI_DESIGN_SPEC.md`).
@@ -108,7 +103,7 @@ Whenever production code is added or modified (new classes, public functions, lo
 
 ### 3.5 Inference — On-Device First (BYOK Optional)
 
-Prioritize on-device inference via LiteRT 2.x/agent_core. Optional "BYOK" cloud providers (OpenAI, Anthropic, Google GenAI) are permitted as advanced user escape hatches, provided they remain isolated from core on-device logic.
+Prioritize on-device inference via LiteRT 2.x/agent_core. Optional "BYOK" cloud providers (OpenAI, Anthropic, Google GenAI) are permitted as advanced user escape hatches, provided they remain isolated from core on-device logic. Full rules: `contracts/INFERENCE_RULES.md`.
 
 ### 3.6 Distribution Scope — No Google Play (Personal / Portfolio)
 
@@ -252,7 +247,7 @@ that bridge commands were skipped.
 Keep reusable expertise out of root instructions. Good candidates for on-demand
 skills or skill-like docs in this repo:
 
-- Android Compose feature work against `ARCHITECTURE_RULES.md`, `CODE_STYLE_RULES.md`, `UI_DESIGN_SPEC.md`, and `UNIT_TESTING.md`; use **Android Studio bridge** per §7 and `pocket-crew-studio-bridge` skill.
+- Android Compose feature work against the gospels in `contracts/gospel/` (architecture, code style, testing, palette/Compose) plus the local contracts `ARCHITECTURE_RULES.md`, `CODE_STYLE_RULES.md`, `UI_DESIGN_SPEC.md`, and `UNIT_TESTING.md` (routing: §1); use **Android Studio bridge** per §7 and `pocket-crew-studio-bridge` skill.
 - Room/schema changes against `DATA_LAYER_RULES.md`.
 - Inference/provider changes against `INFERENCE_RULES.md`.
 - UniFFI binding regeneration for `core/agent` and `core/docgen`.

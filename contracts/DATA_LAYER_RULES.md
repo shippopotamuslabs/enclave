@@ -45,7 +45,9 @@ Always enforce together with `ARCHITECTURE_RULES.md`.
 
 ## 4. Repository Pattern, Mapping & Threading
 
-- Repositories implement `:core:domain` interfaces.
+Canon: `contracts/gospel/ARCHITECTURE-GOSPEL.md` §4 (Port Ownership) — Application defines `*Port` interfaces; infrastructure classes implement them.
+
+- Infrastructure classes in `:core:data` implement the application `*Port` interfaces. `Repository` survives only as an infrastructure implementation-class name (e.g. a `Room*Repository` implementing a `*Port`).
 - Data sources (DAOs, DataStore) injected via constructor.
 - **Mapping Boundaries:**
   - Entity ↔ Domain mapping happens entirely in `:core:data` (repository or dedicated mapper functions). Mappers are pure functions.
