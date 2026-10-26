@@ -7,9 +7,9 @@
 # below check out the tree-identical equivalents in the rewritten history:
 #
 #   whisper-android  GitLab pin c6cd0387 -> GitHub 32682cbc (same tree)
-#   agent_core       GitLab pin cae979a7 -> unresolvable even in the
-#                    original mirror; uses the rewritten main tip
-#                    fe065b73 until the pin is repaired in-repo.
+#   agent_core       pin repaired in-repo by ENC-283: the recorded
+#                    gitlink now resolves in the GitHub mirror, so the
+#                    clone below checks out the pin itself.
 #
 # whisper.cpp needs no workaround: its .gitmodules URL is the public
 # upstream (ggml-org/whisper.cpp) and its pin survived unchanged.
@@ -60,7 +60,7 @@ runs:
         # whisper-android carries its own whisper.cpp submodule (public).
         git -C third_party/whisper-android submodule update --init third_party/whisper.cpp
 
-    - name: agent_core (GitHub, rewritten main tip — original pin unresolvable)
+    - name: agent_core (GitHub, at the pin recorded in the superproject)
       if: inputs.agent-core == 'true'
       shell: bash
       env:
@@ -69,4 +69,5 @@ runs:
         rm -rf third_party/agent_core
         if [ -n "$SUBMODULE_TOKEN" ]; then AUTH="x-access-token:${SUBMODULE_TOKEN}@"; else AUTH=""; fi
         git clone --quiet "https://${AUTH}github.com/shippopotamuslabs/agent_core.git" third_party/agent_core
-        git -C third_party/agent_core checkout --quiet fe065b73259b9354e5ad63d2bb615623cea5a0ab
+        PIN=$(git ls-tree HEAD third_party/agent_core | awk '{print $3}')
+        git -C third_party/agent_core checkout --quiet "$PIN"
