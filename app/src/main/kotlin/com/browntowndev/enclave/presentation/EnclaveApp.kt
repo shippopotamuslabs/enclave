@@ -32,6 +32,10 @@ fun EnclaveApp(
     errorMessage: String? = null,
     navigationIntent: Intent? = null,
     refreshDownloadPlan: DownloadPlanRefresher? = null,
+    updateAvailableVersionName: String? = null,
+    updateDownloadUrl: String? = null,
+    onUpdateDownloadClick: ((String) -> Unit)? = null,
+    onUpdateDismissed: (() -> Unit)? = null,
 ) {
     val themeUiState by viewModel.themeUiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -41,6 +45,25 @@ fun EnclaveApp(
             launch {
                 snackbarHostState.showSnackbar(message)
             }
+        }
+    }
+
+    LaunchedEffect(updateAvailableVersionName, updateDownloadUrl) {
+        val versionName = updateAvailableVersionName
+        val downloadUrl = updateDownloadUrl
+        if (versionName == null || downloadUrl == null) {
+            return@LaunchedEffect
+        }
+        val result =
+            snackbarHostState.showSnackbar(
+                message = "Enclave $versionName is available.",
+                actionLabel = "Download",
+                withDismissAction = true,
+            )
+        if (result == SnackbarResult.ActionPerformed) {
+            onUpdateDownloadClick?.invoke(downloadUrl)
+        } else {
+            onUpdateDismissed?.invoke()
         }
     }
 

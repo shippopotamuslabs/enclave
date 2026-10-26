@@ -1,6 +1,7 @@
 package com.browntowndev.enclave.presentation
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -198,6 +199,12 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                         DownloadPlanRefresher {
                                             viewModel.refreshDownloadModels()
                                         },
+                                    updateAvailableVersionName = currentState.availableVersionName,
+                                    updateDownloadUrl = currentState.updateDownloadUrl,
+                                    onUpdateDownloadClick = { downloadUrl ->
+                                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(downloadUrl)))
+                                    },
+                                    onUpdateDismissed = { viewModel.dismissAppUpdate() },
                                 )
 
                                 currentState.pendingVaultReconciliation?.let { pending ->

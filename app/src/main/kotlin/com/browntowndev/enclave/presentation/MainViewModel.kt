@@ -6,6 +6,7 @@ import com.browntowndev.enclave.core.ui.component.vault.VaultAuthUiState
 import com.browntowndev.enclave.core.ui.component.vault.toVaultAuthUiState
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.download.DownloadModelsResult
+import com.browntowndev.enclave.domain.model.update.LatestRelease
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.usecase.auth.GetAuthStateUseCase
 import com.browntowndev.enclave.domain.usecase.auth.LoginWithGoogleUseCase
@@ -20,6 +21,9 @@ import com.browntowndev.enclave.domain.usecase.security.StoreBiometricDekUseCase
 import com.browntowndev.enclave.domain.usecase.security.VaultSessionInteractor
 import com.browntowndev.enclave.domain.usecase.security.DetectVaultReconciliationStateUseCase
 import com.browntowndev.enclave.domain.usecase.security.UnlockVaultUseCase
+import com.browntowndev.enclave.domain.usecase.update.AppUpdateResult
+import com.browntowndev.enclave.domain.usecase.update.CheckForAppUpdateUseCase
+import com.browntowndev.enclave.domain.usecase.update.DismissAppUpdateUseCase
 import com.browntowndev.enclave.domain.usecase.security.VaultReconciliationOutcome
 import com.browntowndev.enclave.presentation.navigation.Routes
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -59,6 +63,8 @@ sealed interface AppStartupState {
         val unlockSyncProgress: Float? = null,
         val unlockSyncStatus: String? = null,
         val onboardingCompleted: Boolean = true,
+        val availableVersionName: String? = null,
+        val updateDownloadUrl: String? = null,
     ) : AppStartupState {
         val initialRoute: String
             get() =
@@ -92,6 +98,8 @@ class MainViewModel
         private val bootstrapCloudVaultFromLocalUseCase: BootstrapCloudVaultFromLocalUseCase,
         private val loggingPort: LoggingPort,
         private val errorHandler: ViewModelErrorHandler,
+        private val checkForAppUpdateUseCase: CheckForAppUpdateUseCase,
+        private val dismissAppUpdateUseCase: DismissAppUpdateUseCase,
     ) : ViewModel() {
         companion object {
             private const val TAG = "MainViewModel"
@@ -99,11 +107,57 @@ class MainViewModel
         }
 
         private var pendingVaultReconciliationPayload: VaultReconciliationOutcome.MismatchRequiresClobber? = null
+        private var pendingUpdateRelease: LatestRelease? = null
         private val _startupState = MutableStateFlow<AppStartupState>(AppStartupState.Loading)
         val startupState: StateFlow<AppStartupState> = _startupState.asStateFlow()
 
         init {
             initializeApp()
+            checkForAppUpdate()
+        }
+
+        /**
+         * Runs the GitHub Releases update check off the critical startup path
+         * (ENC-250). Never blocks app use and never surfaces failures: a quiet
+         * check leaves the update state empty.
+         */
+        private fun checkForAppUpdate() {
+            viewModelScope.launch {
+                val result = runCatching { checkForAppUpdateUseCase() }.getOrNull() ?: return@launch
+                if (result !is AppUpdateResult.UpdateAvailable) {
+                    return@launch
+                }
+                pendingUpdateRelease = result.release
+                _startupState.update { state ->
+                    if (state is AppStartupState.Ready) {
+                        state.copy(
+                            availableVersionName = result.release.versionName,
+                            updateDownloadUrl = result.release.downloadUrl,
+                        )
+                    } else {
+                        state
+                    }
+                }
+            }
+        }
+
+        /**
+         * Clears the update prompt and records the dismissal so this release is
+         * not offered again. Wired to snackbar dismiss/timeout/close.
+         */
+        fun dismissAppUpdate() {
+            val release = pendingUpdateRelease ?: return
+            pendingUpdateRelease = null
+            _startupState.update { state ->
+                if (state is AppStartupState.Ready) {
+                    state.copy(availableVersionName = null, updateDownloadUrl = null)
+                } else {
+                    state
+                }
+            }
+            viewModelScope.launch {
+                runCatching { dismissAppUpdateUseCase(release.versionCode) }
+            }
         }
 
         @Suppress("TooGenericExceptionCaught")
@@ -175,6 +229,11 @@ class MainViewModel
                             isVaultLocked = nextVaultLocked,
                         )
                     } else {
+                        // An update check resolving before startup completes is
+                        // recorded in pendingUpdateRelease but its state update
+                        // no-ops while Loading — carry it into Ready so the
+                        // update is not lost.
+                        val pendingUpdate = pendingUpdateRelease
                         AppStartupState.Ready(
                             authState = vaultAuthUiState,
                             modelsResult = modelsResult,
@@ -182,6 +241,8 @@ class MainViewModel
                             isVaultLocked = isVaultLocked,
                             isBiometricUnlockPossible = isBiometricUnlockPossible,
                             onboardingCompleted = onboardingCompleted,
+                            availableVersionName = pendingUpdate?.versionName,
+                            updateDownloadUrl = pendingUpdate?.downloadUrl,
                         )
                     }
                 }

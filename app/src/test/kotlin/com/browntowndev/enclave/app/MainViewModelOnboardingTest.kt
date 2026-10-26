@@ -4,7 +4,11 @@ import com.browntowndev.enclave.core.testing.FakeAuthManager
 import com.browntowndev.enclave.core.testing.FakeBiometricPort
 import com.browntowndev.enclave.core.testing.FakeCloudSyncPort
 import com.browntowndev.enclave.core.testing.FakeCryptoManagerPort
+import com.browntowndev.enclave.core.testing.FakeInstalledAppVersionPort
 import com.browntowndev.enclave.core.testing.FakeSyncOrchestrator
+import com.browntowndev.enclave.core.testing.FakeUpdateCheckPreferencesPort
+import com.browntowndev.enclave.core.testing.FakeUpdateMetadataPort
+import com.browntowndev.enclave.core.testing.TestClock
 import com.browntowndev.enclave.core.testing.FakeVaultMetadataPort
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
 import com.browntowndev.enclave.domain.usecase.FakeSettingsRepository
@@ -15,6 +19,8 @@ import com.browntowndev.enclave.domain.usecase.security.GetBiometricDecryptCiphe
 import com.browntowndev.enclave.domain.usecase.security.GetBiometricEncryptCipherUseCase
 import com.browntowndev.enclave.domain.usecase.security.StoreBiometricDekUseCase
 import com.browntowndev.enclave.domain.usecase.security.VaultSessionInteractor
+import com.browntowndev.enclave.domain.usecase.update.CheckForAppUpdateUseCase
+import com.browntowndev.enclave.domain.usecase.update.DismissAppUpdateUseCase
 import com.browntowndev.enclave.presentation.AppStartupState
 import com.browntowndev.enclave.presentation.MainViewModel
 import com.browntowndev.enclave.testing.FakeAdoptCloudVaultUseCase
@@ -96,6 +102,15 @@ class MainViewModelOnboardingTest {
                     bootstrapCloudVaultFromLocalUseCase = FakeBootstrapCloudVaultFromLocalUseCase(),
                     loggingPort = loggingPort,
                     errorHandler = errorHandler,
+                    checkForAppUpdateUseCase =
+                        CheckForAppUpdateUseCase(
+                            FakeUpdateMetadataPort(),
+                            FakeInstalledAppVersionPort(),
+                            FakeUpdateCheckPreferencesPort(),
+                            TestClock(),
+                        ),
+                    dismissAppUpdateUseCase =
+                        DismissAppUpdateUseCase(FakeUpdateCheckPreferencesPort()),
                 )
 
             advanceUntilIdle()
