@@ -10,8 +10,8 @@ import androidx.room.InvalidationTracker
 import androidx.sqlite.db.SupportSQLiteOpenHelper
 import androidx.work.WorkManager
 import androidx.test.core.app.ApplicationProvider
+import com.browntowndev.enclave.core.data.inertWorkManager
 import com.browntowndev.enclave.core.data.local.ApiCredentialsDao
-import com.browntowndev.enclave.core.data.testWorkManager
 import com.browntowndev.enclave.core.data.local.ApiModelConfigurationsDao
 import com.browntowndev.enclave.core.data.local.ChatDao
 import com.browntowndev.enclave.core.data.local.ChatSummaryDao
@@ -82,9 +82,11 @@ internal fun fakeFirestore(): FirebaseFirestore = mockk(relaxed = true)
 
 // ---------------------------------------------------------------------------
 // WorkManager: no fake exists in work-runtime 2.11 (the WorkManager
-// constructor is internal). Filler collaborators get the real test
-// WorkManager via testWorkManager(); their debounce scopes never dispatch,
-// so no work is ever enqueued from filler contexts.
+// constructor is internal). Filler collaborators default to an inert
+// WorkManager placeholder (ENC-253) and their debounce scopes never
+// dispatch, so no work is ever enqueued and no real WorkManager (or its
+// Room database / native SQLite) is ever resolved from filler contexts.
+// Callers that actually enqueue work pass a real testWorkManager instance.
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
@@ -127,14 +129,18 @@ private object NeverDispatchingDispatcher : CoroutineDispatcher() {
 }
 
 /**
- * Real [EmbeddingRegenerationCoordinator] over a real test [WorkManager]. Its
- * debounce scope never dispatches, so no WorkManager work is ever enqueued
- * from filler contexts — matching the relaxed mock's no-op behavior in these
- * suites.
+ * Real [EmbeddingRegenerationCoordinator] over an inert [WorkManager] by
+ * default (ENC-253). The production constructor takes a [WorkManager]
+ * eagerly, so the real test WorkManager cannot be deferred past `super(...)`
+ * without a production change; instead the default is [inertWorkManager],
+ * which never opens WorkManager's Room database. Its debounce scope never
+ * dispatches, so no WorkManager work is ever enqueued from filler contexts —
+ * matching the relaxed mock's no-op behavior in these suites. Tests that
+ * actually enqueue regeneration work pass a real `testWorkManager(context)`.
  */
 internal fun testEmbeddingRegenerationCoordinator(
     context: Context = ApplicationProvider.getApplicationContext(),
-    workManager: WorkManager = testWorkManager(context),
+    workManager: WorkManager = inertWorkManager(),
 ): EmbeddingRegenerationCoordinator =
     EmbeddingRegenerationCoordinator(
         workManager,

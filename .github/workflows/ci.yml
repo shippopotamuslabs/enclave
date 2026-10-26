@@ -336,6 +336,9 @@ jobs:
       # - 3g test heap: the Robolectric-heavy suites (core-data, inference)
       #   OOM-killed their test executors at the default heap in the first
       #   clean-environment runs of this port.
+      # - forkEvery=1 for :core:data only (ENC-253): Robolectric's native
+      #   SQLite loader can poison a shared sandbox on first load; a fresh
+      #   JVM per test class confines a failure to one class.
       # - Quarantine (ENC-216): three :core:agent contract-test classes do a
       #   real UniFFI round-trip and die at class init on the x86_64 runner
       #   (the checked-in native lib is arm64). Excluded here until ENC-216
@@ -346,6 +349,9 @@ jobs:
           allprojects { project ->
               project.tasks.withType(org.gradle.api.tasks.testing.Test).configureEach { testTask ->
                   testTask.maxHeapSize = "3g"
+                  if (project.path == ":core:data") {
+                      testTask.forkEvery = 1
+                  }
                   if (project.path == ":core:agent") {
                       testTask.exclude(
                           "com/browntowndev/enclave/core/agent/RustAgentEngineAdapterActiveSessionContractTest.class",
