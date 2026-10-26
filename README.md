@@ -43,7 +43,7 @@ The APK targets arm64 hardware running Android 14 (API 34) or newer. The build s
 
 ## Architecture
 
-The build has 20 Gradle modules plus one composite build. Dependencies point inward to `:core:domain`, which holds the domain models and the ports other modules implement. Feature, data, and native modules adapt storage, network, hardware, and UI around those ports, and `:core:domain` imports no Android framework types. `contracts/ARCHITECTURE_RULES.md` states the rule set in full.
+The build has 20 Gradle modules plus one composite build. Dependencies point inward to `:core:domain`, which holds the domain models and the ports other modules implement. Feature, data, and native modules adapt storage, network, hardware, and UI around those ports, and `:core:domain` imports no Android framework types. `contracts/gospel/ARCHITECTURE-GOSPEL.md` (pinned submodule) states the shared rule set; `contracts/ARCHITECTURE_RULES.md` records Enclave's module graph and local rules.
 
 Module map, by layer:
 
@@ -69,7 +69,7 @@ Kotlin reaches the Rust through UniFFI-generated bindings. The generated Kotlin 
 
 Long work runs outside the UI. Foreground services carry the chat inference session, the Mixture-of-Agents pipeline, Studio generation, and TTS playback, and WorkManager carries resumable background state between the services and the screens. Android gives a dataSync foreground service a 6-hour cumulative budget, so the workers checkpoint and resume.
 
-`contracts/` holds the binding rules for this repo: architecture, data layer, inference, UI design, code style, unit testing, and voice. `AGENTS.md` routes any piece of work, by a person or by an agent, to the contract that covers it before code gets written.
+`contracts/` holds Enclave's local contracts (data layer, inference, desktop, Enclave UI specs, worked testing examples); the shared Shippopotamus gospels live in the pinned `contracts/gospel/` submodule and are canon for architecture, code style, testing, palette, Compose, button shape, glass bars, and voice (Wumbo). `AGENTS.md` routes each task to the gospel or local contract that covers it.
 
 ## What you need to build it
 
@@ -172,7 +172,7 @@ Skip this section unless you changed a Rust crate's public UniFFI types. The che
 | `desktop/` | The Rust desktop companion: four crates (presentation, domain, data, inference) in the Cargo workspace rooted at the repo's `Cargo.toml`. Unfinished; local inference does not run yet |
 | `llama-android/`, `local-image-gen-android/` | The two native inference engines and their JNI bridges |
 | `third_party/` | The Rust crates and the submodule pointers: `agent_core`, `classifier_core`, `docgen_core`, `whisper-android`, `whisper.cpp` |
-| `contracts/` | The binding architecture, data, inference, UI, style, testing, and voice rules |
+| `contracts/` | Enclave's local contracts (data layer, inference, desktop, Enclave UI specs, worked testing examples); the shared Shippopotamus gospels live in the pinned `gospel/` submodule and are canon for architecture, code style, testing, palette, Compose, button shape, glass bars, and voice (Wumbo) |
 | `functions/` | The TypeScript Firebase functions, with `firebase.json` and the Firestore and Storage rules beside it at the root |
 | `scripts/` | The binding generators, the image and classifier tooling, and the QNN sync scripts |
 | `docs/`, `plans/` | Design documents and feature plans, including the Rust agent core plan and the threat and retention notes in `docs/profile_threat_model_retention.md` |

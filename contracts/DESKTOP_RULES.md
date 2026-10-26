@@ -149,7 +149,7 @@ The companion desktop app follows a custom **Neobrutalist / Neo-minimalist** sty
 
 ## 7. Agent UI Workflow (Brief Read & Anti-Slop Audit)
 
-This section applies to **agents** generating or restyling Iced UI in `enclave-desktop`. Mirror `UI_DESIGN_SPEC.md` §7 for the shared workflow; token sources here are `theme.rs` instead of `EnclaveNeoTokens`.
+This section applies to **agents** generating or restyling Iced UI in `enclave-desktop`. Mirror `UI_DESIGN_SPEC.md` §5 for the shared workflow; token sources here are `theme.rs` instead of `EnclaveNeoTokens`.
 
 ### 7.1 Brief Read (before code)
 
@@ -304,8 +304,7 @@ gnome-screenshot -w -f /absolute/path/to/screenshot.png
 # or, targeted by window ID:
 import -window "$WINID" /absolute/path/to/screenshot.png
 ```
-Save screenshots to the current conversation's artifact directory:
-`/home/sean/.gemini/antigravity/brain/08a4ef79-c3fc-4043-9206-c0c81ad1dbdb/` and **present them to
+Save screenshots to the current conversation's artifact directory and **present them to
 the user** for visual confirmation. Do not claim the screenshot has been "verified" unless the user
 confirms it — the agent's image interpretation is unreliable.
 

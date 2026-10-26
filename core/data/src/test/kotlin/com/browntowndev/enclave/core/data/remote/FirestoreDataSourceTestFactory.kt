@@ -6,7 +6,6 @@ package com.browntowndev.enclave.core.data.remote
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.browntowndev.enclave.core.data.FakeApiCredentialsDao
-import com.browntowndev.enclave.core.data.testWorkManager
 import com.browntowndev.enclave.core.data.FakeApiKeyManager
 import com.browntowndev.enclave.core.data.FakeApiModelConfigurationsDao
 import com.browntowndev.enclave.core.data.FakeChatDao
@@ -73,6 +72,7 @@ import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncLocalSto
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncPendingSyncLookup
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncStateStore
 import com.browntowndev.enclave.core.data.remote.firestore.StudioSyncDaos
+import com.browntowndev.enclave.core.data.remote.firestore.testEmbeddingRegenerationCoordinator
 import com.browntowndev.enclave.core.data.repository.SettingsRepositoryImpl
 import com.browntowndev.enclave.core.data.security.ApiKeyManager
 import com.browntowndev.enclave.core.data.security.LocalDataEncryptionService
@@ -216,7 +216,7 @@ internal fun createTestFirestoreDataSource(
     externalScope: CoroutineScope,
     userIdProvider: () -> String? = { "test-user-id" },
     embeddingCoordinator: EmbeddingRegenerationCoordinator =
-        EmbeddingRegenerationCoordinator(testWorkManager(context), CoroutineScope(SupervisorJob() + Dispatchers.Default)),
+        testEmbeddingRegenerationCoordinator(context),
     localEncryption: LocalDataEncryptionService = LenientFakeLocalDataEncryptionService(),
     sensitiveSelfHealer: SensitivePersistenceSelfHealer? = null,
     purgeInProgress: AtomicBoolean = AtomicBoolean(false),
@@ -232,7 +232,7 @@ internal fun createTestFirestoreDataSource(
                 ) { java.io.File.createTempFile("search-settings-", ".preferences_pb") },
         ),
     settingsRepository: SettingsRepositoryImpl? = null,
-    syncTrigger: CloudSyncTrigger = FakeCloudSyncTrigger(testWorkManager(context)),
+    syncTrigger: CloudSyncTrigger = FakeCloudSyncTrigger(),
     feedIntegrityRecovery: FirestoreSyncFeedIntegrityRecovery? = null,
 ): FirestoreDataSource {
     val healer = sensitiveSelfHealer ?: SensitivePersistenceSelfHealer(localEncryption, loggingPort)
@@ -373,7 +373,7 @@ internal fun testFeedIntegrityRecovery(
             loggingPort = loggingPort,
             apiKeyManager = FakeApiKeyManager(),
             embeddingCoordinator =
-                EmbeddingRegenerationCoordinator(testWorkManager(context), CoroutineScope(SupervisorJob() + Dispatchers.Default)),
+                testEmbeddingRegenerationCoordinator(context),
             userIdProvider = { "test-user-id" },
             purgeInProgress = AtomicBoolean(false),
         )

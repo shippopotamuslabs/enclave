@@ -11,7 +11,7 @@ Always enforce together with `ARCHITECTURE_RULES.md` (which defines the structur
 
 > **v2.8 change (2026-10-20, under Sean's explicit Contract Waiver for this adoption):** the **Shippopotamus Button Shape Gospel**, declared canonical by Sean on 2026-10-20 for Bloviate / Stratum / Enclave, is embedded in full as §8.6. It governs button shape for new work and supersedes §8.3 on one point: the button press morph now lands at **12dp** (was 16dp) for both the pill default and the square variant. Sean's pasted source spelled the tokens `Shipopotamus*` (one p); the canonical spelling is `Shippopotamus*`, used throughout §8.6.
 
-> **v2.9 change (2026-10-20, under Sean's explicit Contract Waiver for this adoption):** the **Shippopotamus Glass Bars Gospel** (Haze 2.0), declared canonical by Sean on 2026-10-20 for Bloviate / Stratum / Enclave, is embedded in full as §8.7. It governs bars, sheets, and overlay glass for new work: the top bar is transparent at rest and glass when scrolled, and the bottom bar is **always glass, never solid**. It resolves §8.4 conflict **C13 in the glass direction** (see §8.7's register note) and supersedes §8.3's solid nav-container and opaque-sheet treatments for those surfaces. Sean's pasted source spelled the tokens `Shipopotamus*` (one p); the canonical spelling is `Shippopotamus*`, used throughout §8.7.
+> **v2.9 change (2026-10-20, under Sean's explicit Contract Waiver for this adoption):** the **Shippopotamus Glass Bars Gospel** (Haze 2.0), declared canonical by Sean on 2026-10-20 for Bloviate / Stratum / Enclave, is embedded in full as §8.7. It governs bars, sheets, and overlay glass for new work: the top bar is **always glazed** (at rest and scrolled alike), and the bottom bar is **always glass, never solid**. It resolves §8.4 conflict **C13 in the glass direction** (see §8.7's register note) and supersedes §8.3's solid nav-container and opaque-sheet treatments for those surfaces. Sean's pasted source spelled the tokens `Shipopotamus*` (one p); the canonical spelling is `Shippopotamus*`, used throughout §8.7.
 
 ---
 
@@ -38,23 +38,16 @@ Always enforce together with `ARCHITECTURE_RULES.md` (which defines the structur
 - **Canonical cross-app system (§8):** All NEW UI work follows the Shippopotamus gospels embedded in §8 (palette tokens, spacing/shape/type systems, component defaults, touch and motion law). The legacy family specs below govern existing surfaces in preserve-mode only; see §8.4 for the conflict register.
 
 ### 1.1 Colors
-**Dark Theme (Default):**
-- Background: `#000000` (AMOLED black)
-- Surface: `#121212`
-- SurfaceVariant: `#1F1F1F`
-- Primary: `#A855F7` (purple accent)
-- OnBackground: `#FFFFFF` (pure white)
-- OnSurface: `#E5E7EB` (soft white)
 
-**Light Theme:**
-- Background: `#FCFCFC`
-- Surface: `#F8F9FA`
-- Primary: `#A855F7` (same purple)
+Canon: `contracts/gospel/PALETTE.md` (Tokens: bg-base `#0D0E11`, accent-base `#7A7CFF`) and `contracts/gospel/PALETTE-LIGHT.md` (Tokens).
+
+**Preserve-mode note:** The values previously listed here — dark background `#000000` (AMOLED black), surface `#121212`, surfaceVariant `#1F1F1F`, primary `#A855F7`; light background `#FCFCFC`, surface `#F8F9FA`, primary `#A855F7` — are the legacy pre-spec theme of record. They are superseded for new work by the gospel palettes above; §8.4 (conflicts C1-C5 and its pre-existing-drift note) records them as the "Enclave today" side of the register. Existing surfaces stay preserve-mode until Sean ratifies §8.4.
 
 ### 1.2 Typography
 
-- **Headlines:** SemiBold, 24-28sp (top bar title, mode switcher).
-- **Body:** Normal, 16sp (message content, standard text).
+Canon: `contracts/gospel/COMPOSE-GOSPEL.md` (Typography, M3 scale).
+
+**Preserve-mode note:** The legacy local spec — SemiBold headlines at 24-28sp and Normal 16sp body text, with the Bold-headline / IBM Plex Sans usage recorded in §8.4 conflict C8 — governs existing surfaces only. New work follows the gospel M3 scale.
 
 ### 1.3 Neo-Brutalist Product Chrome (One Family, Not the Only Chrome)
 
@@ -231,7 +224,7 @@ Run every item for UI-generating tasks. If any box fails, fix before completing.
 
 ## 8. Shippopotamus Gospels — Canonical Cross-App UI System (ENC-87)
 
-This section covers the Shippopotamus gospels declared canonical by Sean on 2026-10-19: the **Color Palette Gospel** (official dark theme) and the **Android Jetpack Compose Gospel** (official UI system), plus the Button Shape and Glass Bars gospels added 2026-10-20. They are the canonical UI system for **all** Shippopotamus apps (Bloviate, Stratum, Enclave, and future products). The full texts live in the `contracts/gospel/` git submodule (the `shippopotamuslabs/gospels` repo, pinned to a release tag) — §8.2, §8.3, §8.6, and §8.7 below are pointers to the gospel files, so the system is enforced by whoever works in this repo, with whatever tooling. (Adoption: GLO-14; the texts were previously embedded here in full under ENC-87/ENC-134.)
+This section covers the Shippopotamus gospels declared canonical by Sean on 2026-10-19: the **Color Palette Gospel** (official dark theme) and the **Android Jetpack Compose Gospel** (official UI system), plus the Button Shape and Glass Bars gospels added 2026-10-20. They are the canonical UI system for **all** Shippopotamus apps (Bloviate, Stratum, Enclave, and future products). The full texts live in the `contracts/gospel/` git submodule (the `shippopotamuslabs/gospels` repo, pinned at `963fdf4` (`v1.1-3-g963fdf4`)) — §8.2, §8.3, §8.6, and §8.7 below are pointers to the gospel files, so the system is enforced by whoever works in this repo, with whatever tooling. (Adoption: GLO-14; the texts were previously embedded here in full under ENC-87/ENC-134.)
 
 ### 8.1 Authority and scope
 
@@ -242,7 +235,7 @@ This section covers the Shippopotamus gospels declared canonical by Sean on 2026
 
 ### 8.2 Palette Gospel — Official Dark Theme
 
-**Canonical text:** `contracts/gospel/PALETTE.md` (git submodule, gospels repo pinned at tag `v1`).
+**Canonical text:** `contracts/gospel/PALETTE.md` (git submodule, gospels repo pinned at `963fdf4` (`v1.1-3-g963fdf4`)).
 
 The full Palette Gospel — the empirical basis, the background/border/text token tables, the indigo accent family, the semantic colors, and the mobile extras — lives in the gospel file. This contract no longer embeds it.
 
@@ -250,7 +243,7 @@ The Light Palette Gospel, `contracts/gospel/PALETTE-LIGHT.md`, also applies via 
 
 ### 8.3 Compose Gospel — Official UI System
 
-**Canonical text:** `contracts/gospel/COMPOSE-GOSPEL.md` (git submodule, gospels repo pinned at tag `v1`).
+**Canonical text:** `contracts/gospel/COMPOSE-GOSPEL.md` (git submodule, gospels repo pinned at `963fdf4` (`v1.1-3-g963fdf4`)).
 
 The full Compose Gospel — the 8dp grid, the shape system, the M3 typography scale, tonal elevation, the component specs, the accessibility and motion rules, and the Theme.kt shape — lives in the gospel file. This contract no longer embeds it. Where §8.3 and §8.6/§8.7 used to cross-refer, the gospels cross-refer the same way: button shape defers to the Button Shape Gospel (§8.6), bars and sheets to the Glass Bars Gospel (§8.7).
 
@@ -294,7 +287,7 @@ The full Compose Gospel — the 8dp grid, the shape system, the M3 typography sc
 
 ### 8.6 Button Shape Gospel — Canonical (2026-10-20)
 
-**Canonical text:** `contracts/gospel/BUTTON-SHAPE-GOSPEL.md` (git submodule, gospels repo pinned at tag `v1`).
+**Canonical text:** `contracts/gospel/BUTTON-SHAPE-GOSPEL.md` (git submodule, gospels repo pinned at `963fdf4` (`v1.1-3-g963fdf4`)).
 
 Declared canonical by Sean, 2026-10-20, for Bloviate / Stratum / Enclave and all future Shippopotamus apps. The full Button Shape Gospel — the FULL PILL default, the allowed SQUARE variant, the press-morph rules, and the Compose implementation — lives in the gospel file. This section governs button shape specifically and supersedes §8.3 wherever they disagree on button shape or button press morph.
 
@@ -302,7 +295,7 @@ Declared canonical by Sean, 2026-10-20, for Bloviate / Stratum / Enclave and all
 
 ### 8.7 Glass Bars Gospel — Top + Bottom + Haze (2026-10-20)
 
-**Canonical text:** `contracts/gospel/GLASS-BARS-GOSPEL.md` (git submodule, gospels repo pinned at tag `v1`).
+**Canonical text:** `contracts/gospel/GLASS-BARS-GOSPEL.md` (git submodule, gospels repo pinned at `963fdf4` (`v1.1-3-g963fdf4`)).
 
 Declared canonical by Sean, 2026-10-20, for Bloviate / Stratum / Enclave and all future Shippopotamus apps. The full Glass Bars Gospel — the Haze 2.0.1 dependency, the edge-to-edge foundation, the reusable Haze styles, the worked top-bar and bottom-bar implementations, and the performance limits — lives in the gospel file. This section governs bars, sheets, and overlay glass for new work and supersedes §8.3 wherever they disagree on those surfaces.
 

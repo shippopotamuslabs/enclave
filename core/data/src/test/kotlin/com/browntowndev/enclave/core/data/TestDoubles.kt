@@ -1,3 +1,6 @@
+@file:Suppress("ForbiddenMockKInTests")
+// MockK is used only for WorkManager, an AndroidX SDK type whose constructor is internal in work-runtime 2.11, so no hand-writable fake exists (ENC-253).
+
 package com.browntowndev.enclave.core.data
 
 import android.content.Context
@@ -102,6 +105,7 @@ import com.browntowndev.enclave.domain.model.inference.PipelineStep
 import com.browntowndev.enclave.domain.model.memory.MemoryCategory
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
+import io.mockk.mockk
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -301,15 +305,32 @@ fun testWorkerParameters(): WorkerParameters {
     )
 }
 
+/**
+ * Inert [WorkManager] placeholder that never opens WorkManager's Room database
+ * or loads native SQLite (ENC-253). [CloudSyncTrigger] and
+ * [com.browntowndev.enclave.core.data.sync.EmbeddingRegenerationCoordinator]
+ * take a [WorkManager] eagerly in their production constructors, so a test
+ * double that overrides every enqueue path still needs an instance to pass to
+ * `super(...)`. A relaxed MockK mock satisfies that slot without resolving a
+ * real WorkManager; it must only be used where every enqueue method is
+ * overridden (record-only) or the dispatching scope never runs. Tests that
+ * actually enqueue work must pass a real instance from [testWorkManager].
+ */
+fun inertWorkManager(): WorkManager = mockk(relaxed = true)
+
 /** No-op [CloudSyncTrigger] recording which trigger entry points fired. */
 class FakeCloudSyncTrigger(
-    workManager: WorkManager,
+    workManager: WorkManager = inertWorkManager(),
 ) : CloudSyncTrigger(workManager, FakeLoggingPort(), FakeEntitlementPort()) {
     var triggerCallCount = 0
     var triggerMetadataCallCount = 0
     var triggerMediaCallCount = 0
     var triggerMediaDownloadCallCount = 0
     var triggerFilesCallCount = 0
+    var triggerCloudChatsPurgeCallCount = 0
+    var triggerCloudMediaPurgeCallCount = 0
+    var triggerCloudMemoriesPurgeCallCount = 0
+    var triggerCloudArtifactsPurgeCallCount = 0
 
     override fun trigger() {
         triggerCallCount++
@@ -329,6 +350,22 @@ class FakeCloudSyncTrigger(
 
     override fun triggerFiles() {
         triggerFilesCallCount++
+    }
+
+    override fun triggerCloudChatsPurge() {
+        triggerCloudChatsPurgeCallCount++
+    }
+
+    override fun triggerCloudMediaPurge() {
+        triggerCloudMediaPurgeCallCount++
+    }
+
+    override fun triggerCloudMemoriesPurge() {
+        triggerCloudMemoriesPurgeCallCount++
+    }
+
+    override fun triggerCloudArtifactsPurge() {
+        triggerCloudArtifactsPurgeCallCount++
     }
 }
 

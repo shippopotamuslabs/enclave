@@ -552,28 +552,17 @@ class ChatInferenceService : Service() {
         inferenceLockManager.forceReleaseOnDeviceLock()
         currentJob?.cancel()
 
-        val chatId = currentChatId
-        val assistantId = currentAssistantMessageId
-        val session = currentSession
-
-        serviceScope.launch(Dispatchers.IO) {
-            withContext(NonCancellable) {
-                session?.flush(markIncompleteAsCancelled = true)
-                if (chatId != null && assistantId != null && session != null) {
-                    publishCancelledTerminalSnapshot(
-                        chatId = chatId,
-                        assistantMessageId = assistantId,
-                        persistenceSession = session,
-                    )
-                }
-            }
-
-            // Ensure service stops if this was the last action
-            if (currentJob == null || currentJob?.isActive == false) {
-                stopForeground(ChatInferenceNotificationPolicy.FOREGROUND_STOP_MODE)
-                stopSelf(latestStartId)
-            }
-        }
+        // No duplicate flush here (ENC-221): cancelling the inference job runs
+        // its CancellationException handler, which flushes the session and
+        // publishes the cancelled terminal snapshot under NonCancellable on
+        // the same session instance. That handler is the sole flush owner:
+        // a session exists only while its owning job is live, and a finished
+        // job has already persisted its terminal state and cleared the
+        // session. The previous Dispatchers.IO launch duplicated that flush
+        // concurrently over unsynchronized session state and escaped the
+        // scope's dispatcher. Likewise there is no stopSelf here: the job's
+        // finally block is the sole deferred stop when a job was active, and
+        // the ACTION_STOP handler stops immediately when no job is active.
     }
 
     private fun ModelType.toSingleModelMode(): Mode =
