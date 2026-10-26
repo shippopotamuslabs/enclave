@@ -6,6 +6,7 @@ import {
     RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
 import * as fs from 'fs';
+import { doc, setDoc } from 'firebase/firestore';
 import 'mocha';
 import * as path from 'path';
 
@@ -32,6 +33,19 @@ describe('sync event feed (security rules)', () => {
 
     beforeEach(async () => {
         await rulesEnv.clearFirestore();
+        // ENC-238: entity + sync feed reads/writes are entitlement-gated.
+        // Seed an active stripe entitlement for the owner uid used below so
+        // existing assertions keep testing ownership/allowlist/metadata, not
+        // entitlement denial. No assertion weakened.
+        await rulesEnv.withSecurityRulesDisabled(async (ctx) => {
+            await setDoc(doc(ctx.firestore(), 'users/alice/entitlement/stripe'), {
+                active: true,
+                stripeCustomerId: 'cus_alice',
+                stripeSubscriptionId: 'sub_alice',
+                expiryTimeMillis: 9999999999999,
+                updatedAt: 1700000000000,
+            });
+        });
     });
 
     after(async () => {
