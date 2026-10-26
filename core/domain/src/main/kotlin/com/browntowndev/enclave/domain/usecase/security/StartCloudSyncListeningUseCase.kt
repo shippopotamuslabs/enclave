@@ -1,28 +1,49 @@
 package com.browntowndev.enclave.domain.usecase.security
 
+import com.browntowndev.enclave.domain.model.entitlement.EntitlementState
 import com.browntowndev.enclave.domain.model.sync.CloudSyncReplayProgress
 import com.browntowndev.enclave.domain.port.repository.CloudSyncPort
+import com.browntowndev.enclave.domain.port.repository.EntitlementPort
 import javax.inject.Inject
 
 /**
  * Uploads local data when requested, replays the remote sync-event feed until drained,
  * then starts the live Firestore listener. Centralizes the post-unlock sync contract
- * shared by main and settings entry points. Fails (without starting the listener) when
- * any step returns a failure, so callers get exact upstream error propagation.
+ * shared by main and settings entry points.
+ *
+ * Reads [EntitlementPort.entitlementState] before touching [CloudSyncPort]: non-subscribers
+ * return [StartCloudSyncResult.SubscriptionRequired] so callers stop cleanly instead of
+ * retrying against server-side denials; unknown entitlement fails (without starting the
+ * listener) so callers keep the existing retryable-error behavior.
  */
 open class StartCloudSyncListeningUseCase
     @Inject
     constructor(
         private val cloudSyncPort: CloudSyncPort,
+        private val entitlementPort: EntitlementPort,
     ) {
+        @Suppress("ReturnCount")
         open suspend operator fun invoke(
             uploadLocalFirst: Boolean = true,
             onProgress: (suspend (CloudSyncReplayProgress) -> Unit)? = null,
-        ): Result<Unit> {
+        ): StartCloudSyncResult {
+            when (entitlementPort.entitlementState.value) {
+                is EntitlementState.NotEntitled -> return StartCloudSyncResult.SubscriptionRequired
+                is EntitlementState.Unknown ->
+                    return StartCloudSyncResult.Failed(
+                        IllegalStateException("Entitlement state unknown"),
+                    )
+                is EntitlementState.SignedOut ->
+                    return StartCloudSyncResult.Failed(
+                        IllegalStateException("Signed out"),
+                    )
+                is EntitlementState.Entitled -> Unit
+            }
+
             if (uploadLocalFirst) {
                 val uploadResult = cloudSyncPort.syncAllLocalDataToCloud()
                 if (uploadResult.isFailure) {
-                    return Result.failure(
+                    return StartCloudSyncResult.Failed(
                         uploadResult.exceptionOrNull() ?: IllegalStateException("upload failed"),
                     )
                 }
@@ -57,7 +78,7 @@ open class StartCloudSyncListeningUseCase
             while (true) {
                 val replayResult = cloudSyncPort.syncRemoteChangesFromCloud()
                 if (replayResult.isFailure) {
-                    return Result.failure(
+                    return StartCloudSyncResult.Failed(
                         replayResult.exceptionOrNull() ?: IllegalStateException("replay failed"),
                     )
                 }
@@ -98,20 +119,20 @@ open class StartCloudSyncListeningUseCase
                 if (!replay.hasMore) break
                 safety += 1
                 if (safety > MAX_REPLAY_PAGES) {
-                    return Result.failure(IllegalStateException("replay exceeded max pages"))
+                    return StartCloudSyncResult.Failed(IllegalStateException("replay exceeded max pages"))
                 }
             }
 
             val bootstrapResult = cloudSyncPort.bootstrapFeatureSettings()
             if (bootstrapResult.isFailure) {
-                return Result.failure(
+                return StartCloudSyncResult.Failed(
                     bootstrapResult.exceptionOrNull()
                         ?: IllegalStateException("feature settings bootstrap failed"),
                 )
             }
 
             cloudSyncPort.startListening()
-            return Result.success(Unit)
+            return StartCloudSyncResult.Started
         }
 
         private companion object {

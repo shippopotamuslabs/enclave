@@ -1,12 +1,18 @@
 package com.browntowndev.enclave.feature.settings
+
+import android.content.Intent
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.net.toUri
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.browntowndev.enclave.domain.model.inference.ModelType
+
+internal const val ENCLAVE_SUBSCRIBE_URL = "https://shippopotamuslabs.com/enclave/subscribe"
 
 @Composable
 internal fun SettingsRoute(
@@ -18,10 +24,16 @@ internal fun SettingsRoute(
     onNavigateToLiveVoiceConfigure: () -> Unit,
     onNavigateToMediaConfigure: () -> Unit,
     onNavigateToLocalModelConfigure: () -> Unit,
+    onOpenSubscription: (() -> Unit)? = null,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
+    val openSubscription =
+        onOpenSubscription ?: {
+            context.startActivity(Intent(Intent.ACTION_VIEW, ENCLAVE_SUBSCRIBE_URL.toUri()))
+        }
 
     LaunchedEffect(viewModel) {
         viewModel.snackbarMessages.collect { message ->
@@ -115,6 +127,7 @@ internal fun SettingsRoute(
         onSubmitVaultReauthPassword = viewModel::onSubmitVaultReauthPassword,
         onConfirmAdoptCloudFromSettings = viewModel::onConfirmAdoptCloudFromSettings,
         onCancelVaultReauth = viewModel::onCancelVaultReauth,
+        onOpenSubscription = openSubscription,
         snackbarHostState = snackbarHostState,
     )
 }

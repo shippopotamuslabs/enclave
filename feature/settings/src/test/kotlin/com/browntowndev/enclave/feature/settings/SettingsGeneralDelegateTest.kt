@@ -4,6 +4,7 @@ import com.browntowndev.enclave.core.testing.FakeCloudSyncPort
 import com.browntowndev.enclave.core.testing.FakeCryptoManagerPort
 import com.browntowndev.enclave.core.testing.FakeVaultMetadataPort
 import com.browntowndev.enclave.domain.port.auth.UserProfile
+import com.browntowndev.enclave.domain.usecase.security.StartCloudSyncResult
 import com.browntowndev.enclave.domain.usecase.security.VaultReconciliationOutcome
 import org.junit.jupiter.api.Assertions.assertTrue
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -97,7 +98,7 @@ class SettingsGeneralDelegateTest {
             cryptoManager.generatedSalt = salt
             cryptoManager.encryptResult = Result.success(verificationCiphertext)
             createVaultUseCase.result = Result.success(wrappedDek)
-            startCloudSyncListeningUseCase.result = Result.success(Unit)
+            startCloudSyncListeningUseCase.result = StartCloudSyncResult.Started
 
             delegate.onSubmitVaultReauthPassword(this, "Settings", sheet, "password")
             advanceUntilIdle()
@@ -161,7 +162,7 @@ class SettingsGeneralDelegateTest {
             val sheet = MutableStateFlow<VaultReauthSheetState>(VaultReauthSheetState.Hidden)
             detectVaultReconciliationStateUseCase.result =
                 Result.success(VaultReconciliationOutcome.AlreadyMatching)
-            startCloudSyncListeningUseCase.result = Result.failure(IllegalStateException("replay failed"))
+            startCloudSyncListeningUseCase.result = StartCloudSyncResult.Failed(IllegalStateException("replay failed"))
 
             delegate.onSubmitVaultReauthPassword(this, "Settings", sheet, "password")
             advanceUntilIdle()
@@ -170,6 +171,27 @@ class SettingsGeneralDelegateTest {
                 VaultReauthSheetState.EnterPassword(
                     isUnlocking = false,
                     errorMessage = "Failed to start cloud sync",
+                ),
+                sheet.value,
+            )
+            assertEquals(listOf(true), startCloudSyncListeningUseCase.calls)
+        }
+
+    @Test
+    fun `sync subscription required surfaces distinct message and keeps sheet open`() =
+        runTest {
+            val sheet = MutableStateFlow<VaultReauthSheetState>(VaultReauthSheetState.Hidden)
+            detectVaultReconciliationStateUseCase.result =
+                Result.success(VaultReconciliationOutcome.AlreadyMatching)
+            startCloudSyncListeningUseCase.result = StartCloudSyncResult.SubscriptionRequired
+
+            delegate.onSubmitVaultReauthPassword(this, "Settings", sheet, "password")
+            advanceUntilIdle()
+
+            assertEquals(
+                VaultReauthSheetState.EnterPassword(
+                    isUnlocking = false,
+                    errorMessage = "Cloud sync needs an Enclave subscription.",
                 ),
                 sheet.value,
             )
@@ -202,7 +224,12 @@ class SettingsGeneralDelegateTest {
                 )
             val realStartUseCase =
                 com.browntowndev.enclave.domain.usecase.security
-                    .StartCloudSyncListeningUseCase(cloudSyncPort)
+                    .StartCloudSyncListeningUseCase(
+                        cloudSyncPort,
+                        com.browntowndev.enclave.core.testing.FakeEntitlementPort(
+                            com.browntowndev.enclave.domain.model.entitlement.EntitlementState.Entitled(),
+                        ),
+                    )
             val realDelegate =
                 SettingsGeneralDelegate(
                     preferencesUseCases = preferencesUseCases,

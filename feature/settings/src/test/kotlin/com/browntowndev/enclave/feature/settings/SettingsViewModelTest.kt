@@ -1,6 +1,9 @@
 package com.browntowndev.enclave.feature.settings
 
 import com.browntowndev.enclave.core.testing.theme.FakeThemePreferencesRepository
+import com.browntowndev.enclave.core.testing.FakeEntitlementPort
+import com.browntowndev.enclave.domain.model.entitlement.EntitlementState
+import com.browntowndev.enclave.domain.usecase.security.ObserveEntitlementStateUseCase
 import com.browntowndev.enclave.domain.theme.ObserveThemePreferencesUseCase
 import com.browntowndev.enclave.domain.theme.SetThemeFamilyUseCase
 
@@ -58,6 +61,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -114,6 +118,7 @@ class SettingsViewModelTest {
     private val loginWithGoogleUseCase = FakeLoginWithGoogleUseCase()
     private val logoutUseCase = FakeLogoutUseCase()
     private val getAuthStateUseCase = FakeGetAuthStateUseCase()
+    private val entitlementPort = FakeEntitlementPort()
 
     private val memoriesRepository = com.browntowndev.enclave.core.testing.FakeMemoriesRepository()
 
@@ -327,6 +332,7 @@ class SettingsViewModelTest {
                         applyApiModelMetadataDefaultsUseCase,
                         UsageSpendUiMapper(),
                     ),
+                observeEntitlementStateUseCase = ObserveEntitlementStateUseCase(entitlementPort),
                 observeUsageSpendSummaryUseCase = testUsageSpendSummaryUseCase(),
                 generalDelegate = generalDelegate,
                 memoriesDelegate = memoriesDelegate,
@@ -372,6 +378,26 @@ class SettingsViewModelTest {
         runTest {
             assertEquals(AppThemeUi.SYSTEM, viewModel.uiState.value.home.theme)
             assertTrue(viewModel.uiState.value.home.hapticResponse)
+        }
+
+    @Test
+    fun `entitlement state flows into home subscription`() =
+        runTest {
+            entitlementPort.setEntitlementState(EntitlementState.NotEntitled)
+            runCurrent()
+            assertEquals(SubscriptionUiState.NotSubscribed, viewModel.uiState.value.home.subscription)
+
+            entitlementPort.setEntitlementState(EntitlementState.Entitled())
+            runCurrent()
+            assertEquals(SubscriptionUiState.Subscribed(expiryLabel = null), viewModel.uiState.value.home.subscription)
+
+            entitlementPort.setEntitlementState(EntitlementState.Unknown)
+            runCurrent()
+            assertEquals(SubscriptionUiState.Error, viewModel.uiState.value.home.subscription)
+
+            entitlementPort.setEntitlementState(EntitlementState.SignedOut)
+            runCurrent()
+            assertEquals(SubscriptionUiState.Hidden, viewModel.uiState.value.home.subscription)
         }
 
     @Test

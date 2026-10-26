@@ -4,12 +4,14 @@ import com.browntowndev.enclave.core.testing.FakeAuthManager
 import com.browntowndev.enclave.core.testing.FakeBiometricPort
 import com.browntowndev.enclave.core.testing.FakeCloudSyncPort
 import com.browntowndev.enclave.core.testing.FakeCryptoManagerPort
+import com.browntowndev.enclave.core.testing.FakeEntitlementPort
 import com.browntowndev.enclave.core.testing.FakeSyncOrchestrator
 import com.browntowndev.enclave.core.testing.FakeVaultMetadataPort
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.download.DownloadModelsResult
 import com.browntowndev.enclave.domain.model.download.ModelScanResult
+import com.browntowndev.enclave.domain.model.entitlement.EntitlementState
 import com.browntowndev.enclave.domain.port.auth.AuthState
 import com.browntowndev.enclave.domain.port.auth.UserProfile
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
@@ -29,6 +31,7 @@ import com.browntowndev.enclave.domain.usecase.security.DecryptBiometricDekUseCa
 import com.browntowndev.enclave.domain.usecase.security.GetBiometricDecryptCipherUseCase
 import com.browntowndev.enclave.domain.usecase.security.GetBiometricEncryptCipherUseCase
 import com.browntowndev.enclave.domain.usecase.security.StartCloudSyncListeningUseCase
+import com.browntowndev.enclave.domain.usecase.security.StartCloudSyncResult
 import com.browntowndev.enclave.domain.usecase.security.StoreBiometricDekUseCase
 import com.browntowndev.enclave.domain.usecase.security.UnlockVaultUseCase
 import com.browntowndev.enclave.domain.usecase.security.VaultReconciliationOutcome
@@ -184,10 +187,13 @@ class MainViewModelTest {
                 runBlocking {
                     workerStartCloudSyncUseCase(uploadLocalFirst, null)
                 }
-            if (result.isSuccess) {
-                Result.success(Unit)
-            } else {
-                Result.failure(result.exceptionOrNull() ?: Exception("replay failed"))
+            // Mirrors InitialSyncWorker: Started and SubscriptionRequired both surface as
+            // worker success (the gate stops cleanly instead of retrying); only Failed defers.
+            when (result) {
+                is StartCloudSyncResult.Started,
+                is StartCloudSyncResult.SubscriptionRequired,
+                -> Result.success(Unit)
+                is StartCloudSyncResult.Failed -> Result.failure(result.cause)
             }
         }
 
@@ -771,7 +777,7 @@ class MainViewModelTest {
 
             // Drive the entry path through a REAL use case so the test fails when the use case
             // does not actually replay before starting the listener.
-            val realStartUseCase = StartCloudSyncListeningUseCase(cloudSyncPort)
+            val realStartUseCase = StartCloudSyncListeningUseCase(cloudSyncPort, FakeEntitlementPort(EntitlementState.Entitled()))
 
             // Recreate VM so init picks up the new auth state and the real use case
             workerStartCloudSyncUseCase = realStartUseCase
@@ -797,7 +803,7 @@ class MainViewModelTest {
             detectVaultReconciliationStateUseCase.result =
                 Result.success(VaultReconciliationOutcome.AlreadyMatching)
             startCloudSyncListeningUseCase.result =
-                Result.failure(IllegalStateException("replay failed"))
+                StartCloudSyncResult.Failed(IllegalStateException("replay failed"))
 
             viewModel =
                 createViewModel()
@@ -851,7 +857,7 @@ class MainViewModelTest {
                 )
             detectVaultReconciliationStateUseCase.result = Result.success(payload)
 
-            val realStartUseCase = StartCloudSyncListeningUseCase(cloudSyncPort)
+            val realStartUseCase = StartCloudSyncListeningUseCase(cloudSyncPort, FakeEntitlementPort(EntitlementState.Entitled()))
 
             workerStartCloudSyncUseCase = realStartUseCase
             viewModel = createViewModel()

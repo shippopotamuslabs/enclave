@@ -12,6 +12,7 @@ import com.browntowndev.enclave.domain.port.auth.AuthManager
 import com.browntowndev.enclave.domain.port.repository.CloudSyncPort
 import com.browntowndev.enclave.domain.port.security.CryptoManagerPort
 import com.browntowndev.enclave.domain.qualifier.ApplicationScope
+import com.browntowndev.enclave.domain.usecase.security.ObserveEntitlementStateUseCase
 import com.browntowndev.enclave.sync.CloudSyncAuthListener
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
@@ -35,6 +36,9 @@ class EnclaveApplication :
 
     @Inject
     lateinit var cryptoManager: CryptoManagerPort
+
+    @Inject
+    lateinit var observeEntitlementStateUseCase: ObserveEntitlementStateUseCase
 
     @Inject
     @ApplicationScope
@@ -63,12 +67,17 @@ class EnclaveApplication :
         ToolDefinition.schemaProvider = RustDocGenSchemaProvider()
 
         applicationScope.launch {
-            combine(authManager.authState, cryptoManager.isVaultUnlocked) { authState, isUnlocked ->
-                authState to isUnlocked
-            }.collect { (authState, isUnlocked) ->
+            combine(
+                authManager.authState,
+                cryptoManager.isVaultUnlocked,
+                observeEntitlementStateUseCase(),
+            ) { authState, isUnlocked, entitlementState ->
+                Triple(authState, isUnlocked, entitlementState)
+            }.collect { (authState, isUnlocked, entitlementState) ->
                 CloudSyncAuthListener.onAuthAndVaultStateChanged(
                     authState = authState,
                     isVaultUnlocked = isUnlocked,
+                    entitlementState = entitlementState,
                     cloudSyncPort = cloudSyncPort,
                 )
             }

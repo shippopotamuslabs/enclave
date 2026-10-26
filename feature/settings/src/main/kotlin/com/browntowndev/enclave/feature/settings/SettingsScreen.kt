@@ -56,6 +56,7 @@ import com.browntowndev.enclave.core.ui.component.enclave.EnclaveNavRow
 import com.browntowndev.enclave.core.ui.component.enclave.EnclavePanel
 import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSectionHeader
 import com.browntowndev.enclave.core.ui.component.enclave.EnclaveSettingsSection
+import com.browntowndev.enclave.core.ui.component.enclave.EnclaveTextButton
 import com.browntowndev.enclave.core.ui.component.enclave.EnclaveThemeChip
 import com.browntowndev.enclave.core.ui.component.enclave.EnclaveToggleRow
 import com.browntowndev.enclave.core.ui.component.sheet.TosBottomSheet
@@ -84,6 +85,7 @@ fun SettingsScreen(
     onNavigateToProfileBuilder: () -> Unit = {},
     onLoginClick: () -> Unit,
     onLogoutClick: () -> Unit,
+    onOpenSubscription: () -> Unit = {},
     onThemeChange: (AppThemeUi) -> Unit,
     onThemeFamilyChange: (ThemeFamilyUi) -> Unit = {},
     onHapticResponseChange: (Boolean) -> Unit,
@@ -205,10 +207,12 @@ fun SettingsScreen(
             item {
                 AccountSection(
                     authState = uiState.home.auth,
+                    subscription = uiState.home.subscription,
                     isReindexing = uiState.home.isReindexing,
                     reindexProgress = uiState.home.reindexProgress,
                     onLoginClick = onLoginClick,
                     onLogoutClick = onLogoutClick,
+                    onOpenSubscription = onOpenSubscription,
                 )
             }
 
@@ -563,12 +567,18 @@ fun SectionHeader(text: String) {
 @Composable
 fun AccountSection(
     authState: AuthStateUi,
+    subscription: SubscriptionUiState = SubscriptionUiState.Hidden,
     isReindexing: Boolean,
     reindexProgress: Float,
     onLoginClick: () -> Unit,
     onLogoutClick: () -> Unit,
+    onOpenSubscription: () -> Unit = {},
 ) {
     EnclaveSectionHeader(text = "Account")
+    SubscriptionRow(
+        subscription = subscription,
+        onOpenSubscription = onOpenSubscription,
+    )
     when (authState) {
         is AuthStateUi.Authenticated -> {
             EnclavePanel {
@@ -671,6 +681,78 @@ fun AccountSection(
                         contentDescription = "Retry Login",
                     )
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Subscription row in the account area. Only [SubscriptionUiState.Subscribed] and
+ * [SubscriptionUiState.NotSubscribed] render an action; [SubscriptionUiState.Error] shows the
+ * status alone and [SubscriptionUiState.Hidden] renders nothing.
+ */
+@Composable
+fun SubscriptionRow(
+    subscription: SubscriptionUiState,
+    onOpenSubscription: () -> Unit,
+) {
+    when (subscription) {
+        SubscriptionUiState.Hidden -> Unit
+        is SubscriptionUiState.Subscribed -> {
+            SubscriptionPanel(
+                statusText = subscription.expiryLabel ?: "Subscribed",
+                actionText = "Manage subscription",
+                onOpenSubscription = onOpenSubscription,
+            )
+        }
+        SubscriptionUiState.NotSubscribed -> {
+            SubscriptionPanel(
+                statusText = "Not subscribed",
+                actionText = "Subscribe",
+                onOpenSubscription = onOpenSubscription,
+            )
+        }
+        SubscriptionUiState.Error -> {
+            SubscriptionPanel(
+                statusText = "Could not load subscription status.",
+                actionText = null,
+                onOpenSubscription = onOpenSubscription,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SubscriptionPanel(
+    statusText: String,
+    actionText: String?,
+    onOpenSubscription: () -> Unit,
+) {
+    EnclavePanel {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Enclave subscription",
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = statusText,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+            if (actionText != null) {
+                EnclaveTextButton(
+                    text = actionText,
+                    onClick = onOpenSubscription,
+                )
             }
         }
     }

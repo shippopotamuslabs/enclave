@@ -1,6 +1,8 @@
 package com.browntowndev.enclave.feature.settings
 
 import com.browntowndev.enclave.core.testing.theme.FakeThemePreferencesRepository
+import com.browntowndev.enclave.core.testing.FakeEntitlementPort
+import com.browntowndev.enclave.domain.usecase.security.ObserveEntitlementStateUseCase
 import com.browntowndev.enclave.domain.theme.ObserveThemePreferencesUseCase
 import com.browntowndev.enclave.domain.theme.SetThemeFamilyUseCase
 
@@ -147,6 +149,7 @@ class SettingsViewModelEventTest {
                         applyApiModelMetadataDefaultsUseCase,
                         UsageSpendUiMapper(),
                     ),
+                observeEntitlementStateUseCase = ObserveEntitlementStateUseCase(FakeEntitlementPort()),
                 observeUsageSpendSummaryUseCase = testUsageSpendSummaryUseCase(),
                 generalDelegate = generalDelegate,
                 memoriesDelegate = memoriesDelegate,

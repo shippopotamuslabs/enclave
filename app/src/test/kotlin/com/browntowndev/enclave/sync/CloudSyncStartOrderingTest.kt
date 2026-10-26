@@ -1,12 +1,14 @@
 package com.browntowndev.enclave.sync
 
 import com.browntowndev.enclave.core.testing.FakeCloudSyncPort
+import com.browntowndev.enclave.core.testing.FakeEntitlementPort
+import com.browntowndev.enclave.domain.model.entitlement.EntitlementState
 import com.browntowndev.enclave.domain.port.auth.AuthState
 import com.browntowndev.enclave.domain.port.auth.UserProfile
 import com.browntowndev.enclave.domain.usecase.security.StartCloudSyncListeningUseCase
+import com.browntowndev.enclave.domain.usecase.security.StartCloudSyncResult
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 /**
@@ -22,13 +24,22 @@ class CloudSyncStartOrderingTest {
     @Test
     fun `vault unlock starts listener only through use case not application gate`() =
         runTest {
-            val realUseCase = StartCloudSyncListeningUseCase(cloudSyncPort)
+            val realUseCase =
+                StartCloudSyncListeningUseCase(
+                    cloudSyncPort,
+                    FakeEntitlementPort(EntitlementState.Entitled()),
+                )
 
-            CloudSyncAuthListener.onAuthAndVaultStateChanged(authenticated, isVaultUnlocked = true, cloudSyncPort)
+            CloudSyncAuthListener.onAuthAndVaultStateChanged(
+                authenticated,
+                isVaultUnlocked = true,
+                EntitlementState.Entitled(),
+                cloudSyncPort,
+            )
             assertEquals(0, cloudSyncPort.count("startListening"))
 
             val result = realUseCase(uploadLocalFirst = false)
-            assertTrue(result.isSuccess)
+            assertEquals(StartCloudSyncResult.Started, result)
 
             // The use case must call replay before listen; otherwise the live listener will race
             // remote events that have not yet been applied to Room.

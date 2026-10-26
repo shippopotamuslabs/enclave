@@ -1,6 +1,8 @@
 package com.browntowndev.enclave.domain.usecase.security
 
 import com.browntowndev.enclave.core.testing.FakeCloudSyncPort
+import com.browntowndev.enclave.core.testing.FakeEntitlementPort
+import com.browntowndev.enclave.domain.model.entitlement.EntitlementState
 import com.browntowndev.enclave.domain.model.sync.CloudSyncEventReplayResult
 import com.browntowndev.enclave.domain.model.sync.CloudSyncReplayProgress
 import kotlinx.coroutines.test.runTest
@@ -27,7 +29,11 @@ class UnlockProgressTddRedTest {
                 ),
             )
 
-            val useCase = StartCloudSyncListeningUseCase(port)
+            val useCase =
+                StartCloudSyncListeningUseCase(
+                    port,
+                    FakeEntitlementPort(EntitlementState.Entitled()),
+                )
             val progressUpdates = mutableListOf<CloudSyncReplayProgress>()
 
             val result =
@@ -35,7 +41,7 @@ class UnlockProgressTddRedTest {
                     progressUpdates.add(progress)
                 }
 
-            assertTrue(result.isSuccess)
+            assertEquals(StartCloudSyncResult.Started, result)
             // Initial progress (fraction = 0, estimate = 300)
             val initial = progressUpdates[0]
             assertEquals(0L, initial.appliedCount)
@@ -70,7 +76,11 @@ class UnlockProgressTddRedTest {
                     CloudSyncEventReplayResult(eventsApplied = 50, lastAppliedSequence = 50L, hasMore = false),
                 )
 
-            val useCase = StartCloudSyncListeningUseCase(port)
+            val useCase =
+                StartCloudSyncListeningUseCase(
+                    port,
+                    FakeEntitlementPort(EntitlementState.Entitled()),
+                )
             val progressUpdates = mutableListOf<CloudSyncReplayProgress>()
 
             val result =
@@ -78,7 +88,7 @@ class UnlockProgressTddRedTest {
                     progressUpdates.add(progress)
                 }
 
-            assertTrue(result.isSuccess)
+            assertEquals(StartCloudSyncResult.Started, result)
 
             // Initial state: indeterminate (no known total)
             val initial = progressUpdates[0]

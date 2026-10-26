@@ -47,7 +47,7 @@ class MediaCloudDownloadWorker
             val pending = studioRepository.getMediaPendingDownload()
             if (pending.isEmpty()) return Result.success()
 
-            var hasFailure = false
+            val failures = mutableListOf<Throwable>()
             for (media in pending) {
                 try {
                     val storageRef = storage.reference.child("users/$userId/media/${media.id}")
@@ -56,7 +56,7 @@ class MediaCloudDownloadWorker
                     val decrypted = cryptoManager.decryptBytes(encryptedBytes)
                     if (decrypted.isFailure) {
                         loggingPort.error(TAG, "Decryption failed for media ${media.id}", decrypted.exceptionOrNull())
-                        hasFailure = true
+                        decrypted.exceptionOrNull()?.let { failures += it }
                         continue
                     }
 
@@ -64,10 +64,10 @@ class MediaCloudDownloadWorker
                     loggingPort.debug(TAG, "Materialized media ${media.id}")
                 } catch (e: Exception) {
                     loggingPort.error(TAG, "Failed to download media ${media.id}", e)
-                    hasFailure = true
+                    failures += e
                 }
             }
 
-            return if (hasFailure) Result.retry() else Result.success()
+            return failures.toWorkerResult()
         }
     }

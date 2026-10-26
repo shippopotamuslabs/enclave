@@ -17,8 +17,11 @@ import com.browntowndev.enclave.core.data.local.MessageEntity
 import com.browntowndev.enclave.core.data.local.MessageFileEntity
 import com.browntowndev.enclave.core.data.repository.FakeLocalDataEncryptionService
 import com.browntowndev.enclave.core.testing.FakeCryptoManagerPort
+import com.browntowndev.enclave.core.testing.FakeEntitlementPort
 import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.model.artifact.MimeType
+import com.browntowndev.enclave.domain.model.entitlement.EntitlementState
+import com.google.firebase.storage.StorageException
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.Role
@@ -64,7 +67,12 @@ class MessageFileCloudSyncWorkerTest {
                 .setExecutor(Executor { })
                 .build()
         WorkManagerTestInitHelper.initializeTestWorkManager(context, config)
-        syncTrigger = CloudSyncTrigger(WorkManager.getInstance(context), loggingPort)
+        syncTrigger =
+            CloudSyncTrigger(
+                WorkManager.getInstance(context),
+                loggingPort,
+                FakeEntitlementPort(EntitlementState.Entitled()),
+            )
         database =
             Room
                 .inMemoryDatabaseBuilder(context, EnclaveDatabase::class.java)
@@ -123,6 +131,66 @@ class MessageFileCloudSyncWorkerTest {
             assertEquals("UPLOADED", stored?.syncStatus)
             assertNull(stored?.stagingRemoteUrl)
         }
+
+    @Test
+    fun `doWork returns failure when upload is not authorized`() =
+        runTest {
+            // Arrange: a pending upload whose putBytes hits the subscription gate.
+            seedPendingFile("file-denied", "msg-denied")
+            val storageRef = mockk<StorageReference>(relaxed = true)
+            every { storage.reference.child("users/user123/files/file-denied") } returns storageRef
+            every { storageRef.putBytes(any()) } throws storageNotAuthorized()
+
+            // Act
+            val result = worker.doWork()
+
+            // Assert: terminal failure, no retry churn.
+            assertEquals(ListenableWorker.Result.failure(), result)
+        }
+
+    @Test
+    fun `doWork returns retry when upload fails transiently`() =
+        runTest {
+            // Arrange: a pending upload whose putBytes fails with a transient error.
+            seedPendingFile("file-transient", "msg-transient")
+            val storageRef = mockk<StorageReference>(relaxed = true)
+            every { storage.reference.child("users/user123/files/file-transient") } returns storageRef
+            every { storageRef.putBytes(any()) } throws RuntimeException("connection reset")
+
+            // Act
+            val result = worker.doWork()
+
+            // Assert: transient errors keep the retry behavior.
+            assertEquals(ListenableWorker.Result.retry(), result)
+        }
+
+    private suspend fun seedPendingFile(
+        fileId: String,
+        messageId: String,
+    ) {
+        database.chatDao().insertIfAbsent(
+            ChatEntity(id = ChatId("chat1"), name = "Chat", created = Date(0), lastModified = Date(0), pinned = false),
+        )
+        database.messageCommandDao().insertIfAbsent(
+            MessageEntity(id = MessageId(messageId), chatId = ChatId("chat1"), content = "seed", role = Role.USER),
+        )
+        database.messageFileDao().insert(
+            MessageFileEntity(
+                id = fileId,
+                messageId = messageId,
+                name = "test.txt",
+                mimeType = MimeType.PLAIN_TEXT,
+                content = "test content",
+            ),
+        )
+    }
+
+    private fun storageNotAuthorized(): StorageException {
+        val exception = mockk<StorageException>()
+        every { exception.errorCode } returns StorageException.ERROR_NOT_AUTHORIZED
+        every { exception.cause } returns null
+        return exception
+    }
 
     private inner class MessageFileCloudSyncWorkerFactory : androidx.work.WorkerFactory() {
         override fun createWorker(

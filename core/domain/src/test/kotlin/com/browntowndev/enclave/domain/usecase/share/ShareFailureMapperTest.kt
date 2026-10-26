@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.domain.usecase.share
 
+import com.browntowndev.enclave.domain.exception.SubscriptionRequiredException
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import java.io.IOException
@@ -51,5 +52,22 @@ class ShareFailureMapperTest {
             )
 
         assertEquals(ShareFailureMapper.NETWORK_MESSAGE, message)
+    }
+
+    @Test
+    fun `maps subscription required to subscription message`() {
+        val message = ShareFailureMapper.userMessageFor(SubscriptionRequiredException())
+
+        assertEquals(ShareFailureMapper.SUBSCRIPTION_REQUIRED_MESSAGE, message)
+    }
+
+    @Test
+    fun `maps wrapped subscription required to subscription message`() {
+        val message =
+            ShareFailureMapper.userMessageFor(
+                RuntimeException("Share failed", SubscriptionRequiredException()),
+            )
+
+        assertEquals(ShareFailureMapper.SUBSCRIPTION_REQUIRED_MESSAGE, message)
     }
 }
