@@ -6,6 +6,7 @@ import com.browntowndev.enclave.domain.model.config.LocalModelAsset
 import com.browntowndev.enclave.domain.model.config.MediaProviderAsset
 import com.browntowndev.enclave.domain.model.config.LiveVoiceProviderAsset
 import com.browntowndev.enclave.domain.model.config.TtsProviderAsset
+import com.browntowndev.enclave.domain.model.entitlement.EntitlementState
 import com.browntowndev.enclave.domain.port.auth.AuthState
 import com.browntowndev.enclave.domain.port.repository.SettingsData
 import kotlinx.coroutines.flow.Flow
@@ -32,10 +33,11 @@ internal object SettingsUiStateFlowCombiner {
                     )
                 },
                 mediaAssets,
-                combine(defaultModels, authState) { defaultModels, authState ->
+                combine(defaultModels, authState, entitlementState) { defaultModels, authState, entitlementState ->
                     SettingsRepositoryMetaSlice(
                         defaultModels = defaultModels,
                         authState = authState,
+                        entitlementState = entitlementState,
                     )
                 },
             ) { assets, mediaAssets, meta ->
@@ -48,6 +50,7 @@ internal object SettingsUiStateFlowCombiner {
                     mediaAssets = mediaAssets,
                     defaultModels = meta.defaultModels,
                     authState = meta.authState,
+                    entitlementState = meta.entitlementState,
                 )
             }
         }
@@ -161,6 +164,7 @@ internal data class SettingsRepositoryAssetsSlice(
 internal data class SettingsRepositoryMetaSlice(
     val defaultModels: List<DefaultModelAssignment>,
     val authState: AuthState,
+    val entitlementState: EntitlementState,
 )
 
 internal data class SettingsRepositorySlice(
@@ -172,6 +176,7 @@ internal data class SettingsRepositorySlice(
     val mediaAssets: List<MediaProviderAsset>,
     val defaultModels: List<DefaultModelAssignment>,
     val authState: AuthState,
+    val entitlementState: EntitlementState,
 )
 
 internal data class SettingsEditorPrimarySlice(

@@ -7,6 +7,7 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.browntowndev.enclave.domain.usecase.security.StartCloudSyncListeningUseCase
+import com.browntowndev.enclave.domain.usecase.security.StartCloudSyncResult
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.CancellationException
@@ -36,7 +37,7 @@ class InitialSyncWorker
                 val uploadLocalFirst = inputData.getBoolean(KEY_UPLOAD_LOCAL_FIRST, true)
                 loggingPort.debug(TAG, "Starting initial sync worker, uploadLocalFirst=$uploadLocalFirst")
 
-                val syncResult =
+                when (val syncResult =
                     startCloudSyncListeningUseCase(
                         uploadLocalFirst = uploadLocalFirst,
                         onProgress = { progress ->
@@ -50,19 +51,25 @@ class InitialSyncWorker
                             )
                         },
                     )
-
-                if (syncResult.isSuccess) {
-                    loggingPort.info(TAG, "Initial sync completed successfully")
-                    // Synced-down media only carries metadata + encrypted remote URL; pull the bytes
-                    // down and decrypt them so the gallery has local files to render.
-                    cloudSyncTrigger.triggerMediaDownload()
-                    Result.success()
-                } else {
-                    val error = syncResult.exceptionOrNull()
-                    loggingPort.error(TAG, "Initial sync failed", error)
-                    Result.failure(
-                        workDataOf(KEY_PROGRESS_STATUS to (error?.message ?: "Unknown sync error")),
-                    )
+                ) {
+                    is StartCloudSyncResult.Started -> {
+                        loggingPort.info(TAG, "Initial sync completed successfully")
+                        // Synced-down media only carries metadata + encrypted remote URL; pull the bytes
+                        // down and decrypt them so the gallery has local files to render.
+                        cloudSyncTrigger.triggerMediaDownload()
+                        Result.success()
+                    }
+                    is StartCloudSyncResult.SubscriptionRequired -> {
+                        loggingPort.info(TAG, "Initial sync skipped: subscription required")
+                        Result.success()
+                    }
+                    is StartCloudSyncResult.Failed -> {
+                        val error = syncResult.cause
+                        loggingPort.error(TAG, "Initial sync failed", error)
+                        Result.failure(
+                            workDataOf(KEY_PROGRESS_STATUS to (error.message ?: "Unknown sync error")),
+                        )
+                    }
                 }
             } catch (e: CancellationException) {
                 loggingPort.info(TAG, "Initial sync worker cancelled")

@@ -7,6 +7,7 @@ import androidx.work.WorkerParameters
 import androidx.work.testing.TestListenableWorkerBuilder
 import com.browntowndev.enclave.core.testing.FakeCloudSyncPort
 import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
@@ -71,6 +72,70 @@ class SyncWorkerTest {
             val result = worker.doWork()
 
             assertEquals(ListenableWorker.Result.retry(), result)
+        }
+
+    @Test
+    fun `doWork returns failure when syncPendingChanges fails permission denied`() =
+        runTest {
+            cloudSyncPort.syncPendingResult =
+                Result.failure(
+                    FirebaseFirestoreException(
+                        "PERMISSION_DENIED: Missing or insufficient permissions.",
+                        FirebaseFirestoreException.Code.PERMISSION_DENIED,
+                    ),
+                )
+
+            val worker =
+                TestListenableWorkerBuilder<SyncWorker>(context)
+                    .setWorkerFactory(SyncWorkerFactory())
+                    .build()
+
+            val result = worker.doWork()
+
+            assertEquals(ListenableWorker.Result.failure(), result)
+        }
+
+    @Test
+    fun `doWork returns failure when syncPendingChanges throws permission denied`() =
+        runTest {
+            cloudSyncPort.syncPendingThrowable =
+                FirebaseFirestoreException(
+                    "PERMISSION_DENIED: Missing or insufficient permissions.",
+                    FirebaseFirestoreException.Code.PERMISSION_DENIED,
+                )
+
+            val worker =
+                TestListenableWorkerBuilder<SyncWorker>(context)
+                    .setWorkerFactory(SyncWorkerFactory())
+                    .build()
+
+            val result = worker.doWork()
+
+            assertEquals(ListenableWorker.Result.failure(), result)
+        }
+
+    @Test
+    fun `doWork returns failure when permission denied is wrapped`() =
+        runTest {
+            cloudSyncPort.syncPendingResult =
+                Result.failure(
+                    RuntimeException(
+                        "Sync call failed",
+                        FirebaseFirestoreException(
+                            "PERMISSION_DENIED: Missing or insufficient permissions.",
+                            FirebaseFirestoreException.Code.PERMISSION_DENIED,
+                        ),
+                    ),
+                )
+
+            val worker =
+                TestListenableWorkerBuilder<SyncWorker>(context)
+                    .setWorkerFactory(SyncWorkerFactory())
+                    .build()
+
+            val result = worker.doWork()
+
+            assertEquals(ListenableWorker.Result.failure(), result)
         }
 
     private inner class SyncWorkerFactory : androidx.work.WorkerFactory() {

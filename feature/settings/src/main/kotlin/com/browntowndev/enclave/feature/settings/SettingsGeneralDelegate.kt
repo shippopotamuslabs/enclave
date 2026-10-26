@@ -13,6 +13,7 @@ import com.browntowndev.enclave.domain.usecase.security.BootstrapCloudVaultFromL
 import com.browntowndev.enclave.domain.usecase.security.CreateVaultUseCase
 import com.browntowndev.enclave.domain.usecase.security.DetectVaultReconciliationStateUseCase
 import com.browntowndev.enclave.domain.usecase.security.StartCloudSyncListeningUseCase
+import com.browntowndev.enclave.domain.usecase.security.StartCloudSyncResult
 import com.browntowndev.enclave.domain.usecase.security.UnlockVaultFromStoredMetadataUseCase
 import com.browntowndev.enclave.domain.usecase.security.VaultReconciliationOutcome
 import com.browntowndev.enclave.domain.usecase.settings.SettingsAuthUseCases
@@ -311,14 +312,25 @@ internal class SettingsGeneralDelegate
             uploadLocalFirst: Boolean,
             vaultReauthSheet: MutableStateFlow<VaultReauthSheetState>,
         ): Boolean {
-            val syncResult = startCloudSyncListeningUseCase(uploadLocalFirst = uploadLocalFirst)
-            if (syncResult.isSuccess) return true
-            vaultReauthSheet.value =
-                VaultReauthSheetState.EnterPassword(
-                    isUnlocking = false,
-                    errorMessage = "Failed to start cloud sync",
-                )
-            return false
+            return when (startCloudSyncListeningUseCase(uploadLocalFirst = uploadLocalFirst)) {
+                is StartCloudSyncResult.Started -> true
+                is StartCloudSyncResult.SubscriptionRequired -> {
+                    vaultReauthSheet.value =
+                        VaultReauthSheetState.EnterPassword(
+                            isUnlocking = false,
+                            errorMessage = "Cloud sync needs an Enclave subscription.",
+                        )
+                    false
+                }
+                is StartCloudSyncResult.Failed -> {
+                    vaultReauthSheet.value =
+                        VaultReauthSheetState.EnterPassword(
+                            isUnlocking = false,
+                            errorMessage = "Failed to start cloud sync",
+                        )
+                    false
+                }
+            }
         }
 
         private suspend fun ensureVerificationStored(): String? {

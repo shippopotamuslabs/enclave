@@ -31,6 +31,7 @@ import com.browntowndev.enclave.core.data.repository.testSensitiveSelfHealer
 import com.browntowndev.enclave.core.data.security.ApiKeyManager
 import com.browntowndev.enclave.core.data.security.SensitiveRoomReadRepairApplier
 import com.browntowndev.enclave.core.testing.FakeCryptoManagerPort
+import com.browntowndev.enclave.core.testing.FakeEntitlementPort
 import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.model.artifact.ArtifactGenerationRequest
 import com.browntowndev.enclave.domain.model.artifact.MimeType
@@ -141,7 +142,7 @@ class ArtifactSyncIntegrationTest {
                 .inMemoryDatabaseBuilder(context, EnclaveDatabase::class.java)
                 .allowMainThreadQueries()
                 .build()
-        syncTrigger = CloudSyncTrigger(workManager, loggingPort)
+        syncTrigger = CloudSyncTrigger(workManager, loggingPort, FakeEntitlementPort())
         embeddingCoordinator = EmbeddingRegenerationCoordinator(workManager, testScope)
 
         val apiKeyManager =

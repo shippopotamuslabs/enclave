@@ -3,13 +3,16 @@
 // MockK retained only for the Firebase Firestore / Functions / Storage SDK surface, which has no JVM fake.
 package com.browntowndev.enclave.core.data.repository
 
+import com.browntowndev.enclave.core.testing.FakeEntitlementPort
 import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.core.testing.FakeStudioRepository
+import com.browntowndev.enclave.domain.exception.SubscriptionRequiredException
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.Content
 import com.browntowndev.enclave.domain.model.chat.Message
 import com.browntowndev.enclave.domain.model.chat.MessageId
 import com.browntowndev.enclave.domain.model.chat.Role
+import com.browntowndev.enclave.domain.model.entitlement.EntitlementState
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.functions.FirebaseFunctions
@@ -50,7 +53,15 @@ class FirestoreShareRepositoryTest {
         every { uploadTask.exception } returns null
         every { uploadTask.result } returns mockk(relaxed = true)
 
-        repository = FirestoreShareRepository(firestore, functions, storage, studioRepository, loggingPort)
+        repository =
+            FirestoreShareRepository(
+                firestore,
+                functions,
+                storage,
+                studioRepository,
+                loggingPort,
+                FakeEntitlementPort(EntitlementState.Entitled()),
+            )
     }
 
     @Test
@@ -120,6 +131,40 @@ class FirestoreShareRepositoryTest {
                     .generatedMediaIds
                     .isEmpty(),
             )
+        }
+
+    @Test
+    fun `shareChat with NotEntitled throws before any storage upload`() =
+        runTest {
+            val blockedRepository =
+                FirestoreShareRepository(
+                    firestore,
+                    functions,
+                    storage,
+                    studioRepository,
+                    loggingPort,
+                    FakeEntitlementPort(EntitlementState.NotEntitled),
+                )
+            val messages =
+                listOf(
+                    Message(
+                        id = MessageId("msg1"),
+                        chatId = ChatId("chat1"),
+                        content = Content(text = "Hello", imageUris = listOf("file://image.jpg")),
+                        role = Role.USER,
+                        createdAt = 1000L,
+                    ),
+                )
+            studioRepository.mediaBytes["file://image.jpg"] = ByteArray(100)
+
+            var thrown: SubscriptionRequiredException? = null
+            try {
+                blockedRepository.shareChat(messages)
+            } catch (e: SubscriptionRequiredException) {
+                thrown = e
+            }
+            assertNotNull(thrown)
+            io.mockk.verify(exactly = 0) { storage.getReference(any<String>()) }
         }
 
     @Test

@@ -88,6 +88,7 @@ import com.browntowndev.enclave.core.data.local.dao.message.MessageWithFiles
 import com.browntowndev.enclave.core.data.repository.InMemoryPreferencesDataStore
 import com.browntowndev.enclave.core.data.security.ApiKeyManager
 import com.browntowndev.enclave.core.data.sync.CloudSyncTrigger
+import com.browntowndev.enclave.core.testing.FakeEntitlementPort
 import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.model.artifact.MimeType
 import com.browntowndev.enclave.domain.model.chat.ChatId
@@ -320,7 +321,7 @@ fun inertWorkManager(): WorkManager = mockk(relaxed = true)
 /** No-op [CloudSyncTrigger] recording which trigger entry points fired. */
 class FakeCloudSyncTrigger(
     workManager: WorkManager = inertWorkManager(),
-) : CloudSyncTrigger(workManager, FakeLoggingPort()) {
+) : CloudSyncTrigger(workManager, FakeLoggingPort(), FakeEntitlementPort()) {
     var triggerCallCount = 0
     var triggerMetadataCallCount = 0
     var triggerMediaCallCount = 0

@@ -34,9 +34,12 @@ import com.browntowndev.enclave.core.data.sync.CloudSyncTrigger
 import com.browntowndev.enclave.core.data.sync.SearchToolSettingsSyncQueue
 import com.browntowndev.enclave.core.testing.FakeCloudSyncPort
 import com.browntowndev.enclave.core.testing.FakeCryptoManagerPort
+import com.browntowndev.enclave.core.testing.FakeEntitlementPort
 import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.domain.model.entitlement.EntitlementState
 import com.browntowndev.enclave.domain.model.sync.CloudSyncReplayProgress
 import com.browntowndev.enclave.domain.usecase.security.StartCloudSyncListeningUseCase
+import com.browntowndev.enclave.domain.usecase.security.StartCloudSyncResult
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.functions.FirebaseFunctions
@@ -190,6 +193,7 @@ class FirestoreSyncDocumentCacheTest {
             CloudSyncTrigger(
                 testWorkManager(ApplicationProvider.getApplicationContext()),
                 FakeLoggingPort(),
+                FakeEntitlementPort(),
             ),
         )
     }
@@ -405,7 +409,8 @@ class FirestoreSyncDocumentCacheTest {
                     ),
                 )
 
-            val useCase = StartCloudSyncListeningUseCase(port)
+            val useCase =
+                StartCloudSyncListeningUseCase(port, FakeEntitlementPort(EntitlementState.Entitled()))
             val progressUpdates = mutableListOf<CloudSyncReplayProgress>()
 
             val result =
@@ -413,7 +418,7 @@ class FirestoreSyncDocumentCacheTest {
                     progressUpdates.add(progress)
                 }
 
-            assertTrue(result.isSuccess)
+            assertTrue(result is StartCloudSyncResult.Started)
             assertTrue(progressUpdates.isNotEmpty())
             assertNull(progressUpdates.first().progressFraction)
             assertEquals("Checking for updates...", progressUpdates.first().status)

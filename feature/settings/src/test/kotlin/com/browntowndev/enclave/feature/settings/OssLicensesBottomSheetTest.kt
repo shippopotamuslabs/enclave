@@ -1,6 +1,8 @@
 package com.browntowndev.enclave.feature.settings
 
 import com.browntowndev.enclave.core.testing.theme.FakeThemePreferencesRepository
+import com.browntowndev.enclave.core.testing.FakeEntitlementPort
+import com.browntowndev.enclave.domain.usecase.security.ObserveEntitlementStateUseCase
 import com.browntowndev.enclave.domain.theme.ObserveThemePreferencesUseCase
 import com.browntowndev.enclave.domain.theme.SetThemeFamilyUseCase
 
@@ -533,6 +535,7 @@ private fun buildMinimalViewModel(): SettingsViewModel {
                 com.browntowndev.enclave.feature.settings.usage
                     .UsageSpendUiMapper(),
             ),
+        observeEntitlementStateUseCase = ObserveEntitlementStateUseCase(FakeEntitlementPort()),
         observeUsageSpendSummaryUseCase =
             com.browntowndev.enclave.feature.settings
                 .testUsageSpendSummaryUseCase(),

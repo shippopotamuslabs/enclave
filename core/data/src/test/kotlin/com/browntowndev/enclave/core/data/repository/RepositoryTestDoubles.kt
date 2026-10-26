@@ -12,6 +12,7 @@ import com.browntowndev.enclave.core.data.local.messageDao
 import com.browntowndev.enclave.core.data.security.ApiKeyManager
 import com.browntowndev.enclave.core.data.security.SensitiveRoomReadRepairApplier
 import com.browntowndev.enclave.core.data.sync.CloudSyncTrigger
+import com.browntowndev.enclave.core.testing.FakeEntitlementPort
 import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -34,7 +35,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 class RecordingCloudSyncTrigger(
     workManager: WorkManager = inertWorkManager(),
     loggingPort: FakeLoggingPort = FakeLoggingPort(),
-) : CloudSyncTrigger(workManager, loggingPort) {
+) : CloudSyncTrigger(workManager, loggingPort, FakeEntitlementPort()) {
     var triggerCalls = 0
         private set
     var triggerMetadataCalls = 0

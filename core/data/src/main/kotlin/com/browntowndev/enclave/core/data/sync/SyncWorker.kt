@@ -29,11 +29,12 @@ class SyncWorker
                     loggingPort.debug(TAG, "Sync completed successfully")
                     Result.success()
                 } else {
-                    loggingPort.warning(TAG, "Sync failed: ${result.exceptionOrNull()?.message}")
-                    Result.retry()
+                    val cause = result.exceptionOrNull()
+                    loggingPort.warning(TAG, "Sync failed: ${cause?.message}")
+                    if (cause.isPermissionDenied()) Result.failure() else Result.retry()
                 }
             } catch (e: Exception) {
                 loggingPort.error(TAG, "Sync threw exception", e)
-                Result.retry()
+                if (e.isPermissionDenied()) Result.failure() else Result.retry()
             }
     }

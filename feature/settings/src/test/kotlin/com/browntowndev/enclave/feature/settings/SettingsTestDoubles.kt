@@ -77,6 +77,7 @@ import com.browntowndev.enclave.domain.usecase.security.BootstrapCloudVaultFromL
 import com.browntowndev.enclave.domain.usecase.security.CreateVaultUseCase
 import com.browntowndev.enclave.domain.usecase.security.DetectVaultReconciliationStateUseCase
 import com.browntowndev.enclave.domain.usecase.security.StartCloudSyncListeningUseCase
+import com.browntowndev.enclave.domain.usecase.security.StartCloudSyncResult
 import com.browntowndev.enclave.domain.usecase.security.UnlockVaultFromStoredMetadataUseCase
 import com.browntowndev.enclave.domain.usecase.security.UnlockVaultUseCase
 import com.browntowndev.enclave.domain.model.config.OpenRouterModelEndpoint
@@ -964,14 +965,17 @@ class FakeBootstrapCloudVaultFromLocalUseCase :
 /** Recording [StartCloudSyncListeningUseCase] fake (ENC-28), mirroring the app migration's. */
 class FakeStartCloudSyncListeningUseCase(
     private val events: MutableList<String>? = null,
-) : StartCloudSyncListeningUseCase(FakeCloudSyncPort()) {
+) : StartCloudSyncListeningUseCase(
+        FakeCloudSyncPort(),
+        com.browntowndev.enclave.core.testing.FakeEntitlementPort(),
+    ) {
     val calls = mutableListOf<Boolean>()
-    var result: Result<Unit> = Result.success(Unit)
+    var result: StartCloudSyncResult = StartCloudSyncResult.Started
 
     override suspend fun invoke(
         uploadLocalFirst: Boolean,
         onProgress: (suspend (com.browntowndev.enclave.domain.model.sync.CloudSyncReplayProgress) -> Unit)?,
-    ): Result<Unit> {
+    ): StartCloudSyncResult {
         calls += uploadLocalFirst
         events?.add("startSync")
         return result

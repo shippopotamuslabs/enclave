@@ -41,7 +41,7 @@ class MediaCloudSyncWorker
             val pendingDeletions = studioMediaDao.getPendingDeletions()
             if (pendingUploads.isEmpty() && pendingDeletions.isEmpty()) return Result.success()
 
-            var hasFailure = false
+            val failures = mutableListOf<Throwable>()
 
             for (media in pendingUploads) {
                 try {
@@ -88,7 +88,7 @@ class MediaCloudSyncWorker
 
                         if (encryptionResult.isFailure) {
                             loggingPort.error(TAG, "Encryption failed for media ${media.id}", encryptionResult.exceptionOrNull())
-                            hasFailure = true
+                            encryptionResult.exceptionOrNull()?.let { failures += it }
                             continue
                         }
 
@@ -116,7 +116,7 @@ class MediaCloudSyncWorker
                     loggingPort.debug(TAG, "Uploaded media ${media.id}")
                 } catch (e: Exception) {
                     loggingPort.error(TAG, "Failed to upload media ${media.id}", e)
-                    hasFailure = true
+                    failures += e
                 }
             }
 
@@ -133,15 +133,15 @@ class MediaCloudSyncWorker
                     studioMediaDao.markCloudDeleted(media.id)
                 } catch (e: Exception) {
                     loggingPort.error(TAG, "Failed to delete cloud media ${media.id}", e)
-                    hasFailure = true
+                    failures += e
                 }
             }
 
             // Trigger metadata sync once at the end if we made progress
-            if (!hasFailure) {
+            if (failures.isEmpty()) {
                 syncTrigger.triggerMetadata()
             }
 
-            return if (hasFailure) Result.retry() else Result.success()
+            return failures.toWorkerResult()
         }
     }

@@ -16,6 +16,7 @@ import com.browntowndev.enclave.domain.model.telemetry.UsagePeriod
 import com.browntowndev.enclave.domain.usecase.settings.ObserveEmbeddingProgressUseCase
 import com.browntowndev.enclave.domain.theme.ObserveThemePreferencesUseCase
 import com.browntowndev.enclave.domain.usecase.download.ObserveDownloadWorkUseCase
+import com.browntowndev.enclave.domain.usecase.security.ObserveEntitlementStateUseCase
 import com.browntowndev.enclave.domain.theme.SetThemeFamilyUseCase
 import com.browntowndev.enclave.domain.theme.ThemeFamily
 import com.browntowndev.enclave.domain.usecase.settings.SettingsUseCases
@@ -52,6 +53,7 @@ internal class SettingsViewModel
         private val deletionHelper: SettingsDeletionHelper,
         settingsUseCases: SettingsUseCases,
         private val settingsUiStateFactory: SettingsUiStateFactory,
+        private val observeEntitlementStateUseCase: ObserveEntitlementStateUseCase,
         private val observeUsageSpendSummaryUseCase: ObserveUsageSpendSummaryUseCase,
         private val errorHandler: ViewModelErrorHandler,
         private val observeEmbeddingProgress: ObserveEmbeddingProgressUseCase,
@@ -133,6 +135,7 @@ internal class SettingsViewModel
                         mediaAssets = settingsUseCases.media.getMediaProviders(),
                         defaultModels = assignmentUseCases.getDefaultModels(),
                         authState = settingsUseCases.auth.getAuthState(),
+                        entitlementState = observeEntitlementStateUseCase(),
                         sheetVisibility = _sheetVisibility,
                         memories = memoriesFlow,
                         feedbackText = _feedbackText,

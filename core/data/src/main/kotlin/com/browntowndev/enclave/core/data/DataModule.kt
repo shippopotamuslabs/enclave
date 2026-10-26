@@ -108,8 +108,10 @@ import com.browntowndev.enclave.core.data.security.StaticSensitiveFieldCatalog
 import com.browntowndev.enclave.core.data.sync.SyncOrchestratorImpl
 import com.browntowndev.enclave.core.data.sync.TelemetryUploadConfig
 import com.browntowndev.enclave.domain.port.auth.AuthManager
+import com.browntowndev.enclave.core.data.entitlement.FirebaseEntitlementPort
 import com.browntowndev.enclave.domain.port.device.DeviceMemoryProbePort
 import com.browntowndev.enclave.domain.port.device.SnapdragonTierPort
+import com.browntowndev.enclave.domain.port.repository.EntitlementPort
 import com.browntowndev.enclave.domain.port.download.DownloadSpeedTrackerPort
 import com.browntowndev.enclave.domain.port.download.FileDownloaderPort
 import com.browntowndev.enclave.domain.port.download.HashingPort
@@ -501,6 +503,10 @@ abstract class DataRepositoryModule {
     @Binds
     @Singleton
     abstract fun bindCloudSyncPort(impl: FirestoreDataSource): CloudSyncPort
+
+    @Binds
+    @Singleton
+    abstract fun bindEntitlementPort(impl: FirebaseEntitlementPort): EntitlementPort
 
     @Binds
     @Singleton

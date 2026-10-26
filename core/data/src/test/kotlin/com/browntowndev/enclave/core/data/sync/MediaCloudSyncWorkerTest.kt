@@ -15,9 +15,12 @@ import com.browntowndev.enclave.core.data.local.EnclaveDatabase
 import com.browntowndev.enclave.core.data.local.StudioMediaEntity
 import com.browntowndev.enclave.core.data.repository.FakeLocalDataEncryptionService
 import com.browntowndev.enclave.core.testing.FakeCryptoManagerPort
+import com.browntowndev.enclave.core.testing.FakeEntitlementPort
 import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.domain.model.entitlement.EntitlementState
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.storage.FirebaseStorage
+import com.google.firebase.storage.StorageException
 import com.google.firebase.storage.StorageMetadata
 import com.google.firebase.storage.StorageReference
 import io.mockk.every
@@ -59,7 +62,12 @@ class MediaCloudSyncWorkerTest {
                 .setExecutor(Executor { })
                 .build()
         WorkManagerTestInitHelper.initializeTestWorkManager(context, config)
-        syncTrigger = CloudSyncTrigger(WorkManager.getInstance(context), loggingPort)
+        syncTrigger =
+            CloudSyncTrigger(
+                WorkManager.getInstance(context),
+                loggingPort,
+                FakeEntitlementPort(EntitlementState.Entitled()),
+            )
         database =
             Room
                 .inMemoryDatabaseBuilder(context, EnclaveDatabase::class.java)
@@ -114,6 +122,69 @@ class MediaCloudSyncWorkerTest {
             assertEquals("UPLOADED", stored?.syncStatus)
             assertNull(stored?.stagingRemoteUrl)
         }
+
+    @Test
+    fun `doWork returns failure when upload is not authorized`() =
+        runBlocking {
+            // Arrange: a pending upload whose putBytes hits the subscription gate.
+            val mediaFile = kotlin.io.path.createTempFile(suffix = ".jpg").toFile()
+            mediaFile.writeBytes(byteArrayOf(1, 2, 3))
+            mediaFile.deleteOnExit()
+            val mediaId = "media-denied"
+            database.studioMediaDao().insertMedia(
+                StudioMediaEntity(
+                    id = mediaId,
+                    prompt = "test",
+                    mediaUri = "file://${mediaFile.absolutePath}",
+                    mediaType = "IMAGE",
+                ),
+            )
+
+            val storageRef = mockk<StorageReference>(relaxed = true)
+            every { storage.reference.child("users/user123/media/$mediaId") } returns storageRef
+            every { storageRef.putBytes(any()) } throws storageNotAuthorized()
+
+            // Act
+            val result = worker.doWork()
+
+            // Assert: terminal failure, no retry churn.
+            assertEquals(ListenableWorker.Result.failure(), result)
+        }
+
+    @Test
+    fun `doWork returns retry when upload fails transiently`() =
+        runBlocking {
+            // Arrange: a pending upload whose putBytes fails with a transient error.
+            val mediaFile = kotlin.io.path.createTempFile(suffix = ".jpg").toFile()
+            mediaFile.writeBytes(byteArrayOf(4, 5, 6))
+            mediaFile.deleteOnExit()
+            val mediaId = "media-transient"
+            database.studioMediaDao().insertMedia(
+                StudioMediaEntity(
+                    id = mediaId,
+                    prompt = "test",
+                    mediaUri = "file://${mediaFile.absolutePath}",
+                    mediaType = "IMAGE",
+                ),
+            )
+
+            val storageRef = mockk<StorageReference>(relaxed = true)
+            every { storage.reference.child("users/user123/media/$mediaId") } returns storageRef
+            every { storageRef.putBytes(any()) } throws RuntimeException("connection reset")
+
+            // Act
+            val result = worker.doWork()
+
+            // Assert: transient errors keep the retry behavior.
+            assertEquals(ListenableWorker.Result.retry(), result)
+        }
+
+    private fun storageNotAuthorized(): StorageException {
+        val exception = mockk<StorageException>()
+        every { exception.errorCode } returns StorageException.ERROR_NOT_AUTHORIZED
+        every { exception.cause } returns null
+        return exception
+    }
 
     private inner class MediaCloudSyncWorkerFactory : androidx.work.WorkerFactory() {
         override fun createWorker(

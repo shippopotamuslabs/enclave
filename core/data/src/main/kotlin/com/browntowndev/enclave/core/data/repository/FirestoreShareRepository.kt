@@ -1,10 +1,13 @@
 package com.browntowndev.enclave.core.data.repository
 
+import com.browntowndev.enclave.domain.exception.SubscriptionRequiredException
 import com.browntowndev.enclave.domain.model.chat.ChatId
 import com.browntowndev.enclave.domain.model.chat.Message
+import com.browntowndev.enclave.domain.model.entitlement.EntitlementState
 import com.browntowndev.enclave.domain.model.share.SharedChat
 import com.browntowndev.enclave.domain.model.share.SharedMessage
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.domain.port.repository.EntitlementPort
 import com.browntowndev.enclave.domain.port.repository.ShareRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.StudioRepositoryPort
 import com.google.firebase.firestore.FirebaseFirestore
@@ -32,6 +35,7 @@ class FirestoreShareRepository
         private val storage: FirebaseStorage,
         private val studioRepository: StudioRepositoryPort,
         private val loggingPort: LoggingPort,
+        private val entitlementPort: EntitlementPort,
     ) : ShareRepositoryPort {
         private companion object {
             private const val TAG = "FirestoreShareRepo"
@@ -44,6 +48,9 @@ class FirestoreShareRepository
             messages: List<Message>,
             chatId: ChatId?,
         ): SharedChat {
+            if (entitlementPort.entitlementState.value is EntitlementState.NotEntitled) {
+                throw SubscriptionRequiredException()
+            }
             val shareId =
                 java.util.UUID
                     .randomUUID()

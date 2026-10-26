@@ -43,7 +43,7 @@ class MessageFileCloudSyncWorker
                 if (pendingDeletions.isEmpty()) return Result.success()
             }
 
-            var hasFailure = false
+            val failures = mutableListOf<Throwable>()
 
             for (file in pendingUploads) {
                 try {
@@ -96,7 +96,7 @@ class MessageFileCloudSyncWorker
 
                         if (encryptionResult.isFailure) {
                             loggingPort.error(TAG, "Encryption failed for file ${file.id}", encryptionResult.exceptionOrNull())
-                            hasFailure = true
+                            encryptionResult.exceptionOrNull()?.let { failures += it }
                             continue
                         }
 
@@ -126,11 +126,11 @@ class MessageFileCloudSyncWorker
                     } else if (content.isBlank() && file.remoteUrl == null) {
                         // This should have been caught by the first check, but just in case
                         loggingPort.error(TAG, "Nothing to upload and no staging URL for file ${file.id}")
-                        hasFailure = true
+                        failures += IllegalStateException("Nothing to upload and no staging URL for file ${file.id}")
                     }
                 } catch (e: Exception) {
                     loggingPort.error(TAG, "Failed to upload file ${file.id}", e)
-                    hasFailure = true
+                    failures += e
                 }
             }
 
@@ -148,15 +148,15 @@ class MessageFileCloudSyncWorker
                     messageFileDao.markCloudDeleted(file.id)
                 } catch (e: Exception) {
                     loggingPort.error(TAG, "Failed to delete cloud file ${file.id}", e)
-                    hasFailure = true
+                    failures += e
                 }
             }
 
             // Trigger metadata sync once at the end if we made progress
-            if (!hasFailure) {
+            if (failures.isEmpty()) {
                 syncTrigger.triggerMetadata()
             }
 
-            return if (hasFailure) Result.retry() else Result.success()
+            return failures.toWorkerResult()
         }
     }

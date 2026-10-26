@@ -1,5 +1,6 @@
 package com.browntowndev.enclave.domain.usecase.share
 
+import com.browntowndev.enclave.domain.exception.SubscriptionRequiredException
 import java.io.IOException
 import java.net.UnknownHostException
 
@@ -8,9 +9,15 @@ internal object ShareFailureMapper {
     const val SIGN_IN_REQUIRED_MESSAGE = "Sign in to share conversations."
     const val NETWORK_MESSAGE = "Check your internet connection and try again."
     const val MESSAGE_NOT_FOUND_MESSAGE = "That message couldn't be found. Try again from the latest reply."
+    const val SUBSCRIPTION_REQUIRED_MESSAGE = "Sharing needs an Enclave subscription."
 
     fun userMessageFor(throwable: Throwable): String {
         val errors = generateSequence(throwable) { it.cause }.toList()
+
+        if (errors.any { it is SubscriptionRequiredException }) {
+            return SUBSCRIPTION_REQUIRED_MESSAGE
+        }
+
         val messages = errors.mapNotNull { it.message?.lowercase() }
 
         if (errors.any { it is UnknownHostException || (it is IOException && it !is java.io.InterruptedIOException) }) {

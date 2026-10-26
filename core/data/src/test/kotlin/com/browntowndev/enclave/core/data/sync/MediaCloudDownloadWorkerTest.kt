@@ -13,6 +13,7 @@ import com.browntowndev.enclave.core.testing.FakeStudioRepository
 import com.browntowndev.enclave.domain.port.repository.StudioMediaAsset
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.storage.FirebaseStorage
+import com.google.firebase.storage.StorageException
 import com.google.firebase.storage.StorageReference
 import io.mockk.every
 import io.mockk.mockk
@@ -89,6 +90,45 @@ class MediaCloudDownloadWorkerTest {
             assertEquals(ListenableWorker.Result.success(), result)
             verify(exactly = 0) { storage.reference }
         }
+
+    @Test
+    fun `doWork returns failure when download is not authorized`() =
+        runBlocking {
+            val mediaId = "media-denied"
+            studioRepository.pendingDownload = listOf(pendingAsset(mediaId))
+
+            val storageRef = mockk<StorageReference>(relaxed = true)
+            every { storage.reference.child("users/user123/media/$mediaId") } returns storageRef
+            every { storageRef.getBytes(any()) } returns Tasks.forException(storageNotAuthorized())
+
+            val result = worker.doWork()
+
+            assertEquals(ListenableWorker.Result.failure(), result)
+            assertTrue(studioRepository.mediaBytes.isEmpty())
+        }
+
+    @Test
+    fun `doWork retries when download fails transiently`() =
+        runBlocking {
+            val mediaId = "media-transient"
+            studioRepository.pendingDownload = listOf(pendingAsset(mediaId))
+
+            val storageRef = mockk<StorageReference>(relaxed = true)
+            every { storage.reference.child("users/user123/media/$mediaId") } returns storageRef
+            every { storageRef.getBytes(any()) } returns Tasks.forException(RuntimeException("connection reset"))
+
+            val result = worker.doWork()
+
+            assertEquals(ListenableWorker.Result.retry(), result)
+            assertTrue(studioRepository.mediaBytes.isEmpty())
+        }
+
+    private fun storageNotAuthorized(): StorageException {
+        val exception = mockk<StorageException>()
+        every { exception.errorCode } returns StorageException.ERROR_NOT_AUTHORIZED
+        every { exception.cause } returns null
+        return exception
+    }
 
     @Test
     fun `doWork retries when vault is locked`() =

@@ -5,7 +5,9 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
+import com.browntowndev.enclave.domain.model.entitlement.EntitlementState
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.domain.port.repository.EntitlementPort
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -15,12 +17,22 @@ open class CloudSyncTrigger
     constructor(
         private val workManager: WorkManager,
         private val loggingPort: LoggingPort,
+        private val entitlementPort: EntitlementPort,
     ) {
         companion object {
             private const val TAG = "CloudSyncTrigger"
         }
 
+        private fun isSubscriptionBlocked(): Boolean {
+            if (entitlementPort.entitlementState.value is EntitlementState.NotEntitled) {
+                loggingPort.debug(TAG, "Skipping sync enqueue: subscription required")
+                return true
+            }
+            return false
+        }
+
         open fun trigger() {
+            if (isSubscriptionBlocked()) return
             triggerMetadata()
             triggerMedia()
             triggerMediaDownload()
@@ -28,6 +40,7 @@ open class CloudSyncTrigger
         }
 
         open fun triggerMetadata() {
+            if (isSubscriptionBlocked()) return
             loggingPort.debug(TAG, "Enqueuing enclave_sync (APPEND_OR_REPLACE)")
             workManager.enqueueUniqueWork(
                 "enclave_sync",
@@ -43,6 +56,7 @@ open class CloudSyncTrigger
         }
 
         open fun triggerMedia() {
+            if (isSubscriptionBlocked()) return
             loggingPort.debug(TAG, "Enqueuing enclave_media_sync (REPLACE)")
             workManager.enqueueUniqueWork(
                 "enclave_media_sync",
@@ -58,6 +72,7 @@ open class CloudSyncTrigger
         }
 
         open fun triggerMediaDownload() {
+            if (isSubscriptionBlocked()) return
             loggingPort.debug(TAG, "Enqueuing enclave_media_download (KEEP)")
             workManager.enqueueUniqueWork(
                 "enclave_media_download",
@@ -73,6 +88,7 @@ open class CloudSyncTrigger
         }
 
         open fun triggerFiles() {
+            if (isSubscriptionBlocked()) return
             loggingPort.debug(TAG, "Enqueuing enclave_file_sync (REPLACE)")
             workManager.enqueueUniqueWork(
                 "enclave_file_sync",

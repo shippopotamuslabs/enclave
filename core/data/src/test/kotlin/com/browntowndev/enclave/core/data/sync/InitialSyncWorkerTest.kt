@@ -10,7 +10,9 @@ import androidx.work.testing.TestListenableWorkerBuilder
 import androidx.work.testing.WorkManagerTestInitHelper
 import androidx.work.workDataOf
 import com.browntowndev.enclave.core.testing.FakeCloudSyncPort
+import com.browntowndev.enclave.core.testing.FakeEntitlementPort
 import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.domain.model.entitlement.EntitlementState
 import com.browntowndev.enclave.domain.usecase.security.StartCloudSyncListeningUseCase
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -44,8 +46,9 @@ class InitialSyncWorkerTest {
                 .build()
         WorkManagerTestInitHelper.initializeTestWorkManager(context, config)
         workManager = WorkManager.getInstance(context)
-        startCloudSyncListeningUseCase = StartCloudSyncListeningUseCase(cloudSyncPort)
-        cloudSyncTrigger = CloudSyncTrigger(workManager, loggingPort)
+        val entitlementPort = FakeEntitlementPort(EntitlementState.Entitled())
+        startCloudSyncListeningUseCase = StartCloudSyncListeningUseCase(cloudSyncPort, entitlementPort)
+        cloudSyncTrigger = CloudSyncTrigger(workManager, loggingPort, FakeEntitlementPort(EntitlementState.Entitled()))
     }
 
     private fun mediaDownloadWorkCount(): Int = workManager.getWorkInfosForUniqueWork("enclave_media_download").get().size
@@ -103,6 +106,29 @@ class InitialSyncWorkerTest {
             assertEquals(0, mediaDownloadWorkCount())
         }
 
+    @Test
+    fun `doWork returns success without media download when subscription required`() =
+        runTest {
+            workerUseCase =
+                StartCloudSyncListeningUseCase(
+                    cloudSyncPort,
+                    FakeEntitlementPort(EntitlementState.NotEntitled),
+                )
+
+            val worker =
+                TestListenableWorkerBuilder<InitialSyncWorker>(context)
+                    .setWorkerFactory(InitialSyncWorkerFactory())
+                    .build()
+
+            val result = worker.doWork()
+
+            assertEquals(ListenableWorker.Result.success(), result)
+            assertEquals(0, cloudSyncPort.count("syncAll"))
+            assertEquals(0, mediaDownloadWorkCount())
+        }
+
+    private var workerUseCase: StartCloudSyncListeningUseCase? = null
+
     private inner class InitialSyncWorkerFactory : androidx.work.WorkerFactory() {
         override fun createWorker(
             appContext: Context,
@@ -112,7 +138,7 @@ class InitialSyncWorkerTest {
             InitialSyncWorker(
                 appContext,
                 workerParameters,
-                startCloudSyncListeningUseCase,
+                workerUseCase ?: startCloudSyncListeningUseCase,
                 loggingPort,
                 cloudSyncTrigger,
             )

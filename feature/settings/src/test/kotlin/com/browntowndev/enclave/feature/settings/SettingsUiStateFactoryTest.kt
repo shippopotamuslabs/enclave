@@ -7,6 +7,7 @@ import com.browntowndev.enclave.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.enclave.domain.model.config.LocalModelId
 import com.browntowndev.enclave.domain.model.config.LocalModelMetadata
 import com.browntowndev.enclave.domain.model.inference.ModelFileFormat
+import com.browntowndev.enclave.domain.model.entitlement.EntitlementState
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.telemetry.UsagePeriod
 import com.browntowndev.enclave.domain.model.telemetry.UsageSpendSummary
@@ -269,6 +270,7 @@ class SettingsUiStateFactoryTest {
         defaults: FactoryArgs,
         defaultModels: List<DefaultModelAssignment> = emptyList(),
         authState: AuthState = AuthState.Loading,
+        entitlementState: EntitlementState = EntitlementState.SignedOut,
     ) = create(
         persistedSettings = defaults.persistedSettings,
         localAssets = localAssets,
@@ -277,6 +279,7 @@ class SettingsUiStateFactoryTest {
         mediaAssets = emptyList(),
         defaultModels = defaultModels,
         authState = authState,
+        entitlementState = entitlementState,
         sheetVisibility = SheetVisibilityState(),
         memories = emptyList(),
         feedbackText = "",
@@ -307,6 +310,68 @@ class SettingsUiStateFactoryTest {
                 providerBreakdown = emptyList(),
             ),
     )
+
+    @Test
+    fun `entitled without expiry maps to subscribed without label`() {
+        val state =
+            factory.create(
+                localAssets = emptyList(),
+                defaults = defaultFactoryArgs(),
+                entitlementState = EntitlementState.Entitled(),
+            )
+
+        assertEquals(SubscriptionUiState.Subscribed(expiryLabel = null), state.home.subscription)
+    }
+
+    @Test
+    fun `entitled with expiry maps to subscribed with active-until label`() {
+        val expiry = 1_700_000_000_000L
+        val state =
+            factory.create(
+                localAssets = emptyList(),
+                defaults = defaultFactoryArgs(),
+                entitlementState = EntitlementState.Entitled(expiryTimeMillis = expiry),
+            )
+
+        assertEquals(SubscriptionUiState.Subscribed(expiryLabel = formatSubscriptionExpiry(expiry)), state.home.subscription)
+        assertTrue((state.home.subscription as SubscriptionUiState.Subscribed).expiryLabel!!.startsWith("Active until "))
+    }
+
+    @Test
+    fun `not entitled maps to not subscribed`() {
+        val state =
+            factory.create(
+                localAssets = emptyList(),
+                defaults = defaultFactoryArgs(),
+                entitlementState = EntitlementState.NotEntitled,
+            )
+
+        assertEquals(SubscriptionUiState.NotSubscribed, state.home.subscription)
+    }
+
+    @Test
+    fun `unknown entitlement maps to error`() {
+        val state =
+            factory.create(
+                localAssets = emptyList(),
+                defaults = defaultFactoryArgs(),
+                entitlementState = EntitlementState.Unknown,
+            )
+
+        assertEquals(SubscriptionUiState.Error, state.home.subscription)
+    }
+
+    @Test
+    fun `signed out maps to hidden subscription`() {
+        val state =
+            factory.create(
+                localAssets = emptyList(),
+                defaults = defaultFactoryArgs(),
+                entitlementState = EntitlementState.SignedOut,
+            )
+
+        assertEquals(SubscriptionUiState.Hidden, state.home.subscription)
+    }
 
     // endregion
 }

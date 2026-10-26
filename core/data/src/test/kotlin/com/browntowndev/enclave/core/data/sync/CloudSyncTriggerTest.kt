@@ -6,7 +6,9 @@ import androidx.work.Configuration
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.testing.WorkManagerTestInitHelper
+import com.browntowndev.enclave.core.testing.FakeEntitlementPort
 import com.browntowndev.enclave.core.testing.FakeLoggingPort
+import com.browntowndev.enclave.domain.model.entitlement.EntitlementState
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
@@ -21,6 +23,7 @@ import tech.apter.junit.jupiter.robolectric.RobolectricExtension
 @Config(sdk = [34])
 class CloudSyncTriggerTest {
     private lateinit var workManager: WorkManager
+    private lateinit var entitlementPort: FakeEntitlementPort
     private lateinit var trigger: CloudSyncTrigger
 
     @BeforeEach
@@ -42,7 +45,8 @@ class CloudSyncTriggerTest {
                 .build()
         WorkManagerTestInitHelper.initializeTestWorkManager(context, config)
         workManager = WorkManager.getInstance(context)
-        trigger = CloudSyncTrigger(workManager, FakeLoggingPort())
+        entitlementPort = FakeEntitlementPort()
+        trigger = CloudSyncTrigger(workManager, FakeLoggingPort(), entitlementPort)
     }
 
     private fun uniqueWork(name: String): List<WorkInfo> = workManager.getWorkInfosForUniqueWork(name).get()
@@ -126,5 +130,53 @@ class CloudSyncTriggerTest {
         assertEquals(1, infos.size)
         assertEquals(WorkInfo.State.ENQUEUED, infos.single().state)
         assertTrue(infos.single().id != first.id)
+    }
+
+    @Nested
+    @DisplayName("not entitled")
+    inner class NotEntitledTests {
+        @BeforeEach
+        fun blockSync() {
+            entitlementPort.setEntitlementState(EntitlementState.NotEntitled)
+        }
+
+        @Test
+        @DisplayName("trigger enqueues nothing")
+        fun triggerEnqueuesNothing() {
+            trigger.trigger()
+
+            assertTrue(uniqueWork("enclave_sync").isEmpty())
+            assertTrue(uniqueWork("enclave_media_sync").isEmpty())
+            assertTrue(uniqueWork("enclave_media_download").isEmpty())
+            assertTrue(uniqueWork("enclave_file_sync").isEmpty())
+        }
+
+        @Test
+        @DisplayName("each sync trigger enqueues nothing")
+        fun eachSyncTriggerEnqueuesNothing() {
+            trigger.triggerMetadata()
+            trigger.triggerMedia()
+            trigger.triggerMediaDownload()
+            trigger.triggerFiles()
+
+            assertTrue(uniqueWork("enclave_sync").isEmpty())
+            assertTrue(uniqueWork("enclave_media_sync").isEmpty())
+            assertTrue(uniqueWork("enclave_media_download").isEmpty())
+            assertTrue(uniqueWork("enclave_file_sync").isEmpty())
+        }
+
+        @Test
+        @DisplayName("purge triggers still enqueue")
+        fun purgeTriggersStillEnqueue() {
+            trigger.triggerCloudChatsPurge()
+            trigger.triggerCloudMediaPurge()
+            trigger.triggerCloudMemoriesPurge()
+            trigger.triggerCloudArtifactsPurge()
+
+            assertEquals(1, uniqueWork("cloud_purge_CHATS").size)
+            assertEquals(1, uniqueWork("cloud_purge_MEDIA").size)
+            assertEquals(1, uniqueWork("cloud_purge_MEMORIES").size)
+            assertEquals(1, uniqueWork("cloud_purge_ARTIFACTS").size)
+        }
     }
 }

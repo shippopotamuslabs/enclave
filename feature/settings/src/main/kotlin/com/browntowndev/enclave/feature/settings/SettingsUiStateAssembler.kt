@@ -13,6 +13,7 @@ import com.browntowndev.enclave.domain.model.inference.ApiModelParameterSupport
 import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.enclave.domain.model.inference.ModelSource
 import com.browntowndev.enclave.domain.model.download.ModelPackRole
+import com.browntowndev.enclave.domain.model.entitlement.EntitlementState
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.telemetry.UsageSpendSummary
 import com.browntowndev.enclave.domain.port.auth.AuthState
@@ -22,6 +23,11 @@ import com.browntowndev.enclave.domain.port.repository.SettingsData
 import com.browntowndev.enclave.domain.usecase.modelconfig.ModelPackSettingsRow
 import com.browntowndev.enclave.domain.usecase.settings.ApplyApiModelMetadataDefaultsUseCase
 import com.browntowndev.enclave.feature.settings.usage.UsageSpendUiMapper
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+import java.util.Locale
 import javax.inject.Inject
 
 class SettingsUiStateAssembler
@@ -68,6 +74,7 @@ class SettingsUiStateAssembler
             mediaAssets: List<MediaProviderAsset>,
             defaultModels: List<DefaultModelAssignment>,
             authState: AuthState,
+            entitlementState: EntitlementState = EntitlementState.SignedOut,
             sheetVisibility: SheetVisibilityState,
             memories: List<StoredMemory>,
             feedbackText: String,
@@ -306,6 +313,7 @@ class SettingsUiStateAssembler
                         hapticResponse = persistedSettings.hapticResponse,
                         backgroundInferenceEnabled = persistedSettings.backgroundInferenceEnabled,
                         auth = authState.toUi(),
+                        subscription = entitlementState.toSubscriptionUiState(),
                         isLocalModelsSheetOpen = localModelsState.isSheetOpen,
                         isApiProvidersSheetOpen = apiState.isSheetOpen,
                         isDataControlsSheetOpen = sheetVisibility.dataControls,
@@ -562,6 +570,17 @@ class SettingsUiStateAssembler
                 is AuthState.Error -> AuthStateUi.Error(message)
             }
 
+        private fun EntitlementState.toSubscriptionUiState(): SubscriptionUiState =
+            when (this) {
+                is EntitlementState.Entitled ->
+                    SubscriptionUiState.Subscribed(
+                        expiryLabel = expiryTimeMillis?.let { formatSubscriptionExpiry(it) },
+                    )
+                EntitlementState.NotEntitled -> SubscriptionUiState.NotSubscribed
+                EntitlementState.Unknown -> SubscriptionUiState.Error
+                EntitlementState.SignedOut -> SubscriptionUiState.Hidden
+            }
+
         private fun UserProfile.toUi(): UserProfileUi =
             UserProfileUi(
                 uid = uid,
@@ -633,6 +652,16 @@ internal fun DefaultModelAssignmentUi.withSd15DeviceAwareLabels(
                 LocalImageGenerationBackendLabels.sd15DeviceAware(it, sd15CpuFallbackActive)
             },
     )
+}
+
+/**
+ * Expiry label for a subscribed row, e.g. "Active until Nov 14, 2023". Formatted in the
+ * assembler's presentation layer so the composable only renders strings.
+ */
+internal fun formatSubscriptionExpiry(expiryTimeMillis: Long): String {
+    val date = Instant.ofEpochMilli(expiryTimeMillis).atZone(ZoneId.systemDefault()).toLocalDate()
+    val formatted = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(Locale.US).format(date)
+    return "Active until $formatted"
 }
 
 internal fun localModelsExcludingPackUtilities(

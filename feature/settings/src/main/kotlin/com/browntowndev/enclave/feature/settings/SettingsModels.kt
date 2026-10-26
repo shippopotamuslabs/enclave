@@ -66,6 +66,24 @@ sealed interface AuthStateUi {
     data object Loading : AuthStateUi
 }
 
+/**
+ * Subscription row state for the account area. Carries presentation strings only, never domain
+ * types: the factory/assembler layer maps [com.browntowndev.enclave.domain.model.entitlement.EntitlementState]
+ * into this model.
+ */
+@Immutable
+sealed interface SubscriptionUiState {
+    data class Subscribed(
+        val expiryLabel: String?,
+    ) : SubscriptionUiState
+
+    data object NotSubscribed : SubscriptionUiState
+
+    data object Error : SubscriptionUiState
+
+    data object Hidden : SubscriptionUiState
+}
+
 @Immutable
 data class SettingsUiState(
     val home: SettingsHomeUiState = SettingsHomeUiState(),
@@ -129,6 +147,7 @@ data class SettingsHomeUiState(
     val hapticResponse: Boolean = true,
     val backgroundInferenceEnabled: Boolean = true,
     val auth: AuthStateUi = AuthStateUi.Loading,
+    val subscription: SubscriptionUiState = SubscriptionUiState.Hidden,
     val isLocalModelsSheetOpen: Boolean = false,
     val isApiProvidersSheetOpen: Boolean = false,
     val isDataControlsSheetOpen: Boolean = false,

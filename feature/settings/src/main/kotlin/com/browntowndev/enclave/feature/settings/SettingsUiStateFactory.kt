@@ -10,6 +10,7 @@ import com.browntowndev.enclave.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.enclave.domain.model.inference.ModelType
 import com.browntowndev.enclave.domain.model.settings.SearchProvider
 import com.browntowndev.enclave.domain.model.telemetry.UsageSpendSummary
+import com.browntowndev.enclave.domain.model.entitlement.EntitlementState
 import com.browntowndev.enclave.domain.port.auth.AuthState
 import com.browntowndev.enclave.domain.port.repository.SettingsData
 import com.browntowndev.enclave.domain.usecase.modelconfig.ModelPackSettingsRow
@@ -17,6 +18,7 @@ import com.browntowndev.enclave.domain.usecase.settings.ApiModelDiscoveryScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import javax.inject.Inject
 
 internal data class SheetVisibilityState(
@@ -150,6 +152,7 @@ internal data class SettingsUiStateSources(
     val mediaAssets: Flow<List<MediaProviderAsset>>,
     val defaultModels: Flow<List<DefaultModelAssignment>>,
     val authState: Flow<AuthState>,
+    val entitlementState: Flow<EntitlementState> = flowOf(EntitlementState.SignedOut),
     val sheetVisibility: StateFlow<SheetVisibilityState>,
     val memories: Flow<List<StoredMemory>>,
     val feedbackText: StateFlow<String>,
@@ -196,6 +199,7 @@ class SettingsUiStateFactory
                     mediaAssets = repository.mediaAssets,
                     defaultModels = repository.defaultModels,
                     authState = repository.authState,
+                    entitlementState = repository.entitlementState,
                     sheetVisibility = editor.sheetVisibility,
                     memories = editor.memories,
                     feedbackText = editor.feedbackText,
@@ -231,6 +235,7 @@ class SettingsUiStateFactory
             mediaAssets: List<MediaProviderAsset>,
             defaultModels: List<DefaultModelAssignment>,
             authState: AuthState,
+            entitlementState: EntitlementState = EntitlementState.SignedOut,
             sheetVisibility: SheetVisibilityState,
             memories: List<StoredMemory>,
             feedbackText: String,
@@ -263,6 +268,7 @@ class SettingsUiStateFactory
                 mediaAssets,
                 defaultModels,
                 authState,
+                entitlementState,
                 sheetVisibility,
                 memories,
                 feedbackText,
