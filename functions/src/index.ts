@@ -9,6 +9,8 @@ export {
     handleSyncEntityWriteTrigger,
     backfillSyncFeedCallable,
 } from './syncEventFeed';
+export { stripeWebhook } from './billing/stripeWebhook';
+export { createCheckoutSession, createPortalSession } from './billing/checkoutSessions';
 
 admin.initializeApp();
 

@@ -6,6 +6,28 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == uid;
     }
 
+    // Entitlement (subscription) state: a server-written Stripe mirror plus a
+    // manual override. Reads go through get()/exists() guards so missing docs
+    // deny safely. This helper gates nothing yet; it is shared groundwork for
+    // premium-feature checks in later chunks.
+    function isOverrideEntitled(uid) {
+      return exists(/databases/$(database)/documents/users/$(uid)/entitlement/override)
+        && 'freeAccess' in get(/databases/$(database)/documents/users/$(uid)/entitlement/override).data
+        && get(/databases/$(database)/documents/users/$(uid)/entitlement/override).data.freeAccess == true;
+    }
+
+    function isStripeEntitled(uid) {
+      return exists(/databases/$(database)/documents/users/$(uid)/entitlement/stripe)
+        && 'active' in get(/databases/$(database)/documents/users/$(uid)/entitlement/stripe).data
+        && get(/databases/$(database)/documents/users/$(uid)/entitlement/stripe).data.active == true
+        && ((!('expiryTimeMillis' in get(/databases/$(database)/documents/users/$(uid)/entitlement/stripe).data)
+          || get(/databases/$(database)/documents/users/$(uid)/entitlement/stripe).data.expiryTimeMillis > request.time.toMillis()));
+    }
+
+    function isEntitled(uid) {
+      return isOwner(uid) && (isOverrideEntitled(uid) || isStripeEntitled(uid));
+    }
+
     function isServerOwnedSyncCollection(collection) {
       return collection == 'sync_events'
         || collection == 'sync_meta'
@@ -80,6 +102,13 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      // Entitlement state (Stripe mirror + manual override): owners may read
+      // their own docs; all client writes are server-only via the Admin SDK.
+      match /entitlement/{docId} {
+        allow read: if isOwner(uid);
+        allow write: if false;
+      }
+
       // Server-only idempotency ledger — clients may not read or write.
       match /sync_processed_events/{doc} {
         allow read, write: if false;
@@ -90,6 +119,12 @@ service cloud.firestore {
     match /shared_chats/{shareId} {
       allow read: if true;
       allow write: if false;
+    }
+
+    // Stripe customer-to-uid mapping: server-only via the Admin SDK. Clients
+    // may neither read nor write; the webhook maintains these docs.
+    match /stripe_customers/{customerId} {
+      allow read, write: if false;
     }
 
     // Write-only moderation reports for false positives/negatives.
