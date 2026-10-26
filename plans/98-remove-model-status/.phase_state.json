@@ -1,8 +1,0 @@
-{
-  "completed_phases": [
-    "discovery",
-    "spec",
-    "tdd_red"
-  ],
-  "current_phase": "implementation"
-}

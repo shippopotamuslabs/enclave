@@ -20,7 +20,7 @@ Every task maps to one or more binding contracts in `/contracts/`. Read the rele
 | Room database, entities, DAOs, repository pattern, entity↔domain mapping, threading | `DATA_LAYER_RULES.md` |
 | LiteRT inference, model loading, KV cache, thermal/memory watchdog, thinking pipeline, safety layer | `INFERENCE_RULES.md` |
 | Colors, typography, Compose component structure, `InputBar`, `MessageList`, `ChatTopBar`, `HistoryScreen` | `UI_DESIGN_SPEC.md` |
-| Adding or editing any user-facing copy: labels, setting descriptions, buttons, empty states, errors, notifications, onboarding, dialog text | `VOICE_RULES.md` |
+| Adding or editing any user-facing copy: labels, setting descriptions, buttons, empty states, errors, notifications, onboarding, dialog text | `contracts/gospel/WOMBO-GOSPEL.md` |
 | JUnit 5, Fakes vs Mocks, Robolectric, Turbine, State-based assertions, Test coverage | `UNIT_TESTING.md` |
 
 ### Desktop Application Contracts
@@ -28,7 +28,7 @@ Every task maps to one or more binding contracts in `/contracts/`. Read the rele
 | Task type | Contract to read |
 |-----------|-----------------|
 | Elm Architecture (MVU), styling rules (Neobrutalism), state patterns, commands, clippy, and rustfmt validations | `DESKTOP_RULES.md` |
-| Adding or editing any user-facing copy: labels, setting descriptions, buttons, empty states, errors, notifications, onboarding, dialog text | `VOICE_RULES.md` |
+| Adding or editing any user-facing copy: labels, setting descriptions, buttons, empty states, errors, notifications, onboarding, dialog text | `contracts/gospel/WOMBO-GOSPEL.md` |
 
 When a task spans multiple domains, read all relevant contracts.
 
@@ -59,7 +59,7 @@ Enclave is a mixed Android monorepo, not a single-module app.
 - `third_party/llama.cpp`, `third_party/whisper.cpp`, `third_party/kleidiai-*`, `third_party/OpenCL-*`, `third_party/Vulkan-*`: vendored/native dependency sources; avoid routine edits.
 - `scripts/`: deterministic helper scripts for Rust binding generation and catalog checks.
 - `config/detekt/`: Detekt static analysis config.
-- `docs/superpowers/` and `plans/`: planning/spec artifacts, not runtime source.
+- `docs/superpowers/`: planning/spec artifacts, not runtime source. (The old `plans/` archive was removed in ENC-252; its contents remain in git history.)
 
 Main toolchains: Gradle Kotlin DSL, Kotlin/Compose/Hilt/Room/WorkManager,
 Rust/Cargo/UniFFI/Iced, CMake/Android NDK, and npm/TypeScript for Firebase functions.
@@ -180,7 +180,7 @@ Do not inspect or edit these during normal tasks unless the task explicitly targ
 - Dependency caches and generated JS: `functions/node_modules/`, `functions/lib/`.
 - Vendored native sources: `third_party/llama.cpp/`, `third_party/whisper.cpp/`, `third_party/kleidiai-*`, `third_party/OpenCL-*`, `third_party/Vulkan-*`.
 - Binary/model/assets noise: `*.so`, `*.tflite`, `*.onnx`, `*.png`, `*.jpg`, `*.webp`, APK/AAB outputs, keystores.
-- Planning/output logs unless requested: `test_output.txt`, `build_output.txt`, `lint_output.txt`, `plans/`.
+- Planning/output logs unless requested: `test_output.txt`, `build_output.txt`, `lint_output.txt`.
 
 Exception: generated UniFFI Kotlin bindings and checked-in native libraries are
 part of the Android bridge deliverable when running the binding scripts. Inspect
@@ -191,7 +191,7 @@ or edit generated binding outputs only as part of that regeneration workflow.
 ## 6. Code Intelligence Setup
 
 - Android/Kotlin: import the root Gradle project in **Android Studio Quail** (or IntelliJ). Keep Studio open on **Enclave** during agent sessions so `android studio` bridge commands work. Use JDK 17 and the checked-in Gradle wrapper.
-- **Android CLI:** `android` 1.0+ on PATH (`android info`). Run `android init` once per machine; project skills live under `.agents/skills/`.
+- **Android CLI:** `android` 1.0+ on PATH (`android info`). Run `android init` once per machine; the Studio bridge rule and recipes live in `docs/tools/`.
 - Rust/Desktop: use **VS Code** with the **rust-analyzer** extension or JetBrains **RustRover**. Open the root of the workspace.
 - Rust bridge crates & desktop: use `rust-analyzer` rooted at the root `Cargo.toml`.
 - TypeScript functions: run `npm --prefix functions install` if dependencies are missing; TypeScript server should use `functions/tsconfig.json`.
@@ -239,8 +239,8 @@ For Desktop tasks, use Cargo, Clippy, and Rustfmt CLI commands directly.
 **AndroJack vs Android CLI:** AndroJack validates **generated** code (§3.2). Android CLI
 queries the **running IDE** and devices. Use both; neither replaces the other.
 
-**Agent rule and recipes:** `.agents/rules/android-studio-cli.md`,
-`.agents/skills/pocket-crew-studio-bridge/SKILL.md`.
+**Agent rule and recipes:** `docs/tools/android-studio-cli.md`,
+`docs/tools/pocket-crew-studio-bridge.md`.
 
 If `android studio check` reports no running Studio, continue with Gradle/tests and note
 that bridge commands were skipped.

@@ -6,6 +6,29 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == uid;
     }
 
+    // Entitlement (subscription) state: a server-written Stripe mirror plus a
+    // manual override. Reads use ternary short-circuit on exists() plus
+    // map .get(key, default) so missing docs/fields deny safely: get() never
+    // runs on an absent doc and field reads carry defaults. These helpers
+    // gate the sync surface (ENC-238) and are shared with the Storage
+    // rules (ENC-239).
+    function isOverrideEntitled(uid) {
+      let p = /databases/$(database)/documents/users/$(uid)/entitlement/override;
+      return exists(p) ? get(p).data.get('freeAccess', false) == true : false;
+    }
+
+    function isStripeEntitled(uid) {
+      let p = /databases/$(database)/documents/users/$(uid)/entitlement/stripe;
+      return exists(p)
+        ? (get(p).data.get('active', false) == true
+          && get(p).data.get('expiryTimeMillis', 9999999999999) > request.time.toMillis())
+        : false;
+    }
+
+    function isEntitled(uid) {
+      return isOwner(uid) && (isOverrideEntitled(uid) || isStripeEntitled(uid));
+    }
+
     function isServerOwnedSyncCollection(collection) {
       return collection == 'sync_events'
         || collection == 'sync_meta'
@@ -61,21 +84,37 @@ service cloud.firestore {
 
       // Allowlisted entity collections: owner read/write only for known synced
       // entity collections. Server-owned sync collections are handled below.
+      // Sync surface is entitlement-gated: reads and writes require an active
+      // entitlement, but deletes are carved out so users can always purge
+      // their cloud data. DEPLOY SEQUENCING (ENC-244): the writer + override
+      // functions must deploy before this rule or entitled clients lose sync.
       match /{collection}/{document} {
-        allow read, delete: if isOwner(uid) && isAllowlistedEntityCollection(collection);
+        allow read: if isOwner(uid)
+          && isAllowlistedEntityCollection(collection)
+          && isEntitled(uid);
         allow create, update: if isOwner(uid)
           && isAllowlistedEntityCollection(collection)
-          && validSyncMetadata();
+          && validSyncMetadata()
+          && isEntitled(uid);
+        allow delete: if isOwner(uid) && isAllowlistedEntityCollection(collection);
       }
 
-      // Server-owned sync feed: owners may READ their own events, but never write.
-      // Cloud Functions use the Admin SDK and are not constrained by these rules.
+      // Server-owned sync feed: entitled owners may READ their own events, but
+      // never write. Cloud Functions use the Admin SDK and are not constrained
+      // by these rules.
       match /sync_events/{eventId} {
-        allow read: if isOwner(uid);
+        allow read: if isOwner(uid) && isEntitled(uid);
         allow write: if false;
       }
 
       match /sync_meta/{doc} {
+        allow read: if isOwner(uid) && isEntitled(uid);
+        allow write: if false;
+      }
+
+      // Entitlement state (Stripe mirror + manual override): owners may read
+      // their own docs; all client writes are server-only via the Admin SDK.
+      match /entitlement/{docId} {
         allow read: if isOwner(uid);
         allow write: if false;
       }
@@ -90,6 +129,12 @@ service cloud.firestore {
     match /shared_chats/{shareId} {
       allow read: if true;
       allow write: if false;
+    }
+
+    // Stripe customer-to-uid mapping: server-only via the Admin SDK. Clients
+    // may neither read nor write; the webhook maintains these docs.
+    match /stripe_customers/{customerId} {
+      allow read, write: if false;
     }
 
     // Write-only moderation reports for false positives/negatives.
