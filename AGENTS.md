@@ -20,7 +20,7 @@ Every task maps to one or more binding contracts in `/contracts/`. Read the rele
 | Room database, entities, DAOs, repository pattern, entity↔domain mapping, threading | `DATA_LAYER_RULES.md` |
 | LiteRT inference, model loading, KV cache, thermal/memory watchdog, thinking pipeline, safety layer | `INFERENCE_RULES.md` |
 | Colors, typography, Compose component structure, `InputBar`, `MessageList`, `ChatTopBar`, `HistoryScreen` | `UI_DESIGN_SPEC.md` |
-| Adding or editing any user-facing copy: labels, setting descriptions, buttons, empty states, errors, notifications, onboarding, dialog text | `contracts/gospel/WOMBO-GOSPEL.md` |
+| Adding or editing any user-facing copy: labels, setting descriptions, buttons, empty states, errors, notifications, onboarding, dialog text | `contracts/gospel/WUMBO-GOSPEL.md` |
 | JUnit 5, Fakes vs Mocks, Robolectric, Turbine, State-based assertions, Test coverage | `UNIT_TESTING.md` |
 
 ### Desktop Application Contracts
@@ -28,7 +28,7 @@ Every task maps to one or more binding contracts in `/contracts/`. Read the rele
 | Task type | Contract to read |
 |-----------|-----------------|
 | Elm Architecture (MVU), styling rules (Neobrutalism), state patterns, commands, clippy, and rustfmt validations | `DESKTOP_RULES.md` |
-| Adding or editing any user-facing copy: labels, setting descriptions, buttons, empty states, errors, notifications, onboarding, dialog text | `contracts/gospel/WOMBO-GOSPEL.md` |
+| Adding or editing any user-facing copy: labels, setting descriptions, buttons, empty states, errors, notifications, onboarding, dialog text | `contracts/gospel/WUMBO-GOSPEL.md` |
 
 When a task spans multiple domains, read all relevant contracts.
 
