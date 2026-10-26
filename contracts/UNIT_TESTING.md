@@ -2,8 +2,12 @@
 
 This contract defines the mandatory standards for unit testing in the Enclave project. It prioritizes **Fakes over Mocks**, **JUnit 5**, and **Robolectric** for high-fidelity JVM testing.
 
-The shared standards are canon in `contracts/gospel/UNIT-TESTING-GOSPEL.md` (git
-submodule, gospels repo pinned at tag `v1`). This contract keeps Enclave's
+The shared standards are canon in `contracts/gospel/TESTING-GOSPEL.md` (git
+submodule, gospels repo). The stack-agnostic canon is in that gospel's §§1–5 —
+the test pyramid (§1) and the level-escalation decision test (§2) are the
+canon pointers for level choice; schools (§3), test doubles (§4), and best
+practices (§5) are the canon pointers for double choice and assertions. The
+Android grounding is in its §6. This contract keeps Enclave's
 instantiations: its `:core:testing` fakes, worked examples, golden references,
 and gates.
 
@@ -11,7 +15,7 @@ and gates.
 
 ## 1. Core Principles (ALWAYS / NEVER)
 
-Canon: `contracts/gospel/UNIT-TESTING-GOSPEL.md` §1. Enclave's table (it carries Enclave-only rows: owned ports, Detekt rules):
+Canon: `contracts/gospel/TESTING-GOSPEL.md` §6.1. Enclave's table (it carries Enclave-only rows: owned ports, Detekt rules):
 
 
 | Rule | Description |
@@ -22,7 +26,7 @@ Canon: `contracts/gospel/UNIT-TESTING-GOSPEL.md` §1. Enclave's table (it carrie
 | **ALWAYS** Use Turbine | Use the Turbine library for testing Kotlin Flows and StateFlows to ensure event-by-event verification. |
 | **ALWAYS** MainDispatcherExtension | In JUnit 5, use a custom `MainDispatcherExtension` to swap `Dispatchers.Main` for a `TestDispatcher`. |
 | **NEVER** Mock Android Classes | Do not mock `Context`, `SharedPreferences`, or `Bundle`. Use Robolectric's real implementations or appropriate fakes. |
-| **NEVER** Mock Owned Ports | Do not `mockk` Enclave repository/use-case ports defined in `:core:domain`. Use fakes from `:core:testing` (Detekt `ForbiddenMockKInTests`, ENC-4). |
+| **NEVER** Mock Owned Ports | Do not `mockk` Enclave-owned application ports (`*Port` interfaces). Use fakes from `:core:testing` (Detekt `ForbiddenMockKInTests`, ENC-4). |
 | **NEVER** `verify()` ViewModels | Do not use MockK `verify` / `coVerify` in `*ViewModelTest.kt` — assert UI state instead (Detekt `ForbiddenVerifyInViewModelTests`). |
 | **NEVER** Use JUnit 4 in New Tests | Avoid `@Rule`, `@Test(expected=...)`, and `@Before`. Migrated tests must be JUnit 5 compliant. |
 | **NEVER** Mock Implementation Details | Avoid mocking private methods or internal helper classes. Test the public API of the unit. |
@@ -32,11 +36,11 @@ Canon: `contracts/gospel/UNIT-TESTING-GOSPEL.md` §1. Enclave's table (it carrie
 
 ## 2. Technical Stack
 
-Canon: `contracts/gospel/UNIT-TESTING-GOSPEL.md` §2. Enclave's stack:
+Canon: `contracts/gospel/TESTING-GOSPEL.md` §6.2. Enclave's stack:
 
 
 - **JUnit 5:** The engine for all local unit tests.
-- **`:core:testing`:** Shared hand-written fakes (`Fake<Port>` per domain port, with `seed`/`setShouldFail`/`clear` toggles), `MainDispatcherRule`, fixtures. A new domain port must ship its fake in the same MR. Feature-local fakes only when single-use.
+- **`:core:testing`:** Shared hand-written fakes (`Fake<Port>` per owned outbound port, with `seed`/`setShouldFail`/`clear` toggles), `MainDispatcherRule`, fixtures. A new outbound port must ship its fake in the same MR. Feature-local fakes only when single-use.
 - **MockK:** Use only when a Fake is impractical (third-party SDK boundaries, static Android APIs). Requires `@file:Suppress("ForbiddenMockKInTests")` with a one-line justification comment. Never for Enclave-owned ports, never `verify` in ViewModel tests.
 - **Turbine:** For all Flow/StateFlow assertions.
 - **Robolectric:** For tests requiring Android framework APIs on the JVM.
@@ -46,7 +50,7 @@ Canon: `contracts/gospel/UNIT-TESTING-GOSPEL.md` §2. Enclave's stack:
 
 ## 3. Pattern Examples
 
-Pattern shapes are canon in `contracts/gospel/UNIT-TESTING-GOSPEL.md` §3. The worked examples below are Enclave's and stay local.
+Pattern shapes are canon in `contracts/gospel/TESTING-GOSPEL.md` §6.3 (§6.3.1 for §3.1, §6.3.2 for §3.2, §6.3.3 for §3.3). The worked examples below are Enclave's and stay local.
 
 
 ### 3.1 ViewModel Testing (JUnit 5 + Turbine + Fakes)
@@ -155,7 +159,7 @@ construction; never bridge real-dispatcher work with a `delay()` poll.
 
 ## 4. Golden Test References
 
-Approach is canon in `contracts/gospel/UNIT-TESTING-GOSPEL.md` §4. Enclave's reference files:
+Approach is canon in `contracts/gospel/TESTING-GOSPEL.md` §6.4. Enclave's reference files:
 
 
 Refer to the following files in `golden-test-examples/` for validated implementation patterns:
@@ -169,10 +173,10 @@ Refer to the following files in `golden-test-examples/` for validated implementa
 
 ## 5. Implementation Mandate
 
-Canon: `contracts/gospel/UNIT-TESTING-GOSPEL.md` §5 (Implementation Mandate).
+Canon: `contracts/gospel/TESTING-GOSPEL.md` §6.5 (Implementation Mandate).
 
 ### 5.1 Self-check (anti reward-hacking)
-Canon: `contracts/gospel/UNIT-TESTING-GOSPEL.md` §5.1.
+Canon: `contracts/gospel/TESTING-GOSPEL.md` §6.5.1.
 
 ### 5.2 Screenshot & preview tests (ENC-4/ENC-19)
 - Shared `:core:ui` components carry `@Preview` covering **Tonal + Neo × Light + Dark** and Compose screenshot goldens (`validateDebugScreenshotTest`) once ENC-19 wiring lands; re-record only via the documented `screenshot-record` flow and review every regenerated PNG.
