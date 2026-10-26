@@ -1,4 +1,5 @@
 import * as functions from 'firebase-functions/v1';
+import { assertOverrideEntitled } from '../entitlement/assertEntitled';
 import { ProviderDailyRollupDoc, RawTelemetryDoc } from './providerDailyRollupTypes';
 
 type RollupKey = string;
@@ -90,7 +91,15 @@ export function buildProviderDailyRollups(
   });
 }
 
-/** Callable entry point for admin rollup refresh; Firestore scan wiring is deferred. */
-export const rebuildProviderDailyRollups = functions.https.onCall(async () => ({
-  status: 'noop',
-}));
+/**
+ * Admin-only maintenance entry point for rollup refresh. Firestore scan wiring
+ * is deferred and must never ship without the override gate below.
+ */
+export const rebuildProviderDailyRollups = functions.https.onCall(async (data, context) => {
+  void data;
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'User must be logged in.');
+  }
+  await assertOverrideEntitled(context.auth.uid);
+  return { status: 'noop' as const };
+});
