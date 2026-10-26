@@ -85,3 +85,26 @@ export async function assertUserEntitled(
         throw new functions.https.HttpsError('permission-denied', 'Enclave subscription required.');
     }
 }
+
+export async function isOverrideEntitled(
+    uid: string,
+    // Accepted for call-site symmetry with isUserEntitled; the override doc
+    // carries no expiry, so the timestamp is intentionally unused.
+    nowMs: number = Date.now(),
+): Promise<boolean> {
+    void nowMs;
+    const override = (await entitlementFirestoreGetter(
+        uid,
+        OVERRIDE_ENTITLEMENT_DOC_ID,
+    )) as OverrideEntitlementDoc | undefined;
+    return override?.freeAccess === true;
+}
+
+export async function assertOverrideEntitled(
+    uid: string,
+    nowMs: number = Date.now(),
+): Promise<void> {
+    if (!(await isOverrideEntitled(uid, nowMs))) {
+        throw new functions.https.HttpsError('permission-denied', 'Enclave subscription required.');
+    }
+}

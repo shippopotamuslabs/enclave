@@ -1,5 +1,6 @@
 import * as functions from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
+import { assertUserEntitled } from './entitlement/assertEntitled';
 
 export interface SyncEntityWriteInput {
     uid: string;
@@ -555,6 +556,7 @@ export const backfillSyncFeedCallable = functions.https.onCall(async (data, cont
     if (!context.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'User must be logged in.');
     }
+    await assertUserEntitled(context.auth.uid);
     const migrationOnly = data?.migrationOnly === true;
     return runProductionBackfillSyncFeed(admin.firestore(), context.auth.uid, { migrationOnly });
 });

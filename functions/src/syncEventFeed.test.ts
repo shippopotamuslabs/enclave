@@ -254,6 +254,38 @@ describe('sync event feed (pure handlers)', () => {
     });
 });
 
+describe('sync event feed entitlement exclusion', () => {
+    it('entitlement writes emit zero sync events', async () => {
+        const store = new InMemorySyncFeedFirestore();
+
+        await handleSyncEntityWrite(store, {
+            uid: 'alice',
+            collectionPath: 'entitlement',
+            entityId: 'stripe',
+            triggerEventId: 'event-entitlement-stripe',
+            after: { active: true },
+        });
+
+        expect(store.syncEvents).to.have.length(0);
+        expect(store.syncMeta.nextSequence).to.equal(0);
+    });
+
+    it('allowlisted write emits exactly one sync event (entitlement control)', async () => {
+        const store = new InMemorySyncFeedFirestore();
+
+        await handleSyncEntityWrite(store, {
+            uid: 'alice',
+            collectionPath: 'chats',
+            entityId: 'chat-1',
+            triggerEventId: 'event-control',
+            after: { updated_at: 1700000001000 },
+        });
+
+        expect(store.syncEvents).to.have.length(1);
+        expect(store.syncMeta.nextSequence).to.equal(1);
+    });
+});
+
 function syncEvent(overrides: Partial<ReturnType<typeof baseSyncEvent>>): ReturnType<typeof baseSyncEvent> {
     return {
         ...baseSyncEvent(),

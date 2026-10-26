@@ -1,10 +1,12 @@
 import { expect } from 'chai';
 import 'mocha';
 import {
+    assertOverrideEntitled,
     assertUserEntitled,
     entitlementDocPath,
     EntitlementDocGetter,
     isEntitledFromDocs,
+    isOverrideEntitled,
     isUserEntitled,
     OVERRIDE_ENTITLEMENT_DOC_ID,
     resetEntitlementFirestoreGetter,
@@ -127,6 +129,58 @@ describe('isUserEntitled / assertUserEntitled', () => {
         setEntitlementFirestoreGetter(stubGetter({}));
         try {
             await assertUserEntitled('alice', NOW_MS);
+            expect.fail('Should have thrown');
+        } catch (e: unknown) {
+            const error = e as { code?: string; message?: string };
+            expect(error.code).to.equal('permission-denied');
+            expect(error.message).to.include('Enclave subscription required.');
+        }
+    });
+});
+
+describe('isOverrideEntitled / assertOverrideEntitled', () => {
+    afterEach(() => {
+        resetEntitlementFirestoreGetter();
+    });
+
+    it('grants when the override doc sets freeAccess', async () => {
+        setEntitlementFirestoreGetter(async (_uid: string, docId: string) =>
+            docId === OVERRIDE_ENTITLEMENT_DOC_ID ? { freeAccess: true } : undefined,
+        );
+        expect(await isOverrideEntitled('alice')).to.equal(true);
+    });
+
+    it('denies when the override doc is missing or freeAccess is not true', async () => {
+        setEntitlementFirestoreGetter(async () => undefined);
+        expect(await isOverrideEntitled('alice')).to.equal(false);
+
+        setEntitlementFirestoreGetter(async () => ({ freeAccess: false }));
+        expect(await isOverrideEntitled('alice')).to.equal(false);
+    });
+
+    it('denies active stripe without an override and never reads the stripe doc', async () => {
+        const requestedDocIds: string[] = [];
+        setEntitlementFirestoreGetter(async (_uid: string, docId: string) => {
+            requestedDocIds.push(docId);
+            // Even an active stripe subscription must not grant override entitlement.
+            if (docId === STRIPE_ENTITLEMENT_DOC_ID) {
+                return { active: true };
+            }
+            return undefined;
+        });
+        expect(await isOverrideEntitled('alice')).to.equal(false);
+        expect(requestedDocIds).to.deep.equal([OVERRIDE_ENTITLEMENT_DOC_ID]);
+    });
+
+    it('assertOverrideEntitled resolves on override and throws permission-denied otherwise', async () => {
+        setEntitlementFirestoreGetter(async () => ({ freeAccess: true }));
+        await assertOverrideEntitled('alice');
+
+        setEntitlementFirestoreGetter(async (_uid: string, docId: string) =>
+            docId === STRIPE_ENTITLEMENT_DOC_ID ? { active: true } : undefined,
+        );
+        try {
+            await assertOverrideEntitled('alice');
             expect.fail('Should have thrown');
         } catch (e: unknown) {
             const error = e as { code?: string; message?: string };
