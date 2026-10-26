@@ -628,7 +628,6 @@ class RustLoopInferenceService(
                                     AgentLoopContextPolicyTier.FIXED_KV
                                 },
                             toolSchemaDeferralSupported = true,
-                            nativeToolCallingSupported = false,
                             historyRewriteSupported = true,
                             lifecycleHooksSupported = true,
                         )
@@ -642,7 +641,6 @@ class RustLoopInferenceService(
                                     AgentLoopContextPolicyTier.HOSTED_MUTABLE
                                 },
                             toolSchemaDeferralSupported = true,
-                            nativeToolCallingSupported = true,
                             fileBackedContextSupported = true,
                             promptCacheSupported = true,
                             lifecycleHooksSupported = true,

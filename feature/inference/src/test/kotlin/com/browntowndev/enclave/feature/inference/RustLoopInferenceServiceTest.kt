@@ -438,7 +438,6 @@ class RustLoopInferenceServiceTest {
             assertFalse(config.capabilities.summarizationAllowed, "default dummy summarizer is not installed")
             assertTrue(config.capabilities.kvFixed)
             assertTrue(config.capabilities.toolSchemaDeferralSupported)
-            assertFalse(config.capabilities.nativeToolCallingSupported)
             assertEquals(AgentLoopContextPolicyTier.SMALL_CONTEXT, config.capabilities.contextPolicyTier)
             assertTrue(config.capabilities.lifecycleHooksSupported)
             assertEquals(
@@ -498,7 +497,6 @@ class RustLoopInferenceServiceTest {
 
             val config = requireNotNull(port.capturedConfig)
             assertTrue(config.capabilities.toolSchemaDeferralSupported)
-            assertTrue(config.capabilities.nativeToolCallingSupported)
             assertTrue(config.capabilities.fileBackedContextSupported)
             assertTrue(config.capabilities.promptCacheSupported)
             assertTrue(config.capabilities.lifecycleHooksSupported)
