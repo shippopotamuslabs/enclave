@@ -6,10 +6,9 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
-import androidx.test.core.app.ApplicationProvider
+import com.browntowndev.enclave.core.data.inertWorkManager
 import com.browntowndev.enclave.core.data.local.EnclaveDatabase
 import com.browntowndev.enclave.core.data.local.messageDao
-import com.browntowndev.enclave.core.data.testWorkManager
 import com.browntowndev.enclave.core.data.security.ApiKeyManager
 import com.browntowndev.enclave.core.data.security.SensitiveRoomReadRepairApplier
 import com.browntowndev.enclave.core.data.sync.CloudSyncTrigger
@@ -24,14 +23,16 @@ import kotlinx.coroutines.flow.MutableStateFlow
  * Replaces the MockK mocks removed from this package: a recording
  * [CloudSyncTrigger] subclass (over the behavior-preserving `open` seam),
  * an in-memory preferences [DataStore], and factories for the real
- * collaborators wired over a real in-memory Room database. WorkManager is
- * the real test instance (see [testWorkManager]) — work-runtime 2.11 made
- * its constructor internal, so no subclass fake can exist.
+ * collaborators wired over a real in-memory Room database. The recording
+ * trigger overrides every enqueue entry point, so it defaults to an inert
+ * [WorkManager] placeholder (see inertWorkManager, ENC-253) and never
+ * resolves a real WorkManager — work-runtime 2.11 made its constructor
+ * internal, so no subclass fake can exist.
  */
 
 /** Records every trigger call instead of enqueueing WorkManager work. */
 class RecordingCloudSyncTrigger(
-    workManager: WorkManager = testWorkManager(ApplicationProvider.getApplicationContext()),
+    workManager: WorkManager = inertWorkManager(),
     loggingPort: FakeLoggingPort = FakeLoggingPort(),
 ) : CloudSyncTrigger(workManager, loggingPort) {
     var triggerCalls = 0

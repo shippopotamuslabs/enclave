@@ -11,13 +11,13 @@ import com.browntowndev.enclave.core.data.local.MediaProviderEntity
 import com.browntowndev.enclave.core.data.remote.FirestoreSensitiveFieldRepairer
 import com.browntowndev.enclave.core.data.remote.firestore.FirestoreSyncContext
 import com.browntowndev.enclave.core.data.remote.firestore.handlers.MediaProviderSyncHandler
+import com.browntowndev.enclave.core.data.remote.firestore.testEmbeddingRegenerationCoordinator
 import com.browntowndev.enclave.core.data.remote.testFirestoreSyncDaos
 import com.browntowndev.enclave.core.data.repository.FakeLocalDataEncryptionService
 import com.browntowndev.enclave.core.data.repository.MediaProviderRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.realReadRepairApplier
 import com.browntowndev.enclave.core.data.repository.testSensitiveSelfHealer
 import com.browntowndev.enclave.core.data.security.StaticSensitiveFieldCatalog
-import com.browntowndev.enclave.core.data.sync.EmbeddingRegenerationCoordinator
 import com.browntowndev.enclave.core.testing.FakeCryptoManagerPort
 import com.browntowndev.enclave.core.testing.FakeLoggingPort
 import com.browntowndev.enclave.domain.model.config.MediaCapability
@@ -31,16 +31,12 @@ import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.objectweb.asm.AnnotationVisitor
@@ -54,31 +50,37 @@ import java.util.concurrent.atomic.AtomicBoolean
 @ExtendWith(RobolectricExtension::class)
 @Config(sdk = [34])
 class MediaTaskPersistenceRedTest {
-    private lateinit var database: EnclaveDatabase
     private val mediaProviderDao = FakeMediaProviderDao()
-    private lateinit var repository: MediaProviderRepositoryImpl
 
-    @BeforeEach
-    fun setup() {
-        val context = ApplicationProvider.getApplicationContext<Context>()
-        database =
+    // Lazy so DB-01 (annotation read) and SYNC-01/02/03 (handler + fakes) never
+    // open a real database or WorkManager (ENC-253). Only ENTITY tests build these.
+    private val databaseLazy =
+        lazy {
+            val context = ApplicationProvider.getApplicationContext<Context>()
             Room
                 .inMemoryDatabaseBuilder(context, EnclaveDatabase::class.java)
                 .allowMainThreadQueries()
                 .build()
-        repository =
+        }
+    private val database: EnclaveDatabase by databaseLazy
+
+    private val repositoryLazy =
+        lazy {
             MediaProviderRepositoryImpl(
-                syncTrigger = FakeCloudSyncTrigger(testWorkManager(context)),
+                syncTrigger = FakeCloudSyncTrigger(),
                 mediaProviderDao = mediaProviderDao,
                 apiKeyManager = FakeApiKeyManager(),
                 healer = testSensitiveSelfHealer(FakeLocalDataEncryptionService()),
                 readRepairApplier = database.realReadRepairApplier(),
             )
-    }
+        }
+    private val repository: MediaProviderRepositoryImpl by repositoryLazy
 
     @AfterEach
     fun teardown() {
-        database.close()
+        if (databaseLazy.isInitialized()) {
+            databaseLazy.value.close()
+        }
     }
 
     @Test
@@ -201,11 +203,7 @@ class MediaTaskPersistenceRedTest {
             cryptoManager = FakeCryptoManagerPort(),
             loggingPort = loggingPort,
             apiKeyManager = FakeApiKeyManager(),
-            embeddingCoordinator =
-                EmbeddingRegenerationCoordinator(
-                    testWorkManager(ApplicationProvider.getApplicationContext()),
-                    CoroutineScope(SupervisorJob() + Dispatchers.Default),
-                ),
+            embeddingCoordinator = testEmbeddingRegenerationCoordinator(),
             userIdProvider = { "user-1" },
             purgeInProgress = AtomicBoolean(false),
         )
