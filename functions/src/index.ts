@@ -2,6 +2,7 @@ import * as functions from 'firebase-functions/v1';
 import * as admin from 'firebase-admin';
 import { v4 as uuidv4 } from 'uuid';
 import { APP_DOMAIN, handleUploadSharedChat } from './sharedChatUpload';
+import { assertUserEntitled } from './entitlement/assertEntitled';
 export { cleanupExpiredShares } from './scheduledCleanup';
 export { rebuildProviderDailyRollups } from './telemetry/providerDailyRollup';
 export {
@@ -101,6 +102,7 @@ export const uploadSharedChat = functions.https.onCall(async (data, context) => 
     if (!context.auth) {
         throw new functions.https.HttpsError('unauthenticated', 'User must be logged in to share chats.');
     }
+    await assertUserEntitled(context.auth.uid);
 
     return handleUploadSharedChat(
         data,
