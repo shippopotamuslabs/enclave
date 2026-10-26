@@ -130,7 +130,6 @@ data class AgentLoopSessionCapabilities(
     val toolResultBudgetTokens: UInt? = null,
     val contextPolicyTier: AgentLoopContextPolicyTier = AgentLoopContextPolicyTier.HOSTED_MUTABLE,
     val toolSchemaDeferralSupported: Boolean = false,
-    val nativeToolCallingSupported: Boolean = false,
     val fileBackedContextSupported: Boolean = false,
     val promptCacheSupported: Boolean = false,
     val historyRewriteSupported: Boolean = true,
