@@ -42,6 +42,7 @@ import com.browntowndev.enclave.domain.usecase.media.MediaToolDefinitionFactory
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.flow
@@ -49,6 +50,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
@@ -206,6 +208,19 @@ class ChatInferenceServiceTest {
                 isMultimodal = false,
             )
         promptComposer.resultOverride = "composed-prompt"
+    }
+
+    @AfterEach
+    fun tearDown() {
+        if (!::service.isInitialized) return
+        // ENC-221: no coroutine launched on the test-replaced scope may leak
+        // into the next test. Cancel the scope's job, then drain the test
+        // scheduler so every outstanding child finishes cancelling here.
+        val scopeField = ChatInferenceService::class.java.getDeclaredField("serviceScope")
+        scopeField.isAccessible = true
+        val replacedScope = scopeField.get(service) as CoroutineScope
+        replacedScope.coroutineContext[Job]?.cancel()
+        testDispatcher.scheduler.advanceUntilIdle()
     }
 
     private fun startIntent(userHasImage: Boolean = false): Intent =
