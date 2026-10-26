@@ -2,6 +2,7 @@ package com.browntowndev.enclave.app
 
 import android.content.Context
 import com.browntowndev.enclave.domain.port.config.DistributionConfigurationPort
+import com.browntowndev.enclave.domain.port.update.InstalledAppVersionPort
 import com.browntowndev.enclave.domain.port.inference.ChatTitleGeneratorPort
 import com.browntowndev.enclave.domain.port.inference.CompactionSummarizerPort
 import com.browntowndev.enclave.domain.port.inference.EmbeddingEnginePort
@@ -65,6 +66,10 @@ abstract class EngineModule {
     @Binds
     @Singleton
     abstract fun bindDistributionConfiguration(impl: DistributionConfigurationImpl): DistributionConfigurationPort
+
+    @Binds
+    @Singleton
+    abstract fun bindInstalledAppVersionPort(impl: InstalledAppVersionProvider): InstalledAppVersionPort
 
     companion object {
         // Consolidated ConversationManager provider - resolve models lazily via ModelRegistry

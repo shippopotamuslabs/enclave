@@ -100,6 +100,8 @@ import com.browntowndev.enclave.core.data.repository.TrustedDomainRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.TtsProviderRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.UiSelectionRepositoryImpl
 import com.browntowndev.enclave.core.data.repository.UtilityModelRepositoryImpl
+import com.browntowndev.enclave.core.data.update.DataStoreUpdateCheckPreferences
+import com.browntowndev.enclave.core.data.update.GitHubLatestReleaseClient
 import com.browntowndev.enclave.core.data.security.ApiKeyProviderImpl
 import com.browntowndev.enclave.core.data.security.CryptoAtRestEncryptionService
 import com.browntowndev.enclave.core.data.security.LocalDataEncryptionService
@@ -162,6 +164,8 @@ import com.browntowndev.enclave.domain.port.repository.TtsProviderRepositoryPort
 import com.browntowndev.enclave.domain.port.repository.UiSelectionRepository
 import com.browntowndev.enclave.domain.port.repository.UtilityModelFilePort
 import com.browntowndev.enclave.domain.port.repository.UtilityModelRepositoryPort
+import com.browntowndev.enclave.domain.port.update.UpdateCheckPreferencesPort
+import com.browntowndev.enclave.domain.port.update.UpdateMetadataPort
 import com.browntowndev.enclave.domain.port.security.ApiKeyProviderPort
 import com.browntowndev.enclave.domain.port.security.VaultMetadataPort
 import com.browntowndev.enclave.domain.port.telemetry.TelemetryEventPort
@@ -777,4 +781,12 @@ abstract class DataRepositoryModule {
     @Binds
     @Singleton
     abstract fun bindUiSelectionRepository(impl: UiSelectionRepositoryImpl): UiSelectionRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindUpdateMetadataPort(impl: GitHubLatestReleaseClient): UpdateMetadataPort
+
+    @Binds
+    @Singleton
+    abstract fun bindUpdateCheckPreferencesPort(impl: DataStoreUpdateCheckPreferences): UpdateCheckPreferencesPort
 }

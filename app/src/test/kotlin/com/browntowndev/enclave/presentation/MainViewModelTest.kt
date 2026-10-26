@@ -6,8 +6,12 @@ import com.browntowndev.enclave.core.testing.FakeCloudSyncPort
 import com.browntowndev.enclave.core.testing.FakeCryptoManagerPort
 import com.browntowndev.enclave.core.testing.FakeEntitlementPort
 import com.browntowndev.enclave.core.testing.FakeSyncOrchestrator
+import com.browntowndev.enclave.core.testing.FakeInstalledAppVersionPort
+import com.browntowndev.enclave.core.testing.FakeUpdateCheckPreferencesPort
+import com.browntowndev.enclave.core.testing.FakeUpdateMetadataPort
 import com.browntowndev.enclave.core.testing.FakeVaultMetadataPort
 import com.browntowndev.enclave.core.testing.MainDispatcherRule
+import com.browntowndev.enclave.core.testing.TestClock
 import com.browntowndev.enclave.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.enclave.domain.model.download.DownloadModelsResult
 import com.browntowndev.enclave.domain.model.download.ModelScanResult
@@ -36,6 +40,8 @@ import com.browntowndev.enclave.domain.usecase.security.StoreBiometricDekUseCase
 import com.browntowndev.enclave.domain.usecase.security.UnlockVaultUseCase
 import com.browntowndev.enclave.domain.usecase.security.VaultReconciliationOutcome
 import com.browntowndev.enclave.domain.usecase.security.VaultSessionInteractor
+import com.browntowndev.enclave.domain.usecase.update.CheckForAppUpdateUseCase
+import com.browntowndev.enclave.domain.usecase.update.DismissAppUpdateUseCase
 import com.browntowndev.enclave.testing.FakeAdoptCloudVaultUseCase
 import com.browntowndev.enclave.testing.FakeBiometricCipherPort
 import com.browntowndev.enclave.testing.FakeBootstrapCloudVaultFromLocalUseCase
@@ -139,6 +145,15 @@ class MainViewModelTest {
         errHandler: ViewModelErrorHandler = errorHandler,
         settings: SettingsRepository = settingsRepository,
         syncOrch: SyncOrchestrator = syncOrchestrator,
+        checkUpdate: CheckForAppUpdateUseCase =
+            CheckForAppUpdateUseCase(
+                FakeUpdateMetadataPort(),
+                FakeInstalledAppVersionPort(),
+                FakeUpdateCheckPreferencesPort(),
+                TestClock(),
+            ),
+        dismissUpdate: DismissAppUpdateUseCase =
+            DismissAppUpdateUseCase(FakeUpdateCheckPreferencesPort()),
     ): MainViewModel {
         // ENC-24: the ViewModel depends on VaultSessionInteractor + biometric cipher
         // use cases; tests fake the underlying ports and wrap them here.
@@ -168,6 +183,8 @@ class MainViewModelTest {
             bootstrapCloud,
             logging,
             errHandler,
+            checkUpdate,
+            dismissUpdate,
         )
     }
 
