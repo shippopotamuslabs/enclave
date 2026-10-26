@@ -72,8 +72,10 @@ android {
         applicationId = "com.browntowndev.enclave"
         minSdk = 34
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        // ENC-248: release.yml passes -PversionCode/-PversionName per
+        // release. Defaults (1/"1.0") preserve local-build behavior.
+        versionCode = providers.gradleProperty("versionCode").getOrElse("1").toInt()
+        versionName = providers.gradleProperty("versionName").getOrElse("1.0")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

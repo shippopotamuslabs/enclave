@@ -1,0 +1,186 @@
+# Enclave Release — signed sideload APK on GitHub Releases.
+#
+# Manual, main-only, workflow_dispatch pipeline (AGENTS.md §3.6, ENC-248):
+# Sean runs this by hand per release; it is never a Play lane and the APK
+# is never uploaded anywhere except the GitHub Release it creates.
+# The stable contracts this creates for ENC-250 + the website:
+#   https://github.com/shippopotamuslabs/enclave/releases/latest/download/latest.json
+#   https://github.com/shippopotamuslabs/enclave/releases/latest/download/enclave-v<versionName>.apk
+# (apkFileName inside latest.json is the stable contract.)
+#
+# Required repo secrets (Settings -> Secrets and variables -> Actions):
+#   KEYSTORE_BASE64         base64-encoded enclave_keystore.jks
+#   RELEASE_STORE_PASSWORD  \
+#   RELEASE_KEY_ALIAS        > read by app/build.gradle.kts via
+#   RELEASE_KEY_PASSWORD    /  local.properties (written by the job below)
+#   TENSOR_APP_ID           \
+#   TENSOR_APP_PRIVATE_KEY  > GitHub App credentials used to mint the
+#                           /  token that clones the private submodule
+#                              repos (see .github/actions/fetch-submodules)
+name: Release
+
+"on":
+  workflow_dispatch:
+    inputs:
+      versionName:
+        description: "Release version name (e.g. 1.1.0; creates tag v<versionName>)"
+        type: string
+        required: true
+      versionCode:
+        description: "Release version code (integer, must increase per release)"
+        type: number
+        required: true
+
+# Release creation + asset upload needs contents: write.
+permissions:
+  contents: write
+
+# One release at a time; a second dispatch waits instead of racing the tag.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  # Mirror of the ci.yml assemble-release job (ENC-248): same checkout,
+  # app-token, fetch-submodules, android-setup, Gradle cache, NDK/CMake,
+  # and strict keystore materialization. The build differs only in the
+  # -PversionCode/-PversionName overrides (normal flavor = sideload build).
+  release:
+    name: release
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # PR-title harvest needs full tag history for the previous v* tag.
+          fetch-depth: 0
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ secrets.TENSOR_APP_ID }}
+          private-key: ${{ secrets.TENSOR_APP_PRIVATE_KEY }}
+          owner: shippopotamuslabs
+          repositories: "whisper-android,agent_core"
+      - uses: ./.github/actions/fetch-submodules
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+      - uses: ./.github/actions/android-setup
+      - name: Restore Gradle dependency cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .ci-gradle-home/caches/modules-2
+            .ci-gradle-home/wrapper
+          key: ${{ runner.os }}-gradle-deps-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-deps-
+      - name: Install pinned NDKs + CMake
+        run: |
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
+          sdkmanager "ndk;27.0.11718014" "ndk;28.2.13676358" "cmake;3.22.1"
+      - name: Fail if tag already exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "v${{ inputs.versionName }}" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "Tag v${{ inputs.versionName }} already exists — refusing to overwrite an existing release." >&2
+            exit 1
+          fi
+      - name: Materialize release keystore + local.properties (strict)
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$KEYSTORE_BASE64" || (echo "Missing KEYSTORE_BASE64 secret" && exit 1)
+          test -n "$RELEASE_STORE_PASSWORD" || (echo "Missing RELEASE_STORE_PASSWORD secret" && exit 1)
+          test -n "$RELEASE_KEY_ALIAS" || (echo "Missing RELEASE_KEY_ALIAS secret" && exit 1)
+          test -n "$RELEASE_KEY_PASSWORD" || (echo "Missing RELEASE_KEY_PASSWORD secret" && exit 1)
+          mkdir -p .keystore
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > .keystore/enclave_keystore.jks
+          printf 'RELEASE_STORE_PASSWORD=%s\nRELEASE_KEY_ALIAS=%s\nRELEASE_KEY_PASSWORD=%s\n' \
+            "$RELEASE_STORE_PASSWORD" "$RELEASE_KEY_ALIAS" "$RELEASE_KEY_PASSWORD" > local.properties
+      - name: Assemble signed release APK (normal flavor)
+        run: ./gradlew :app:assembleNormalRelease -PversionCode="${{ inputs.versionCode }}" -PversionName="${{ inputs.versionName }}"
+      - name: Package APK + sha256 + latest.json
+        run: |
+          set -euo pipefail
+          # minSdk literal 34 — kept in sync with app/build.gradle.kts:73.
+          src_apk="$(ls app/build/outputs/apk/normal/release/*.apk | head -n 1)"
+          test -n "$src_apk"
+          apk_name="enclave-v${{ inputs.versionName }}.apk"
+          cp "$src_apk" "$apk_name"
+          sha256sum "$apk_name" > "${apk_name}.sha256"
+          hex="$(cut -d' ' -f1 < "${apk_name}.sha256")"
+          bytes="$(stat -c%s "$apk_name")"
+          published="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          python3 - "$hex" "$bytes" "$published" <<'EOF'
+          import json, sys
+          hex_digest, size_bytes, published_at = sys.argv[1], int(sys.argv[2]), sys.argv[3]
+          payload = {
+              "versionCode": ${{ inputs.versionCode }},
+              "versionName": "${{ inputs.versionName }}",
+              "apkFileName": "enclave-v${{ inputs.versionName }}.apk",
+              "sha256": hex_digest,
+              "sizeBytes": size_bytes,
+              "minSdk": 34,
+              "publishedAt": published_at,
+          }
+          with open("latest.json", "w") as f:
+              json.dump(payload, f, indent=2)
+              f.write("\n")
+          EOF
+      - name: Verify APK signature (apksigner)
+        run: |
+          set -euo pipefail
+          apk_name="enclave-v${{ inputs.versionName }}.apk"
+          apksigner="$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -n 1)"
+          test -x "$apksigner"
+          "$apksigner" verify --print-certs "$apk_name" | tee apksigner-certs.txt
+          fingerprint="$(grep -m1 'SHA-256 digest' apksigner-certs.txt || true)"
+          {
+            echo "## Release v${{ inputs.versionName }} signature"
+            echo ""
+            echo "Compare this SHA-256 certificate fingerprint with the ADC-registered fingerprint (ENC-247):"
+            echo ""
+            echo '```'
+            echo "$fingerprint"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Collect release notes (merged PR titles since previous v* tag)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          prev_tag="$(git tag --list 'v*' --sort=-v:refname | grep -v "^v${{ inputs.versionName }}$" | head -n 1 || true)"
+          if [ -n "$prev_tag" ]; then
+            prev_date="$(git log -1 --format=%cs "$prev_tag")"
+            gh pr list --repo "${{ github.repository }}" --state merged --limit 100 \
+              --search "merged:>=${prev_date}" --json title,number \
+              --jq '.[] | "- #\(.number) \(.title)"' > pr-titles.txt || true
+            header="Merged since ${prev_tag}:"
+          else
+            gh pr list --repo "${{ github.repository }}" --state merged --limit 100 \
+              --json title,number \
+              --jq '.[] | "- #\(.number) \(.title)"' > pr-titles.txt || true
+            header="Merged PRs:"
+          fi
+          {
+            echo "Enclave v${{ inputs.versionName }}"
+            echo ""
+            echo "$header"
+            if [ -s pr-titles.txt ]; then cat pr-titles.txt; else echo "No merged PRs found."; fi
+          } > notes.md
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          apk_name="enclave-v${{ inputs.versionName }}.apk"
+          gh release create "v${{ inputs.versionName }}" \
+            --title "Enclave v${{ inputs.versionName }}" \
+            --notes-file notes.md \
+            "$apk_name" "${apk_name}.sha256" latest.json
