@@ -12,6 +12,7 @@ export {
 } from './syncEventFeed';
 export { stripeWebhook } from './billing/stripeWebhook';
 export { createCheckoutSession, createPortalSession } from './billing/checkoutSessions';
+export { mintModelDownloadUrl } from './models/modelDownloadUrl';
 
 admin.initializeApp();
 

@@ -23,5 +23,5 @@ class R2ModelUrlProvider
 
         override fun getTrustedDomainsUrl(): String = "$R2_BUCKET_URL/trusted_domains.json"
 
-        override fun getModelDownloadUrl(spec: DownloadFileSpec): String = "$R2_BUCKET_URL/${spec.remoteFileName}"
+        override suspend fun getModelDownloadUrl(spec: DownloadFileSpec): String = "$R2_BUCKET_URL/${spec.remoteFileName}"
     }

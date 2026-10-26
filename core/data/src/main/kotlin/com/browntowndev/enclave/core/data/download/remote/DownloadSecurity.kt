@@ -9,6 +9,14 @@ internal object DownloadSecurity {
     private const val R2_HOST = "config.enclave-app.com"
     private const val HUGGING_FACE_HOST = "huggingface.co"
     private const val HF_SHORT_HOST = "hf.co"
+
+    /**
+     * Suffix for presigned R2 model download URLs minted by `mintModelDownloadUrl`
+     * (`<accountId>.r2.cloudflarestorage.com`). Matched as a suffix with a required
+     * non-empty account prefix so lookalikes such as
+     * `r2.cloudflarestorage.com.evil.com` never match.
+     */
+    private const val R2_PRESIGNED_HOST_SUFFIX = ".r2.cloudflarestorage.com"
     private val repoSegmentPattern = Regex("^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
     data class DownloadPaths(
@@ -68,6 +76,8 @@ internal object DownloadSecurity {
         val redirectAllowed =
             when {
                 originalUrl.host == R2_HOST -> finalUrl.host == R2_HOST
+                isPresignedR2Host(originalUrl.host) ->
+                    isPresignedR2Host(finalUrl.host) && finalUrl.host == originalUrl.host
                 isHuggingFaceHost(originalUrl.host) -> isHuggingFaceHost(finalUrl.host)
                 else -> sameOrigin(originalUrl, finalUrl)
             }
@@ -110,6 +120,17 @@ internal object DownloadSecurity {
             tempFile = resolveChild("$safeFileName${ModelConfig.TEMP_EXTENSION}"),
             metaFile = resolveChild("$safeFileName${ModelConfig.TEMP_META_EXTENSION}"),
         )
+    }
+
+    /**
+     * Returns true for presigned R2 download hosts (`<accountId>.r2.cloudflarestorage.com`).
+     * The account prefix must be non-empty and the match is suffix-anchored, so the bare
+     * service domain and lookalike suffixes (`r2.cloudflarestorage.com.evil.com`) are rejected.
+     */
+    private fun isPresignedR2Host(host: String): Boolean {
+        val normalizedHost = host.lowercase()
+        return normalizedHost.endsWith(R2_PRESIGNED_HOST_SUFFIX) &&
+            normalizedHost.length > R2_PRESIGNED_HOST_SUFFIX.length
     }
 
     private fun isHuggingFaceHost(host: String): Boolean {

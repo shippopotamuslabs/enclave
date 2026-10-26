@@ -43,7 +43,7 @@ class ModelConfigFetcherImplTest {
 
         override fun getTrustedDomainsUrl(): String = "https://config.example.com/trusted_domains.json"
 
-        override fun getModelDownloadUrl(spec: com.browntowndev.enclave.domain.model.download.DownloadFileSpec): String =
+        override suspend fun getModelDownloadUrl(spec: com.browntowndev.enclave.domain.model.download.DownloadFileSpec): String =
             "https://config.example.com/${spec.remoteFileName}"
     }
 

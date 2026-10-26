@@ -5,6 +5,7 @@ import com.browntowndev.enclave.core.data.FirebaseAvailability
 import com.browntowndev.enclave.domain.model.entitlement.EntitlementState
 import com.browntowndev.enclave.domain.port.repository.EntitlementPort
 import com.browntowndev.enclave.domain.qualifier.ApplicationScope
+import com.browntowndev.enclave.domain.qualifier.InternalTelemetryLogging
 import com.browntowndev.enclave.domain.util.Clock
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
 import com.google.firebase.auth.FirebaseAuth
@@ -38,7 +39,7 @@ class FirebaseEntitlementPort
         @ApplicationContext private val context: Context,
         @ApplicationScope private val externalScope: CoroutineScope,
         private val clock: Clock,
-        private val loggingPort: LoggingPort,
+        @param:InternalTelemetryLogging private val loggingPort: LoggingPort,
     ) : EntitlementPort {
         companion object {
             private const val TAG = "EntitlementPort"

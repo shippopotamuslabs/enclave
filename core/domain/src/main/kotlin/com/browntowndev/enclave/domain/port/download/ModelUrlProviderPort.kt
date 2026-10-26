@@ -25,8 +25,10 @@ interface ModelUrlProviderPort {
     /**
      * Get the download URL for a specific file spec.
      * Uses the spec's source and huggingFaceModelName to determine the URL.
+     * CLOUDFLARE_R2 specs mint a short-lived presigned URL via the
+     * `mintModelDownloadUrl` Firebase callable, so this is suspend.
      * @param spec The download file spec containing remote file info and source
      * @return The full URL to download the file
      */
-    fun getModelDownloadUrl(spec: DownloadFileSpec): String
+    suspend fun getModelDownloadUrl(spec: DownloadFileSpec): String
 }
