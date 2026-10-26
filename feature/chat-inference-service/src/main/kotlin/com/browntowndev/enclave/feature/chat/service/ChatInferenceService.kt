@@ -568,11 +568,11 @@ class ChatInferenceService : Service() {
                 }
             }
 
-            // Ensure service stops if this was the last action
-            if (currentJob == null || currentJob?.isActive == false) {
-                stopForeground(ChatInferenceNotificationPolicy.FOREGROUND_STOP_MODE)
-                stopSelf(latestStartId)
-            }
+            // No stopSelf here: the inference job's finally block is the sole
+            // deferred stop (with its own serviceStartId) when a job was active,
+            // and the ACTION_STOP handler stops immediately when no job is
+            // active. A second stopSelf(latestStartId) from this IO coroutine
+            // races the finally block and overwrites its recorded start id.
         }
     }
 
