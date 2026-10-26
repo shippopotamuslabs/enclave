@@ -7,6 +7,8 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.browntowndev.enclave.domain.model.entitlement.EntitlementState
+import com.browntowndev.enclave.domain.port.repository.EntitlementPort
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -17,9 +19,13 @@ class TelemetryUploadScheduler
     constructor(
         private val workManager: WorkManager,
         private val config: TelemetryUploadConfig,
+        private val entitlementPort: EntitlementPort,
     ) {
         fun schedule() {
             if (!config.isConfigured) {
+                return
+            }
+            if (isUploadBlocked()) {
                 return
             }
             val constraints =
@@ -57,6 +63,9 @@ class TelemetryUploadScheduler
             if (!config.isConfigured) {
                 return
             }
+            if (isUploadBlocked()) {
+                return
+            }
             val constraints =
                 Constraints
                     .Builder()
@@ -74,6 +83,13 @@ class TelemetryUploadScheduler
                 oneTimeRequest,
             )
         }
+
+        /**
+         * Telemetry uploads only for subscribers: when the subscription state is
+         * [EntitlementState.NotEntitled] nothing is enqueued. All other states
+         * (Entitled, Unknown, SignedOut) enqueue exactly as before.
+         */
+        private fun isUploadBlocked(): Boolean = entitlementPort.entitlementState.value is EntitlementState.NotEntitled
 
         companion object {
             const val WORK_NAME = "telemetry_upload"

@@ -25,6 +25,7 @@ import com.browntowndev.enclave.core.data.download.Sd15QnnPackInstaller
 import com.browntowndev.enclave.core.data.download.UtilityModelFileResolver
 import com.browntowndev.enclave.core.data.download.remote.DynamicModelUrlProvider
 import com.browntowndev.enclave.core.data.download.remote.HttpFileDownloader
+import com.browntowndev.enclave.core.data.download.remote.FirebaseModelDownloadUrlMinter
 import com.browntowndev.enclave.core.data.inference.MiniLMEmbeddingEngine
 import com.browntowndev.enclave.core.data.inference.RoomCommittedInferencePromptStore
 import com.browntowndev.enclave.core.data.local.ApiCredentialsDao
@@ -173,6 +174,7 @@ import com.browntowndev.enclave.domain.util.Clock
 import com.browntowndev.enclave.domain.util.SystemClock
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.functions.FirebaseFunctions
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -393,9 +395,9 @@ object DataModule {
     @Singleton
     fun provideFirebaseFunctions(
         @ApplicationContext context: Context,
-    ): com.google.firebase.functions.FirebaseFunctions {
+    ): FirebaseFunctions {
         FirebaseAvailability.ensureFirebaseApp(context)
-        return com.google.firebase.functions.FirebaseFunctions
+        return FirebaseFunctions
             .getInstance("us-central1")
     }
 
@@ -470,7 +472,11 @@ object DataModule {
 
     @Provides
     @Singleton
-    fun provideModelUrlProvider(): ModelUrlProviderPort = DynamicModelUrlProvider()
+    fun provideModelUrlProvider(functions: FirebaseFunctions): ModelUrlProviderPort =
+        // The FirebaseFunctions handle is dark-build safe (its own provider installs the
+        // placeholder app first), and the minter only holds the reference:
+        // construction never touches the network, so provider construction cannot crash.
+        DynamicModelUrlProvider(FirebaseModelDownloadUrlMinter(functions))
 
     @Provides
     @Singleton

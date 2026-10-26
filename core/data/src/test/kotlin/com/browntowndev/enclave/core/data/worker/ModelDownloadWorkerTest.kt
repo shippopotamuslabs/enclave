@@ -56,7 +56,7 @@ class ModelDownloadWorkerTest {
 
         override fun getTrustedDomainsUrl(): String = "https://example.com/trusted-domains.json"
 
-        override fun getModelDownloadUrl(spec: DownloadFileSpec): String = "https://example.com/${spec.remoteFileName}"
+        override suspend fun getModelDownloadUrl(spec: DownloadFileSpec): String = "https://example.com/${spec.remoteFileName}"
     }
 
     /** Minimal [DownloadSpeedTrackerPort] fake (ENC-28) for the real progress tracker. */

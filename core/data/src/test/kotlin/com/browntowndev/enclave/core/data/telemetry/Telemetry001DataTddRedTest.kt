@@ -24,6 +24,7 @@ import com.browntowndev.enclave.core.data.repository.TelemetryEventRepositoryImp
 import com.browntowndev.enclave.core.data.sync.TelemetryUploadConfig
 import com.browntowndev.enclave.core.data.sync.TelemetryUploadScheduler
 import com.browntowndev.enclave.core.data.sync.TelemetryUploadWorker
+import com.browntowndev.enclave.domain.model.entitlement.EntitlementState
 import com.browntowndev.enclave.domain.model.inference.ToolCallRequest
 import com.browntowndev.enclave.domain.model.inference.ToolDefinition
 import com.browntowndev.enclave.domain.model.settings.SearchProvider
@@ -57,6 +58,7 @@ import com.browntowndev.enclave.core.data.repository.testApiKeyManager
 import com.browntowndev.enclave.core.data.security.ApiKeyManager
 import com.browntowndev.enclave.core.data.testWorkerParameters
 import com.browntowndev.enclave.core.testing.FakeChatRepository
+import com.browntowndev.enclave.core.testing.FakeEntitlementPort
 import com.browntowndev.enclave.core.testing.FakeDefaultModelRepository
 import com.browntowndev.enclave.core.testing.FakeDocumentValidationPort
 import com.browntowndev.enclave.core.testing.FakeEmbeddingEngine
@@ -508,7 +510,7 @@ class Telemetry001DataTddRedTest {
                     )
                 }
             dao.pendingUploadsResult = pending
-            val worker = TelemetryUploadWorker(context, params, dao, otlp, loggingPort)
+            val worker = TelemetryUploadWorker(context, params, dao, otlp, loggingPort, FakeEntitlementPort())
             val result = worker.doWork()
             assertEquals(
                 androidx.work.ListenableWorker.Result
@@ -538,7 +540,7 @@ class Telemetry001DataTddRedTest {
                 }
             dao.pendingUploadsQueue.addLast(pending)
             dao.pendingUploadsQueue.addLast(emptyList())
-            val worker = TelemetryUploadWorker(context, params, dao, otlp, loggingPort)
+            val worker = TelemetryUploadWorker(context, params, dao, otlp, loggingPort, FakeEntitlementPort())
             worker.doWork()
             assertEquals(listOf(pending.map { it.id }), dao.markUploadedCalls)
             assertEquals(1, dao.deleteUploadedCallCount)
@@ -559,7 +561,7 @@ class Telemetry001DataTddRedTest {
             dao.pendingUploadsQueue.addLast(emptyList())
             otlp.uploadResults.addLast(Result.success(Unit))
             otlp.uploadResults.addLast(Result.failure(IOException("network")))
-            val worker = TelemetryUploadWorker(context, params, dao, otlp, loggingPort)
+            val worker = TelemetryUploadWorker(context, params, dao, otlp, loggingPort, FakeEntitlementPort())
             val result = worker.doWork()
             assertEquals(
                 androidx.work.ListenableWorker.Result
@@ -578,7 +580,7 @@ class Telemetry001DataTddRedTest {
             val otlp = FakeTelemetryOtlpClient()
             val loggingPort = FakeLoggingPort()
             dao.pendingUploadsResult = emptyList()
-            val worker = TelemetryUploadWorker(context, params, dao, otlp, loggingPort)
+            val worker = TelemetryUploadWorker(context, params, dao, otlp, loggingPort, FakeEntitlementPort())
             val result = worker.doWork()
             assertEquals(
                 androidx.work.ListenableWorker.Result
@@ -622,6 +624,8 @@ class Telemetry001DataTddRedTest {
                         endpointUrl = "https://enclaveapp.grafana.net/otlp/v1/logs",
                         apiKey = "test-key",
                     ),
+                // Unknown entitlement uploads exactly as before the gate.
+                entitlementPort = FakeEntitlementPort(),
             )
         scheduler.schedule()
         // One-time upload: exactly one entry under the one-time name, CONNECTED-constrained.
@@ -806,7 +810,7 @@ class Telemetry001DataTddRedTest {
     @Test
     fun `TEL-058 TelemetryUploadScheduler no-ops when telemetry is not configured`() {
         val workManager = holdingWorkManager()
-        val scheduler = TelemetryUploadScheduler(workManager, TelemetryUploadConfig())
+        val scheduler = TelemetryUploadScheduler(workManager, TelemetryUploadConfig(), FakeEntitlementPort())
         scheduler.schedule()
         // Conversion (strengthened): the fake-era test asserted only that no
         // periodic call was recorded; against a real WorkManager, neither
@@ -1234,6 +1238,7 @@ class Telemetry001DataTddRedTest {
                         endpointUrl = "https://enclaveapp.grafana.net/otlp/v1/logs",
                         apiKey = "test-key",
                     ),
+                entitlementPort = FakeEntitlementPort(),
             )
         scheduler.triggerImmediateUpload()
         val oneTime = uniqueWorkInfos(workManager, TelemetryUploadScheduler.ONE_TIME_WORK_NAME)
@@ -1263,6 +1268,7 @@ class Telemetry001DataTddRedTest {
                             endpointUrl = "https://enclaveapp.grafana.net/otlp/v1/logs",
                             apiKey = "test-key",
                         ),
+                    entitlementPort = FakeEntitlementPort(),
                 )
             val repository = TelemetryEventRepositoryImpl(dao, FakeLoggingPort(), scheduler)
             repository.emitInferenceOutcome(sampleInferenceOutcome())
@@ -1271,5 +1277,70 @@ class Telemetry001DataTddRedTest {
             // is proven behaviorally in TEL-062).
             val oneTime = uniqueWorkInfos(workManager, TelemetryUploadScheduler.ONE_TIME_WORK_NAME)
             assertEquals(1, oneTime.size)
+        }
+
+    @Test
+    fun `TEL-064 TelemetryUploadScheduler enqueues nothing when NotEntitled`() {
+        val workManager = holdingWorkManager()
+        val scheduler =
+            TelemetryUploadScheduler(
+                workManager = workManager,
+                config =
+                    TelemetryUploadConfig(
+                        endpointUrl = "https://enclaveapp.grafana.net/otlp/v1/logs",
+                        apiKey = "test-key",
+                    ),
+                entitlementPort = FakeEntitlementPort(EntitlementState.NotEntitled),
+            )
+        scheduler.schedule()
+        scheduler.triggerImmediateUpload()
+        assertTrue(uniqueWorkInfos(workManager, TelemetryUploadScheduler.WORK_NAME).isEmpty())
+        assertTrue(uniqueWorkInfos(workManager, TelemetryUploadScheduler.ONE_TIME_WORK_NAME).isEmpty())
+    }
+
+    @Test
+    fun `TEL-065 TelemetryUploadScheduler enqueues when Entitled`() {
+        val workManager = holdingWorkManager()
+        val scheduler =
+            TelemetryUploadScheduler(
+                workManager = workManager,
+                config =
+                    TelemetryUploadConfig(
+                        endpointUrl = "https://enclaveapp.grafana.net/otlp/v1/logs",
+                        apiKey = "test-key",
+                    ),
+                entitlementPort = FakeEntitlementPort(EntitlementState.Entitled()),
+            )
+        scheduler.schedule()
+        assertEquals(1, uniqueWorkInfos(workManager, TelemetryUploadScheduler.WORK_NAME).size)
+        assertEquals(1, uniqueWorkInfos(workManager, TelemetryUploadScheduler.ONE_TIME_WORK_NAME).size)
+    }
+
+    @Test
+    fun `TEL-066 TelemetryUploadWorker succeeds without uploading when NotEntitled`() =
+        runTest {
+            val context = ApplicationProvider.getApplicationContext<Context>()
+            val params = testWorkerParameters()
+            val dao = FakeTelemetryEventDao()
+            val otlp = FakeTelemetryOtlpClient()
+            dao.pendingUploadsResult = listOf(pendingEntity("evt-gated", 1L))
+            val worker =
+                TelemetryUploadWorker(
+                    context,
+                    params,
+                    dao,
+                    otlp,
+                    FakeLoggingPort(),
+                    FakeEntitlementPort(EntitlementState.NotEntitled),
+                )
+            val result = worker.doWork()
+            assertEquals(
+                androidx.work.ListenableWorker.Result
+                    .success(),
+                result,
+            )
+            assertTrue(otlp.uploadCalls.isEmpty())
+            assertTrue(dao.markUploadedCalls.isEmpty())
+            assertEquals(0, dao.deleteUploadedCallCount)
         }
 }

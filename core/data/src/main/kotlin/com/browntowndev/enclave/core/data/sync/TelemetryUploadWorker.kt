@@ -7,7 +7,9 @@ import androidx.work.ListenableWorker
 import androidx.work.WorkerParameters
 import com.browntowndev.enclave.core.data.local.TelemetryEventDao
 import com.browntowndev.enclave.core.data.remote.telemetry.TelemetryOtlpClient
+import com.browntowndev.enclave.domain.model.entitlement.EntitlementState
 import com.browntowndev.enclave.domain.port.inference.LoggingPort
+import com.browntowndev.enclave.domain.port.repository.EntitlementPort
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 
@@ -20,19 +22,25 @@ class TelemetryUploadWorker
         private val telemetryEventDao: TelemetryEventDao,
         private val otlpClient: TelemetryOtlpClient,
         private val loggingPort: LoggingPort,
+        private val entitlementPort: EntitlementPort,
     ) : CoroutineWorker(context, params) {
         companion object {
             private const val TAG = "TelemetryUploadWorker"
             const val BATCH_SIZE = 100
         }
 
-        override suspend fun doWork(): ListenableWorker.Result =
-            try {
+        override suspend fun doWork(): ListenableWorker.Result {
+            // Non-subscribers upload nothing: succeed without touching the DAO or transport.
+            if (entitlementPort.entitlementState.value is EntitlementState.NotEntitled) {
+                return ListenableWorker.Result.success()
+            }
+            return try {
                 uploadPendingEvents()
             } catch (error: Exception) {
                 loggingPort.warning(TAG, "Telemetry upload worker failed: ${error.message}")
                 ListenableWorker.Result.retry()
             }
+        }
 
         private suspend fun uploadPendingEvents(): ListenableWorker.Result {
             var lastUploadedIds: Set<String>? = null
