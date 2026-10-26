@@ -4,7 +4,7 @@
 Kotlin and Compose idioms, naming, formatting, and stability rules.
 
 The shared rules are canon in `contracts/gospel/CODE-STYLE-GOSPEL.md` (git
-submodule, gospels repo pinned at tag `v1`). This contract keeps Enclave's
+submodule, gospels repo pinned at `963fdf4` (`v1.1-3-g963fdf4`)). This contract keeps Enclave's
 example tables, enforcement lines, and validation gates; sections below that
 only restated the canon are now pointers.
 
@@ -37,7 +37,7 @@ Canon: `contracts/gospel/CODE-STYLE-GOSPEL.md` §2. Enclave's example table:
 | Constant | UPPER_SNAKE_CASE | `MAX_REFINEMENT_ROUNDS` |
 | Private backing flow | `_uiState` pattern | `private val _uiState = MutableStateFlow(...)` |
 | Resource IDs | snake_case | `R.drawable.attach_file`, `R.string.mode_auto` |
-| Domain Ports | Port suffix on the interface | 'MyNewDomainPort' |
+| Application Ports | `*Port` suffix on the interface (gospel `ARCHITECTURE-GOSPEL.md` §4) | `MyNewPort` |
 
 ## 3. File Organization
 
@@ -86,15 +86,9 @@ Canon: `contracts/gospel/CODE-STYLE-GOSPEL.md` §8 (JUnit 5 + Turbine + hand-wri
 
 ### 8.1 Test Coverage Discipline (Agent Mandate)
 
-Canon: `contracts/gospel/CODE-STYLE-GOSPEL.md` §8.1. Enclave's mandate:
+Canon: `contracts/gospel/CODE-STYLE-GOSPEL.md` §8.1. Enclave's mandate applies to new or modified production code in `:core:domain`, `:core:data`, `:feature:inference`, and to ViewModels, repositories, mappers, and use cases; Enclave instantiation and gates: `contracts/UNIT_TESTING.md`.
 
-
-- Whenever the task **adds** new production code (new classes, public functions, significant logic in `:core:domain`, `:core:data`, `:feature:inference`, ViewModels, repositories, mappers, use cases, etc.) **or modifies** existing code, the agent **MUST**:
-  - Write new unit tests (or extend existing ones) in the matching `src/test/kotlin` source set that cover the new/modified behavior, main paths, edge cases, and error conditions.
-  - Use JUnit 5 + Turbine (for `StateFlow`/`Flow`) + fakes from `:core:testing` as defined above and in `UNIT_TESTING.md`.
-- For pure UI/Compose changes that affect behavior or interactions: also add or update Compose UI tests using `createComposeRule()` and semantic matchers.
 - Trivial styling-only or preview-only changes are exempt from new tests, but the full test suite must still pass.
-- Before declaring `TASK_STATUS: COMPLETE`, the agent must have written/updated the tests **and** executed them successfully.
 
 ---
 

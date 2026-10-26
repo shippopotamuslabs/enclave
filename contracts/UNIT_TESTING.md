@@ -59,12 +59,15 @@ Pattern shapes are canon in `contracts/gospel/TESTING-GOSPEL.md` §6.3 (§6.3.1 
 @ExtendWith(MainDispatcherExtension::class)
 class ChatViewModelTest {
 
-    private val fakeRepository = FakeChatRepository()
+    private val fakeChatPort = FakeChatPort()
     private lateinit var viewModel: ChatViewModel
 
     @BeforeEach
     fun setup() {
-        viewModel = ChatViewModel(fakeRepository)
+        viewModel = ChatViewModel(
+            ObserveMessagesUseCase(fakeChatPort),
+            SendMessageUseCase(fakeChatPort),
+        )
     }
 
     @Test
@@ -93,14 +96,14 @@ class ChatViewModelTest {
 
 **Wrong (Brittle Mock):**
 ```kotlin
-val mockRepo = mockk<ChatRepository>()
-coEvery { mockRepo.getMessages() } returns flowOf(listOf(msg1))
+val mockPort = mockk<ChatPort>()
+coEvery { mockPort.getMessages() } returns flowOf(listOf(msg1))
 // This fails if the internal implementation changes how getMessages is called.
 ```
 
 **Right (Robust Fake):**
 ```kotlin
-class FakeChatRepository : ChatRepository {
+class FakeChatPort : ChatPort {
     private val messages = MutableStateFlow<List<Message>>(emptyList())
     override fun getMessages() = messages
     suspend fun emit(list: List<Message>) { messages.value = list }

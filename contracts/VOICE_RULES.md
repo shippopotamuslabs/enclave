@@ -6,7 +6,7 @@ Voice contract. Binding rules for every user-facing string in Enclave.
 The full text is the **Shippopotamus Wumbo Gospel**, declared canonical by Sean
 on 2026-10-23. It lives in the gospels submodule now:
 `contracts/gospel/WUMBO-GOSPEL.md` (git submodule, `shippopotamuslabs/gospels`
-repo, pinned at tag `v1.1`). Read the gospel before adding or editing any
+repo, pinned at `963fdf4` (`v1.1-3-g963fdf4`)). Read the gospel before adding or editing any
 user-facing copy (routing: `AGENTS.md` §1).
 
 History: adopted 2026-10-23 (ENC-207), following the gospel adoption pattern
