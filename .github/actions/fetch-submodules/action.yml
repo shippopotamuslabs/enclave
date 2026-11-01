@@ -1,33 +1,36 @@
 # Materialize the third_party submodules CI actually consumes.
 #
-# Why not `actions/checkout` with submodules: the repo's .gitmodules still
-# points at the pre-migration GitLab URLs, and the pinned gitlink SHAs are
-# pre-rewrite SHAs that do not exist in the GitHub mirrors (the migration
-# rewrote timestamps, so every rewritten commit has a new SHA). The clones
-# below check out the tree-identical equivalents in the rewritten history:
+# Why this composite instead of `actions/checkout` with `submodules: true`:
+# CI jobs selectively fetch whisper-android and/or agent_core (inputs below),
+# and they skip docgen_core (no Gradle/CI consumer). The clones below use
+# absolute public HTTPS URLs under github.com/shippopotamuslabs (the same
+# org/repos `.gitmodules` resolves to via relative sibling paths today;
+# ENC-322 makes those `.gitmodules` entries absolute):
 #
-#   whisper-android  GitLab pin c6cd0387 -> GitHub 32682cbc (same tree)
-#   agent_core       pin repaired in-repo by ENC-283: the recorded
-#                    gitlink now resolves in the GitHub mirror, so the
-#                    clone below checks out the pin itself.
+#   https://github.com/shippopotamuslabs/whisper-android.git
+#   https://github.com/shippopotamuslabs/agent_core.git
 #
-# whisper.cpp needs no workaround: its .gitmodules URL is the public
-# upstream (ggml-org/whisper.cpp) and its pin survived unchanged.
+# Pins:
+#   whisper-android  gitlink 32682cbcc71b206970fb964b5000d75361465ad5
+#   agent_core       recorded gitlink from `git ls-tree HEAD` (repaired by ENC-283)
+#
+# whisper.cpp needs no workaround: its `.gitmodules` URL is the public
+# upstream (ggml-org/whisper.cpp) and its pin is fetched via
+# `git submodule update --init`.
 #
 # third_party/docgen_core is deliberately NOT fetched: no Gradle build
 # input or CI job consumes it (only a detekt exclude glob names it).
 #
-# The token input is a GitHub App installation token minted by the caller
-# (actions/create-github-app-token) from the TENSOR_APP_ID /
-# TENSOR_APP_PRIVATE_KEY repo secrets; the sibling repos are private, so
-# anonymous clones fail. Once the repos flip public, the token can be
-# dropped and the clones fall back to plain https.
+# The token input is optional. Sibling repos are public on GitHub, so
+# anonymous HTTPS clones succeed. Callers may still pass a GitHub App
+# installation token (TENSOR_APP_ID / TENSOR_APP_PRIVATE_KEY) when they
+# want authenticated clones.
 name: fetch-submodules
-description: Fetch whisper-android / agent_core / whisper.cpp at CI-usable pins
+description: Fetch whisper-android / agent_core / whisper.cpp at recorded pins
 
 inputs:
   token:
-    description: Token for the private sibling repos (pass the create-github-app-token output; empty = anonymous)
+    description: Optional token for authenticated sibling clones (empty = anonymous public HTTPS)
     required: false
     default: ""
   whisper-android:
@@ -42,12 +45,12 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: whisper.cpp (public upstream, pin unchanged by the migration)
+    - name: whisper.cpp (public upstream)
       if: inputs.whisper-android == 'true'
       shell: bash
       run: git submodule update --init third_party/whisper.cpp
 
-    - name: whisper-android (GitHub, tree-identical equivalent of the GitLab pin)
+    - name: whisper-android (public GitHub, recorded gitlink)
       if: inputs.whisper-android == 'true'
       shell: bash
       env:
@@ -60,7 +63,7 @@ runs:
         # whisper-android carries its own whisper.cpp submodule (public).
         git -C third_party/whisper-android submodule update --init third_party/whisper.cpp
 
-    - name: agent_core (GitHub, at the pin recorded in the superproject)
+    - name: agent_core (public GitHub, at the pin recorded in the superproject)
       if: inputs.agent-core == 'true'
       shell: bash
       env:
