@@ -22,9 +22,9 @@
 #   RELEASE_KEY_ALIAS        > read by app/build.gradle.kts via
 #   RELEASE_KEY_PASSWORD    /  local.properties (written by the jobs below)
 #   TENSOR_APP_ID           \
-#   TENSOR_APP_PRIVATE_KEY   > GitHub App credentials used to mint the
-#                           /  token that clones the private submodule
-#                              repos (see .github/actions/fetch-submodules)
+#   TENSOR_APP_PRIVATE_KEY   > optional GitHub App credentials for authenticated
+#                           /  sibling submodule clones (repos are public;
+#                              see .github/actions/fetch-submodules)
 #
 # GitLab `workflow:rules` equivalence:
 #   - merge_request_event && target == default branch -> pull_request: [main]
