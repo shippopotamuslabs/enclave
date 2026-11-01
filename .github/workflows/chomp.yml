@@ -10,7 +10,7 @@ name: Chomp Review
 #
 # Supply-chain pinning (Chomp review finding on this PR): the reusable
 # workflow and the forge_ref scripts checkout are both pinned to the
-# v2.1.1 release tag of chomp-reviewer, not a mutable branch, and only
+# v2.1.2 release tag of chomp-reviewer, not a mutable branch, and only
 # the secrets the reusable workflow declares are passed — never
 # `secrets: inherit`. (An interim full-SHA pin was orphaned once by a
 # history rewrite: the object survived but no ref reached it, and
@@ -31,9 +31,9 @@ permissions:
 
 jobs:
   chomp-review:
-    uses: shippopotamuslabs/chomp-reviewer/.github/workflows/chomp-review.yml@v2.1.1
+    uses: shippopotamuslabs/chomp-reviewer/.github/workflows/chomp-review.yml@v2.1.2
     with:
-      chomp_ref: v2.1.1
+      chomp_ref: v2.1.2
       chomp_agent: "on"
     secrets:
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
