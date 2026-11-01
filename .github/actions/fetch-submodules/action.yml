@@ -2,8 +2,10 @@
 #
 # Why this composite instead of `actions/checkout` with `submodules: true`:
 # CI jobs selectively fetch whisper-android and/or agent_core (inputs below),
-# and they skip docgen_core (no Gradle/CI consumer). The clones below use the
-# same public GitHub URLs as `.gitmodules`:
+# and they skip docgen_core (no Gradle/CI consumer). The clones below use
+# absolute public HTTPS URLs under github.com/shippopotamuslabs (the same
+# org/repos `.gitmodules` resolves to via relative sibling paths today;
+# ENC-322 makes those `.gitmodules` entries absolute):
 #
 #   https://github.com/shippopotamuslabs/whisper-android.git
 #   https://github.com/shippopotamuslabs/agent_core.git
